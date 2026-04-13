@@ -70,7 +70,7 @@ canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 const JR = 55; // joystick base radius
 const touch = {
   joystick: { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0 },
-  aim:      { active:false, id:null, x:W*0.75, y:H*0.5, shooting:false },
+  aim:      { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0, shooting:false },
   // button touch IDs
   btnE: null, btnV: null, btnPause: null,
 };
@@ -108,7 +108,8 @@ canvas.addEventListener('touchstart', e => {
       touch.joystick.dx=0;       touch.joystick.dy=0;
     } else if (cx >= W/2 && !touch.aim.active) {
       touch.aim.active=true; touch.aim.id=t.identifier;
-      touch.aim.x=cx; touch.aim.y=cy; touch.aim.shooting=true;
+      touch.aim.baseX=cx; touch.aim.baseY=cy;
+      touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=true;
       justPressed.add('MouseLeft');
     }
   }
@@ -125,7 +126,10 @@ canvas.addEventListener('touchmove', e => {
       touch.joystick.dx=dx/JR; touch.joystick.dy=dy/JR;
     }
     if (t.identifier === touch.aim.id) {
-      touch.aim.x=cx; touch.aim.y=cy;
+      let adx=cx-touch.aim.baseX, ady=cy-touch.aim.baseY;
+      const alen=Math.sqrt(adx*adx+ady*ady);
+      if (alen>JR) { adx=adx/alen*JR; ady=ady/alen*JR; }
+      touch.aim.dx=adx/JR; touch.aim.dy=ady/JR;
       touch.aim.shooting=true;
     }
   }
@@ -135,7 +139,7 @@ canvas.addEventListener('touchend', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     if (t.identifier===touch.joystick.id) { touch.joystick.active=false; touch.joystick.dx=0; touch.joystick.dy=0; }
-    if (t.identifier===touch.aim.id)      { touch.aim.active=false; touch.aim.shooting=false; mouse.down=false; }
+    if (t.identifier===touch.aim.id)      { touch.aim.active=false; touch.aim.shooting=false; touch.aim.dx=0; touch.aim.dy=0; mouse.down=false; }
     if (t.identifier===touch.btnE)   touch.btnE=null;
     if (t.identifier===touch.btnV)   touch.btnV=null;
     if (t.identifier===touch.btnPause) touch.btnPause=null;
@@ -143,7 +147,7 @@ canvas.addEventListener('touchend', e => {
 }, {passive:false});
 
 function drawTouchUI() {
-  // Joystick
+  // Left joystick (move)
   if (touch.joystick.active) {
     const {baseX:bx,baseY:by,dx,dy}=touch.joystick;
     ctx.save();
@@ -154,12 +158,31 @@ function drawTouchUI() {
     ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
     ctx.restore();
   } else {
-    // ghost joystick hint
+    // ghost move joystick hint
     ctx.save(); ctx.globalAlpha=0.12;
     ctx.strokeStyle='#00f5ff'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.arc(80, H-80, JR, 0, TWO_PI); ctx.stroke();
     ctx.fillStyle='#00f5ff';
     ctx.beginPath(); ctx.arc(80, H-80, 18, 0, TWO_PI); ctx.fill();
+    ctx.restore();
+  }
+  // Right joystick (aim)
+  if (touch.aim.active) {
+    const {baseX:bx,baseY:by,dx,dy}=touch.aim;
+    ctx.save();
+    ctx.globalAlpha=0.35;
+    ctx.strokeStyle='#ff00c8'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(bx,by,JR,0,TWO_PI); ctx.stroke();
+    ctx.fillStyle='#ff00c8';
+    ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
+    ctx.restore();
+  } else {
+    // ghost aim joystick hint
+    ctx.save(); ctx.globalAlpha=0.12;
+    ctx.strokeStyle='#ff00c8'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(W/2+80, H-80, JR, 0, TWO_PI); ctx.stroke();
+    ctx.fillStyle='#ff00c8';
+    ctx.beginPath(); ctx.arc(W/2+80, H-80, 18, 0, TWO_PI); ctx.fill();
     ctx.restore();
   }
   // Buttons
@@ -1415,17 +1438,20 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
 
-    // sync touch aim to mouse so aiming/shooting works
-    if (touch.aim.active) {
-      mouse.x = touch.aim.x;
-      mouse.y = touch.aim.y;
-      mouse.down = touch.aim.shooting;
-    }
-
     player.update(dt,dungeon.map);
 
-    // aim with mouse
     const cam=getCamera(player);
+
+    // sync touch aim: synthesise a mouse position far in the joystick direction
+    if (touch.aim.active) {
+      mouse.down = touch.aim.shooting;
+      if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
+        mouse.x = player.x * TILE - cam.x + touch.aim.dx * 300;
+        mouse.y = player.y * TILE - cam.y + touch.aim.dy * 300;
+      }
+    }
+
+    // aim with mouse
     const worldAimX=(mouse.x+cam.x)/TILE;
     const worldAimY=(mouse.y+cam.y)/TILE;
     const [afx,afy]=norm(worldAimX-player.x,worldAimY-player.y);
