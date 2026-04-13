@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.0
+# NEON DUNGEON — Game Specification v1.1
 
 ## Vision
 
@@ -62,7 +62,7 @@ static wall sconces in rooms). Tiles beyond radius 12 are fully dark.
 | LEVEL     | 1    | Max 10                          |
 | XP        | 0    | XP to next level = level × 80   |
 
-### Controls
+### Controls — Keyboard & Mouse
 
 | Input              | Action                    |
 |--------------------|---------------------------|
@@ -72,6 +72,25 @@ static wall sconces in rooms). Tiles beyond radius 12 are fully dark.
 | E                  | Interact (door/stairs)    |
 | I                  | Toggle inventory           |
 | ESC                | Pause / back to menu       |
+
+### Controls — Touch (dual-joystick)
+
+On touch devices, the game uses a dual-joystick layout with virtual buttons:
+
+| Input                             | Action                      |
+|-----------------------------------|-----------------------------|
+| Left-half touch & drag            | Move joystick (base radius 55 px) |
+| Right-half touch & drag           | Aim joystick — holding fires automatically |
+| E button (bottom-right, cyan)     | Interact (door/stairs)      |
+| V button (bottom-right, purple)   | Use void shard              |
+| ‖ button (top-right, magenta)     | Pause                       |
+
+Joystick deflection is clamped to the base radius and normalised to 0–1.
+Ghost joystick hints (12 % opacity) are drawn when inactive so the player
+knows where to touch. Active joysticks render at 35 % opacity.
+
+Touch events call `preventDefault()` (passive: false) to suppress browser
+scroll/zoom. The CSS rule `touch-action: none` is applied globally.
 
 ### Weapons
 
@@ -241,3 +260,60 @@ High-score table stored in `localStorage` as JSON, top 10, with player name
 ```
 
 Total estimated LOC: ~3 500–4 500.
+
+---
+
+## Mobile & PWA
+
+### Progressive Web App
+
+A `manifest.json` at the repository root enables Add-to-Home-Screen:
+
+| Field            | Value                   |
+|------------------|-------------------------|
+| `display`        | `fullscreen`            |
+| `orientation`    | `any`                   |
+| `background_color` / `theme_color` | `#0a0a12` |
+| `start_url`      | `./index.html`          |
+| `icons`          | *(empty — to be added)* |
+
+Meta tags in `<head>`:
+- `apple-mobile-web-app-capable: yes` (iOS Safari home-screen)
+- `apple-mobile-web-app-status-bar-style: black-translucent`
+- `mobile-web-app-capable: yes` (Android Chrome)
+
+### Fullscreen — Landscape Auto-Request
+
+On touch devices, orientation changes trigger fullscreen behaviour:
+
+1. **Rotate to landscape** → set `fsWantLandscape = true`, reset dismiss state.
+   On the next `touchstart` user gesture, call `requestFullscreen()` on
+   `document.documentElement`.
+2. **Rotate to portrait** → call `exitFullscreen()` immediately, clear want flag.
+3. **Dismiss button** (✕, top-left 48×48 px hit area): sets `fsDismissed = true`
+   for the current landscape session. A new portrait→landscape transition
+   resets the dismiss flag.
+
+Fullscreen prompt: a centered pill overlay ("⤢ Tap for fullscreen · ✕")
+drawn at 70 % opacity when landscape + not fullscreen + not dismissed +
+API supported.
+
+**Browser compat:** Detects `requestFullscreen` / `webkitRequestFullscreen`
+at boot. Promise `.catch()` guards handle void-return Safari variants.
+`screen.orientation.type` is preferred; falls back to
+`innerWidth > innerHeight`. Non-touch devices skip all orientation logic.
+
+### Known Limitation — iOS Safari
+
+The Fullscreen API is not supported in standalone iOS Safari. The reliable
+iOS path is PWA Add-to-Home-Screen, which uses `display: fullscreen` from
+the manifest to achieve a chrome-less experience.
+
+---
+
+## Changelog
+
+| Version | Change |
+|---------|--------|
+| v1.0    | Initial specification |
+| v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
