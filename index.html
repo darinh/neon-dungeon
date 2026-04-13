@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a12">
+<link rel="manifest" href="manifest.json">
 <title>NEON DUNGEON</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
@@ -42,6 +47,68 @@ function resize() {
 }
 resize();
 window.addEventListener('resize', resize);
+
+// ─── Fullscreen (landscape auto-request, portrait auto-exit) ─────────────────
+const fsApi = {
+  request: canvas.requestFullscreen ? 'requestFullscreen'
+         : canvas.webkitRequestFullscreen ? 'webkitRequestFullscreen' : null,
+  exit: document.exitFullscreen ? 'exitFullscreen'
+      : document.webkitExitFullscreen ? 'webkitExitFullscreen' : null,
+  element: () => document.fullscreenElement ?? document.webkitFullscreenElement,
+  supported: !!(canvas.requestFullscreen || canvas.webkitRequestFullscreen),
+};
+let fsWantLandscape = false;   // true when landscape but no gesture yet
+let fsDismissed = false;       // user tapped X to dismiss the prompt this session
+
+function isLandscape() {
+  if (screen.orientation) return screen.orientation.type.startsWith('landscape');
+  return window.innerWidth > window.innerHeight;
+}
+
+function isTouchDevice() {
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
+function tryFullscreen() {
+  if (!fsApi.supported || fsApi.element()) return;
+  try {
+    const ret = document.documentElement[fsApi.request]?.();
+    if (ret && typeof ret.catch === 'function') ret.catch(() => {});
+  } catch (_) {}
+}
+
+function exitFullscreen() {
+  if (!fsApi.element()) return;
+  try {
+    const ret = document[fsApi.exit]?.();
+    if (ret && typeof ret.catch === 'function') ret.catch(() => {});
+  } catch (_) {}
+}
+
+let fsWasLandscape = false;
+function onOrientationChange() {
+  if (!isTouchDevice()) return;
+  const landscape = isLandscape();
+  if (landscape) {
+    fsWantLandscape = true;
+    // only reset dismiss on actual portrait→landscape transition
+    if (!fsWasLandscape) fsDismissed = false;
+  } else {
+    fsWantLandscape = false;
+    exitFullscreen();
+  }
+  fsWasLandscape = landscape;
+}
+
+if (screen.orientation) {
+  screen.orientation.addEventListener('change', onOrientationChange);
+} else {
+  window.addEventListener('orientationchange', onOrientationChange);
+}
+// also recheck on resize (some browsers fire resize instead of orientationchange)
+window.addEventListener('resize', onOrientationChange);
+// set initial state
+onOrientationChange();
 
 // ─── Input ───────────────────────────────────────────────────────────────────
 const keys = new Set();
@@ -95,8 +162,21 @@ function hitBtn(cx, cy, btn) {
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   audio.resume();
+  // check if any touch hit the fullscreen dismiss button first
+  let dismissed = false;
   for (const t of e.changedTouches) {
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
+    if (fsWantLandscape && !fsApi.element() && !fsDismissed
+        && cx < 48 && cy < 48) {
+      fsDismissed = true; dismissed = true;
+    }
+  }
+  // piggyback on user gesture: request fullscreen if landscape wants it
+  if (!dismissed && fsWantLandscape && !fsApi.element() && !fsDismissed) tryFullscreen();
+  for (const t of e.changedTouches) {
+    const [cx, cy] = toCanvas(t.clientX, t.clientY);
+    // skip the dismiss touch (already handled above)
+    if (cx < 48 && cy < 48 && dismissed) continue;
     // button priority
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('KeyE'); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add('KeyV'); continue; }
@@ -201,6 +281,33 @@ function drawTouchUI() {
     ctx.restore();
   }
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+
+  // Fullscreen prompt (landscape, not fullscreen, not dismissed, API available)
+  if (fsWantLandscape && !fsApi.element() && !fsDismissed && fsApi.supported) {
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    // pill background
+    const pw = 180, ph = 32, px = (W - pw) / 2, py = 6;
+    ctx.fillStyle = '#0a0a12';
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(px, py, pw, ph);
+    ctx.fill(); ctx.stroke();
+    // text
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('TAP FOR FULLSCREEN', W / 2, py + ph / 2);
+    // dismiss X button (top-left corner)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#ff00c8';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('×', 24, 22);
+    ctx.restore();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
 }
 
 function jp(code) { return justPressed.has(code); }
