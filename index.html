@@ -895,6 +895,13 @@ const audio = (() => {
       osc('triangle', 700,  900,  0.05, t + 0.06, 0.06);
       osc('sine',     900,  1100, 0.07, t + 0.12, 0.08);
       noise(0.02, t + 0.04, 0.03, 4000);
+    },
+    enemySplit() {
+      const c = getCtx(); const t = c.currentTime;
+      // Digital fracture — rising twin tones + crackle
+      osc('square', 300, 600, 0.06, t, 0.1);
+      osc('square', 350, 650, 0.06, t + 0.02, 0.1);
+      noise(0.05, t, 0.08, 3000);
     }
   };
 })();
@@ -1948,7 +1955,8 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SENTINEL:80, HIVE:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
+let pendingEnemySpawns = [];
 
 class Enemy {
   constructor(x,y,hp,atk,spd,xpVal,colour,type) {
@@ -1994,7 +2002,7 @@ class Enemy {
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
     const d=getDiff();
     const dropRate = game.modifier === 'FORTIFIED' ? d.itemDrop * 1.3 : d.itemDrop;
-    if (Math.random()<dropRate) items.push(new Item(this.x,this.y));
+    if (!this.isShard && Math.random()<dropRate) items.push(new Item(this.x,this.y));
     game.player.gainXP(Math.round(this.xpValue*d.xpMul));
     game.player.score += this.xpValue * game.floor;
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
@@ -2019,6 +2027,20 @@ class Enemy {
         }
       }
     }
+    // SPLITTER: queue 2 SHARDs (deferred to avoid same-frame hits)
+    if (this.type === 'SPLITTER') {
+      audio.enemySplit();
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#00ff88', 15);
+      const map = game.dungeon.map;
+      for (let s = 0; s < 2; s++) {
+        let sx = this.x + rnd(-1, 1), sy = this.y + rnd(-1, 1);
+        const fx = Math.floor(sx), fy = Math.floor(sy);
+        if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H || !isPassable(map[fy][fx])) {
+          sx = this.x; sy = this.y;
+        }
+        pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: game.floor, room: this.room });
+      }
+    }
   }
 
   update(dt, player, map) {
@@ -2041,6 +2063,8 @@ class Enemy {
       case 'DRONE':    this.aiDrone(dt,player,map,d,los);    break;
       case 'SHIELDER': this.aiShielder(dt,player,map,d,los); break;
       case 'GRENADIER':this.aiGrenadier(dt,player,map,d,los);break;
+      case 'SPLITTER': this.aiSplitter(dt,player,map,d,los);break;
+      case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
       case 'OMEGA':    this.aiBossOmega(dt,player,map,d,los);    break;
@@ -2205,6 +2229,30 @@ class Enemy {
     g.grenadeDmg = this.atk; // already floor-scaled from spawnEnemy
     projectiles.push(g);
     audio.grenadeLob();
+  }
+
+  aiSplitter(dt,player,map,d,los) {
+    const speedMul = this.hp < this.maxHp * 0.3 ? 1.3 : 1;
+    if (los && d < 10) {
+      this.state = 'CHASE';
+      this.moveToward(player.x, player.y, this.spd * speedMul, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.state = 'PATROL';
+      this.patrol(dt, map);
+    }
+  }
+
+  aiShard(dt,player,map,d,los) {
+    if (los || d < 8) {
+      this.zigzag += dt * 6;
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const perp = { x: -dy, y: dx };
+      const tx = player.x + perp.x * Math.sin(this.zigzag) * 1.2;
+      const ty = player.y + perp.y * Math.sin(this.zigzag) * 1.2;
+      this.moveToward(tx, ty, this.spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else this.patrol(dt, map);
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -2483,7 +2531,7 @@ class Enemy {
       ctx.fillStyle=this.colour;
       ctx.fillRect(sx-25,sy-30,50*(this.hp/this.maxHp),5);
     } else {
-      const sz=TILE*0.4;
+      const sz=TILE*(this.isShard?0.25:0.4);
       ctx.fillRect(sx-sz/2, sy-sz/2, sz, sz);
       // Shielder: draw 120° shield arc facing the player
       if (this.type === 'SHIELDER') {
@@ -2533,6 +2581,7 @@ const ENEMY_WEIGHTS = {
   PHANTOM:  { base: 5,  perFloor: 4 },    // late-game threat
   DRONE:    { base: 5,  perFloor: 3 },    // late-game ranged
   SHIELDER: { base: 3,  perFloor: 2, minFloor: 3 },  // mid-game tank
+  SPLITTER: { base: 2,  perFloor: 2, minFloor: 4 },  // splits into SHARDs on death
   GRENADIER:{ base: 1,  perFloor: 2, minFloor: 5 },  // late-game zone denial
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
@@ -2564,6 +2613,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'DRONE':   hp=15;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
     case 'SHIELDER':hp=50;  atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
     case 'GRENADIER':hp=30; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
+    case 'SPLITTER':hp=40;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
+    case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
     case 'OMEGA':   hp=1000;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
@@ -2581,6 +2632,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   e.isBoss=isBoss;
   e.elite=false;
   if (type==='PHANTOM') e.visible=false;
+  if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses
   if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < d.eliteRate) {
@@ -3367,7 +3419,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[];
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
@@ -3404,7 +3456,7 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, GRENADIER: 1 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
@@ -3892,6 +3944,14 @@ const game = {
     // remove dead enemies
     for (let i=enemies.length-1;i>=0;i--) {
       if (enemies[i].dead) enemies.splice(i,1);
+    }
+
+    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs)
+    if (pendingEnemySpawns.length) {
+      for (const s of pendingEnemySpawns) {
+        enemies.push(spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false));
+      }
+      pendingEnemySpawns.length = 0;
     }
 
     // update lighting

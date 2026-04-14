@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.7
+# NEON DUNGEON — Game Specification v2.8
 
 ## Vision
 
@@ -241,11 +241,13 @@ Default starting weapon: PULSE PISTOL.
 | PHANTOM      | 35      | 10  | Invisible until within 3 tiles, teleports   | 30  |
 | DRONE        | 15      | 8   | Flies over walls (no collision), ranged     | 12  |
 | SHIELDER     | 50      | 10  | Frontal shield blocks projectiles, melee    | 25  |
+| SPLITTER     | 40      | 8   | Splits into 2 SHARDs on death               | 25  |
 | GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
-**Floor-gated types:** SHIELDER appears floor 3+, GRENADIER appears floor 5+.
+**Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
+GRENADIER appears floor 5+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -280,6 +282,33 @@ Prefers to stay at 6–12 tile range; retreats if player closes to within 5 tile
   as semi-transparent pulsing orange circle below enemies
 - **Colour:** `#ff6622` (orange)
 - **Credits:** 7
+
+#### SPLITTER (floor 4+)
+
+Fragmentation enemy that splits into 2 smaller SHARD copies on death, forcing
+players to manage kill order and swarming. Approaches the player at medium
+speed; gains a 30% speed boost below 30% HP as a visual warning that it is
+about to split.
+
+- **Split mechanic:** On death, queues 2 SHARD enemies at the death position
+  (±1 tile random offset, validated for passability). Spawns are deferred to
+  the next frame via `pendingEnemySpawns` to prevent same-frame attacks.
+- **SHARD stats:** HP 15, ATK 5, SPD 3.5, XP 8. Uses fast zigzag chase AI
+  (similar to CRAWLER). SHARDs spawn with a 0.5 s attack lockout.
+- **SHARD economy:** SHARDs drop no items and award 0 credits. XP is minimal
+  (8) to prevent economy inflation from split kills.
+- **SHARDs do not split** — only the parent SPLITTER fragments.
+- **Visual:** SPLITTER is green (`#00ff88`), SHARDs are darker green
+  (`#00cc66`) and drawn at 62.5% size (0.25 tile vs 0.4 tile).
+- **Audio:** `enemySplit()` — digital fracture sound (twin rising square waves
+  + noise crackle).
+- **Cap:** 2 SPLITTERs per room (SHARDs are uncapped since they are transient).
+- **Credits:** 9 (SHARD: 0)
+- **Modifier interactions:**
+  - SWARM (0.6× HP): SPLITTERs split faster — intentional chaos amplification
+  - FORTIFIED (1.4× HP): Harder to split, fewer SHARDs overall
+  - VOLATILE: Deferred spawns are safe from the parent's explosion chain;
+    VOLATILE-killed SPLITTERs still split
 
 ### Difficulty Modes
 
