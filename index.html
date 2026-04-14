@@ -30,7 +30,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '7.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -435,7 +435,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 
 // Tile helpers
 function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR; }
-function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID; }
+function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
@@ -799,6 +799,19 @@ const audio = (() => {
       // Low buzz rejection
       osc('square', 120, 90, 0.08, t, 0.15);
       noise(0.03, t, 0.08, 400);
+    },
+    wallBreak() {
+      const c = getCtx(); const t = c.currentTime;
+      // Crumbling rock: noise burst + low rumble + debris clinks
+      noise(0.12, t, 0.25, 2000);
+      osc('sine', 80, 30, 0.1, t, 0.3);
+      osc('triangle', 40, 20, 0.06, t, 0.35);
+      // Debris clinks
+      for (let i=0; i<3; i++) {
+        const d = 0.05 + i * 0.06;
+        const f = 800 + Math.random() * 600;
+        osc('sine', f, f*0.4, 0.03, t+d, 0.06);
+      }
     }
   };
 })();
@@ -1033,7 +1046,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f'};
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005'};
   const specialRooms = [];
   const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -1120,7 +1133,7 @@ function generateFloor(floorNum) {
     const lockPriority = [];
     if (farthest !== spawnRoom && farthest !== bossRoom) lockPriority.push(farthest);
     for (const r of specialRooms) {
-      if (!lockPriority.includes(r) && r.roomType !== 'vendor') lockPriority.push(r);
+      if (!lockPriority.includes(r) && r.roomType !== 'vendor' && r.roomType !== 'secret') lockPriority.push(r);
     }
     const fallback = rooms.filter(r =>
       r !== spawnRoom && r !== farthest && r !== bossRoom &&
@@ -1167,7 +1180,7 @@ function generateFloor(floorNum) {
           const nx2=cx+ddx, ny2=cy+ddy;
           if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
           const t=map[ny2][nx2];
-          if (t===T.WALL||t===T.VOID||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G) continue;
+          if (t===T.WALL||t===T.VOID||t===T.CRACKED||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G) continue;
           vis2[ny2][nx2]=1;
           q2.push({x:nx2,y:ny2});
         }
@@ -1188,6 +1201,37 @@ function generateFloor(floorNum) {
           }
         }
       }
+    }
+  }
+
+  // ── Secret room (floor 3+, one per floor, not boss floors) ──────────────
+  const secretRooms = [];
+  if (floorNum >= 3 && !bossRoom) {
+    // Candidates: not spawn, not stair, not special, not vendor, decent size
+    const secretEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && !r.roomType && r.w * r.h >= 20
+    );
+    // Shuffle and try to find one with a narrow entrance cluster
+    const shuffled = secretEligible.sort(() => Math.random() - 0.5);
+    for (const r of shuffled) {
+      const cls = getEntranceClusters(r);
+      const narrow = cls.filter(cl => cl.length <= 2);
+      if (!narrow.length) continue; // no narrow entrance → skip
+
+      r.roomType = 'secret';
+      r.secretRevealed = false;
+      specialRooms.push(r);
+      secretRooms.push(r);
+
+      // Wall off ALL entrances
+      for (const cl of cls) {
+        for (const e of cl) map[e.y][e.x] = T.WALL;
+      }
+      // Place T.CRACKED at one narrow cluster (the "hidden entrance")
+      const crackedCluster = narrow[rndInt(0, narrow.length - 1)];
+      for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
+
+      break; // only one secret room per floor
     }
   }
 
@@ -1281,7 +1325,16 @@ function generateFloor(floorNum) {
         if (map[ty][tx]===T.FLOOR) roomColour[ty][tx]=col;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom };
+  // Secret room mask — tiles inside unrevealed secret rooms are hidden from lighting/rendering
+  // Cracked entrance tiles are excluded so they can receive light and render crack visuals
+  const secretMask = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+  for (const r of secretRooms) {
+    for (let ty=r.y; ty<r.y+r.h; ty++)
+      for (let tx=r.x; tx<r.x+r.w; tx++)
+        if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
+  }
+
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -1292,6 +1345,7 @@ function updateLighting(dungeon, px, py) {
     for (let dx=-r; dx<=r; dx++) {
       const x=tx+dx, y=ty+dy;
       if (x<0||y<0||x>=MAP_W||y>=MAP_H) continue;
+      if (dungeon.secretMask[y][x]) continue; // hide unrevealed secret rooms
       const d = Math.sqrt(dx*dx+dy*dy);
       if (d <= r) {
         const l = Math.max(0, 1 - d/r);
@@ -1307,6 +1361,7 @@ function updateLighting(dungeon, px, py) {
       for (let dx=-4; dx<=4; dx++) {
         const x=sc.x+dx, y=sc.y+dy;
         if (x<0||y<0||x>=MAP_W||y>=MAP_H) continue;
+        if (dungeon.secretMask[y][x]) continue;
         const d=Math.sqrt(dx*dx+dy*dy);
         if (d<=4) dungeon.light[y][x]=Math.max(dungeon.light[y][x],0.4*(1-d/4));
       }
@@ -2492,6 +2547,38 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
+        case T.CRACKED: {
+          // Render as wall base
+          ctx.fillStyle='#1a1a2e';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#2d2d5e';
+          ctx.fillRect(sx,sy,TILE,2);
+          ctx.fillRect(sx,sy,2,TILE);
+          // Show crack lines only when player is within 3 tiles
+          const pdx=tx-Math.floor(game.player.x), pdy=ty-Math.floor(game.player.y);
+          const pDist=Math.sqrt(pdx*pdx+pdy*pdy);
+          if (pDist <= 3) {
+            const crackAlpha = brightness * Math.max(0.15, 0.5 * (1 - pDist/3));
+            ctx.globalAlpha = crackAlpha;
+            ctx.strokeStyle='#ffb700';
+            ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
+            ctx.lineWidth=1;
+            ctx.beginPath();
+            const seed = tx * 137 + ty * 311;
+            const mx = sx + TILE/2 + (seed%5-2);
+            const my = sy + TILE/2 + (seed%7-3);
+            ctx.moveTo(sx+2, my-2);
+            ctx.lineTo(mx-1, my+1);
+            ctx.lineTo(sx+TILE-3, my+2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(mx+1, sy+3);
+            ctx.lineTo(mx-2, my);
+            ctx.lineTo(mx+2, sy+TILE-3);
+            ctx.stroke();
+          }
+          break;
+        }
       }
       ctx.restore();
     }
@@ -2666,7 +2753,7 @@ function drawMinimap(dungeon, player) {
       const tile=dungeon.map[ty][tx];
       const px2=MX+tx*sx, py2=MY+ty*sy;
       let col=null;
-      if (tile===T.WALL) {
+      if (tile===T.WALL||tile===T.CRACKED) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
       else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW) col='#202040';
@@ -2779,6 +2866,7 @@ function populateFloor(dungeon, floorNum) {
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
     if (room===spawnRoom) continue;
+    if (room.roomType==='secret') continue; // lazy-spawn on reveal
 
     if (bossRoom && room===bossRoom) {
       const btype=bossTypes[floorNum];
@@ -2941,7 +3029,7 @@ const game = {
         reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
       { id:'EXPLORE', label:'Visit every room', check: ()=>{
           const d=this.dungeon;
-          return d.rooms.every(r=>d.visited[r.cy]?.[r.cx]);
+          return d.rooms.every(r=>r.roomType==='secret' && !r.secretRevealed || d.visited[r.cy]?.[r.cx]);
         },
         reward: ()=>{ this.player.gainXP(40+floorNum*8); this.msg('Quest complete! +XP','#39ff14'); }},
       { id:'SPEEDRUN', label:'Reach stairs in 60s', timer:60, check: function(){
@@ -2986,6 +3074,41 @@ const game = {
         this.loadFloor(next);
       }, 'PLAYING');
     }
+  },
+
+  revealSecretRoom(sr) {
+    sr.secretRevealed = true;
+    const dungeon = this.dungeon;
+    // Clear secret mask so lighting/visited works
+    for (let ty=sr.y; ty<sr.y+sr.h; ty++)
+      for (let tx=sr.x; tx<sr.x+sr.w; tx++)
+        dungeon.secretMask[ty][tx] = 0;
+    // Convert any remaining cracked tiles around the room to floor
+    for (let ty=Math.max(0,sr.y-1); ty<Math.min(MAP_H,sr.y+sr.h+1); ty++)
+      for (let tx=Math.max(0,sr.x-1); tx<Math.min(MAP_W,sr.x+sr.w+1); tx++)
+        if (dungeon.map[ty][tx]===T.CRACKED) dungeon.map[ty][tx]=T.FLOOR;
+    // Spawn enemies (reduced count — it's a bonus room)
+    const floorNum = this.floor;
+    const minE = 1 + Math.floor(floorNum / 4);
+    const maxE = Math.min(4, 2 + Math.floor(floorNum / 3));
+    const areaCap = Math.floor(sr.w * sr.h / 10);
+    const count = Math.min(areaCap, rndInt(minE, maxE));
+    for (let j=0; j<count; j++) {
+      const type = pickEnemyType(floorNum);
+      const ex = sr.x + rnd(1, sr.w - 1), ey = sr.y + rnd(1, sr.h - 1);
+      const e = spawnEnemy(type, ex, ey, floorNum, sr, true);
+      enemies.push(e);
+    }
+    // Spawn premium loot: guaranteed upgrade item + bonus credits
+    const itemCount = 2 + (sr.w * sr.h >= 40 ? 1 : 0);
+    for (let j=0; j<itemCount; j++) {
+      const ix = sr.x + rnd(1, sr.w - 1), iy = sr.y + rnd(1, sr.h - 1);
+      items.push(new Item(ix, iy));
+    }
+    // Bonus credit pickup worth floor-scaled amount
+    this.player.credits += Math.round(20 * (1 + floorNum * 0.15));
+    this.msg('+' + Math.round(20 * (1 + floorNum * 0.15)) + ' credits found!', '#39ff14');
+    this.player.score += 300 * floorNum;
   },
 
   saveScore(name) {
@@ -3261,6 +3384,22 @@ const game = {
         const dx=tx+ddx, dy=ty+ddy;
         if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
         const dt=dungeon.map[dy][dx];
+        if (dt===T.CRACKED) {
+          dungeon.map[dy][dx]=T.FLOOR;
+          audio.wallBreak();
+          spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', '#ffb700', 12);
+          this.msg('SECRET AREA DISCOVERED','#ffb700');
+          // Reveal the secret room — cracked tile is on room boundary
+          for (const sr of dungeon.secretRooms) {
+            if (sr.secretRevealed) continue;
+            // Cracked tile is on room edge or 1 tile outside it
+            if (dx >= sr.x-1 && dx <= sr.x+sr.w && dy >= sr.y-1 && dy <= sr.y+sr.h) {
+              this.revealSecretRoom(sr);
+              break;
+            }
+          }
+          break;
+        }
         if (dt===T.DOOR) {
           dungeon.map[dy][dx]=T.DOOR_OPEN;
           this.msg('Door opened','#aa8844');
@@ -3281,12 +3420,13 @@ const game = {
         }
       }
     }
-    // door prompt
+    // door / cracked wall prompt
     const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
     for (const [ddx,ddy] of dirs) {
       const dx=tx+ddx, dy=ty+ddy;
       if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
       const dt=dungeon.map[dy][dx];
+      if (dt===T.CRACKED) { this.hint={text:'Faint cracks... (press E)',colour:'#ffb700'}; break; }
       if (dt===T.DOOR) { this.hint={text:'Press E to open door',colour:'#aa8844'}; break; }
       if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press E)', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
     }
