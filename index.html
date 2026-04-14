@@ -1044,7 +1044,7 @@ class Projectile {
 const ITEM_TYPES = [
   {id:'MED_PACK',   name:'Med-Pack',     colour:'#00ff88', rarity:40, fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
   {id:'NANO_REPAIR',name:'Nano-Repair',  colour:'#88ff88', rarity:35, fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
-  {id:'SHIELD_CELL',name:'Shield Cell',  colour:'#00aaff', rarity:20, fn: p=>{ p.def+=2; }},
+  {id:'SHIELD_CELL',name:'Shield Cell',  colour:'#00aaff', rarity:20, fn: p=>{ p.def+=5; p.shieldBonus+=5; }},
   {id:'XP_CHIP',    name:'XP Chip',      colour:'#ffff00', rarity:20, fn: p=>{ p.gainXP(50); }},
   {id:'WEAPON_CRATE',name:'Weapon Crate',colour:'#ff8800', rarity:10, fn: p=>{ const k=WEAPON_KEYS[rndInt(0,WEAPON_KEYS.length-1)]; p.weapon=WEAPONS[k]; game.msg('Found '+WEAPONS[k].name+'!','#ff8800'); }},
   {id:'OVERCLOCK',  name:'Overclock',    colour:'#ff00c8', rarity:8,  fn: p=>{ p.speedBoost=1.5; p.speedTimer=20; }},
@@ -1617,6 +1617,7 @@ class Player {
     this.shootCooldown=0;
     this.facing={x:1,y:0};
     this.speedBoost=0; this.speedTimer=0;
+    this.shieldBonus=0;
     this.shards=0;
     this.flashTimer=0;
     this.levelFlash=0;
@@ -2108,6 +2109,9 @@ const game = {
 
   loadFloor(n) {
     this.floor=n;
+    // Strip floor-only shield bonus from previous floor
+    this.player.def-=this.player.shieldBonus;
+    this.player.shieldBonus=0;
     this.dungeon=generateFloor(n);
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
