@@ -819,6 +819,14 @@ const audio = (() => {
       osc('sine', 2200, 800, 0.06, t, 0.08);
       osc('triangle', 3400, 1200, 0.03, t, 0.05);
       noise(0.02, t, 0.02, 6000);
+    },
+    autoLaser() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.25, 0.2);
+      // Sharp high-frequency zap + descending ring
+      osc('sine', 3000, 800, 0.08, t, 0.1, bus);
+      osc('square', 1500, 400, 0.05, t, 0.08, bus);
+      noise(0.04, t, 0.05, 5000, bus);
     }
   };
 })();
@@ -1531,10 +1539,11 @@ function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 // ─── Level-Up Perks ──────────────────────────────────────────────────────────
 // Passive abilities unlocked automatically at specific levels
 const PERKS = {
-  LASER_SIGHT:     { level:2, name:'Laser Sight',     desc:'Shows aim trajectory',          colour:'#00f5ff' },
-  THREAT_SENSE:    { level:4, name:'Threat Sense',     desc:'Detects nearby off-screen foes', colour:'#ff6644' },
-  PIERCING_ROUNDS: { level:6, name:'Piercing Rounds',  desc:'Shots pierce through one enemy', colour:'#ff00c8' },
-  ENERGY_SHIELD:   { level:8, name:'Energy Shield',    desc:'Absorbs one hit every 30s',      colour:'#4488ff' },
+  LASER_SIGHT:     { level:2,  name:'Laser Sight',     desc:'Shows aim trajectory',          colour:'#00f5ff' },
+  THREAT_SENSE:    { level:4,  name:'Threat Sense',     desc:'Detects nearby off-screen foes', colour:'#ff6644' },
+  PIERCING_ROUNDS: { level:6,  name:'Piercing Rounds',  desc:'Shots pierce through one enemy', colour:'#ff00c8' },
+  ENERGY_SHIELD:   { level:8,  name:'Energy Shield',    desc:'Absorbs one hit every 30s',      colour:'#4488ff' },
+  AUTO_LASER:      { level:10, name:'Auto-Laser',       desc:'Fires beam at nearest foe',      colour:'#ff2222' },
 };
 function checkPerkUnlocks(player, level) {
   for (const [id, perk] of Object.entries(PERKS)) {
@@ -2219,6 +2228,8 @@ class Player {
     this.perks={};              // level-unlocked passive abilities
     this.energyShield=false;    // active energy shield bubble
     this.energyShieldTimer=0;   // recharge countdown (30s)
+    this.autoLaserTimer=0;      // auto-laser cooldown
+    this.autoLaserBeam=null;    // {x1,y1,x2,y2,timer} for beam rendering
     this.credits=0;             // vendor currency
   }
 
@@ -2388,6 +2399,32 @@ class Player {
       ctx.beginPath();
       ctx.arc(ex, ey, 2.5, 0, TWO_PI);
       ctx.fill();
+      ctx.restore();
+    }
+
+    // Auto-Laser beam effect
+    if (this.autoLaserBeam) {
+      const b = this.autoLaserBeam;
+      const alpha = b.timer / 0.15;
+      ctx.save();
+      // Outer glow
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.strokeStyle = '#ff2222';
+      ctx.shadowBlur = 14; ctx.shadowColor = '#ff2222';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(b.x1*TILE-camX, b.y1*TILE-camY);
+      ctx.lineTo(b.x2*TILE-camX, b.y2*TILE-camY);
+      ctx.stroke();
+      // Bright core
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ffffff';
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(b.x1*TILE-camX, b.y1*TILE-camY);
+      ctx.lineTo(b.x2*TILE-camX, b.y2*TILE-camY);
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -3038,6 +3075,7 @@ const game = {
     // Strip floor-only shield bonus from previous floor
     this.player.def-=this.player.shieldBonus;
     this.player.shieldBonus=0;
+    this.player.autoLaserBeam=null; // clear stale beam from previous floor
     this.dungeon=generateFloor(n);
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
@@ -3227,6 +3265,8 @@ const game = {
     p.energyShieldTimer=s.energyShieldTimer||0;
     p.credits=s.credits||0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
+    // Recompute perks from level — handles saves from before new perks existed
+    for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
     this.player=p;
     this.loadFloor(save.floor||1);
     this.setState('PLAYING');
@@ -3397,6 +3437,33 @@ const game = {
           p.homing = nearest;
           projectiles.push(p);
           spawnParticles(player.x, player.y, 'MUZZLE', '#ff44cc', 3);
+        }
+      }
+    }
+
+    // Auto-Laser perk — hitscan beam at nearest visible enemy
+    if (player.perks.AUTO_LASER && player.hp > 0) {
+      if (player.autoLaserBeam) {
+        player.autoLaserBeam.timer -= dt;
+        if (player.autoLaserBeam.timer <= 0) player.autoLaserBeam = null;
+      }
+      player.autoLaserTimer -= dt;
+      if (player.autoLaserTimer <= 0) {
+        let target = null, minD = 12;
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (e.type === 'PHANTOM' && !e.visible) continue;
+          const d = dist(player.x, player.y, e.x, e.y);
+          if (d <= minD && hasLOS(player.x, player.y, e.x, e.y, dungeon.map)) {
+            minD = d; target = e;
+          }
+        }
+        if (target) {
+          player.autoLaserTimer = 2.5;
+          target.takeDamage(20, 'Auto-Laser');
+          player.autoLaserBeam = {x1:player.x, y1:player.y, x2:target.x, y2:target.y, timer:0.15};
+          spawnParticles(target.x, target.y, 'SPARK', '#ff2222', 5);
+          audio.autoLaser();
         }
       }
     }

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.3
+# NEON DUNGEON — Game Specification v2.4
 
 ## Vision
 
@@ -449,6 +449,7 @@ perks.
 | 4 | Threat Sense | Directional chevrons on screen edges pointing toward off-screen enemies within 18 tiles. Closer enemies produce larger, brighter indicators. Boss indicators are red; normal enemies are orange-red. Invisible phantoms are excluded. |
 | 6 | Piercing Rounds | All player projectiles (weapon shots and Plasma Orb) pass through one additional enemy before stopping. Stacks with weapon-native piercing (Railgun already pierces infinitely, so no visible change). Implemented via `maxPierces` counter on `Projectile`. |
 | 8 | Energy Shield | A protective shield that absorbs one hit completely (no HP loss). After breaking, recharges over 30 s of gameplay time (pauses during menus/transitions). Visual: pulsing blue ring around the player while active. HUD shows `🛡 Ns` countdown while recharging. Does **not** block environmental hazards (plasma vents, arc grids) that bypass `takeDamage()`. |
+| 10 | Auto-Laser | Every 2.5 s, fires an instant hitscan beam at the nearest visible enemy within 12 tiles. Deals 20 flat damage (unscaled by player ATK). Requires line-of-sight; invisible phantoms excluded. Visual: bright crimson beam with white core, fades over 0.15 s. `audio.autoLaser()` zap SFX. |
 
 **Laser Sight details:**
 - Ray uses `isPassable()` collision (same as projectiles) so the line
@@ -498,6 +499,25 @@ perks.
   with `#4488ff` colour and `shadowBlur` glow, drawn over the player body.
 - HUD: `🛡 Ns` countdown in `#4488ff` shown in both compact and landscape layouts
   while recharging. Hidden when shield is active (the visual bubble is sufficient).
+
+**Auto-Laser details:**
+- State: `player.autoLaserTimer` (seconds until next beam), `player.autoLaserBeam`
+  (`{x1,y1,x2,y2,timer}` or `null`).
+- Cooldown: 2.5 s. Timer only resets on a **successful hit** — if no valid target
+  is in range, the timer stays at 0 and fires immediately when one appears.
+- Target selection: nearest living, visible enemy within 12 tiles with clear
+  line-of-sight (`hasLOS()`). Invisible phantoms excluded.
+- Damage: 20 flat (not scaled by `player.atk`), applied via `enemy.takeDamage()`.
+  Affected by enemy defense. Weapon name: `'Auto-Laser'`.
+- Visual: drawn in `player.draw()` before the player body. Dual-layer beam:
+  outer `#ff2222` glow (2.5 px, `shadowBlur` 14, 60 % alpha) + inner `#ffffff`
+  core (1 px, full alpha). Both fade linearly over 0.15 s. Red spark particles
+  at the impact point.
+- Audio: `audio.autoLaser()` — high-pitched sine zap (3000→800 Hz) + square
+  harmonic (1500→400 Hz) + noise burst through reverb bus.
+- Save compatibility: existing saves load perks from JSON, then `checkPerkUnlocks()`
+  re-runs for all levels up to `player.level`. Saves from before Auto-Laser was
+  added will retroactively unlock it on load if the player is level 10.
 
 ### Vendor / Shop System
 
@@ -850,3 +870,5 @@ the manifest to achieve a chrome-less experience.
 | v6.3    | Boss seal fix: entrance-aware detection prevents locking player out of boss room; safety nudge to room center if stuck. Door clustering: `getEntranceClusters()` helper groups adjacent entrance tiles; only narrow clusters (≤2 tiles) receive doors; all tiles in a cluster doored together. Locked door targeting: priority system (stair room > special rooms > random); all narrow entrance clusters locked, wide ones walled off. Save system: checkpoint-only auto-save on floor entry (no `beforeunload` — prevents save-scumming); CONTINUE/NEW GAME menu; save deleted on game over/victory; `localStorage` key `neonDungeonSave`. SW cache v12 |
 | v7.0    | Vendor/shop system: credits currency (earned from enemy kills, floor-scaled), `T.VENDOR` tile (14), vendor room type (floor 2+, independent of special room rotation, excluded from lock targets), `SHOPPING` game state with 3-item shop UI (keyboard + touch), explicit per-upgrade pricing, shop-exclusive Full Repair and coloured Key items, credits on HUD (compact + landscape), credits in save/load, `audio.vendorOpen()`/`purchase()`/`purchaseFail()` SFX. SW cache v13 |
 | v8.0    | Secret rooms: `T.CRACKED` tile (15) — wall-like with proximity-visible amber cracks. One secret room per non-boss floor (3+), walled off with one cracked entrance. Lazy activation: enemies/items spawn only when cracked wall is broken (E key). `secretMask` prevents lighting from revealing hidden contents. Premium loot + credit bonus on reveal. EXPLORE quest excludes unrevealed secrets. `audio.wallBreak()` SFX. SW cache v14 |
+| v9.0    | Ricochet Module upgrade: persistent upgrade (max level 3), player projectiles bounce off walls (axis-separated reflection, epsilon nudge), cyan sparks + `audio.ricochet()` SFX. Excluded from Plasma Orb homing. `hitEnemies` preserved across bounces. SW cache v15 |
+| v10.0   | Auto-Laser capstone perk (level 10): hitscan beam auto-fires at nearest visible enemy within 12 tiles every 2.5 s, 20 flat damage, LOS-gated, invisible phantoms excluded. Crimson beam + white core visual (0.15 s fade), `audio.autoLaser()` zap SFX. Save compatibility: `checkPerkUnlocks()` re-runs on load to retroactively grant perks from before they existed. SW cache v16 |
