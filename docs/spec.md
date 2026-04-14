@@ -183,6 +183,7 @@ unlock passive **perks** (see Level-Up Perks section under Items & Upgrades).
 | WASD / Arrow keys  | Move                      |
 | Mouse              | Aim                       |
 | Left Click / Space | Fire weapon               |
+| Shift              | Dash (dodge)              |
 | E                  | Interact (door/stairs)    |
 | I                  | Toggle inventory           |
 | ESC                | Pause / back to menu       |
@@ -196,6 +197,7 @@ On touch devices, the game uses a dual-joystick layout with virtual buttons:
 | Left-half touch & drag            | Move joystick (base radius 55 px) |
 | Right-half touch & drag           | Aim joystick — holding fires automatically |
 | E button (bottom-right, cyan)     | Interact (door/stairs)      |
+| ⇧ button (bottom-right, amber)   | Dash (dodge)                |
 | V button (bottom-right, purple)   | Use void shard              |
 | ‖ button (top-right, magenta)     | Pause                       |
 
@@ -226,6 +228,26 @@ Default starting weapon: PULSE PISTOL.
 - ATK +3
 - DEF +1
 - Brief screen flash + sound sting
+
+### Dash (Dodge)
+
+The player can perform a short burst-dash to evade attacks. Available from
+floor 1 with no unlock requirement.
+
+| Property       | Value                                              |
+|----------------|----------------------------------------------------|
+| Keybind        | Shift (keyboard), ⇧ button (touch)                |
+| Direction      | Movement direction if moving; facing direction otherwise |
+| Speed          | 18 tiles/sec (~5× normal walk speed)               |
+| Duration       | 0.12 s (~2.2 tiles travel)                         |
+| Cooldown       | 1.5 s (shown on HUD when active)                  |
+| Invulnerability| Player has i-frames for the entire dash duration   |
+| Collision      | Wall collision ends the dash early                 |
+| Visual         | Amber afterimage trail (up to 8 ghosts, fade 0.25s), amber spark particles |
+| Audio          | Whoosh (rising noise burst + descending sine sweep) |
+
+During a dash, normal movement and shooting are suppressed. The player cannot
+dash while dead or while the cooldown is active.
 
 ---
 
@@ -1186,3 +1208,4 @@ the manifest to achieve a chrome-less experience.
 | v19.0   | Screen shake: camera shakes on player damage (intensity ∝ damage, capped 8 px), shield break (4 px), volatile explosions (6 px), void shard detonation (10 px). Linear decay, render-only (no aim interference). Reset on floor transitions. SW cache v26 |
 | v20.0   | Combo / kill-streak counter: fast successive kills build a combo multiplier (×1.25 at 2 kills up to ×4 at 13+, 3 s window). Boss kills capped at ×2. SHARDs and VOLATILE chain kills excluded from building combo. HUD shows multiplier + count with colour tiers (cyan → yellow → orange → magenta). Ascending audio chirp on each increment. Milestone floating text at ×5/×10/×15/×20. Best combo shown on end screens. Reset per floor. SW cache v27 |
 | v21.0   | Minimap POI markers: key locations (stairs/terminal, vendor, lore) get larger pulsing glow markers on the minimap drawn above tile and enemy layers. Stairs/terminal: white 3 px, vendor: green 3 px, lore: amber 2 px. Sealed boss entrances: red 4 px fast-pulse overlay. Player dot stays on top. Improves navigation on larger floors. SW cache v28 |
+| v22.0   | Dash/dodge ability: Shift key (keyboard) or ⇧ touch button triggers a fast 0.12 s burst-dash at 18 tiles/sec (~5× walk speed) in movement/facing direction. 1.5 s cooldown, invulnerable during dash, wall collision ends early. Amber afterimage trail (8 ghosts, fade 0.25 s) + amber spark particles. `audio.dash()` whoosh SFX. HUD cooldown display (compact + landscape). Touch button added between E and V buttons with cooldown dim overlay. Control hints updated. SW cache v29 |
