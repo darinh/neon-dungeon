@@ -397,6 +397,12 @@ function dist(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx
 function dist2(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
 function norm(dx, dy) { const l=Math.sqrt(dx*dx+dy*dy)||1; return [dx/l, dy/l]; }
 function lerp(a, b, t) { return a + (b-a)*t; }
+function clampToBossRoom(entity) {
+  if (!game.bossSealed || !game.bossRoom) return;
+  const r = game.bossRoom;
+  entity.x = Math.max(r.x + 0.5, Math.min(r.x + r.w - 0.5, entity.x));
+  entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
+}
 
 function hasLOS(x1, y1, x2, y2, map) {
   let dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
@@ -704,6 +710,28 @@ const audio = (() => {
       nSrc.start(t); nSrc.stop(t + 0.92);
       // Sub rumble
       osc('sine', 50, 35, 0.08, t, 0.8, bus);
+    },
+    roomSeal() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 1.0);
+      // Heavy metallic slam
+      osc('square',   80,  30,  0.3,  t, 0.15, bus);
+      osc('sawtooth', 120, 60,  0.15, t, 0.2,  bus);
+      noise(0.25, t, 0.12, 800, bus);
+      // Lock mechanism clank
+      osc('square', 400, 200, 0.12, t + 0.15, 0.08, bus);
+      osc('square', 300, 150, 0.10, t + 0.22, 0.06, bus);
+      // Sub-bass thud
+      osc('sine', 40, 25, 0.2, t, 0.3);
+    },
+    roomUnseal() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.6);
+      // Rising release tone
+      osc('sine',     200, 500, 0.15, t, 0.3, bus);
+      osc('triangle', 400, 800, 0.08, t + 0.05, 0.25, bus);
+      // Hiss of pressure release
+      noise(0.15, t, 0.25, 2000, bus);
     }
   };
 })();
@@ -864,6 +892,7 @@ function generateFloor(floorNum) {
 
   // boss room on floors 3,6,10
   let bossRoom = null;
+  let bossEntrances = [];
   if (floorNum===3||floorNum===6||floorNum===10) {
     // use the room furthest from spawn that isn't the stair room
     let br = null, bd = 0;
@@ -872,6 +901,48 @@ function generateFloor(floorNum) {
       if (d>bd) { bd=d; br=r; }
     }
     bossRoom = br || rooms[Math.floor(rooms.length/2)];
+
+    // Enforce minimum boss room size (15×15) by expanding if needed
+    const MIN_BOSS = 15;
+    if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
+      const nw = Math.max(bossRoom.w, MIN_BOSS);
+      const nh = Math.max(bossRoom.h, MIN_BOSS);
+      // centre the expansion on the current room centre, clamped to map
+      const nx = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
+      const ny = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
+      bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
+      bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
+      carveRect(map, nx, ny, nw, nh, T.FLOOR);
+      // re-carve corridors to this room from neighbours
+      for (const r of rooms) {
+        if (r === bossRoom) continue;
+        const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
+        if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
+      }
+      // Re-place stairs/terminal in case expansion overwrote it
+      map[farthest.cy][farthest.cx] = floorNum>=10 ? T.TERMINAL : T.STAIRS;
+    }
+
+    // Record entrance tiles: floor tiles on room boundary that connect to corridors
+    const rx=bossRoom.x, ry=bossRoom.y, rw=bossRoom.w, rh=bossRoom.h;
+    for (let tx=rx; tx<rx+rw; tx++) {
+      // top edge
+      if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR)
+        bossEntrances.push({x:tx, y:ry});
+      // bottom edge
+      const by=ry+rh-1;
+      if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR)
+        bossEntrances.push({x:tx, y:by});
+    }
+    for (let ty=ry; ty<ry+rh; ty++) {
+      // left edge
+      if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR)
+        bossEntrances.push({x:rx, y:ty});
+      // right edge
+      const bx=rx+rw-1;
+      if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR)
+        bossEntrances.push({x:bx, y:ty});
+    }
   }
 
   // lights
@@ -885,7 +956,7 @@ function generateFloor(floorNum) {
   const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, playerPos, lights, visited, light };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -1161,7 +1232,9 @@ class Enemy {
   aiDrone(dt,player,map,d,los) {
     const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07);
     if (d<15) {
-      this.moveToward(player.x,player.y,this.spd,dt,map,true);
+      // Drones respect walls when boss room is sealed
+      const canPhase = !game.bossSealed;
+      this.moveToward(player.x,player.y,this.spd,dt,map,canPhase);
       if (this.shootTimer<=0) {
         this.fireAt(player.x,player.y,7,this.atk,16,'#00aaff');
         this.shootTimer=cooldown;
@@ -1202,6 +1275,7 @@ class Enemy {
     if (this.phase===2 && this.bossTimers.shield<=0) {
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
       player.x-=dx*3; player.y-=dy*3;
+      clampToBossRoom(player);
       player.takeDamage(20);
       spawnParticles(player.x,player.y,'EXPLOSION','#ff4444',8);
       this.bossTimers.shield=5;
@@ -1344,6 +1418,7 @@ class Enemy {
         const [kx, ky] = norm(player.x - this.x, player.y - this.y);
         player.x += kx * 3;
         player.y += ky * 3;
+        clampToBossRoom(player);
         player.takeDamage(20);
         spawnParticles(this.x, this.y, 'EXPLOSION', '#ff00c8', 12);
       }
@@ -1704,13 +1779,21 @@ function drawWorld(dungeon, camX, camY) {
       ctx.save();
       ctx.globalAlpha=brightness;
       switch(tile) {
-        case T.WALL:
-          ctx.fillStyle='#1a1a2e';
+        case T.WALL: {
+          const isSealed = game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty);
+          ctx.fillStyle = isSealed ? '#2e1a1a' : '#1a1a2e';
           ctx.fillRect(sx,sy,TILE,TILE);
-          ctx.fillStyle='#2d2d5e';
+          ctx.fillStyle = isSealed ? '#5e2d2d' : '#2d2d5e';
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
+          if (isSealed) {
+            ctx.shadowBlur=8; ctx.shadowColor='#ff3333';
+            ctx.fillStyle='#ff3333';
+            ctx.globalAlpha=brightness*0.4;
+            ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          }
           break;
+        }
         case T.FLOOR:
           ctx.fillStyle='#0f0f1f';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -1875,7 +1958,9 @@ function drawMinimap(dungeon, player) {
       const tile=dungeon.map[ty][tx];
       const px2=MX+tx*sx, py2=MY+ty*sy;
       let col=null;
-      if (tile===T.WALL) col='#1a1a2e';
+      if (tile===T.WALL) {
+        col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
+      }
       else if (tile===T.FLOOR) col='#202040';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
@@ -1929,8 +2014,8 @@ function populateFloor(dungeon, floorNum) {
       if (btype) {
         const b=spawnEnemy(btype,room.cx,room.cy,floorNum,room);
         enemies.push(b);
-        // seal boss room (we track it separately)
         game.bossRoom=bossRoom;
+        game.bossEntrances=dungeon.bossEntrances||[];
         game.bossSealed=false;
         game.bossAlive=true;
       }
@@ -1986,6 +2071,7 @@ const game = {
   transitionText: '',
   menuParticles: [],
   bossRoom: null,
+  bossEntrances: [],
   bossSealed: false,
   bossAlive: false,
   msgList: [],
@@ -2023,6 +2109,11 @@ const game = {
   loadFloor(n) {
     this.floor=n;
     this.dungeon=generateFloor(n);
+    // Reset boss state before populating (populateFloor sets them for boss floors)
+    this.bossRoom=null;
+    this.bossEntrances=[];
+    this.bossSealed=false;
+    this.bossAlive=false;
     populateFloor(this.dungeon,n);
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
@@ -2188,17 +2279,32 @@ const game = {
     // pause
     if (jp('Escape')) this.setState('PAUSED');
 
-    // boss seal check
-    if (this.bossRoom && !this.bossSealed) {
-      const bossEnemy=enemies.find(e=>e.isBoss);
-      if (bossEnemy && dist(player.x,player.y,bossEnemy.x,bossEnemy.y)<8) {
-        this.bossSealed=true;
+    // boss seal check — seal when player enters the boss room
+    if (this.bossRoom && !this.bossSealed && this.bossAlive) {
+      const r = this.bossRoom;
+      if (player.x >= r.x && player.x < r.x + r.w &&
+          player.y >= r.y && player.y < r.y + r.h) {
+        this.bossSealed = true;
+        // Convert entrance tiles to walls
+        for (const e of this.bossEntrances) {
+          e.origTile = dungeon.map[e.y][e.x];
+          dungeon.map[e.y][e.x] = T.WALL;
+        }
+        audio.roomSeal();
+        this.msg('⚠ ROOM SEALED','#ff3333');
       }
     }
 
     // boss death — unseal room and update state
     if (this.bossAlive && !enemies.some(e=>e.isBoss && !e.dead)) {
       this.bossAlive=false;
+      // Restore entrance tiles
+      if (this.bossSealed) {
+        for (const e of this.bossEntrances) {
+          if (e.origTile !== undefined) dungeon.map[e.y][e.x] = e.origTile;
+        }
+        audio.roomUnseal();
+      }
       this.bossSealed=false;
       const bossNames={3:'SENTINEL MK-I',6:'NEURAL HIVE',10:'OMEGA CORE'};
       game.msg((bossNames[this.floor]||'BOSS')+' DESTROYED','#39ff14');

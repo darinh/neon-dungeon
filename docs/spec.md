@@ -193,13 +193,17 @@ AI parameters tighten with floor progression:
 | NEURAL HIVE    | 500   | 3      | Spawns crawlers, psionic shockwave                |
 | OMEGA CORE     | 1000  | 4      | All previous attacks, room-filling void orbs      |
 
-Boss arenas: pre-built 20×20 rooms, sealed on entry (doors lock until dead).
+Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
+When the player enters a boss room, corridor entrance tiles become WALL (red glow
+on minimap and main view), trapping both player and boss inside. Drones inside a
+sealed room respect walls. Boss knockback effects clamp to room bounds.
 Boss-summoned adds (HIVE crawlers, OMEGA drones/crawlers) cannot be elite.
 All boss HP values are scaled by the floor modifier (`1 + 0.15 × (floor − 1)`).
 Phase thresholds use `maxHp` percentages, so scaling does not break phases.
 
-On boss death, the arena unseals and the game displays "{BOSS NAME} DESTROYED".
-On floor 10, the CORE terminal is locked until OMEGA CORE is defeated.
+On boss death, the arena unseals (entrance tiles restored) and the game displays
+"{BOSS NAME} DESTROYED". On floor 10, the CORE terminal is locked until OMEGA CORE
+is defeated.
 
 #### OMEGA CORE — Phase Breakdown
 
