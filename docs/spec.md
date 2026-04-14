@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.6
+# NEON DUNGEON — Game Specification v1.7
 
 ## Vision
 
@@ -398,6 +398,23 @@ at boot. Promise `.catch()` guards handle void-return Safari variants.
 `screen.orientation.type` is preferred; falls back to
 `innerWidth > innerHeight`. Non-touch devices skip all orientation logic.
 
+### Service Worker — Offline Caching
+
+A `sw.js` at the repository root provides offline play after first visit:
+
+| Aspect     | Detail |
+|------------|--------|
+| **Cache name** | `neon-dungeon-v1` (bump version to bust cache on updates) |
+| **Strategy**   | Stale-while-revalidate for navigation (HTML); cache-first for pre-cached assets; no runtime caching of unknown URLs |
+| **Pre-cached** | `./`, `./index.html`, `./manifest.json`, all icon PNGs |
+| **Install**    | `skipWaiting()` — new SW activates immediately |
+| **Activate**   | `clients.claim()` + purge old cache versions |
+| **Registration** | Separate `<script>` tag after the game script; silent `.catch()` for non-supporting browsers |
+
+**Update flow:** Increment the version string in `CACHE` (e.g. `neon-dungeon-v2`).
+The activate handler deletes all caches that don't match the new name, so users
+get the fresh assets on next load.
+
 ### Known Limitation — iOS Safari
 
 The Fullscreen API is not supported in standalone iOS Safari. The reliable
@@ -421,3 +438,4 @@ the manifest to achieve a chrome-less experience.
 | v1.8    | Scatter Gun per-pellet pitch randomisation: 4 staggered cracks with ±15% pitch variation and randomised noise filters replace the static dual-noise burst |
 | v1.9    | Weapon-aware hit sounds: `audio.hit()` accepts weapon name; each weapon produces a distinct enemy-impact sound (Scatter plink, Railgun crack+ring, Plasma Sword sizzle, Void Cannon thud); Projectile carries `weaponName`; fixed double-hit-sound on surviving enemies |
 | v1.10   | Maskable icon variants: 192×192 + 512×512 maskable PNGs (72% inner icon, `#0a0a12` background) for Android adaptive icons; manifest updated with `purpose: maskable` entries |
+| v1.11   | Service worker (`sw.js`): cache-first offline PWA; pre-caches index.html, manifest, and icon PNGs on install; `skipWaiting` + `clients.claim` for immediate activation; versioned cache name for update busting |
