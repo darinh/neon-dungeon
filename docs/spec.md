@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.5
+# NEON DUNGEON — Game Specification v1.6
 
 ## Vision
 
@@ -176,7 +176,7 @@ Dropped by enemies (20 % chance) or placed in rooms (1–3 per room).
 
 ### Audio Bus Architecture
 
-All audio routes through a master gain bus (0.7) → DynamicsCompressor (threshold −12 dB, ratio 4:1) → destination. A shared ConvolverNode with a procedurally generated stereo impulse response (1.6 s, quadratic decay) provides reverb. Signature sounds (death, level-up, boss enter, descend, game over, victory) send to the reverb via wet/dry split nodes. Shoot and hit sounds remain dry for clarity.
+All audio routes through a master gain bus (0.7) → DynamicsCompressor (threshold −12 dB, ratio 4:1) → destination. A shared ConvolverNode with a procedurally generated stereo impulse response (1.6 s, quadratic decay) provides reverb. Signature sounds (death, level-up, boss enter, descend, game over, victory) and heavy-weapon shots (Railgun, Void Cannon) send to the reverb via wet/dry split nodes. Lighter weapons (Pulse Pistol, Scatter Gun, Plasma Sword) remain dry for clarity.
 
 A single 2-second white-noise AudioBuffer is generated once at init and reused for all noise-burst voices.
 
@@ -184,7 +184,11 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 
 | Event            | Sound description                                                                |
 |------------------|----------------------------------------------------------------------------------|
-| Player shoot     | Sine chirp 880→440 Hz + triangle harmonic 1760→880 Hz + noise click             |
+| Pulse Pistol     | Sine chirp 880→440 Hz + triangle harmonic 1760→880 Hz + noise click (default)   |
+| Scatter Gun      | Wide noise burst (LP 2500 Hz) + secondary noise (LP 800 Hz) + square crunch 220→110 Hz + sine thump 100→50 Hz |
+| Railgun          | Charge whine (sine 3200→6400 Hz + saw 1600→4800 Hz) → crack (noise LP 8000 Hz) + ring 2400→800 Hz, reverb (0.3) |
+| Plasma Sword     | Melee whoosh: saw sweep 600→150 Hz + triangle 1200→300 Hz + noise transient     |
+| Void Cannon      | Deep thump: sine 80→35 Hz + saw 160→60 Hz + square 320→80 Hz + noise (LP 500 Hz), reverb (0.25) |
 | Enemy shoot      | Sawtooth 300→200 Hz + square sub-layer 150→100 Hz                               |
 | Hit (player)     | Noise burst (LP 250 Hz) + sine thump 80→30 Hz + triangle sub 40→20 Hz          |
 | Hit (enemy)      | Sine ping 600→200 Hz + triangle transient 1200→400 Hz                           |
@@ -358,3 +362,4 @@ the manifest to achieve a chrome-less experience.
 | v1.3    | PWA icons: 192×192 + 512×512 PNGs added to manifest.json; apple-touch-icon link in HTML |
 | v1.4    | Portrait HUD: compact two-row layout (H > W, W ≤ 600); centralized `layout` object for bottom-UI metrics; touch-aware screen prompts ("TAP TO START"); full-screen touch confirm in non-playing states |
 | v1.5    | Audio polish: master gain bus + DynamicsCompressor + ConvolverNode reverb; cached noise buffer; layered oscillators for all SFX; exponential envelopes; wet/dry reverb sends for signature sounds |
+| v1.6    | Weapon-specific shoot sounds: each weapon has a unique audio signature (Scatter Gun blast, Railgun charge-crack, Plasma Sword whoosh, Void Cannon thump); `audio.shoot()` accepts weapon object |

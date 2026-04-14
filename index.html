@@ -497,16 +497,44 @@ const audio = (() => {
 
   return {
     resume,
-    shoot(isPlayer) {
+    shoot(isPlayer, weapon) {
       const c = getCtx(); const t = c.currentTime;
-      if (isPlayer) {
-        // Layered: sine chirp + triangle harmonic + noise click
+      if (!isPlayer) {
+        osc('sawtooth', 300, 200, 0.07, t, 0.08);
+        osc('square',   150, 100, 0.04, t, 0.06);
+        return;
+      }
+      const n = weapon && weapon.name;
+      if (n === 'Scatter Gun') {
+        // Shotgun blast: wide noise burst + square crunch + low thump
+        noise(0.18, t, 0.07, 2500);
+        noise(0.10, t + 0.01, 0.05, 800);
+        osc('square', 220, 110, 0.10, t, 0.06);
+        osc('sine',   100,  50, 0.08, t, 0.05);
+      } else if (n === 'Railgun') {
+        // Charge whine + sharp crack + lingering ring
+        const bus = wetDry(1, 0.3, 0.35);
+        osc('sine',     3200, 6400, 0.06, t, 0.08, bus);
+        osc('sawtooth', 1600, 4800, 0.04, t, 0.06, bus);
+        noise(0.12, t + 0.06, 0.04, 8000, bus);
+        osc('sine',     2400, 800,  0.10, t + 0.06, 0.25, bus);
+      } else if (n === 'Plasma Sword') {
+        // Energized melee whoosh: fast sweep + harmonics
+        osc('sawtooth', 600, 150,  0.12, t, 0.10);
+        osc('triangle', 1200, 300, 0.06, t, 0.08);
+        noise(0.06, t, 0.04, 3000);
+      } else if (n === 'Void Cannon') {
+        // Deep resonant thump + sub pulse + distortion edge
+        const bus = wetDry(1, 0.25, 0.3);
+        osc('sine',     80,  35, 0.18, t, 0.25, bus);
+        osc('sawtooth', 160, 60, 0.08, t, 0.18, bus);
+        osc('square',   320, 80, 0.05, t, 0.12, bus);
+        noise(0.06, t, 0.06, 500, bus);
+      } else {
+        // Pulse Pistol (default): sine chirp + triangle harmonic + noise click
         osc('sine',    880, 440,  0.15, t, 0.09);
         osc('triangle',1760, 880, 0.06, t, 0.06);
         noise(0.08, t, 0.03, 4000);
-      } else {
-        osc('sawtooth', 300, 200, 0.07, t, 0.08);
-        osc('square',   150, 100, 0.04, t, 0.06);
       }
     },
     hit(isPlayer) {
@@ -1306,7 +1334,7 @@ class Player {
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
     }
-    audio.shoot(true);
+    audio.shoot(true, w);
     this.shootCooldown=1/w.rate;
   }
 
