@@ -344,6 +344,8 @@ perks.
 |-------|------|--------|
 | 2 | Laser Sight | Dashed neon line from player in facing direction, stops at impassable tiles. Colour matches current weapon. Hidden for melee weapons. Range matches weapon range. |
 | 4 | Threat Sense | Directional chevrons on screen edges pointing toward off-screen enemies within 18 tiles. Closer enemies produce larger, brighter indicators. Boss indicators are red; normal enemies are orange-red. Invisible phantoms are excluded. |
+| 6 | Piercing Rounds | All player projectiles (weapon shots and Plasma Orb) pass through one additional enemy before stopping. Stacks with weapon-native piercing (Railgun already pierces infinitely, so no visible change). Implemented via `maxPierces` counter on `Projectile`. |
+| 8 | Energy Shield | A protective shield that absorbs one hit completely (no HP loss). After breaking, recharges over 30 s of gameplay time (pauses during menus/transitions). Visual: pulsing blue ring around the player while active. HUD shows `🛡 Ns` countdown while recharging. Does **not** block environmental hazards (plasma vents, arc grids) that bypass `takeDamage()`. |
 
 **Laser Sight details:**
 - Ray uses `isPassable()` collision (same as projectiles) so the line
@@ -364,6 +366,35 @@ perks.
 - Boss enemies use `#ff3333`; normal enemies use `#ff6644`. Both have matching
   `shadowBlur` glow.
 - Range: 18 tiles from the player — covers roughly two rooms in any direction.
+
+**Piercing Rounds details:**
+- Adds +1 to `maxPierces` on every player-owned projectile (weapon shots via
+  `player.shoot()` and auto-cast Plasma Orbs).
+- Projectile tracks hit enemies in `hitEnemies` Set. Dies when
+  `hitEnemies.size > maxPierces`. Base `maxPierces` is 0 (normal) or `Infinity`
+  (Railgun's native piercing).
+- Railgun + Piercing Rounds: `Infinity + 1 = Infinity` — no behavioural change
+  for already-infinite-pierce weapons.
+- Enemy projectiles are unaffected (they never have `fromPlayer === true`).
+
+**Energy Shield details:**
+- State: `player.energyShield` (boolean, active/broken), `player.energyShieldTimer`
+  (seconds remaining until recharge).
+- On perk unlock: shield activates immediately (`energyShield = true`).
+- On hit absorbed: shield breaks, 30 s recharge timer starts, player gets 0.3 s
+  brief invincibility (prevents same-frame multi-hit), "🛡 SHIELD BROKEN" message,
+  blue explosion particles, `audio.shieldBreak()` SFX.
+- On recharge complete: shield restores, "🛡 SHIELD RESTORED" message,
+  `audio.shieldRestore()` ascending chime SFX.
+- Timer ticks in `player.update()` — only advances during `PLAYING` state, so it
+  pauses during menus, fade transitions, and powerup choice screens.
+- Shield does **not** block: plasma vent burns, arc grid zaps, or any damage
+  applied via direct `player.hp` reduction. Only `takeDamage()` calls are intercepted.
+- Spike traps (which use `takeDamage()`) **are** blocked by the shield.
+- Visual: 12 px radius pulsing circle (`sin` wave ±0.15 opacity around 0.25 base)
+  with `#4488ff` colour and `shadowBlur` glow, drawn over the player body.
+- HUD: `🛡 Ns` countdown in `#4488ff` shown in both compact and landscape layouts
+  while recharging. Hidden when shield is active (the visual bubble is sufficient).
 
 ---
 
@@ -627,3 +658,4 @@ the manifest to achieve a chrome-less experience.
 | v5.0    | Environmental hazards: plasma vents (floor 4+, clustered burn pools in rooms, continuous DPS bypassing armor) and arc grids (floor 5+, pulsing electric tiles in corridors, periodic zap damage); new audio `plasmaBurn()` + `arcZap()`; HP display rounded with `Math.ceil`; score HP bonus uses `Math.floor`; SW cache v8 |
 | v6.0    | Level-up perk system: passive abilities auto-unlock at specific levels. First perk: Laser Sight (level 2) — dashed neon line showing aim trajectory, weapon-coloured, stops at walls/doors, hidden for melee; perk infrastructure (`PERKS` table, `checkPerkUnlocks()`, `player.perks`); SW cache v9 |
 | v6.1    | Threat Sense perk (level 4): directional chevrons on screen edges for off-screen enemies within 18 tiles, proximity-scaled size/opacity, boss-aware colouring. Proximity hint system: doors/stairs/terminal/shrine prompts replaced per-frame `msg()` spam with single pulsing `game.hint` overlay above HUD. SW cache v10 |
+| v6.2    | Piercing Rounds perk (level 6): player projectiles pass through one additional enemy via `maxPierces` counter on `Projectile` class; applies to weapon shots and Plasma Orb auto-casts; stacks with Railgun native piercing. Energy Shield perk (level 8): absorbs one `takeDamage()` hit completely, 30 s gameplay-time recharge, pulsing blue shield visual, HUD recharge countdown, `audio.shieldBreak()`/`shieldRestore()` SFX; does not block environmental hazards. SW cache v11 |

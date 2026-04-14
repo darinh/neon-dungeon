@@ -755,6 +755,24 @@ const audio = (() => {
       osc('triangle', 400, 800, 0.08, t + 0.05, 0.25, bus);
       // Hiss of pressure release
       noise(0.15, t, 0.25, 2000, bus);
+    },
+    shieldBreak() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.6);
+      // Sharp descending crack
+      osc('square',   800, 100, 0.2,  t, 0.15, bus);
+      osc('sawtooth', 600,  80, 0.12, t + 0.02, 0.12, bus);
+      noise(0.25, t, 0.1, 3000, bus);
+      // Sub thud
+      osc('sine', 60, 30, 0.15, t + 0.05, 0.2);
+    },
+    shieldRestore() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.8);
+      // Ascending shimmer chime
+      osc('sine',     400, 900,  0.12, t, 0.3, bus);
+      osc('triangle', 600, 1200, 0.08, t + 0.05, 0.25, bus);
+      osc('sine',     800, 1400, 0.06, t + 0.1, 0.2, bus);
     }
   };
 })();
@@ -1222,6 +1240,7 @@ class Projectile {
     this.spd=spd; this.dmg=dmg;
     this.maxRange=range; this.travelled=0;
     this.colour=colour; this.piercing=piercing;
+    this.maxPierces=piercing?Infinity:0;
     this.fromPlayer=fromPlayer; this.dead=false;
     this.weaponName=weaponName||null;
     this.hitEnemies=new Set();
@@ -1252,8 +1271,8 @@ class Projectile {
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
           e.takeDamage(this.dmg, this.weaponName);
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
-          if (!this.piercing) { this.dead=true; return; }
           this.hitEnemies.add(e);
+          if (this.hitEnemies.size > this.maxPierces) { this.dead=true; return; }
         }
       }
     } else {
@@ -1341,13 +1360,16 @@ function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 // ─── Level-Up Perks ──────────────────────────────────────────────────────────
 // Passive abilities unlocked automatically at specific levels
 const PERKS = {
-  LASER_SIGHT:  { level:2, name:'Laser Sight',  desc:'Shows aim trajectory',          colour:'#00f5ff' },
-  THREAT_SENSE: { level:4, name:'Threat Sense',  desc:'Detects nearby off-screen foes', colour:'#ff6644' },
+  LASER_SIGHT:     { level:2, name:'Laser Sight',     desc:'Shows aim trajectory',          colour:'#00f5ff' },
+  THREAT_SENSE:    { level:4, name:'Threat Sense',     desc:'Detects nearby off-screen foes', colour:'#ff6644' },
+  PIERCING_ROUNDS: { level:6, name:'Piercing Rounds',  desc:'Shots pierce through one enemy', colour:'#ff00c8' },
+  ENERGY_SHIELD:   { level:8, name:'Energy Shield',    desc:'Absorbs one hit every 30s',      colour:'#4488ff' },
 };
 function checkPerkUnlocks(player, level) {
   for (const [id, perk] of Object.entries(PERKS)) {
     if (perk.level === level && !player.perks[id]) {
       player.perks[id] = true;
+      if (id === 'ENERGY_SHIELD') player.energyShield = true;
       setTimeout(() => game.msg('⚡ PERK: '+perk.name, perk.colour), 200);
     }
   }
@@ -1952,6 +1974,8 @@ class Player {
     this.orbitalHits=new Map(); // enemy→cooldown for orbital damage
     this.spellTimers={plasmaOrb:2}; // cooldown timers for auto-spells
     this.perks={};              // level-unlocked passive abilities
+    this.energyShield=false;    // active energy shield bubble
+    this.energyShieldTimer=0;   // recharge countdown (30s)
   }
 
   xpNeeded() { return this.level*80; }
@@ -1972,6 +1996,16 @@ class Player {
 
   takeDamage(dmg) {
     if (this.invincibleTimer>0) return;
+    // Energy shield absorbs the hit
+    if (this.energyShield && this.perks.ENERGY_SHIELD) {
+      this.energyShield=false;
+      this.energyShieldTimer=30;
+      this.invincibleTimer=0.3;
+      audio.shieldBreak();
+      spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
+      game.msg('🛡 SHIELD BROKEN','#4488ff');
+      return;
+    }
     const actual=Math.max(1,dmg-this.def);
     this.hp=Math.max(0,this.hp-actual);
     this.invincibleTimer=0.5;
@@ -2000,10 +2034,12 @@ class Player {
         const spread=(Math.random()-0.5)*w.spread;
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
-        projectiles.push(new Projectile(
+        const proj=new Projectile(
           this.x,this.y,pdx,pdy,12,w.dmg+this.atk,w.range,
           w.colour,!!w.piercing,true,w.name
-        ));
+        );
+        if (this.perks.PIERCING_ROUNDS) proj.maxPierces+=1;
+        projectiles.push(proj);
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
     }
@@ -2027,6 +2063,17 @@ class Player {
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
+
+    // Energy shield recharge
+    if (this.perks.ENERGY_SHIELD && !this.energyShield && this.energyShieldTimer>0) {
+      this.energyShieldTimer-=dt;
+      if (this.energyShieldTimer<=0) {
+        this.energyShield=true;
+        this.energyShieldTimer=0;
+        audio.shieldRestore();
+        game.msg('🛡 SHIELD RESTORED','#4488ff');
+      }
+    }
 
     // Low health warning pulse
     if (this.hp > 0 && this.hp / this.maxHp <= 0.25) {
@@ -2113,6 +2160,20 @@ class Player {
     ctx.arc(sx+this.facing.x*7,sy+this.facing.y*7,2.5,0,TWO_PI);
     ctx.fill();
     ctx.restore();
+
+    // Energy shield bubble
+    if (this.energyShield && this.perks.ENERGY_SHIELD) {
+      ctx.save();
+      const pulse=0.15*Math.sin(performance.now()*0.004);
+      ctx.globalAlpha=0.25+pulse;
+      ctx.strokeStyle='#4488ff';
+      ctx.shadowBlur=12; ctx.shadowColor='#4488ff';
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.arc(sx,sy,12,0,TWO_PI);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
@@ -2337,6 +2398,11 @@ function drawHUD(player) {
       ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
       ctx.fillText(`V×${player.shards}`, statsX + 74, r2 + 22);
     }
+    // Energy shield recharge indicator
+    if (player.perks.ENERGY_SHIELD && !player.energyShield) {
+      ctx.fillStyle='#4488ff'; ctx.font=`${fs}px monospace`;
+      ctx.fillText(`🛡${Math.ceil(player.energyShieldTimer)}s`, lx, r2 + 22);
+    }
   } else {
     // ── Standard landscape HUD: single row ──
     ctx.fillStyle='#1a1a2e'; ctx.fillRect(lx, y + 4, 130, 14);
@@ -2368,6 +2434,10 @@ function drawHUD(player) {
 
     if (player.shards > 0) {
       ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Void Shard ×${player.shards}`, colBase + 220, y + 22);
+    }
+    // Energy shield recharge indicator
+    if (player.perks.ENERGY_SHIELD && !player.energyShield) {
+      ctx.fillStyle='#4488ff'; ctx.fillText(`🛡 ${Math.ceil(player.energyShieldTimer)}s`, colBase, y + 22);
     }
 
     ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
@@ -2911,6 +2981,7 @@ const game = {
         if (nearest) {
           const [dx, dy] = norm(nearest.x - player.x, nearest.y - player.y);
           const p = new Projectile(player.x, player.y, dx, dy, 6, 25, 10, '#ff44cc', false, true, 'Plasma Orb');
+          if (player.perks.PIERCING_ROUNDS) p.maxPierces+=1;
           p.homing = nearest;
           projectiles.push(p);
           spawnParticles(player.x, player.y, 'MUZZLE', '#ff44cc', 3);
