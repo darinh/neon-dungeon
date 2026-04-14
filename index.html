@@ -506,11 +506,15 @@ const audio = (() => {
       }
       const n = weapon && weapon.name;
       if (n === 'Scatter Gun') {
-        // Shotgun blast: wide noise burst + square crunch + low thump
+        // Shotgun blast: base thump + per-pellet cracks with randomised pitch
         noise(0.18, t, 0.07, 2500);
-        noise(0.10, t + 0.01, 0.05, 800);
-        osc('square', 220, 110, 0.10, t, 0.06);
-        osc('sine',   100,  50, 0.08, t, 0.05);
+        osc('sine', 100, 50, 0.08, t, 0.05);
+        for (let i = 0; i < 4; i++) {
+          const dt = i * 0.008 + Math.random() * 0.006;
+          const p = 0.85 + Math.random() * 0.3;
+          noise(0.08, t + dt, 0.04, 600 + Math.random() * 1200);
+          osc('square', 220 * p, 110 * p, 0.06, t + dt, 0.05);
+        }
       } else if (n === 'Railgun') {
         // Charge whine + sharp crack + lingering ring
         const bus = wetDry(1, 0.3, 0.35);
