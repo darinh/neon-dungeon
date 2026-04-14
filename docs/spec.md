@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.6
+# NEON DUNGEON — Game Specification v2.7
 
 ## Vision
 
@@ -315,6 +315,46 @@ environmental damage (traps, plasma, arc), and boss special attack damage.
 **HUD:** Non-NORMAL difficulty shows a coloured `[EASY]` or `[HARD]` badge below
 the minimap. Shown on GAME_OVER and VICTORY screens. CONTINUE menu item shows
 the save's difficulty.
+
+### Floor Modifiers (floor 2+, non-boss)
+
+Each qualifying floor randomly receives one gameplay modifier from a pool of six.
+Floor 1 (settle-in) and boss floors (3, 6, 10) never have modifiers. Modifier is
+rolled on floor entry, saved in the checkpoint, and restored on continue. No
+SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
+
+| Modifier   | Icon | Description                    | Colour    | Effect |
+|------------|------|--------------------------------|-----------|--------|
+| BLACKOUT   | ◐    | Emergency lights only          | `#4466aa` | Player torch radius 9→5 (enemy AI unaffected) |
+| SWARM      | ⚠    | Alert — all units respond      | `#ff6644` | ×1.5 enemy count per room (area-capped), ×0.6 enemy HP |
+| FORTIFIED  | 🛡   | Reinforced patrols             | `#66eeff` | ×1.4 enemy HP, ×1.3 item drop rate |
+| VOLATILE   | 💥   | Unstable power cells           | `#ff4422` | Enemies explode on death: 15 + floor×2 AoE damage in 2-tile radius (LOS-gated); no chain reactions; player rewards normal but AoE-killed enemies don't chain |
+| SCRAMBLED  | ⌁    | Targeting interference         | `#cc44ff` | +0.15 added to weapon spread on all player shots |
+| OVERCLOCK  | ⚡   | System overclock detected      | `#ffcc00` | ×1.2 all movement speed (player + enemies) and ×1.2 enemy fire rates (÷1.2 attack/shoot cooldowns) |
+
+**Implementation hooks:**
+- BLACKOUT: `updateLighting()` torch radius conditional on `game.modifier`.
+- SWARM: `populateFloor()` + `revealSecretRoom()` count multiplier; `spawnEnemy()`
+  HP multiplier applied before `new Enemy()` (keeps `maxHp` in sync).
+- FORTIFIED: `spawnEnemy()` HP multiplier (same pattern as SWARM);
+  `Enemy.die()` drop rate boost.
+- VOLATILE: `Enemy.die()` AoE — marks targets with `_volatileKill` flag to
+  prevent recursion. Uses `hasLOS()` to avoid through-wall damage.
+- SCRAMBLED: `Player.shoot()` spread addend.
+- OVERCLOCK: `modSpeed(base)` helper used in `moveToward()` (all enemies) and
+  player movement; cooldown divisor in `aiTurret`, `aiDrone`, `aiGrenadier`,
+  `meleeAttack`.
+
+**Display:**
+- On floor entry: message via `game.msg()` (300 ms delay) showing icon + name
+  + description in modifier colour.
+- HUD: modifier label below `FLR:N` in both compact and landscape layouts.
+- `getMod()` accessor returns `FLOOR_MODIFIERS[game.modifier]` or `null`.
+
+**Save format:** `modifier` field added to save object (string key or `null`).
+`loadFloor(n, savedModifier)` accepts optional second argument: if provided,
+uses saved value instead of rolling fresh. `continueGame()` passes
+`save.modifier` through.
 
 ### Difficulty Curve
 
@@ -849,10 +889,10 @@ Mid-floor progress is not saved. Closing the browser mid-floor loses progress
 back to the start of the current floor. This is intentional — it prevents save-
 scumming (reloading to re-roll dungeon layout while keeping stats).
 
-**Save payload:** `{ v, floor, player: { hp, maxHp, atk, def, level, xp,
+**Save payload:** `{ v, floor, difficulty, modifier, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
-energyShieldTimer, credits } }` — `shieldBonus` is always 0 at floor entry so is
-excluded.
+energyShieldTimer, credits, loreRead } }` — `shieldBonus` is always 0 at floor entry so is
+excluded. `modifier` is the floor modifier key (string) or `null`.
 
 **Menu behaviour:**
 - If a save exists: two options — `CONTINUE (FLOOR N)` and `NEW GAME`.
@@ -1060,3 +1100,4 @@ the manifest to achieve a chrome-less experience.
 | v12.0   | Lore terminals: `T.LORE` tile (16) — amber data terminals placed 1–2 per non-boss floor (floor 2+), containing cyberpunk narrative fragments from a 25-entry pool. Single-use: press E to read, terminal converts to floor. `READING` game state with overlay UI (word-wrapped text, scanline frame, touch/keyboard close). +50 score per new entry. `player.loreRead` Set tracks discovered entries per run. `audio.loreAccess()` chirp SFX. Amber `◫` HUD counter + minimap dot. Save-compatible (no version bump). SW cache v19 |
 | v13.0   | Meta-progression system (Neural Archives): persistent Data Fragments (◆) currency earned at end of every run based on floors reached, bosses cleared, victory, and score. 6 permanent upgrades purchasable from new ARCHIVES game state accessible from main menu: Vital Systems (+HP), Scavenger Protocol (+credits), Quick Learner (+XP), Armor Plating (+DEF), Weapon Cache (start with upgraded weapon), Data Persistence (+fragments/run). Array-driven menu system replacing hardcoded 2-option layout — supports touch hit-testing for 2-3 options. `bossesCleared` counter tracked on game object and persisted in save. ◆ reward shown on GAME_OVER/VICTORY screens. Meta data stored in separate `localStorage` key (`neonDungeonMeta`). SW cache v20 |
 | v14.0   | Difficulty modes: EASY / NORMAL / HARD selectable on NEW GAME menu row via ◀▶ (keyboard arrows or touch edge taps, center tap starts). `DIFFICULTIES` table with per-mode multipliers for enemy HP/ATK/SPD, item drop rate, credit gain, XP gain, elite spawn rate, shard payout (run portion only), and environmental/boss damage. Selection persists in `neonDungeonMeta.lastDifficulty`; saved in run checkpoint. Old saves default to NORMAL. Non-NORMAL badge below minimap + shown on end screens. Touch menu splits diff row into 3 zones (left edge cycle, center start, right edge cycle). SW cache v21 |
+| v15.0   | Floor modifiers: each non-boss floor (2+) gets a random gameplay mutator from a pool of 6: BLACKOUT (halved torch radius), SWARM (×1.5 enemies, ×0.6 HP), FORTIFIED (×1.4 HP, +30% drops), VOLATILE (death AoE, LOS-gated, no chain), SCRAMBLED (+0.15 spread), OVERCLOCK (×1.2 all speeds + fire rates). Modifier announced on floor entry, displayed in HUD below floor number. Saved in checkpoint; old saves load without version bump. `modSpeed()` helper centralizes speed scaling. `getMod()` accessor. SW cache v22 |
