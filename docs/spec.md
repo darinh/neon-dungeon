@@ -55,7 +55,22 @@ Each floor is generated fresh using Binary Space Partitioning:
    with unobstructed LOS are treated as neighbours).
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
-**Tile types:** WALL | FLOOR | DOOR | STAIRS | TERMINAL | VOID
+**Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
+LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VOID
+
+### Environmental Hazards
+
+**Plasma Vents** (floor 4+): Clusters of 2–4 orange-glowing tiles placed in
+normal rooms (never in spawn, boss, or special rooms). Deal continuous burn
+damage at `(3 + floor) HP/s`, bypassing defense and invincibility frames.
+Animated bubbling visual with pulsing glow. Orange on minimap.
+
+**Arc Grids** (floor 5+): Individual electrified tiles placed in corridors
+(never in rooms or adjacent to doors/stairs). Pulse on a 2-second cycle
+(1 s active, 1 s off) driven by `game.floorTime`. During the active phase,
+deal `10 + floor × 2` HP damage per zap (0.8 s cooldown between hits),
+bypassing defense. Blue/white crackling visual when active, dim when off.
+Cyan on minimap (pulses with phase).
 
 **Lighting:** Each floor tile has a computed light level (0–1) based on
 distance from the nearest light source (player torch radius = 9 tiles,
@@ -567,3 +582,4 @@ the manifest to achieve a chrome-less experience.
 | v4.0    | Exploration system: doors at room-corridor junctions (E to open); colored locked doors (red/blue/gold) on floors 2+ with BFS-safe key placement; spike traps (damage) and slow traps (speed debuff) on floors 3+; isPassable()/isSeeThrough() tile helpers replacing hardcoded wall checks; minimap shows all new tile types; key HUD display; SW cache v7 |
 | v4.1    | Special room types: armory (fewer enemies), medbay (passive healing font), shrine (one-use XP grant), vault (more enemies + loot); room-type-tinted floor tiles; glowing markers for heal fonts and shrines |
 | v4.2    | Per-floor quest objectives: EXTERMINATE, EXPLORE, SPEEDRUN (60s timer), PACIFIST (no kills); quest HUD below minimap; boss floors always get EXTERMINATE; quest rewards: score, XP, full heal |
+| v5.0    | Environmental hazards: plasma vents (floor 4+, clustered burn pools in rooms, continuous DPS bypassing armor) and arc grids (floor 5+, pulsing electric tiles in corridors, periodic zap damage); new audio `plasmaBurn()` + `arcZap()`; HP display rounded with `Math.ceil`; score HP bonus uses `Math.floor`; SW cache v8 |
