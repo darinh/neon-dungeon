@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.3
+# NEON DUNGEON — Game Specification v1.5
 
 ## Vision
 
@@ -174,19 +174,29 @@ Dropped by enemies (20 % chance) or placed in rooms (1–3 per room).
 
 ## Audio (Web Audio API — synthesised only)
 
-| Event            | Sound description                               |
-|------------------|-------------------------------------------------|
-| Player shoot     | Short sine-wave blip, 880 Hz → 440 Hz          |
-| Enemy shoot      | Sawtooth blip, 300 Hz                           |
-| Hit (player)     | Low thud + noise burst                          |
-| Hit (enemy)      | Mid-freq tick                                   |
-| Enemy death      | Descending sweep                                |
-| Level-up         | Ascending arpeggio (C-E-G-C)                   |
-| Boss enter       | Deep drone + reverb tail                        |
-| Pick up item     | Quick ascending blip                            |
-| Stairs / descend | Whoosh + resonant ping                          |
-| Game Over        | Minor chord + long decay                        |
-| Victory          | Major fanfare arpeggio                          |
+### Audio Bus Architecture
+
+All audio routes through a master gain bus (0.7) → DynamicsCompressor (threshold −12 dB, ratio 4:1) → destination. A shared ConvolverNode with a procedurally generated stereo impulse response (1.6 s, quadratic decay) provides reverb. Signature sounds (death, level-up, boss enter, descend, game over, victory) send to the reverb via wet/dry split nodes. Shoot and hit sounds remain dry for clarity.
+
+A single 2-second white-noise AudioBuffer is generated once at init and reused for all noise-burst voices.
+
+### Sound Effects
+
+| Event            | Sound description                                                                |
+|------------------|----------------------------------------------------------------------------------|
+| Player shoot     | Sine chirp 880→440 Hz + triangle harmonic 1760→880 Hz + noise click             |
+| Enemy shoot      | Sawtooth 300→200 Hz + square sub-layer 150→100 Hz                               |
+| Hit (player)     | Noise burst (LP 250 Hz) + sine thump 80→30 Hz + triangle sub 40→20 Hz          |
+| Hit (enemy)      | Sine ping 600→200 Hz + triangle transient 1200→400 Hz                           |
+| Enemy death      | Saw sweep 400→60 Hz + square 200→30 Hz + noise + sub thump, reverb send (0.4)  |
+| Level-up         | C-E-G-C shimmer arpeggio: sine + detuned triangle pairs (±0.3%), reverb (0.5)  |
+| Boss enter       | Detuned saw drones (55 Hz + 57 Hz beat) + octave swell + noise rumble + sub 27.5 Hz, heavy reverb (0.7) |
+| Pick up item     | Ascending sine 400→1200 Hz + triangle 800→2400 Hz sparkle                       |
+| Stairs / descend | Noise whoosh (LP 1500 Hz) + sine 1200→500 Hz + triangle 600→250 Hz, reverb (0.5) |
+| Game Over        | Minor chord (A3-C4-D♯4): sine+saw layers sweeping to half-freq + sub drone, reverb (0.6) |
+| Victory          | Major fanfare (C4-E4-G4-C5): sine + triangle harmonics + detuned shimmer + sustain chord, reverb (0.6) |
+
+All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
 ---
 
@@ -347,3 +357,4 @@ the manifest to achieve a chrome-less experience.
 | v1.2    | Renderer: dynamic resolution (edge-to-edge canvas, gameScale 0.7–1.5, safe-area insets, touchcancel handling) |
 | v1.3    | PWA icons: 192×192 + 512×512 PNGs added to manifest.json; apple-touch-icon link in HTML |
 | v1.4    | Portrait HUD: compact two-row layout (H > W, W ≤ 600); centralized `layout` object for bottom-UI metrics; touch-aware screen prompts ("TAP TO START"); full-screen touch confirm in non-playing states |
+| v1.5    | Audio polish: master gain bus + DynamicsCompressor + ConvolverNode reverb; cached noise buffer; layered oscillators for all SFX; exponential envelopes; wet/dry reverb sends for signature sounds |
