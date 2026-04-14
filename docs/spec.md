@@ -889,6 +889,7 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Grenade lob      | Hollow thunk: sine 200→120 Hz + triangle 400→800 Hz rising whoosh |
 | Grenade explode  | Muffled boom: sine 100→30 Hz + square 60→20 Hz + noise (LP 2000 Hz) |
 | Lore access      | Data retrieval chirp: ascending sine tones (500→700, 700→900, 900→1100 Hz) + noise texture (4 kHz) |
+| Combo tick       | Ascending chirp: base pitch rises with combo count (400 + count×80 Hz, capped 1800 Hz); sine + triangle |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -896,12 +897,45 @@ All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies
 
 ## Scoring
 
+### Base Scoring
 ```
-score += enemy_xp_value × floor_multiplier   (on kill)
+score += enemy_xp_value × floor_multiplier × combo_multiplier   (on kill)
 score += 500 × floor_number                  (on floor clear)
 score += remaining_hp × 10                   (on floor clear)
 score += 50                                  (on lore terminal read)
 ```
+
+### Combo / Kill-Streak System
+
+Killing enemies in quick succession builds a combo counter. The combo multiplies
+score earned per kill.
+
+**Combo rules:**
+- Each eligible kill increments `combo.count` and resets a 3-second window timer.
+- If 3 seconds elapse without a kill, the combo resets to 0.
+- Multiplier formula: `1 + (count - 1) × 0.25`, hard-capped at **4×** (combo 13+).
+- Boss kills use a separate cap of **2×** to prevent score inflation.
+- **Excluded from combo building** (don't increment count):
+  - SHARDs (from SPLITTER splits) — too easy, would inflate streaks.
+  - VOLATILE chain kills (`_volatileKill`) — indirect, would max combo instantly.
+- Excluded enemies still receive the current combo multiplier on their score.
+- Combo resets on floor transition (`populateFloor()`).
+- `combo.best` tracks the highest streak in the run (runtime only, not saved).
+- The combo timer only decrements during `PLAYING` state — pausing or entering
+  menus does not drain the window.
+
+**Visual feedback:**
+- HUD shows `×{multiplier} COMBO ×{count}` when count ≥ 2.
+- Colour tiers: cyan (2–4), yellow (5–7), orange (8–10), magenta (11+).
+- Flash effect on each new kill; opacity fades with timer.
+- Milestone floating text ("×5 COMBO!", "×10 COMBO!", etc.) at player position.
+- Best combo displayed on GAME_OVER and VICTORY screens.
+
+**Audio:** ascending chirp on each combo increment (pitch rises with count).
+
+**Global state:** `combo { count, timer, best, flashTimer }` — reset in
+`populateFloor()` alongside other per-floor globals. `combo.best` reset in
+`startGame()` and `continueGame()`.
 
 High-score table stored in `localStorage` as JSON, top 10, with player name.
 When a run ends (death or victory), if the score qualifies for the top 10,
@@ -956,13 +990,13 @@ Starting a new game overwrites the save when the first floor loads.
 ### Landscape (W ≥ 600 or W ≥ H) — single row
 
 ```
-┌───────────────────────────────────────────────┐
-│                  NEON DUNGEON          [map]  │  ← minimap top-right
-│                                               │
-│              [GAME CANVAS]                    │
-│                                               │
-│  HP ████░░  LVL ATK DEF  FLR  WEAPON  SCORE  │  ← HUD bottom (40 px)
-└───────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│                  NEON DUNGEON                  [map]  │  ← minimap top-right
+│                                                       │
+│              [GAME CANVAS]                            │
+│                                                       │
+│  HP ████░░  LVL ATK DEF  FLR  WEAPON  SCORE  COMBO   │  ← HUD bottom (40 px)
+└───────────────────────────────────────────────────────┘
 ```
 
 ### Portrait (H > W and W ≤ 600) — compact two-row
@@ -973,7 +1007,7 @@ Starting a new game overwrites the save when the first floor loads.
 │                      │
 │   [GAME CANVAS]      │
 │                      │
-│  HP ████░░  FLR  SCR │  ← row 1
+│  HP ████░░  FLR  SCR │  ← row 1 (+ combo below score)
 │  LV XP A:n D:n WEAP │  ← row 2 (58 px total)
 └──────────────────────┘
 ```
@@ -1146,3 +1180,4 @@ the manifest to achieve a chrome-less experience.
 | v17.0   | Ricochet visual trail: bouncing projectiles leave a fading cyan trail showing their path. Trail records recent positions and renders as gradient-opacity line segments. Active from the moment of firing when Ricochet Module is equipped. SW cache v24 |
 | v18.0   | Floating damage numbers: every hit spawns a rising, fading text showing the damage dealt. White for normal enemy hits, yellow for killing blows, red for player damage, blue "BLOCK" for energy shield absorbs. Capped at 20 concurrent texts. Frame-rate-independent velocity damping (`Math.pow(0.35, dt)`). Cleared on floor transitions. SW cache v25 |
 | v19.0   | Screen shake: camera shakes on player damage (intensity ∝ damage, capped 8 px), shield break (4 px), volatile explosions (6 px), void shard detonation (10 px). Linear decay, render-only (no aim interference). Reset on floor transitions. SW cache v26 |
+| v20.0   | Combo / kill-streak counter: fast successive kills build a combo multiplier (×1.25 at 2 kills up to ×4 at 13+, 3 s window). Boss kills capped at ×2. SHARDs and VOLATILE chain kills excluded from building combo. HUD shows multiplier + count with colour tiers (cyan → yellow → orange → magenta). Ascending audio chirp on each increment. Milestone floating text at ×5/×10/×15/×20. Best combo shown on end screens. Reset per floor. SW cache v27 |
