@@ -28,9 +28,9 @@ let gameScale = 1;
 const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
-const SAVE_VERSION = '6.3';
+const SAVE_VERSION = '7.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -231,8 +231,8 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'POWERUP_CHOICE') {
-        // Route touch position via mouse so updatePowerupChoice handles it
+      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING') {
+        // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
         continue;
@@ -434,7 +434,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -779,6 +779,26 @@ const audio = (() => {
       osc('sine',     400, 900,  0.12, t, 0.3, bus);
       osc('triangle', 600, 1200, 0.08, t + 0.05, 0.25, bus);
       osc('sine',     800, 1400, 0.06, t + 0.1, 0.2, bus);
+    },
+    vendorOpen() {
+      const c = getCtx(); const t = c.currentTime;
+      // Digital cash register chime — three ascending tones
+      osc('sine',     600,  800,  0.10, t, 0.08);
+      osc('triangle', 800,  1100, 0.08, t + 0.08, 0.08);
+      osc('sine',     1100, 1400, 0.10, t + 0.16, 0.12);
+    },
+    purchase() {
+      const c = getCtx(); const t = c.currentTime;
+      // Coin-drop confirmation bleep
+      osc('sine',     1000, 1600, 0.12, t, 0.06);
+      osc('triangle', 1400, 1800, 0.06, t + 0.04, 0.06);
+      noise(0.04, t + 0.02, 0.04, 3000);
+    },
+    purchaseFail() {
+      const c = getCtx(); const t = c.currentTime;
+      // Low buzz rejection
+      osc('square', 120, 90, 0.08, t, 0.15);
+      noise(0.03, t, 0.08, 400);
     }
   };
 })();
@@ -1013,11 +1033,26 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05'};
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f'};
   const specialRooms = [];
   const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
-  const numSpecial = Math.min(eligible.length, Math.floor(floorNum/2)+1);
-  const picked = eligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
+
+  // ── Vendor room (floor 2+, one per non-boss floor) — reserved first ─────
+  let vendorRoom = null;
+  if (floorNum >= 2 && !bossRoom) {
+    const vendorEligible = eligible.filter(r => r.w >= 5 && r.h >= 5);
+    if (vendorEligible.length > 0) {
+      vendorRoom = vendorEligible[rndInt(0, vendorEligible.length - 1)];
+      vendorRoom.roomType = 'vendor';
+      specialRooms.push(vendorRoom);
+      map[vendorRoom.cy][vendorRoom.cx] = T.VENDOR;
+    }
+  }
+
+  // ── Special room rotation (excluding vendor room) ───────────────────────
+  const specialEligible = eligible.filter(r => r !== vendorRoom);
+  const numSpecial = Math.min(specialEligible.length, Math.floor(floorNum/2)+1);
+  const picked = specialEligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
   for (let i=0; i<picked.length; i++) {
     const r = picked[i];
     r.roomType = ROOM_TYPES[i % ROOM_TYPES.length];
@@ -1085,7 +1120,7 @@ function generateFloor(floorNum) {
     const lockPriority = [];
     if (farthest !== spawnRoom && farthest !== bossRoom) lockPriority.push(farthest);
     for (const r of specialRooms) {
-      if (!lockPriority.includes(r)) lockPriority.push(r);
+      if (!lockPriority.includes(r) && r.roomType !== 'vendor') lockPriority.push(r);
     }
     const fallback = rooms.filter(r =>
       r !== spawnRoom && r !== farthest && r !== bossRoom &&
@@ -1214,7 +1249,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -1246,7 +1281,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx]===T.FLOOR) roomColour[ty][tx]=col;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -1422,6 +1457,72 @@ function checkPerkUnlocks(player, level) {
   }
 }
 
+// ─── Vendor / Shop ───────────────────────────────────────────────────────────
+// Shop prices are explicit per upgrade id (not derived from rarity which is spawn weight)
+const SHOP_PRICES = {
+  MED_PACK:60, NANO_REPAIR:35, XP_CHIP:45, VOID_SHARD:90,
+  SAW_BLADE:120, PLASMA_ORB:130, NANO_REGEN:80, OVERCLOCK:110, ARMOR_UP:100
+};
+function shopPrice(id, floor, playerUpgrades) {
+  const base = SHOP_PRICES[id] || 80;
+  const lvl = (playerUpgrades && playerUpgrades[id]) || 0;
+  return Math.floor((base + floor * 5) * (1 + lvl * 0.4));
+}
+
+function generateShopItems(floor, player, dungeon) {
+  const pool = [];
+  // Always offer a heal option
+  pool.push({
+    id:'SHOP_HEAL', name:'Full Repair', desc:'Restore all HP',
+    colour:'#00ff88', price: 50 + floor * 12,
+    fn: p => { p.hp = p.maxHp; game.msg('Fully repaired!','#00ff88'); }
+  });
+  // Offer a key if the floor has locked doors the player can't open
+  if (dungeon) {
+    const neededColours = [];
+    for (let ty=0; ty<MAP_H; ty++) for (let tx=0; tx<MAP_W; tx++) {
+      const t = dungeon.map[ty][tx];
+      const kc = doorKeyColour(t);
+      if (kc && player.keys[kc] <= 0 && !neededColours.includes(kc)) neededColours.push(kc);
+    }
+    if (neededColours.length > 0) {
+      const kc = neededColours[rndInt(0, neededColours.length - 1)];
+      const tileCol = kc==='red'?'#ff3333':kc==='blue'?'#3388ff':'#ffcc00';
+      pool.push({
+        id:'SHOP_KEY_'+kc.toUpperCase(), name:kc.charAt(0).toUpperCase()+kc.slice(1)+' Key',
+        desc:'Unlocks '+kc+' doors', colour:tileCol, price: 80 + floor * 8,
+        fn: p => { p.keys[kc]++; game.msg('Bought '+kc.toUpperCase()+' KEY!', tileCol); }
+      });
+    }
+  }
+  // Fill remaining slots from UPGRADES pool
+  const used = new Set(pool.map(p => p.id));
+  const eligible = UPGRADES.filter(u => {
+    if (used.has(u.id)) return false;
+    if (u.persistent && player) {
+      const cur = player.upgrades[u.id] || 0;
+      if (cur >= u.maxLevel) return false;
+    }
+    return true;
+  });
+  // Shuffle eligible and pick enough to fill 3 total slots
+  const shuffled = eligible.sort(() => Math.random() - 0.5);
+  while (pool.length < 3 && shuffled.length > 0) {
+    const u = shuffled.pop();
+    const price = shopPrice(u.id, floor, player ? player.upgrades : {});
+    pool.push({
+      id:u.id, name:u.name, desc:u.desc, colour:u.colour, price,
+      fn: u.fn, persistent:u.persistent, maxLevel:u.maxLevel, levelDesc:u.levelDesc
+    });
+  }
+  // If still < 3, add a weapon option
+  while (pool.length < 3) {
+    const wo = makeWeaponOption();
+    pool.push({ ...wo, price: 70 + floor * 6 });
+  }
+  return pool.slice(0, 3).map(item => ({ ...item, sold: false }));
+}
+
 class Item {
   constructor(x,y,type) {
     this.x=x; this.y=y; this.type=type||pickItemType();
@@ -1466,6 +1567,8 @@ class KeyItem {
 let enemies = [];
 let items   = [];
 
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SENTINEL:80, HIVE:120, OMEGA:200};
+
 class Enemy {
   constructor(x,y,hp,atk,spd,xpVal,colour,type) {
     this.x=x; this.y=y;
@@ -1509,6 +1612,10 @@ class Enemy {
     game.player.gainXP(this.xpValue);
     game.player.score += this.xpValue * game.floor;
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
+    // Credit drops scale with enemy value and floor
+    const baseCr = CREDIT_VALUES[this.type] || 5;
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15));
+    game.player.credits += cr;
   }
 
   update(dt, player, map) {
@@ -2023,6 +2130,7 @@ class Player {
     this.perks={};              // level-unlocked passive abilities
     this.energyShield=false;    // active energy shield bubble
     this.energyShieldTimer=0;   // recharge countdown (30s)
+    this.credits=0;             // vendor currency
   }
 
   xpNeeded() { return this.level*80; }
@@ -2295,6 +2403,15 @@ function drawWorld(dungeon, camX, camY) {
           ctx.font='13px monospace';
           ctx.fillText('⬡',sx+2,sy+14);
           break;
+        case T.VENDOR:
+          ctx.fillStyle='#0a1a0f';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          ctx.shadowBlur=10; ctx.shadowColor='#39ff14';
+          ctx.fillStyle='#39ff14';
+          ctx.font='13px monospace';
+          ctx.fillText('◈',sx+2,sy+14);
+          break;
         case T.DOOR:
           ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
@@ -2416,6 +2533,10 @@ function drawHUD(player) {
     ctx.fillText(`SCORE:${player.score}`, W - 10 - safeRight, r1 + 10);
     ctx.textAlign='left'; ctx.shadowBlur=0;
 
+    // Credits
+    ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
+    ctx.fillText(`◈${player.credits}`, mid + 50, r1 + 10);
+
     // Row 2: LVL + XP bar + ATK + DEF + weapon
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`LV:${player.level}`, lx, r2 + 10);
@@ -2491,6 +2612,9 @@ function drawHUD(player) {
     ctx.fillStyle='#ffb700';
     ctx.font='12px monospace';
     ctx.fillText(`SCORE: ${player.score}`, W - 160 - safeRight, y + 12);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#39ff14'; ctx.font='11px monospace';
+    ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
   }
   ctx.restore();
 
@@ -2549,6 +2673,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.PLASMA) col='#ff6600';
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
+      else if (tile===T.VENDOR) col='#39ff14';
       else if (tile===T.DOOR) col='#664422';
       else if (tile===T.LOCKED_R) col='#ff3333';
       else if (tile===T.LOCKED_B) col='#3388ff';
@@ -2711,6 +2836,11 @@ function populateFloor(dungeon, floorNum) {
     if (rt==='shrine') {
       room.xpShrine = true;
     }
+    if (rt==='vendor') {
+      // Generate shop inventory for this vendor room
+      room.shopItems = generateShopItems(floorNum, game.player, dungeon);
+      room.vendorVisited = false;
+    }
   }
 
   // Place key items from dungeon generator
@@ -2746,6 +2876,9 @@ const game = {
   lastSavedRank: -1,
   quest: null, // current floor objective
   hint: null,  // proximity hint {text, colour} — set per-frame, rendered with pulse
+  shopRoom: null,     // room currently being shopped in
+  shopSelected: 0,    // keyboard selection index in shop
+  shopClosing: false,  // true during auto-close delay after last purchase
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -2903,7 +3036,8 @@ const game = {
         upgrades:{...p.upgrades}, perks:{...p.perks},
         keys:{...p.keys}, shards:p.shards,
         permSpeedBonus:p.permSpeedBonus, score:p.score,
-        energyShield:p.energyShield, energyShieldTimer:p.energyShieldTimer
+        energyShield:p.energyShield, energyShieldTimer:p.energyShieldTimer,
+        credits:p.credits
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -2933,6 +3067,7 @@ const game = {
     p.score=s.score||0;
     p.energyShield=!!s.energyShield;
     p.energyShieldTimer=s.energyShieldTimer||0;
+    p.credits=s.credits||0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.player=p;
     this.loadFloor(save.floor||1);
@@ -2946,6 +3081,7 @@ const game = {
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
+      case 'SHOPPING':       this.updateShopping(); break;
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
@@ -3220,6 +3356,30 @@ const game = {
         }
         if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at shrine',colour:'#aa00ff'};
       }
+      if (r.shopItems && r.shopItems.some(i => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+          // Revalidate shop items (maxed upgrades, stale prices, unneeded keys)
+          for (const si of r.shopItems) {
+            if (si.sold) continue;
+            if (si.persistent && player.upgrades[si.id] >= si.maxLevel) { si.sold = true; continue; }
+            // Recalculate price for persistent upgrades (level may have changed)
+            if (si.persistent && SHOP_PRICES[si.id]) si.price = shopPrice(si.id, this.floor, player.upgrades);
+            // Mark key items as sold if player already has that colour
+            if (si.id && si.id.startsWith('SHOP_KEY_')) {
+              const kc = si.id.replace('SHOP_KEY_','').toLowerCase();
+              if (player.keys[kc] > 0) si.sold = true;
+            }
+          }
+          if (!r.shopItems.some(i => !i.sold)) continue; // all invalidated
+          this.shopRoom = r;
+          this.shopSelected = 0;
+          this.shopClosing = false;
+          audio.vendorOpen();
+          this.setState('SHOPPING');
+          return;
+        }
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at vendor',colour:'#39ff14'};
+      }
     }
 
     // quest tracking
@@ -3331,6 +3491,87 @@ const game = {
     }
     this.powerupChoice = null;
     this.setState('PLAYING');
+  },
+
+  // ─── Vendor Shop ─────────────────────────────────────────────────────────
+  updateShopping() {
+    const room = this.shopRoom;
+    if (!room || !room.shopItems) { this.setState('PLAYING'); return; }
+    const items = room.shopItems;
+    // If all sold, wait for auto-close timer (set in tryShopBuy)
+    if (this.shopClosing || items.every(i => i.sold)) return;
+
+    // Keyboard navigation
+    if (jp('Escape') || jp('KeyQ')) { audio.menuSelect(); this.setState('PLAYING'); return; }
+    if (jp('ArrowLeft') || jp('KeyA'))  this.shopSelected = Math.max(0, this.shopSelected - 1);
+    if (jp('ArrowRight')|| jp('KeyD'))  this.shopSelected = Math.min(2, this.shopSelected + 1);
+
+    // Direct buy by number
+    for (let i = 0; i < 3; i++) {
+      if (jp('Digit' + (i + 1)) && !items[i].sold) {
+        this.tryShopBuy(i);
+        return;
+      }
+    }
+    // Enter on selected
+    if (jp('Enter') || jp('Space')) {
+      if (!items[this.shopSelected].sold) this.tryShopBuy(this.shopSelected);
+      return;
+    }
+
+    // Mouse/touch click on cards or leave button
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const cw = Math.min(200, W * 0.28);
+      const gap = 16;
+      const totalW = cw * 3 + gap * 2;
+      const startX = (W - totalW) / 2;
+      const cardY = H * 0.22;
+      const cardH = Math.min(200, H * 0.38);
+      const mx = mouse.x, my = mouse.y;
+
+      for (let i = 0; i < 3; i++) {
+        const cx = startX + i * (cw + gap);
+        if (!items[i].sold && mx >= cx && mx <= cx + cw && my >= cardY && my <= cardY + cardH) {
+          this.tryShopBuy(i);
+          return;
+        }
+      }
+      // Leave button
+      const leaveY = cardY + cardH + 20;
+      const leaveW = 160, leaveH = 40;
+      if (mx >= (W - leaveW) / 2 && mx <= (W + leaveW) / 2 && my >= leaveY && my <= leaveY + leaveH) {
+        audio.menuSelect();
+        this.setState('PLAYING');
+        return;
+      }
+    }
+  },
+
+  tryShopBuy(idx) {
+    const item = this.shopRoom.shopItems[idx];
+    if (!item || item.sold) return;
+    if (this.player.credits < item.price) {
+      audio.purchaseFail();
+      this.msg('Not enough credits!', '#ff3333');
+      return;
+    }
+    this.player.credits -= item.price;
+    item.fn(this.player);
+    item.sold = true;
+    audio.purchase();
+    this.msg('Bought ' + item.name, item.colour);
+    spawnParticles(this.player.x, this.player.y, 'SPARK', item.colour, 8);
+    // Advance cursor to next unsold slot
+    const items = this.shopRoom.shopItems;
+    const nextUnsold = items.findIndex((it, i) => i > idx && !it.sold);
+    const prevUnsold = items.findIndex(it => !it.sold);
+    this.shopSelected = nextUnsold >= 0 ? nextUnsold : (prevUnsold >= 0 ? prevUnsold : idx);
+    // If all sold, auto-leave after brief delay
+    if (items.every(i => i.sold)) {
+      this.shopClosing = true;
+      setTimeout(() => { if (this.state === 'SHOPPING') this.setState('PLAYING'); this.shopClosing = false; }, 400);
+    }
   },
 
   updateFade(dt) {
@@ -3545,6 +3786,7 @@ const game = {
       case 'PLAYING':   this.renderPlaying();  break;
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
+      case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
@@ -3694,6 +3936,14 @@ const game = {
         ctx.shadowBlur=15; ctx.shadowColor='#aa00ff'; ctx.globalAlpha=0.6+Math.sin(Date.now()/500)*0.2;
         ctx.fillStyle='#aa00ff'; ctx.font='16px monospace'; ctx.textAlign='center';
         ctx.fillText('☆', sx, sy+5);
+        ctx.restore();
+      }
+      if (r.shopItems && r.shopItems.some(i => !i.sold)) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=12; ctx.shadowColor='#39ff14'; ctx.globalAlpha=0.6+Math.sin(Date.now()/350)*0.2;
+        ctx.fillStyle='#39ff14'; ctx.font='16px monospace'; ctx.textAlign='center';
+        ctx.fillText('◈', sx, sy+5);
         ctx.restore();
       }
     }
@@ -3899,6 +4149,139 @@ const game = {
       ctx.fillText('Tap a card or Skip', W/2, skipY + skipH + 22);
     } else {
       ctx.fillText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', W/2, skipY + skipH + 22);
+    }
+
+    ctx.restore();
+  },
+
+  renderShopping() {
+    const room = this.shopRoom;
+    if (!room || !room.shopItems) return;
+    const items = room.shopItems;
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    const p = this.player;
+    ctx.save();
+
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 25; ctx.shadowColor = '#39ff14';
+    ctx.fillStyle = '#39ff14';
+    ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
+    ctx.fillText('VENDOR TERMINAL', W / 2, H * 0.1);
+    ctx.shadowBlur = 0;
+
+    // Credits display
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
+    ctx.fillText('◈ ' + p.credits + ' CREDITS', W / 2, H * 0.17);
+
+    // Cards
+    const cw = Math.min(200, W * 0.28);
+    const gap = 16;
+    const totalW = cw * 3 + gap * 2;
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.22;
+    const cardH = Math.min(200, H * 0.38);
+
+    for (let i = 0; i < 3; i++) {
+      const item = items[i];
+      const cx = startX + i * (cw + gap);
+      const sel = this.shopSelected === i;
+      const affordable = p.credits >= item.price;
+      const curLvl = item.persistent && p ? (p.upgrades[item.id] || 0) : 0;
+
+      if (item.sold) {
+        // Sold-out card
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#333344';
+        ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
+        ctx.fillText('SOLD', cx + cw / 2, cardY + cardH / 2 + 6);
+        continue;
+      }
+
+      // Card background
+      ctx.fillStyle = sel ? 'rgba(57,255,20,0.06)' : 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = sel ? item.colour : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+
+      if (sel) {
+        ctx.save();
+        ctx.shadowBlur = 16; ctx.shadowColor = item.colour;
+        ctx.strokeStyle = item.colour; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.stroke();
+        ctx.restore();
+      }
+
+      // Number badge
+      ctx.fillStyle = item.colour;
+      ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
+      ctx.fillText((i + 1) + '', cx + cw / 2, cardY + 22);
+
+      // Icon
+      ctx.save();
+      ctx.shadowBlur = 12; ctx.shadowColor = item.colour;
+      ctx.fillStyle = item.colour;
+      ctx.fillRect(cx + cw / 2 - 10, cardY + 32, 20, 20);
+      ctx.restore();
+
+      // Name
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
+      ctx.fillText(item.name, cx + cw / 2, cardY + 74);
+
+      // Description
+      ctx.fillStyle = '#aaaacc';
+      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      ctx.fillText(item.desc, cx + cw / 2, cardY + 92);
+
+      // Level info for persistent upgrades
+      if (item.persistent && item.levelDesc) {
+        ctx.fillStyle = '#888899';
+        ctx.font = `${narrow ? 9 : 11}px monospace`;
+        ctx.fillText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), cx + cw / 2, cardY + 108);
+      }
+
+      // Price
+      const priceCol = affordable ? '#ffcc00' : '#ff3333';
+      ctx.fillStyle = priceCol;
+      ctx.font = `bold ${narrow ? 12 : 15}px monospace`;
+      ctx.fillText('◈ ' + item.price, cx + cw / 2, cardY + cardH - 18);
+
+      if (!affordable) {
+        ctx.fillStyle = '#ff3333';
+        ctx.font = `${narrow ? 8 : 10}px monospace`;
+        ctx.fillText('NOT ENOUGH', cx + cw / 2, cardY + cardH - 6);
+      }
+    }
+
+    // Leave button
+    const leaveY = cardY + cardH + 20;
+    const leaveW = 160, leaveH = 40;
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect((W - leaveW) / 2, leaveY, leaveW, leaveH, 6); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#666688';
+    ctx.font = `${narrow ? 13 : 15}px monospace`;
+    ctx.fillText('LEAVE  [Esc]', W / 2, leaveY + 26);
+
+    // Hint
+    ctx.fillStyle = '#444466';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    if (isTouch) {
+      ctx.fillText('Tap to buy · Tap Leave to exit', W / 2, leaveY + leaveH + 18);
+    } else {
+      ctx.fillText('1/2/3 buy  ·  ←/→ + Enter  ·  Esc leave', W / 2, leaveY + leaveH + 18);
     }
 
     ctx.restore();

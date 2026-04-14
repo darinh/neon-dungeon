@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.0
+# NEON DUNGEON — Game Specification v2.1
 
 ## Vision
 
@@ -26,6 +26,7 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
                 → GAME_OVER  (score doesn't qualify for top 10)
                 → VICTORY    (score doesn't qualify for top 10)
      PLAYING ↔ POWERUP_CHOICE (item pickup pauses, choice resumes)
+     PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ PAUSED
 ```
 
@@ -56,7 +57,7 @@ Each floor is generated fresh using Binary Space Partitioning:
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
-LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VOID
+LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | VOID
 
 ### Doors & Locked Doors
 
@@ -424,6 +425,54 @@ perks.
 - HUD: `🛡 Ns` countdown in `#4488ff` shown in both compact and landscape layouts
   while recharging. Hidden when shield is active (the visual bubble is sufficient).
 
+### Vendor / Shop System
+
+**Credits:** A spendable currency earned by killing enemies. Each enemy type
+has a base credit value: GUARD 8, TURRET 6, CRAWLER 4, PHANTOM 12, DRONE 5,
+SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
+`Math.round(base × (1 + floor × 0.15))`. Credits are displayed on the HUD
+(green `◈` symbol) and saved/restored with the checkpoint system.
+
+**Vendor rooms (floor 2+, non-boss floors):** One vendor room is placed per
+qualifying floor, chosen independently from the regular special room rotation
+(armory/medbay/shrine/vault). The vendor room has a green-tinted floor
+(`#0a1a0f`), and a `T.VENDOR` terminal tile at its centre — a green `◈` glyph
+with neon glow. Vendor rooms are **excluded from lock placement** — the shop
+must always be freely accessible. The vendor terminal appears as bright green
+on the minimap.
+
+**Interaction:** Press E within 1.5 tiles of the vendor terminal to enter the
+`SHOPPING` game state. A proximity hint ("Press E at vendor") appears at 2
+tiles. `audio.vendorOpen()` plays an ascending three-tone chime on entry.
+
+**SHOPPING state:**
+- Overlay: dark background, "VENDOR TERMINAL" title in green, player's credit
+  balance, three item cards with prices, and a LEAVE button.
+- **Keyboard:** 1/2/3 to buy directly, ←/→ to select + Enter to confirm,
+  Escape/Q to leave.
+- **Touch:** tap a card to buy, tap LEAVE to exit. Touch input is routed via
+  mouse coordinates (same pattern as `POWERUP_CHOICE`).
+- Items that cost more than the player's credits show "NOT ENOUGH" in red.
+- Sold items display a greyed "SOLD" card. If all three items are sold, the
+  shop auto-closes after a brief 400 ms delay.
+- `audio.purchase()` plays a coin-drop bleep on successful buy.
+  `audio.purchaseFail()` plays a low buzz on insufficient credits.
+
+**Shop inventory:** Generated at floor load time (deterministic per floor, not
+per visit). Three items per shop:
+1. A **Full Repair** option (restores all HP, costs `50 + floor × 12`).
+2. If the floor has locked doors the player cannot currently open: a matching
+   **coloured Key** (costs `80 + floor × 8`). Otherwise a random upgrade.
+3. A random upgrade from the UPGRADES pool (instant, persistent, or weapon).
+   Persistent upgrades already at max level are excluded. Prices are explicit
+   per upgrade ID (not derived from spawn rarity), increased by floor
+   (`base + floor × 5`) and by current upgrade level (`× (1 + level × 0.4)`).
+
+On shop open, maxed persistent upgrades are revalidated and marked as sold.
+
+**Tile:** `T.VENDOR` (value 14). Passable, see-through. Arc grids will not
+spawn adjacent to vendor terminals.
+
 ---
 
 ## Visual Style
@@ -480,6 +529,9 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Low health       | Heartbeat warning: two sub thumps (sine 60→40 Hz, 180 ms apart) + noise click (LP 200 Hz). Plays every 2 s while HP ≤ 25 %. |
 | Game Over        | Minor chord (A3-C4-D♯4): sine+saw layers sweeping to half-freq + sub drone, reverb (0.6) |
 | Victory          | Major fanfare (C4-E4-G4-C5): sine + triangle harmonics + detuned shimmer + sustain chord, reverb (0.6) |
+| Vendor open      | Digital cash register chime: three ascending tones (sine 600→800, triangle 800→1100, sine 1100→1400 Hz) |
+| Purchase         | Coin-drop bleep: sine 1000→1600 Hz + triangle 1400→1800 Hz + HP noise burst (3 kHz) |
+| Purchase fail    | Low buzz rejection: square 120→90 Hz + LP noise (400 Hz) |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -522,7 +574,7 @@ scumming (reloading to re-roll dungeon layout while keeping stats).
 
 **Save payload:** `{ v, floor, player: { hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
-energyShieldTimer } }` — `shieldBonus` is always 0 at floor entry so is
+energyShieldTimer, credits } }` — `shieldBonus` is always 0 at floor entry so is
 excluded.
 
 **Menu behaviour:**
@@ -722,3 +774,4 @@ the manifest to achieve a chrome-less experience.
 | v6.1    | Threat Sense perk (level 4): directional chevrons on screen edges for off-screen enemies within 18 tiles, proximity-scaled size/opacity, boss-aware colouring. Proximity hint system: doors/stairs/terminal/shrine prompts replaced per-frame `msg()` spam with single pulsing `game.hint` overlay above HUD. SW cache v10 |
 | v6.2    | Piercing Rounds perk (level 6): player projectiles pass through one additional enemy via `maxPierces` counter on `Projectile` class; applies to weapon shots and Plasma Orb auto-casts; stacks with Railgun native piercing. Energy Shield perk (level 8): absorbs one `takeDamage()` hit completely, 30 s gameplay-time recharge, pulsing blue shield visual, HUD recharge countdown, `audio.shieldBreak()`/`shieldRestore()` SFX; does not block environmental hazards. SW cache v11 |
 | v6.3    | Boss seal fix: entrance-aware detection prevents locking player out of boss room; safety nudge to room center if stuck. Door clustering: `getEntranceClusters()` helper groups adjacent entrance tiles; only narrow clusters (≤2 tiles) receive doors; all tiles in a cluster doored together. Locked door targeting: priority system (stair room > special rooms > random); all narrow entrance clusters locked, wide ones walled off. Save system: checkpoint-only auto-save on floor entry (no `beforeunload` — prevents save-scumming); CONTINUE/NEW GAME menu; save deleted on game over/victory; `localStorage` key `neonDungeonSave`. SW cache v12 |
+| v7.0    | Vendor/shop system: credits currency (earned from enemy kills, floor-scaled), `T.VENDOR` tile (14), vendor room type (floor 2+, independent of special room rotation, excluded from lock targets), `SHOPPING` game state with 3-item shop UI (keyboard + touch), explicit per-upgrade pricing, shop-exclusive Full Repair and coloured Key items, credits on HUD (compact + landscape), credits in save/load, `audio.vendorOpen()`/`purchase()`/`purchaseFail()` SFX. SW cache v13 |
