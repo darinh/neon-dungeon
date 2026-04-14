@@ -205,23 +205,49 @@ High-score table stored in `localStorage` as JSON, top 10, with player name
 
 ## HUD Layout
 
+### Landscape (W ≥ 600 or W ≥ H) — single row
+
 ```
 ┌───────────────────────────────────────────────┐
 │                  NEON DUNGEON          [map]  │  ← minimap top-right
 │                                               │
 │              [GAME CANVAS]                    │
 │                                               │
-│  HP ████░░  ATK:13 DEF:3  FLOOR:3  SCORE:... │  ← HUD bottom
+│  HP ████░░  LVL ATK DEF  FLR  WEAPON  SCORE  │  ← HUD bottom (40 px)
 └───────────────────────────────────────────────┘
 ```
+
+### Portrait (H > W and W ≤ 600) — compact two-row
+
+```
+┌──────────────────────┐
+│            [map]     │  ← minimap top-right
+│                      │
+│   [GAME CANVAS]      │
+│                      │
+│  HP ████░░  FLR  SCR │  ← row 1
+│  LV XP A:n D:n WEAP │  ← row 2 (58 px total)
+└──────────────────────┘
+```
+
+A shared `layout` object (`compact`, `hudH`, `hudTop`, `msgBase`) is computed
+in `updateLayout()` (called from `resize()`). All bottom-area positioning —
+camera Y bias, tile culling, message placement, touch button Y, ghost joystick
+Y — derives from `layout` to prevent overlap.
+
+**Compact mode gate:** `H > W && W <= 600` (orientation + logical width).
+
+**Touch-aware text:** On touch devices, menu shows "TAP TO START" and
+touch-specific control hints; game-over / victory / pause screens show
+tap-based prompts instead of keyboard-only text.
 
 ---
 
 ## Screen Flow
 
-1. **Title Screen** — animated neon logo, "PRESS ENTER TO START", high-score table
+1. **Title Screen** — animated neon logo, "PRESS ENTER TO START" (desktop) / "TAP TO START" (touch), high-score table, touch-specific control hints
 2. **Playing** — full game loop
-3. **Pause** — ESC, dim overlay, resume / quit options
+3. **Pause** — ESC / ‖ button, dim overlay, resume / quit options
 4. **Level Transition** — fade, "DESCENDING TO FLOOR N" text
 5. **Game Over** — score, death floor, name prompt if high score
 6. **Victory** — cinematic text crawl, final score
@@ -320,3 +346,4 @@ the manifest to achieve a chrome-less experience.
 | v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
 | v1.2    | Renderer: dynamic resolution (edge-to-edge canvas, gameScale 0.7–1.5, safe-area insets, touchcancel handling) |
 | v1.3    | PWA icons: 192×192 + 512×512 PNGs added to manifest.json; apple-touch-icon link in HTML |
+| v1.4    | Portrait HUD: compact two-row layout (H > W, W ≤ 600); centralized `layout` object for bottom-UI metrics; touch-aware screen prompts ("TAP TO START"); full-screen touch confirm in non-playing states |
