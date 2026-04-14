@@ -1348,6 +1348,7 @@ class Enemy {
     if (Math.random()<0.2) items.push(new Item(this.x,this.y));
     game.player.gainXP(this.xpValue);
     game.player.score += this.xpValue * game.floor;
+    if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
   }
 
   update(dt, player, map) {
@@ -2387,6 +2388,7 @@ const game = {
   msgList: [],
   nameEntry: null,
   lastSavedRank: -1,
+  quest: null, // current floor objective
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -2435,6 +2437,38 @@ const game = {
     if (n===3||n===6||n===10) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
+    // Generate floor quest
+    this.generateQuest(n);
+  },
+
+  generateQuest(floorNum) {
+    const questTypes = [
+      { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0,
+        reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
+      { id:'EXPLORE', label:'Visit every room', check: ()=>{
+          const d=this.dungeon;
+          return d.rooms.every(r=>d.visited[r.cy]?.[r.cx]);
+        },
+        reward: ()=>{ this.player.gainXP(40+floorNum*8); this.msg('Quest complete! +XP','#39ff14'); }},
+      { id:'SPEEDRUN', label:'Reach stairs in 60s', timer:60, check: function(){
+          const tx=Math.floor(game.player.x), ty=Math.floor(game.player.y);
+          return game.dungeon.map[ty]?.[tx]===T.STAIRS||game.dungeon.map[ty]?.[tx]===T.TERMINAL;
+        },
+        reward: ()=>{ this.player.hp=this.player.maxHp; this.msg('Quest complete! Full heal!','#39ff14'); }},
+      { id:'PACIFIST', label:'Reach stairs without killing', kills:0, check: function(){
+          const tx=Math.floor(game.player.x), ty=Math.floor(game.player.y);
+          return (game.dungeon.map[ty]?.[tx]===T.STAIRS||game.dungeon.map[ty]?.[tx]===T.TERMINAL) && this.kills===0;
+        },
+        reward: ()=>{ this.player.score+=500*floorNum; this.msg('Pacifist bonus! +'+500*floorNum+' pts','#39ff14'); }},
+    ];
+    // Boss floors always get EXTERMINATE
+    if (floorNum===3||floorNum===6||floorNum===10) {
+      this.quest = {...questTypes[0], done:false, failed:false};
+    } else {
+      const q = questTypes[rndInt(0, questTypes.length-1)];
+      this.quest = {...q, done:false, failed:false};
+    }
+    setTimeout(()=>this.msg('⚡ '+this.quest.label,'#39ff14'), 800);
   },
 
   startGame() {
@@ -2724,6 +2758,19 @@ const game = {
           spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#aa00ff', 15);
         }
         if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.msg('Press E at shrine','#aa00ff');
+      }
+    }
+
+    // quest tracking
+    if (this.quest && !this.quest.done && !this.quest.failed) {
+      if (this.quest.timer !== undefined) {
+        this.quest.timer -= dt;
+        if (this.quest.timer <= 0) { this.quest.failed = true; this.msg('Quest failed!','#ff3333'); }
+      }
+      if (!this.quest.failed && this.quest.check()) {
+        this.quest.done = true;
+        this.quest.reward();
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#39ff14', 20);
       }
     }
 
@@ -3195,6 +3242,28 @@ const game = {
 
     drawHUD(player);
     drawMinimap(dungeon,player);
+
+    // Quest HUD (below minimap)
+    if (game.quest) {
+      const q = game.quest;
+      const qx = W - 128 - safeRight, qy = 96 + safeTop;
+      ctx.save();
+      ctx.font='10px monospace'; ctx.textAlign='right';
+      if (q.done) {
+        ctx.fillStyle='#39ff14'; ctx.fillText('✓ '+q.label, W-8-safeRight, qy);
+      } else if (q.failed) {
+        ctx.fillStyle='#ff3333'; ctx.fillText('✗ '+q.label, W-8-safeRight, qy);
+      } else {
+        ctx.shadowBlur=4; ctx.shadowColor='#39ff14';
+        ctx.fillStyle='#39ff14'; ctx.fillText('⚡ '+q.label, W-8-safeRight, qy);
+        if (q.timer !== undefined) {
+          ctx.fillStyle=q.timer<10?'#ff3333':'#aaaacc';
+          ctx.fillText(Math.ceil(q.timer)+'s', W-8-safeRight, qy+14);
+        }
+      }
+      ctx.restore();
+    }
+
     drawMessages();
     drawTouchUI();
   },
