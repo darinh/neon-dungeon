@@ -1977,7 +1977,7 @@ class Projectile {
     } else if (!this.isGrenade) {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
       if (!player.invincibleTimer && dist(this.x,this.y,player.x,player.y)<0.5) {
-        player.takeDamage(this.dmg);
+        player.takeDamage(this.dmg, this.ownerType || 'Projectile');
         this.dead=true;
       }
     }
@@ -2048,7 +2048,7 @@ function updateHazardZones(dt, player) {
     if (z.tickCd <= 0 && !player.invincibleTimer &&
         dist(player.x, player.y, z.x, z.y) < z.radius &&
         hasLOS(z.x, z.y, player.x, player.y, game.dungeon.map)) {
-      player.takeDamage(z.dmg);
+      player.takeDamage(z.dmg, 'Grenade');
       spawnParticles(player.x, player.y, 'SPARK', '#ff6622', 4);
       z.tickCd = 0.8;
     }
@@ -2274,6 +2274,24 @@ let items   = [];
 let hazardZones = [];
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
+const SOURCE_LABELS = {
+  GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
+  DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
+  TELEPORTER:'Teleporter', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  HIVE:'Neural Hive', OMEGA:'Omega Core',
+  'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
+  'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb',
+};
+const SOURCE_COLOURS = {
+  GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
+  DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
+  TELEPORTER:'#ff44ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  HIVE:'#aa00ff', OMEGA:'#ff00c8',
+  'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
+  'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff',
+};
+function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
+function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
 let pendingEnemySpawns = [];
 
 class Enemy {
@@ -2329,6 +2347,7 @@ class Enemy {
     const mul = this.isBoss ? comboBossMultiplier() : comboMultiplier();
     game.player.score += Math.round(this.xpValue * game.floor * mul);
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
+    if (!this.isShard) game.player.enemiesKilled++;
     const baseCr = CREDIT_VALUES[this.type] || 5;
     const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul);
     game.player.credits += cr;
@@ -2340,7 +2359,7 @@ class Enemy {
       triggerShake(6, 0.2);
       const p = game.player;
       if (dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
-        p.takeDamage(vdmg);
+        p.takeDamage(vdmg, 'Volatile');
       }
       for (const e of enemies) {
         if (e === this || e.dead) continue;
@@ -2421,7 +2440,7 @@ class Enemy {
 
   meleeAttack(player) {
     if (this.attackTimer<=0) {
-      player.takeDamage(this.atk);
+      player.takeDamage(this.atk, this.type);
       this.attackTimer = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       spawnParticles(player.x,player.y,'SPARK','#ff4444',5);
     }
@@ -2429,7 +2448,9 @@ class Enemy {
 
   fireAt(px,py,spd,dmg,range,colour) {
     const [dx,dy]=norm(px-this.x,py-this.y);
-    projectiles.push(new Projectile(this.x,this.y,dx,dy,spd,dmg,range,colour,false,false));
+    const p=new Projectile(this.x,this.y,dx,dy,spd,dmg,range,colour,false,false);
+    p.ownerType=this.type;
+    projectiles.push(p);
     audio.shoot(false);
   }
 
@@ -2647,7 +2668,8 @@ class Enemy {
     if (this.bossTimers.laser<=0) {
       for (let i=0;i<(this.phase===2?8:5);i++) {
         const a=(i/(this.phase===2?8:5))*TWO_PI;
-        projectiles.push(new Projectile(this.x,this.y,Math.cos(a),Math.sin(a),7,this.atk,14,'#ff4444',false,false));
+        const bp=new Projectile(this.x,this.y,Math.cos(a),Math.sin(a),7,this.atk,14,'#ff4444',false,false);
+        bp.ownerType='SENTINEL'; projectiles.push(bp);
       }
       audio.shoot(false);
       this.bossTimers.laser=rate;
@@ -2657,7 +2679,7 @@ class Enemy {
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
       player.x-=dx*3; player.y-=dy*3;
       clampToBossRoom(player);
-      player.takeDamage(Math.round(20*getDiff().enemyAtk));
+      player.takeDamage(Math.round(20*getDiff().enemyAtk), 'SENTINEL');
       spawnParticles(player.x,player.y,'EXPLOSION','#ff4444',8);
       this.bossTimers.shield=5;
     }
@@ -2704,7 +2726,7 @@ class Enemy {
 
     if (this.phase===3 && this.bossTimers.shock<=0) {
       if (dist(game.player.x,game.player.y,this.x,this.y)<8) {
-        game.player.takeDamage(Math.round(25*getDiff().enemyAtk));
+        game.player.takeDamage(Math.round(25*getDiff().enemyAtk), 'HIVE');
         spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',15);
       }
       this.bossTimers.shock=4;
@@ -2753,7 +2775,8 @@ class Enemy {
       const n = this.phase >= 3 ? 8 : this.phase >= 2 ? 5 : 4;
       for (let i = 0; i < n; i++) {
         const a = (i / n) * TWO_PI + this.bobAngle;
-        projectiles.push(new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 8, this.atk, 18, '#ff00c8', false, false));
+        const bp=new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 8, this.atk, 18, '#ff00c8', false, false);
+        bp.ownerType='OMEGA'; projectiles.push(bp);
       }
       audio.shoot(false);
       T.turret = 2 / spd;
@@ -2787,7 +2810,8 @@ class Enemy {
       const half = Math.floor(count / 2);
       for (let i = -half; i <= half; i++) {
         const a = Math.atan2(dy, dx) + i * 0.18;
-        projectiles.push(new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 14, 35, 22, '#ff00c8', true, false));
+        const bp=new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 14, 35, 22, '#ff00c8', true, false);
+        bp.ownerType='OMEGA'; projectiles.push(bp);
       }
       audio.shoot(false);
       T.beam = 3.5 / spd;
@@ -2800,7 +2824,7 @@ class Enemy {
         player.x += kx * 3;
         player.y += ky * 3;
         clampToBossRoom(player);
-        player.takeDamage(Math.round(20*getDiff().enemyAtk));
+        player.takeDamage(Math.round(20*getDiff().enemyAtk), 'OMEGA');
         spawnParticles(this.x, this.y, 'EXPLOSION', '#ff00c8', 12);
       }
       T.shield = 6 / spd;
@@ -2809,7 +2833,7 @@ class Enemy {
     // Phase 4: Psionic shockwave — AoE damage within 7 tiles (from HIVE)
     if (this.phase >= 4 && T.shock <= 0) {
       if (d < 7) {
-        player.takeDamage(Math.round(25*getDiff().enemyAtk));
+        player.takeDamage(Math.round(25*getDiff().enemyAtk), 'OMEGA');
         spawnParticles(player.x, player.y, 'EXPLOSION', '#aa00ff', 10);
       }
       spawnParticles(this.x, this.y, 'EXPLOSION', '#aa00ff', 20);
@@ -2840,7 +2864,7 @@ class Enemy {
       if (orb.age >= orb.maxAge) { this.voidOrbs.splice(i, 1); continue; }
       // tick damage every 0.5s while player is inside
       if (orb.tickCd <= 0 && dist(player.x, player.y, orb.x, orb.y) < orb.radius) {
-        player.takeDamage(Math.round(15*getDiff().enemyAtk));
+        player.takeDamage(Math.round(15*getDiff().enemyAtk), 'Void Orb');
         spawnParticles(player.x, player.y, 'SPARK', '#aa00ff', 4);
         orb.tickCd = 0.5;
       }
@@ -3069,6 +3093,15 @@ class Player {
     this.dashDx=0;              // dash direction x
     this.dashDy=0;              // dash direction y
     this.dashTrail=[];          // afterimage positions [{x,y,alpha}]
+    // Death recap tracking
+    this.damageLog={};          // source → total damage taken
+    this.killedBy='';           // source of killing blow
+    this.enemiesKilled=0;       // total enemies killed this run
+    this.hitsBlocked=0;         // energy shield blocks
+  }
+
+  logDamage(source, amount) {
+    this.damageLog[source] = (this.damageLog[source] || 0) + amount;
   }
 
   xpNeeded() { return this.level*80; }
@@ -3087,13 +3120,14 @@ class Player {
     }
   }
 
-  takeDamage(dmg) {
+  takeDamage(dmg, source) {
     if (this.invincibleTimer>0) return;
     // Energy shield absorbs the hit
     if (this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
       this.energyShieldTimer=30;
       this.invincibleTimer=0.3;
+      this.hitsBlocked++;
       audio.shieldBreak();
       spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
       spawnDmgText(this.x, this.y, 'BLOCK', '#4488ff');
@@ -3103,13 +3137,15 @@ class Player {
     }
     const actual=Math.max(1,dmg-this.def);
     this.hp=Math.max(0,this.hp-actual);
+    const src = source || 'Unknown';
+    this.logDamage(src, actual);
     this.invincibleTimer=0.5;
     this.flashTimer=0.2;
     spawnDmgText(this.x, this.y, actual, '#ff4444');
     triggerShake(Math.min(actual * 0.4, 8), 0.2);
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
-    if (this.hp<=0) { audio.gameOver(); game.endRun(false); }
+    if (this.hp<=0) { this.killedBy=src; audio.gameOver(); game.endRun(false); }
   }
 
   shoot(aimX,aimY,map) {
@@ -4159,6 +4195,7 @@ const game = {
     meta.lastDifficulty = this.difficulty;
     saveMeta(meta);
     this.bossesCleared=0;
+    this.runTime=0;
     combo.best=0;
     this.player=new Player();
     applyMetaToPlayer(this.player);
@@ -4231,6 +4268,20 @@ const game = {
 
   endRun(victory) {
     this.deleteSave(); // run is over — clear save file
+    // Snapshot recap data before anything else
+    const p = this.player;
+    this.lastRunRecap = {
+      killedBy: p.killedBy || 'Unknown',
+      damageLog: {...p.damageLog},
+      enemiesKilled: p.enemiesKilled,
+      hitsBlocked: p.hitsBlocked,
+      floor: this.floor,
+      score: p.score,
+      level: p.level,
+      bestCombo: combo.best,
+      runTime: this.runTime || 0,
+      victory: victory,
+    };
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
     const meta = loadMeta();
@@ -4274,6 +4325,7 @@ const game = {
       difficulty: this.difficulty,
       modifier: this.modifier,
       bossesCleared: this.bossesCleared,
+      runTime: this.runTime,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponKey,
@@ -4282,7 +4334,10 @@ const game = {
         permSpeedBonus:p.permSpeedBonus, score:p.score,
         energyShield:p.energyShield, energyShieldTimer:p.energyShieldTimer,
         credits:p.credits,
-        loreRead:[...p.loreRead]
+        loreRead:[...p.loreRead],
+        damageLog:{...p.damageLog},
+        enemiesKilled:p.enemiesKilled,
+        hitsBlocked:p.hitsBlocked
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -4320,10 +4375,13 @@ const game = {
     p.energyShieldTimer=s.energyShieldTimer||0;
     p.credits=s.credits||0;
     p.loreRead=new Set(s.loreRead||[]);
+    p.damageLog=s.damageLog||{};
+    p.enemiesKilled=s.enemiesKilled||0;
+    p.hitsBlocked=s.hitsBlocked||0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
-    // Recompute perks from level — handles saves from before new perks existed
     for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
+    this.runTime=save.runTime||0;
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
     this.loadFloor(save.floor||1, savedMod);
@@ -4397,6 +4455,7 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     this.floorTime = (this.floorTime || 0) + dt;
+    this.runTime = (this.runTime || 0) + dt;
     this.hint = null;
 
     player.update(dt,dungeon.map);
@@ -4650,7 +4709,7 @@ const game = {
     if (player.trapCooldown <= 0) {
       if (tile===T.TRAP_SPIKE) {
         const trapDmg = Math.round((8 + game.floor * 2) * getDiff().envDmg);
-        player.takeDamage(trapDmg);
+        player.takeDamage(trapDmg, 'Spike Trap');
         player.trapCooldown = 1.0;
         this.msg('Spike trap! -'+trapDmg+' HP','#ff6644');
         spawnParticles(player.x, player.y, 'SPARK', '#ff6644', 5);
@@ -4668,7 +4727,7 @@ const game = {
       // Continuous burn: direct HP reduction, bypasses defense/invincibility
       const burnDps = (3 + this.floor) * getDiff().envDmg;
       player.hp = Math.max(0, player.hp - burnDps * dt);
-      // Cosmetic throttle for messages, particles, and audio
+      player.logDamage('Plasma', burnDps * dt);
       player.plasmaBurnTimer = Math.max(0, player.plasmaBurnTimer - dt);
       if (player.plasmaBurnTimer <= 0) {
         const dmgShown = Math.round(burnDps);
@@ -4677,19 +4736,20 @@ const game = {
         audio.plasmaBurn();
         player.plasmaBurnTimer = 0.5;
       }
-      if (player.hp <= 0) { player.hp = 0; audio.gameOver(); this.endRun(false); }
+      if (player.hp <= 0) { player.hp = 0; player.killedBy = 'Plasma'; audio.gameOver(); this.endRun(false); }
     }
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
       const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
       player.hp = Math.max(0, player.hp - zapDmg);
+      player.logDamage('Arc Grid', zapDmg);
       player.arcCooldown = 0.8;
       player.flashTimer = 0.15;
       this.msg('Arc zap! -'+zapDmg+' HP','#44ccff');
       spawnParticles(player.x, player.y, 'SPARK', '#88eeff', 6);
       audio.arcZap();
-      if (player.hp <= 0) { player.hp = 0; audio.gameOver(); this.endRun(false); }
+      if (player.hp <= 0) { player.hp = 0; player.killedBy = 'Arc Grid'; audio.gameOver(); this.endRun(false); }
     }
 
     // special room effects
@@ -5981,40 +6041,112 @@ const game = {
   renderGameOver() {
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
+    const r = this.lastRunRecap || {};
+    const fs1 = narrow ? 14 : 16;
+    const lh = narrow ? 20 : 24;
     ctx.save();
     ctx.fillStyle='rgba(0,0,0,0.92)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
+    // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ff3333';
-    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 42 : 64}px monospace`;
-    ctx.fillText('GAME OVER',W/2, narrow ? 80 : 100);
-    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-    const baseY = narrow ? 120 : 150;
-    ctx.fillText(`Floor Reached: ${this.floor}`,W/2, baseY);
-    ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY + 26);
-    ctx.fillText(`Level: ${this.player.level}`,W/2, baseY + 52);
-    if (combo.best >= 2) {
-      ctx.fillStyle=comboColour(); ctx.fillText(`Best Combo: ×${combo.best}`,W/2, baseY + 78);
-      ctx.fillStyle='#aaaacc';
+    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 36 : 56}px monospace`;
+    ctx.fillText('GAME OVER',W/2, narrow ? 50 : 68);
+    ctx.shadowBlur=0;
+    // Killed by
+    const killer = r.killedBy || 'Unknown';
+    const killerLabel = sourceLabel(killer);
+    const killerCol = sourceColour(killer);
+    ctx.fillStyle=killerCol; ctx.font=`bold ${narrow ? 16 : 22}px monospace`;
+    ctx.shadowBlur=12; ctx.shadowColor=killerCol;
+    ctx.fillText(`KILLED BY: ${killerLabel.toUpperCase()}`, W/2, narrow ? 78 : 100);
+    ctx.shadowBlur=0;
+    // Stats line
+    let y = narrow ? 100 : 128;
+    ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
+    ctx.fillStyle='#aaaacc'; ctx.font=`${fs1}px monospace`;
+    let statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
+    ctx.fillText(statsLine, W/2, y); y += lh;
+    if ((r.bestCombo||combo.best) >= 2) {
+      ctx.fillStyle=comboColour();
+      ctx.fillText(`Best Combo: ×${r.bestCombo||combo.best}`, W/2, y);
+      ctx.fillStyle='#aaaacc'; y += lh;
     }
-    const diffOffY = combo.best >= 2 ? 26 : 0;
     if (this.difficulty !== 'NORMAL') {
       const d = getDiff();
       ctx.fillStyle=d.colour;
-      ctx.fillText(`Difficulty: ${d.label}`,W/2, baseY + 78 + diffOffY);
+      ctx.fillText(`Difficulty: ${d.label}`, W/2, y);
+      ctx.fillStyle='#aaaacc'; y += lh;
     }
-    const shardY = this.difficulty !== 'NORMAL' ? baseY + 104 + diffOffY : baseY + 78 + diffOffY;
+    // Damage breakdown
+    const log = r.damageLog || {};
+    const entries = Object.entries(log).sort((a,b)=>b[1]-a[1]);
+    const totalDmg = entries.reduce((s,e)=>s+e[1], 0);
+    if (entries.length > 0 && totalDmg > 0) {
+      y += narrow ? 4 : 6;
+      ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+      ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
+      ctx.fillStyle='#ff6666'; ctx.font=`bold ${narrow ? 12 : 14}px monospace`;
+      ctx.fillText('DAMAGE TAKEN', W/2, y); y += narrow ? 16 : 20;
+      const maxBars = narrow ? 3 : 4;
+      const barW = narrow ? 140 : 200;
+      const barH = narrow ? 10 : 12;
+      ctx.textAlign='left';
+      for (let i = 0; i < Math.min(maxBars, entries.length); i++) {
+        const [src, dmg] = entries[i];
+        const pct = dmg / totalDmg;
+        const col = sourceColour(src);
+        const bx = W/2 - barW/2 - (narrow ? 10 : 20);
+        // Bar background
+        ctx.fillStyle='#1a1a2e'; ctx.fillRect(bx, y - barH + 2, barW, barH);
+        // Bar fill
+        ctx.fillStyle=col; ctx.globalAlpha=0.7;
+        ctx.fillRect(bx, y - barH + 2, barW * pct, barH);
+        ctx.globalAlpha=1;
+        // Label
+        ctx.fillStyle='#ffffff'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+        ctx.fillText(sourceLabel(src), bx + 4, y);
+        // Value
+        ctx.textAlign='right';
+        ctx.fillText(`${Math.round(dmg)} (${Math.round(pct*100)}%)`, bx + barW - 2, y);
+        ctx.textAlign='left';
+        y += narrow ? 16 : 20;
+      }
+      if (entries.length > maxBars) {
+        const rest = entries.slice(maxBars).reduce((s,e)=>s+e[1], 0);
+        ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+        const bx = W/2 - barW/2 - (narrow ? 10 : 20);
+        ctx.fillText(`+${entries.length - maxBars} more (${Math.round(rest)})`, bx + 4, y);
+        y += narrow ? 14 : 16;
+      }
+      ctx.textAlign='center';
+    }
+    // Run stats line
+    y += narrow ? 4 : 6;
+    ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
+    ctx.fillStyle='#888899'; ctx.font=`${narrow ? 11 : 13}px monospace`;
+    const mins = Math.floor((r.runTime||0)/60);
+    const secs = Math.floor((r.runTime||0)%60);
+    const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
+    let runLine = `${r.enemiesKilled||0} slain`;
+    if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
+    runLine += `  •  ${timeStr} survived`;
+    ctx.fillText(runLine, W/2, y); y += lh;
+    // Data fragments
     if (this.lastRunShards) {
-      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, shardY);
+      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 16}px monospace`;
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, y); y += lh;
     }
     ctx.restore();
-    // leaderboard
-    this.renderLeaderboard(shardY + (narrow?32:48), narrow?5:7, this.lastSavedRank);
-    // continue prompt
+    // Leaderboard
+    const lbRows = narrow ? 4 : 5;
+    this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
+    // Continue prompt
     if (Math.floor(Date.now()/800)%2===0) {
       ctx.save(); ctx.textAlign='center';
       ctx.fillStyle='#ff00c8'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP TO CONTINUE' : 'PRESS ENTER TO CONTINUE', W/2, H - (narrow?30:40));
+      ctx.fillText(isTouch ? 'TAP TO CONTINUE' : 'PRESS ENTER TO CONTINUE', W/2, H - (narrow?20:30));
       ctx.restore();
     }
   },
@@ -6022,44 +6154,58 @@ const game = {
   renderVictory() {
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
+    const r = this.lastRunRecap || {};
     ctx.save();
     ctx.fillStyle='rgba(0,0,10,0.95)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
     const t=Date.now()/1000;
     ctx.shadowBlur=30; ctx.shadowColor='#00f5ff';
     ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 22 : 32}px monospace`;
-    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 60 : 80);
+    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 50 : 70);
     ctx.shadowColor='#ff00c8'; ctx.fillStyle='#ff00c8';
     ctx.font=`bold ${narrow ? 32 : 48}px monospace`;
-    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 105 : 130);
-    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-    const baseY = narrow ? 145 : 175;
-    ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY);
-    ctx.fillText(`Floors Cleared: 10`,W/2, baseY + 26);
-    ctx.fillText(`Level Achieved: ${this.player.level}`,W/2, baseY + 52);
-    if (combo.best >= 2) {
-      ctx.fillStyle=comboColour(); ctx.fillText(`Best Combo: ×${combo.best}`,W/2, baseY + 78);
-      ctx.fillStyle='#aaaacc';
+    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 90 : 115);
+    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
+    let y = narrow ? 115 : 148;
+    ctx.fillText(`Final Score: ${r.score||this.player.score}`,W/2, y); y += narrow ? 22 : 26;
+    ctx.fillText(`Floors Cleared: 10`,W/2, y); y += narrow ? 22 : 26;
+    ctx.fillText(`Level Achieved: ${r.level||this.player.level}`,W/2, y); y += narrow ? 22 : 26;
+    if ((r.bestCombo||combo.best) >= 2) {
+      ctx.fillStyle=comboColour(); ctx.fillText(`Best Combo: ×${r.bestCombo||combo.best}`,W/2, y);
+      ctx.fillStyle='#aaaacc'; y += narrow ? 22 : 26;
     }
-    const diffOffVY = combo.best >= 2 ? 26 : 0;
     if (this.difficulty !== 'NORMAL') {
       const d = getDiff();
       ctx.fillStyle=d.colour;
-      ctx.fillText(`Difficulty: ${d.label}`,W/2, baseY + 78 + diffOffVY);
+      ctx.fillText(`Difficulty: ${d.label}`,W/2, y);
+      ctx.fillStyle='#aaaacc'; y += narrow ? 22 : 26;
     }
-    const shardY = this.difficulty !== 'NORMAL' ? baseY + 104 + diffOffVY : baseY + 78 + diffOffVY;
+    // Run stats
+    y += narrow ? 2 : 4;
+    ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
+    ctx.fillStyle='#888899'; ctx.font=`${narrow ? 11 : 13}px monospace`;
+    const mins = Math.floor((r.runTime||0)/60);
+    const secs = Math.floor((r.runTime||0)%60);
+    const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
+    let runLine = `${r.enemiesKilled||0} slain`;
+    if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
+    runLine += `  •  ${timeStr} survived`;
+    ctx.fillText(runLine, W/2, y); y += narrow ? 20 : 24;
+    // Data fragments
     if (this.lastRunShards) {
-      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, shardY);
+      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 16}px monospace`;
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, y); y += narrow ? 22 : 26;
     }
     ctx.restore();
     // leaderboard
-    this.renderLeaderboard(shardY + (narrow?32:48), narrow?5:7, this.lastSavedRank);
+    const lbRows = narrow ? 4 : 5;
+    this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
     // continue prompt
     if (Math.floor(t*2)%2===0) {
       ctx.save(); ctx.textAlign='center';
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP FOR MENU' : 'PRESS ENTER FOR MENU', W/2, H - (narrow?30:40));
+      ctx.fillText(isTouch ? 'TAP FOR MENU' : 'PRESS ENTER FOR MENU', W/2, H - (narrow?20:30));
       ctx.restore();
     }
   }
