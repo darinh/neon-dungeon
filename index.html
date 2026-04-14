@@ -970,6 +970,8 @@ class Enemy {
     this.spawnCooldown=0;
     this.shieldBurstTimer=0;
     this.flashTimer=0;
+    this.voidOrbs=[];
+    this.prevPhase=1;
   }
 
   takeDamage(dmg, weaponName) {
@@ -1185,47 +1187,136 @@ class Enemy {
   }
 
   aiBossOmega(dt,player,map,d,los) {
-    if (this.hp<200) this.phase=4;
-    else if (this.hp<400) this.phase=3;
-    else if (this.hp<700) this.phase=2;
-    else this.phase=1;
+    // Phase transitions based on maxHp percentage
+    const hpPct = this.hp / this.maxHp;
+    if (hpPct <= 0.2) this.phase = 4;
+    else if (hpPct <= 0.4) this.phase = 3;
+    else if (hpPct <= 0.7) this.phase = 2;
+    else this.phase = 1;
 
-    const spd=this.phase>=4?2:1;
-    this.bossTimers.turret=(this.bossTimers.turret||0)-dt;
-    this.bossTimers.spawn=(this.bossTimers.spawn||0)-dt;
-    this.bossTimers.beam=(this.bossTimers.beam||0)-dt;
-    this.bossTimers.move=(this.bossTimers.move||0)-dt;
-
-    if (this.bossTimers.move<=0) {
-      if (this.room) this.patrolTarget={x:this.room.x+rnd(2,this.room.w-2),y:this.room.y+rnd(2,this.room.h-2)};
-      this.bossTimers.move=1.5/spd;
+    // Phase transition VFX
+    if (this.phase !== this.prevPhase) {
+      spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 25);
+      game.msg('⚠ OMEGA PHASE ' + this.phase, '#ff00c8');
+      this.prevPhase = this.phase;
     }
-    if (this.patrolTarget) this.moveToward(this.patrolTarget.x,this.patrolTarget.y,spd*2,dt,map);
 
-    if (this.bossTimers.turret<=0) {
-      const n=this.phase>=4?6:3;
-      for (let i=0;i<n;i++) {
-        const a=(i/n)*TWO_PI;
-        projectiles.push(new Projectile(this.x,this.y,Math.cos(a),Math.sin(a),8,this.atk,18,'#ff00c8',false,false));
+    const spd = [1, 1.2, 1.5, 2][this.phase - 1];
+    const T = this.bossTimers;
+    T.turret = (T.turret || 0) - dt;
+    T.homing = (T.homing || 0) - dt;
+    T.spawn  = (T.spawn  || 0) - dt;
+    T.beam   = (T.beam   || 0) - dt;
+    T.shield = (T.shield || 0) - dt;
+    T.void   = (T.void   || 0) - dt;
+    T.shock  = (T.shock  || 0) - dt;
+    T.move   = (T.move   || 0) - dt;
+
+    // Movement — patrol within boss room
+    if (T.move <= 0) {
+      if (this.room) this.patrolTarget = {
+        x: this.room.x + rnd(2, this.room.w - 2),
+        y: this.room.y + rnd(2, this.room.h - 2)
+      };
+      T.move = 1.5 / spd;
+    }
+    if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, spd * 2, dt, map);
+
+    // Phase 1+: Radial turret shots (from SENTINEL)
+    if (T.turret <= 0) {
+      const n = this.phase >= 3 ? 8 : this.phase >= 2 ? 5 : 4;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TWO_PI + this.bobAngle;
+        projectiles.push(new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 8, this.atk, 18, '#ff00c8', false, false));
       }
       audio.shoot(false);
-      this.bossTimers.turret=1.5/spd;
+      T.turret = 2 / spd;
     }
 
-    if (this.phase>=2 && this.bossTimers.spawn<=0) {
-      const dr=spawnEnemy('DRONE',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room,false);
-      enemies.push(dr);
-      this.bossTimers.spawn=4/spd;
+    // Phase 1+: Homing missile at player (from HIVE)
+    if (T.homing <= 0 && los) {
+      this.fireAt(player.x, player.y, 7, this.atk + 5, 20, '#aa00ff');
+      T.homing = 2.5 / spd;
     }
 
-    if (this.phase>=3 && this.bossTimers.beam<=0) {
-      const [dx,dy]=norm(player.x-this.x,player.y-this.y);
-      // fire a fan of beams
-      for (let i=-2;i<=2;i++) {
-        const a=Math.atan2(dy,dx)+i*0.2;
-        projectiles.push(new Projectile(this.x,this.y,Math.cos(a),Math.sin(a),15,40,22,'#ff00c8',true,false));
+    // Phase 2+: Spawn crawlers (inherited from HIVE) and drones — capped at 8 active adds
+    if (this.phase >= 2 && T.spawn <= 0 && this.spawnCooldown <= 0) {
+      const activeAdds = enemies.filter(e => !e.dead && !e.isBoss && e.room === this.room).length;
+      if (activeAdds < 8) {
+        const addType = Math.random() < 0.6 ? 'CRAWLER' : 'DRONE';
+        const count = Math.min(this.phase >= 4 ? 3 : 2, 8 - activeAdds);
+        for (let i = 0; i < count; i++) {
+          const add = spawnEnemy(addType, this.x + rnd(-3, 3), this.y + rnd(-3, 3), game.floor, this.room, false);
+          enemies.push(add);
+        }
       }
-      this.bossTimers.beam=3/spd;
+      T.spawn = 5 / spd;
+      this.spawnCooldown = 0.5;
+    }
+
+    // Phase 3+: Beam fan (5–7 piercing beams aimed at player)
+    if (this.phase >= 3 && T.beam <= 0) {
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const count = this.phase >= 4 ? 7 : 5;
+      const half = Math.floor(count / 2);
+      for (let i = -half; i <= half; i++) {
+        const a = Math.atan2(dy, dx) + i * 0.18;
+        projectiles.push(new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 14, 35, 22, '#ff00c8', true, false));
+      }
+      audio.shoot(false);
+      T.beam = 3.5 / spd;
+    }
+
+    // Phase 3+: Shield burst — AoE knockback+damage within 5 tiles (from SENTINEL)
+    if (this.phase >= 3 && T.shield <= 0) {
+      if (d < 5) {
+        const [kx, ky] = norm(player.x - this.x, player.y - this.y);
+        player.x += kx * 3;
+        player.y += ky * 3;
+        player.takeDamage(20);
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#ff00c8', 12);
+      }
+      T.shield = 6 / spd;
+    }
+
+    // Phase 4: Psionic shockwave — AoE damage within 7 tiles (from HIVE)
+    if (this.phase >= 4 && T.shock <= 0) {
+      if (d < 7) {
+        player.takeDamage(25);
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#aa00ff', 10);
+      }
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#aa00ff', 20);
+      T.shock = 4 / spd;
+    }
+
+    // Phase 4: Void orbs — expanding AoE zones that fill the room
+    if (this.phase >= 4 && T.void <= 0 && this.room) {
+      const count = rndInt(2, 3);
+      for (let i = 0; i < count; i++) {
+        this.voidOrbs.push({
+          x: this.room.x + rnd(2, this.room.w - 2),
+          y: this.room.y + rnd(2, this.room.h - 2),
+          radius: 0, maxRadius: rnd(4, 7),
+          age: 0, maxAge: 2.5,
+          tickCd: 0
+        });
+      }
+      T.void = 3.5 / spd;
+    }
+
+    // Update void orbs — expand and tick damage
+    for (let i = this.voidOrbs.length - 1; i >= 0; i--) {
+      const orb = this.voidOrbs[i];
+      orb.age += dt;
+      orb.radius = orb.maxRadius * Math.min(1, orb.age / (orb.maxAge * 0.6));
+      orb.tickCd = Math.max(0, orb.tickCd - dt);
+      if (orb.age >= orb.maxAge) { this.voidOrbs.splice(i, 1); continue; }
+      // tick damage every 0.5s while player is inside
+      if (orb.tickCd <= 0 && dist(player.x, player.y, orb.x, orb.y) < orb.radius) {
+        player.takeDamage(15);
+        spawnParticles(player.x, player.y, 'SPARK', '#aa00ff', 4);
+        orb.tickCd = 0.5;
+      }
     }
   }
 
@@ -1247,6 +1338,29 @@ class Enemy {
     ctx.fillStyle=col;
 
     if (this.isBoss) {
+      // Draw void orbs as ground effects (OMEGA phase 4)
+      if (this.voidOrbs.length > 0) {
+        for (const orb of this.voidOrbs) {
+          const ox = orb.x * TILE - camX, oy = orb.y * TILE - camY;
+          const r = orb.radius * TILE;
+          const fade = 1 - (orb.age / orb.maxAge);
+          ctx.save();
+          ctx.globalAlpha = fade * 0.3;
+          ctx.fillStyle = '#aa00ff';
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#aa00ff';
+          ctx.beginPath();
+          ctx.arc(ox, oy, r, 0, TWO_PI);
+          ctx.fill();
+          // Ring edge
+          ctx.globalAlpha = fade * 0.7;
+          ctx.strokeStyle = '#ff00c8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       const sz=this.type==='OMEGA'?22:18;
       ctx.beginPath();
       ctx.arc(sx,sy,sz,0,TWO_PI);
@@ -1984,11 +2098,13 @@ const game = {
     // stairs interaction
     const tx=Math.floor(player.x), ty=Math.floor(player.y);
     const tile=dungeon.map[ty]?.[tx];
-    if ((tile===T.STAIRS||tile===T.TERMINAL) && jp('KeyE')) {
+    const bossBlocking = tile===T.TERMINAL && this.bossAlive;
+    if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp('KeyE')) {
       this.descend();
     }
     if (tile===T.STAIRS) this.msg('Press E to descend','#ffff00');
-    if (tile===T.TERMINAL) this.msg('Press E to interface with CORE terminal','#00f5ff');
+    if (tile===T.TERMINAL && bossBlocking) this.msg('CORE terminal locked — destroy OMEGA CORE first','#ff3333');
+    if (tile===T.TERMINAL && !bossBlocking) this.msg('Press E to interface with CORE terminal','#00f5ff');
 
     // pause
     if (jp('Escape')) this.setState('PAUSED');
@@ -1999,6 +2115,14 @@ const game = {
       if (bossEnemy && dist(player.x,player.y,bossEnemy.x,bossEnemy.y)<8) {
         this.bossSealed=true;
       }
+    }
+
+    // boss death — unseal room and update state
+    if (this.bossAlive && !enemies.some(e=>e.isBoss && !e.dead)) {
+      this.bossAlive=false;
+      this.bossSealed=false;
+      const bossNames={3:'SENTINEL MK-I',6:'NEURAL HIVE',10:'OMEGA CORE'};
+      game.msg((bossNames[this.floor]||'BOSS')+' DESTROYED','#39ff14');
     }
   },
 

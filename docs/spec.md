@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.9
+# NEON DUNGEON — Game Specification v2.0
 
 ## Vision
 
@@ -194,7 +194,39 @@ AI parameters tighten with floor progression:
 | OMEGA CORE     | 1000  | 4      | All previous attacks, room-filling void orbs      |
 
 Boss arenas: pre-built 20×20 rooms, sealed on entry (doors lock until dead).
-Boss-summoned adds (HIVE crawlers, OMEGA drones) cannot be elite.
+Boss-summoned adds (HIVE crawlers, OMEGA drones/crawlers) cannot be elite.
+All boss HP values are scaled by the floor modifier (`1 + 0.15 × (floor − 1)`).
+Phase thresholds use `maxHp` percentages, so scaling does not break phases.
+
+On boss death, the arena unseals and the game displays "{BOSS NAME} DESTROYED".
+On floor 10, the CORE terminal is locked until OMEGA CORE is defeated.
+
+#### OMEGA CORE — Phase Breakdown
+
+Phase thresholds (by % of scaled max HP):
+
+| Phase | HP Range     | Speed | Attacks Unlocked                              |
+|-------|-------------|-------|------------------------------------------------|
+| 1     | 100 %–70 %  | 1.0×  | Rotating radial shots + homing missile         |
+| 2     | 70 %–40 %   | 1.2×  | + Crawler/drone spawns (2 adds per wave)       |
+| 3     | 40 %–20 %   | 1.5×  | + Piercing beam fan (5) + shield burst (≤5 tiles) |
+| 4     | 20 %–0 %    | 2.0×  | + Void orbs + psionic shockwave (≤7 tiles) + 3 adds/wave + 7-beam fan |
+
+Phase transitions trigger an explosion particle burst and a HUD warning
+(`⚠ OMEGA PHASE N`).
+
+**Void Orbs** (Phase 4 signature attack):
+- 2–3 orbs spawn at random room positions every 3.5 s (÷ speed mult)
+- Each orb expands from radius 0 to 4–7 tiles over 2.5 s, then fades
+- Players inside an orb take 15 damage every 0.5 s (cooldown-gated)
+- Visual: translucent magenta fill with neon ring edge, fading with age
+
+**Attack Inheritance:**
+- SENTINEL radial shots → rotating turret volley (4→5→8 projectiles by phase)
+- SENTINEL shield burst → knockback AoE (phase 3+, ≤5 tile range, 20 dmg)
+- HIVE homing missile → targeted shot at player (phase 1+)
+- HIVE crawler spawns → 60 % crawler / 40 % drone mix (phase 2+)
+- HIVE psionic shockwave → AoE pulse (phase 4, ≤7 tile range, 25 dmg)
 
 ---
 
