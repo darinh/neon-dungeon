@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.5
+# NEON DUNGEON — Game Specification v2.6
 
 ## Vision
 
@@ -29,6 +29,7 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
+     MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
 
 State transitions are animated (fade in/out, 400 ms).
@@ -611,6 +612,69 @@ spawn adjacent to vendor terminals.
 
 ---
 
+## Meta-Progression — Neural Archives
+
+Persistent upgrades that carry across runs. Currency: **Data Fragments (◆)**,
+stored in `localStorage` key `neonDungeonMeta` (separate from run saves).
+
+### Data Fragment Earnings (end of every run)
+
+| Source                    | Fragments          |
+|---------------------------|--------------------|
+| Floors reached            | 1 per floor        |
+| Bosses cleared            | 2 per boss killed  |
+| Victory (floor 10)       | +5 bonus           |
+| Score                     | 1 per 2000 pts (cap 5) |
+| Data Persistence upgrade  | +3 flat per level  |
+
+Fragments are tracked via `bossesCleared` counter on the game object (incremented
+on boss death, reset on `startGame()`, saved/loaded with checkpoints). Calculation
+uses `calcRunShards(floor, score, bossesCleared, victory)`.
+
+### Permanent Upgrades
+
+Accessible from the **NEURAL ARCHIVES** menu screen (new game state: `ARCHIVES`).
+
+| ID              | Name               | Effect                        | Max Lv | Costs (per lv) |
+|-----------------|--------------------|-------------------------------|--------|-----------------|
+| VITAL_BOOST     | Vital Systems      | +10 max HP                    | 3      | 5 / 12 / 22    |
+| SCAVENGER       | Scavenger Protocol | +15% credit gain              | 3      | 5 / 12 / 22    |
+| QUICK_LEARNER   | Quick Learner      | +15% XP gain                  | 3      | 5 / 12 / 22    |
+| ARMOR_PLATING   | Armor Plating      | +1 starting DEF               | 3      | 8 / 18 / 30    |
+| STARTING_GEAR   | Weapon Cache       | Start with random weapon      | 1      | 25              |
+| PERSISTENCE     | Data Persistence   | +3 fragments per run (flat)   | 2      | 12 / 25         |
+
+**Total cost to max all upgrades:** 5+12+22 + 5+12+22 + 5+12+22 + 8+18+30 + 25 + 12+25 = 235◆
+
+**Weapon Cache pool:** Scatter Gun, Railgun, Plasma Sword, Void Cannon (excludes
+Pulse Pistol — starting weapon is always an upgrade).
+
+Meta upgrades are applied in `startGame()` via `applyMetaToPlayer(player)` after
+`Player` constructor runs. `gainXP()` multiplies by `getMetaXPMultiplier()`;
+enemy credit drops multiply by `getMetaCreditMultiplier()`.
+
+### Menu Integration
+
+The main menu always shows NEURAL ARCHIVES as the last option (with current shard
+balance). Menu is array-driven via `getMenuOptions()` — supports 2–3 items depending
+on save state. Touch hit-testing uses closest-option matching.
+
+### Save Format
+
+```json
+{
+  "shards": 42,
+  "upgrades": { "VITAL_BOOST": 1, "SCAVENGER": 2 },
+  "stats": { "totalRuns": 15, "totalShards": 120, "bestFloor": 8, "victories": 1 }
+}
+```
+
+### End-of-Run Display
+
+GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summary.
+
+---
+
 ## Visual Style
 
 - **Palette:** Near-black backgrounds (#0a0a12), neon cyan (#00f5ff),
@@ -959,3 +1023,4 @@ the manifest to achieve a chrome-less experience.
 | v10.1   | Bug fix: touch menu hit-test for Continue/New Game used `H/2` instead of actual menu item positions — tapping Continue selected New Game on landscape tablets and 768p viewports. `continueGame()` now falls back to `startGame()` with visible message on corrupt saves instead of silently returning. SW cache v17 |
 | v11.0   | Enemy variety expansion: SHIELDER (floor 3+, 120° frontal arc deflects non-piercing projectiles, forces flanking) and GRENADIER (floor 5+, lobs grenades creating 1.5-tile radius AoE hazard zones lasting 3 s). Floor-gated via `minFloor` in ENEMY_WEIGHTS — excluded from both weighted selection and cap-reroll on lower floors. Global `hazardZones[]` array for grenade zones with LOS-gated damage. `audio.shieldDeflect()`/`grenadeLob()`/`grenadeExplode()` SFX. Per-room caps: 1 shielder, 1 grenadier. SW cache v18 |
 | v12.0   | Lore terminals: `T.LORE` tile (16) — amber data terminals placed 1–2 per non-boss floor (floor 2+), containing cyberpunk narrative fragments from a 25-entry pool. Single-use: press E to read, terminal converts to floor. `READING` game state with overlay UI (word-wrapped text, scanline frame, touch/keyboard close). +50 score per new entry. `player.loreRead` Set tracks discovered entries per run. `audio.loreAccess()` chirp SFX. Amber `◫` HUD counter + minimap dot. Save-compatible (no version bump). SW cache v19 |
+| v13.0   | Meta-progression system (Neural Archives): persistent Data Fragments (◆) currency earned at end of every run based on floors reached, bosses cleared, victory, and score. 6 permanent upgrades purchasable from new ARCHIVES game state accessible from main menu: Vital Systems (+HP), Scavenger Protocol (+credits), Quick Learner (+XP), Armor Plating (+DEF), Weapon Cache (start with upgraded weapon), Data Persistence (+fragments/run). Array-driven menu system replacing hardcoded 2-option layout — supports touch hit-testing for 2-3 options. `bossesCleared` counter tracked on game object and persisted in save. ◆ reward shown on GAME_OVER/VICTORY screens. Meta data stored in separate `localStorage` key (`neonDungeonMeta`). SW cache v20 |
