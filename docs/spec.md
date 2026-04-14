@@ -129,6 +129,55 @@ Default starting weapon: PULSE PISTOL.
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
+### Difficulty Curve
+
+**Weighted type distribution:** Each enemy type has a base weight and per-floor
+modifier. Early floors are GUARD-heavy (~50% on floor 1); later floors shift
+toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
+`max(1, base + perFloor × (floor − 1))`.
+
+| Type    | Base weight | Per-floor |
+|---------|-------------|-----------|
+| GUARD   | 40          | −3        |
+| TURRET  | 20          | +1        |
+| CRAWLER | 10          | +3        |
+| PHANTOM | 5           | +4        |
+| DRONE   | 5           | +3        |
+
+**Scaling enemy count per room:**
+`count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
+`areaCap = floor(room.w × room.h ÷ 8)`. Floor 1 averages 2–4 per room;
+floor 10 averages 5–8 (capped by room area).
+
+**Per-room composition caps:** max 2 turrets, max 2 drones, max 1 phantom per
+room. Excess rolls default to GUARD.
+
+### Elite Enemies (floor 3+)
+
+8% chance per spawn on floor 3 and above. Maximum 1 elite per room. Never
+applied to bosses or boss-summoned adds.
+
+| Stat     | Multiplier |
+|----------|------------|
+| HP       | ×1.8       |
+| ATK      | ×1.3       |
+| SPD      | ×1.15      |
+| XP value | ×1.25      |
+
+**Visual:** Pulsing neon glow (oscillating `shadowBlur` driven by `bobAngle`)
+and a white diamond marker above the enemy. Elite HP bars render in white
+instead of the type colour.
+
+### Aggression Scaling
+
+AI parameters tighten with floor progression:
+
+| Parameter            | Formula                            | Range         |
+|----------------------|-------------------------------------|---------------|
+| GUARD detect range   | `10 + floor × 0.4`                 | 10.4 – 14     |
+| TURRET shoot cooldown| `max(1.0, 2.0 − floor × 0.11)`    | 1.89 – 1.0 s  |
+| DRONE shoot cooldown | `max(0.9, 1.5 − floor × 0.07)`    | 1.43 – 0.9 s  |
+
 ### Bosses (appear on floors 3, 6, 10)
 
 | Boss           | HP    | Phases | Special                                           |
@@ -138,6 +187,7 @@ HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 | OMEGA CORE     | 1000  | 4      | All previous attacks, room-filling void orbs      |
 
 Boss arenas: pre-built 20×20 rooms, sealed on entry (doors lock until dead).
+Boss-summoned adds (HIVE crawlers, OMEGA drones) cannot be elite.
 
 ---
 
@@ -363,3 +413,4 @@ the manifest to achieve a chrome-less experience.
 | v1.4    | Portrait HUD: compact two-row layout (H > W, W ≤ 600); centralized `layout` object for bottom-UI metrics; touch-aware screen prompts ("TAP TO START"); full-screen touch confirm in non-playing states |
 | v1.5    | Audio polish: master gain bus + DynamicsCompressor + ConvolverNode reverb; cached noise buffer; layered oscillators for all SFX; exponential envelopes; wet/dry reverb sends for signature sounds |
 | v1.6    | Weapon-specific shoot sounds: each weapon has a unique audio signature (Scatter Gun blast, Railgun charge-crack, Plasma Sword whoosh, Void Cannon thump); `audio.shoot()` accepts weapon object |
+| v1.7    | Enemy variety & difficulty curve: weighted type distribution (GUARD-heavy early → PHANTOM/DRONE-heavy late), scaling enemy count per room (area-capped), elite enemies (8% on floor 3+, 1.8× HP, pulsing glow + diamond marker), aggression scaling (tighter cooldowns/detection per floor), per-room composition caps |

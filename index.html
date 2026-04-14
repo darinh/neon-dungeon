@@ -935,6 +935,7 @@ class Enemy {
     this.zigzag=0;
     this.room=null;
     this.isBoss=false;
+    this.elite=false;
     this.phase=1;
     this.bossTimers={};
     this.spawnCooldown=0;
@@ -1020,8 +1021,9 @@ class Enemy {
   }
 
   aiGuard(dt,player,map,d,los) {
-    if (los && d<10) { this.state='CHASE'; }
-    else if (d>12) { this.state='PATROL'; }
+    const detectRange = 10 + (game.floor || 1) * 0.4;
+    if (los && d<detectRange) { this.state='CHASE'; }
+    else if (d>detectRange+2) { this.state='PATROL'; }
     if (this.state==='PATROL') this.patrol(dt,map);
     else {
       this.moveToward(player.x,player.y,this.spd,dt,map);
@@ -1030,9 +1032,10 @@ class Enemy {
   }
 
   aiTurret(dt,player,map,d,los) {
+    const cooldown = Math.max(1.0, 2.0 - (game.floor || 1) * 0.11);
     if (los && d<12 && this.shootTimer<=0) {
       this.fireAt(player.x,player.y,8,this.atk,13,'#ffb700');
-      this.shootTimer=2.0;
+      this.shootTimer=cooldown;
     }
   }
 
@@ -1065,11 +1068,12 @@ class Enemy {
   }
 
   aiDrone(dt,player,map,d,los) {
+    const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07);
     if (d<15) {
       this.moveToward(player.x,player.y,this.spd,dt,map,true);
       if (this.shootTimer<=0) {
         this.fireAt(player.x,player.y,7,this.atk,16,'#00aaff');
-        this.shootTimer=1.5;
+        this.shootTimer=cooldown;
       }
     }
   }
@@ -1135,7 +1139,7 @@ class Enemy {
 
     if (this.phase>=2 && this.bossTimers.spawn<=0 && this.spawnCooldown<=0) {
       for (let i=0;i<2;i++) {
-        const cr=spawnEnemy('CRAWLER',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room);
+        const cr=spawnEnemy('CRAWLER',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room,false);
         enemies.push(cr);
       }
       this.bossTimers.spawn=5;
@@ -1180,7 +1184,7 @@ class Enemy {
     }
 
     if (this.phase>=2 && this.bossTimers.spawn<=0) {
-      const dr=spawnEnemy('DRONE',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room);
+      const dr=spawnEnemy('DRONE',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room,false);
       enemies.push(dr);
       this.bossTimers.spawn=4/spd;
     }
@@ -1208,7 +1212,8 @@ class Enemy {
     ctx.globalAlpha=alpha;
 
     const col=this.flashTimer>0?'#ffffff':this.colour;
-    ctx.shadowBlur=this.isBoss?20:10;
+    const elitePulse = this.elite ? 12 + Math.sin(this.bobAngle * 2) * 8 : 0;
+    ctx.shadowBlur=this.isBoss?20: this.elite ? 10 + elitePulse : 10;
     ctx.shadowColor=col;
     ctx.fillStyle=col;
 
@@ -1226,12 +1231,25 @@ class Enemy {
     } else {
       const sz=TILE*0.4;
       ctx.fillRect(sx-sz/2, sy-sz/2, sz, sz);
+      // elite diamond marker
+      if (this.elite) {
+        ctx.fillStyle='#ffffff';
+        ctx.shadowColor='#ffffff';
+        ctx.shadowBlur=6;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - sz - 4);
+        ctx.lineTo(sx + 3, sy - sz - 1);
+        ctx.lineTo(sx, sy - sz + 2);
+        ctx.lineTo(sx - 3, sy - sz - 1);
+        ctx.closePath();
+        ctx.fill();
+      }
       // small hp bar
       if (this.hp<this.maxHp) {
         ctx.shadowBlur=0;
         ctx.fillStyle='#333';
         ctx.fillRect(sx-8,sy-12,16,2);
-        ctx.fillStyle=this.colour;
+        ctx.fillStyle= this.elite ? '#ffffff' : this.colour;
         ctx.fillRect(sx-8,sy-12,16*(this.hp/this.maxHp),2);
       }
     }
@@ -1239,7 +1257,30 @@ class Enemy {
   }
 }
 
-function spawnEnemy(type,x,y,floorNum,room) {
+// ─── Enemy Weights & Spawning ─────────────────────────────────────────────────
+const ENEMY_WEIGHTS = {
+  GUARD:   { base: 40, perFloor: -3 },   // common early, fades
+  TURRET:  { base: 20, perFloor: 1 },    // steady
+  CRAWLER: { base: 10, perFloor: 3 },    // ramps up mid-game
+  PHANTOM: { base: 5,  perFloor: 4 },    // late-game threat
+  DRONE:   { base: 5,  perFloor: 3 },    // late-game ranged
+};
+const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
+
+function pickEnemyType(floorNum) {
+  const weights = [];
+  let total = 0;
+  for (const t of ENEMY_TYPES_LIST) {
+    const w = Math.max(1, ENEMY_WEIGHTS[t].base + ENEMY_WEIGHTS[t].perFloor * (floorNum - 1));
+    weights.push({ type: t, w });
+    total += w;
+  }
+  let r = Math.random() * total;
+  for (const { type, w } of weights) { r -= w; if (r <= 0) return type; }
+  return 'GUARD';
+}
+
+function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const scale=1+0.15*(floorNum-1);
   let hp,atk,spd,xpVal,colour;
   switch(type) {
@@ -1255,11 +1296,21 @@ function spawnEnemy(type,x,y,floorNum,room) {
   const isBoss = ['SENTINEL','HIVE','OMEGA'].includes(type);
   const e=new Enemy(x,y,
     Math.round(hp*scale), Math.round(atk*scale),
-    spd*(isBoss?1:1), xpVal, colour, type);
+    spd, xpVal, colour, type);
   e.room=room;
   e.isBoss=isBoss;
+  e.elite=false;
   if (type==='PHANTOM') e.visible=false;
   if (isBoss) { e.maxHp=e.hp; }
+  // Elite roll: 8% chance on floor 3+, never on bosses or disallowed spawns
+  if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < 0.08) {
+    e.elite = true;
+    e.hp = Math.round(e.hp * 1.8);
+    e.maxHp = e.hp;
+    e.atk = Math.round(e.atk * 1.3);
+    e.spd *= 1.15;
+    e.xpValue = Math.round(e.xpValue * 1.25);
+  }
   return e;
 }
 
@@ -1665,12 +1716,28 @@ function populateFloor(dungeon, floorNum) {
       continue;
     }
 
-    const count=rndInt(2,5);
-    const types=['GUARD','TURRET','CRAWLER','PHANTOM','DRONE'];
+    // Enemy count scales with floor, capped by room area
+    const minE = 2 + Math.floor(floorNum / 3);
+    const maxE = Math.min(8, 4 + Math.floor(floorNum / 2));
+    const areaCap = Math.floor(room.w * room.h / 8);
+    const count = Math.min(areaCap, rndInt(minE, maxE));
+
+    let roomElite = false;  // max 1 elite per room
+    const typeCounts = {};  // per-type caps within room
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2 };
     for (let j=0;j<count;j++) {
-      const type=types[rndInt(0,Math.min(floorNum,types.length)-1)];
+      let type = pickEnemyType(floorNum);
+      // Per-type room caps — reroll among uncapped types if hit
+      if ((typeCounts[type] || 0) >= (TYPE_CAPS[type] || 99)) {
+        const open = ENEMY_TYPES_LIST.filter(t => (typeCounts[t] || 0) < (TYPE_CAPS[t] || 99));
+        type = open.length ? open[rndInt(0, open.length - 1)] : 'GUARD';
+      }
+      typeCounts[type] = (typeCounts[type] || 0) + 1;
+
       const ex=room.x+rnd(1,room.w-1), ey=room.y+rnd(1,room.h-1);
-      enemies.push(spawnEnemy(type,ex,ey,floorNum,room));
+      const e = spawnEnemy(type,ex,ey,floorNum,room, !roomElite);
+      if (e.elite) roomElite = true;
+      enemies.push(e);
     }
 
     const itemCount=rndInt(0,2);
