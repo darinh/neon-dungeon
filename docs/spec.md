@@ -27,6 +27,7 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
                 → VICTORY    (score doesn't qualify for top 10)
      PLAYING ↔ POWERUP_CHOICE (item pickup pauses, choice resumes)
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
+     PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
 ```
 
@@ -57,7 +58,7 @@ Each floor is generated fresh using Binary Space Partitioning:
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
-LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | VOID
+LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | VOID
 
 ### Doors & Locked Doors
 
@@ -627,6 +628,43 @@ spawn adjacent to vendor terminals.
   `game.hint` is set per-frame; `drawHint()` renders with `sin(Date.now()/300)`
   opacity oscillation (0.20–0.90). Only one hint is shown at a time (last wins).
 
+### Lore Terminals (floor 2+, non-boss)
+
+Data terminals scattered through the dungeon containing narrative fragments about
+the facility, its creators, the OMEGA CORE, and the events that led to lockdown.
+
+**Tile:** `T.LORE` (value 16). Passable, see-through. Rendered as an amber `◫`
+glyph with pulsing glow on a `#1a1208` background. Distinct from the cyan CORE
+terminal (`T.TERMINAL`) used on floor 10.
+
+**Placement:** 1 terminal per floor (floors 2–4), 2 per floor (floor 5+).
+Excluded from: spawn room, stair room, vendor rooms, secret rooms, boss floors.
+Placed on a random `T.FLOOR` tile away from room edges (1-tile inset). Generated
+**before** arc grids so the adjacency exclusion works correctly.
+
+**Interaction:** Walk onto the tile → hint prompt ("Press E to access data
+terminal"). Press E → game enters `READING` state, gameplay pauses. The terminal
+is consumed (converted to `T.FLOOR`) — single use per terminal.
+
+**Lore selection:** 25-entry pool of cyberpunk narrative fragments. Each terminal
+displays an entry not yet seen this run (`player.loreRead` Set of indices). When
+all entries exhausted, repeats randomly. Each new entry awards +50 score.
+
+**READING state:** Dark overlay (82% opacity) with amber terminal-style frame,
+scanline effect, word-wrapped lore text, and pulsing "PRESS E TO CLOSE" / "TAP TO
+CLOSE" hint. Closes on E, Escape, Enter, or mouse click/touch tap.
+
+**Audio:** `audio.loreAccess()` — warm ascending chirp (500→700→900→1100 Hz sine +
+triangle tones with noise texture).
+
+**HUD:** Amber `◫ N` counter next to credits in both compact and landscape
+layouts, shown only when `loreRead.size > 0`.
+
+**Minimap:** Amber (`#ffb700`) dot.
+
+**Save/Load:** `player.loreRead` serialised as array, loaded as Set. Defaults
+gracefully to empty Set on older saves — no `SAVE_VERSION` bump required.
+
 ---
 
 ## Audio (Web Audio API — synthesised only)
@@ -670,6 +708,7 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Shield deflect   | Hard metallic clang: triangle 1800→600 Hz + sine 2400→900 Hz + noise (LP 4000 Hz) |
 | Grenade lob      | Hollow thunk: sine 200→120 Hz + triangle 400→800 Hz rising whoosh |
 | Grenade explode  | Muffled boom: sine 100→30 Hz + square 60→20 Hz + noise (LP 2000 Hz) |
+| Lore access      | Data retrieval chirp: ascending sine tones (500→700, 700→900, 900→1100 Hz) + noise texture (4 kHz) |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -681,6 +720,7 @@ All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies
 score += enemy_xp_value × floor_multiplier   (on kill)
 score += 500 × floor_number                  (on floor clear)
 score += remaining_hp × 10                   (on floor clear)
+score += 50                                  (on lore terminal read)
 ```
 
 High-score table stored in `localStorage` as JSON, top 10, with player name.
@@ -918,3 +958,4 @@ the manifest to achieve a chrome-less experience.
 | v10.0   | Auto-Laser capstone perk (level 10): hitscan beam auto-fires at nearest visible enemy within 12 tiles every 2.5 s, 20 flat damage, LOS-gated, invisible phantoms excluded. Crimson beam + white core visual (0.15 s fade), `audio.autoLaser()` zap SFX. Save compatibility: `checkPerkUnlocks()` re-runs on load to retroactively grant perks from before they existed. SW cache v16 |
 | v10.1   | Bug fix: touch menu hit-test for Continue/New Game used `H/2` instead of actual menu item positions — tapping Continue selected New Game on landscape tablets and 768p viewports. `continueGame()` now falls back to `startGame()` with visible message on corrupt saves instead of silently returning. SW cache v17 |
 | v11.0   | Enemy variety expansion: SHIELDER (floor 3+, 120° frontal arc deflects non-piercing projectiles, forces flanking) and GRENADIER (floor 5+, lobs grenades creating 1.5-tile radius AoE hazard zones lasting 3 s). Floor-gated via `minFloor` in ENEMY_WEIGHTS — excluded from both weighted selection and cap-reroll on lower floors. Global `hazardZones[]` array for grenade zones with LOS-gated damage. `audio.shieldDeflect()`/`grenadeLob()`/`grenadeExplode()` SFX. Per-room caps: 1 shielder, 1 grenadier. SW cache v18 |
+| v12.0   | Lore terminals: `T.LORE` tile (16) — amber data terminals placed 1–2 per non-boss floor (floor 2+), containing cyberpunk narrative fragments from a 25-entry pool. Single-use: press E to read, terminal converts to floor. `READING` game state with overlay UI (word-wrapped text, scanline frame, touch/keyboard close). +50 score per new entry. `player.loreRead` Set tracks discovered entries per run. `audio.loreAccess()` chirp SFX. Amber `◫` HUD counter + minimap dot. Save-compatible (no version bump). SW cache v19 |

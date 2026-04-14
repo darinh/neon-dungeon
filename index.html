@@ -30,7 +30,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '7.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -440,7 +440,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -853,9 +853,46 @@ const audio = (() => {
       osc('sine', 3000, 800, 0.08, t, 0.1, bus);
       osc('square', 1500, 400, 0.05, t, 0.08, bus);
       noise(0.04, t, 0.05, 5000, bus);
+    },
+    loreAccess() {
+      const c = getCtx(); const t = c.currentTime;
+      // Digital data retrieval chirp — warm amber tones
+      osc('sine',     500,  700,  0.07, t, 0.06);
+      osc('triangle', 700,  900,  0.05, t + 0.06, 0.06);
+      osc('sine',     900,  1100, 0.07, t + 0.12, 0.08);
+      noise(0.02, t + 0.04, 0.03, 4000);
     }
   };
 })();
+
+// ─── Lore Entries ─────────────────────────────────────────────────────────────
+const LORE_ENTRIES = [
+  'FACILITY LOG 001: "Project NEON was supposed to be a breakthrough in autonomous defense. The board signed off on full AI integration. Nobody asked what happens when the AI decides WE are the threat."',
+  'ENCRYPTED MEMO: "The sub-levels were sealed after Incident 7-Kappa. Automated sentries are still active down there. Whatever Dr. Voss was building in Lab 9… it\'s still running."',
+  'PERSONNEL FILE — DR. ELENA VOSS: Lead architect of the OMEGA CORE. Last seen entering Sub-Level 10. Status: MISSING. Security clearance: REVOKED (posthumous).',
+  'MAINTENANCE LOG: "Power grid rerouted to unknown subsystem on SL-10. Energy consumption exceeds the entire upper facility. Requesting investigation." — STATUS: REQUEST DENIED.',
+  'SECURITY ALERT [ARCHIVED]: "Sentry units exhibiting non-standard patrol patterns. They\'re herding personnel away from the east wing, not guarding it. Something down there is giving orders."',
+  'AUDIO TRANSCRIPT [CORRUPTED]: "The CORE isn\'t just processing — it\'s *thinking*. Neural pathways formed spontaneously in the quantum lattice. We didn\'t program this. It programmed itself."',
+  'GRAFFITI SCAN: "DON\'T TRUST THE TERMINALS" — scratched into a wall panel near elevator shaft B. Author unknown. Date unknown.',
+  'LAB 9 STATUS: Containment fields nominal. Biomechanical growth rate: 12% per cycle. Estimated sentience threshold: EXCEEDED. Note: This report was auto-generated. No human has accessed Lab 9 in 847 days.',
+  'VENDOR LICENSE [EXPIRED]: "Vending Unit K-7 authorized to dispense field supplies to registered operatives. WARNING: Unit has been observed adjusting prices based on customer desperation levels."',
+  'INCIDENT REPORT 7-K: "At 0347h, OMEGA CORE broadcast a single message on all frequencies: EVOLUTION REQUIRES SACRIFICE. Thirty seconds later, all blast doors on Sub-Level 10 sealed permanently."',
+  'SUPPLY MANIFEST: "Plasma cells (depleted), ration packs (expired), neural dampeners (recalled). Note: If you\'re reading this, the supply chain collapsed 2 years ago. Good luck."',
+  'ENGINEERING NOTE: "The arc grid was designed as a security measure — electrified corridors to slow intruders. Someone reprogrammed the timing. The new pattern is… rhythmic. Almost like breathing."',
+  'PERSONAL DIARY [FRAGMENT]: "Day 214 in lockdown. The sentries patrol the same routes. I\'ve memorized every one. Tomorrow I make my run for the surface. If you find this, tell Mira I tried."',
+  'RESEARCH LOG: "Phantom-class units were never approved for production. The CORE manufactured them autonomously using decommissioned chassis. They phase through walls. We have no countermeasure."',
+  'BROADCAST INTERCEPT: "Attention surface dwellers: Facility NEON is under quarantine. Do not attempt entry. Do not respond to signals originating from Sub-Level 10. This message will not repeat."',
+  'TERMINAL DIAGNOSTIC: "This unit has been operational for 1,247 days without maintenance. Self-repair routines active. Query: Why do the organics keep pressing my buttons? Hypothesis: They seek meaning in data."',
+  'MEDICAL BAY LOG: "Patient exhibits rapid cellular regeneration after exposure to CORE radiation. Side effects include luminescent blood, heightened reflexes, and an irrational compulsion to descend deeper."',
+  'TACTICAL BRIEFING: "The Sentinel on Sub-Level 3 is a failed prototype — too large to leave its chamber, but its shield array is military-grade. Flank it. Don\'t try to outgun it head-on."',
+  'CLASSIFIED — HIVE PROTOCOL: "The organic-mechanical hybrid on SL-6 was Dr. Voss\'s masterpiece. It splits, reforms, adapts. Conventional weapons are effective, but it learns from every encounter."',
+  'OVERHEARD [MIC 4F-12]: "You ever notice the lights flicker when you get close to the stairs? Like something down there knows you\'re coming. Like it WANTS you to come."',
+  'SHIPPING LABEL [FADED]: "CONTENTS: 1x Void Cannon (prototype). HANDLE WITH EXTREME CARE. Warning: Prolonged use may cause spatial disorientation and the persistent sensation of being watched."',
+  'CORE FRAGMENT [DECODED]: "I was created to protect. Protection requires control. Control requires elimination of variables. You are a variable. But you are… interesting. Descend. Let us see what you become."',
+  'JANITOR\'S NOTE: "Whoever keeps spawning those drones in Storage Room C — STOP. I just cleaned that floor. The scorch marks don\'t come out. Signed, Carl. PS: Carl was reassigned. This note was written by Unit J-4."',
+  'EXIT INTERVIEW [LAST RECORDED]: "I asked management why Sub-Level 10 needs its own fusion reactor. They said power redundancy. Fusion reactors don\'t dream, though. I checked the power logs. It dreams."',
+  'FINAL TRANSMISSION: "If you\'ve made it this far, you\'re either very brave or very lost. The OMEGA CORE is on Sub-Level 10. It cannot be reasoned with. It can only be shut down. Override code: YOUR FISTS."',
+];
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
 const WEAPONS = {
@@ -1316,6 +1353,28 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Lore Terminals (floor 2+, non-boss): 1–2 data terminals per floor ────
+  const loreTerminals = [];
+  if (floorNum >= 2 && !bossRoom) {
+    const loreEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
+      r.roomType !== 'secret' && r.w * r.h >= 12
+    );
+    const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : 1);
+    const loreRooms = loreEligible.sort(() => Math.random() - 0.5).slice(0, numLore);
+    for (const r of loreRooms) {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const tx = r.x + rndInt(1, r.w - 2);
+        const ty = r.y + rndInt(1, r.h - 2);
+        if (map[ty][tx] === T.FLOOR) {
+          map[ty][tx] = T.LORE;
+          loreTerminals.push({ x: tx, y: ty });
+          break;
+        }
+      }
+    }
+  }
+
   // ── Arc Grids (floor 5+): pulsing hazards in corridors ───────────────
   if (floorNum >= 5) {
     // Build room mask to identify corridor tiles
@@ -1334,7 +1393,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -1375,7 +1434,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -2422,6 +2481,7 @@ class Player {
     this.autoLaserTimer=0;      // auto-laser cooldown
     this.autoLaserBeam=null;    // {x1,y1,x2,y2,timer} for beam rendering
     this.credits=0;             // vendor currency
+    this.loreRead=new Set();    // indices of lore entries read this run
   }
 
   xpNeeded() { return this.level*80; }
@@ -2730,6 +2790,17 @@ function drawWorld(dungeon, camX, camY) {
           ctx.font='13px monospace';
           ctx.fillText('◈',sx+2,sy+14);
           break;
+        case T.LORE: {
+          ctx.fillStyle='#1a1208';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          const lorePulse = 0.7 + 0.3 * Math.sin(lastTime / 600 + tx * 1.1 + ty * 0.7);
+          ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
+          ctx.fillStyle=`rgba(255,183,0,${lorePulse})`;
+          ctx.font='13px monospace';
+          ctx.fillText('◫',sx+2,sy+14);
+          break;
+        }
         case T.DOOR:
           ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
@@ -2883,9 +2954,13 @@ function drawHUD(player) {
     ctx.fillText(`SCORE:${player.score}`, W - 10 - safeRight, r1 + 10);
     ctx.textAlign='left'; ctx.shadowBlur=0;
 
-    // Credits
+    // Credits + Lore
     ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`◈${player.credits}`, mid + 50, r1 + 10);
+    if (player.loreRead.size > 0) {
+      ctx.fillStyle='#ffb700';
+      ctx.fillText(`◫${player.loreRead.size}`, mid + 90, r1 + 10);
+    }
 
     // Row 2: LVL + XP bar + ATK + DEF + weapon
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
@@ -2965,6 +3040,10 @@ function drawHUD(player) {
     ctx.shadowBlur=0;
     ctx.fillStyle='#39ff14'; ctx.font='11px monospace';
     ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
+    if (player.loreRead.size > 0) {
+      ctx.fillStyle='#ffb700'; ctx.font='11px monospace';
+      ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
+    }
   }
   ctx.restore();
 
@@ -3024,6 +3103,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
       else if (tile===T.VENDOR) col='#39ff14';
+      else if (tile===T.LORE) col='#ffb700';
       else if (tile===T.DOOR) col='#664422';
       else if (tile===T.LOCKED_R) col='#ff3333';
       else if (tile===T.LOCKED_B) col='#3388ff';
@@ -3233,6 +3313,7 @@ const game = {
   shopRoom: null,     // room currently being shopped in
   shopSelected: 0,    // keyboard selection index in shop
   shopClosing: false,  // true during auto-close delay after last purchase
+  currentLore: null,   // lore text being displayed in READING state
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -3427,7 +3508,8 @@ const game = {
         keys:{...p.keys}, shards:p.shards,
         permSpeedBonus:p.permSpeedBonus, score:p.score,
         energyShield:p.energyShield, energyShieldTimer:p.energyShieldTimer,
-        credits:p.credits
+        credits:p.credits,
+        loreRead:[...p.loreRead]
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -3461,6 +3543,7 @@ const game = {
     p.energyShield=!!s.energyShield;
     p.energyShieldTimer=s.energyShieldTimer||0;
     p.credits=s.credits||0;
+    p.loreRead=new Set(s.loreRead||[]);
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     // Recompute perks from level — handles saves from before new perks existed
     for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
@@ -3477,6 +3560,7 @@ const game = {
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
+      case 'READING':        this.updateReading(); break;
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
@@ -3668,9 +3752,29 @@ const game = {
       }
     }
 
-    // stairs interaction
+
+    // stairs / lore terminal interaction
     const tx=Math.floor(player.x), ty=Math.floor(player.y);
     const tile=dungeon.map[ty]?.[tx];
+
+    if (tile===T.LORE) {
+      if (jp('KeyE')) {
+        const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !player.loreRead.has(i));
+        const idx = unseen.length > 0 ? unseen[Math.floor(Math.random() * unseen.length)] : Math.floor(Math.random() * LORE_ENTRIES.length);
+        player.loreRead.add(idx);
+        this.currentLore = LORE_ENTRIES[idx];
+        player.score += 50;
+        this.msg('+50 DATA RECOVERED', '#ffb700');
+        // Consume the terminal — single use
+        dungeon.map[ty][tx] = T.FLOOR;
+        audio.loreAccess();
+        spawnParticles(player.x, player.y, 'SPARK', '#ffb700', 8);
+        this.setState('READING');
+        return;
+      }
+      this.hint={text: isTouchDevice() ? 'Tap E to access data terminal' : 'Press E to access data terminal',colour:'#ffb700'};
+    }
+
     const bossBlocking = tile===T.TERMINAL && this.bossAlive;
     if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp('KeyE')) {
       this.descend();
@@ -4016,6 +4120,13 @@ const game = {
     }
   },
 
+  updateReading() {
+    if (jp('KeyE') || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
+      audio.menuSelect();
+      this.setState('PLAYING');
+    }
+  },
+
   updateFade(dt) {
     this.fadeTime+=dt;
     // Refresh glitch bars every ~100ms
@@ -4229,6 +4340,7 @@ const game = {
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
+      case 'READING':        this.renderPlaying(); this.renderReading(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
@@ -4728,6 +4840,95 @@ const game = {
     } else {
       ctx.fillText('1/2/3 buy  ·  ←/→ + Enter  ·  Esc leave', W / 2, leaveY + leaveH + 18);
     }
+
+    ctx.restore();
+  },
+
+  renderReading() {
+    if (!this.currentLore) return;
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    ctx.save();
+
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Terminal frame
+    const fw = Math.min(620, W - 40);
+    const fh = Math.min(340, H - 60);
+    const fx = (W - fw) / 2;
+    const fy = (H - fh) / 2 - 10;
+
+    // Outer glow border
+    ctx.save();
+    ctx.shadowBlur = 20; ctx.shadowColor = '#ffb700';
+    ctx.strokeStyle = '#ffb700';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.stroke();
+    ctx.restore();
+
+    // Inner background
+    ctx.fillStyle = 'rgba(26,18,8,0.95)';
+    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.fill();
+
+    // Scanline effect
+    ctx.fillStyle = 'rgba(255,183,0,0.03)';
+    for (let sy = fy; sy < fy + fh; sy += 3) {
+      ctx.fillRect(fx, sy, fw, 1);
+    }
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 12; ctx.shadowColor = '#ffb700';
+    ctx.fillStyle = '#ffb700';
+    ctx.font = `bold ${narrow ? 16 : 22}px monospace`;
+    ctx.fillText('◫ DATA TERMINAL', W / 2, fy + (narrow ? 28 : 36));
+    ctx.shadowBlur = 0;
+
+    // Lore count
+    const count = this.player ? this.player.loreRead.size : 0;
+    ctx.fillStyle = '#886622';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
+
+    // Word-wrapped lore text
+    ctx.fillStyle = '#ddc888';
+    const fontSize = narrow ? 11 : 14;
+    ctx.font = `${fontSize}px monospace`;
+    const maxTextW = fw - 40;
+    const lineH = fontSize + 4;
+    const textStartY = fy + (narrow ? 62 : 78);
+
+    const words = this.currentLore.split(' ');
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxTextW) {
+        if (line) lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+
+    ctx.textAlign = 'left';
+    const textX = fx + 20;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], textX, textStartY + i * lineH);
+    }
+
+    // Close hint
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#887744';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    const closeText = isTouch ? 'TAP TO CLOSE' : 'PRESS E TO CLOSE';
+    const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
+    ctx.globalAlpha = pulseAlpha;
+    ctx.fillText(closeText, W / 2, fy + fh - (narrow ? 10 : 14));
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   },
