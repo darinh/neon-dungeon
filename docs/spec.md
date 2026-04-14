@@ -25,9 +25,15 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
                              → VICTORY (floor 10 cleared)
                 → GAME_OVER  (score doesn't qualify for top 10)
                 → VICTORY    (score doesn't qualify for top 10)
+     PLAYING ↔ POWERUP_CHOICE (item pickup pauses, choice resumes)
+     PLAYING ↔ PAUSED
 ```
 
 State transitions are animated (fade in/out, 400 ms).
+
+**POWERUP_CHOICE** appears when the player walks over an item. Gameplay
+freezes and two random upgrade options are presented. The player picks one
+or skips, then returns to PLAYING.
 
 **NAME_ENTRY** appears when the player's score qualifies for the top-10
 leaderboard. It replaces the browser `prompt()` with an in-game arcade-style
@@ -240,19 +246,71 @@ sting, and a HUD warning (`⚠ OMEGA PHASE N` / `⚠ HIVE PHASE N`).
 
 ---
 
-## Items
+## Items & Upgrade System
 
-Dropped by enemies (20 % chance) or placed in rooms (1–3 per room).
+### Powerup Choice UI
 
-| Item            | Effect                                  | Rarity  |
-|-----------------|-----------------------------------------|---------|
-| MED-PACK        | +40 HP (capped at MAX_HP)              | Common  |
-| NANO-REPAIR     | +15 HP                                  | Common  |
-| SHIELD CELL     | +5 DEF for current floor               | Uncommon|
-| XP CHIP         | +50 XP                                  | Uncommon|
-| WEAPON CRATE    | Random weapon drop                      | Rare    |
-| OVERCLOCK       | SPD +1.5 for 20 s                       | Rare    |
-| VOID SHARD      | One-use: massive explosion (80 dmg AoE) | Epic    |
+Items are dropped by enemies (20 % chance) or placed in rooms (1–3 per room).
+Walking over an item **pauses gameplay** and presents a choice overlay with
+two random upgrades. The player picks one or skips (taking neither). This
+replaces the previous auto-pickup behaviour.
+
+**Choice generation:** Two options are drawn from the combined upgrade pool
+(instant, persistent, and weapon types). Both options must be different.
+Persistent upgrades that have reached their max level are excluded.
+There is a 20 % chance one option is a pre-rolled weapon showing exact stats.
+
+**Controls:**
+- Keyboard: `1`/`2` direct pick, `←`/`→` + `Enter` to select, `3`/`Esc` to skip
+- Touch: tap a card or the Skip button
+
+### Upgrade Pool
+
+**Instant upgrades (one-time, no stacking):**
+
+| ID | Name | Effect | Rarity |
+|----|------|--------|--------|
+| MED_PACK | Med-Pack | +40 HP (capped at MAX_HP) | 40 |
+| NANO_REPAIR | Nano-Repair | +15 HP | 35 |
+| XP_CHIP | XP Chip | +50 XP | 20 |
+| VOID_SHARD | Void Shard | +1 void bomb charge | 4 |
+
+**Weapon upgrades (pre-rolled, shows exact weapon name and stats):**
+
+When a weapon option is generated, a specific weapon is pre-rolled from the
+full weapon table. The choice card shows the weapon name, damage, fire rate,
+and range so the player can make an informed decision.
+
+**Persistent upgrades (stackable across the run):**
+
+| ID | Name | Max Lv | Per-Level Effect | Rarity |
+|----|------|--------|-----------------|--------|
+| SAW_BLADE | Saw Blade | 4 | +1 orbital blade, 12 dmg each (LOS-gated) | 12 |
+| PLASMA_ORB | Plasma Orb | 3 | Auto-fires homing orb; cooldown: 3 / 2.3 / 1.6 s | 10 |
+| NANO_REGEN | Nano Regen | 5 | +1 HP/s passive regeneration | 15 |
+| OVERCLOCK | Overclock | 3 | +0.5 permanent speed per level | 10 |
+| ARMOR_UP | Reinforced Armor | 5 | +3 permanent DEF per level | 12 |
+
+### Orbital Weapons (Saw Blade)
+
+Saw Blades orbit the player at 1.5 tile radius, rotating at 3 rad/s. Each
+blade deals 12 damage on contact with a 0.5 s per-enemy cooldown. Damage
+requires line-of-sight (blades cannot hit through walls). Rendered as
+spinning neon-red rectangles with glow. Levels 1–4 add additional blades
+evenly spaced around the orbit.
+
+### Auto-Spells (Plasma Orb)
+
+Plasma Orb auto-fires a homing projectile at the nearest enemy within range
+every `3 − (level−1) × 0.7` seconds. Homing uses lerp-based steering at
+8 rad/s turn rate. Projectile: 25 damage, range 10, speed 6, colour #ff44cc.
+Uses the existing Projectile class with a `homing` target reference.
+
+### Removed Items
+
+- **SHIELD CELL** — replaced by ARMOR_UP (permanent DEF per level)
+- **WEAPON CRATE** — replaced by pre-rolled weapon upgrades showing exact stats
+- **OVERCLOCK (timed)** — replaced by persistent OVERCLOCK (permanent speed)
 
 ---
 
@@ -505,3 +563,4 @@ the manifest to achieve a chrome-less experience.
 | v2.1    | Floor transition audio: `audio.transition()` plays digital glitch SFX (stutter tones + bandpass noise sweep + sub rumble) on every `fadeTo()` call; SW cache v5 |
 | v2.2    | Audio polish + spec fixes: boss phase transition SFX (`audio.phaseShift()`), menu select blip (`audio.menuSelect()`), low-health heartbeat warning (`audio.lowHealth()` every 2 s at ≤25% HP); Hive phase transitions now have VFX + message like Omega/Sentinel; Sentinel shield burst fixed to 20 dmg (was 15, spec says 20); Hive shockwave fixed to 25 dmg (was 30, spec says 25); touch pause overlay now shows resume + quit (was resume only); mobile first-touch aim initialises mouse position immediately (fixes stale aim on first shot) |
 | v2.3    | Spec accuracy: corrected torch radius 8→9; replaced "fully dark beyond radius 12" with actual fog-of-war behaviour (visited tiles at 12–20% brightness, unvisited not drawn); clarified stairs-placement BFS uses LOS + proximity heuristic, not true corridor BFS |
+| v3.0    | Roguelike powerup choice system: items pause gameplay and present 2 random upgrades (pick one or skip); pre-rolled weapon options show exact stats; new persistent upgrades: Saw Blade (LOS-gated orbital), Plasma Orb (homing auto-spell), Nano Regen, Overclock (permanent), Reinforced Armor; homing projectile support; removed SHIELD_CELL, WEAPON_CRATE, timed OVERCLOCK |
