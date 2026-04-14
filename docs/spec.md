@@ -1258,6 +1258,56 @@ Adds run statistics (same enemies/blocks/time line) between the existing stats a
 
 ---
 
+## Status Effect Indicators
+
+Three visual systems communicate active effects to the player.
+
+### Low-HP Danger Vignette
+
+When player HP ≤ 25%, a pulsing red vignette appears at the screen edges:
+- **Radial gradient** from transparent (centre) to `#ff1a1a` (edges)
+- **Intensity** scales linearly: 0 at 25% HP → max at 0% HP
+- **Pulse** syncs with existing `player.lowHpTimer` (2 s heartbeat cycle)
+- **Compositing**: `globalAlpha = severity × (0.12 + 0.14 × pulse)` — visible but never obscures gameplay
+- **Neon border** stroke with `shadowBlur` glow adds urgency
+- **Render order**: drawn BEFORE HUD/minimap so UI elements remain readable
+
+### Floor Modifier Banner
+
+On floor entry (fresh transitions only, not save resume), a prominent
+banner slides down from the top of the screen announcing the active modifier:
+
+- **Duration**: 3 s (`game.modBannerTimer`), ticked in `updatePlaying()`
+- **Animation**: 0.3 s fade-in slide-down, 2.4 s hold, 0.3 s fade-out slide-up
+- **Content**: modifier icon + label (landscape adds description line)
+- **Compact mode**: icon + label only (no description) to fit narrow screens
+- **Background**: dark rounded pill with modifier-colour border glow
+- **Replaces** the previous `game.msg()` modifier announcement
+- **Gate**: only fires when `savedModifier === undefined` (new floor, not save restore)
+
+### Status Effect Bar
+
+Row of compact badge indicators displayed just above the HUD bar (`layout.hudTop - 16`):
+
+| Effect | Trigger | Icon | Colour |
+|--------|---------|------|--------|
+| Floor modifier | `game.modifier` active | Modifier icon | Modifier colour |
+| Slow debuff | `player.speedTimer > 0 && speedBoost < 0` | ❄ | `#6688cc` |
+| Shield recharging | `perks.ENERGY_SHIELD && !energyShield` | 🛡 | `#4466aa` |
+| Shield active | `perks.ENERGY_SHIELD && energyShield` | 🛡 | `#4488ff` |
+| Nano Regen | `upgrades.NANO_REGEN > 0 && hp < maxHp` | ♻ | `#00ff88` |
+| Dash cooldown | `dashCooldown > 0` | ⇧ | `#7a6a33` |
+| Dash ready | `dashCooldown ≤ 0` | ⇧ | `#ffb700` |
+
+Each badge: dark pill background + icon + label text, `shadowBlur` colour glow.
+Smooth alpha fade-in/out (0.08 per frame) tracked per effect ID via `statusFx` object;
+inactive effects continue rendering during fade-out, cleaned up at alpha 0.
+Badges flow left-to-right from the safe-area left edge; overflow stops before
+minimap region (`W - 130 - safeRight`). Y position shifts up (`hudTop - 32`)
+when key indicators are present to avoid collision.
+
+---
+
 ## Changelog
 
 | Version | Change |
@@ -1306,3 +1356,4 @@ Adds run statistics (same enemies/blocks/time line) between the existing stats a
 | v23.0   | Ambient particle system: environmental storytelling via 5 particle emitter types. DUST motes drift through lit rooms/corridors (white/cyan). EMBER sparks rise from plasma vents (orange). ZAP micro-flashes on active arc grids (blue-white). STEAM wisps from cracked walls when player is near (grey). WISP energy motes around sealed boss entrances (red glow). Separate `ambientParticles[]` array (cap 80), timer-gated spawning (0.08 s), soft fade-in/out, performance-budgeted (max 3 new/tick). Cleared on floor transitions. SW cache v30 |
 | v24.0   | TELEPORTER enemy (floor 6+): spatial disruptor that blinks to random room positions every 2–3 s (floor-scaled), fires 2 quick ranged bursts after 0.4 s materialise, then relocates. Emergency blink if player within 2 tiles. Hot magenta (`#ff44ff`), rapid alpha flicker, fading afterimage at warp origin. `audio.teleport()` zwip SFX. Per-room cap: 1. Credits: 8. OVERCLOCK shortens cycle. SW cache v31 |
 | v25.0   | Death recap & run statistics: all player damage attributed to named sources via `takeDamage(dmg, source)`. Game Over screen shows KILLED BY banner, colour-coded damage breakdown bars (top 3–4 sources with percentages), and run stats (enemies slain, shield blocks, time survived). Victory screen adds same run stats line. `SOURCE_LABELS`/`SOURCE_COLOURS` maps for friendly display. `Projectile.ownerType` tracks shooter. `player.damageLog`, `enemiesKilled`, `hitsBlocked` persisted in save. `game.runTime` accumulates across floors. `endRun()` snapshots `lastRunRecap` for stable rendering. SW cache v32 |
+| v26.0   | Status effect indicators: three visual systems for active effect communication. (1) Low-HP danger vignette — red pulsing radial gradient at screen edges when HP ≤ 25%, severity-scaled intensity, heartbeat-synced pulse, drawn before HUD. (2) Floor modifier banner — 3 s animated pill sliding from top on floor entry, icon + name + description (compact: icon + label only), replaces `game.msg()` announcement, gated to new transitions (not save resume). (3) Status effect bar — row of compact badges above HUD showing active modifier, slow debuff, energy shield state, nano regen, dash cooldown/ready. Per-effect smooth alpha fade via `statusFx` keyed state. `game.modBannerTimer` ticked in `updatePlaying()`. SW cache v33 |

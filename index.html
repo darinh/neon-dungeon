@@ -1323,6 +1323,182 @@ function updateShake(dt) {
   if (shake.timer <= 0) { shake.intensity = 0; shake.ox = shake.oy = 0; }
 }
 
+// ─── Status Effect Indicators ────────────────────────────────────────────────
+// Low-HP danger vignette (red pulsing edge glow at ≤25% HP)
+function drawDangerVignette(player) {
+  const frac = player.hp / player.maxHp;
+  if (frac > 0.25 || player.hp <= 0) return;
+  // Intensity: 0 at 25% → 1 at 0%. Pulse synced with lowHpTimer (2s cycle).
+  const severity = 1 - (frac / 0.25);
+  const pulse = 0.5 + 0.5 * Math.sin(player.lowHpTimer * Math.PI);
+  const alpha = severity * (0.12 + 0.14 * pulse);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, '#ff1a1a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.strokeStyle = '#ff1a1a';
+  ctx.lineWidth = 3;
+  ctx.shadowBlur = 15; ctx.shadowColor = '#ff1a1a';
+  ctx.strokeRect(2, 2, W - 4, H - 4);
+  ctx.restore();
+}
+
+// Floor modifier announcement banner (slides down on floor entry)
+function drawModBanner() {
+  const t = game.modBannerTimer;
+  if (!t || t <= 0 || !game.modifier) return;
+  const m = getMod();
+  const dur = 3.0;
+  const fadeIn = 0.3, fadeOut = 0.3;
+  let alpha = 1;
+  const elapsed = dur - t;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+
+  // Slide down from offscreen
+  const slideY = elapsed < fadeIn ? -20 * (1 - elapsed / fadeIn) : (t < fadeOut ? -20 * (1 - t / fadeOut) : 0);
+  const cy = 50 + safeTop + slideY;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Background pill
+  const narrow = layout.compact;
+  const pillW = narrow ? Math.min(W - 40, 260) : 320;
+  const pillH = narrow ? 32 : 40;
+  const px = (W - pillW) / 2;
+  const py = cy - pillH / 2;
+  ctx.fillStyle = 'rgba(10,10,18,0.85)';
+  ctx.beginPath();
+  const r = 8;
+  ctx.moveTo(px + r, py);
+  ctx.lineTo(px + pillW - r, py);
+  ctx.quadraticCurveTo(px + pillW, py, px + pillW, py + r);
+  ctx.lineTo(px + pillW, py + pillH - r);
+  ctx.quadraticCurveTo(px + pillW, py + pillH, px + pillW - r, py + pillH);
+  ctx.lineTo(px + r, py + pillH);
+  ctx.quadraticCurveTo(px, py + pillH, px, py + pillH - r);
+  ctx.lineTo(px, py + r);
+  ctx.quadraticCurveTo(px, py, px + r, py);
+  ctx.fill();
+
+  // Border glow
+  ctx.shadowBlur = 12; ctx.shadowColor = m.colour;
+  ctx.strokeStyle = m.colour; ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Icon + text
+  const fs = narrow ? 11 : 13;
+  ctx.font = `bold ${fs}px monospace`;
+  ctx.fillStyle = m.colour; ctx.textAlign = 'center';
+  const iconText = m.icon + ' ' + m.label;
+  ctx.fillText(iconText, W / 2, cy - (narrow ? 1 : 3));
+
+  if (!narrow) {
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#aaaacc';
+    ctx.fillText(m.desc, W / 2, cy + 12);
+  }
+
+  ctx.restore();
+}
+
+// Status effect badges — compact indicators above HUD bar
+const statusFx = {};
+function getStatusEffects(player) {
+  const fx = [];
+  // Floor modifier
+  if (game.modifier) {
+    const m = getMod();
+    fx.push({ id: 'mod', icon: m.icon, label: m.label, colour: m.colour });
+  }
+  // Slow trap debuff
+  if (player.speedTimer > 0 && player.speedBoost < 0) {
+    fx.push({ id: 'slow', icon: '❄', label: 'SLOW', colour: '#6688cc', timer: player.speedTimer });
+  }
+  // Energy shield recharging
+  if (player.perks.ENERGY_SHIELD && !player.energyShield) {
+    fx.push({ id: 'shield', icon: '🛡', label: Math.ceil(player.energyShieldTimer) + 's', colour: '#4466aa' });
+  }
+  // Energy shield active
+  if (player.perks.ENERGY_SHIELD && player.energyShield) {
+    fx.push({ id: 'shield-up', icon: '🛡', label: 'UP', colour: '#4488ff' });
+  }
+  // Nano Regen (only show when actively healing)
+  if ((player.upgrades.NANO_REGEN || 0) > 0 && player.hp < player.maxHp) {
+    fx.push({ id: 'regen', icon: '♻', label: 'REGEN', colour: '#00ff88' });
+  }
+  // Dash cooldown
+  if (player.dashCooldown > 0) {
+    fx.push({ id: 'dash-cd', icon: '⇧', label: player.dashCooldown.toFixed(1) + 's', colour: '#7a6a33' });
+  } else {
+    fx.push({ id: 'dash', icon: '⇧', label: 'RDY', colour: '#ffb700' });
+  }
+  return fx;
+}
+
+function drawStatusBar(player) {
+  const effects = getStatusEffects(player);
+
+  // Update statusFx state: fade in active, fade out inactive, cache render data
+  const activeIds = new Set(effects.map(f => f.id));
+  for (const fx of effects) {
+    if (!statusFx[fx.id]) statusFx[fx.id] = { alpha: 0 };
+    statusFx[fx.id].alpha = Math.min(1, statusFx[fx.id].alpha + 0.08);
+    statusFx[fx.id].icon = fx.icon;
+    statusFx[fx.id].label = fx.label;
+    statusFx[fx.id].colour = fx.colour;
+  }
+  for (const id in statusFx) {
+    if (!activeIds.has(id)) {
+      statusFx[id].alpha = Math.max(0, statusFx[id].alpha - 0.08);
+      if (statusFx[id].alpha <= 0) { delete statusFx[id]; continue; }
+    }
+  }
+
+  const ids = Object.keys(statusFx);
+  if (ids.length === 0) return;
+
+  const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
+  const y = layout.hudTop - (hasKeys ? 32 : 16);
+  const fs = layout.compact ? 8 : 9;
+  const maxX = W - 130 - safeRight; // stop before minimap area
+  let x = 14 + safeLeft;
+
+  ctx.save();
+  ctx.font = `${fs}px monospace`;
+
+  for (const id of ids) {
+    const s = statusFx[id];
+    if (s.alpha <= 0) continue;
+    const text = s.icon + (s.label ? ' ' + s.label : '');
+    const tw = ctx.measureText(text).width;
+    const badgeW = tw + 8;
+    const badgeH = fs + 6;
+
+    if (x + badgeW > maxX) break; // prevent overflow into minimap
+
+    ctx.globalAlpha = s.alpha * 0.7;
+    ctx.fillStyle = 'rgba(10,10,18,0.7)';
+    ctx.fillRect(x, y - badgeH + 2, badgeW, badgeH);
+
+    ctx.globalAlpha = s.alpha;
+    ctx.shadowBlur = 4; ctx.shadowColor = s.colour;
+    ctx.fillStyle = s.colour;
+    ctx.fillText(text, x + 4, y);
+    ctx.shadowBlur = 0;
+
+    x += badgeW + 4;
+  }
+
+  ctx.restore();
+}
+
 // ─── Combo / Kill-Streak ─────────────────────────────────────────────────────
 const combo = { count: 0, timer: 0, best: 0, flashTimer: 0 };
 const COMBO_WINDOW    = 3;     // seconds between kills to maintain streak
@@ -4078,6 +4254,7 @@ const game = {
   bossSealed: false,
   bossAlive: false,
   modifier: null,
+  modBannerTimer: 0,
   bossesCleared: 0,
   msgList: [],
   nameEntry: null,
@@ -4147,10 +4324,11 @@ const game = {
     if (n===3||n===6||n===10) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
-    // Announce modifier
-    if (this.modifier) {
-      const m = getMod();
-      setTimeout(()=>this.msg(m.icon+' '+m.label+': '+m.desc, m.colour), 300);
+    // Announce modifier (banner replaces msg — banner timer set only on fresh transitions)
+    if (this.modifier && savedModifier === undefined) {
+      this.modBannerTimer = 3.0;
+    } else {
+      this.modBannerTimer = 0;
     }
     // Generate floor quest
     this.generateQuest(n);
@@ -4537,6 +4715,7 @@ const game = {
     updateShake(dt);
     updateCombo(dt);
     updateAmbient(dt);
+    if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
     // Nano Regen
@@ -5424,7 +5603,9 @@ const game = {
       ctx.restore();
     }
 
+    drawDangerVignette(player);
     drawHUD(player);
+    drawStatusBar(player);
     drawThreatIndicators(cam.x, cam.y);
     drawMinimap(dungeon,player);
 
@@ -5462,6 +5643,7 @@ const game = {
     }
 
     drawMessages();
+    drawModBanner();
     drawHint();
     drawTouchUI();
   },
