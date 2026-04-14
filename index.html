@@ -1338,6 +1338,20 @@ function pickUpgradeOption(exclude) {
 const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
 function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 
+// ─── Level-Up Perks ──────────────────────────────────────────────────────────
+// Passive abilities unlocked automatically at specific levels
+const PERKS = {
+  LASER_SIGHT: { level:2, name:'Laser Sight', desc:'Shows aim trajectory', colour:'#00f5ff' },
+};
+function checkPerkUnlocks(player, level) {
+  for (const [id, perk] of Object.entries(PERKS)) {
+    if (perk.level === level && !player.perks[id]) {
+      player.perks[id] = true;
+      setTimeout(() => game.msg('⚡ PERK: '+perk.name, perk.colour), 200);
+    }
+  }
+}
+
 class Item {
   constructor(x,y,type) {
     this.x=x; this.y=y; this.type=type||pickItemType();
@@ -1936,6 +1950,7 @@ class Player {
     this.orbitalAngle=0;    // shared rotation for saw blades
     this.orbitalHits=new Map(); // enemy→cooldown for orbital damage
     this.spellTimers={plasmaOrb:2}; // cooldown timers for auto-spells
+    this.perks={};              // level-unlocked passive abilities
   }
 
   xpNeeded() { return this.level*80; }
@@ -1950,6 +1965,7 @@ class Player {
       this.levelFlash=1.5;
       audio.levelUp();
       game.msg('LEVEL UP! Now level '+this.level,'#00f5ff');
+      checkPerkUnlocks(this, this.level);
     }
   }
 
@@ -2044,6 +2060,43 @@ class Player {
   draw(camX,camY) {
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     const col=this.flashTimer>0?'#ffffff':'#00f5ff';
+
+    // Laser sight (drawn under player so it originates from centre)
+    if (this.perks.LASER_SIGHT && game.dungeon && !this.weapon.melee) {
+      const map = game.dungeon.map;
+      const maxDist = this.weapon.range;
+      const step = 0.15;
+      let rx = this.x, ry = this.y;
+      for (let d = 0; d < maxDist; d += step) {
+        const nx = rx + this.facing.x * step;
+        const ny = ry + this.facing.y * step;
+        const tx = Math.floor(nx), ty = Math.floor(ny);
+        if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) break;
+        if (!isPassable(map[ty][tx])) break;
+        rx = nx; ry = ny;
+      }
+      const ex = rx*TILE-camX, ey = ry*TILE-camY;
+      const lc = this.weapon.colour;
+      ctx.save();
+      // Beam line — thin, translucent, with glow
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = lc;
+      ctx.shadowBlur = 8; ctx.shadowColor = lc;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Endpoint dot
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = lc;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 2.5, 0, TWO_PI);
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.save();
     // body

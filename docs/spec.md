@@ -96,6 +96,9 @@ brightness, visited tiles with zero light render at 12% brightness
 | LEVEL     | 1    | Max 10                          |
 | XP        | 0    | XP to next level = level × 80   |
 
+On level-up: +20 MAX_HP (full heal), +3 ATK, +1 DEF. Certain levels also
+unlock passive **perks** (see Level-Up Perks section under Items & Upgrades).
+
 ### Controls — Keyboard & Mouse
 
 | Input              | Action                    |
@@ -326,6 +329,30 @@ Uses the existing Projectile class with a `homing` target reference.
 - **SHIELD CELL** — replaced by ARMOR_UP (permanent DEF per level)
 - **WEAPON CRATE** — replaced by pre-rolled weapon upgrades showing exact stats
 - **OVERCLOCK (timed)** — replaced by persistent OVERCLOCK (permanent speed)
+
+### Level-Up Perks
+
+Passive abilities unlocked automatically when the player reaches a specific
+level. Unlike the powerup choice system, perks require no player input — they
+activate instantly with a "⚡ PERK: {name}" message.
+
+Perk unlock checks run **inside** the level-up loop so multi-level jumps
+(e.g., gaining enough XP to go from level 1 to 3) trigger all intermediate
+perks.
+
+| Level | Perk | Effect |
+|-------|------|--------|
+| 2 | Laser Sight | Dashed neon line from player in facing direction, stops at impassable tiles. Colour matches current weapon. Hidden for melee weapons. Range matches weapon range. |
+
+**Laser Sight details:**
+- Ray uses `isPassable()` collision (same as projectiles) so the line
+  accurately represents where shots will travel, including stopping at
+  closed/locked doors.
+- Rendered as a dashed line (4 px dash, 4 px gap) at 35 % opacity with
+  `shadowBlur` glow in the weapon's colour, plus a small endpoint dot at
+  60 % opacity.
+- Step size: 0.15 tiles per iteration (max ~133 steps for Railgun range 20).
+- Not drawn for melee weapons (Plasma Sword hits a full radius, not a line).
 
 ---
 
@@ -583,3 +610,4 @@ the manifest to achieve a chrome-less experience.
 | v4.1    | Special room types: armory (fewer enemies), medbay (passive healing font), shrine (one-use XP grant), vault (more enemies + loot); room-type-tinted floor tiles; glowing markers for heal fonts and shrines |
 | v4.2    | Per-floor quest objectives: EXTERMINATE, EXPLORE, SPEEDRUN (60s timer), PACIFIST (no kills); quest HUD below minimap; boss floors always get EXTERMINATE; quest rewards: score, XP, full heal |
 | v5.0    | Environmental hazards: plasma vents (floor 4+, clustered burn pools in rooms, continuous DPS bypassing armor) and arc grids (floor 5+, pulsing electric tiles in corridors, periodic zap damage); new audio `plasmaBurn()` + `arcZap()`; HP display rounded with `Math.ceil`; score HP bonus uses `Math.floor`; SW cache v8 |
+| v6.0    | Level-up perk system: passive abilities auto-unlock at specific levels. First perk: Laser Sight (level 2) — dashed neon line showing aim trajectory, weapon-coloured, stops at walls/doors, hidden for melee; perk infrastructure (`PERKS` table, `checkPerkUnlocks()`, `player.perks`); SW cache v9 |
