@@ -230,7 +230,10 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'PAUSED') { justPressed.add('Escape'); }
+      if (game.state === 'PAUSED') {
+        if (cy > H/2) justPressed.add('KeyQ');
+        else justPressed.add('Escape');
+      }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
       continue;
     }
@@ -247,6 +250,8 @@ canvas.addEventListener('touchstart', e => {
       touch.aim.active=true; touch.aim.id=t.identifier;
       touch.aim.baseX=cx; touch.aim.baseY=cy;
       touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=true;
+      // Initialise mouse position so first shot aims toward the tap
+      mouse.x=cx; mouse.y=cy;
       justPressed.add('MouseLeft');
     }
   }
@@ -644,6 +649,34 @@ const audio = (() => {
       // Final sustain chord
       osc('sine', 523, 523, 0.15, t + 0.72, 0.8, bus);
       osc('sine', 659, 659, 0.1,  t + 0.72, 0.8, bus);
+    },
+    phaseShift() {
+      // Boss phase transition: digital alarm sweep + sub pulse + metallic ring
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.45, 0.8);
+      // Rising alarm sweep
+      osc('sawtooth', 200, 1200, 0.12, t, 0.25, bus);
+      osc('sawtooth', 205, 1210, 0.10, t, 0.25, bus);
+      // Sub pulse
+      osc('sine', 55, 40, 0.15, t + 0.05, 0.3);
+      // Metallic ring
+      osc('sine', 1800, 900, 0.08, t + 0.15, 0.5, bus);
+      osc('triangle', 2400, 1200, 0.04, t + 0.15, 0.4, bus);
+      // Noise burst
+      noise(0.10, t + 0.1, 0.12, 3000, bus);
+    },
+    menuSelect() {
+      // Quick UI blip: short bright chirp
+      const c = getCtx(); const t = c.currentTime;
+      osc('sine', 1200, 1800, 0.10, t, 0.06);
+      osc('triangle', 600, 900, 0.05, t, 0.04);
+    },
+    lowHealth() {
+      // Heartbeat-style warning: two quick sub thumps
+      const c = getCtx(); const t = c.currentTime;
+      osc('sine', 60, 40, 0.12, t, 0.12);
+      osc('sine', 60, 40, 0.10, t + 0.18, 0.10);
+      noise(0.03, t, 0.06, 200);
     },
     transition() {
       const c = getCtx(); const t = c.currentTime;
@@ -1137,9 +1170,12 @@ class Enemy {
   }
 
   aiBossSentinel(dt,player,map,d,los) {
-    const prevPhase=this.phase;
     if (this.hp<100) this.phase=2; else this.phase=1;
-    if (this.phase!==prevPhase) spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
+    if (this.phase!==this.prevPhase) {
+      spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
+      audio.phaseShift();
+      this.prevPhase=this.phase;
+    }
 
     this.bossTimers.laser=(this.bossTimers.laser||0)-dt;
     this.bossTimers.move=(this.bossTimers.move||0)-dt;
@@ -1166,7 +1202,7 @@ class Enemy {
     if (this.phase===2 && this.bossTimers.shield<=0) {
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
       player.x-=dx*3; player.y-=dy*3;
-      player.takeDamage(15);
+      player.takeDamage(20);
       spawnParticles(player.x,player.y,'EXPLOSION','#ff4444',8);
       this.bossTimers.shield=5;
     }
@@ -1176,6 +1212,13 @@ class Enemy {
     if (this.hp<150) this.phase=3;
     else if (this.hp<350) this.phase=2;
     else this.phase=1;
+
+    if (this.phase!==this.prevPhase) {
+      spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
+      audio.phaseShift();
+      game.msg('⚠ HIVE PHASE '+this.phase,'#aa00ff');
+      this.prevPhase=this.phase;
+    }
 
     this.bossTimers.homing=(this.bossTimers.homing||0)-dt;
     this.bossTimers.spawn=(this.bossTimers.spawn||0)-dt;
@@ -1206,7 +1249,7 @@ class Enemy {
 
     if (this.phase===3 && this.bossTimers.shock<=0) {
       if (dist(game.player.x,game.player.y,this.x,this.y)<8) {
-        game.player.takeDamage(30);
+        game.player.takeDamage(25);
         spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',15);
       }
       this.bossTimers.shock=4;
@@ -1224,6 +1267,7 @@ class Enemy {
     // Phase transition VFX
     if (this.phase !== this.prevPhase) {
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 25);
+      audio.phaseShift();
       game.msg('⚠ OMEGA PHASE ' + this.phase, '#ff00c8');
       this.prevPhase = this.phase;
     }
@@ -1501,6 +1545,7 @@ class Player {
     this.shards=0;
     this.flashTimer=0;
     this.levelFlash=0;
+    this.lowHpTimer=0;
   }
 
   xpNeeded() { return this.level*80; }
@@ -1575,6 +1620,12 @@ class Player {
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
+
+    // Low health warning pulse
+    if (this.hp > 0 && this.hp / this.maxHp <= 0.25) {
+      this.lowHpTimer -= dt;
+      if (this.lowHpTimer <= 0) { audio.lowHealth(); this.lowHpTimer = 2; }
+    } else { this.lowHpTimer = 0; }
 
     const spd=this.spd+(this.speedBoost||0);
     let mx=0,my=0;
@@ -2060,7 +2111,7 @@ const game = {
       p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*0.4;
       if (p.life<=0||p.y<-10) this.menuParticles.splice(i,1);
     }
-    if (jp('Enter')||jp('MouseLeft')) this.startGame();
+    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.startGame(); }
   },
 
   updatePlaying(dt) {
@@ -2155,8 +2206,8 @@ const game = {
   },
 
   updatePaused() {
-    if (jp('Escape')) this.setState('PLAYING');
-    if (jp('KeyQ')) { this.setState('MENU'); }
+    if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
+    else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
   },
 
   updateFade(dt) {
@@ -2261,6 +2312,7 @@ const game = {
     // Confirm (Enter on keyboard or OK on virtual keyboard)
     if (jp('Enter')) {
       if (ne.name.length===0) ne.name='ANON';
+      audio.menuSelect();
       this.saveScore(ne.name);
       const dest=ne.victory?'VICTORY':'GAME_OVER';
       this.nameEntry=null;
@@ -2354,11 +2406,11 @@ const game = {
   },
 
   updateGameOver() {
-    if (jp('Enter')||jp('MouseLeft')) this.setState('MENU');
+    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.setState('MENU'); }
   },
 
   updateVictory() {
-    if (jp('Enter')||jp('MouseLeft')) this.setState('MENU');
+    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.setState('MENU'); }
   },
 
   render() {
@@ -2510,7 +2562,8 @@ const game = {
     ctx.fillText('PAUSED',W/2, narrow ? 200 : 240);
     ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
     if (isTouch) {
-      ctx.fillText('‖ — Resume',W/2, narrow ? 260 : 300);
+      ctx.fillText('TAP TOP — Resume',W/2, narrow ? 260 : 300);
+      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, narrow ? 290 : 330);
     } else {
       ctx.fillText('ESC — Resume',W/2, narrow ? 260 : 300);
       ctx.fillText('Q   — Quit to Menu',W/2, narrow ? 290 : 330);

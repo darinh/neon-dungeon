@@ -212,8 +212,8 @@ Phase thresholds (by % of scaled max HP):
 | 3     | 40 %–20 %   | 1.5×  | + Piercing beam fan (5) + shield burst (≤5 tiles) |
 | 4     | 20 %–0 %    | 2.0×  | + Void orbs + psionic shockwave (≤7 tiles) + 3 adds/wave + 7-beam fan |
 
-Phase transitions trigger an explosion particle burst and a HUD warning
-(`⚠ OMEGA PHASE N`).
+Phase transitions trigger an explosion particle burst, a phase-shift audio
+sting, and a HUD warning (`⚠ OMEGA PHASE N` / `⚠ HIVE PHASE N`).
 
 **Void Orbs** (Phase 4 signature attack):
 - 2–3 orbs spawn at random room positions every 3.5 s (÷ speed mult)
@@ -291,6 +291,9 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Pick up item     | Ascending sine 400→1200 Hz + triangle 800→2400 Hz sparkle                       |
 | Stairs / descend | Noise whoosh (LP 1500 Hz) + sine 1200→500 Hz + triangle 600→250 Hz, reverb (0.5) |
 | Floor transition | Digital glitch: 6 stutter square tones (random 200–2000 Hz, rapid decay) + bandpass noise sweep 300→4000→200 Hz (Q 3) + sub rumble 50→35 Hz, reverb (0.3). Fires on `fadeTo()` start. |
+| Boss phase shift | Rising alarm sweep: detuned saw pair 200→1200 Hz + sub pulse 55→40 Hz + metallic ring (sine 1800→900 Hz + triangle 2400→1200 Hz) + noise burst (LP 3000 Hz), reverb (0.45). Fires on boss phase transition for all bosses. |
+| Menu select      | Quick UI blip: sine chirp 1200→1800 Hz + triangle 600→900 Hz. Fires on start game, pause resume/quit, name-entry confirm, and return-to-menu. |
+| Low health       | Heartbeat warning: two sub thumps (sine 60→40 Hz, 180 ms apart) + noise click (LP 200 Hz). Plays every 2 s while HP ≤ 25 %. |
 | Game Over        | Minor chord (A3-C4-D♯4): sine+saw layers sweeping to half-freq + sub drone, reverb (0.6) |
 | Victory          | Major fanfare (C4-E4-G4-C5): sine + triangle harmonics + detuned shimmer + sustain chord, reverb (0.6) |
 
@@ -364,7 +367,7 @@ tap-based prompts instead of keyboard-only text.
 
 1. **Title Screen** — animated neon logo, "PRESS ENTER TO START" (desktop) / "TAP TO START" (touch), high-score table (top 3/5), touch-specific control hints
 2. **Playing** — full game loop
-3. **Pause** — ESC / ‖ button, dim overlay, resume / quit options
+3. **Pause** — ESC / ‖ button, dim overlay. Desktop: ESC resume, Q quit. Touch: tap upper half to resume, lower half to quit.
 4. **Level Transition** — cyberpunk fade with scanlines, glitch bars, noise band, chromatic-aberration text reveal, neon border pulse; 0.4 s fade-in → 0.15 s hold at peak → 0.4 s fade-out (~0.95 s total). "DESCENDING TO FLOOR N" appears character-by-character at 80 chars/s during the peak window.
 5. **Name Entry** — arcade-style name input with virtual keyboard (if score qualifies for top 10). Desktop: type + Enter. Touch: tap virtual keys + OK.
 6. **Game Over** — score, death floor, level, leaderboard with player's rank highlighted
@@ -490,3 +493,4 @@ the manifest to achieve a chrome-less experience.
 | v1.10   | Maskable icon variants: 192×192 + 512×512 maskable PNGs (72% inner icon, `#0a0a12` background) for Android adaptive icons; manifest updated with `purpose: maskable` entries |
 | v1.11   | Service worker (`sw.js`): cache-first offline PWA; pre-caches index.html, manifest, and icon PNGs on install; `skipWaiting` + `clients.claim` for immediate activation; versioned cache name for update busting |
 | v2.1    | Floor transition audio: `audio.transition()` plays digital glitch SFX (stutter tones + bandpass noise sweep + sub rumble) on every `fadeTo()` call; SW cache v5 |
+| v2.2    | Audio polish + spec fixes: boss phase transition SFX (`audio.phaseShift()`), menu select blip (`audio.menuSelect()`), low-health heartbeat warning (`audio.lowHealth()` every 2 s at ≤25% HP); Hive phase transitions now have VFX + message like Omega/Sentinel; Sentinel shield burst fixed to 20 dmg (was 15, spec says 20); Hive shockwave fixed to 25 dmg (was 30, spec says 25); touch pause overlay now shows resume + quit (was resume only); mobile first-touch aim initialises mouse position immediately (fixes stale aim on first shot) |
