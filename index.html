@@ -227,9 +227,15 @@ canvas.addEventListener('touchstart', e => {
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
     // skip the dismiss touch (already handled above)
     if (cx < 48 && cy < 48 && dismissed) continue;
-    // In non-playing states, any touch acts as confirm (except NAME_ENTRY)
+    // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
+      if (game.state === 'POWERUP_CHOICE') {
+        // Route touch position via mouse so updatePowerupChoice handles it
+        mouse.x = cx; mouse.y = cy;
+        justPressed.add('MouseLeft');
+        continue;
+      }
       if (game.state === 'PAUSED') {
         if (cy > H/2) justPressed.add('KeyQ');
         else justPressed.add('Escape');
@@ -1009,6 +1015,16 @@ class Projectile {
     this.hitEnemies=new Set();
   }
   update(dt, map, player, enemies) {
+    // Homing: steer toward target
+    if (this.homing && !this.homing.dead) {
+      const [tx, ty] = [this.homing.x - this.x, this.homing.y - this.y];
+      const [nd, ndy] = norm(tx, ty);
+      const steer = 8; // radians/sec turn rate
+      this.dx = lerp(this.dx, nd,  Math.min(1, steer * dt));
+      this.dy = lerp(this.dy, ndy, Math.min(1, steer * dt));
+      const [fd, fdy] = norm(this.dx, this.dy);
+      this.dx = fd; this.dy = fdy;
+    }
     const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
@@ -1047,23 +1063,68 @@ class Projectile {
   }
 }
 
-// ─── Items ───────────────────────────────────────────────────────────────────
-const ITEM_TYPES = [
-  {id:'MED_PACK',   name:'Med-Pack',     colour:'#00ff88', rarity:40, fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
-  {id:'NANO_REPAIR',name:'Nano-Repair',  colour:'#88ff88', rarity:35, fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
-  {id:'SHIELD_CELL',name:'Shield Cell',  colour:'#00aaff', rarity:20, fn: p=>{ p.def+=5; p.shieldBonus+=5; }},
-  {id:'XP_CHIP',    name:'XP Chip',      colour:'#ffff00', rarity:20, fn: p=>{ p.gainXP(50); }},
-  {id:'WEAPON_CRATE',name:'Weapon Crate',colour:'#ff8800', rarity:10, fn: p=>{ const k=WEAPON_KEYS[rndInt(0,WEAPON_KEYS.length-1)]; p.weapon=WEAPONS[k]; game.msg('Found '+WEAPONS[k].name+'!','#ff8800'); }},
-  {id:'OVERCLOCK',  name:'Overclock',    colour:'#ff00c8', rarity:8,  fn: p=>{ p.speedBoost=1.5; p.speedTimer=20; }},
-  {id:'VOID_SHARD', name:'Void Shard',   colour:'#aa00ff', rarity:4,  fn: p=>{ p.shards=(p.shards||0)+1; game.msg('Got Void Shard! ('+p.shards+')',  '#aa00ff'); }},
+// ─── Upgrades ────────────────────────────────────────────────────────────────
+const UPGRADES = [
+  // Instant (one-time) upgrades
+  {id:'MED_PACK',    name:'Med-Pack',     desc:'+40 HP',               colour:'#00ff88', rarity:40, persistent:false,
+   fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
+  {id:'NANO_REPAIR', name:'Nano-Repair',  desc:'+15 HP',               colour:'#88ff88', rarity:35, persistent:false,
+   fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
+  {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
+   fn: p=>{ p.gainXP(50); }},
+  {id:'VOID_SHARD',  name:'Void Shard',   desc:'+1 void bomb charge',  colour:'#aa00ff', rarity:4,  persistent:false,
+   fn: p=>{ p.shards=(p.shards||0)+1; game.msg('Got Void Shard! ('+p.shards+')','#aa00ff'); }},
+  // Persistent (stackable) upgrades
+  {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
+   levelDesc: l=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
+   fn: p=>{ p.upgrades.SAW_BLADE=(p.upgrades.SAW_BLADE||0)+1; }},
+  {id:'PLASMA_ORB',  name:'Plasma Orb',   desc:'Auto-fires homing orb',       colour:'#ff44cc', rarity:10, persistent:true, maxLevel:3,
+   levelDesc: l=>'25 dmg, '+(3-l*0.7).toFixed(1)+'s cooldown',
+   fn: p=>{ p.upgrades.PLASMA_ORB=(p.upgrades.PLASMA_ORB||0)+1; }},
+  {id:'NANO_REGEN',  name:'Nano Regen',   desc:'Passive HP regeneration',     colour:'#44ffaa', rarity:15, persistent:true, maxLevel:5,
+   levelDesc: l=>'+'+(l+1)+' HP/s',
+   fn: p=>{ p.upgrades.NANO_REGEN=(p.upgrades.NANO_REGEN||0)+1; }},
+  {id:'OVERCLOCK',   name:'Overclock',    desc:'Permanent speed boost',       colour:'#ff00c8', rarity:10, persistent:true, maxLevel:3,
+   levelDesc: l=>'+'+(15*(l+1))+'% speed',
+   fn: p=>{ p.upgrades.OVERCLOCK=(p.upgrades.OVERCLOCK||0)+1; p.permSpeedBonus=(p.upgrades.OVERCLOCK)*0.5; }},
+  {id:'ARMOR_UP',    name:'Reinforced Armor', desc:'Permanent +3 DEF',        colour:'#00aaff', rarity:12, persistent:true, maxLevel:5,
+   levelDesc: l=>'+'+(3*(l+1))+' DEF total',
+   fn: p=>{ p.upgrades.ARMOR_UP=(p.upgrades.ARMOR_UP||0)+1; p.def+=3; }},
 ];
 
-function pickItemType() {
-  const total=ITEM_TYPES.reduce((s,t)=>s+t.rarity,0);
-  let r=Math.random()*total;
-  for (const t of ITEM_TYPES) { r-=t.rarity; if (r<=0) return t; }
-  return ITEM_TYPES[0];
+// Generate a weapon upgrade option (pre-rolled so player sees exact weapon)
+function makeWeaponOption() {
+  const k=WEAPON_KEYS[rndInt(0,WEAPON_KEYS.length-1)];
+  const w=WEAPONS[k];
+  return {
+    id:'WEAPON_'+k, name:w.name, colour:w.colour, rarity:10, persistent:false,
+    desc: w.melee ? w.dmg+' dmg, melee, '+w.rate+'/s' : w.dmg+(w.count>1?'×'+w.count:'')+' dmg, '+w.rate+'/s, rng '+w.range,
+    fn: p=>{ p.weapon=w; game.msg('Equipped '+w.name+'!',w.colour); }
+  };
 }
+
+function pickUpgradeOption(exclude) {
+  // Build eligible pool: exclude maxed persistent upgrades and the excluded id
+  const pool = UPGRADES.filter(u => {
+    if (exclude && u.id === exclude) return false;
+    if (u.persistent && game.player) {
+      const cur = game.player.upgrades[u.id] || 0;
+      if (cur >= u.maxLevel) return false;
+    }
+    return true;
+  });
+  // 20% chance for a weapon option (always eligible)
+  if (Math.random() < 0.2 && (!exclude || !exclude.startsWith('WEAPON_'))) return makeWeaponOption();
+  if (pool.length === 0) return makeWeaponOption();
+  const total = pool.reduce((s,u) => s+u.rarity, 0);
+  let r = Math.random() * total;
+  for (const u of pool) { r -= u.rarity; if (r <= 0) return u; }
+  return pool[0];
+}
+
+// Legacy compatibility: items on the ground still use a type for colour/visual
+const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
+function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 
 class Item {
   constructor(x,y,type) {
@@ -1629,6 +1690,11 @@ class Player {
     this.flashTimer=0;
     this.levelFlash=0;
     this.lowHpTimer=0;
+    this.upgrades={};       // persistent upgrade levels: {SAW_BLADE:2, ...}
+    this.permSpeedBonus=0;  // from OVERCLOCK
+    this.orbitalAngle=0;    // shared rotation for saw blades
+    this.orbitalHits=new Map(); // enemy→cooldown for orbital damage
+    this.spellTimers={plasmaOrb:2}; // cooldown timers for auto-spells
   }
 
   xpNeeded() { return this.level*80; }
@@ -1710,7 +1776,7 @@ class Player {
       if (this.lowHpTimer <= 0) { audio.lowHealth(); this.lowHpTimer = 2; }
     } else { this.lowHpTimer = 0; }
 
-    const spd=this.spd+(this.speedBoost||0);
+    const spd=this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0);
     let mx=0,my=0;
     if (keys.has('KeyW')||keys.has('ArrowUp'))    my=-1;
     if (keys.has('KeyS')||keys.has('ArrowDown'))  my= 1;
@@ -2192,6 +2258,7 @@ const game = {
       case 'MENU':        this.updateMenu(dt);    break;
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
+      case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
@@ -2256,14 +2323,18 @@ const game = {
     // update items
     for (const it of items) it.update(dt);
 
-    // item pickup
+    // item pickup → trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<0.7) {
-        it.type.fn(player);
         audio.pickup();
-        this.msg('Picked up '+it.type.name, it.type.colour);
         items.splice(i,1);
+        // Generate 2 upgrade options
+        const optA = pickUpgradeOption(null);
+        const optB = pickUpgradeOption(optA.id);
+        this.powerupChoice = { options:[optA, optB], selected:0 };
+        this.setState('POWERUP_CHOICE');
+        return; // freeze gameplay immediately
       }
     }
 
@@ -2275,6 +2346,59 @@ const game = {
     // update lighting
     updateLighting(dungeon,player.x,player.y);
     updateParticles(dt);
+
+    // ── Upgrade effects ──────────────────────────────────────────────────
+    // Nano Regen
+    const regenLvl = player.upgrades.NANO_REGEN||0;
+    if (regenLvl > 0) player.hp = Math.min(player.maxHp, player.hp + regenLvl * dt);
+
+    // Saw Blade orbitals
+    const sawLvl = player.upgrades.SAW_BLADE||0;
+    if (sawLvl > 0) {
+      player.orbitalAngle += 3 * dt;
+      // Tick down hit cooldowns
+      for (const [e, cd] of player.orbitalHits) {
+        player.orbitalHits.set(e, cd - dt);
+        if (cd - dt <= 0) player.orbitalHits.delete(e);
+      }
+      for (let i=0; i<sawLvl; i++) {
+        const a = player.orbitalAngle + (TWO_PI / sawLvl) * i;
+        const bx = player.x + Math.cos(a) * 1.5;
+        const by = player.y + Math.sin(a) * 1.5;
+        for (const e of enemies) {
+          if (e.dead || player.orbitalHits.has(e)) continue;
+          if (dist(bx, by, e.x, e.y) < 0.6 && hasLOS(bx, by, e.x, e.y, dungeon.map)) {
+            e.takeDamage(12, 'Saw Blade');
+            player.orbitalHits.set(e, 0.5);
+            spawnParticles(bx, by, 'SPARK', '#ff3333', 3);
+          }
+        }
+      }
+    }
+
+    // Plasma Orb auto-spell
+    const orbLvl = player.upgrades.PLASMA_ORB||0;
+    if (orbLvl > 0) {
+      const cd = 3 - (orbLvl - 1) * 0.7;
+      player.spellTimers.plasmaOrb -= dt;
+      if (player.spellTimers.plasmaOrb <= 0) {
+        player.spellTimers.plasmaOrb = cd;
+        // Find nearest enemy
+        let nearest = null, nearD = 64;
+        for (const e of enemies) {
+          if (e.dead) continue;
+          const d = dist(player.x, player.y, e.x, e.y);
+          if (d < nearD) { nearD = d; nearest = e; }
+        }
+        if (nearest) {
+          const [dx, dy] = norm(nearest.x - player.x, nearest.y - player.y);
+          const p = new Projectile(player.x, player.y, dx, dy, 6, 25, 10, '#ff44cc', false, true, 'Plasma Orb');
+          p.homing = nearest;
+          projectiles.push(p);
+          spawnParticles(player.x, player.y, 'MUZZLE', '#ff44cc', 3);
+        }
+      }
+    }
 
     // stairs interaction
     const tx=Math.floor(player.x), ty=Math.floor(player.y);
@@ -2325,6 +2449,56 @@ const game = {
   updatePaused() {
     if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
     else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
+  },
+
+  updatePowerupChoice() {
+    const pc = this.powerupChoice;
+    if (!pc) { this.setState('PLAYING'); return; }
+    // Keyboard: left/right to select, 1/2 for direct pick, 3/Escape to skip
+    if (jp('ArrowLeft') || jp('KeyA'))  pc.selected = 0;
+    if (jp('ArrowRight')|| jp('KeyD'))  pc.selected = 1;
+    if (jp('Digit1')) { pc.selected=0; this.applyPowerupChoice(0); return; }
+    if (jp('Digit2')) { pc.selected=1; this.applyPowerupChoice(1); return; }
+    if (jp('Digit3') || jp('Escape') || jp('KeyQ')) { this.applyPowerupChoice(-1); return; }
+    if (jp('Enter') || jp('Space'))    { this.applyPowerupChoice(pc.selected); return; }
+    // Mouse/touch: check click on cards or skip
+    if (jp('MouseLeft')) {
+      const cw = Math.min(280, W * 0.35);
+      const gap = 30;
+      const totalW = cw * 2 + gap;
+      const startX = (W - totalW) / 2;
+      const cardY = H * 0.28;
+      const cardH = Math.min(220, H * 0.38);
+      const mx = mouse.x, my = mouse.y;
+      // Card 0
+      if (mx >= startX && mx <= startX + cw && my >= cardY && my <= cardY + cardH) {
+        this.applyPowerupChoice(0); return;
+      }
+      // Card 1
+      if (mx >= startX + cw + gap && mx <= startX + totalW && my >= cardY && my <= cardY + cardH) {
+        this.applyPowerupChoice(1); return;
+      }
+      // Skip button
+      const skipY = cardY + cardH + 25;
+      const skipW = 160, skipH = 40;
+      if (mx >= (W-skipW)/2 && mx <= (W+skipW)/2 && my >= skipY && my <= skipY+skipH) {
+        this.applyPowerupChoice(-1); return;
+      }
+    }
+  },
+
+  applyPowerupChoice(idx) {
+    const pc = this.powerupChoice;
+    if (idx >= 0 && idx < pc.options.length) {
+      const opt = pc.options[idx];
+      opt.fn(this.player);
+      audio.menuSelect();
+      this.msg('Chose ' + opt.name, opt.colour);
+    } else {
+      this.msg('Skipped upgrade', '#666688');
+    }
+    this.powerupChoice = null;
+    this.setState('PLAYING');
   },
 
   updateFade(dt) {
@@ -2538,6 +2712,7 @@ const game = {
       case 'MENU':      this.renderMenu();     break;
       case 'PLAYING':   this.renderPlaying();  break;
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
+      case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
@@ -2661,6 +2836,27 @@ const game = {
     // player
     player.draw(cam.x,cam.y);
 
+    // Saw blade orbitals
+    const sawLvl = player.upgrades.SAW_BLADE||0;
+    if (sawLvl > 0) {
+      ctx.save();
+      for (let i=0; i<sawLvl; i++) {
+        const a = player.orbitalAngle + (TWO_PI / sawLvl) * i;
+        const bx = player.x * TILE - cam.x + Math.cos(a) * 1.5 * TILE;
+        const by = player.y * TILE - cam.y + Math.sin(a) * 1.5 * TILE;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(player.orbitalAngle * 4 + i);
+        ctx.shadowBlur=10; ctx.shadowColor='#ff3333';
+        ctx.fillStyle='#ff3333';
+        ctx.fillRect(-5, -2, 10, 4);
+        ctx.fillStyle='#ff8866';
+        ctx.fillRect(-3, -3, 6, 6);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
     drawHUD(player);
     drawMinimap(dungeon,player);
     drawMessages();
@@ -2685,6 +2881,125 @@ const game = {
       ctx.fillText('ESC — Resume',W/2, narrow ? 260 : 300);
       ctx.fillText('Q   — Quit to Menu',W/2, narrow ? 290 : 330);
     }
+    ctx.restore();
+  },
+
+  renderPowerupChoice() {
+    const pc = this.powerupChoice;
+    if (!pc) return;
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    ctx.save();
+
+    // Dark overlay
+    ctx.fillStyle='rgba(0,0,0,0.7)';
+    ctx.fillRect(0,0,W,H);
+
+    // Title
+    ctx.textAlign='center';
+    ctx.shadowBlur=25; ctx.shadowColor='#00f5ff';
+    ctx.fillStyle='#00f5ff';
+    ctx.font=`bold ${narrow?22:30}px monospace`;
+    ctx.fillText('CHOOSE AN UPGRADE', W/2, H*0.15);
+    ctx.shadowBlur=0;
+
+    // Cards
+    const cw = Math.min(280, W * 0.35);
+    const gap = 30;
+    const totalW = cw * 2 + gap;
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.28;
+    const cardH = Math.min(220, H * 0.38);
+
+    for (let i=0; i<2; i++) {
+      const opt = pc.options[i];
+      const cx = startX + i * (cw + gap);
+      const sel = pc.selected === i;
+      const curLvl = opt.persistent && game.player ? (game.player.upgrades[opt.id]||0) : 0;
+
+      // Card background
+      ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = sel ? opt.colour : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.beginPath();
+      ctx.roundRect(cx, cardY, cw, cardH, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      // Glow on selected
+      if (sel) {
+        ctx.save();
+        ctx.shadowBlur=20; ctx.shadowColor=opt.colour;
+        ctx.strokeStyle=opt.colour; ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.roundRect(cx, cardY, cw, cardH, 8);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Number badge
+      ctx.fillStyle=opt.colour;
+      ctx.font=`bold ${narrow?16:20}px monospace`;
+      ctx.textAlign='center';
+      ctx.fillText((i+1)+'', cx + cw/2, cardY + 28);
+
+      // Icon: colored square with glow
+      ctx.save();
+      ctx.shadowBlur=15; ctx.shadowColor=opt.colour;
+      ctx.fillStyle=opt.colour;
+      ctx.fillRect(cx + cw/2 - 12, cardY + 40, 24, 24);
+      ctx.restore();
+
+      // Name
+      ctx.fillStyle='#ffffff';
+      ctx.font=`bold ${narrow?13:16}px monospace`;
+      ctx.fillText(opt.name, cx + cw/2, cardY + 90);
+
+      // Description
+      ctx.fillStyle='#aaaacc';
+      ctx.font=`${narrow?11:13}px monospace`;
+      ctx.fillText(opt.desc, cx + cw/2, cardY + 112);
+
+      // Level info for persistent upgrades
+      if (opt.persistent && opt.levelDesc) {
+        ctx.fillStyle='#888899';
+        ctx.font=`${narrow?10:12}px monospace`;
+        ctx.fillText('Lv '+(curLvl)+'→'+(curLvl+1)+': '+opt.levelDesc(curLvl), cx + cw/2, cardY + 134);
+      }
+
+      // Weapon stats line for weapon options
+      if (opt.id && opt.id.startsWith('WEAPON_')) {
+        ctx.fillStyle='#ffcc44';
+        ctx.font=`${narrow?10:12}px monospace`;
+        ctx.fillText(opt.desc, cx + cw/2, cardY + 134);
+      }
+    }
+
+    // Skip button
+    const skipY = cardY + cardH + 25;
+    const skipW = 160, skipH = 40;
+    ctx.fillStyle='rgba(255,255,255,0.04)';
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.roundRect((W-skipW)/2, skipY, skipW, skipH, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle='#666688';
+    ctx.font=`${narrow?13:15}px monospace`;
+    ctx.textAlign='center';
+    ctx.fillText('SKIP  [3]', W/2, skipY + 26);
+
+    // Hint
+    ctx.fillStyle='#444466';
+    ctx.font=`${narrow?9:11}px monospace`;
+    if (isTouch) {
+      ctx.fillText('Tap a card or Skip', W/2, skipY + skipH + 22);
+    } else {
+      ctx.fillText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', W/2, skipY + skipH + 22);
+    }
+
     ctx.restore();
   },
 
