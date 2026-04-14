@@ -369,7 +369,7 @@ A `manifest.json` at the repository root enables Add-to-Home-Screen:
 | `orientation`    | `any`                   |
 | `background_color` / `theme_color` | `#0a0a12` |
 | `start_url`      | `./index.html`          |
-| `icons`          | 192×192 + 512×512 PNG (cyberpunk crosshair motif, neon cyan diamond, magenta crosshair, dark grid background) |
+| `icons`          | 192×192 + 512×512 PNG (`purpose: any`), plus 192×192 + 512×512 maskable variants (`purpose: maskable`, 72% inner icon on `#0a0a12` background for Android adaptive icons) |
 
 Meta tags in `<head>`:
 - `apple-mobile-web-app-capable: yes` (iOS Safari home-screen)
@@ -420,3 +420,4 @@ the manifest to achieve a chrome-less experience.
 | v1.7    | Enemy variety & difficulty curve: weighted type distribution (GUARD-heavy early → PHANTOM/DRONE-heavy late), scaling enemy count per room (area-capped), elite enemies (8% on floor 3+, 1.8× HP, pulsing glow + diamond marker), aggression scaling (tighter cooldowns/detection per floor), per-room composition caps |
 | v1.8    | Scatter Gun per-pellet pitch randomisation: 4 staggered cracks with ±15% pitch variation and randomised noise filters replace the static dual-noise burst |
 | v1.9    | Weapon-aware hit sounds: `audio.hit()` accepts weapon name; each weapon produces a distinct enemy-impact sound (Scatter plink, Railgun crack+ring, Plasma Sword sizzle, Void Cannon thud); Projectile carries `weaponName`; fixed double-hit-sound on surviving enemies |
+| v1.10   | Maskable icon variants: 192×192 + 512×512 maskable PNGs (72% inner icon, `#0a0a12` background) for Android adaptive icons; manifest updated with `purpose: maskable` entries |
