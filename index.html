@@ -257,7 +257,14 @@ canvas.addEventListener('touchstart', e => {
           if (d < bestDist) { bestDist = d; best = i; }
         }
         game.menuSel = best;
-        justPressed.add('Enter');
+        // On the difficulty row, left/right edge taps cycle, center taps start
+        if (opts[best]?.isDiffRow && Math.abs(cy - (startY + best * gap)) < gap * 0.7) {
+          if (cx < W * 0.35) justPressed.add('ArrowLeft');
+          else if (cx > W * 0.65) justPressed.add('ArrowRight');
+          else justPressed.add('Enter');
+        } else {
+          justPressed.add('Enter');
+        }
       }
       else if (game.state === 'ARCHIVES') {
         // Hit-test against upgrade rows or back button
@@ -931,6 +938,15 @@ const WEAPONS = {
 };
 const WEAPON_KEYS = Object.keys(WEAPONS);
 
+// ─── Difficulty ──────────────────────────────────────────────────────────────
+const DIFFICULTIES = {
+  EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.28, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75 },
+  NORMAL: { id:'NORMAL', label:'NORMAL', colour:'#00f5ff', enemyHp:1.0,  enemyAtk:1.0,  enemySpd:1.0,  itemDrop:0.20, creditMul:1.0, xpMul:1.0,  eliteRate:0.08, shardMul:1.0,  envDmg:1.0 },
+  HARD:   { id:'HARD',   label:'HARD',   colour:'#ff3333', enemyHp:1.25, enemyAtk:1.15, enemySpd:1.05, itemDrop:0.18, creditMul:1.0, xpMul:1.15, eliteRate:0.12, shardMul:1.3,  envDmg:1.15 },
+};
+const DIFF_ORDER = ['EASY','NORMAL','HARD'];
+function getDiff() { return DIFFICULTIES[game.difficulty] || DIFFICULTIES.NORMAL; }
+
 // ─── Meta-Progression (persistent across runs) ──────────────────────────────
 const META_UPGRADES = [
   { id:'VITAL_BOOST',   name:'Vital Systems',    desc:'+10 max HP',          maxLv:3, costs:[5,12,22],  icon:'♥' },
@@ -944,7 +960,7 @@ const META_UPGRADES = [
 function loadMeta() {
   try {
     const raw = localStorage.getItem('neonDungeonMeta');
-    if (!raw) return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 } };
+    if (!raw) return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL' };
     const m = JSON.parse(raw);
     if (!m.stats) m.stats = { totalRuns:0, totalShards:0, bestFloor:0, victories:0 };
     if (!m.upgrades) m.upgrades = {};
@@ -955,8 +971,9 @@ function loadMeta() {
         m.upgrades[u.id] = Math.max(0, Math.min(u.maxLv, Math.floor(Number(m.upgrades[u.id]) || 0)));
       }
     }
+    if (!DIFFICULTIES[m.lastDifficulty]) m.lastDifficulty = 'NORMAL';
     return m;
-  } catch(e) { return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 } }; }
+  } catch(e) { return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL' }; }
 }
 
 function saveMeta(meta) {
@@ -969,13 +986,15 @@ function getMetaLevel(id) {
 }
 
 function calcRunShards(floor, score, bossesCleared, victory) {
-  let shards = floor;                                       // 1 per floor reached
-  shards += bossesCleared * 2;                              // 2 per boss cleared
-  if (victory) shards += 5;                                 // 5 for victory
-  shards += Math.min(5, Math.floor(score / 2000));          // 1 per 2000 score, cap 5
+  let runShards = floor;                                    // 1 per floor reached
+  runShards += bossesCleared * 2;                           // 2 per boss cleared
+  if (victory) runShards += 5;                              // 5 for victory
+  runShards += Math.min(5, Math.floor(score / 2000));       // 1 per 2000 score, cap 5
+  // Difficulty scales only the run-earned portion
+  runShards = Math.round(runShards * getDiff().shardMul);
   const persistLv = getMetaLevel('PERSISTENCE');
-  shards += persistLv * 3;                                  // flat bonus from PERSISTENCE
-  return shards;
+  runShards += persistLv * 3;                               // flat bonus from PERSISTENCE (unscaled)
+  return runShards;
 }
 
 function applyMetaToPlayer(player) {
@@ -1959,15 +1978,14 @@ class Enemy {
     this.dead=true;
     audio.death();
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
-    if (Math.random()<0.2) items.push(new Item(this.x,this.y));
-    game.player.gainXP(this.xpValue);
+    const d=getDiff();
+    if (Math.random()<d.itemDrop) items.push(new Item(this.x,this.y));
+    game.player.gainXP(Math.round(this.xpValue*d.xpMul));
     game.player.score += this.xpValue * game.floor;
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
-    // Credit drops scale with enemy value and floor
     const baseCr = CREDIT_VALUES[this.type] || 5;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier());
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul);
     game.player.credits += cr;
-    // Track boss kills immediately for accurate fragment payout
     if (this.isBoss) game.bossesCleared++;
   }
 
@@ -2190,7 +2208,7 @@ class Enemy {
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
       player.x-=dx*3; player.y-=dy*3;
       clampToBossRoom(player);
-      player.takeDamage(20);
+      player.takeDamage(Math.round(20*getDiff().enemyAtk));
       spawnParticles(player.x,player.y,'EXPLOSION','#ff4444',8);
       this.bossTimers.shield=5;
     }
@@ -2237,7 +2255,7 @@ class Enemy {
 
     if (this.phase===3 && this.bossTimers.shock<=0) {
       if (dist(game.player.x,game.player.y,this.x,this.y)<8) {
-        game.player.takeDamage(25);
+        game.player.takeDamage(Math.round(25*getDiff().enemyAtk));
         spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',15);
       }
       this.bossTimers.shock=4;
@@ -2333,7 +2351,7 @@ class Enemy {
         player.x += kx * 3;
         player.y += ky * 3;
         clampToBossRoom(player);
-        player.takeDamage(20);
+        player.takeDamage(Math.round(20*getDiff().enemyAtk));
         spawnParticles(this.x, this.y, 'EXPLOSION', '#ff00c8', 12);
       }
       T.shield = 6 / spd;
@@ -2342,7 +2360,7 @@ class Enemy {
     // Phase 4: Psionic shockwave — AoE damage within 7 tiles (from HIVE)
     if (this.phase >= 4 && T.shock <= 0) {
       if (d < 7) {
-        player.takeDamage(25);
+        player.takeDamage(Math.round(25*getDiff().enemyAtk));
         spawnParticles(player.x, player.y, 'EXPLOSION', '#aa00ff', 10);
       }
       spawnParticles(this.x, this.y, 'EXPLOSION', '#aa00ff', 20);
@@ -2373,7 +2391,7 @@ class Enemy {
       if (orb.age >= orb.maxAge) { this.voidOrbs.splice(i, 1); continue; }
       // tick damage every 0.5s while player is inside
       if (orb.tickCd <= 0 && dist(player.x, player.y, orb.x, orb.y) < orb.radius) {
-        player.takeDamage(15);
+        player.takeDamage(Math.round(15*getDiff().enemyAtk));
         spawnParticles(player.x, player.y, 'SPARK', '#aa00ff', 4);
         orb.tickCd = 0.5;
       }
@@ -2503,6 +2521,7 @@ function pickEnemyType(floorNum) {
 
 function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const scale=1+0.15*(floorNum-1);
+  const d=getDiff();
   let hp,atk,spd,xpVal,colour;
   switch(type) {
     case 'GUARD':   hp=40;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
@@ -2518,15 +2537,15 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   }
   const isBoss = ['SENTINEL','HIVE','OMEGA'].includes(type);
   const e=new Enemy(x,y,
-    Math.round(hp*scale), Math.round(atk*scale),
-    spd, xpVal, colour, type);
+    Math.round(hp*scale*d.enemyHp), Math.round(atk*scale*d.enemyAtk),
+    spd*d.enemySpd, xpVal, colour, type);
   e.room=room;
   e.isBoss=isBoss;
   e.elite=false;
   if (type==='PHANTOM') e.visible=false;
   if (isBoss) { e.maxHp=e.hp; }
-  // Elite roll: 8% chance on floor 3+, never on bosses or disallowed spawns
-  if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < 0.08) {
+  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses
+  if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -3378,6 +3397,7 @@ function populateFloor(dungeon, floorNum) {
 // ─── Game State Machine ───────────────────────────────────────────────────────
 const game = {
   state: 'MENU',
+  difficulty: loadMeta().lastDifficulty || 'NORMAL',
   floor: 1,
   player: null,
   dungeon: null,
@@ -3494,6 +3514,10 @@ const game = {
 
   startGame() {
     audio.resume();
+    // Persist selected difficulty for future sessions
+    const meta = loadMeta();
+    meta.lastDifficulty = this.difficulty;
+    saveMeta(meta);
     this.bossesCleared=0;
     this.player=new Player();
     applyMetaToPlayer(this.player);
@@ -3547,7 +3571,7 @@ const game = {
       items.push(new Item(ix, iy));
     }
     // Bonus credit pickup worth floor-scaled amount
-    const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier());
+    const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier() * getDiff().creditMul);
     this.player.credits += secretCr;
     this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
@@ -3605,6 +3629,7 @@ const game = {
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
+      difficulty: this.difficulty,
       bossesCleared: this.bossesCleared,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
@@ -3634,6 +3659,8 @@ const game = {
       return;
     }
     audio.resume();
+    // Restore difficulty from save (old saves default to NORMAL)
+    this.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'NORMAL';
     const p = new Player();
     const s = save.player;
     p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
@@ -3679,9 +3706,11 @@ const game = {
     const opts = [];
     if (this.hasSave()) {
       let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){}
-      opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'})`, action:()=>this.continueGame(), colour:'#00f5ff' });
+      const saveDiff = DIFFICULTIES[save?.difficulty] ? save.difficulty : 'NORMAL';
+      opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
     }
-    opts.push({ label:'NEW GAME', action:()=>this.startGame(), colour:'#ff00c8' });
+    const d = getDiff();
+    opts.push({ label:`NEW GAME — ${d.label}  ◀▶`, action:()=>this.startGame(), colour:d.colour, isDiffRow:true });
     const meta = loadMeta();
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     return opts;
@@ -3706,6 +3735,13 @@ const game = {
     if (this.menuSel === undefined || this.menuSel >= n) this.menuSel = 0;
     if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = (this.menuSel - 1 + n) % n;
     if (jp('ArrowDown')||jp('KeyS')) this.menuSel = (this.menuSel + 1) % n;
+    // Left/Right cycles difficulty on the NEW GAME row
+    if (opts[this.menuSel]?.isDiffRow && (jp('ArrowLeft')||jp('KeyA')||jp('ArrowRight')||jp('KeyD'))) {
+      const idx = DIFF_ORDER.indexOf(this.difficulty);
+      const dir = (jp('ArrowRight')||jp('KeyD')) ? 1 : -1;
+      this.difficulty = DIFF_ORDER[(idx + dir + DIFF_ORDER.length) % DIFF_ORDER.length];
+      audio.menuSelect();
+    }
     if (jp('Enter')||jp('MouseLeft')) {
       audio.menuSelect();
       opts[this.menuSel].action();
@@ -3956,7 +3992,7 @@ const game = {
     player.trapCooldown = Math.max(0, player.trapCooldown - dt);
     if (player.trapCooldown <= 0) {
       if (tile===T.TRAP_SPIKE) {
-        const trapDmg = 8 + game.floor * 2;
+        const trapDmg = Math.round((8 + game.floor * 2) * getDiff().envDmg);
         player.takeDamage(trapDmg);
         player.trapCooldown = 1.0;
         this.msg('Spike trap! -'+trapDmg+' HP','#ff6644');
@@ -3973,7 +4009,7 @@ const game = {
     // environmental hazards (separate from traps — own cooldowns, bypass armor)
     if (tile === T.PLASMA) {
       // Continuous burn: direct HP reduction, bypasses defense/invincibility
-      const burnDps = 3 + this.floor;
+      const burnDps = (3 + this.floor) * getDiff().envDmg;
       player.hp = Math.max(0, player.hp - burnDps * dt);
       // Cosmetic throttle for messages, particles, and audio
       player.plasmaBurnTimer = Math.max(0, player.plasmaBurnTimer - dt);
@@ -3989,7 +4025,7 @@ const game = {
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
-      const zapDmg = 10 + this.floor * 2;
+      const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
       player.hp = Math.max(0, player.hp - zapDmg);
       player.arcCooldown = 0.8;
       player.flashTimer = 0.15;
@@ -4566,9 +4602,14 @@ const game = {
       ctx.fillText(`▶  ${opts[i].label}`, W/2, startY + i * gap);
     }
     ctx.shadowBlur=0;
-    // Navigation hint
+    // Navigation hint (context-sensitive for difficulty row)
     ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
-    ctx.fillText(isTouch ? 'Tap to select' : '↑↓ to select, Enter to confirm', W/2, startY + opts.length * gap + 8);
+    const diffHint = opts[sel]?.isDiffRow;
+    if (isTouch) {
+      ctx.fillText(diffHint ? 'Tap edges ◀▶ to change difficulty · center to start' : 'Tap to select', W/2, startY + opts.length * gap + 8);
+    } else {
+      ctx.fillText(diffHint ? '◀▶ change difficulty · Enter to start' : '↑↓ to select, Enter to confirm', W/2, startY + opts.length * gap + 8);
+    }
     ctx.restore();
 
     // controls hint
@@ -4666,6 +4707,18 @@ const game = {
     drawHUD(player);
     drawThreatIndicators(cam.x, cam.y);
     drawMinimap(dungeon,player);
+
+    // Difficulty badge below minimap (non-NORMAL only)
+    if (game.difficulty !== 'NORMAL') {
+      const d = getDiff();
+      const bx = W - 128 - safeRight, by = 92 + safeTop;
+      ctx.save(); ctx.textAlign='right';
+      ctx.font='bold 9px monospace';
+      ctx.shadowBlur=4; ctx.shadowColor=d.colour;
+      ctx.fillStyle=d.colour;
+      ctx.fillText('['+d.label+']', W-8-safeRight, by);
+      ctx.restore();
+    }
 
     // Quest HUD (below minimap)
     if (game.quest) {
@@ -5279,13 +5332,19 @@ const game = {
     ctx.fillText(`Floor Reached: ${this.floor}`,W/2, baseY);
     ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY + 26);
     ctx.fillText(`Level: ${this.player.level}`,W/2, baseY + 52);
+    if (this.difficulty !== 'NORMAL') {
+      const d = getDiff();
+      ctx.fillStyle=d.colour;
+      ctx.fillText(`Difficulty: ${d.label}`,W/2, baseY + 78);
+    }
+    const shardY = this.difficulty !== 'NORMAL' ? baseY + 104 : baseY + 78;
     if (this.lastRunShards) {
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, baseY + 78);
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, shardY);
     }
     ctx.restore();
     // leaderboard
-    this.renderLeaderboard(baseY + (narrow?110:126), narrow?5:7, this.lastSavedRank);
+    this.renderLeaderboard(shardY + (narrow?32:48), narrow?5:7, this.lastSavedRank);
     // continue prompt
     if (Math.floor(Date.now()/800)%2===0) {
       ctx.save(); ctx.textAlign='center';
@@ -5313,13 +5372,19 @@ const game = {
     ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY);
     ctx.fillText(`Floors Cleared: 10`,W/2, baseY + 26);
     ctx.fillText(`Level Achieved: ${this.player.level}`,W/2, baseY + 52);
+    if (this.difficulty !== 'NORMAL') {
+      const d = getDiff();
+      ctx.fillStyle=d.colour;
+      ctx.fillText(`Difficulty: ${d.label}`,W/2, baseY + 78);
+    }
+    const shardY = this.difficulty !== 'NORMAL' ? baseY + 104 : baseY + 78;
     if (this.lastRunShards) {
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
-      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, baseY + 78);
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, shardY);
     }
     ctx.restore();
     // leaderboard
-    this.renderLeaderboard(baseY + (narrow?110:126), narrow?5:7, this.lastSavedRank);
+    this.renderLeaderboard(shardY + (narrow?32:48), narrow?5:7, this.lastSavedRank);
     // continue prompt
     if (Math.floor(t*2)%2===0) {
       ctx.save(); ctx.textAlign='center';

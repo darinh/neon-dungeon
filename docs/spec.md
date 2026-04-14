@@ -281,6 +281,41 @@ Prefers to stay at 6–12 tile range; retreats if player closes to within 5 tile
 - **Colour:** `#ff6622` (orange)
 - **Credits:** 7
 
+### Difficulty Modes
+
+Three selectable difficulty levels, chosen from the main menu on the NEW GAME
+row using ◀▶ (keyboard: arrow keys; touch: tap left/right edges). The last
+selection persists in `neonDungeonMeta.lastDifficulty`. Continued runs restore
+the difficulty from the save file.
+
+| Parameter     | EASY        | NORMAL      | HARD        |
+|---------------|-------------|-------------|-------------|
+| Enemy HP      | ×0.75       | ×1.0        | ×1.25       |
+| Enemy ATK     | ×0.75       | ×1.0        | ×1.15       |
+| Enemy SPD     | ×1.0        | ×1.0        | ×1.05       |
+| Item drop     | 28%         | 20%         | 18%         |
+| Credit mult   | ×1.2        | ×1.0        | ×1.0        |
+| XP mult       | ×1.0        | ×1.0        | ×1.15       |
+| Elite rate    | 4%          | 8%          | 12%         |
+| Shard mult    | ×0.85       | ×1.0        | ×1.3        |
+| Env damage    | ×0.75       | ×1.0        | ×1.15       |
+
+**Multipliers apply to:** `spawnEnemy()` stats (HP/ATK/SPD stacked with floor
+scaling), elite roll chance, item drop rate in `Enemy.die()`, credit drops
+(stacked with meta Scavenger), XP from kills (stacked with meta Quick Learner),
+shard payout (run-earned portion only — meta PERSISTENCE flat bonus is unscaled),
+environmental damage (traps, plasma, arc), and boss special attack damage.
+
+**Design intent:**
+- EASY reduces incoming threats and increases economy — accessible entry.
+- HARD increases enemy durability and elite pressure; rewards with more XP and
+  shards per run — risk/reward, not punishment. Credits stay at ×1.0 so the
+  in-run economy isn't double-nerfed.
+
+**HUD:** Non-NORMAL difficulty shows a coloured `[EASY]` or `[HARD]` badge below
+the minimap. Shown on GAME_OVER and VICTORY screens. CONTINUE menu item shows
+the save's difficulty.
+
 ### Difficulty Curve
 
 **Weighted type distribution:** Each enemy type has a base weight and per-floor
@@ -309,8 +344,8 @@ floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
 
-8% chance per spawn on floor 3 and above. Maximum 1 elite per room. Never
-applied to bosses or boss-summoned adds.
+Base 8% chance per spawn on floor 3 and above (scaled by difficulty: 4% EASY,
+12% HARD). Maximum 1 elite per room. Never applied to bosses or boss-summoned adds.
 
 | Stat     | Multiplier |
 |----------|------------|
@@ -1024,3 +1059,4 @@ the manifest to achieve a chrome-less experience.
 | v11.0   | Enemy variety expansion: SHIELDER (floor 3+, 120° frontal arc deflects non-piercing projectiles, forces flanking) and GRENADIER (floor 5+, lobs grenades creating 1.5-tile radius AoE hazard zones lasting 3 s). Floor-gated via `minFloor` in ENEMY_WEIGHTS — excluded from both weighted selection and cap-reroll on lower floors. Global `hazardZones[]` array for grenade zones with LOS-gated damage. `audio.shieldDeflect()`/`grenadeLob()`/`grenadeExplode()` SFX. Per-room caps: 1 shielder, 1 grenadier. SW cache v18 |
 | v12.0   | Lore terminals: `T.LORE` tile (16) — amber data terminals placed 1–2 per non-boss floor (floor 2+), containing cyberpunk narrative fragments from a 25-entry pool. Single-use: press E to read, terminal converts to floor. `READING` game state with overlay UI (word-wrapped text, scanline frame, touch/keyboard close). +50 score per new entry. `player.loreRead` Set tracks discovered entries per run. `audio.loreAccess()` chirp SFX. Amber `◫` HUD counter + minimap dot. Save-compatible (no version bump). SW cache v19 |
 | v13.0   | Meta-progression system (Neural Archives): persistent Data Fragments (◆) currency earned at end of every run based on floors reached, bosses cleared, victory, and score. 6 permanent upgrades purchasable from new ARCHIVES game state accessible from main menu: Vital Systems (+HP), Scavenger Protocol (+credits), Quick Learner (+XP), Armor Plating (+DEF), Weapon Cache (start with upgraded weapon), Data Persistence (+fragments/run). Array-driven menu system replacing hardcoded 2-option layout — supports touch hit-testing for 2-3 options. `bossesCleared` counter tracked on game object and persisted in save. ◆ reward shown on GAME_OVER/VICTORY screens. Meta data stored in separate `localStorage` key (`neonDungeonMeta`). SW cache v20 |
+| v14.0   | Difficulty modes: EASY / NORMAL / HARD selectable on NEW GAME menu row via ◀▶ (keyboard arrows or touch edge taps, center tap starts). `DIFFICULTIES` table with per-mode multipliers for enemy HP/ATK/SPD, item drop rate, credit gain, XP gain, elite spawn rate, shard payout (run portion only), and environmental/boss damage. Selection persists in `neonDungeonMeta.lastDifficulty`; saved in run checkpoint. Old saves default to NORMAL. Non-NORMAL badge below minimap + shown on end screens. Touch menu splits diff row into 3 zones (left edge cycle, center start, right edge cycle). SW cache v21 |
