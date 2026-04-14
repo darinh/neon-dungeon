@@ -241,16 +241,43 @@ canvas.addEventListener('touchstart', e => {
         if (cy > H/2) justPressed.add('KeyQ');
         else justPressed.add('Escape');
       }
-      else if (game.state === 'MENU' && game.hasSave()) {
+      else if (game.state === 'MENU') {
         // Hit-test against actual menu item positions
         const narrow = layout.compact;
         const titleFs = narrow ? 48 : 72;
         const ty1 = narrow ? 120 : 160;
-        const menuY = ty1 + titleFs * 0.95 + 80; // startY of "Continue"
+        const startY = ty1 + titleFs * 0.95 + 80;
         const gap = narrow ? 24 : 28;
-        const mid = menuY + gap / 2; // midpoint between the two options
-        game.menuSel = cy < mid ? 0 : 1;
+        const opts = game.getMenuOptions();
+        // Find closest option
+        let best = 0, bestDist = Infinity;
+        for (let i = 0; i < opts.length; i++) {
+          const oy = startY + i * gap;
+          const d = Math.abs(cy - oy);
+          if (d < bestDist) { bestDist = d; best = i; }
+        }
+        game.menuSel = best;
         justPressed.add('Enter');
+      }
+      else if (game.state === 'ARCHIVES') {
+        // Hit-test against upgrade rows or back button
+        const narrow = layout.compact;
+        const startY = narrow ? 95 : 120;
+        const rowH = narrow ? 42 : 50;
+        if (cy > H - 60) {
+          // Back button area
+          justPressed.add('Escape');
+        } else {
+          // Find closest upgrade row
+          let best = 0, bestDist = Infinity;
+          for (let i = 0; i < META_UPGRADES.length; i++) {
+            const oy = startY + i * rowH;
+            const d = Math.abs(cy - oy);
+            if (d < bestDist) { bestDist = d; best = i; }
+          }
+          game.archivesSel = best;
+          justPressed.add('Enter');
+        }
       }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
       continue;
@@ -903,6 +930,67 @@ const WEAPONS = {
   VOID_CANNON:  { name:'Void Cannon',  dmg:45, rate:1.5, range:12, spread:0,   count:1, colour:'#aa00ff' },
 };
 const WEAPON_KEYS = Object.keys(WEAPONS);
+
+// ─── Meta-Progression (persistent across runs) ──────────────────────────────
+const META_UPGRADES = [
+  { id:'VITAL_BOOST',   name:'Vital Systems',    desc:'+10 max HP',          maxLv:3, costs:[5,12,22],  icon:'♥' },
+  { id:'SCAVENGER',     name:'Scavenger Protocol',desc:'+15% credit gain',   maxLv:3, costs:[5,12,22],  icon:'◈' },
+  { id:'QUICK_LEARNER', name:'Quick Learner',     desc:'+15% XP gain',       maxLv:3, costs:[5,12,22],  icon:'★' },
+  { id:'ARMOR_PLATING', name:'Armor Plating',     desc:'+1 starting DEF',    maxLv:3, costs:[8,18,30],  icon:'▣' },
+  { id:'STARTING_GEAR', name:'Weapon Cache',      desc:'Start with upgraded weapon', maxLv:1, costs:[25], icon:'⚔' },
+  { id:'PERSISTENCE',   name:'Data Persistence',  desc:'+3 fragments per run',maxLv:2, costs:[12,25],   icon:'◆' },
+];
+
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem('neonDungeonMeta');
+    if (!raw) return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 } };
+    const m = JSON.parse(raw);
+    if (!m.stats) m.stats = { totalRuns:0, totalShards:0, bestFloor:0, victories:0 };
+    if (!m.upgrades) m.upgrades = {};
+    m.shards = Math.max(0, Math.floor(Number(m.shards) || 0));
+    // Clamp upgrade levels to valid ranges
+    for (const u of META_UPGRADES) {
+      if (u.id in m.upgrades) {
+        m.upgrades[u.id] = Math.max(0, Math.min(u.maxLv, Math.floor(Number(m.upgrades[u.id]) || 0)));
+      }
+    }
+    return m;
+  } catch(e) { return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 } }; }
+}
+
+function saveMeta(meta) {
+  try { localStorage.setItem('neonDungeonMeta', JSON.stringify(meta)); } catch(e){}
+}
+
+function getMetaLevel(id) {
+  const m = loadMeta();
+  return m.upgrades[id] || 0;
+}
+
+function calcRunShards(floor, score, bossesCleared, victory) {
+  let shards = floor;                                       // 1 per floor reached
+  shards += bossesCleared * 2;                              // 2 per boss cleared
+  if (victory) shards += 5;                                 // 5 for victory
+  shards += Math.min(5, Math.floor(score / 2000));          // 1 per 2000 score, cap 5
+  const persistLv = getMetaLevel('PERSISTENCE');
+  shards += persistLv * 3;                                  // flat bonus from PERSISTENCE
+  return shards;
+}
+
+function applyMetaToPlayer(player) {
+  const m = loadMeta();
+  const u = m.upgrades;
+  if (u.VITAL_BOOST)   { player.maxHp += u.VITAL_BOOST * 10; player.hp = player.maxHp; }
+  if (u.ARMOR_PLATING) { player.def += u.ARMOR_PLATING; }
+  if (u.STARTING_GEAR) {
+    const pool = ['SCATTER_GUN','RAILGUN','PLASMA_SWORD','VOID_CANNON'];
+    player.weapon = WEAPONS[pool[Math.floor(Math.random() * pool.length)]];
+  }
+}
+
+function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }
+function getMetaCreditMultiplier() { return 1 + getMetaLevel('SCAVENGER') * 0.15; }
 
 // ─── Particles ───────────────────────────────────────────────────────────────
 let particles = [];
@@ -1877,8 +1965,10 @@ class Enemy {
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
     // Credit drops scale with enemy value and floor
     const baseCr = CREDIT_VALUES[this.type] || 5;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15));
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier());
     game.player.credits += cr;
+    // Track boss kills immediately for accurate fragment payout
+    if (this.isBoss) game.bossesCleared++;
   }
 
   update(dt, player, map) {
@@ -2487,7 +2577,7 @@ class Player {
   xpNeeded() { return this.level*80; }
 
   gainXP(amount) {
-    this.xp+=amount;
+    this.xp+=Math.round(amount * getMetaXPMultiplier());
     while (this.xp>=this.xpNeeded() && this.level<10) {
       this.xp-=this.xpNeeded();
       this.level++;
@@ -3305,6 +3395,7 @@ const game = {
   bossEntrances: [],
   bossSealed: false,
   bossAlive: false,
+  bossesCleared: 0,
   msgList: [],
   nameEntry: null,
   lastSavedRank: -1,
@@ -3403,7 +3494,9 @@ const game = {
 
   startGame() {
     audio.resume();
+    this.bossesCleared=0;
     this.player=new Player();
+    applyMetaToPlayer(this.player);
     this.loadFloor(1);
     this.setState('PLAYING');
   },
@@ -3454,8 +3547,9 @@ const game = {
       items.push(new Item(ix, iy));
     }
     // Bonus credit pickup worth floor-scaled amount
-    this.player.credits += Math.round(20 * (1 + floorNum * 0.15));
-    this.msg('+' + Math.round(20 * (1 + floorNum * 0.15)) + ' credits found!', '#39ff14');
+    const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier());
+    this.player.credits += secretCr;
+    this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
   },
 
@@ -3471,6 +3565,16 @@ const game = {
 
   endRun(victory) {
     this.deleteSave(); // run is over — clear save file
+    // Award data fragments
+    const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
+    const meta = loadMeta();
+    meta.shards += earned;
+    meta.stats.totalRuns++;
+    meta.stats.totalShards += earned;
+    meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
+    if (victory) meta.stats.victories++;
+    saveMeta(meta);
+    this.lastRunShards = earned;
     const scores=this.getScores();
     const testEntry={score:this.player.score};
     scores.push(testEntry);
@@ -3501,6 +3605,7 @@ const game = {
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
+      bossesCleared: this.bossesCleared,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponKey,
@@ -3547,6 +3652,7 @@ const game = {
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     // Recompute perks from level — handles saves from before new perks existed
     for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
+    this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.player=p;
     this.loadFloor(save.floor||1);
     this.setState('PLAYING');
@@ -3561,11 +3667,24 @@ const game = {
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
+      case 'ARCHIVES':       this.updateArchives(); break;
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
       case 'NAME_ENTRY':  this.updateNameEntry(dt); break;
     }
+  },
+
+  getMenuOptions() {
+    const opts = [];
+    if (this.hasSave()) {
+      let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){}
+      opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'})`, action:()=>this.continueGame(), colour:'#00f5ff' });
+    }
+    opts.push({ label:'NEW GAME', action:()=>this.startGame(), colour:'#ff00c8' });
+    const meta = loadMeta();
+    opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
+    return opts;
   },
 
   updateMenu(dt) {
@@ -3582,18 +3701,14 @@ const game = {
       p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*0.4;
       if (p.life<=0||p.y<-10) this.menuParticles.splice(i,1);
     }
-    const hasSave = this.hasSave();
-    if (hasSave) {
-      if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = 0;
-      if (jp('ArrowDown')||jp('KeyS')) this.menuSel = 1;
-      if (jp('Enter')||jp('MouseLeft')) {
-        audio.menuSelect();
-        if (this.menuSel === 0) this.continueGame();
-        else this.startGame();
-      }
-    } else {
-      this.menuSel = undefined;
-      if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.startGame(); }
+    const opts = this.getMenuOptions();
+    const n = opts.length;
+    if (this.menuSel === undefined || this.menuSel >= n) this.menuSel = 0;
+    if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = (this.menuSel - 1 + n) % n;
+    if (jp('ArrowDown')||jp('KeyS')) this.menuSel = (this.menuSel + 1) % n;
+    if (jp('Enter')||jp('MouseLeft')) {
+      audio.menuSelect();
+      opts[this.menuSel].action();
     }
   },
 
@@ -4330,6 +4445,26 @@ const game = {
     if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.setState('MENU'); }
   },
 
+  updateArchives() {
+    const n = META_UPGRADES.length;
+    if (this.archivesSel === undefined) this.archivesSel = 0;
+    if (jp('ArrowUp')||jp('KeyW'))   this.archivesSel = (this.archivesSel - 1 + n) % n;
+    if (jp('ArrowDown')||jp('KeyS')) this.archivesSel = (this.archivesSel + 1) % n;
+    if (jp('Escape')||jp('KeyQ'))    { audio.menuSelect(); this.setState('MENU'); return; }
+    if (jp('Enter')||jp('MouseLeft')) {
+      const u = META_UPGRADES[this.archivesSel];
+      const meta = loadMeta();
+      const curLv = meta.upgrades[u.id] || 0;
+      if (curLv >= u.maxLv) return;
+      const cost = u.costs[curLv];
+      if (!Number.isFinite(cost) || meta.shards < cost) { audio.hit(true); return; }
+      meta.shards -= cost;
+      meta.upgrades[u.id] = curLv + 1;
+      saveMeta(meta);
+      audio.purchase();
+    }
+  },
+
   render() {
     ctx.fillStyle='#0a0a12';
     ctx.fillRect(0,0,W,H);
@@ -4341,6 +4476,7 @@ const game = {
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'READING':        this.renderPlaying(); this.renderReading(); break;
+      case 'ARCHIVES':  this.renderArchives(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
@@ -4415,42 +4551,28 @@ const game = {
     ctx.fillText('A CYBERPUNK DUNGEON CRAWLER',W/2,ty2 + 35);
     ctx.restore();
 
-    // Menu options — save-aware
+    // Menu options — array-driven
     const startY = ty2 + 80;
-    const hasSave = this.hasSave();
+    const gap = narrow ? 24 : 28;
     const fs = narrow ? 15 : 18;
+    const opts = this.getMenuOptions();
+    const sel = this.menuSel || 0;
     ctx.save(); ctx.textAlign='center';
-    if (hasSave) {
-      // Two options: CONTINUE / NEW GAME
-      let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){}
-      const sel = this.menuSel || 0;
-      // CONTINUE
-      const contCol = sel===0 ? '#00f5ff' : '#555577';
-      ctx.shadowBlur = sel===0 ? 10 : 0; ctx.shadowColor = contCol;
-      ctx.fillStyle = contCol; ctx.font = `${sel===0?'bold ':''}${fs}px monospace`;
-      const flr = save?.floor || '?';
-      ctx.fillText(`▶  CONTINUE (FLOOR ${flr})`, W/2, startY);
-      // NEW GAME
-      const newCol = sel===1 ? '#ff00c8' : '#555577';
-      ctx.shadowBlur = sel===1 ? 10 : 0; ctx.shadowColor = newCol;
-      ctx.fillStyle = newCol; ctx.font = `${sel===1?'bold ':''}${fs}px monospace`;
-      ctx.fillText('▶  NEW GAME', W/2, startY + (narrow?24:28));
-      ctx.shadowBlur=0;
-      // Navigation hint
-      ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
-      ctx.fillText(isTouch ? 'Tap to select' : '↑↓ to select, Enter to confirm', W/2, startY + (narrow?46:56));
-    } else {
-      // No save — original single prompt
-      if (Math.floor(t*2)%2===0) {
-        ctx.shadowBlur=10; ctx.shadowColor='#ff00c8';
-        ctx.fillStyle='#ff00c8'; ctx.font=`${fs}px monospace`;
-        ctx.fillText(isTouch ? '▶  TAP TO START  ◀' : '▶  PRESS ENTER TO START  ◀', W/2, startY);
-      }
+    for (let i = 0; i < opts.length; i++) {
+      const selected = i === sel;
+      const col = selected ? opts[i].colour : '#555577';
+      ctx.shadowBlur = selected ? 10 : 0; ctx.shadowColor = col;
+      ctx.fillStyle = col; ctx.font = `${selected?'bold ':''}${fs}px monospace`;
+      ctx.fillText(`▶  ${opts[i].label}`, W/2, startY + i * gap);
     }
+    ctx.shadowBlur=0;
+    // Navigation hint
+    ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
+    ctx.fillText(isTouch ? 'Tap to select' : '↑↓ to select, Enter to confirm', W/2, startY + opts.length * gap + 8);
     ctx.restore();
 
-    // controls hint — contextual
-    const hintY = hasSave ? startY + (narrow?60:72) : startY + 30;
+    // controls hint
+    const hintY = startY + opts.length * gap + (narrow?24:32);
     ctx.save(); ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     if (isTouch) {
@@ -5050,6 +5172,99 @@ const game = {
     ctx.restore();
   },
 
+  renderArchives() {
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    const meta = loadMeta();
+    const sel = this.archivesSel || 0;
+
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(0,0,W,H);
+
+    // grid lines
+    ctx.globalAlpha=0.03; ctx.strokeStyle='#ffb700';
+    for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.globalAlpha=1;
+
+    // Title
+    ctx.textAlign='center';
+    ctx.shadowBlur=20; ctx.shadowColor='#ffb700';
+    ctx.fillStyle='#ffb700'; ctx.font=`bold ${narrow?24:32}px monospace`;
+    ctx.fillText('NEURAL ARCHIVES',W/2, narrow?40:55);
+    ctx.shadowBlur=0;
+
+    // Shard balance
+    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow?13:16}px monospace`;
+    ctx.fillText(`◆ ${meta.shards} Data Fragments available`, W/2, narrow?65:85);
+
+    // Upgrades list
+    const startY = narrow ? 95 : 120;
+    const rowH = narrow ? 42 : 50;
+    const fs = narrow ? 12 : 14;
+    const iconFs = narrow ? 16 : 20;
+
+    for (let i = 0; i < META_UPGRADES.length; i++) {
+      const u = META_UPGRADES[i];
+      const curLv = meta.upgrades[u.id] || 0;
+      const maxed = curLv >= u.maxLv;
+      const cost = maxed ? null : u.costs[curLv];
+      const canAfford = !maxed && meta.shards >= cost;
+      const selected = i === sel;
+      const y = startY + i * rowH;
+
+      // Selection highlight
+      if (selected) {
+        ctx.fillStyle='rgba(255,183,0,0.08)';
+        ctx.fillRect(W*0.08, y - rowH/2 + 4, W*0.84, rowH - 4);
+      }
+
+      // Icon
+      const iconCol = maxed ? '#39ff14' : selected ? '#ffb700' : '#777799';
+      ctx.textAlign='left';
+      ctx.fillStyle=iconCol; ctx.font=`${iconFs}px monospace`;
+      ctx.fillText(u.icon, W*0.1, y + 2);
+
+      // Name
+      ctx.fillStyle = selected ? '#ffffff' : '#aaaacc';
+      ctx.font=`${selected?'bold ':''}${fs}px monospace`;
+      ctx.fillText(u.name, W*0.18, y - 4);
+
+      // Description
+      ctx.fillStyle='#777799'; ctx.font=`${narrow?10:12}px monospace`;
+      ctx.fillText(u.desc, W*0.18, y + (narrow?12:14));
+
+      // Level pips
+      ctx.textAlign='right';
+      let lvText = '';
+      for (let l = 0; l < u.maxLv; l++) lvText += l < curLv ? '●' : '○';
+      ctx.fillStyle = maxed ? '#39ff14' : '#aaaacc';
+      ctx.font=`${fs}px monospace`;
+      ctx.fillText(lvText, W*0.72, y);
+
+      // Cost / Status
+      if (maxed) {
+        ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
+        ctx.fillText('MAXED', W*0.9, y);
+      } else {
+        ctx.fillStyle = canAfford ? '#ffb700' : '#ff3333';
+        ctx.font=`${selected?'bold ':''}${fs}px monospace`;
+        ctx.fillText(`◆${cost}`, W*0.9, y);
+      }
+    }
+
+    // Stats footer
+    ctx.textAlign='center';
+    ctx.fillStyle='#555577'; ctx.font=`${narrow?9:11}px monospace`;
+    const statsY = startY + META_UPGRADES.length * rowH + (narrow?15:20);
+    ctx.fillText(`Runs: ${meta.stats.totalRuns}  |  Best Floor: ${meta.stats.bestFloor}  |  Victories: ${meta.stats.victories}  |  Total ◆: ${meta.stats.totalShards}`, W/2, statsY);
+
+    // Back hint
+    ctx.fillStyle='#444466'; ctx.font=`${narrow?10:12}px monospace`;
+    ctx.fillText(isTouch ? 'Tap upgrade to buy  |  ← Back' : 'Enter: Buy  |  ESC: Back', W/2, H - (narrow?20:30));
+    ctx.restore();
+  },
+
   renderGameOver() {
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
@@ -5064,9 +5279,13 @@ const game = {
     ctx.fillText(`Floor Reached: ${this.floor}`,W/2, baseY);
     ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY + 26);
     ctx.fillText(`Level: ${this.player.level}`,W/2, baseY + 52);
+    if (this.lastRunShards) {
+      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, baseY + 78);
+    }
     ctx.restore();
     // leaderboard
-    this.renderLeaderboard(baseY + (narrow?85:100), narrow?5:7, this.lastSavedRank);
+    this.renderLeaderboard(baseY + (narrow?110:126), narrow?5:7, this.lastSavedRank);
     // continue prompt
     if (Math.floor(Date.now()/800)%2===0) {
       ctx.save(); ctx.textAlign='center';
@@ -5094,9 +5313,13 @@ const game = {
     ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY);
     ctx.fillText(`Floors Cleared: 10`,W/2, baseY + 26);
     ctx.fillText(`Level Achieved: ${this.player.level}`,W/2, baseY + 52);
+    if (this.lastRunShards) {
+      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 18}px monospace`;
+      ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, baseY + 78);
+    }
     ctx.restore();
     // leaderboard
-    this.renderLeaderboard(baseY + (narrow?85:100), narrow?5:7, this.lastSavedRank);
+    this.renderLeaderboard(baseY + (narrow?110:126), narrow?5:7, this.lastSavedRank);
     // continue prompt
     if (Math.floor(t*2)%2===0) {
       ctx.save(); ctx.textAlign='center';
