@@ -13,7 +13,7 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 - **Delivery:** Single `index.html` file, zero external dependencies
 - **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 14–30 CSS px)
 - **Audio:** Web Audio API (synthesised — no audio files)
-- **Persistence:** `localStorage` for high-score table (top 10 entries)
+- **Persistence:** `localStorage` for high-score table (top 10 entries) and save game (checkpoint at floor entry; deleted on game over/victory)
 - **Browser target:** Modern Chromium / Firefox (ES2020+)
 
 ---
@@ -57,6 +57,31 @@ Each floor is generated fresh using Binary Space Partitioning:
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
 LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VOID
+
+### Doors & Locked Doors
+
+**Regular doors:** Placed at room–corridor junctions using entrance clustering.
+Adjacent boundary tiles that connect to corridors are grouped into clusters.
+Only narrow clusters (1–2 tiles wide) receive doors — wider openings are left
+open (they are hallways, not doorways). When a cluster is doored, **all** tiles
+in the cluster become `T.DOOR` (no single-door-next-to-open-tile problem). Each
+eligible cluster has a 50 % chance of receiving doors.
+
+**Locked doors (floor 2+):** Gate high-value rooms using coloured keys (red,
+blue, gold). Target priority:
+1. **Stair / exit room** — always first priority for locking
+2. **Special rooms** (armory, medbay, shrine, vault)
+3. **Random eligible rooms** (fallback, shuffled)
+
+All narrow entrance clusters of the target room are converted to locked tiles
+(same colour). Wide clusters (> 2 tiles) are walled off to prevent bypass. This
+ensures the room is truly gated — one key unlocks one tile, but all entrances
+are blocked.
+
+Number of locked rooms per floor: 1 (floor 2–3), 2 (floor 4–6), 3 (floor 7+).
+Keys are placed via BFS reachability from spawn to guarantee no softlocks. If a
+room cannot be safely locked (no narrow clusters, or no reachable room for the
+key), it is skipped and the lock budget moves to the next candidate.
 
 ### Environmental Hazards
 
@@ -225,7 +250,10 @@ AI parameters tighten with floor progression:
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
-on minimap and main view), trapping both player and boss inside. Drones inside a
+on minimap and main view), trapping both player and boss inside. The seal triggers
+only when the player is inside the room AND not standing on an entrance tile — this
+prevents the seal from creating a wall under the player's feet. If the player is
+somehow on a sealed tile, they are nudged to the room center. Drones inside a
 sealed room respect walls. Boss knockback effects clamp to room bounds.
 Boss-summoned adds (HIVE crawlers, OMEGA drones/crawlers) cannot be elite.
 All boss HP values are scaled by the floor modifier (`1 + 0.15 × (floor − 1)`).
@@ -344,6 +372,8 @@ perks.
 |-------|------|--------|
 | 2 | Laser Sight | Dashed neon line from player in facing direction, stops at impassable tiles. Colour matches current weapon. Hidden for melee weapons. Range matches weapon range. |
 | 4 | Threat Sense | Directional chevrons on screen edges pointing toward off-screen enemies within 18 tiles. Closer enemies produce larger, brighter indicators. Boss indicators are red; normal enemies are orange-red. Invisible phantoms are excluded. |
+| 6 | Piercing Rounds | All player projectiles (weapon shots and Plasma Orb) pass through one additional enemy before stopping. Stacks with weapon-native piercing (Railgun already pierces infinitely, so no visible change). Implemented via `maxPierces` counter on `Projectile`. |
+| 8 | Energy Shield | A protective shield that absorbs one hit completely (no HP loss). After breaking, recharges over 30 s of gameplay time (pauses during menus/transitions). Visual: pulsing blue ring around the player while active. HUD shows `🛡 Ns` countdown while recharging. Does **not** block environmental hazards (plasma vents, arc grids) that bypass `takeDamage()`. |
 
 **Laser Sight details:**
 - Ray uses `isPassable()` collision (same as projectiles) so the line
@@ -364,6 +394,35 @@ perks.
 - Boss enemies use `#ff3333`; normal enemies use `#ff6644`. Both have matching
   `shadowBlur` glow.
 - Range: 18 tiles from the player — covers roughly two rooms in any direction.
+
+**Piercing Rounds details:**
+- Adds +1 to `maxPierces` on every player-owned projectile (weapon shots via
+  `player.shoot()` and auto-cast Plasma Orbs).
+- Projectile tracks hit enemies in `hitEnemies` Set. Dies when
+  `hitEnemies.size > maxPierces`. Base `maxPierces` is 0 (normal) or `Infinity`
+  (Railgun's native piercing).
+- Railgun + Piercing Rounds: `Infinity + 1 = Infinity` — no behavioural change
+  for already-infinite-pierce weapons.
+- Enemy projectiles are unaffected (they never have `fromPlayer === true`).
+
+**Energy Shield details:**
+- State: `player.energyShield` (boolean, active/broken), `player.energyShieldTimer`
+  (seconds remaining until recharge).
+- On perk unlock: shield activates immediately (`energyShield = true`).
+- On hit absorbed: shield breaks, 30 s recharge timer starts, player gets 0.3 s
+  brief invincibility (prevents same-frame multi-hit), "🛡 SHIELD BROKEN" message,
+  blue explosion particles, `audio.shieldBreak()` SFX.
+- On recharge complete: shield restores, "🛡 SHIELD RESTORED" message,
+  `audio.shieldRestore()` ascending chime SFX.
+- Timer ticks in `player.update()` — only advances during `PLAYING` state, so it
+  pauses during menus, fade transitions, and powerup choice screens.
+- Shield does **not** block: plasma vent burns, arc grid zaps, or any damage
+  applied via direct `player.hp` reduction. Only `takeDamage()` calls are intercepted.
+- Spike traps (which use `takeDamage()`) **are** blocked by the shield.
+- Visual: 12 px radius pulsing circle (`sin` wave ±0.15 opacity around 0.25 base)
+  with `#4488ff` colour and `shadowBlur` glow, drawn over the player body.
+- HUD: `🛡 Ns` countdown in `#4488ff` shown in both compact and landscape layouts
+  while recharging. Hidden when shield is active (the visual bubble is sufficient).
 
 ---
 
@@ -445,6 +504,40 @@ The leaderboard is displayed on three screens:
 - **MENU** — top 3 (compact) or 5 (landscape)
 - **GAME_OVER** — top 5 (compact) or 7 (landscape), player's entry highlighted
 - **VICTORY** — top 5 (compact) or 7 (landscape), player's entry highlighted
+
+---
+
+## Save System
+
+Uses `localStorage` key `neonDungeonSave`. Saves player stats and current floor
+number — the dungeon itself is not persisted (a fresh floor is generated on
+resume).
+
+**Auto-save triggers:**
+1. After `loadFloor()` completes (start of every floor — the sole checkpoint)
+
+Mid-floor progress is not saved. Closing the browser mid-floor loses progress
+back to the start of the current floor. This is intentional — it prevents save-
+scumming (reloading to re-roll dungeon layout while keeping stats).
+
+**Save payload:** `{ v, floor, player: { hp, maxHp, atk, def, level, xp,
+weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
+energyShieldTimer } }` — `shieldBonus` is always 0 at floor entry so is
+excluded.
+
+**Menu behaviour:**
+- If a save exists: two options — `CONTINUE (FLOOR N)` and `NEW GAME`.
+  Keyboard ↑↓ or W/S to select, Enter to confirm. Touch: top half = continue,
+  bottom half = new game.
+- If no save: single `PRESS ENTER TO START` prompt (unchanged).
+
+**Continue flow:** Creates a fresh `Player`, applies saved stats, calls
+`loadFloor(savedFloor)`, displays "RUN RESUMED — FLOOR N" message. The dungeon
+is regenerated fresh — enemies, items, and layout will differ from the original
+floor. Incompatible save versions (different `v` field) are silently deleted.
+
+**Save deletion:** `endRun()` (called on death and victory) deletes the save.
+Starting a new game overwrites the save when the first floor loads.
 
 ---
 
@@ -627,3 +720,5 @@ the manifest to achieve a chrome-less experience.
 | v5.0    | Environmental hazards: plasma vents (floor 4+, clustered burn pools in rooms, continuous DPS bypassing armor) and arc grids (floor 5+, pulsing electric tiles in corridors, periodic zap damage); new audio `plasmaBurn()` + `arcZap()`; HP display rounded with `Math.ceil`; score HP bonus uses `Math.floor`; SW cache v8 |
 | v6.0    | Level-up perk system: passive abilities auto-unlock at specific levels. First perk: Laser Sight (level 2) — dashed neon line showing aim trajectory, weapon-coloured, stops at walls/doors, hidden for melee; perk infrastructure (`PERKS` table, `checkPerkUnlocks()`, `player.perks`); SW cache v9 |
 | v6.1    | Threat Sense perk (level 4): directional chevrons on screen edges for off-screen enemies within 18 tiles, proximity-scaled size/opacity, boss-aware colouring. Proximity hint system: doors/stairs/terminal/shrine prompts replaced per-frame `msg()` spam with single pulsing `game.hint` overlay above HUD. SW cache v10 |
+| v6.2    | Piercing Rounds perk (level 6): player projectiles pass through one additional enemy via `maxPierces` counter on `Projectile` class; applies to weapon shots and Plasma Orb auto-casts; stacks with Railgun native piercing. Energy Shield perk (level 8): absorbs one `takeDamage()` hit completely, 30 s gameplay-time recharge, pulsing blue shield visual, HUD recharge countdown, `audio.shieldBreak()`/`shieldRestore()` SFX; does not block environmental hazards. SW cache v11 |
+| v6.3    | Boss seal fix: entrance-aware detection prevents locking player out of boss room; safety nudge to room center if stuck. Door clustering: `getEntranceClusters()` helper groups adjacent entrance tiles; only narrow clusters (≤2 tiles) receive doors; all tiles in a cluster doored together. Locked door targeting: priority system (stair room > special rooms > random); all narrow entrance clusters locked, wide ones walled off. Save system: auto-save on floor entry + `beforeunload`; CONTINUE/NEW GAME menu; save deleted on game over/victory; `localStorage` key `neonDungeonSave`. SW cache v12 |
