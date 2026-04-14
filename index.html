@@ -644,6 +644,33 @@ const audio = (() => {
       // Final sustain chord
       osc('sine', 523, 523, 0.15, t + 0.72, 0.8, bus);
       osc('sine', 659, 659, 0.1,  t + 0.72, 0.8, bus);
+    },
+    transition() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.9);
+      // Digital glitch: rapid stutter tones at random pitches
+      for (let i = 0; i < 6; i++) {
+        const s = t + i * 0.12 + Math.random() * 0.04;
+        const f = 200 + Math.random() * 1800;
+        osc('square', f, f * (0.3 + Math.random() * 0.7), 0.06, s, 0.04 + Math.random() * 0.06, bus);
+      }
+      // Filtered noise sweep (low → high, like data streaming)
+      const nSrc = c.createBufferSource();
+      nSrc.buffer = noiseBuf;
+      const flt = c.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.Q.value = 3;
+      flt.frequency.setValueAtTime(300, t);
+      flt.frequency.exponentialRampToValueAtTime(4000, t + 0.5);
+      flt.frequency.exponentialRampToValueAtTime(200, t + 0.85);
+      const ng = c.createGain();
+      ng.gain.setValueAtTime(0.12, t);
+      ng.gain.linearRampToValueAtTime(0.18, t + 0.3);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+      nSrc.connect(flt); flt.connect(ng); ng.connect(bus);
+      nSrc.start(t); nSrc.stop(t + 0.92);
+      // Sub rumble
+      osc('sine', 50, 35, 0.08, t, 0.8, bus);
     }
   };
 })();
@@ -1934,6 +1961,7 @@ const game = {
     this.fadeGlitchTimer=0;
     this.fadeCallback=callback;
     this.fadeNextState=nextState||null;
+    audio.transition();
   },
 
   init() {
