@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.7
+# NEON DUNGEON — Game Specification v1.8
 
 ## Vision
 
@@ -21,11 +21,18 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 ## Game States
 
 ```
-MENU → PLAYING → GAME_OVER
-                → VICTORY (floor 10 cleared)
+MENU → PLAYING → NAME_ENTRY → GAME_OVER
+                             → VICTORY (floor 10 cleared)
+                → GAME_OVER  (score doesn't qualify for top 10)
+                → VICTORY    (score doesn't qualify for top 10)
 ```
 
 State transitions are animated (fade in/out, 400 ms).
+
+**NAME_ENTRY** appears when the player's score qualifies for the top-10
+leaderboard. It replaces the browser `prompt()` with an in-game arcade-style
+name entry screen featuring a virtual keyboard (touch and desktop). If the
+score does not qualify, the game skips directly to GAME_OVER or VICTORY.
 
 ---
 
@@ -266,8 +273,17 @@ score += 500 × floor_number                  (on floor clear)
 score += remaining_hp × 10                   (on floor clear)
 ```
 
-High-score table stored in `localStorage` as JSON, top 10, with player name
-(prompt on game over / victory if score qualifies).
+High-score table stored in `localStorage` as JSON, top 10, with player name.
+When a run ends (death or victory), if the score qualifies for the top 10,
+the game enters the **NAME_ENTRY** state — an arcade-style name input with a
+virtual keyboard (A–Z, 0–9, DEL, OK) that works on both desktop (physical
+keyboard) and touch (tap keys on canvas). Names are capped at 12 characters,
+uppercased. If the score doesn't qualify, it is saved as "ANON".
+
+The leaderboard is displayed on three screens:
+- **MENU** — top 3 (compact) or 5 (landscape)
+- **GAME_OVER** — top 5 (compact) or 7 (landscape), player's entry highlighted
+- **VICTORY** — top 5 (compact) or 7 (landscape), player's entry highlighted
 
 ---
 
@@ -313,12 +329,13 @@ tap-based prompts instead of keyboard-only text.
 
 ## Screen Flow
 
-1. **Title Screen** — animated neon logo, "PRESS ENTER TO START" (desktop) / "TAP TO START" (touch), high-score table, touch-specific control hints
+1. **Title Screen** — animated neon logo, "PRESS ENTER TO START" (desktop) / "TAP TO START" (touch), high-score table (top 3/5), touch-specific control hints
 2. **Playing** — full game loop
 3. **Pause** — ESC / ‖ button, dim overlay, resume / quit options
 4. **Level Transition** — fade, "DESCENDING TO FLOOR N" text
-5. **Game Over** — score, death floor, name prompt if high score
-6. **Victory** — cinematic text crawl, final score
+5. **Name Entry** — arcade-style name input with virtual keyboard (if score qualifies for top 10). Desktop: type + Enter. Touch: tap virtual keys + OK.
+6. **Game Over** — score, death floor, level, leaderboard with player's rank highlighted
+7. **Victory** — cinematic text, final score, floors cleared, level, leaderboard with player's rank highlighted
 
 ---
 

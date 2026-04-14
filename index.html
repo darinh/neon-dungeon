@@ -141,10 +141,13 @@ const keys = new Set();
 const mouse = { x: W/2, y: H/2, down: false };
 let justPressed = new Set();
 let justReleased = new Set();
+let lastKey = '';
+let nameEntryTap = null;
 
 window.addEventListener('keydown', e => {
   if (!keys.has(e.code)) justPressed.add(e.code);
   keys.add(e.code);
+  lastKey = e.key;
   e.preventDefault();
 });
 window.addEventListener('keyup', e => {
@@ -224,8 +227,9 @@ canvas.addEventListener('touchstart', e => {
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
     // skip the dismiss touch (already handled above)
     if (cx < 48 && cy < 48 && dismissed) continue;
-    // In non-playing states, any touch acts as confirm
+    // In non-playing states, any touch acts as confirm (except NAME_ENTRY)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
+      if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
       if (game.state === 'PAUSED') { justPressed.add('Escape'); }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
       continue;
@@ -378,7 +382,7 @@ function drawTouchUI() {
 }
 
 function jp(code) { return justPressed.has(code); }
-function clearJust() { justPressed.clear(); justReleased.clear(); }
+function clearJust() { justPressed.clear(); justReleased.clear(); lastKey=''; nameEntryTap=null; }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 function rnd(min, max) { return min + Math.random() * (max - min); }
@@ -1381,7 +1385,7 @@ class Player {
     this.flashTimer=0.2;
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
-    if (this.hp<=0) { audio.gameOver(); game.saveScore(); game.setState('GAME_OVER'); }
+    if (this.hp<=0) { audio.gameOver(); game.endRun(false); }
   }
 
   shoot(aimX,aimY,map) {
@@ -1788,6 +1792,8 @@ const game = {
   bossSealed: false,
   bossAlive: false,
   msgList: [],
+  nameEntry: null,
+  lastSavedRank: -1,
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -1836,8 +1842,7 @@ const game = {
       // victory
       audio.victory();
       this.player.score+=500*this.floor+this.player.hp*10;
-      this.saveScore();
-      this.setState('VICTORY');
+      this.endRun(true);
     } else {
       audio.descend();
       this.player.score+=500*this.floor+this.player.hp*10;
@@ -1849,18 +1854,29 @@ const game = {
     }
   },
 
-  saveScore() {
+  saveScore(name) {
     const scores=this.getScores();
-    const entry={name:'ANON',score:this.player.score,floor:this.floor,date:new Date().toLocaleDateString()};
+    const entry={name:name||'ANON',score:this.player.score,floor:this.floor,date:new Date().toLocaleDateString()};
     scores.push(entry);
     scores.sort((a,b)=>b.score-a.score);
-    const rank=scores.findIndex(s=>s===entry);
-    if (rank>=0 && rank<10) {
-      const n=prompt(`🏆 Rank #${rank+1}! Score: ${entry.score}\nEnter your name:`) || 'ANON';
-      entry.name=n.substring(0,12).toUpperCase();
-    }
+    this.lastSavedRank=scores.findIndex(s=>s===entry);
     scores.splice(10);
     try { localStorage.setItem('neonDungeonScores',JSON.stringify(scores)); } catch(e){}
+  },
+
+  endRun(victory) {
+    const scores=this.getScores();
+    const testEntry={score:this.player.score};
+    scores.push(testEntry);
+    scores.sort((a,b)=>b.score-a.score);
+    const rank=scores.findIndex(s=>s===testEntry);
+    if (rank>=0 && rank<10) {
+      this.nameEntry={name:'',rank,victory,cursorBlink:0};
+      this.setState('NAME_ENTRY');
+    } else {
+      this.saveScore('ANON');
+      this.setState(victory?'VICTORY':'GAME_OVER');
+    }
   },
 
   getScores() {
@@ -1875,6 +1891,7 @@ const game = {
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
+      case 'NAME_ENTRY':  this.updateNameEntry(dt); break;
     }
   },
 
@@ -2000,6 +2017,157 @@ const game = {
     }
   },
 
+  // ─── Virtual Keyboard Layout ──────────────────────────────────────────────
+  _vkChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'.split(''),
+  _vkCols: 10,
+
+  _vkLayout(narrow) {
+    const cols=this._vkCols;
+    const cellW=narrow?28:36, cellH=narrow?28:36, gap=narrow?3:4;
+    const rows=Math.ceil((this._vkChars.length+2)/cols); // +2 for DEL/OK
+    const gridW=cols*(cellW+gap)-gap;
+    const ox=(W-gridW)/2;
+    return {cellW,cellH,gap,cols,rows,ox,gridW};
+  },
+
+  _vkHitTest(cx,cy,oy,narrow) {
+    const {cellW,cellH,gap,cols,ox}=this._vkLayout(narrow);
+    const allKeys=[...this._vkChars,'←','OK'];
+    for (let i=0;i<allKeys.length;i++) {
+      const col=i%cols, row=Math.floor(i/cols);
+      const kx=ox+col*(cellW+gap), ky=oy+row*(cellH+gap);
+      // OK key is double-wide
+      const kw=allKeys[i]==='OK'?(cellW*2+gap):cellW;
+      if (cx>=kx&&cx<=kx+kw&&cy>=ky&&cy<=ky+cellH) return allKeys[i];
+    }
+    return null;
+  },
+
+  updateNameEntry(dt) {
+    const ne=this.nameEntry;
+    if (!ne) return;
+    ne.cursorBlink=(ne.cursorBlink||0)+dt;
+
+    // Desktop keyboard input
+    if (lastKey.length===1 && /[A-Za-z0-9 \-_]/.test(lastKey)) {
+      if (ne.name.length<12) ne.name+=lastKey.toUpperCase();
+    }
+    if (jp('Backspace')) ne.name=ne.name.slice(0,-1);
+
+    // Touch/click virtual keyboard
+    if (nameEntryTap) {
+      const narrow=layout.compact;
+      const oy=narrow?280:340;
+      const hit=this._vkHitTest(nameEntryTap[0],nameEntryTap[1],oy,narrow);
+      if (hit==='←') ne.name=ne.name.slice(0,-1);
+      else if (hit==='OK') { if (ne.name.length===0) ne.name='ANON'; jp('Enter'); justPressed.add('Enter'); }
+      else if (hit && ne.name.length<12) ne.name+=hit;
+    }
+    // Mouse click on virtual keyboard (desktop)
+    if (jp('MouseLeft') && !nameEntryTap) {
+      const narrow=layout.compact;
+      const oy=narrow?280:340;
+      const hit=this._vkHitTest(mouse.x,mouse.y,oy,narrow);
+      if (hit==='←') ne.name=ne.name.slice(0,-1);
+      else if (hit==='OK') { if (ne.name.length===0) ne.name='ANON'; justPressed.add('Enter'); }
+      else if (hit && ne.name.length<12) ne.name+=hit;
+    }
+
+    // Confirm (Enter on keyboard or OK on virtual keyboard)
+    if (jp('Enter')) {
+      if (ne.name.length===0) ne.name='ANON';
+      this.saveScore(ne.name);
+      const dest=ne.victory?'VICTORY':'GAME_OVER';
+      this.nameEntry=null;
+      this.setState(dest);
+    }
+  },
+
+  renderNameEntry() {
+    const ne=this.nameEntry;
+    if (!ne) return;
+    const narrow=layout.compact;
+    const isTouch=isTouchDevice();
+
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';
+
+    // Title
+    ctx.shadowBlur=30; ctx.shadowColor='#ffb700';
+    ctx.fillStyle='#ffb700'; ctx.font=`bold ${narrow?28:40}px monospace`;
+    ctx.fillText('HIGH SCORE!',W/2,narrow?60:80);
+
+    // Rank + score
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow?14:18}px monospace`;
+    ctx.fillText(`Rank #${ne.rank+1}  •  Score: ${this.player.score}  •  Floor: ${this.floor}`,W/2,narrow?95:125);
+
+    // Name input field
+    const fieldY=narrow?130:170;
+    ctx.fillStyle='#555577'; ctx.font=`${narrow?12:14}px monospace`;
+    ctx.fillText('ENTER YOUR NAME',W/2,fieldY);
+
+    const nameDisplay=ne.name+(Math.floor(ne.cursorBlink*3)%2===0?'_':'');
+    ctx.shadowBlur=15; ctx.shadowColor='#00f5ff';
+    ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow?24:32}px monospace`;
+    ctx.fillText(nameDisplay,W/2,fieldY+(narrow?30:40));
+    ctx.shadowBlur=0;
+
+    // Virtual keyboard
+    const oy=narrow?280:340;
+    const {cellW,cellH,gap,cols,ox}=this._vkLayout(narrow);
+    const allKeys=[...this._vkChars,'←','OK'];
+    const fontSize=narrow?12:14;
+
+    for (let i=0;i<allKeys.length;i++) {
+      const col=i%cols, row=Math.floor(i/cols);
+      const kx=ox+col*(cellW+gap), ky=oy+row*(cellH+gap);
+      const key=allKeys[i];
+      const isOK=key==='OK';
+      const isDel=key==='←';
+      const kw=isOK?(cellW*2+gap):cellW;
+
+      // Hover highlight
+      let hover=false;
+      if (nameEntryTap) {
+        const [tx,ty]=nameEntryTap;
+        hover=tx>=kx&&tx<=kx+kw&&ty>=ky&&ty<=ky+cellH;
+      } else if (mouse.x>=kx&&mouse.x<=kx+kw&&mouse.y>=ky&&mouse.y<=ky+cellH) {
+        hover=true;
+      }
+
+      // Key background
+      ctx.fillStyle=hover?(isOK?'#39ff14':isDel?'#ff3333':'#00f5ff'):'rgba(255,255,255,0.08)';
+      ctx.globalAlpha=hover?0.3:1;
+      ctx.fillRect(kx,ky,kw,cellH);
+      ctx.globalAlpha=1;
+
+      // Key border
+      ctx.strokeStyle=isOK?'#39ff14':isDel?'#ff3333':'#555577';
+      ctx.lineWidth=1;
+      ctx.strokeRect(kx,ky,kw,cellH);
+
+      // Key label
+      ctx.fillStyle=isOK?'#39ff14':isDel?'#ff3333':'#aaaacc';
+      ctx.font=`${isOK?'bold ':''}${fontSize}px monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(key,kx+kw/2,ky+cellH/2);
+    }
+    ctx.textBaseline='alphabetic';
+
+    // Hint
+    ctx.textAlign='center';
+    ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
+    if (isTouch) {
+      ctx.fillText('TAP KEYS TO ENTER NAME  •  TAP OK TO CONFIRM',W/2,oy+(narrow?130:155));
+    } else {
+      ctx.fillText('TYPE YOUR NAME  •  PRESS ENTER TO CONFIRM',W/2,oy+(narrow?130:155));
+    }
+
+    ctx.restore();
+  },
+
   updateGameOver() {
     if (jp('Enter')||jp('MouseLeft')) this.setState('MENU');
   },
@@ -2019,7 +2187,38 @@ const game = {
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
+      case 'NAME_ENTRY': this.renderNameEntry(); break;
     }
+  },
+
+  renderLeaderboard(y, maxEntries, highlightRank) {
+    const narrow=layout.compact;
+    const scores=this.getScores().slice(0,maxEntries);
+    ctx.save();
+    ctx.textAlign='center';
+    ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
+    ctx.fillStyle='#ffb700'; ctx.font=`${narrow?12:14}px monospace`;
+    ctx.fillText('— HIGH SCORES —',W/2,y);
+    ctx.shadowBlur=0;
+    const lineH=narrow?16:18;
+    const startY=y+(narrow?18:20);
+    scores.forEach((s,i)=>{
+      const isHL=i===highlightRank;
+      ctx.fillStyle=isHL?'#00f5ff':'#aaaacc';
+      if (isHL) { ctx.shadowBlur=6; ctx.shadowColor='#00f5ff'; }
+      ctx.font=`${isHL?'bold ':''}${narrow?10:12}px monospace`;
+      if (narrow) {
+        ctx.fillText(`${i+1}. ${s.name}  ${s.score}  FLR ${s.floor}`,W/2,startY+i*lineH);
+      } else {
+        ctx.fillText(`${i+1}. ${s.name.padEnd(12)} ${String(s.score).padStart(8)}  FLR ${s.floor}`,W/2,startY+i*lineH);
+      }
+      if (isHL) ctx.shadowBlur=0;
+    });
+    if (!scores.length) {
+      ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
+      ctx.fillText('No scores yet.',W/2,startY);
+    }
+    ctx.restore();
   },
 
   renderMenu() {
@@ -2083,22 +2282,7 @@ const game = {
 
     // high scores
     const scoresY = startY + 80;
-    const scores=this.getScores().slice(0, narrow ? 3 : 5);
-    ctx.save();
-    ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 12 : 14}px monospace`;
-    ctx.textAlign='center';
-    ctx.fillText('— HIGH SCORES —',W/2, scoresY);
-    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 10 : 12}px monospace`;
-    scores.forEach((s,i)=>{
-      if (narrow) {
-        ctx.fillText(`${i+1}. ${s.name}  ${s.score}  FLR ${s.floor}`, W/2, scoresY + 18 + i * 16);
-      } else {
-        ctx.fillText(`${i+1}. ${s.name.padEnd(12)} ${String(s.score).padStart(8)}  FLR ${s.floor}`, W/2, scoresY + 20 + i * 18);
-      }
-    });
-    if (!scores.length) ctx.fillText('No scores yet. Be the first!', W/2, scoresY + 22);
-    ctx.restore();
+    this.renderLeaderboard(scoresY, narrow ? 3 : 5, -1);
   },
 
   renderPlaying() {
@@ -2172,17 +2356,22 @@ const game = {
     ctx.textAlign='center';
     ctx.shadowBlur=30; ctx.shadowColor='#ff3333';
     ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 42 : 64}px monospace`;
-    ctx.fillText('GAME OVER',W/2, narrow ? 160 : 200);
-    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 16 : 20}px monospace`;
-    const baseY = narrow ? 230 : 280;
+    ctx.fillText('GAME OVER',W/2, narrow ? 80 : 100);
+    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
+    const baseY = narrow ? 120 : 150;
     ctx.fillText(`Floor Reached: ${this.floor}`,W/2, baseY);
-    ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY + 30);
-    ctx.fillText(`Level: ${this.player.level}`,W/2, baseY + 60);
-    if (Math.floor(Date.now()/800)%2===0) {
-      ctx.fillStyle='#ff00c8'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP TO CONTINUE' : 'PRESS ENTER TO CONTINUE', W/2, baseY + 120);
-    }
+    ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY + 26);
+    ctx.fillText(`Level: ${this.player.level}`,W/2, baseY + 52);
     ctx.restore();
+    // leaderboard
+    this.renderLeaderboard(baseY + (narrow?85:100), narrow?5:7, this.lastSavedRank);
+    // continue prompt
+    if (Math.floor(Date.now()/800)%2===0) {
+      ctx.save(); ctx.textAlign='center';
+      ctx.fillStyle='#ff00c8'; ctx.font=`${narrow ? 13 : 16}px monospace`;
+      ctx.fillText(isTouch ? 'TAP TO CONTINUE' : 'PRESS ENTER TO CONTINUE', W/2, H - (narrow?30:40));
+      ctx.restore();
+    }
   },
 
   renderVictory() {
@@ -2194,20 +2383,25 @@ const game = {
     const t=Date.now()/1000;
     ctx.shadowBlur=30; ctx.shadowColor='#00f5ff';
     ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 22 : 32}px monospace`;
-    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 130 : 170);
+    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 60 : 80);
     ctx.shadowColor='#ff00c8'; ctx.fillStyle='#ff00c8';
     ctx.font=`bold ${narrow ? 32 : 48}px monospace`;
-    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 185 : 240);
-    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 16 : 20}px monospace`;
-    const baseY = narrow ? 240 : 310;
+    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 105 : 130);
+    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
+    const baseY = narrow ? 145 : 175;
     ctx.fillText(`Final Score: ${this.player.score}`,W/2, baseY);
-    ctx.fillText(`Floors Cleared: 10`,W/2, baseY + 30);
-    ctx.fillText(`Level Achieved: ${this.player.level}`,W/2, baseY + 60);
-    if (Math.floor(t*2)%2===0) {
-      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP FOR MENU' : 'PRESS ENTER FOR MENU', W/2, baseY + 110);
-    }
+    ctx.fillText(`Floors Cleared: 10`,W/2, baseY + 26);
+    ctx.fillText(`Level Achieved: ${this.player.level}`,W/2, baseY + 52);
     ctx.restore();
+    // leaderboard
+    this.renderLeaderboard(baseY + (narrow?85:100), narrow?5:7, this.lastSavedRank);
+    // continue prompt
+    if (Math.floor(t*2)%2===0) {
+      ctx.save(); ctx.textAlign='center';
+      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 13 : 16}px monospace`;
+      ctx.fillText(isTouch ? 'TAP FOR MENU' : 'PRESS ENTER FOR MENU', W/2, H - (narrow?30:40));
+      ctx.restore();
+    }
   }
 };
 
