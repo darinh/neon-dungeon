@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.8
+# NEON DUNGEON — Game Specification v1.9
 
 ## Vision
 
@@ -332,7 +332,7 @@ tap-based prompts instead of keyboard-only text.
 1. **Title Screen** — animated neon logo, "PRESS ENTER TO START" (desktop) / "TAP TO START" (touch), high-score table (top 3/5), touch-specific control hints
 2. **Playing** — full game loop
 3. **Pause** — ESC / ‖ button, dim overlay, resume / quit options
-4. **Level Transition** — fade, "DESCENDING TO FLOOR N" text
+4. **Level Transition** — cyberpunk fade with scanlines, glitch bars, noise band, chromatic-aberration text reveal, neon border pulse; 0.4 s fade-in → 0.15 s hold at peak → 0.4 s fade-out (~0.95 s total). "DESCENDING TO FLOOR N" appears character-by-character at 80 chars/s during the peak window.
 5. **Name Entry** — arcade-style name input with virtual keyboard (if score qualifies for top 10). Desktop: type + Enter. Touch: tap virtual keys + OK.
 6. **Game Over** — score, death floor, level, leaderboard with player's rank highlighted
 7. **Victory** — cinematic text, final score, floors cleared, level, leaderboard with player's rank highlighted
