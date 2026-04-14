@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.1
+# NEON DUNGEON — Game Specification v2.2
 
 ## Vision
 
@@ -57,7 +57,7 @@ Each floor is generated fresh using Binary Space Partitioning:
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
-LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | VOID
+LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | VOID
 
 ### Doors & Locked Doors
 
@@ -105,6 +105,55 @@ linearly to zero at the torch edge. **Fog of war:** visited tiles retain
 their peak light level permanently; lit tiles render at minimum 20%
 brightness, visited tiles with zero light render at 12% brightness
 (dim memory effect). Unvisited tiles are not drawn.
+
+### Secret Rooms (Cracked Walls)
+
+**Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
+BSP room is walled off completely and one narrow entrance cluster (1–2 tiles)
+is replaced with `T.CRACKED` tiles. The room is invisible to the player until
+discovered.
+
+**Candidate selection:** Rooms must not be spawn, stair, boss, vendor, or any
+existing special room. Must have at least one narrow entrance cluster (≤ 2
+tiles). Candidate list is shuffled; the first qualifying room is chosen.
+Secret rooms are excluded from locked-door placement.
+
+**Tile: `T.CRACKED` (value 15).** Not passable, not see-through (behaves
+like a wall for movement, LOS, and BFS reachability). On the minimap, renders
+identically to WALL (no spoilers). In the main view, renders as a standard
+wall tile with subtle amber crack lines visible only when the player is
+within 3 tiles — crack opacity scales with proximity.
+
+**Interaction:** Press E adjacent to a cracked wall to break it. The tile
+becomes `T.FLOOR` and the secret room is revealed. Breaking triggers:
+`audio.wallBreak()` SFX, explosion particles, "SECRET AREA DISCOVERED"
+message (amber), score bonus (300 × floor).
+
+**Secret room mask (`secretMask`):** A per-tile boolean grid that prevents
+player torch light and sconce light from marking secret-room tiles as visited
+or lit. This ensures the room contents are completely invisible before reveal.
+
+**Lazy activation:** Enemies and items are **not** spawned during floor
+generation. On reveal (`revealSecretRoom`):
+1. `secretMask` cleared for the room's tiles.
+2. All remaining `T.CRACKED` tiles adjacent to the room become `T.FLOOR`.
+3. Enemies spawned: reduced count (`1 + floor÷4` to `min(4, 2 + floor÷3)`,
+   area-capped at `room.w × room.h ÷ 10`).
+4. Premium loot: 2–3 `Item` drops + bonus credits
+   (`round(20 × (1 + floor × 0.15))`).
+
+**Quest interactions:**
+- **EXPLORE:** Unrevealed secret rooms are excluded from the "visit every room"
+  check. Revealed secret rooms count normally.
+- **EXTERMINATE:** Unaffected — no enemies exist in secret rooms until reveal.
+  Boss floors (3, 6, 10) never have secret rooms.
+- **SPEEDRUN / PACIFIST:** Unaffected — secret rooms are optional.
+
+**Visual style:** Room floor tiles use tint `#1a1005` (warm amber-dark).
+
+**Audio: `audio.wallBreak()`** — crumbling rock: noise burst (LP 2 kHz) +
+sine rumble 80→30 Hz + triangle sub 40→20 Hz + 3 staggered debris clinks
+(sine 800–1400→half Hz).
 
 ---
 
@@ -775,3 +824,4 @@ the manifest to achieve a chrome-less experience.
 | v6.2    | Piercing Rounds perk (level 6): player projectiles pass through one additional enemy via `maxPierces` counter on `Projectile` class; applies to weapon shots and Plasma Orb auto-casts; stacks with Railgun native piercing. Energy Shield perk (level 8): absorbs one `takeDamage()` hit completely, 30 s gameplay-time recharge, pulsing blue shield visual, HUD recharge countdown, `audio.shieldBreak()`/`shieldRestore()` SFX; does not block environmental hazards. SW cache v11 |
 | v6.3    | Boss seal fix: entrance-aware detection prevents locking player out of boss room; safety nudge to room center if stuck. Door clustering: `getEntranceClusters()` helper groups adjacent entrance tiles; only narrow clusters (≤2 tiles) receive doors; all tiles in a cluster doored together. Locked door targeting: priority system (stair room > special rooms > random); all narrow entrance clusters locked, wide ones walled off. Save system: checkpoint-only auto-save on floor entry (no `beforeunload` — prevents save-scumming); CONTINUE/NEW GAME menu; save deleted on game over/victory; `localStorage` key `neonDungeonSave`. SW cache v12 |
 | v7.0    | Vendor/shop system: credits currency (earned from enemy kills, floor-scaled), `T.VENDOR` tile (14), vendor room type (floor 2+, independent of special room rotation, excluded from lock targets), `SHOPPING` game state with 3-item shop UI (keyboard + touch), explicit per-upgrade pricing, shop-exclusive Full Repair and coloured Key items, credits on HUD (compact + landscape), credits in save/load, `audio.vendorOpen()`/`purchase()`/`purchaseFail()` SFX. SW cache v13 |
+| v8.0    | Secret rooms: `T.CRACKED` tile (15) — wall-like with proximity-visible amber cracks. One secret room per non-boss floor (3+), walled off with one cracked entrance. Lazy activation: enemies/items spawn only when cracked wall is broken (E key). `secretMask` prevents lighting from revealing hidden contents. Premium loot + credit bonus on reveal. EXPLORE quest excludes unrevealed secrets. `audio.wallBreak()` SFX. SW cache v14 |
