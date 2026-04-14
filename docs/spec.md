@@ -572,7 +572,11 @@ continues counting through bounces — bullets are not infinite.
 - Scatter Gun pellets each bounce independently (range 5 keeps chaos bounded).
 
 **Audio:** Metallic ping + high-frequency zing on each bounce.
-**Visual:** Cyan (#00ffff) spark particles at bounce point.
+**Visual:** Cyan (#00ffff) spark particles at bounce point. Fading cyan trail
+behind bouncing projectiles — a short line of recent positions rendered with
+increasing opacity toward the projectile head. Trail starts from the moment the
+projectile is fired (not just after the first bounce), highlighting the ricochet
+path through walls.
 
 ### Removed Items
 
@@ -1130,3 +1134,5 @@ the manifest to achieve a chrome-less experience.
 | v13.0   | Meta-progression system (Neural Archives): persistent Data Fragments (◆) currency earned at end of every run based on floors reached, bosses cleared, victory, and score. 6 permanent upgrades purchasable from new ARCHIVES game state accessible from main menu: Vital Systems (+HP), Scavenger Protocol (+credits), Quick Learner (+XP), Armor Plating (+DEF), Weapon Cache (start with upgraded weapon), Data Persistence (+fragments/run). Array-driven menu system replacing hardcoded 2-option layout — supports touch hit-testing for 2-3 options. `bossesCleared` counter tracked on game object and persisted in save. ◆ reward shown on GAME_OVER/VICTORY screens. Meta data stored in separate `localStorage` key (`neonDungeonMeta`). SW cache v20 |
 | v14.0   | Difficulty modes: EASY / NORMAL / HARD selectable on NEW GAME menu row via ◀▶ (keyboard arrows or touch edge taps, center tap starts). `DIFFICULTIES` table with per-mode multipliers for enemy HP/ATK/SPD, item drop rate, credit gain, XP gain, elite spawn rate, shard payout (run portion only), and environmental/boss damage. Selection persists in `neonDungeonMeta.lastDifficulty`; saved in run checkpoint. Old saves default to NORMAL. Non-NORMAL badge below minimap + shown on end screens. Touch menu splits diff row into 3 zones (left edge cycle, center start, right edge cycle). SW cache v21 |
 | v15.0   | Floor modifiers: each non-boss floor (2+) gets a random gameplay mutator from a pool of 6: BLACKOUT (halved torch radius), SWARM (×1.5 enemies, ×0.6 HP), FORTIFIED (×1.4 HP, +30% drops), VOLATILE (death AoE, LOS-gated, no chain), SCRAMBLED (+0.15 spread), OVERCLOCK (×1.2 all speeds + fire rates). Modifier announced on floor entry, displayed in HUD below floor number. Saved in checkpoint; old saves load without version bump. `modSpeed()` helper centralizes speed scaling. `getMod()` accessor. SW cache v22 |
+| v16.0   | SPLITTER enemy (floor 4+): splits into 2 fast SHARDs on death. SHARDs use zigzag AI, 0.25 tile size, no drops, 0 credits, 8 XP. Deferred spawn pattern via `pendingEnemySpawns[]` flushed after dead enemy cleanup. Per-room cap: 2 splitters. SW cache v23 |
+| v17.0   | Ricochet visual trail: bouncing projectiles leave a fading cyan trail showing their path. Trail records recent positions and renders as gradient-opacity line segments. Active from the moment of firing when Ricochet Module is equipped. SW cache v24 |

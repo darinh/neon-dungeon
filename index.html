@@ -1609,6 +1609,8 @@ class Projectile {
     this.weaponName=weaponName||null;
     this.hitEnemies=new Set();
     this.bouncesLeft=0;
+    this._hasRicochet=false;
+    this.trail=[];
   }
   update(dt, map, player, enemies) {
     // Homing: steer toward target
@@ -1620,6 +1622,11 @@ class Projectile {
       this.dy = lerp(this.dy, ndy, Math.min(1, steer * dt));
       const [fd, fdy] = norm(this.dx, this.dy);
       this.dx = fd; this.dy = fdy;
+    }
+    // Trail: record position before moving (ricochet projectiles only)
+    if (this._hasRicochet) {
+      this.trail.push(this.x*TILE, this.y*TILE);
+      if (this.trail.length>24) this.trail.splice(0,2); // max 12 points (x,y pairs)
     }
     const prevX=this.x, prevY=this.y;
     const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
@@ -1692,6 +1699,33 @@ class Projectile {
     }
   }
   draw(camX,camY) {
+    // Ricochet trail — fading cyan line behind bouncing projectiles
+    const tl=this.trail.length;
+    if (tl>=4) {
+      ctx.save();
+      ctx.lineCap='round';
+      const pts=Math.floor(tl/2);
+      for (let i=1;i<pts;i++) {
+        const a=(i-1)*2, b=i*2;
+        const alpha=(i/pts)*0.5;
+        ctx.globalAlpha=alpha;
+        ctx.strokeStyle='#00ffff';
+        ctx.shadowBlur=4; ctx.shadowColor='#00ffff';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(this.trail[a]-camX, this.trail[a+1]-camY);
+        ctx.lineTo(this.trail[b]-camX, this.trail[b+1]-camY);
+        ctx.stroke();
+      }
+      // Line from last trail point to current position
+      ctx.globalAlpha=0.6;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(this.trail[tl-2]-camX, this.trail[tl-1]-camY);
+      ctx.lineTo(this.x*TILE-camX, this.y*TILE-camY);
+      ctx.stroke();
+      ctx.restore();
+    }
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     ctx.save();
     ctx.shadowBlur=8; ctx.shadowColor=this.colour;
@@ -2745,6 +2779,7 @@ class Player {
         );
         if (this.perks.PIERCING_ROUNDS) proj.maxPierces+=1;
         proj.bouncesLeft=this.upgrades.RICOCHET||0;
+        if (proj.bouncesLeft) proj._hasRicochet=true;
         projectiles.push(proj);
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
