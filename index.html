@@ -3472,6 +3472,7 @@ function drawMinimap(dungeon, player) {
   ctx.strokeStyle='#2d2d5e'; ctx.lineWidth=1; ctx.strokeRect(MX-2,MY-2,MW+4,MH+4);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
+  const pois = [];
   for (let ty=0;ty<MAP_H;ty++) {
     for (let tx=0;tx<MAP_W;tx++) {
       if (!dungeon.visited[ty][tx]) continue;
@@ -3492,6 +3493,10 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.LOCKED_B) col='#3388ff';
       else if (tile===T.LOCKED_G) col='#ffcc00';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
+      // Collect POI tiles for marker overlay
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE) {
+        pois.push({tile, px:px2+sx/2, py:py2+sy/2});
+      }
     }
   }
 
@@ -3501,6 +3506,31 @@ function drawMinimap(dungeon, player) {
     ctx.fillStyle='#ff3333';
     ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
   }
+
+  // POI markers — larger glowing indicators for key locations
+  const pulse = 0.65 + 0.35 * Math.sin((game.floorTime||0) * 2.5);
+  for (const p of pois) {
+    let col, sz;
+    if (p.tile===T.STAIRS||p.tile===T.TERMINAL) { col='#ffffff'; sz=3; }
+    else if (p.tile===T.VENDOR) { col='#39ff14'; sz=3; }
+    else { col='#ffb700'; sz=2; } // LORE
+    ctx.globalAlpha=pulse;
+    ctx.shadowBlur=5; ctx.shadowColor=col;
+    ctx.fillStyle=col;
+    ctx.fillRect(p.px-sz/2, p.py-sz/2, sz, sz);
+  }
+  // Boss entrance markers when sealed
+  if (game.bossSealed && game.bossEntrances) {
+    const bPulse = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 4);
+    ctx.globalAlpha=bPulse;
+    ctx.shadowBlur=6; ctx.shadowColor='#ff3333';
+    ctx.fillStyle='#ff3333';
+    for (const be of game.bossEntrances) {
+      if (!dungeon.visited[be.y]?.[be.x]) continue;
+      ctx.fillRect(MX+be.x*sx+sx/2-2, MY+be.y*sy+sy/2-2, 4, 4);
+    }
+  }
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
 
   // player dot
   ctx.shadowBlur=6; ctx.shadowColor='#00f5ff';

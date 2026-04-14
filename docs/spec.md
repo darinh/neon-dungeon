@@ -801,7 +801,11 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   shard detonation (10 px). Linear decay over 0.15–0.3 s. Render-only — does
   not affect aim or game logic. Reset on floor transitions.
 - **HUD:** Semi-transparent panel bottom-left (HP bar, weapon, floor, score)
-- **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only)
+- **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only).
+  POI markers: visited key locations get larger pulsing glow markers drawn above
+  tile/enemy layers — stairs/terminal (white, 3 px), vendor (green, 3 px), lore
+  (amber, 2 px), sealed boss entrance (red, 4 px, fast pulse). Player dot (cyan,
+  4 px) always on top.
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
 - **Proximity hints:** Interaction prompts (stairs, doors, terminals, shrines) use
   a persistent pulsing hint centred above the HUD instead of repeating chat messages.
@@ -1181,3 +1185,4 @@ the manifest to achieve a chrome-less experience.
 | v18.0   | Floating damage numbers: every hit spawns a rising, fading text showing the damage dealt. White for normal enemy hits, yellow for killing blows, red for player damage, blue "BLOCK" for energy shield absorbs. Capped at 20 concurrent texts. Frame-rate-independent velocity damping (`Math.pow(0.35, dt)`). Cleared on floor transitions. SW cache v25 |
 | v19.0   | Screen shake: camera shakes on player damage (intensity ∝ damage, capped 8 px), shield break (4 px), volatile explosions (6 px), void shard detonation (10 px). Linear decay, render-only (no aim interference). Reset on floor transitions. SW cache v26 |
 | v20.0   | Combo / kill-streak counter: fast successive kills build a combo multiplier (×1.25 at 2 kills up to ×4 at 13+, 3 s window). Boss kills capped at ×2. SHARDs and VOLATILE chain kills excluded from building combo. HUD shows multiplier + count with colour tiers (cyan → yellow → orange → magenta). Ascending audio chirp on each increment. Milestone floating text at ×5/×10/×15/×20. Best combo shown on end screens. Reset per floor. SW cache v27 |
+| v21.0   | Minimap POI markers: key locations (stairs/terminal, vendor, lore) get larger pulsing glow markers on the minimap drawn above tile and enemy layers. Stairs/terminal: white 3 px, vendor: green 3 px, lore: amber 2 px. Sealed boss entrances: red 4 px fast-pulse overlay. Player dot stays on top. Improves navigation on larger floors. SW cache v28 |
