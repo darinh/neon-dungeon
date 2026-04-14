@@ -792,6 +792,10 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   Phantoms = purple, Drones = blue
 - **Bosses:** Large sprites with glow halos
 - **Particles:** Sparks, blood pixels, muzzle flash, explosion rings
+- **Damage numbers:** Floating text pops up on every hit — white for normal enemy
+  damage, yellow (#ffcc00) for killing blows, red (#ff4444) for player damage,
+  blue (#4488ff) for shield blocks. Numbers rise and decelerate over ~0.7 s.
+  Capped at 20 simultaneous texts. Frame-rate-independent damping.
 - **HUD:** Semi-transparent panel bottom-left (HP bar, weapon, floor, score)
 - **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only)
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
@@ -1136,3 +1140,4 @@ the manifest to achieve a chrome-less experience.
 | v15.0   | Floor modifiers: each non-boss floor (2+) gets a random gameplay mutator from a pool of 6: BLACKOUT (halved torch radius), SWARM (×1.5 enemies, ×0.6 HP), FORTIFIED (×1.4 HP, +30% drops), VOLATILE (death AoE, LOS-gated, no chain), SCRAMBLED (+0.15 spread), OVERCLOCK (×1.2 all speeds + fire rates). Modifier announced on floor entry, displayed in HUD below floor number. Saved in checkpoint; old saves load without version bump. `modSpeed()` helper centralizes speed scaling. `getMod()` accessor. SW cache v22 |
 | v16.0   | SPLITTER enemy (floor 4+): splits into 2 fast SHARDs on death. SHARDs use zigzag AI, 0.25 tile size, no drops, 0 credits, 8 XP. Deferred spawn pattern via `pendingEnemySpawns[]` flushed after dead enemy cleanup. Per-room cap: 2 splitters. SW cache v23 |
 | v17.0   | Ricochet visual trail: bouncing projectiles leave a fading cyan trail showing their path. Trail records recent positions and renders as gradient-opacity line segments. Active from the moment of firing when Ricochet Module is equipped. SW cache v24 |
+| v18.0   | Floating damage numbers: every hit spawns a rising, fading text showing the damage dealt. White for normal enemy hits, yellow for killing blows, red for player damage, blue "BLOCK" for energy shield absorbs. Capped at 20 concurrent texts. Frame-rate-independent velocity damping (`Math.pow(0.35, dt)`). Cleared on floor transitions. SW cache v25 |

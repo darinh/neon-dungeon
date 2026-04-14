@@ -1077,6 +1077,39 @@ function drawParticles(camX, camY) {
   }
 }
 
+// ─── Floating Damage Numbers ─────────────────────────────────────────────────
+let floatingTexts = [];
+function spawnDmgText(wx, wy, text, colour) {
+  if (floatingTexts.length >= 20) floatingTexts.shift();
+  floatingTexts.push({
+    x: wx * TILE + rnd(-6, 6), y: wy * TILE - 8,
+    vy: -40, life: 1, text: String(text), colour
+  });
+}
+function updateFloatingTexts(dt) {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const f = floatingTexts[i];
+    f.y += f.vy * dt;
+    f.vy *= Math.pow(0.35, dt);
+    f.life -= dt * 1.4;
+    if (f.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+function drawFloatingTexts(camX, camY) {
+  for (const f of floatingTexts) {
+    const sx = f.x - camX, sy = f.y - camY;
+    if (sx < -40 || sx > W + 40 || sy < -20 || sy > H + 20) continue;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, f.life);
+    ctx.shadowBlur = 6; ctx.shadowColor = f.colour;
+    ctx.fillStyle = f.colour;
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(f.text, sx, sy);
+    ctx.restore();
+  }
+}
+
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 function createMap() {
   return Array.from({length: MAP_H}, () => new Uint8Array(MAP_W).fill(T.WALL));
@@ -2026,6 +2059,7 @@ class Enemy {
     if (this.type==='PHANTOM' && !this.visible) { this.visible=true; }
     this.hp -= dmg;
     this.flashTimer = 0.1;
+    spawnDmgText(this.x, this.y, dmg, this.hp <= 0 ? '#ffcc00' : '#ffffff');
     if (this.hp<=0) { this.hp=0; this.die(); }
     else audio.hit(false, weaponName);
   }
@@ -2742,6 +2776,7 @@ class Player {
       this.invincibleTimer=0.3;
       audio.shieldBreak();
       spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
+      spawnDmgText(this.x, this.y, 'BLOCK', '#4488ff');
       game.msg('🛡 SHIELD BROKEN','#4488ff');
       return;
     }
@@ -2749,6 +2784,7 @@ class Player {
     this.hp=Math.max(0,this.hp-actual);
     this.invincibleTimer=0.5;
     this.flashTimer=0.2;
+    spawnDmgText(this.x, this.y, actual, '#ff4444');
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
     if (this.hp<=0) { audio.gameOver(); game.endRun(false); }
@@ -3454,7 +3490,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[];
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
@@ -3992,6 +4028,7 @@ const game = {
     // update lighting
     updateLighting(dungeon,player.x,player.y);
     updateParticles(dt);
+    updateFloatingTexts(dt);
 
     // ── Upgrade effects ──────────────────────────────────────────────────
     // Nano Regen
@@ -4850,6 +4887,7 @@ const game = {
 
     // particles
     drawParticles(cam.x,cam.y);
+    drawFloatingTexts(cam.x,cam.y);
 
     // player
     player.draw(cam.x,cam.y);
