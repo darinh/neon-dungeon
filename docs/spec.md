@@ -265,11 +265,12 @@ dash while dead or while the cooldown is active.
 | SHIELDER     | 50      | 10  | Frontal shield blocks projectiles, melee    | 25  |
 | SPLITTER     | 40      | 8   | Splits into 2 SHARDs on death               | 25  |
 | GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
+| TELEPORTER   | 25      | 12  | Blinks around room, fires ranged bursts      | 22  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
-GRENADIER appears floor 5+.
+GRENADIER appears floor 5+, TELEPORTER appears floor 6+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -331,6 +332,36 @@ about to split.
   - FORTIFIED (1.4× HP): Harder to split, fewer SHARDs overall
   - VOLATILE: Deferred spawns are safe from the parent's explosion chain;
     VOLATILE-killed SPLITTERs still split
+
+#### TELEPORTER (floor 6+)
+
+Spatial disruptor that blinks to random positions within its room and fires
+quick ranged bursts before relocating. Unlike the PHANTOM (stealthy melee),
+the TELEPORTER is always visible but spatially unpredictable — it punishes
+players who camp in one spot and rewards target tracking.
+
+- **Teleport cycle:** Every `max(2.0, 3.0 − floor × 0.1)` seconds, blinks to a
+  random passable tile within the same room. Leaves a fading magenta afterimage
+  at the departure point (0.6 alpha → 0 over ~0.4 s). On arrival, 0.4 s
+  materialise window (reduced alpha, cannot attack). After materialising, fires
+  2 quick projectiles at the player (0.25 s apart, speed 8, range 14).
+- **Emergency blink:** If the player closes to within 2 tiles and the teleporter
+  has been idle long enough (cooldown > 0.8 s, not materialising), the cooldown
+  is forced to 0, triggering an immediate escape blink next frame. The
+  materialise guard prevents frame-loop re-triggers.
+- **Stats:** HP 25, ATK 12, SPD 0 (no walking movement), XP 22.
+- **Visual:** Hot magenta (`#ff44ff`), rapid alpha flicker
+  (`0.7 + sin(bobAngle × 8) × 0.3`) to suggest spatial instability. During
+  materialise: alpha ramps from 0.3 → 0.7 over 0.4 s.
+- **Audio:** `teleport()` — descending sine + square sweep + high noise pop
+  ("zwip" translocate sound).
+- **Colour:** `#ff44ff` (hot magenta)
+- **Credits:** 8
+- **Cap:** 1 per room.
+- **Modifier interactions:**
+  - OVERCLOCK (÷1.2 cooldowns): Teleport cycle shortened proportionally
+  - SWARM (0.6× HP): Even more fragile — reward for fast target acquisition
+  - BLACKOUT: Harder to spot the flicker in reduced torch radius
 
 ### Difficulty Modes
 
@@ -422,16 +453,19 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | PHANTOM   | 5           | +4        | —         |
 | DRONE     | 5           | +3        | —         |
 | SHIELDER  | 3           | +2        | 3         |
+| SPLITTER  | 2           | +2        | 4         |
 | GRENADIER | 1           | +2        | 5         |
+| TELEPORTER| 1           | +2        | 6         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
 `areaCap = floor(room.w × room.h ÷ 8)`. Floor 1 averages 2–4 per room;
 floor 10 averages 5–8 (capped by room area).
 
-**Per-room composition caps:** max 2 turrets, max 2 drones, max 1 phantom,
-max 1 shielder, max 1 grenadier per room. Excess rolls reroll among uncapped,
-floor-eligible types; final fallback is GUARD.
+**Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
+max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter per room.
+Excess rolls reroll among uncapped, floor-eligible types; final fallback is
+GUARD.
 
 ### Elite Enemies (floor 3+)
 
@@ -1225,3 +1259,4 @@ the manifest to achieve a chrome-less experience.
 | v21.0   | Minimap POI markers: key locations (stairs/terminal, vendor, lore) get larger pulsing glow markers on the minimap drawn above tile and enemy layers. Stairs/terminal: white 3 px, vendor: green 3 px, lore: amber 2 px. Sealed boss entrances: red 4 px fast-pulse overlay. Player dot stays on top. Improves navigation on larger floors. SW cache v28 |
 | v22.0   | Dash/dodge ability: Shift key (keyboard) or ⇧ touch button triggers a fast 0.12 s burst-dash at 18 tiles/sec (~5× walk speed) in movement/facing direction. 1.5 s cooldown, invulnerable during dash, wall collision ends early. Amber afterimage trail (8 ghosts, fade 0.25 s) + amber spark particles. `audio.dash()` whoosh SFX. HUD cooldown display (compact + landscape). Touch button added between E and V buttons with cooldown dim overlay. Control hints updated. SW cache v29 |
 | v23.0   | Ambient particle system: environmental storytelling via 5 particle emitter types. DUST motes drift through lit rooms/corridors (white/cyan). EMBER sparks rise from plasma vents (orange). ZAP micro-flashes on active arc grids (blue-white). STEAM wisps from cracked walls when player is near (grey). WISP energy motes around sealed boss entrances (red glow). Separate `ambientParticles[]` array (cap 80), timer-gated spawning (0.08 s), soft fade-in/out, performance-budgeted (max 3 new/tick). Cleared on floor transitions. SW cache v30 |
+| v24.0   | TELEPORTER enemy (floor 6+): spatial disruptor that blinks to random room positions every 2–3 s (floor-scaled), fires 2 quick ranged bursts after 0.4 s materialise, then relocates. Emergency blink if player within 2 tiles. Hot magenta (`#ff44ff`), rapid alpha flicker, fading afterimage at warp origin. `audio.teleport()` zwip SFX. Per-room cap: 1. Credits: 8. OVERCLOCK shortens cycle. SW cache v31 |
