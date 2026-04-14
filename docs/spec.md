@@ -829,6 +829,21 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   (amber, 2 px), sealed boss entrance (red, 4 px, fast pulse). Player dot (cyan,
   4 px) always on top.
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
+- **Ambient particles:** Separate `ambientParticles[]` array (cap 80) with
+  five emitter types that spawn in visited, non-secret tiles within torch radius:
+  - **DUST** — slow-drifting motes in rooms/corridors (white/cyan, α 0.06–0.18,
+    3–6 s life, sinusoidal drift). Spawn rate ~0.8% per visible floor tile per tick.
+  - **EMBER** — rising orange sparks from `T.PLASMA` tiles (α 0.3–0.6,
+    0.6–1.2 s life). ~15% chance per visible plasma tile per tick.
+  - **ZAP** — electric micro-flashes on active `T.ARC` tiles (white core + cyan
+    glow, α 0.5–0.9, 0.08–0.18 s life). ~12% chance when arc phase is on.
+  - **STEAM** — faint grey wisps rising from `T.CRACKED` walls within 4 tiles
+    of player (α 0.06–0.14, 1–2 s life). ~6% chance per tick.
+  - **WISP** — red energy motes near sealed boss entrance walls (α 0.2–0.45,
+    0.8–1.8 s life, glow halo). ~18% chance per tick.
+  Spawned via timer (0.08 s interval), max 3 new per tick. Soft fade-in/out via
+  combined life ramps. Drawn after `drawWorld()`, before room markers. Cleared
+  in `populateFloor()`.
 - **Proximity hints:** Interaction prompts (stairs, doors, terminals, shrines) use
   a persistent pulsing hint centred above the HUD instead of repeating chat messages.
   `game.hint` is set per-frame; `drawHint()` renders with `sin(Date.now()/300)`
@@ -1209,3 +1224,4 @@ the manifest to achieve a chrome-less experience.
 | v20.0   | Combo / kill-streak counter: fast successive kills build a combo multiplier (×1.25 at 2 kills up to ×4 at 13+, 3 s window). Boss kills capped at ×2. SHARDs and VOLATILE chain kills excluded from building combo. HUD shows multiplier + count with colour tiers (cyan → yellow → orange → magenta). Ascending audio chirp on each increment. Milestone floating text at ×5/×10/×15/×20. Best combo shown on end screens. Reset per floor. SW cache v27 |
 | v21.0   | Minimap POI markers: key locations (stairs/terminal, vendor, lore) get larger pulsing glow markers on the minimap drawn above tile and enemy layers. Stairs/terminal: white 3 px, vendor: green 3 px, lore: amber 2 px. Sealed boss entrances: red 4 px fast-pulse overlay. Player dot stays on top. Improves navigation on larger floors. SW cache v28 |
 | v22.0   | Dash/dodge ability: Shift key (keyboard) or ⇧ touch button triggers a fast 0.12 s burst-dash at 18 tiles/sec (~5× walk speed) in movement/facing direction. 1.5 s cooldown, invulnerable during dash, wall collision ends early. Amber afterimage trail (8 ghosts, fade 0.25 s) + amber spark particles. `audio.dash()` whoosh SFX. HUD cooldown display (compact + landscape). Touch button added between E and V buttons with cooldown dim overlay. Control hints updated. SW cache v29 |
+| v23.0   | Ambient particle system: environmental storytelling via 5 particle emitter types. DUST motes drift through lit rooms/corridors (white/cyan). EMBER sparks rise from plasma vents (orange). ZAP micro-flashes on active arc grids (blue-white). STEAM wisps from cracked walls when player is near (grey). WISP energy motes around sealed boss entrances (red glow). Separate `ambientParticles[]` array (cap 80), timer-gated spawning (0.08 s), soft fade-in/out, performance-budgeted (max 3 new/tick). Cleared on floor transitions. SW cache v30 |
