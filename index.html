@@ -1103,6 +1103,168 @@ function drawParticles(camX, camY) {
   }
 }
 
+// ─── Ambient Particles ───────────────────────────────────────────────────────
+let ambientParticles = [];
+const AMB_CAP = 80;
+const AMB_SPAWN_INTERVAL = 0.08; // seconds between spawn attempts
+let ambSpawnTimer = 0;
+
+function updateAmbient(dt) {
+  // Update existing
+  for (let i = ambientParticles.length - 1; i >= 0; i--) {
+    const p = ambientParticles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt / p.maxLife;
+    if (p.life <= 0) { ambientParticles.splice(i, 1); continue; }
+    // Drift for dust motes
+    if (p.kind === 'DUST') {
+      p.vx += (Math.sin(p.seed + lastTime / 2000) * 3 - p.vx) * dt * 0.5;
+      p.vy += (Math.cos(p.seed + lastTime / 1700) * 2 - p.vy) * dt * 0.5;
+    }
+  }
+
+  // Spawn new particles
+  ambSpawnTimer += dt;
+  if (ambSpawnTimer < AMB_SPAWN_INTERVAL || ambientParticles.length >= AMB_CAP) {
+    if (ambSpawnTimer >= AMB_SPAWN_INTERVAL) ambSpawnTimer = 0;
+    return;
+  }
+  ambSpawnTimer = 0;
+
+  const dungeon = game.dungeon;
+  const player = game.player;
+  if (!dungeon || !player) return;
+
+  const cam = getCamera(player);
+  const startX = Math.max(0, Math.floor(cam.x / TILE) - 1);
+  const startY = Math.max(0, Math.floor(cam.y / TILE) - 1);
+  const endX = Math.min(MAP_W, startX + Math.ceil(W / TILE) + 2);
+  const endY = Math.min(MAP_H, startY + Math.ceil((H - layout.hudH) / TILE) + 2);
+  const torchR = game.modifier === 'BLACKOUT' ? 5 : 9;
+  const ptx = Math.floor(player.x), pty = Math.floor(player.y);
+
+  // Collect emitter candidates in visible range
+  const emitters = [];
+  for (let ty = startY; ty < endY; ty++) {
+    for (let tx = startX; tx < endX; tx++) {
+      if (!dungeon.visited[ty][tx]) continue;
+      if (dungeon.secretMask[ty][tx]) continue;
+      const tile = dungeon.map[ty][tx];
+      // Only spawn on tiles currently in torch range (light never decays)
+      const ddx = tx - ptx, ddy = ty - pty;
+      if (ddx * ddx + ddy * ddy > torchR * torchR) continue;
+
+      if (tile === T.FLOOR || tile === T.DOOR_OPEN) {
+        if (Math.random() < 0.008) emitters.push({ kind: 'DUST', tx, ty });
+      } else if (tile === T.PLASMA) {
+        if (Math.random() < 0.15) emitters.push({ kind: 'EMBER', tx, ty });
+      } else if (tile === T.ARC) {
+        const arcActive = Math.sin((game.floorTime || 0) * Math.PI) > 0;
+        if (arcActive && Math.random() < 0.12) emitters.push({ kind: 'ZAP', tx, ty });
+      } else if (tile === T.CRACKED) {
+        const pdx = tx - Math.floor(player.x), pdy = ty - Math.floor(player.y);
+        if (pdx * pdx + pdy * pdy <= 16) {
+          if (Math.random() < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
+        }
+      } else if (tile === T.WALL) {
+        if (game.bossSealed && game.bossEntrances && game.bossEntrances.some(e => e.x === tx && e.y === ty)) {
+          if (Math.random() < 0.18) emitters.push({ kind: 'WISP', tx, ty });
+        }
+      }
+    }
+  }
+
+  // Spawn from a few random emitters (budget-aware)
+  const budget = AMB_CAP - ambientParticles.length;
+  const count = Math.min(emitters.length, budget, 3);
+  for (let i = 0; i < count; i++) {
+    const idx = Math.floor(Math.random() * emitters.length);
+    const e = emitters.splice(idx, 1)[0];
+    const cx = e.tx * TILE + rnd(2, TILE - 2);
+    const cy = e.ty * TILE + rnd(2, TILE - 2);
+
+    switch (e.kind) {
+      case 'DUST':
+        ambientParticles.push({
+          kind: 'DUST', x: cx, y: cy,
+          vx: rnd(-3, 3), vy: rnd(-3, 3),
+          life: 1, maxLife: rnd(3, 6), size: rnd(1, 2.5),
+          alpha: rnd(0.06, 0.18), colour: Math.random() < 0.3 ? '#66ddff' : '#aabbcc',
+          seed: Math.random() * 1000,
+        });
+        break;
+      case 'EMBER':
+        ambientParticles.push({
+          kind: 'EMBER', x: cx, y: cy,
+          vx: rnd(-6, 6), vy: rnd(-25, -10),
+          life: 1, maxLife: rnd(0.6, 1.2), size: rnd(1.5, 3),
+          alpha: rnd(0.3, 0.6), colour: Math.random() < 0.5 ? '#ff6600' : '#ffaa33',
+          seed: 0,
+        });
+        break;
+      case 'ZAP':
+        ambientParticles.push({
+          kind: 'ZAP', x: cx, y: cy,
+          vx: rnd(-15, 15), vy: rnd(-15, 15),
+          life: 1, maxLife: rnd(0.08, 0.18), size: rnd(1, 2.5),
+          alpha: rnd(0.5, 0.9), colour: '#88eeff',
+          seed: 0,
+        });
+        break;
+      case 'STEAM':
+        ambientParticles.push({
+          kind: 'STEAM', x: cx, y: cy - TILE * 0.3,
+          vx: rnd(-2, 2), vy: rnd(-12, -5),
+          life: 1, maxLife: rnd(1.0, 2.0), size: rnd(2, 4),
+          alpha: rnd(0.06, 0.14), colour: '#8888aa',
+          seed: 0,
+        });
+        break;
+      case 'WISP':
+        ambientParticles.push({
+          kind: 'WISP', x: cx, y: cy,
+          vx: rnd(-10, 10), vy: rnd(-10, 10),
+          life: 1, maxLife: rnd(0.8, 1.8), size: rnd(2, 4),
+          alpha: rnd(0.2, 0.45), colour: Math.random() < 0.6 ? '#ff3333' : '#ff6644',
+          seed: Math.random() * 1000,
+        });
+        break;
+    }
+  }
+}
+
+function drawAmbient(camX, camY) {
+  for (const p of ambientParticles) {
+    const sx = p.x - camX, sy = p.y - camY;
+    if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+    const a = p.alpha * Math.min(1, p.life * 2) * Math.min(1, (1 - p.life) * 3 + 0.3);
+    if (a < 0.01) continue;
+    ctx.save();
+    ctx.globalAlpha = a;
+    if (p.kind === 'ZAP') {
+      ctx.shadowBlur = 6; ctx.shadowColor = p.colour;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
+    } else if (p.kind === 'WISP') {
+      ctx.shadowBlur = 8; ctx.shadowColor = p.colour;
+      ctx.fillStyle = p.colour;
+      ctx.beginPath();
+      ctx.arc(sx, sy, p.size * (0.5 + 0.5 * p.life), 0, TWO_PI);
+      ctx.fill();
+    } else if (p.kind === 'EMBER') {
+      ctx.fillStyle = p.colour;
+      const flicker = 0.7 + 0.3 * Math.sin(lastTime / 60 + p.seed);
+      ctx.globalAlpha = a * flicker;
+      ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
+    } else {
+      ctx.fillStyle = p.colour;
+      ctx.fillRect(sx - p.size / 2, sy - p.size / 2, p.size, p.size);
+    }
+    ctx.restore();
+  }
+}
+
 // ─── Floating Damage Numbers ─────────────────────────────────────────────────
 let floatingTexts = [];
 function spawnDmgText(wx, wy, text, colour) {
@@ -3704,7 +3866,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -4249,6 +4411,7 @@ const game = {
     updateFloatingTexts(dt);
     updateShake(dt);
     updateCombo(dt);
+    updateAmbient(dt);
 
     // ── Upgrade effects ──────────────────────────────────────────────────
     // Nano Regen
@@ -5065,6 +5228,7 @@ const game = {
     cam.x += shake.ox;
     cam.y += shake.oy;
     drawWorld(dungeon,cam.x,cam.y);
+    drawAmbient(cam.x,cam.y);
 
     // Special room markers
     for (const r of dungeon.rooms) {
