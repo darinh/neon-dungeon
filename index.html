@@ -975,6 +975,20 @@ function generateFloor(floorNum) {
   const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
 
+  // ── Room types: assign special purposes ──────────────────────────────────
+  // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
+  const ROOM_TYPES = ['armory','medbay','shrine','vault'];
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05'};
+  const specialRooms = [];
+  const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
+  const numSpecial = Math.min(eligible.length, Math.floor(floorNum/2)+1);
+  const picked = eligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
+  for (let i=0; i<picked.length; i++) {
+    const r = picked[i];
+    r.roomType = ROOM_TYPES[i % ROOM_TYPES.length];
+    specialRooms.push(r);
+  }
+
   // ── Doors: place at room-corridor junctions ──────────────────────────────
   for (const r of rooms) {
     if (r === bossRoom) continue; // boss room uses its own sealing
@@ -1081,7 +1095,17 @@ function generateFloor(floorNum) {
     }
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems };
+  // Room colour map (floor tile → tint)
+  const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
+  for (const r of rooms) {
+    if (!r.roomType) continue;
+    const col = ROOM_COLOURS[r.roomType];
+    for (let ty=r.y; ty<r.y+r.h; ty++)
+      for (let tx=r.x; tx<r.x+r.w; tx++)
+        if (map[ty][tx]===T.FLOOR) roomColour[ty][tx]=col;
+  }
+
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -2006,11 +2030,13 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
-        case T.FLOOR:
-          ctx.fillStyle='#0f0f1f';
+        case T.FLOOR: {
+          const rc = dungeon.roomColour[ty]?.[tx];
+          ctx.fillStyle = rc || '#0f0f1f';
           ctx.fillRect(sx,sy,TILE,TILE);
-          if ((tx+ty)%4===0) { ctx.fillStyle='#13132a'; ctx.fillRect(sx,sy,TILE,TILE); }
+          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0a0a0a' : '#13132a'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
           break;
+        }
         case T.STAIRS:
           ctx.fillStyle='#0f0f1f';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -2285,11 +2311,15 @@ function populateFloor(dungeon, floorNum) {
       continue;
     }
 
+    // Room type modifiers
+    const rt = room.roomType || null;
+    const enemyMod = rt==='medbay' ? 0.3 : rt==='vault' ? 1.5 : rt==='armory' ? 0.5 : 1;
+
     // Enemy count scales with floor, capped by room area
     const minE = 2 + Math.floor(floorNum / 3);
     const maxE = Math.min(8, 4 + Math.floor(floorNum / 2));
     const areaCap = Math.floor(room.w * room.h / 8);
-    const count = Math.min(areaCap, rndInt(minE, maxE));
+    const count = Math.min(areaCap, Math.round(rndInt(minE, maxE) * enemyMod));
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
@@ -2313,6 +2343,16 @@ function populateFloor(dungeon, floorNum) {
     for (let j=0;j<itemCount;j++) {
       const ix=room.x+rnd(1,room.w-1), iy=room.y+rnd(1,room.h-1);
       items.push(new Item(ix,iy));
+    }
+
+    // Special room bonuses
+    if (rt==='medbay') {
+      // Place a healing font (persistent heal tile) in center
+      dungeon.map[room.cy][room.cx] = T.FLOOR; // keep walkable
+      room.healFont = true; // flag checked during gameplay
+    }
+    if (rt==='shrine') {
+      room.xpShrine = true;
     }
   }
 
@@ -2664,6 +2704,26 @@ const game = {
         player.trapCooldown = 3.0;
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
+      }
+    }
+
+    // special room effects
+    for (const r of dungeon.rooms) {
+      if (r.healFont && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (player.hp < player.maxHp) {
+          player.hp = Math.min(player.maxHp, player.hp + 5 * dt);
+          if (Math.random()<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
+        }
+      }
+      if (r.xpShrine && !r.shrineUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+          r.shrineUsed = true;
+          const xp = 30 + game.floor * 10;
+          player.gainXP(xp);
+          this.msg('XP Shrine: +'+xp+' XP!','#aa00ff');
+          spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#aa00ff', 15);
+        }
+        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.msg('Press E at shrine','#aa00ff');
       }
     }
 
@@ -3076,6 +3136,26 @@ const game = {
     const cam=getCamera(player);
 
     drawWorld(dungeon,cam.x,cam.y);
+
+    // Special room markers
+    for (const r of dungeon.rooms) {
+      if (r.healFont) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=12; ctx.shadowColor='#00ff88'; ctx.globalAlpha=0.6+Math.sin(Date.now()/400)*0.2;
+        ctx.fillStyle='#00ff88'; ctx.font='16px monospace'; ctx.textAlign='center';
+        ctx.fillText('+', sx, sy+5);
+        ctx.restore();
+      }
+      if (r.xpShrine && !r.shrineUsed) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=15; ctx.shadowColor='#aa00ff'; ctx.globalAlpha=0.6+Math.sin(Date.now()/500)*0.2;
+        ctx.fillStyle='#aa00ff'; ctx.font='16px monospace'; ctx.textAlign='center';
+        ctx.fillText('☆', sx, sy+5);
+        ctx.restore();
+      }
+    }
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
