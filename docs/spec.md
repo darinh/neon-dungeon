@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.4
+# NEON DUNGEON — Game Specification v2.5
 
 ## Vision
 
@@ -238,8 +238,46 @@ Default starting weapon: PULSE PISTOL.
 | CRAWLER      | 20      | 6   | Fast zigzag charge, melee                    | 10  |
 | PHANTOM      | 35      | 10  | Invisible until within 3 tiles, teleports   | 30  |
 | DRONE        | 15      | 8   | Flies over walls (no collision), ranged     | 12  |
+| SHIELDER     | 50      | 10  | Frontal shield blocks projectiles, melee    | 25  |
+| GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
+
+**Floor-gated types:** SHIELDER appears floor 3+, GRENADIER appears floor 5+.
+Floor-gated types are excluded from both weighted selection and cap-reroll pools
+on floors below their minimum.
+
+#### SHIELDER (floor 3+)
+
+Shield-bearing enemy with a 120° frontal arc that deflects non-piercing player
+projectiles. Slowly advances toward the player when in LOS. Player must flank
+(shoot from behind/sides), use piercing weapons (Railgun), or melee to bypass
+the shield. Shield orientation only updates when the player is in line of sight
+— the shielder does not track through walls.
+
+- **Shield arc:** ±60° from facing direction (120° total)
+- **Deflection:** Non-piercing `fromPlayer` projectiles within the arc are
+  destroyed on contact (cyan sparks + `shieldDeflect` SFX). Piercing weapons
+  and saw blade orbitals are unaffected.
+- **Visual:** Cyan arc drawn at shield radius, pulsing with `bobAngle`
+- **Colour:** `#66eeff` (cyan-white)
+- **Credits:** 10
+
+#### GRENADIER (floor 5+)
+
+Ranged area-denial enemy that lobs grenades creating temporary hazard zones.
+Prefers to stay at 6–12 tile range; retreats if player closes to within 5 tiles
+(falls back to patrol if retreat is wall-blocked).
+
+- **Grenade:** Projectile (speed 6) aimed at player's current position. On wall
+  hit or reaching target, detonates into a **hazard zone** (1.5 tile radius,
+  3 s duration, 0.8 s damage tick cooldown). Zone damage equals the grenadier's
+  scaled ATK. LOS check prevents damage through walls.
+- **Cooldown:** `max(2.5, 3.5 − floor × 0.1)` seconds between lobs
+- **Visual:** Larger orange projectile with pulsing warning ring; zone rendered
+  as semi-transparent pulsing orange circle below enemies
+- **Colour:** `#ff6622` (orange)
+- **Credits:** 7
 
 ### Difficulty Curve
 
@@ -248,21 +286,24 @@ modifier. Early floors are GUARD-heavy (~50% on floor 1); later floors shift
 toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 `max(1, base + perFloor × (floor − 1))`.
 
-| Type    | Base weight | Per-floor |
-|---------|-------------|-----------|
-| GUARD   | 40          | −3        |
-| TURRET  | 20          | +1        |
-| CRAWLER | 10          | +3        |
-| PHANTOM | 5           | +4        |
-| DRONE   | 5           | +3        |
+| Type      | Base weight | Per-floor | Min floor |
+|-----------|-------------|-----------|-----------|
+| GUARD     | 40          | −3        | —         |
+| TURRET    | 20          | +1        | —         |
+| CRAWLER   | 10          | +3        | —         |
+| PHANTOM   | 5           | +4        | —         |
+| DRONE     | 5           | +3        | —         |
+| SHIELDER  | 3           | +2        | 3         |
+| GRENADIER | 1           | +2        | 5         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
 `areaCap = floor(room.w × room.h ÷ 8)`. Floor 1 averages 2–4 per room;
 floor 10 averages 5–8 (capped by room area).
 
-**Per-room composition caps:** max 2 turrets, max 2 drones, max 1 phantom per
-room. Excess rolls default to GUARD.
+**Per-room composition caps:** max 2 turrets, max 2 drones, max 1 phantom,
+max 1 shielder, max 1 grenadier per room. Excess rolls reroll among uncapped,
+floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
 
@@ -523,7 +564,7 @@ perks.
 
 **Credits:** A spendable currency earned by killing enemies. Each enemy type
 has a base credit value: GUARD 8, TURRET 6, CRAWLER 4, PHANTOM 12, DRONE 5,
-SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
+SHIELDER 10, GRENADIER 7, SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
 `Math.round(base × (1 + floor × 0.15))`. Credits are displayed on the HUD
 (green `◈` symbol) and saved/restored with the checkpoint system.
 
@@ -626,6 +667,9 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Vendor open      | Digital cash register chime: three ascending tones (sine 600→800, triangle 800→1100, sine 1100→1400 Hz) |
 | Purchase         | Coin-drop bleep: sine 1000→1600 Hz + triangle 1400→1800 Hz + HP noise burst (3 kHz) |
 | Purchase fail    | Low buzz rejection: square 120→90 Hz + LP noise (400 Hz) |
+| Shield deflect   | Hard metallic clang: triangle 1800→600 Hz + sine 2400→900 Hz + noise (LP 4000 Hz) |
+| Grenade lob      | Hollow thunk: sine 200→120 Hz + triangle 400→800 Hz rising whoosh |
+| Grenade explode  | Muffled boom: sine 100→30 Hz + square 60→20 Hz + noise (LP 2000 Hz) |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -872,3 +916,5 @@ the manifest to achieve a chrome-less experience.
 | v8.0    | Secret rooms: `T.CRACKED` tile (15) — wall-like with proximity-visible amber cracks. One secret room per non-boss floor (3+), walled off with one cracked entrance. Lazy activation: enemies/items spawn only when cracked wall is broken (E key). `secretMask` prevents lighting from revealing hidden contents. Premium loot + credit bonus on reveal. EXPLORE quest excludes unrevealed secrets. `audio.wallBreak()` SFX. SW cache v14 |
 | v9.0    | Ricochet Module upgrade: persistent upgrade (max level 3), player projectiles bounce off walls (axis-separated reflection, epsilon nudge), cyan sparks + `audio.ricochet()` SFX. Excluded from Plasma Orb homing. `hitEnemies` preserved across bounces. SW cache v15 |
 | v10.0   | Auto-Laser capstone perk (level 10): hitscan beam auto-fires at nearest visible enemy within 12 tiles every 2.5 s, 20 flat damage, LOS-gated, invisible phantoms excluded. Crimson beam + white core visual (0.15 s fade), `audio.autoLaser()` zap SFX. Save compatibility: `checkPerkUnlocks()` re-runs on load to retroactively grant perks from before they existed. SW cache v16 |
+| v10.1   | Bug fix: touch menu hit-test for Continue/New Game used `H/2` instead of actual menu item positions — tapping Continue selected New Game on landscape tablets and 768p viewports. `continueGame()` now falls back to `startGame()` with visible message on corrupt saves instead of silently returning. SW cache v17 |
+| v11.0   | Enemy variety expansion: SHIELDER (floor 3+, 120° frontal arc deflects non-piercing projectiles, forces flanking) and GRENADIER (floor 5+, lobs grenades creating 1.5-tile radius AoE hazard zones lasting 3 s). Floor-gated via `minFloor` in ENEMY_WEIGHTS — excluded from both weighted selection and cap-reroll on lower floors. Global `hazardZones[]` array for grenade zones with LOS-gated damage. `audio.shieldDeflect()`/`grenadeLob()`/`grenadeExplode()` SFX. Per-room caps: 1 shielder, 1 grenadier. SW cache v18 |
