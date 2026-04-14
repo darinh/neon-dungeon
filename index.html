@@ -240,6 +240,11 @@ canvas.addEventListener('touchstart', e => {
         if (cy > H/2) justPressed.add('KeyQ');
         else justPressed.add('Escape');
       }
+      else if (game.state === 'MENU' && game.hasSave()) {
+        // Two-option menu: top half = continue (0), bottom half = new game (1)
+        game.menuSel = cy < H/2 ? 0 : 1;
+        justPressed.add('Enter');
+      }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
       continue;
     }
@@ -1018,67 +1023,105 @@ function generateFloor(floorNum) {
     specialRooms.push(r);
   }
 
-  // ── Doors: place at room-corridor junctions ──────────────────────────────
-  for (const r of rooms) {
-    if (r === bossRoom) continue; // boss room uses its own sealing
+  // ── Doors: place at room-corridor junctions (chokepoints only) ──────────
+  // Helper: find entrance clusters for a room (groups of adjacent boundary tiles
+  // connecting to corridors). Returns array of arrays.
+  function getEntranceClusters(room) {
     const edges = [];
-    // scan room boundary for corridor exits
-    for (let tx=r.x; tx<r.x+r.w; tx++) {
-      if (r.y>0 && map[r.y][tx]===T.FLOOR && map[r.y-1][tx]===T.FLOOR) edges.push({x:tx, y:r.y});
-      const by=r.y+r.h-1;
-      if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR) edges.push({x:tx, y:by});
+    const isEntry = t => t===T.FLOOR||t===T.DOOR;
+    for (let tx=room.x; tx<room.x+room.w; tx++) {
+      if (room.y>0 && isEntry(map[room.y][tx]) && map[room.y-1][tx]===T.FLOOR) edges.push({x:tx, y:room.y});
+      const by=room.y+room.h-1;
+      if (by<MAP_H-1 && isEntry(map[by][tx]) && map[by+1][tx]===T.FLOOR) edges.push({x:tx, y:by});
     }
-    for (let ty=r.y; ty<r.y+r.h; ty++) {
-      if (r.x>0 && map[ty][r.x]===T.FLOOR && map[ty][r.x-1]===T.FLOOR) edges.push({x:r.x, y:ty});
-      const bx=r.x+r.w-1;
-      if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR) edges.push({x:bx, y:ty});
+    for (let ty=room.y; ty<room.y+room.h; ty++) {
+      if (room.x>0 && isEntry(map[ty][room.x]) && map[ty][room.x-1]===T.FLOOR) edges.push({x:room.x, y:ty});
+      const bx=room.x+room.w-1;
+      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && map[ty][bx+1]===T.FLOOR) edges.push({x:bx, y:ty});
     }
     // Deduplicate
     const seen = new Set();
-    const dedupEdges = edges.filter(e => { const k=e.x+','+e.y; if(seen.has(k)) return false; seen.add(k); return true; });
-    // Place a door at ~40% of entrances (feels natural, not every doorway)
-    for (const e of dedupEdges) {
-      if (Math.random() < 0.4) map[e.y][e.x] = T.DOOR;
+    const dedup = edges.filter(e => { const k=e.x+','+e.y; if(seen.has(k)) return false; seen.add(k); return true; });
+    // Cluster adjacent tiles
+    const used = new Set();
+    const clusters = [];
+    for (const e of dedup) {
+      const k = e.x+','+e.y;
+      if (used.has(k)) continue;
+      const cl = [e]; used.add(k);
+      let qi = 0;
+      while (qi < cl.length) {
+        const c = cl[qi++];
+        for (const o of dedup) {
+          const ok = o.x+','+o.y;
+          if (used.has(ok)) continue;
+          if (Math.abs(c.x-o.x)+Math.abs(c.y-o.y)===1) { cl.push(o); used.add(ok); }
+        }
+      }
+      clusters.push(cl);
+    }
+    return clusters;
+  }
+
+  for (const r of rooms) {
+    if (r === bossRoom) continue;
+    const clusters = getEntranceClusters(r);
+    // Only door narrow clusters (1-2 tiles = real chokepoints)
+    for (const cl of clusters) {
+      if (cl.length <= 2 && Math.random() < 0.5) {
+        for (const e of cl) map[e.y][e.x] = T.DOOR;
+      }
     }
   }
 
   // ── Locked doors + keys (floor 2+) ──────────────────────────────────────
-  const keyItems = []; // {x, y, colour} items to place on the map
+  // Lock meaningful targets: stair room first, then special rooms, then random.
+  // All narrow entrance clusters of the target room are locked so the room
+  // is truly gated (no walking around a single locked tile).
+  const keyItems = [];
   if (floorNum >= 2) {
-    const lockableRooms = rooms.filter(r =>
-      r !== spawnRoom && r !== farthest && r !== bossRoom && r.w * r.h >= 20
+    // Build priority list: stair room > special rooms > eligible randoms
+    const lockPriority = [];
+    if (farthest !== spawnRoom && farthest !== bossRoom) lockPriority.push(farthest);
+    for (const r of specialRooms) {
+      if (!lockPriority.includes(r)) lockPriority.push(r);
+    }
+    const fallback = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && r !== bossRoom &&
+      !specialRooms.includes(r) && r.w * r.h >= 20
     );
-    const numLocked = Math.min(lockableRooms.length, floorNum >= 7 ? 3 : floorNum >= 4 ? 2 : 1);
+    lockPriority.push(...fallback.sort(() => Math.random()-0.5));
+
+    const numLocked = floorNum >= 7 ? 3 : floorNum >= 4 ? 2 : 1;
     const colours = ['red','blue','gold'];
     const lockTiles = [T.LOCKED_R, T.LOCKED_B, T.LOCKED_G];
     const lockColours = ['#ff3333','#3388ff','#ffcc00'];
-    const shuffled = lockableRooms.sort(() => Math.random()-0.5).slice(0, numLocked);
+    let placed = 0;
 
-    for (let i=0; i<shuffled.length; i++) {
-      const lr = shuffled[i];
-      const ci = Math.min(i, 2);
-      // Find an entrance tile of this room and lock it (scan all 4 edges)
-      let locked = false;
-      // Top/bottom edges
-      for (let tx=lr.x; tx<lr.x+lr.w && !locked; tx++) {
-        if (lr.y>0 && (map[lr.y][tx]===T.FLOOR||map[lr.y][tx]===T.DOOR) && map[lr.y-1][tx]===T.FLOOR)
-          { map[lr.y][tx]=lockTiles[ci]; locked=true; }
-        const by=lr.y+lr.h-1;
-        if (!locked && by<MAP_H-1 && (map[by][tx]===T.FLOOR||map[by][tx]===T.DOOR) && map[by+1][tx]===T.FLOOR)
-          { map[by][tx]=lockTiles[ci]; locked=true; }
+    for (const lr of lockPriority) {
+      if (placed >= numLocked) break;
+      const ci = Math.min(placed, 2);
+      // Get entrance clusters and lock ALL narrow ones (size ≤ 2)
+      const cls = getEntranceClusters(lr);
+      const narrowClusters = cls.filter(cl => cl.length <= 2);
+      if (!narrowClusters.length) continue; // can't meaningfully gate this room
+
+      // Convert every tile in every narrow cluster to a locked door
+      const lockedTiles = [];
+      for (const cl of narrowClusters) {
+        for (const e of cl) {
+          map[e.y][e.x] = lockTiles[ci];
+          lockedTiles.push(e);
+        }
       }
-      // Left/right edges
-      for (let ty=lr.y; ty<lr.y+lr.h && !locked; ty++) {
-        if (lr.x>0 && (map[ty][lr.x]===T.FLOOR||map[ty][lr.x]===T.DOOR) && map[ty][lr.x-1]===T.FLOOR)
-          { map[ty][lr.x]=lockTiles[ci]; locked=true; }
-        const bx=lr.x+lr.w-1;
-        if (!locked && bx<MAP_W-1 && (map[ty][bx]===T.FLOOR||map[ty][bx]===T.DOOR) && map[ty][bx+1]===T.FLOOR)
-          { map[ty][bx]=lockTiles[ci]; locked=true; }
+      // Wide clusters (>2): wall them off to prevent bypass
+      for (const cl of cls) {
+        if (cl.length > 2) {
+          for (const e of cl) map[e.y][e.x] = T.WALL;
+        }
       }
-      if (!locked) continue; // skip key/loot if we couldn't place a lock
 
       // BFS from spawn to find rooms reachable without this lock
-      const reachable = new Set();
       const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
       const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
       vis2[spawnRoom.cy][spawnRoom.cx] = 1;
@@ -1094,17 +1137,20 @@ function generateFloor(floorNum) {
         }
       }
       // Find a reachable room to place the key
-      const keyRoom = rooms.filter(r => r!==lr && r!==bossRoom && !shuffled.includes(r) && vis2[r.cy][r.cx]);
+      const keyRoom = rooms.filter(r => r!==lr && r!==bossRoom && vis2[r.cy][r.cx]);
       if (keyRoom.length) {
         const kr = keyRoom[rndInt(0, keyRoom.length-1)];
         keyItems.push({ x: kr.cx, y: kr.cy, colour: colours[ci], tileColour: lockColours[ci] });
         lr.hasLoot = true;
+        placed++;
       } else {
-        // Can't safely place key — remove the lock to prevent softlock
-        // Find and revert the locked tile
-        for (let ty2=lr.y; ty2<lr.y+lr.h; ty2++)
-          for (let tx2=lr.x; tx2<lr.x+lr.w; tx2++)
-            if (map[ty2][tx2]===lockTiles[ci]) map[ty2][tx2]=T.DOOR;
+        // Can't safely place key — revert locks and walls to floor
+        for (const e of lockedTiles) map[e.y][e.x] = T.FLOOR;
+        for (const cl of cls) {
+          if (cl.length > 2) {
+            for (const e of cl) map[e.y][e.x] = T.FLOOR;
+          }
+        }
       }
     }
   }
@@ -2750,6 +2796,8 @@ const game = {
     }
     // Generate floor quest
     this.generateQuest(n);
+    // Auto-save at start of each floor
+    this.saveGame();
   },
 
   generateQuest(floorNum) {
@@ -2816,6 +2864,7 @@ const game = {
   },
 
   endRun(victory) {
+    this.deleteSave(); // run is over — clear save file
     const scores=this.getScores();
     const testEntry={score:this.player.score};
     scores.push(testEntry);
@@ -2832,6 +2881,61 @@ const game = {
 
   getScores() {
     try { return JSON.parse(localStorage.getItem('neonDungeonScores'))||[]; } catch(e){return[];}
+  },
+
+  // ── Save / Load ────────────────────────────────────────────────────────
+  hasSave() {
+    try { return !!localStorage.getItem('neonDungeonSave'); } catch(e){return false;}
+  },
+
+  saveGame() {
+    if (!this.player) return;
+    const p = this.player;
+    const weaponKey = WEAPON_KEYS.find(k => WEAPONS[k] === p.weapon) || 'PULSE_PISTOL';
+    const save = {
+      v: '6.3',
+      floor: this.floor,
+      player: {
+        hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
+        level:p.level, xp:p.xp, weapon:weaponKey,
+        upgrades:{...p.upgrades}, perks:{...p.perks},
+        keys:{...p.keys}, shards:p.shards,
+        permSpeedBonus:p.permSpeedBonus, score:p.score,
+        energyShield:p.energyShield, energyShieldTimer:p.energyShieldTimer
+      }
+    };
+    try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
+  },
+
+  deleteSave() {
+    try { localStorage.removeItem('neonDungeonSave'); } catch(e){}
+  },
+
+  continueGame() {
+    let save;
+    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ return; }
+    if (!save || !save.player) return;
+    // Reject incompatible saves
+    if (save.v !== '6.3') { this.deleteSave(); return; }
+    audio.resume();
+    const p = new Player();
+    const s = save.player;
+    p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
+    p.level=s.level; p.xp=s.xp;
+    p.weapon=WEAPONS[s.weapon]||WEAPONS.PULSE_PISTOL;
+    p.upgrades=s.upgrades||{};
+    p.perks=s.perks||{};
+    p.keys=s.keys||{red:0,blue:0,gold:0};
+    p.shards=s.shards||0;
+    p.permSpeedBonus=s.permSpeedBonus||0;
+    p.score=s.score||0;
+    p.energyShield=!!s.energyShield;
+    p.energyShieldTimer=s.energyShieldTimer||0;
+    p.shieldBonus=0; // loadFloor will manage floor-only bonuses
+    this.player=p;
+    this.loadFloor(save.floor||1);
+    this.setState('PLAYING');
+    this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
 
   update(dt) {
@@ -2861,7 +2965,20 @@ const game = {
       p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*0.4;
       if (p.life<=0||p.y<-10) this.menuParticles.splice(i,1);
     }
-    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.startGame(); }
+    const hasSave = this.hasSave();
+    if (hasSave) {
+      if (this.menuSel === undefined) this.menuSel = 0; // 0=continue, 1=new
+      if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = 0;
+      if (jp('ArrowDown')||jp('KeyS')) this.menuSel = 1;
+      if (jp('Enter')||jp('MouseLeft')) {
+        audio.menuSelect();
+        if (this.menuSel === 0) this.continueGame();
+        else this.startGame();
+      }
+    } else {
+      this.menuSel = undefined;
+      if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.startGame(); }
+    }
   },
 
   updatePlaying(dt) {
@@ -3120,16 +3237,24 @@ const game = {
     // pause
     if (jp('Escape')) this.setState('PAUSED');
 
-    // boss seal check — seal when player enters the boss room
+    // boss seal check — seal when player is clearly inside the boss room
     if (this.bossRoom && !this.bossSealed && this.bossAlive) {
       const r = this.bossRoom;
-      if (player.x >= r.x && player.x < r.x + r.w &&
+      const onEntrance = this.bossEntrances.some(e =>
+        Math.floor(player.x)===e.x && Math.floor(player.y)===e.y);
+      if (!onEntrance &&
+          player.x >= r.x && player.x < r.x + r.w &&
           player.y >= r.y && player.y < r.y + r.h) {
         this.bossSealed = true;
-        // Convert entrance tiles to walls
         for (const e of this.bossEntrances) {
           e.origTile = dungeon.map[e.y][e.x];
           dungeon.map[e.y][e.x] = T.WALL;
+        }
+        // Safety: nudge player off any sealed tile
+        const ptx = Math.floor(player.x), pty = Math.floor(player.y);
+        if (!isPassable(dungeon.map[pty]?.[ptx])) {
+          player.x = r.cx + 0.5;
+          player.y = r.cy + 0.5;
         }
         audio.roomSeal();
         this.msg('⚠ ROOM SEALED','#ff3333');
@@ -3493,30 +3618,55 @@ const game = {
     ctx.fillText('A CYBERPUNK DUNGEON CRAWLER',W/2,ty2 + 35);
     ctx.restore();
 
-    // blink start prompt — touch-aware
+    // Menu options — save-aware
     const startY = ty2 + 80;
-    if (Math.floor(t*2)%2===0) {
-      ctx.save(); ctx.textAlign='center';
-      ctx.shadowBlur=10; ctx.shadowColor='#ff00c8';
-      ctx.fillStyle='#ff00c8'; ctx.font=`${narrow ? 15 : 18}px monospace`;
-      ctx.fillText(isTouch ? '▶  TAP TO START  ◀' : '▶  PRESS ENTER TO START  ◀', W/2, startY);
-      ctx.restore();
+    const hasSave = this.hasSave();
+    const fs = narrow ? 15 : 18;
+    ctx.save(); ctx.textAlign='center';
+    if (hasSave) {
+      // Two options: CONTINUE / NEW GAME
+      let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){}
+      const sel = this.menuSel || 0;
+      // CONTINUE
+      const contCol = sel===0 ? '#00f5ff' : '#555577';
+      ctx.shadowBlur = sel===0 ? 10 : 0; ctx.shadowColor = contCol;
+      ctx.fillStyle = contCol; ctx.font = `${sel===0?'bold ':''}${fs}px monospace`;
+      const flr = save?.floor || '?';
+      ctx.fillText(`▶  CONTINUE (FLOOR ${flr})`, W/2, startY);
+      // NEW GAME
+      const newCol = sel===1 ? '#ff00c8' : '#555577';
+      ctx.shadowBlur = sel===1 ? 10 : 0; ctx.shadowColor = newCol;
+      ctx.fillStyle = newCol; ctx.font = `${sel===1?'bold ':''}${fs}px monospace`;
+      ctx.fillText('▶  NEW GAME', W/2, startY + (narrow?24:28));
+      ctx.shadowBlur=0;
+      // Navigation hint
+      ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
+      ctx.fillText(isTouch ? 'Tap to select' : '↑↓ to select, Enter to confirm', W/2, startY + (narrow?46:56));
+    } else {
+      // No save — original single prompt
+      if (Math.floor(t*2)%2===0) {
+        ctx.shadowBlur=10; ctx.shadowColor='#ff00c8';
+        ctx.fillStyle='#ff00c8'; ctx.font=`${fs}px monospace`;
+        ctx.fillText(isTouch ? '▶  TAP TO START  ◀' : '▶  PRESS ENTER TO START  ◀', W/2, startY);
+      }
     }
+    ctx.restore();
 
     // controls hint — contextual
+    const hintY = hasSave ? startY + (narrow?60:72) : startY + 30;
     ctx.save(); ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     if (isTouch) {
-      ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, startY + 30);
-      ctx.fillText('E: Interact  |  V: Void Shard  |  ‖: Pause', W/2, startY + 46);
+      ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
+      ctx.fillText('E: Interact  |  V: Void Shard  |  ‖: Pause', W/2, hintY + 16);
     } else {
-      ctx.fillText('WASD: Move  |  Mouse: Aim  |  Click/Space: Shoot', W/2, startY + 30);
-      ctx.fillText('E: Interact  |  V: Void Shard  |  ESC: Pause', W/2, startY + 46);
+      ctx.fillText('WASD: Move  |  Mouse: Aim  |  Click/Space: Shoot', W/2, hintY);
+      ctx.fillText('E: Interact  |  V: Void Shard  |  ESC: Pause', W/2, hintY + 16);
     }
     ctx.restore();
 
     // high scores
-    const scoresY = startY + 80;
+    const scoresY = hintY + 50;
     this.renderLeaderboard(scoresY, narrow ? 3 : 5, -1);
   },
 
