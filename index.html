@@ -914,6 +914,13 @@ const audio = (() => {
       osc('square', 350, 650, 0.06, t + 0.02, 0.1);
       noise(0.05, t, 0.08, 3000);
     },
+    teleport() {
+      const c = getCtx(); const t = c.currentTime;
+      // Quick zwip — descending sine + high noise pop
+      osc('sine', 1400, 300, 0.07, t, 0.1);
+      osc('square', 800, 200, 0.04, t, 0.08);
+      noise(0.05, t, 0.04, 6000);
+    },
     comboTick(count) {
       const c = getCtx(); const t = c.currentTime;
       // Ascending pitch with combo — quick chirp
@@ -2266,7 +2273,7 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
 let pendingEnemySpawns = [];
 
 class Enemy {
@@ -2381,6 +2388,7 @@ class Enemy {
       case 'SHIELDER': this.aiShielder(dt,player,map,d,los); break;
       case 'GRENADIER':this.aiGrenadier(dt,player,map,d,los);break;
       case 'SPLITTER': this.aiSplitter(dt,player,map,d,los);break;
+      case 'TELEPORTER':this.aiTeleporter(dt,player,map,d,los);break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
@@ -2570,6 +2578,49 @@ class Enemy {
       this.moveToward(tx, ty, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else this.patrol(dt, map);
+  }
+
+  aiTeleporter(dt,player,map,d,los) {
+    this.teleportTimer = Math.max(0, this.teleportTimer - dt);
+    if (this._materialize > 0) this._materialize -= dt;
+    if (this._warpFade > 0) this._warpFade -= dt * 1.5;
+
+    // Emergency blink if player gets close (skip if just teleported)
+    if (d < 2 && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
+
+    // Teleport cycle
+    if (this.teleportTimer <= 0 && this.room) {
+      this._warpFromX = this.x;
+      this._warpFromY = this.y;
+      this._warpFade = 0.6;
+      let placed = false;
+      for (let a = 0; a < 12; a++) {
+        const nx = this.room.x + rnd(1, this.room.w - 1);
+        const ny = this.room.y + rnd(1, this.room.h - 1);
+        const fx = Math.floor(nx), fy = Math.floor(ny);
+        if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) {
+          this.x = nx; this.y = ny; placed = true; break;
+        }
+      }
+      if (placed) {
+        spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 8);
+        audio.teleport();
+      }
+      const cd = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+      this.teleportTimer = cd;
+      this._materialize = 0.4;
+      this._burstLeft = 2;
+    }
+
+    // Can't attack while materializing
+    if (this._materialize > 0) return;
+
+    // Fire burst at player
+    if (this._burstLeft > 0 && los && this.shootTimer <= 0) {
+      this.fireAt(player.x, player.y, 8, this.atk, 14, this.colour);
+      this._burstLeft--;
+      this.shootTimer = 0.25;
+    }
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -2803,6 +2854,7 @@ class Enemy {
 
     let alpha=1;
     if (this.type==='PHANTOM' && !this.visible) alpha=0.08;
+    if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
 
     ctx.save();
     ctx.globalAlpha=alpha;
@@ -2864,6 +2916,17 @@ class Enemy {
         ctx.stroke();
         ctx.restore();
       }
+      // Teleporter: afterimage at previous warp origin
+      if (this.type === 'TELEPORTER' && this._warpFade > 0) {
+        ctx.save();
+        ctx.globalAlpha = this._warpFade * 0.35;
+        ctx.fillStyle = this.colour;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.colour;
+        const osx = this._warpFromX * TILE - camX, osy = this._warpFromY * TILE - camY;
+        ctx.fillRect(osx - sz / 2, osy - sz / 2, sz, sz);
+        ctx.restore();
+      }
       // elite diamond marker
       if (this.elite) {
         ctx.fillStyle='#ffffff';
@@ -2899,7 +2962,8 @@ const ENEMY_WEIGHTS = {
   DRONE:    { base: 5,  perFloor: 3 },    // late-game ranged
   SHIELDER: { base: 3,  perFloor: 2, minFloor: 3 },  // mid-game tank
   SPLITTER: { base: 2,  perFloor: 2, minFloor: 4 },  // splits into SHARDs on death
-  GRENADIER:{ base: 1,  perFloor: 2, minFloor: 5 },  // late-game zone denial
+  GRENADIER:  { base: 1,  perFloor: 2, minFloor: 5 },  // late-game zone denial
+  TELEPORTER: { base: 1,  perFloor: 2, minFloor: 6 },  // deep-floor blinker
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2931,6 +2995,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SHIELDER':hp=50;  atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
     case 'GRENADIER':hp=30; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
     case 'SPLITTER':hp=40;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
+    case 'TELEPORTER':hp=25;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
@@ -2950,6 +3015,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   e.elite=false;
   if (type==='PHANTOM') e.visible=false;
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
+  if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses
   if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < d.eliteRate) {
@@ -3905,7 +3971,7 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
