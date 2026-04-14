@@ -222,6 +222,63 @@ Player carries one weapon at a time. Weapons found as floor drops.
 
 Default starting weapon: PULSE PISTOL.
 
+### Weapon Affixes
+
+Weapons found on floor 2+ may roll random affixes that modify their stats and grant on-hit/on-kill effects. Each weapon can have at most one prefix (stat modifier) and one suffix (effect).
+
+**Rarity tiers:**
+- **Common** (white, no affixes) — guaranteed on floor 1
+- **Uncommon** (green, 1 affix) — available floor 2+
+- **Rare** (purple, 2 affixes: prefix + suffix) — available floor 4+
+
+**Affix chance by floor:**
+
+| Floor | No affix | 1 affix | 2 affixes |
+|-------|----------|---------|-----------|
+| 1     | 100%     | 0%      | 0%        |
+| 2–3   | 50%      | 50%     | 0%        |
+| 4–5   | 30%      | 45%     | 25%       |
+| 6+    | 20%      | 40%     | 40%       |
+
+**Prefix affixes (stat modifiers):**
+
+| Affix    | Effect                       | Eligibility       |
+|----------|------------------------------|--------------------|
+| Rapid    | +30% fire rate               | All weapons        |
+| Heavy    | +35% damage, −20% fire rate  | All weapons        |
+| Extended | +40% range                   | Ranged only        |
+| Twin     | +1 projectile, −15% damage   | Ranged only        |
+| Precise  | −60% spread                  | Spread weapons only|
+
+**Suffix affixes (on-hit / on-kill effects):**
+
+| Affix        | Effect                                              |
+|--------------|------------------------------------------------------|
+| of Flame     | Ignites: 3 DPS burn for 3 s (orange particles)       |
+| of Frost     | Slows: 30% speed reduction for 2 s (cyan tint)       |
+| of Vampirism | Heals player for 8% of actual damage dealt            |
+| of Thunder   | 20% chance chain lightning to nearest enemy within 3 tiles for 50% damage |
+| of Detonation| Enemies explode on kill: 25 AoE damage in 2-tile radius (LOS-gated, also damages player at 50%) |
+
+**Naming convention:** `"[Prefix] Base Name [Suffix]"` (e.g., "Rapid Pulse Pistol of Flame").
+
+**Proc rules:**
+- On-hit effects (burn, slow, leech, chain) trigger from both projectile hits and melee hits.
+- Chain lightning and detonation AoE are "proc" damage — they do not trigger further on-hit effects (prevents recursion).
+- Burn damage-over-time ticks can trigger on-kill effects (detonation).
+- Detonation AoE damages the player at 50% if in range (LOS-gated), similar to VOLATILE modifier.
+
+**Visual indicators:**
+- Burning enemies: flickering orange underglow.
+- Slowed enemies: cyan tint overlay.
+- Chain lightning: jagged yellow bolt between targets (0.15 s fade).
+- Weapon name in HUD uses rarity colour (green for uncommon, purple for rare).
+- Upgrade/vendor cards show rarity border glow and affix descriptions.
+
+**Save format:** weapon saved as `{ _base: 'PULSE_PISTOL', _affixes: ['RAPID', 'FLAME'] }` instead of plain key string. `buildWeapon()` deterministically reconstructs from base + affixes on load (no re-rolling).
+
+**Implementation:** `buildWeapon(baseKey, affixIds)` for deterministic construction; `rollWeapon(baseKey, floor)` for random generation. `applyHitEffects(enemy, actualDmg, hitCtx)` centralizes on-hit logic. `applyOnKill(enemy)` handles detonation. `tickEnemyStatusEffects(enemy, dt)` processes burn/slow per frame. Enemy class stores `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`.
+
 ### Level-Up Effects (automatic on XP threshold)
 
 - MAX_HP +20, HP fully restored
@@ -1358,3 +1415,4 @@ when key indicators are present to avoid collision.
 | v25.0   | Death recap & run statistics: all player damage attributed to named sources via `takeDamage(dmg, source)`. Game Over screen shows KILLED BY banner, colour-coded damage breakdown bars (top 3–4 sources with percentages), and run stats (enemies slain, shield blocks, time survived). Victory screen adds same run stats line. `SOURCE_LABELS`/`SOURCE_COLOURS` maps for friendly display. `Projectile.ownerType` tracks shooter. `player.damageLog`, `enemiesKilled`, `hitsBlocked` persisted in save. `game.runTime` accumulates across floors. `endRun()` snapshots `lastRunRecap` for stable rendering. SW cache v32 |
 | v26.0   | Status effect indicators: three visual systems for active effect communication. (1) Low-HP danger vignette — red pulsing radial gradient at screen edges when HP ≤ 25%, severity-scaled intensity, heartbeat-synced pulse, drawn before HUD. (2) Floor modifier banner — 3 s animated pill sliding from top on floor entry, icon + name + description (compact: icon + label only), replaces `game.msg()` announcement, gated to new transitions (not save resume). (3) Status effect bar — row of compact badges above HUD showing active modifier, slow debuff, energy shield state, nano regen, dash cooldown/ready. Per-effect smooth alpha fade via `statusFx` keyed state. `game.modBannerTimer` ticked in `updatePlaying()`. SW cache v33 |
 | v27.0   | Room-clear rewards: killing all enemies in a room grants bonus credits (`10 + floor × 5`, scaled by difficulty and meta credit multiplier), +50 × floor score, green particle burst at room center, floating "+N◆" text, and `audio.roomClear()` ascending triple chime. Detection runs only when an enemy dies (`game.enemyDiedThisFrame` flag set in `Enemy.die()`), placed after dead-enemy removal and pending-spawn flush in `updatePlaying()` so SPLITTER → SHARD sequences are handled correctly. `room._hadEnemies` flag set during `populateFloor()` (only when count > 0) and `revealSecretRoom()`. `game.clearedRooms` Set tracks rewarded rooms per floor (reset in `loadFloor()`). Multi-room clears in a single frame (e.g. VOLATILE chain) batched into one audio/message. `player.roomsCleared` stat tracked in save/load and shown on Game Over / Victory screens ("N cleared"). Boss room excluded (has own death sequence). Spawn room excluded (no enemies). SW cache v34 |
+| v28.0   | Weapon affixes: random modifiers on weapons for loot variety and replayability. 5 prefixes (stat modifiers: Rapid, Heavy, Extended, Twin, Precise) and 5 suffixes (effects: Flame/burn, Frost/slow, Vampirism/leech, Thunder/chain, Detonation/explode). Floor-gated rarity: common (no affix, floor 1), uncommon (1 affix, floor 2+), rare (2 affixes, floor 4+). Affix eligibility filters prevent dead rolls (Precise on zero-spread, Twin/Extended on melee). Affixed weapons are unique cloned objects with `buildWeapon()`/`rollWeapon()` pattern. `applyHitEffects()` + `applyOnKill()` centralize proc logic with `isProc` guard against recursion. `tickEnemyStatusEffects()` handles burn DOT and slow decay per enemy per frame. Enemy class gains `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`. Visual: burn underglow, frost tint, chain lightning bolts (jagged yellow), rarity-coloured HUD weapon name + upgrade card borders. Save format: weapon stored as `{_base, _affixes}` object. SAVE_VERSION 8.0. SW cache v35 |
