@@ -28,6 +28,7 @@ let gameScale = 1;
 const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
+const SAVE_VERSION = '6.3';
 
 const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13 };
 
@@ -2752,6 +2753,7 @@ const game = {
 
   setState(s, callback) {
     this.state=s;
+    if (s === 'MENU') this.menuSel = 0;
     if (callback) callback();
   },
 
@@ -2893,7 +2895,7 @@ const game = {
     const p = this.player;
     const weaponKey = WEAPON_KEYS.find(k => WEAPONS[k] === p.weapon) || 'PULSE_PISTOL';
     const save = {
-      v: '6.3',
+      v: SAVE_VERSION,
       floor: this.floor,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
@@ -2913,10 +2915,10 @@ const game = {
 
   continueGame() {
     let save;
-    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ return; }
-    if (!save || !save.player) return;
+    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ this.deleteSave(); return; }
+    if (!save || !save.player) { this.deleteSave(); return; }
     // Reject incompatible saves
-    if (save.v !== '6.3') { this.deleteSave(); return; }
+    if (save.v !== SAVE_VERSION) { this.deleteSave(); return; }
     audio.resume();
     const p = new Player();
     const s = save.player;
@@ -2967,7 +2969,6 @@ const game = {
     }
     const hasSave = this.hasSave();
     if (hasSave) {
-      if (this.menuSel === undefined) this.menuSel = 0; // 0=continue, 1=new
       if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = 0;
       if (jp('ArrowDown')||jp('KeyS')) this.menuSel = 1;
       if (jp('Enter')||jp('MouseLeft')) {
@@ -3267,7 +3268,7 @@ const game = {
       // Restore entrance tiles
       if (this.bossSealed) {
         for (const e of this.bossEntrances) {
-          if (e.origTile !== undefined) dungeon.map[e.y][e.x] = e.origTile;
+          if (e.origTile !== undefined) { dungeon.map[e.y][e.x] = e.origTile; delete e.origTile; }
         }
         audio.roomUnseal();
       }
