@@ -1213,6 +1213,51 @@ the manifest to achieve a chrome-less experience.
 
 ---
 
+## Death Recap & Run Statistics
+
+### Damage Tracking
+
+All player damage is attributed to a named source. The `player.takeDamage(dmg, source)` method records cumulative damage per source in `player.damageLog` (object: source→total). Environmental damage that bypasses `takeDamage` (Plasma burn, Arc Grid zap) logs separately via `player.logDamage(source, amount)`.
+
+| Field            | Type   | Reset        | Saved |
+|------------------|--------|-------------|-------|
+| `damageLog`      | Object | `Player.reset()` | Yes |
+| `killedBy`       | String | `Player.reset()` | No (set on death) |
+| `enemiesKilled`  | Number | `Player.reset()` | Yes |
+| `hitsBlocked`    | Number | `Player.reset()` | Yes |
+| `game.runTime`   | Number | `startGame()` | Yes |
+
+Kill counter (`enemiesKilled`) increments in `Enemy.die()` for all non-SHARD enemies.
+
+### Source Labels & Colours
+
+`SOURCE_LABELS` and `SOURCE_COLOURS` maps provide friendly display names and neon colours for all damage sources. Enemy types use their canonical names (Guard, Turret, etc.); bosses use campaign names (Sentinel Mk-I, Neural Hive, Omega Core). Environmental sources: Spike Trap, Plasma, Arc Grid, Grenade, Volatile, Void Orb.
+
+### Recap Snapshot
+
+`endRun()` captures `game.lastRunRecap` — an immutable snapshot of recap fields — before any state transitions. Both GAME_OVER and VICTORY screens render from this snapshot, not live mutable state.
+
+### Game Over Screen
+
+Redesigned layout (top to bottom):
+1. **GAME OVER** title (red glow)
+2. **KILLED BY: {Source}** — prominent, in the source's neon colour with glow
+3. Divider + stats line: Floor • Score • Level
+4. Best combo (if ≥2), difficulty (if non-NORMAL)
+5. **DAMAGE TAKEN** breakdown — top 3–4 sources as coloured progress bars with label, absolute damage, and percentage
+6. Divider + run stats: enemies slain • shield blocks • time survived (m:ss)
+7. Data Fragments earned
+8. Leaderboard (4–5 rows)
+9. Continue prompt
+
+Compact/mobile layout reduces bars to 3, leaderboard to 4 rows.
+
+### Victory Screen
+
+Adds run statistics (same enemies/blocks/time line) between the existing stats and leaderboard. No "killed by" section.
+
+---
+
 ## Changelog
 
 | Version | Change |
@@ -1260,3 +1305,4 @@ the manifest to achieve a chrome-less experience.
 | v22.0   | Dash/dodge ability: Shift key (keyboard) or ⇧ touch button triggers a fast 0.12 s burst-dash at 18 tiles/sec (~5× walk speed) in movement/facing direction. 1.5 s cooldown, invulnerable during dash, wall collision ends early. Amber afterimage trail (8 ghosts, fade 0.25 s) + amber spark particles. `audio.dash()` whoosh SFX. HUD cooldown display (compact + landscape). Touch button added between E and V buttons with cooldown dim overlay. Control hints updated. SW cache v29 |
 | v23.0   | Ambient particle system: environmental storytelling via 5 particle emitter types. DUST motes drift through lit rooms/corridors (white/cyan). EMBER sparks rise from plasma vents (orange). ZAP micro-flashes on active arc grids (blue-white). STEAM wisps from cracked walls when player is near (grey). WISP energy motes around sealed boss entrances (red glow). Separate `ambientParticles[]` array (cap 80), timer-gated spawning (0.08 s), soft fade-in/out, performance-budgeted (max 3 new/tick). Cleared on floor transitions. SW cache v30 |
 | v24.0   | TELEPORTER enemy (floor 6+): spatial disruptor that blinks to random room positions every 2–3 s (floor-scaled), fires 2 quick ranged bursts after 0.4 s materialise, then relocates. Emergency blink if player within 2 tiles. Hot magenta (`#ff44ff`), rapid alpha flicker, fading afterimage at warp origin. `audio.teleport()` zwip SFX. Per-room cap: 1. Credits: 8. OVERCLOCK shortens cycle. SW cache v31 |
+| v25.0   | Death recap & run statistics: all player damage attributed to named sources via `takeDamage(dmg, source)`. Game Over screen shows KILLED BY banner, colour-coded damage breakdown bars (top 3–4 sources with percentages), and run stats (enemies slain, shield blocks, time survived). Victory screen adds same run stats line. `SOURCE_LABELS`/`SOURCE_COLOURS` maps for friendly display. `Projectile.ownerType` tracks shooter. `player.damageLog`, `enemiesKilled`, `hitsBlocked` persisted in save. `game.runTime` accumulates across floors. `endRun()` snapshots `lastRunRecap` for stable rendering. SW cache v32 |
