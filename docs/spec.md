@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v1.1
+# NEON DUNGEON — Game Specification v1.3
 
 ## Vision
 
@@ -275,12 +275,13 @@ A `manifest.json` at the repository root enables Add-to-Home-Screen:
 | `orientation`    | `any`                   |
 | `background_color` / `theme_color` | `#0a0a12` |
 | `start_url`      | `./index.html`          |
-| `icons`          | *(empty — to be added)* |
+| `icons`          | 192×192 + 512×512 PNG (cyberpunk crosshair motif, neon cyan diamond, magenta crosshair, dark grid background) |
 
 Meta tags in `<head>`:
 - `apple-mobile-web-app-capable: yes` (iOS Safari home-screen)
 - `apple-mobile-web-app-status-bar-style: black-translucent`
 - `mobile-web-app-capable: yes` (Android Chrome)
+- `apple-touch-icon` → `icon-192x192.png`
 
 ### Fullscreen — Landscape Auto-Request
 
@@ -318,3 +319,4 @@ the manifest to achieve a chrome-less experience.
 | v1.0    | Initial specification |
 | v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
 | v1.2    | Renderer: dynamic resolution (edge-to-edge canvas, gameScale 0.7–1.5, safe-area insets, touchcancel handling) |
+| v1.3    | PWA icons: 192×192 + 512×512 PNGs added to manifest.json; apple-touch-icon link in HTML |
