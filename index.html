@@ -29,7 +29,7 @@ const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -428,7 +428,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -695,6 +695,17 @@ const audio = (() => {
       osc('sine', 60, 40, 0.12, t, 0.12);
       osc('sine', 60, 40, 0.10, t + 0.18, 0.10);
       noise(0.03, t, 0.06, 200);
+    },
+    plasmaBurn() {
+      const c = getCtx(); const t = c.currentTime;
+      noise(0.06, t, 0.15, 1200);
+      osc('sawtooth', 180, 60, 0.04, t, 0.12);
+    },
+    arcZap() {
+      const c = getCtx(); const t = c.currentTime;
+      osc('square', 2400, 600, 0.08, t, 0.06);
+      osc('square', 1800, 400, 0.06, t + 0.03, 0.05);
+      noise(0.07, t, 0.08, 3000);
     },
     transition() {
       const c = getCtx(); const t = c.currentTime;
@@ -1092,6 +1103,71 @@ function generateFloor(floorNum) {
           map[ty][tx] = Math.random() < 0.7 ? T.TRAP_SPIKE : T.TRAP_SLOW;
         }
       }
+    }
+  }
+
+  // ── Plasma Vents (floor 4+): clustered pools in normal rooms ─────────
+  if (floorNum >= 4) {
+    for (const r of rooms) {
+      if (r === spawnRoom || r === bossRoom || r.roomType) continue;
+      if (Math.random() > 0.35) continue; // ~35% of eligible rooms
+      // Seed tile for the pool
+      const sx = r.x + rndInt(2, r.w-3);
+      const sy = r.y + rndInt(2, r.h-3);
+      if (map[sy][sx] !== T.FLOOR) continue;
+      map[sy][sx] = T.PLASMA;
+      // Grow pool via random-walk from seed (2-4 total tiles)
+      const poolSize = rndInt(2, 4);
+      let cx = sx, cy = sy;
+      for (let p = 1; p < poolSize; p++) {
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+        const [ddx, ddy] = dirs[rndInt(0, 3)];
+        const nx = cx + ddx, ny = cy + ddy;
+        if (nx > r.x && nx < r.x+r.w-1 && ny > r.y && ny < r.y+r.h-1 && map[ny][nx] === T.FLOOR) {
+          map[ny][nx] = T.PLASMA;
+          cx = nx; cy = ny;
+        }
+      }
+    }
+  }
+
+  // ── Arc Grids (floor 5+): pulsing hazards in corridors ───────────────
+  if (floorNum >= 5) {
+    // Build room mask to identify corridor tiles
+    const roomMask = Array.from({length:MAP_H}, ()=>new Uint8Array(MAP_W));
+    for (const r of rooms) {
+      for (let ty = r.y; ty < r.y + r.h; ty++)
+        for (let tx = r.x; tx < r.x + r.w; tx++)
+          roomMask[ty][tx] = 1;
+    }
+    // Collect corridor floor tiles (not adjacent to doors/stairs/terminals)
+    const corridorTiles = [];
+    for (let ty = 1; ty < MAP_H-1; ty++) {
+      for (let tx = 1; tx < MAP_W-1; tx++) {
+        if (map[ty][tx] !== T.FLOOR || roomMask[ty][tx]) continue;
+        // Skip if adjacent to door, stairs, terminal, or locked door
+        let nearSpecial = false;
+        for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+          const nt = map[ty+ddy]?.[tx+ddx];
+          if (nt===T.STAIRS||nt===T.TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+        }
+        if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
+      }
+    }
+    // Place arc grids: ~1 per 12 corridor tiles, capped
+    const arcCount = Math.min(Math.floor(corridorTiles.length / 12) + 1, 6 + floorNum);
+    const shuffled = corridorTiles.sort(() => Math.random() - 0.5);
+    let placed = 0;
+    for (const ct of shuffled) {
+      if (placed >= arcCount) break;
+      // Don't place adjacent to another arc
+      let adjArc = false;
+      for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+        if (map[ct.y+ddy]?.[ct.x+ddx] === T.ARC) { adjArc = true; break; }
+      }
+      if (adjArc) continue;
+      map[ct.y][ct.x] = T.ARC;
+      placed++;
     }
   }
 
@@ -1853,6 +1929,8 @@ class Player {
     this.lowHpTimer=0;
     this.keys={red:0, blue:0, gold:0};
     this.trapCooldown=0;
+    this.plasmaBurnTimer=0;  // cosmetic throttle for plasma damage messages
+    this.arcCooldown=0;      // separate cooldown for arc grid zaps
     this.upgrades={};       // persistent upgrade levels: {SAW_BLADE:2, ...}
     this.permSpeedBonus=0;  // from OVERCLOCK
     this.orbitalAngle=0;    // shared rotation for saw blades
@@ -2086,6 +2164,55 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle='#8866ff';
           ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
+        case T.PLASMA: {
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          // Animated orange glow with pulsing brightness
+          const pPulse = 0.3 + 0.15 * Math.sin(lastTime / 400 + tx * 0.7 + ty * 1.3);
+          ctx.globalAlpha = brightness * pPulse;
+          ctx.fillStyle='#ff4400';
+          ctx.fillRect(sx+1,sy+1,TILE-2,TILE-2);
+          // Bright core
+          ctx.globalAlpha = brightness * pPulse * 0.6;
+          ctx.fillStyle='#ff8800';
+          ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+          // Shimmer bubbles
+          ctx.shadowBlur=4; ctx.shadowColor='#ff6600';
+          const bx = sx + 4 + Math.sin(lastTime/300 + tx*2) * 3;
+          const by = sy + 4 + Math.cos(lastTime/350 + ty*2) * 3;
+          ctx.fillStyle='#ffaa33';
+          ctx.globalAlpha = brightness * 0.4;
+          ctx.fillRect(bx, by, 2, 2);
+          break;
+        }
+        case T.ARC: {
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          // Phase-based rendering: bright when active, dim when off
+          const arcActive = Math.sin((game.floorTime||0) * Math.PI) > 0;
+          const aAlpha = arcActive ? 0.5 + 0.2 * Math.sin(lastTime/80) : 0.1;
+          ctx.globalAlpha = brightness * aAlpha;
+          ctx.fillStyle = arcActive ? '#44ccff' : '#1a3344';
+          ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          if (arcActive) {
+            // Crackling arc lines
+            ctx.shadowBlur=6; ctx.shadowColor='#00ccff';
+            ctx.strokeStyle='#88eeff';
+            ctx.lineWidth=1;
+            ctx.globalAlpha = brightness * 0.7;
+            ctx.beginPath();
+            const mid = TILE/2;
+            ctx.moveTo(sx+2, sy+mid + Math.sin(lastTime/50)*3);
+            ctx.lineTo(sx+mid, sy+mid + Math.cos(lastTime/60)*4);
+            ctx.lineTo(sx+TILE-2, sy+mid + Math.sin(lastTime/70+1)*3);
+            ctx.stroke();
+            // Vertical arc
+            ctx.beginPath();
+            ctx.moveTo(sx+mid + Math.cos(lastTime/55)*3, sy+2);
+            ctx.lineTo(sx+mid + Math.sin(lastTime/65)*4, sy+mid);
+            ctx.lineTo(sx+mid + Math.cos(lastTime/75+1)*3, sy+TILE-2);
+            ctx.stroke();
+          }
+          break;
+        }
       }
       ctx.restore();
     }
@@ -2115,7 +2242,7 @@ function drawHUD(player) {
     ctx.fillStyle=hpCol; ctx.fillRect(lx, r1, hpW * hpFrac, 12);
     ctx.shadowBlur=0;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`HP ${player.hp}/${player.maxHp}`, lx + 2, r1 + 10);
+    ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 2, r1 + 10);
 
     const mid = lx + hpW + 10;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
@@ -2166,7 +2293,7 @@ function drawHUD(player) {
     ctx.shadowBlur=0;
 
     ctx.fillStyle='#e0e0ff'; ctx.font='11px monospace';
-    ctx.fillText(`HP ${player.hp}/${player.maxHp}`, lx + 4, y + 15);
+    ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 4, y + 15);
 
     const colBase = lx + 141;
     ctx.fillStyle='#aaaacc'; ctx.font='11px monospace';
@@ -2248,6 +2375,8 @@ function drawMinimap(dungeon, player) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
       else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW) col='#202040';
+      else if (tile===T.PLASMA) col='#ff6600';
+      else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
       else if (tile===T.DOOR) col='#664422';
       else if (tile===T.LOCKED_R) col='#ff3333';
@@ -2420,6 +2549,7 @@ const game = {
 
   loadFloor(n) {
     this.floor=n;
+    this.floorTime=0; // arc grid phase timer
     // Strip floor-only shield bonus from previous floor
     this.player.def-=this.player.shieldBonus;
     this.player.shieldBonus=0;
@@ -2482,11 +2612,11 @@ const game = {
     if (this.floor>=10) {
       // victory
       audio.victory();
-      this.player.score+=500*this.floor+this.player.hp*10;
+      this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
       this.endRun(true);
     } else {
       audio.descend();
-      this.player.score+=500*this.floor+this.player.hp*10;
+      this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
       const next=this.floor+1;
       this.fadeTo('DESCENDING TO FLOOR '+next, ()=>{
         this.loadFloor(next);
@@ -2556,6 +2686,7 @@ const game = {
   updatePlaying(dt) {
     const player=this.player;
     const dungeon=this.dungeon;
+    this.floorTime = (this.floorTime || 0) + dt;
 
     player.update(dt,dungeon.map);
 
@@ -2739,6 +2870,35 @@ const game = {
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
       }
+    }
+
+    // environmental hazards (separate from traps — own cooldowns, bypass armor)
+    if (tile === T.PLASMA) {
+      // Continuous burn: direct HP reduction, bypasses defense/invincibility
+      const burnDps = 3 + this.floor;
+      player.hp = Math.max(0, player.hp - burnDps * dt);
+      // Cosmetic throttle for messages, particles, and audio
+      player.plasmaBurnTimer = Math.max(0, player.plasmaBurnTimer - dt);
+      if (player.plasmaBurnTimer <= 0) {
+        const dmgShown = Math.round(burnDps);
+        this.msg('Plasma burn! -'+dmgShown+'/s','#ff6600');
+        spawnParticles(player.x, player.y, 'SPARK', '#ff8800', 3);
+        audio.plasmaBurn();
+        player.plasmaBurnTimer = 0.5;
+      }
+      if (player.hp <= 0) { player.hp = 0; audio.gameOver(); this.endRun(false); }
+    }
+    player.arcCooldown = Math.max(0, player.arcCooldown - dt);
+    if (tile === T.ARC && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
+      // Periodic zap during active phase
+      const zapDmg = 10 + this.floor * 2;
+      player.hp = Math.max(0, player.hp - zapDmg);
+      player.arcCooldown = 0.8;
+      player.flashTimer = 0.15;
+      this.msg('Arc zap! -'+zapDmg+' HP','#44ccff');
+      spawnParticles(player.x, player.y, 'SPARK', '#88eeff', 6);
+      audio.arcZap();
+      if (player.hp <= 0) { player.hp = 0; audio.gameOver(); this.endRun(false); }
     }
 
     // special room effects
