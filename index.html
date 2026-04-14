@@ -813,6 +813,15 @@ const audio = (() => {
       // Hiss of pressure release
       noise(0.15, t, 0.25, 2000, bus);
     },
+    roomClear() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.5);
+      // Bright ascending triple chime
+      osc('sine',     600,  800,  0.12, t, 0.1, bus);
+      osc('sine',     800,  1000, 0.10, t + 0.08, 0.1, bus);
+      osc('sine',     1000, 1400, 0.12, t + 0.16, 0.15, bus);
+      osc('triangle', 1200, 1600, 0.05, t + 0.16, 0.12, bus);
+    },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.6);
@@ -2511,6 +2520,7 @@ class Enemy {
 
   die() {
     this.dead=true;
+    game.enemyDiedThisFrame=true;
     audio.death();
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
     const d=getDiff();
@@ -3274,6 +3284,7 @@ class Player {
     this.killedBy='';           // source of killing blow
     this.enemiesKilled=0;       // total enemies killed this run
     this.hitsBlocked=0;         // energy shield blocks
+    this.roomsCleared=0;        // rooms fully cleared of enemies
   }
 
   logDamage(source, amount) {
@@ -4201,6 +4212,7 @@ function populateFloor(dungeon, floorNum) {
       if (e.elite) roomElite = true;
       enemies.push(e);
     }
+    if (count > 0) room._hadEnemies = true;
 
     const itemCount=rndInt(0,2) + (room.hasLoot ? 2 : 0); // locked rooms get bonus loot
     for (let j=0;j<itemCount;j++) {
@@ -4265,6 +4277,8 @@ const game = {
   shopSelected: 0,    // keyboard selection index in shop
   shopClosing: false,  // true during auto-close delay after last purchase
   currentLore: null,   // lore text being displayed in READING state
+  clearedRooms: null,  // Set of rooms where all enemies were killed this floor
+  enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -4316,6 +4330,7 @@ const game = {
     this.bossEntrances=[];
     this.bossSealed=false;
     this.bossAlive=false;
+    this.clearedRooms=new Set();
     populateFloor(this.dungeon,n);
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
@@ -4421,6 +4436,7 @@ const game = {
       const e = spawnEnemy(type, ex, ey, floorNum, sr, true);
       enemies.push(e);
     }
+    if (count > 0) sr._hadEnemies = true;
     // Spawn premium loot: guaranteed upgrade item + bonus credits
     const itemCount = 2 + (sr.w * sr.h >= 40 ? 1 : 0);
     for (let j=0; j<itemCount; j++) {
@@ -4453,6 +4469,7 @@ const game = {
       damageLog: {...p.damageLog},
       enemiesKilled: p.enemiesKilled,
       hitsBlocked: p.hitsBlocked,
+      roomsCleared: p.roomsCleared,
       floor: this.floor,
       score: p.score,
       level: p.level,
@@ -4515,7 +4532,8 @@ const game = {
         loreRead:[...p.loreRead],
         damageLog:{...p.damageLog},
         enemiesKilled:p.enemiesKilled,
-        hitsBlocked:p.hitsBlocked
+        hitsBlocked:p.hitsBlocked,
+        roomsCleared:p.roomsCleared
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -4556,6 +4574,7 @@ const game = {
     p.damageLog=s.damageLog||{};
     p.enemiesKilled=s.enemiesKilled||0;
     p.hitsBlocked=s.hitsBlocked||0;
+    p.roomsCleared=s.roomsCleared||0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
@@ -4706,6 +4725,34 @@ const game = {
         enemies.push(spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false));
       }
       pendingEnemySpawns.length = 0;
+    }
+
+    // room-clear rewards — only scan when an enemy died this frame
+    if (this.enemyDiedThisFrame && this.clearedRooms) {
+      this.enemyDiedThisFrame = false;
+      let clears = 0;
+      let lastCx = 0, lastCy = 0;
+      for (const room of dungeon.rooms) {
+        if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
+        if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
+        if (enemies.some(e => !e.dead && e.room === room)) continue;
+        this.clearedRooms.add(room);
+        clears++;
+        lastCx = room.cx; lastCy = room.cy;
+        const d = getDiff();
+        const cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul);
+        player.credits += cr;
+        player.score += 50 * this.floor;
+        player.roomsCleared++;
+        spawnParticles(room.cx, room.cy, 'EXPLOSION', '#39ff14', 15);
+        spawnDmgText(room.cx, room.cy, '+' + cr + '◆', '#39ff14');
+      }
+      if (clears > 0) {
+        audio.roomClear();
+        this.msg(clears > 1 ? clears + ' ROOMS CLEARED!' : 'ROOM CLEARED!', '#39ff14');
+      }
+    } else {
+      this.enemyDiedThisFrame = false;
     }
 
     // update lighting
@@ -6312,6 +6359,7 @@ const game = {
     const secs = Math.floor((r.runTime||0)%60);
     const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
     let runLine = `${r.enemiesKilled||0} slain`;
+    if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += lh;
@@ -6371,6 +6419,7 @@ const game = {
     const secs = Math.floor((r.runTime||0)%60);
     const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
     let runLine = `${r.enemiesKilled||0} slain`;
+    if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += narrow ? 20 : 24;
