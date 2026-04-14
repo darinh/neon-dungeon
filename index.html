@@ -10,9 +10,10 @@
 <link rel="manifest" href="manifest.json">
 <title>NEON DUNGEON</title>
 <style>
+  :root { --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); }
   * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
-  body { background: #0a0a12; overflow: hidden; display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; user-select: none; }
-  canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  body { background: #0a0a12; overflow: hidden; width: 100vw; height: 100vh; user-select: none; }
+  canvas { display: block; image-rendering: pixelated; cursor: crosshair; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; }
 </style>
 </head>
 <body>
@@ -21,7 +22,8 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const W = 900, H = 600;
+let W = 900, H = 600;
+let gameScale = 1;
 const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
@@ -33,20 +35,33 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
 
+// Safe-area insets (logical px) for notched devices
+let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
+
 let scale = 1, offX = 0, offY = 0;
 function resize() {
-  const sx = window.innerWidth / W, sy = window.innerHeight / H;
-  scale = Math.min(sx, sy);
-  canvas.style.width  = (W * scale) + 'px';
-  canvas.style.height = (H * scale) + 'px';
-  offX = (window.innerWidth  - W * scale) / 2;
-  offY = (window.innerHeight - H * scale) / 2;
-  canvas.style.left = offX + 'px';
-  canvas.style.top  = offY + 'px';
-  canvas.style.position = 'fixed';
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Scale: smaller viewport dimension maps to ~600 logical px
+  // Tiles (20 logical px) appear as 20 × gameScale CSS px on screen
+  // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
+  gameScale = clamp(Math.min(vw, vh) / 600, 0.7, 1.5);
+  W = Math.round(vw / gameScale);
+  H = Math.round(vh / gameScale);
+  canvas.width = W;
+  canvas.height = H;
+  scale = gameScale;
+  offX = 0;
+  offY = 0;
+  // Read safe-area insets from CSS env() and convert to logical px
+  const cs = getComputedStyle(document.documentElement);
+  safeTop    = (parseFloat(cs.getPropertyValue('--sat')) || 0) / gameScale;
+  safeRight  = (parseFloat(cs.getPropertyValue('--sar')) || 0) / gameScale;
+  safeBottom = (parseFloat(cs.getPropertyValue('--sab')) || 0) / gameScale;
+  safeLeft   = (parseFloat(cs.getPropertyValue('--sal')) || 0) / gameScale;
+  console.log(`[NEON DUNGEON] ${vw}×${vh} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px`);
 }
-resize();
-window.addEventListener('resize', resize);
+// resize() + event listener registered in Boot section (after all defs are ready)
 
 // ─── Fullscreen (landscape auto-request, portrait auto-exit) ─────────────────
 const fsApi = {
@@ -127,8 +142,8 @@ window.addEventListener('keyup', e => {
 });
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
-  mouse.x = (e.clientX - r.left) / scale;
-  mouse.y = (e.clientY - r.top)  / scale;
+  mouse.x = (e.clientX - r.left) * canvas.width / r.width;
+  mouse.y = (e.clientY - r.top)  * canvas.height / r.height;
 });
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
@@ -142,21 +157,41 @@ const touch = {
   btnE: null, btnV: null, btnPause: null,
 };
 
-// Button definitions (screen coords, drawn + hit-tested)
+// Button definitions — positions updated dynamically by updateBtns()
 const BTNS = {
-  E:     { x:W-160, y:H-90,  r:30, label:'E',  colour:'#00f5ff' },
-  V:     { x:W-90,  y:H-90,  r:28, label:'V',  colour:'#aa00ff' },
-  PAUSE: { x:W-30,  y:30,    r:20, label:'II', colour:'#ff00c8' },
+  E:     { x:0, y:0, r:30, label:'E',  colour:'#00f5ff' },
+  V:     { x:0, y:0, r:28, label:'V',  colour:'#aa00ff' },
+  PAUSE: { x:0, y:0, r:20, label:'II', colour:'#ff00c8' },
 };
+function updateBtns() {
+  // Scale up buttons on small screens (min ~44 CSS px diameter)
+  const minR = 22 / gameScale;
+  BTNS.E.r     = Math.max(30, minR);
+  BTNS.V.r     = Math.max(28, minR);
+  BTNS.PAUSE.r = Math.max(20, Math.ceil(minR * 0.7));
+  // Position from edges, respecting safe-area insets
+  const pr = Math.max(10, safeRight);
+  const pb = Math.max(10, safeBottom);
+  const pt = Math.max(10, safeTop);
+  BTNS.E.x     = W - pr - 160;
+  BTNS.E.y     = H - pb - 90;
+  BTNS.V.x     = W - pr - 90;
+  BTNS.V.y     = H - pb - 90;
+  BTNS.PAUSE.x = W - pr - 30;
+  BTNS.PAUSE.y = pt + 30;
+}
 
 function toCanvas(clientX, clientY) {
   const r = canvas.getBoundingClientRect();
-  return [(clientX - r.left) / scale, (clientY - r.top) / scale];
+  return [(clientX - r.left) * canvas.width / r.width,
+          (clientY - r.top)  * canvas.height / r.height];
 }
 
 function hitBtn(cx, cy, btn) {
   const dx=cx-btn.x, dy=cy-btn.y;
-  return dx*dx+dy*dy <= btn.r*btn.r;
+  // Expand hit area on small screens to meet minimum touch target
+  const hitR = Math.max(btn.r, 22 / gameScale);
+  return dx*dx+dy*dy <= hitR*hitR;
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -225,6 +260,18 @@ canvas.addEventListener('touchend', e => {
     if (t.identifier===touch.btnPause) touch.btnPause=null;
   }
 }, {passive:false});
+
+canvas.addEventListener('touchcancel', e => {
+  e.preventDefault();
+  resetTouch();
+}, {passive:false});
+
+function resetTouch() {
+  touch.joystick.active=false; touch.joystick.id=null; touch.joystick.dx=0; touch.joystick.dy=0;
+  touch.aim.active=false; touch.aim.id=null; touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=false;
+  touch.btnE=null; touch.btnV=null; touch.btnPause=null;
+  mouse.down=false;
+}
 
 function drawTouchUI() {
   // Left joystick (move)
@@ -1206,9 +1253,14 @@ class Player {
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
 function getCamera(player) {
-  const camX=clamp(player.x*TILE-W/2, 0, MAP_W*TILE-W);
-  const camY=clamp(player.y*TILE-H/2+30, 0, MAP_H*TILE-H+30);
-  return {x:camX,y:camY};
+  const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
+  const camX = W >= worldW
+    ? -(W - worldW) / 2
+    : clamp(player.x * TILE - W / 2, 0, worldW - W);
+  const camY = H >= worldH
+    ? -(H - worldH) / 2
+    : clamp(player.y * TILE - H / 2 + 30, 0, worldH - H + 30);
+  return { x: camX, y: camY };
 }
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
@@ -1267,10 +1319,10 @@ function drawWorld(dungeon, camX, camY) {
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 function drawHUD(player) {
-  const y=H-38;
+  const y=H-38-safeBottom;
   ctx.save();
   ctx.fillStyle='rgba(10,10,18,0.85)';
-  ctx.fillRect(0,y-2,W,42);
+  ctx.fillRect(0,y-2,W,H-y+2); // extend to bottom edge over safe area
 
   // HP bar
   ctx.fillStyle='#1a1a2e'; ctx.fillRect(14,y+4,130,14);
@@ -1328,7 +1380,7 @@ function drawHUD(player) {
 
 // ─── Minimap ──────────────────────────────────────────────────────────────────
 function drawMinimap(dungeon, player) {
-  const MW=120, MH=80, MX=W-MW-8, MY=8;
+  const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
   ctx.save();
   ctx.fillStyle='rgba(0,0,0,0.75)';
   ctx.fillRect(MX-2,MY-2,MW+4,MH+4);
@@ -1373,7 +1425,7 @@ function drawMessages() {
     ctx.globalAlpha=Math.min(1,m.life);
     ctx.shadowBlur=6; ctx.shadowColor=m.colour;
     ctx.fillStyle=m.colour; ctx.font='13px monospace';
-    ctx.fillText(m.text, 14, H-50-(messages.length-1-i)*16);
+    ctx.fillText(m.text, 14+safeLeft, H-50-safeBottom-(messages.length-1-i)*16);
     ctx.restore();
   }
 }
@@ -1839,6 +1891,10 @@ function loop(ts) {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+resize();
+updateBtns();
+mouse.x = W/2; mouse.y = H/2;
+window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); mouse.x = W/2; mouse.y = H/2; });
 game.state='MENU';
 game.menuParticles=[];
 requestAnimationFrame(loop);

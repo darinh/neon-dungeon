@@ -11,7 +11,7 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 ## Technical Constraints
 
 - **Delivery:** Single `index.html` file, zero external dependencies
-- **Renderer:** HTML5 Canvas 2D API, 900×600 logical resolution
+- **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 14–30 CSS px)
 - **Audio:** Web Audio API (synthesised — no audio files)
 - **Persistence:** `localStorage` for high-score table (top 10 entries)
 - **Browser target:** Modern Chromium / Firefox (ES2020+)
@@ -317,3 +317,4 @@ the manifest to achieve a chrome-less experience.
 |---------|--------|
 | v1.0    | Initial specification |
 | v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
+| v1.2    | Renderer: dynamic resolution (edge-to-edge canvas, gameScale 0.7–1.5, safe-area insets, touchcancel handling) |
