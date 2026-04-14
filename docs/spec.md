@@ -796,6 +796,10 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   damage, yellow (#ffcc00) for killing blows, red (#ff4444) for player damage,
   blue (#4488ff) for shield blocks. Numbers rise and decelerate over ~0.7 s.
   Capped at 20 simultaneous texts. Frame-rate-independent damping.
+- **Screen shake:** Camera shakes on player damage (intensity scales with damage,
+  capped at 8 px), shield breaks (4 px), volatile explosions (6 px), and void
+  shard detonation (10 px). Linear decay over 0.15–0.3 s. Render-only — does
+  not affect aim or game logic. Reset on floor transitions.
 - **HUD:** Semi-transparent panel bottom-left (HP bar, weapon, floor, score)
 - **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only)
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
@@ -1141,3 +1145,4 @@ the manifest to achieve a chrome-less experience.
 | v16.0   | SPLITTER enemy (floor 4+): splits into 2 fast SHARDs on death. SHARDs use zigzag AI, 0.25 tile size, no drops, 0 credits, 8 XP. Deferred spawn pattern via `pendingEnemySpawns[]` flushed after dead enemy cleanup. Per-room cap: 2 splitters. SW cache v23 |
 | v17.0   | Ricochet visual trail: bouncing projectiles leave a fading cyan trail showing their path. Trail records recent positions and renders as gradient-opacity line segments. Active from the moment of firing when Ricochet Module is equipped. SW cache v24 |
 | v18.0   | Floating damage numbers: every hit spawns a rising, fading text showing the damage dealt. White for normal enemy hits, yellow for killing blows, red for player damage, blue "BLOCK" for energy shield absorbs. Capped at 20 concurrent texts. Frame-rate-independent velocity damping (`Math.pow(0.35, dt)`). Cleared on floor transitions. SW cache v25 |
+| v19.0   | Screen shake: camera shakes on player damage (intensity ∝ damage, capped 8 px), shield break (4 px), volatile explosions (6 px), void shard detonation (10 px). Linear decay, render-only (no aim interference). Reset on floor transitions. SW cache v26 |
