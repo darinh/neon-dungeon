@@ -1110,6 +1110,24 @@ function drawFloatingTexts(camX, camY) {
   }
 }
 
+// ─── Screen Shake ────────────────────────────────────────────────────────────
+const shake = { intensity: 0, timer: 0, ox: 0, oy: 0 };
+function triggerShake(intensity, duration = 0.25) {
+  if (intensity > shake.intensity) {
+    shake.intensity = intensity;
+    shake.timer = duration;
+  }
+}
+function updateShake(dt) {
+  if (shake.timer <= 0) { shake.ox = shake.oy = 0; return; }
+  shake.timer -= dt;
+  const t = Math.max(0, shake.timer);
+  const mag = shake.intensity * (t / 0.25);  // decay linearly
+  shake.ox = (Math.random() * 2 - 1) * mag;
+  shake.oy = (Math.random() * 2 - 1) * mag;
+  if (shake.timer <= 0) { shake.intensity = 0; shake.ox = shake.oy = 0; }
+}
+
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 function createMap() {
   return Array.from({length: MAP_H}, () => new Uint8Array(MAP_W).fill(T.WALL));
@@ -2082,6 +2100,7 @@ class Enemy {
     if (game.modifier === 'VOLATILE' && !this.isBoss && !this._volatileKill) {
       const vr = 2, vdmg = 15 + game.floor * 2;
       spawnParticles(this.x, this.y, 'EXPLOSION', '#ff4422', 18);
+      triggerShake(6, 0.2);
       const p = game.player;
       if (dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
         p.takeDamage(vdmg);
@@ -2778,6 +2797,7 @@ class Player {
       spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
       spawnDmgText(this.x, this.y, 'BLOCK', '#4488ff');
       game.msg('🛡 SHIELD BROKEN','#4488ff');
+      triggerShake(4, 0.15);
       return;
     }
     const actual=Math.max(1,dmg-this.def);
@@ -2785,6 +2805,7 @@ class Player {
     this.invincibleTimer=0.5;
     this.flashTimer=0.2;
     spawnDmgText(this.x, this.y, actual, '#ff4444');
+    triggerShake(Math.min(actual * 0.4, 8), 0.2);
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
     if (this.hp<=0) { audio.gameOver(); game.endRun(false); }
@@ -2832,6 +2853,7 @@ class Player {
     }
     spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
     game.msg('VOID SHARD DETONATED!','#aa00ff');
+    triggerShake(10, 0.3);
   }
 
   update(dt,map) {
@@ -3491,6 +3513,7 @@ function drawThreatIndicators(camX, camY) {
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
   enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[];
+  shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
@@ -4029,6 +4052,7 @@ const game = {
     updateLighting(dungeon,player.x,player.y);
     updateParticles(dt);
     updateFloatingTexts(dt);
+    updateShake(dt);
 
     // ── Upgrade effects ──────────────────────────────────────────────────
     // Nano Regen
@@ -4842,7 +4866,8 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     const cam=getCamera(player);
-
+    cam.x += shake.ox;
+    cam.y += shake.oy;
     drawWorld(dungeon,cam.x,cam.y);
 
     // Special room markers
