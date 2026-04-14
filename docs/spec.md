@@ -343,6 +343,7 @@ perks.
 | Level | Perk | Effect |
 |-------|------|--------|
 | 2 | Laser Sight | Dashed neon line from player in facing direction, stops at impassable tiles. Colour matches current weapon. Hidden for melee weapons. Range matches weapon range. |
+| 4 | Threat Sense | Directional chevrons on screen edges pointing toward off-screen enemies within 18 tiles. Closer enemies produce larger, brighter indicators. Boss indicators are red; normal enemies are orange-red. Invisible phantoms are excluded. |
 
 **Laser Sight details:**
 - Ray uses `isPassable()` collision (same as projectiles) so the line
@@ -353,6 +354,16 @@ perks.
   60 % opacity.
 - Step size: 0.15 tiles per iteration (max ~133 steps for Railgun range 20).
 - Not drawn for melee weapons (Plasma Sword hits a full radius, not a line).
+
+**Threat Sense details:**
+- Chevrons are right-pointing triangles rotated toward the enemy's direction from
+  the player, clamped to a 14 px margin inside the viewport edges.
+- Proximity factor `(1 - (dist-1)/(range-1))` scales chevron size (5–8 px) and
+  base opacity (0.35–0.70). A `sin(Date.now()/200)` oscillation adds ±0.2 pulse.
+- Enemies already visible within the viewport (with 1-tile padding) are excluded.
+- Boss enemies use `#ff3333`; normal enemies use `#ff6644`. Both have matching
+  `shadowBlur` glow.
+- Range: 18 tiles from the player — covers roughly two rooms in any direction.
 
 ---
 
@@ -368,6 +379,10 @@ perks.
 - **HUD:** Semi-transparent panel bottom-left (HP bar, weapon, floor, score)
 - **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only)
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
+- **Proximity hints:** Interaction prompts (stairs, doors, terminals, shrines) use
+  a persistent pulsing hint centred above the HUD instead of repeating chat messages.
+  `game.hint` is set per-frame; `drawHint()` renders with `sin(Date.now()/300)`
+  opacity oscillation (0.20–0.90). Only one hint is shown at a time (last wins).
 
 ---
 
@@ -611,3 +626,4 @@ the manifest to achieve a chrome-less experience.
 | v4.2    | Per-floor quest objectives: EXTERMINATE, EXPLORE, SPEEDRUN (60s timer), PACIFIST (no kills); quest HUD below minimap; boss floors always get EXTERMINATE; quest rewards: score, XP, full heal |
 | v5.0    | Environmental hazards: plasma vents (floor 4+, clustered burn pools in rooms, continuous DPS bypassing armor) and arc grids (floor 5+, pulsing electric tiles in corridors, periodic zap damage); new audio `plasmaBurn()` + `arcZap()`; HP display rounded with `Math.ceil`; score HP bonus uses `Math.floor`; SW cache v8 |
 | v6.0    | Level-up perk system: passive abilities auto-unlock at specific levels. First perk: Laser Sight (level 2) — dashed neon line showing aim trajectory, weapon-coloured, stops at walls/doors, hidden for melee; perk infrastructure (`PERKS` table, `checkPerkUnlocks()`, `player.perks`); SW cache v9 |
+| v6.1    | Threat Sense perk (level 4): directional chevrons on screen edges for off-screen enemies within 18 tiles, proximity-scaled size/opacity, boss-aware colouring. Proximity hint system: doors/stairs/terminal/shrine prompts replaced per-frame `msg()` spam with single pulsing `game.hint` overlay above HUD. SW cache v10 |

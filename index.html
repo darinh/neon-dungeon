@@ -1341,7 +1341,8 @@ function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 // ─── Level-Up Perks ──────────────────────────────────────────────────────────
 // Passive abilities unlocked automatically at specific levels
 const PERKS = {
-  LASER_SIGHT: { level:2, name:'Laser Sight', desc:'Shows aim trajectory', colour:'#00f5ff' },
+  LASER_SIGHT:  { level:2, name:'Laser Sight',  desc:'Shows aim trajectory',          colour:'#00f5ff' },
+  THREAT_SENSE: { level:4, name:'Threat Sense',  desc:'Detects nearby off-screen foes', colour:'#ff6644' },
 };
 function checkPerkUnlocks(player, level) {
   for (const [id, perk] of Object.entries(PERKS)) {
@@ -2469,6 +2470,62 @@ function drawMessages() {
   }
 }
 
+function drawHint() {
+  const h = game.hint;
+  if (!h) return;
+  const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 300);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
+  ctx.fillStyle = h.colour;
+  ctx.font = '13px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(h.text, W / 2, layout.hudTop - 14);
+  ctx.restore();
+}
+
+function drawThreatIndicators(camX, camY) {
+  if (!game.player.perks.THREAT_SENSE) return;
+  const px = game.player.x, py = game.player.y;
+  const margin = 14;
+  const viewL = camX / TILE, viewT = camY / TILE;
+  const viewR = (camX + W) / TILE, viewB = (camY + H - layout.hudH) / TILE;
+  const range = 18;
+
+  for (const e of enemies) {
+    if (e.dead) continue;
+    if (e.type === 'PHANTOM' && !e.visible) continue;
+    const dx = e.x - px, dy = e.y - py;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 1 || d > range) continue;
+    // Skip enemies already on screen
+    if (e.x > viewL + 1 && e.x < viewR - 1 && e.y > viewT + 1 && e.y < viewB - 1) continue;
+
+    const sx = e.x * TILE - camX, sy = e.y * TILE - camY;
+    // Clamp to screen edges
+    const cx = clamp(sx, margin, W - margin);
+    const cy = clamp(sy, margin, H - layout.hudH - margin);
+    const ang = Math.atan2(dy, dx);
+    const proximity = 1 - (d - 1) / Math.max(range - 1, 1); // 1=close, 0=far
+    const size = 5 + proximity * 3;
+    const pulse = 0.35 + 0.35 * proximity + 0.2 * Math.sin(Date.now() / 200 + d);
+    const col = e.isBoss ? '#ff3333' : '#ff6644';
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.globalAlpha = pulse;
+    ctx.shadowBlur = 8; ctx.shadowColor = col;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.6, -size * 0.6);
+    ctx.lineTo(-size * 0.6, size * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
   enemies=[]; items=[]; projectiles=[]; particles=[];
@@ -2571,6 +2628,7 @@ const game = {
   nameEntry: null,
   lastSavedRank: -1,
   quest: null, // current floor objective
+  hint: null,  // proximity hint {text, colour} — set per-frame, rendered with pulse
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -2740,6 +2798,7 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     this.floorTime = (this.floorTime || 0) + dt;
+    this.hint = null;
 
     player.update(dt,dungeon.map);
 
@@ -2866,9 +2925,9 @@ const game = {
     if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp('KeyE')) {
       this.descend();
     }
-    if (tile===T.STAIRS) this.msg('Press E to descend','#ffff00');
-    if (tile===T.TERMINAL && bossBlocking) this.msg('CORE terminal locked — destroy OMEGA CORE first','#ff3333');
-    if (tile===T.TERMINAL && !bossBlocking) this.msg('Press E to interface with CORE terminal','#00f5ff');
+    if (tile===T.STAIRS) this.hint={text:'Press E to descend',colour:'#ffff00'};
+    if (tile===T.TERMINAL && bossBlocking) this.hint={text:'CORE terminal locked — destroy OMEGA CORE first',colour:'#ff3333'};
+    if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press E to interface with CORE terminal',colour:'#00f5ff'};
 
     // door interaction (check adjacent tiles when pressing E)
     if (jp('KeyE')) {
@@ -2903,8 +2962,8 @@ const game = {
       const dx=tx+ddx, dy=ty+ddy;
       if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
       const dt=dungeon.map[dy][dx];
-      if (dt===T.DOOR) { this.msg('Press E to open door','#aa8844'); break; }
-      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.msg('Need '+kc.toUpperCase()+' KEY (press E)', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'); break; }
+      if (dt===T.DOOR) { this.hint={text:'Press E to open door',colour:'#aa8844'}; break; }
+      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press E)', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
     }
 
     // trap triggering
@@ -2970,7 +3029,7 @@ const game = {
           this.msg('XP Shrine: +'+xp+' XP!','#aa00ff');
           spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#aa00ff', 15);
         }
-        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.msg('Press E at shrine','#aa00ff');
+        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at shrine',colour:'#aa00ff'};
       }
     }
 
@@ -3454,6 +3513,7 @@ const game = {
     }
 
     drawHUD(player);
+    drawThreatIndicators(cam.x, cam.y);
     drawMinimap(dungeon,player);
 
     // Quest HUD (below minimap)
@@ -3478,6 +3538,7 @@ const game = {
     }
 
     drawMessages();
+    drawHint();
     drawTouchUI();
   },
 
