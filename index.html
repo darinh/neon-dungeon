@@ -242,8 +242,14 @@ canvas.addEventListener('touchstart', e => {
         else justPressed.add('Escape');
       }
       else if (game.state === 'MENU' && game.hasSave()) {
-        // Two-option menu: top half = continue (0), bottom half = new game (1)
-        game.menuSel = cy < H/2 ? 0 : 1;
+        // Hit-test against actual menu item positions
+        const narrow = layout.compact;
+        const titleFs = narrow ? 48 : 72;
+        const ty1 = narrow ? 120 : 160;
+        const menuY = ty1 + titleFs * 0.95 + 80; // startY of "Continue"
+        const gap = narrow ? 24 : 28;
+        const mid = menuY + gap / 2; // midpoint between the two options
+        game.menuSel = cy < mid ? 0 : 1;
         justPressed.add('Enter');
       }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
@@ -3245,10 +3251,13 @@ const game = {
 
   continueGame() {
     let save;
-    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ this.deleteSave(); return; }
-    if (!save || !save.player) { this.deleteSave(); return; }
-    // Reject incompatible saves
-    if (save.v !== SAVE_VERSION) { this.deleteSave(); return; }
+    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ save = null; }
+    if (!save || !save.player || save.v !== SAVE_VERSION) {
+      this.deleteSave();
+      this.startGame();
+      this.msg('SAVE DATA CORRUPT — STARTED FRESH','#ff4444');
+      return;
+    }
     audio.resume();
     const p = new Player();
     const s = save.player;
