@@ -541,7 +541,7 @@ const audio = (() => {
         noise(0.08, t, 0.03, 4000);
       }
     },
-    hit(isPlayer) {
+    hit(isPlayer, weaponName) {
       const c = getCtx(); const t = c.currentTime;
       if (isPlayer) {
         // Impact: noise burst + low sine thump + sub-bass
@@ -549,9 +549,30 @@ const audio = (() => {
         osc('sine',    80, 30, 0.25, t, 0.15);
         osc('triangle',40, 20, 0.12, t, 0.1);
       } else {
-        // Bright transient ping + body
-        osc('sine',    600, 200, 0.12, t, 0.06);
-        osc('triangle',1200,400, 0.05, t, 0.04);
+        const n = weaponName;
+        if (n === 'Scatter Gun') {
+          // Quick plink: bright but short
+          osc('sine',    800, 300, 0.08, t, 0.04);
+          noise(0.05, t, 0.02, 3000);
+        } else if (n === 'Railgun') {
+          // Metallic crack + lingering ring
+          const bus = wetDry(1, 0.2, 0.2);
+          noise(0.10, t, 0.03, 6000, bus);
+          osc('sine', 1800, 600, 0.08, t, 0.15, bus);
+        } else if (n === 'Plasma Sword') {
+          // Electric sizzle
+          osc('sawtooth', 900, 200, 0.10, t, 0.07);
+          noise(0.06, t, 0.03, 4000);
+        } else if (n === 'Void Cannon') {
+          // Deep resonant thud
+          const bus = wetDry(1, 0.15, 0.15);
+          osc('sine', 120, 40, 0.12, t, 0.12, bus);
+          noise(0.08, t, 0.06, 400, bus);
+        } else {
+          // Pulse Pistol / default: bright transient ping + body
+          osc('sine',    600, 200, 0.12, t, 0.06);
+          osc('triangle',1200,400, 0.05, t, 0.04);
+        }
       }
     },
     death() {
@@ -835,13 +856,14 @@ function updateLighting(dungeon, px, py) {
 // ─── Projectiles ─────────────────────────────────────────────────────────────
 let projectiles = [];
 class Projectile {
-  constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer) {
+  constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     this.x=x; this.y=y;
     [this.dx,this.dy]=norm(dx,dy);
     this.spd=spd; this.dmg=dmg;
     this.maxRange=range; this.travelled=0;
     this.colour=colour; this.piercing=piercing;
     this.fromPlayer=fromPlayer; this.dead=false;
+    this.weaponName=weaponName||null;
     this.hitEnemies=new Set();
   }
   update(dt, map, player, enemies) {
@@ -858,9 +880,8 @@ class Projectile {
       for (const e of enemies) {
         if (e.dead||this.hitEnemies.has(e)) continue;
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
-          e.takeDamage(this.dmg);
+          e.takeDamage(this.dmg, this.weaponName);
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
-          audio.hit(false);
           if (!this.piercing) { this.dead=true; return; }
           this.hitEnemies.add(e);
         }
@@ -947,12 +968,12 @@ class Enemy {
     this.flashTimer=0;
   }
 
-  takeDamage(dmg) {
+  takeDamage(dmg, weaponName) {
     if (this.type==='PHANTOM' && !this.visible) { this.visible=true; }
     this.hp -= dmg;
     this.flashTimer = 0.1;
     if (this.hp<=0) { this.hp=0; this.die(); }
-    else audio.hit(false);
+    else audio.hit(false, weaponName);
   }
 
   die() {
@@ -1374,7 +1395,7 @@ class Player {
       for (const e of enemies) {
         if (e.dead) continue;
         if (dist(this.x,this.y,e.x,e.y)<w.range) {
-          e.takeDamage(w.dmg+this.atk);
+          e.takeDamage(w.dmg+this.atk, w.name);
         }
       }
     } else {
@@ -1384,7 +1405,7 @@ class Player {
         const pdx=Math.cos(a), pdy=Math.sin(a);
         projectiles.push(new Projectile(
           this.x,this.y,pdx,pdy,12,w.dmg+this.atk,w.range,
-          w.colour,!!w.piercing,true
+          w.colour,!!w.piercing,true,w.name
         ));
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
@@ -1397,7 +1418,7 @@ class Player {
     if (!this.shards) return;
     this.shards--;
     for (const e of enemies) {
-      if (!e.dead && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80);
+      if (!e.dead && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
     }
     spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
     game.msg('VOID SHARD DETONATED!','#aa00ff');
