@@ -826,6 +826,26 @@ const audio = (() => {
       osc('triangle', 3400, 1200, 0.03, t, 0.05);
       noise(0.02, t, 0.02, 6000);
     },
+    shieldDeflect() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hard metallic clang + descending ring
+      osc('triangle', 1800, 600, 0.08, t, 0.1);
+      osc('sine', 2400, 900, 0.04, t, 0.06);
+      noise(0.03, t, 0.03, 4000);
+    },
+    grenadeLob() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hollow thunk + rising whoosh
+      osc('sine', 200, 120, 0.06, t, 0.12);
+      osc('triangle', 400, 800, 0.03, t, 0.15);
+    },
+    grenadeExplode() {
+      const c = getCtx(); const t = c.currentTime;
+      // Muffled boom + crackle
+      osc('sine', 100, 30, 0.12, t, 0.25);
+      osc('square', 60, 20, 0.06, t, 0.2);
+      noise(0.08, t, 0.15, 2000);
+    },
     autoLaser() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.25, 0.2);
@@ -1419,13 +1439,22 @@ class Projectile {
     const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
-    if (this.travelled>=this.maxRange) { this.dead=true; return; }
+    if (this.travelled>=this.maxRange) {
+      if (this.isGrenade) detonateGrenade(prevX, prevY, this.grenadeDmg);
+      this.dead=true; return;
+    }
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
     if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) {
-      spawnParticles(prevX,prevY,'SPARK',this.colour,3);
+      if (this.isGrenade) { detonateGrenade(prevX, prevY, this.grenadeDmg); }
+      else { spawnParticles(prevX,prevY,'SPARK',this.colour,3); }
       this.dead=true; return;
     }
     if (!isPassable(map[ty][tx])) {
+      // Grenades detonate at last passable position on wall hit
+      if (this.isGrenade) {
+        detonateGrenade(prevX, prevY, this.grenadeDmg);
+        this.dead = true; return;
+      }
       // Ricochet: bounce off walls if bounces remain
       if (this.bouncesLeft>0) {
         this.bouncesLeft--;
@@ -1447,17 +1476,29 @@ class Projectile {
       spawnParticles(this.x,this.y,'SPARK',this.colour,3);
       this.dead=true; return;
     }
+    // Grenades: detonate when reaching target
+    if (this.isGrenade && dist(this.x, this.y, this.targetX, this.targetY) < 0.5) {
+      detonateGrenade(this.x, this.y, this.grenadeDmg);
+      this.dead = true; return;
+    }
     if (this.fromPlayer) {
       for (const e of enemies) {
         if (e.dead||this.hitEnemies.has(e)) continue;
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
+          // Shield deflection check (skip for piercing weapons)
+          if (e.blocksProjectile(this) && !this.piercing) {
+            spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+            audio.shieldDeflect();
+            this.dead = true; return;
+          }
           e.takeDamage(this.dmg, this.weaponName);
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
           this.hitEnemies.add(e);
           if (this.hitEnemies.size > this.maxPierces) { this.dead=true; return; }
         }
       }
-    } else {
+    } else if (!this.isGrenade) {
+      // Normal enemy projectiles damage player (grenades don't — they create zones)
       if (!player.invincibleTimer && dist(this.x,this.y,player.x,player.y)<0.5) {
         player.takeDamage(this.dmg);
         this.dead=true;
@@ -1470,8 +1511,64 @@ class Projectile {
     ctx.shadowBlur=8; ctx.shadowColor=this.colour;
     ctx.fillStyle=this.colour;
     ctx.beginPath();
-    ctx.arc(sx,sy,3,0,TWO_PI);
+    const r = this.isGrenade ? 5 : 3;
+    ctx.arc(sx,sy,r,0,TWO_PI);
     ctx.fill();
+    if (this.isGrenade) {
+      // Pulsing warning ring
+      ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 80) * 0.3;
+      ctx.strokeStyle = '#ffaa00';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 7, 0, TWO_PI);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// ─── Hazard Zones (grenade AoE) ───────────────────────────────────────────────
+function detonateGrenade(x, y, dmg) {
+  hazardZones.push({ x, y, radius: 1.5, age: 0, maxAge: 3, tickCd: 0, dmg, colour: '#ff6622' });
+  spawnParticles(x, y, 'EXPLOSION', '#ff6622', 10);
+  audio.grenadeExplode();
+}
+
+function updateHazardZones(dt, player) {
+  for (let i = hazardZones.length - 1; i >= 0; i--) {
+    const z = hazardZones[i];
+    z.age += dt;
+    z.tickCd = Math.max(0, z.tickCd - dt);
+    if (z.age >= z.maxAge) { hazardZones.splice(i, 1); continue; }
+    // Damage player if within radius (with LOS check to prevent through-wall damage)
+    if (z.tickCd <= 0 && !player.invincibleTimer &&
+        dist(player.x, player.y, z.x, z.y) < z.radius &&
+        hasLOS(z.x, z.y, player.x, player.y, game.dungeon.map)) {
+      player.takeDamage(z.dmg);
+      spawnParticles(player.x, player.y, 'SPARK', '#ff6622', 4);
+      z.tickCd = 0.8;
+    }
+  }
+}
+
+function drawHazardZones(camX, camY) {
+  for (const z of hazardZones) {
+    const sx = z.x * TILE - camX, sy = z.y * TILE - camY;
+    const r = z.radius * TILE;
+    const fade = 1 - (z.age / z.maxAge);
+    const pulse = 0.7 + Math.sin(z.age * 6) * 0.15;
+    ctx.save();
+    ctx.globalAlpha = fade * 0.3 * pulse;
+    ctx.fillStyle = z.colour;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = z.colour;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, TWO_PI);
+    ctx.fill();
+    ctx.globalAlpha = fade * 0.6 * pulse;
+    ctx.strokeStyle = z.colour;
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.restore();
   }
 }
@@ -1670,8 +1767,9 @@ class KeyItem {
 // ─── Enemies ─────────────────────────────────────────────────────────────────
 let enemies = [];
 let items   = [];
+let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SENTINEL:80, HIVE:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SENTINEL:80, HIVE:120, OMEGA:200};
 
 class Enemy {
   constructor(x,y,hp,atk,spd,xpVal,colour,type) {
@@ -1698,6 +1796,8 @@ class Enemy {
     this.flashTimer=0;
     this.voidOrbs=[];
     this.prevPhase=1;
+    this.shieldAngle=0;    // SHIELDER: facing angle toward player
+    this.grenadeTimer=0;   // GRENADIER: cooldown between lobs
   }
 
   takeDamage(dmg, weaponName) {
@@ -1740,6 +1840,8 @@ class Enemy {
       case 'CRAWLER':  this.aiCrawler(dt,player,map,d,los);  break;
       case 'PHANTOM':  this.aiPhantom(dt,player,map,d,los);  break;
       case 'DRONE':    this.aiDrone(dt,player,map,d,los);    break;
+      case 'SHIELDER': this.aiShielder(dt,player,map,d,los); break;
+      case 'GRENADIER':this.aiGrenadier(dt,player,map,d,los);break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
       case 'OMEGA':    this.aiBossOmega(dt,player,map,d,los);    break;
@@ -1840,6 +1942,69 @@ class Enemy {
         this.shootTimer=cooldown;
       }
     }
+  }
+
+  aiShielder(dt,player,map,d,los) {
+    // Only update facing when player is visible (prevents wall-hack orientation)
+    if (los) this.shieldAngle = Math.atan2(player.y - this.y, player.x - this.x);
+    if (los && d < 12) {
+      this.state = 'CHASE';
+      this.moveToward(player.x, player.y, this.spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.state = 'PATROL';
+      this.patrol(dt, map);
+    }
+  }
+
+  blocksProjectile(proj) {
+    // 120° frontal arc shield — blocks player projectiles (not piercing/orbitals)
+    if (this.type !== 'SHIELDER' || this.dead) return false;
+    // Use reversed projectile direction (where it's coming FROM)
+    const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
+    let diff = incomingAngle - this.shieldAngle;
+    while (diff > Math.PI) diff -= TWO_PI;
+    while (diff < -Math.PI) diff += TWO_PI;
+    return Math.abs(diff) < Math.PI / 3;
+  }
+
+  aiGrenadier(dt,player,map,d,los) {
+    this.grenadeTimer = Math.max(0, this.grenadeTimer - dt);
+    if (los && d < 5) {
+      // Too close — retreat
+      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const nx = this.x + dx * this.spd * dt;
+      const ny = this.y + dy * this.spd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      // Only move if passable; if blocked, strafe instead of getting stuck
+      let moved = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
+      if (!moved) this.patrol(dt, map); // fallback: strafe/reposition
+    } else if (los && d <= 12) {
+      // In range — lob grenades
+      if (this.grenadeTimer <= 0) {
+        this.lobGrenade(player.x, player.y, map);
+        this.grenadeTimer = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1);
+      }
+    } else if (d > 12 && los) {
+      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
+  lobGrenade(tx, ty, map) {
+    // Create a grenade projectile targeting (tx,ty)
+    const [dx, dy] = norm(tx - this.x, ty - this.y);
+    const g = new Projectile(this.x, this.y, dx, dy, 6, 0, 20, '#ff6622', false, false);
+    g.isGrenade = true;
+    g.targetX = tx;
+    g.targetY = ty;
+    g.grenadeDmg = this.atk; // already floor-scaled from spawnEnemy
+    projectiles.push(g);
+    audio.grenadeLob();
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -2120,6 +2285,20 @@ class Enemy {
     } else {
       const sz=TILE*0.4;
       ctx.fillRect(sx-sz/2, sy-sz/2, sz, sz);
+      // Shielder: draw 120° shield arc facing the player
+      if (this.type === 'SHIELDER') {
+        ctx.save();
+        ctx.strokeStyle = '#66eeff';
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#66eeff';
+        ctx.globalAlpha = 0.7 + Math.sin(this.bobAngle * 2) * 0.15;
+        const shieldR = sz * 1.2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, shieldR, this.shieldAngle - Math.PI / 3, this.shieldAngle + Math.PI / 3);
+        ctx.stroke();
+        ctx.restore();
+      }
       // elite diamond marker
       if (this.elite) {
         ctx.fillStyle='#ffffff';
@@ -2148,11 +2327,13 @@ class Enemy {
 
 // ─── Enemy Weights & Spawning ─────────────────────────────────────────────────
 const ENEMY_WEIGHTS = {
-  GUARD:   { base: 40, perFloor: -3 },   // common early, fades
-  TURRET:  { base: 20, perFloor: 1 },    // steady
-  CRAWLER: { base: 10, perFloor: 3 },    // ramps up mid-game
-  PHANTOM: { base: 5,  perFloor: 4 },    // late-game threat
-  DRONE:   { base: 5,  perFloor: 3 },    // late-game ranged
+  GUARD:    { base: 40, perFloor: -3 },   // common early, fades
+  TURRET:   { base: 20, perFloor: 1 },    // steady
+  CRAWLER:  { base: 10, perFloor: 3 },    // ramps up mid-game
+  PHANTOM:  { base: 5,  perFloor: 4 },    // late-game threat
+  DRONE:    { base: 5,  perFloor: 3 },    // late-game ranged
+  SHIELDER: { base: 3,  perFloor: 2, minFloor: 3 },  // mid-game tank
+  GRENADIER:{ base: 1,  perFloor: 2, minFloor: 5 },  // late-game zone denial
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2160,7 +2341,9 @@ function pickEnemyType(floorNum) {
   const weights = [];
   let total = 0;
   for (const t of ENEMY_TYPES_LIST) {
-    const w = Math.max(1, ENEMY_WEIGHTS[t].base + ENEMY_WEIGHTS[t].perFloor * (floorNum - 1));
+    const cfg = ENEMY_WEIGHTS[t];
+    if (cfg.minFloor && floorNum < cfg.minFloor) continue; // floor-gated
+    const w = Math.max(1, cfg.base + cfg.perFloor * (floorNum - 1));
     weights.push({ type: t, w });
     total += w;
   }
@@ -2178,6 +2361,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'CRAWLER': hp=20;  atk=6;  spd=4;   xpVal=10; colour='#39ff14'; break;
     case 'PHANTOM': hp=35;  atk=10; spd=2.5; xpVal=30; colour='#cc00ff'; break;
     case 'DRONE':   hp=15;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
+    case 'SHIELDER':hp=50;  atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
+    case 'GRENADIER':hp=30; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
     case 'OMEGA':   hp=1000;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
@@ -2935,7 +3120,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[];
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
@@ -2971,12 +3156,15 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, GRENADIER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
-      // Per-type room caps — reroll among uncapped types if hit
+      // Per-type room caps — reroll among uncapped, floor-eligible types if hit
       if ((typeCounts[type] || 0) >= (TYPE_CAPS[type] || 99)) {
-        const open = ENEMY_TYPES_LIST.filter(t => (typeCounts[t] || 0) < (TYPE_CAPS[t] || 99));
+        const open = ENEMY_TYPES_LIST.filter(t =>
+          (typeCounts[t] || 0) < (TYPE_CAPS[t] || 99) &&
+          !(ENEMY_WEIGHTS[t].minFloor && floorNum < ENEMY_WEIGHTS[t].minFloor)
+        );
         type = open.length ? open[rndInt(0, open.length - 1)] : 'GUARD';
       }
       typeCounts[type] = (typeCounts[type] || 0) + 1;
@@ -3363,6 +3551,9 @@ const game = {
       projectiles[i].update(dt,dungeon.map,player,enemies);
       if (projectiles[i].dead) projectiles.splice(i,1);
     }
+
+    // update hazard zones (grenade AoE)
+    updateHazardZones(dt, player);
 
     // update items
     for (const it of items) it.update(dt);
@@ -4198,6 +4389,9 @@ const game = {
         ctx.restore();
       }
     }
+
+    // hazard zones (ground effects — below items/enemies)
+    drawHazardZones(cam.x, cam.y);
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
