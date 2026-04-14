@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.2
+# NEON DUNGEON — Game Specification v2.3
 
 ## Vision
 
@@ -386,6 +386,7 @@ and range so the player can make an informed decision.
 | NANO_REGEN | Nano Regen | 5 | +1 HP/s passive regeneration | 15 |
 | OVERCLOCK | Overclock | 3 | +0.5 permanent speed per level | 10 |
 | ARMOR_UP | Reinforced Armor | 5 | +3 permanent DEF per level | 12 |
+| RICOCHET | Ricochet Module | 3 | Bullets bounce off walls (1/2/3 bounces) | 8 |
 
 ### Orbital Weapons (Saw Blade)
 
@@ -401,6 +402,30 @@ Plasma Orb auto-fires a homing projectile at the nearest enemy within range
 every `3 − (level−1) × 0.7` seconds. Homing uses lerp-based steering at
 8 rad/s turn rate. Projectile: 25 damage, range 10, speed 6, colour #ff44cc.
 Uses the existing Projectile class with a `homing` target reference.
+Homing projectiles do **not** receive ricochet — bouncing would fight the
+homing steering and waste bounces.
+
+### Ricochet Module
+
+Player projectiles bounce off walls instead of dying on impact. Each level
+adds one bounce (1 / 2 / 3). Bouncing uses axis-separated wall detection to
+determine the reflection axis (horizontal, vertical, or corner). Range
+continues counting through bounces — bullets are not infinite.
+
+**Mechanics:**
+- On wall hit, the projectile reverts to its pre-move position, reflects the
+  appropriate velocity component(s), and nudges 0.05 tiles along the new
+  direction to prevent re-collision.
+- `hitEnemies` set is preserved across bounces (no re-hitting the same enemy).
+- Piercing and ricochet are orthogonal: a piercing bullet bounces but still
+  pierces through enemies as normal.
+- Out-of-bounds hits (map edge) always kill the projectile — no bouncing off
+  the void.
+- Melee weapons (Plasma Sword) are unaffected.
+- Scatter Gun pellets each bounce independently (range 5 keeps chaos bounded).
+
+**Audio:** Metallic ping + high-frequency zing on each bounce.
+**Visual:** Cyan (#00ffff) spark particles at bounce point.
 
 ### Removed Items
 

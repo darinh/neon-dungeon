@@ -812,6 +812,13 @@ const audio = (() => {
         const f = 800 + Math.random() * 600;
         osc('sine', f, f*0.4, 0.03, t+d, 0.06);
       }
+    },
+    ricochet() {
+      const c = getCtx(); const t = c.currentTime;
+      // Metallic ping + high-frequency zing
+      osc('sine', 2200, 800, 0.06, t, 0.08);
+      osc('triangle', 3400, 1200, 0.03, t, 0.05);
+      noise(0.02, t, 0.02, 6000);
     }
   };
 })();
@@ -1381,6 +1388,7 @@ class Projectile {
     this.fromPlayer=fromPlayer; this.dead=false;
     this.weaponName=weaponName||null;
     this.hitEnemies=new Set();
+    this.bouncesLeft=0;
   }
   update(dt, map, player, enemies) {
     // Homing: steer toward target
@@ -1393,12 +1401,35 @@ class Projectile {
       const [fd, fdy] = norm(this.dx, this.dy);
       this.dx = fd; this.dy = fdy;
     }
+    const prevX=this.x, prevY=this.y;
     const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
     if (this.travelled>=this.maxRange) { this.dead=true; return; }
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
-    if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H||!isPassable(map[ty][tx])) {
+    if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) {
+      spawnParticles(prevX,prevY,'SPARK',this.colour,3);
+      this.dead=true; return;
+    }
+    if (!isPassable(map[ty][tx])) {
+      // Ricochet: bounce off walls if bounces remain
+      if (this.bouncesLeft>0) {
+        this.bouncesLeft--;
+        this.x=prevX; this.y=prevY;
+        // Axis-separated wall detection
+        const ptx=Math.floor(prevX), pty=Math.floor(prevY);
+        const ntx=Math.floor(prevX+mx), nty=Math.floor(prevY+my);
+        const xWall=ntx<0||ntx>=MAP_W||!isPassable(map[pty][ntx]);
+        const yWall=nty<0||nty>=MAP_H||!isPassable(map[nty][ptx]);
+        if (xWall) this.dx=-this.dx;
+        if (yWall) this.dy=-this.dy;
+        if (!xWall&&!yWall) { this.dx=-this.dx; this.dy=-this.dy; }
+        // Nudge away from wall to prevent re-collision
+        this.x+=this.dx*0.05; this.y+=this.dy*0.05;
+        spawnParticles(prevX,prevY,'SPARK','#00ffff',4);
+        audio.ricochet();
+        return;
+      }
       spawnParticles(this.x,this.y,'SPARK',this.colour,3);
       this.dead=true; return;
     }
@@ -1458,6 +1489,9 @@ const UPGRADES = [
   {id:'ARMOR_UP',    name:'Reinforced Armor', desc:'Permanent +3 DEF',        colour:'#00aaff', rarity:12, persistent:true, maxLevel:5,
    levelDesc: l=>'+'+(3*(l+1))+' DEF total',
    fn: p=>{ p.upgrades.ARMOR_UP=(p.upgrades.ARMOR_UP||0)+1; p.def+=3; }},
+  {id:'RICOCHET',   name:'Ricochet Module',  desc:'Bullets bounce off walls', colour:'#00ffff', rarity:8,  persistent:true, maxLevel:3,
+   levelDesc: l=>(l+1)+' bounce'+(l>0?'s':''),
+   fn: p=>{ p.upgrades.RICOCHET=(p.upgrades.RICOCHET||0)+1; }},
 ];
 
 // Generate a weapon upgrade option (pre-rolled so player sees exact weapon)
@@ -1516,7 +1550,7 @@ function checkPerkUnlocks(player, level) {
 // Shop prices are explicit per upgrade id (not derived from rarity which is spawn weight)
 const SHOP_PRICES = {
   MED_PACK:60, NANO_REPAIR:35, XP_CHIP:45, VOID_SHARD:90,
-  SAW_BLADE:120, PLASMA_ORB:130, NANO_REGEN:80, OVERCLOCK:110, ARMOR_UP:100
+  SAW_BLADE:120, PLASMA_ORB:130, NANO_REGEN:80, OVERCLOCK:110, ARMOR_UP:100, RICOCHET:115
 };
 function shopPrice(id, floor, playerUpgrades) {
   const base = SHOP_PRICES[id] || 80;
@@ -2249,6 +2283,7 @@ class Player {
           w.colour,!!w.piercing,true,w.name
         );
         if (this.perks.PIERCING_ROUNDS) proj.maxPierces+=1;
+        proj.bouncesLeft=this.upgrades.RICOCHET||0;
         projectiles.push(proj);
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
