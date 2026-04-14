@@ -44,14 +44,20 @@ Each floor is generated fresh using Binary Space Partitioning:
 2. Place one room per leaf (random size within partition bounds).
 3. Connect sibling rooms with L-shaped corridors.
 4. Guarantee: every room is reachable from spawn.
-5. Place stairs-down in the deepest room from spawn (BFS distance).
+5. Place stairs-down in the farthest room from spawn (approximate BFS
+   using line-of-sight + proximity heuristic — rooms within 20 tiles or
+   with unobstructed LOS are treated as neighbours).
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
 **Tile types:** WALL | FLOOR | DOOR | STAIRS | TERMINAL | VOID
 
 **Lighting:** Each floor tile has a computed light level (0–1) based on
-distance from the nearest light source (player torch radius = 8 tiles,
-static wall sconces in rooms). Tiles beyond radius 12 are fully dark.
+distance from the nearest light source (player torch radius = 9 tiles,
+static wall sconces in rooms — radius 4, 0.4× brightness). Light decays
+linearly to zero at the torch edge. **Fog of war:** visited tiles retain
+their peak light level permanently; lit tiles render at minimum 20%
+brightness, visited tiles with zero light render at 12% brightness
+(dim memory effect). Unvisited tiles are not drawn.
 
 ---
 
@@ -498,3 +504,4 @@ the manifest to achieve a chrome-less experience.
 | v1.11   | Service worker (`sw.js`): cache-first offline PWA; pre-caches index.html, manifest, and icon PNGs on install; `skipWaiting` + `clients.claim` for immediate activation; versioned cache name for update busting |
 | v2.1    | Floor transition audio: `audio.transition()` plays digital glitch SFX (stutter tones + bandpass noise sweep + sub rumble) on every `fadeTo()` call; SW cache v5 |
 | v2.2    | Audio polish + spec fixes: boss phase transition SFX (`audio.phaseShift()`), menu select blip (`audio.menuSelect()`), low-health heartbeat warning (`audio.lowHealth()` every 2 s at ≤25% HP); Hive phase transitions now have VFX + message like Omega/Sentinel; Sentinel shield burst fixed to 20 dmg (was 15, spec says 20); Hive shockwave fixed to 25 dmg (was 30, spec says 25); touch pause overlay now shows resume + quit (was resume only); mobile first-touch aim initialises mouse position immediately (fixes stale aim on first shot) |
+| v2.3    | Spec accuracy: corrected torch radius 8→9; replaced "fully dark beyond radius 12" with actual fog-of-war behaviour (visited tiles at 12–20% brightness, unvisited not drawn); clarified stairs-placement BFS uses LOS + proximity heuristic, not true corridor BFS |
