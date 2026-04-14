@@ -29,7 +29,7 @@ const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -419,13 +419,19 @@ function hasLOS(x1, y1, x2, y2, map) {
   for (let i=0; i<100; i++) {
     if (cx===ex && cy===ey) return true;
     if (cx<0||cy<0||cx>=MAP_W||cy>=MAP_H) return false;
-    if (map[cy][cx] === T.WALL) return false;
+    if (!isSeeThrough(map[cy][cx])) return false;
     const e2 = 2*err;
     if (e2 > -dy) { err -= dy; cx += sx; }
     if (e2 <  dx) { err += dx; cy += sy; }
   }
   return true;
 }
+
+// Tile helpers
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW; }
+function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID; }
+function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
+function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
 // ─── Audio Engine ────────────────────────────────────────────────────────────
 const audio = (() => {
@@ -969,7 +975,137 @@ function generateFloor(floorNum) {
   const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light };
+  // ── Room types: assign special purposes ──────────────────────────────────
+  // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
+  const ROOM_TYPES = ['armory','medbay','shrine','vault'];
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05'};
+  const specialRooms = [];
+  const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
+  const numSpecial = Math.min(eligible.length, Math.floor(floorNum/2)+1);
+  const picked = eligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
+  for (let i=0; i<picked.length; i++) {
+    const r = picked[i];
+    r.roomType = ROOM_TYPES[i % ROOM_TYPES.length];
+    specialRooms.push(r);
+  }
+
+  // ── Doors: place at room-corridor junctions ──────────────────────────────
+  for (const r of rooms) {
+    if (r === bossRoom) continue; // boss room uses its own sealing
+    const edges = [];
+    // scan room boundary for corridor exits
+    for (let tx=r.x; tx<r.x+r.w; tx++) {
+      if (r.y>0 && map[r.y][tx]===T.FLOOR && map[r.y-1][tx]===T.FLOOR) edges.push({x:tx, y:r.y});
+      const by=r.y+r.h-1;
+      if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR) edges.push({x:tx, y:by});
+    }
+    for (let ty=r.y; ty<r.y+r.h; ty++) {
+      if (r.x>0 && map[ty][r.x]===T.FLOOR && map[ty][r.x-1]===T.FLOOR) edges.push({x:r.x, y:ty});
+      const bx=r.x+r.w-1;
+      if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR) edges.push({x:bx, y:ty});
+    }
+    // Deduplicate
+    const seen = new Set();
+    const dedupEdges = edges.filter(e => { const k=e.x+','+e.y; if(seen.has(k)) return false; seen.add(k); return true; });
+    // Place a door at ~40% of entrances (feels natural, not every doorway)
+    for (const e of dedupEdges) {
+      if (Math.random() < 0.4) map[e.y][e.x] = T.DOOR;
+    }
+  }
+
+  // ── Locked doors + keys (floor 2+) ──────────────────────────────────────
+  const keyItems = []; // {x, y, colour} items to place on the map
+  if (floorNum >= 2) {
+    const lockableRooms = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && r !== bossRoom && r.w * r.h >= 20
+    );
+    const numLocked = Math.min(lockableRooms.length, floorNum >= 7 ? 3 : floorNum >= 4 ? 2 : 1);
+    const colours = ['red','blue','gold'];
+    const lockTiles = [T.LOCKED_R, T.LOCKED_B, T.LOCKED_G];
+    const lockColours = ['#ff3333','#3388ff','#ffcc00'];
+    const shuffled = lockableRooms.sort(() => Math.random()-0.5).slice(0, numLocked);
+
+    for (let i=0; i<shuffled.length; i++) {
+      const lr = shuffled[i];
+      const ci = Math.min(i, 2);
+      // Find an entrance tile of this room and lock it (scan all 4 edges)
+      let locked = false;
+      // Top/bottom edges
+      for (let tx=lr.x; tx<lr.x+lr.w && !locked; tx++) {
+        if (lr.y>0 && (map[lr.y][tx]===T.FLOOR||map[lr.y][tx]===T.DOOR) && map[lr.y-1][tx]===T.FLOOR)
+          { map[lr.y][tx]=lockTiles[ci]; locked=true; }
+        const by=lr.y+lr.h-1;
+        if (!locked && by<MAP_H-1 && (map[by][tx]===T.FLOOR||map[by][tx]===T.DOOR) && map[by+1][tx]===T.FLOOR)
+          { map[by][tx]=lockTiles[ci]; locked=true; }
+      }
+      // Left/right edges
+      for (let ty=lr.y; ty<lr.y+lr.h && !locked; ty++) {
+        if (lr.x>0 && (map[ty][lr.x]===T.FLOOR||map[ty][lr.x]===T.DOOR) && map[ty][lr.x-1]===T.FLOOR)
+          { map[ty][lr.x]=lockTiles[ci]; locked=true; }
+        const bx=lr.x+lr.w-1;
+        if (!locked && bx<MAP_W-1 && (map[ty][bx]===T.FLOOR||map[ty][bx]===T.DOOR) && map[ty][bx+1]===T.FLOOR)
+          { map[ty][bx]=lockTiles[ci]; locked=true; }
+      }
+      if (!locked) continue; // skip key/loot if we couldn't place a lock
+
+      // BFS from spawn to find rooms reachable without this lock
+      const reachable = new Set();
+      const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
+      const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+      vis2[spawnRoom.cy][spawnRoom.cx] = 1;
+      while (q2.length) {
+        const {x:cx,y:cy} = q2.shift();
+        for (const [ddx,ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+          const nx2=cx+ddx, ny2=cy+ddy;
+          if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
+          const t=map[ny2][nx2];
+          if (t===T.WALL||t===T.VOID||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G) continue;
+          vis2[ny2][nx2]=1;
+          q2.push({x:nx2,y:ny2});
+        }
+      }
+      // Find a reachable room to place the key
+      const keyRoom = rooms.filter(r => r!==lr && r!==bossRoom && !shuffled.includes(r) && vis2[r.cy][r.cx]);
+      if (keyRoom.length) {
+        const kr = keyRoom[rndInt(0, keyRoom.length-1)];
+        keyItems.push({ x: kr.cx, y: kr.cy, colour: colours[ci], tileColour: lockColours[ci] });
+        lr.hasLoot = true;
+      } else {
+        // Can't safely place key — remove the lock to prevent softlock
+        // Find and revert the locked tile
+        for (let ty2=lr.y; ty2<lr.y+lr.h; ty2++)
+          for (let tx2=lr.x; tx2<lr.x+lr.w; tx2++)
+            if (map[ty2][tx2]===lockTiles[ci]) map[ty2][tx2]=T.DOOR;
+      }
+    }
+  }
+
+  // ── Traps (floor 3+) ────────────────────────────────────────────────────
+  if (floorNum >= 3) {
+    for (const r of rooms) {
+      if (r === spawnRoom || r === bossRoom) continue;
+      const trapCount = rndInt(0, Math.min(3, Math.floor(floorNum/3)));
+      for (let t=0; t<trapCount; t++) {
+        const tx = r.x + rndInt(1, r.w-2);
+        const ty = r.y + rndInt(1, r.h-2);
+        if (map[ty][tx] === T.FLOOR) {
+          map[ty][tx] = Math.random() < 0.7 ? T.TRAP_SPIKE : T.TRAP_SLOW;
+        }
+      }
+    }
+  }
+
+  // Room colour map (floor tile → tint)
+  const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
+  for (const r of rooms) {
+    if (!r.roomType) continue;
+    const col = ROOM_COLOURS[r.roomType];
+    for (let ty=r.y; ty<r.y+r.h; ty++)
+      for (let tx=r.x; tx<r.x+r.w; tx++)
+        if (map[ty][tx]===T.FLOOR) roomColour[ty][tx]=col;
+  }
+
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -1030,7 +1166,7 @@ class Projectile {
     this.travelled+=Math.sqrt(mx*mx+my*my);
     if (this.travelled>=this.maxRange) { this.dead=true; return; }
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
-    if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H||map[ty][tx]===T.WALL) {
+    if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H||!isPassable(map[ty][tx])) {
       spawnParticles(this.x,this.y,'SPARK',this.colour,3);
       this.dead=true; return;
     }
@@ -1129,7 +1265,7 @@ function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 class Item {
   constructor(x,y,type) {
     this.x=x; this.y=y; this.type=type||pickItemType();
-    this.dead=false; this.bob=Math.random()*TWO_PI;
+    this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=false;
   }
   update(dt) { this.bob+=dt*2; }
   draw(camX,camY) {
@@ -1138,6 +1274,30 @@ class Item {
     ctx.shadowBlur=12; ctx.shadowColor=this.type.colour;
     ctx.fillStyle=this.type.colour;
     ctx.fillRect(sx-5,sy-5,10,10);
+    ctx.restore();
+  }
+}
+
+class KeyItem {
+  constructor(x,y,colour,tileColour) {
+    this.x=x; this.y=y;
+    this.colour=colour; // 'red','blue','gold'
+    this.tileColour=tileColour;
+    this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=true;
+  }
+  update(dt) { this.bob+=dt*2; }
+  draw(camX,camY) {
+    const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*3;
+    ctx.save();
+    ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
+    ctx.fillStyle=this.tileColour;
+    // Key shape: circle + teeth
+    ctx.beginPath();
+    ctx.arc(sx, sy-3, 5, 0, TWO_PI);
+    ctx.fill();
+    ctx.fillRect(sx-1.5, sy, 3, 8);
+    ctx.fillRect(sx, sy+3, 4, 2);
+    ctx.fillRect(sx, sy+6, 3, 2);
     ctx.restore();
   }
 }
@@ -1188,6 +1348,7 @@ class Enemy {
     if (Math.random()<0.2) items.push(new Item(this.x,this.y));
     game.player.gainXP(this.xpValue);
     game.player.score += this.xpValue * game.floor;
+    if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
   }
 
   update(dt, player, map) {
@@ -1220,8 +1381,8 @@ class Enemy {
     if (ignoreWalls) { this.x=nx; this.y=ny; return; }
     const fx=Math.floor(nx), fy=Math.floor(this.y);
     const xf=Math.floor(this.x), yf=Math.floor(ny);
-    if (fx>=0&&fy>=0&&fx<MAP_W&&fy<MAP_H && map[fy][fx]!==T.WALL) this.x=nx;
-    if (xf>=0&&yf>=0&&xf<MAP_W&&yf<MAP_H && map[yf][xf]!==T.WALL) this.y=ny;
+    if (fx>=0&&fy>=0&&fx<MAP_W&&fy<MAP_H && isPassable(map[fy][fx])) this.x=nx;
+    if (xf>=0&&yf>=0&&xf<MAP_W&&yf<MAP_H && isPassable(map[yf][xf])) this.y=ny;
   }
 
   patrol(dt,map) {
@@ -1690,6 +1851,8 @@ class Player {
     this.flashTimer=0;
     this.levelFlash=0;
     this.lowHpTimer=0;
+    this.keys={red:0, blue:0, gold:0};
+    this.trapCooldown=0;
     this.upgrades={};       // persistent upgrade levels: {SAW_BLADE:2, ...}
     this.permSpeedBonus=0;  // from OVERCLOCK
     this.orbitalAngle=0;    // shared rotation for saw blades
@@ -1791,8 +1954,8 @@ class Player {
       const ny=this.y+ndy*spd*dt;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x),oy=Math.floor(ny);
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && map[ty][tx]!==T.WALL) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && map[oy][ox]!==T.WALL) this.y=ny;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && isPassable(map[ty][tx])) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && isPassable(map[oy][ox])) this.y=ny;
       this.facing={x:ndx,y:ndy};
     }
 
@@ -1868,11 +2031,13 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
-        case T.FLOOR:
-          ctx.fillStyle='#0f0f1f';
+        case T.FLOOR: {
+          const rc = dungeon.roomColour[ty]?.[tx];
+          ctx.fillStyle = rc || '#0f0f1f';
           ctx.fillRect(sx,sy,TILE,TILE);
-          if ((tx+ty)%4===0) { ctx.fillStyle='#13132a'; ctx.fillRect(sx,sy,TILE,TILE); }
+          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0a0a0a' : '#13132a'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
           break;
+        }
         case T.STAIRS:
           ctx.fillStyle='#0f0f1f';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -1889,6 +2054,37 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle='#00f5ff';
           ctx.font='13px monospace';
           ctx.fillText('⬡',sx+2,sy+14);
+          break;
+        case T.DOOR:
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
+          ctx.fillStyle='#886633'; ctx.fillRect(sx+3,sy+2,TILE-6,TILE-4);
+          ctx.fillStyle='#aa8844'; ctx.fillRect(sx+TILE-7,sy+TILE/2-2,3,3); // handle
+          break;
+        case T.DOOR_OPEN:
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#33261a'; ctx.fillRect(sx,sy,3,TILE);
+          ctx.fillStyle='#33261a'; ctx.fillRect(sx+TILE-3,sy,3,TILE);
+          break;
+        case T.LOCKED_R: case T.LOCKED_B: case T.LOCKED_G: {
+          const lc=tile===T.LOCKED_R?'#ff3333':tile===T.LOCKED_B?'#3388ff':'#ffcc00';
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#443322'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
+          ctx.shadowBlur=8; ctx.shadowColor=lc;
+          ctx.fillStyle=lc; ctx.fillRect(sx+TILE/2-3,sy+TILE/2-3,6,6); // lock glow
+          break;
+        }
+        case T.TRAP_SPIKE:
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness*0.35;
+          ctx.fillStyle='#ff6644';
+          for (let s=0;s<3;s++) ctx.fillRect(sx+3+s*6,sy+TILE-6,2,5); // subtle spikes
+          break;
+        case T.TRAP_SLOW:
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness*0.25;
+          ctx.fillStyle='#8866ff';
+          ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
       }
       ctx.restore();
@@ -2000,7 +2196,23 @@ function drawHUD(player) {
   }
   ctx.restore();
 
-  // level up flash
+  // Key indicators (above HUD bar)
+  const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
+  if (hasKeys) {
+    ctx.save();
+    const keyY = layout.hudTop - 18;
+    let kx = 14 + safeLeft;
+    const keyData = [['red','#ff3333'],['blue','#3388ff'],['gold','#ffcc00']];
+    for (const [col, hex] of keyData) {
+      if (player.keys[col] > 0) {
+        ctx.shadowBlur=6; ctx.shadowColor=hex;
+        ctx.fillStyle=hex; ctx.font='bold 12px monospace';
+        ctx.fillText('🔑×'+player.keys[col], kx, keyY);
+        kx += 55;
+      }
+    }
+    ctx.restore();
+  }
   if (player.levelFlash>0) {
     ctx.save();
     ctx.globalAlpha=Math.min(0.5,player.levelFlash*0.35);
@@ -2035,8 +2247,12 @@ function drawMinimap(dungeon, player) {
       if (tile===T.WALL) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
-      else if (tile===T.FLOOR) col='#202040';
+      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW) col='#202040';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
+      else if (tile===T.DOOR) col='#664422';
+      else if (tile===T.LOCKED_R) col='#ff3333';
+      else if (tile===T.LOCKED_B) col='#3388ff';
+      else if (tile===T.LOCKED_G) col='#ffcc00';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
     }
   }
@@ -2096,11 +2312,15 @@ function populateFloor(dungeon, floorNum) {
       continue;
     }
 
+    // Room type modifiers
+    const rt = room.roomType || null;
+    const enemyMod = rt==='medbay' ? 0.3 : rt==='vault' ? 1.5 : rt==='armory' ? 0.5 : 1;
+
     // Enemy count scales with floor, capped by room area
     const minE = 2 + Math.floor(floorNum / 3);
     const maxE = Math.min(8, 4 + Math.floor(floorNum / 2));
     const areaCap = Math.floor(room.w * room.h / 8);
-    const count = Math.min(areaCap, rndInt(minE, maxE));
+    const count = Math.min(areaCap, Math.round(rndInt(minE, maxE) * enemyMod));
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
@@ -2120,10 +2340,27 @@ function populateFloor(dungeon, floorNum) {
       enemies.push(e);
     }
 
-    const itemCount=rndInt(0,2);
+    const itemCount=rndInt(0,2) + (room.hasLoot ? 2 : 0); // locked rooms get bonus loot
     for (let j=0;j<itemCount;j++) {
       const ix=room.x+rnd(1,room.w-1), iy=room.y+rnd(1,room.h-1);
       items.push(new Item(ix,iy));
+    }
+
+    // Special room bonuses
+    if (rt==='medbay') {
+      // Place a healing font (persistent heal tile) in center
+      dungeon.map[room.cy][room.cx] = T.FLOOR; // keep walkable
+      room.healFont = true; // flag checked during gameplay
+    }
+    if (rt==='shrine') {
+      room.xpShrine = true;
+    }
+  }
+
+  // Place key items from dungeon generator
+  if (dungeon.keyItems) {
+    for (const ki of dungeon.keyItems) {
+      items.push(new KeyItem(ki.x, ki.y, ki.colour, ki.tileColour));
     }
   }
 }
@@ -2151,6 +2388,7 @@ const game = {
   msgList: [],
   nameEntry: null,
   lastSavedRank: -1,
+  quest: null, // current floor objective
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -2199,6 +2437,38 @@ const game = {
     if (n===3||n===6||n===10) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
+    // Generate floor quest
+    this.generateQuest(n);
+  },
+
+  generateQuest(floorNum) {
+    const questTypes = [
+      { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0,
+        reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
+      { id:'EXPLORE', label:'Visit every room', check: ()=>{
+          const d=this.dungeon;
+          return d.rooms.every(r=>d.visited[r.cy]?.[r.cx]);
+        },
+        reward: ()=>{ this.player.gainXP(40+floorNum*8); this.msg('Quest complete! +XP','#39ff14'); }},
+      { id:'SPEEDRUN', label:'Reach stairs in 60s', timer:60, check: function(){
+          const tx=Math.floor(game.player.x), ty=Math.floor(game.player.y);
+          return game.dungeon.map[ty]?.[tx]===T.STAIRS||game.dungeon.map[ty]?.[tx]===T.TERMINAL;
+        },
+        reward: ()=>{ this.player.hp=this.player.maxHp; this.msg('Quest complete! Full heal!','#39ff14'); }},
+      { id:'PACIFIST', label:'Reach stairs without killing', kills:0, check: function(){
+          const tx=Math.floor(game.player.x), ty=Math.floor(game.player.y);
+          return (game.dungeon.map[ty]?.[tx]===T.STAIRS||game.dungeon.map[ty]?.[tx]===T.TERMINAL) && this.kills===0;
+        },
+        reward: ()=>{ this.player.score+=500*floorNum; this.msg('Pacifist bonus! +'+500*floorNum+' pts','#39ff14'); }},
+    ];
+    // Boss floors always get EXTERMINATE
+    if (floorNum===3||floorNum===6||floorNum===10) {
+      this.quest = {...questTypes[0], done:false, failed:false};
+    } else {
+      const q = questTypes[rndInt(0, questTypes.length-1)];
+      this.quest = {...q, done:false, failed:false};
+    }
+    setTimeout(()=>this.msg('⚡ '+this.quest.label,'#39ff14'), 800);
   },
 
   startGame() {
@@ -2323,12 +2593,17 @@ const game = {
     // update items
     for (const it of items) it.update(dt);
 
-    // item pickup → trigger choice UI
+    // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<0.7) {
         audio.pickup();
         items.splice(i,1);
+        if (it.isKey) {
+          player.keys[it.colour]++;
+          this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
+          continue;
+        }
         // Generate 2 upgrade options
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
@@ -2410,6 +2685,94 @@ const game = {
     if (tile===T.STAIRS) this.msg('Press E to descend','#ffff00');
     if (tile===T.TERMINAL && bossBlocking) this.msg('CORE terminal locked — destroy OMEGA CORE first','#ff3333');
     if (tile===T.TERMINAL && !bossBlocking) this.msg('Press E to interface with CORE terminal','#00f5ff');
+
+    // door interaction (check adjacent tiles when pressing E)
+    if (jp('KeyE')) {
+      const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+      for (const [ddx,ddy] of dirs) {
+        const dx=tx+ddx, dy=ty+ddy;
+        if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
+        const dt=dungeon.map[dy][dx];
+        if (dt===T.DOOR) {
+          dungeon.map[dy][dx]=T.DOOR_OPEN;
+          this.msg('Door opened','#aa8844');
+          spawnParticles(dx+0.5, dy+0.5, 'SPARK', '#aa8844', 4);
+          break;
+        }
+        if (isDoor(dt)) {
+          const kc=doorKeyColour(dt);
+          if (player.keys[kc] > 0) {
+            player.keys[kc]--;
+            dungeon.map[dy][dx]=T.DOOR_OPEN;
+            this.msg('Unlocked '+kc+' door!', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
+            spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00', 8);
+            break;
+          } else {
+            this.msg('Need '+kc.toUpperCase()+' KEY', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
+          }
+        }
+      }
+    }
+    // door prompt
+    const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+    for (const [ddx,ddy] of dirs) {
+      const dx=tx+ddx, dy=ty+ddy;
+      if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
+      const dt=dungeon.map[dy][dx];
+      if (dt===T.DOOR) { this.msg('Press E to open door','#aa8844'); break; }
+      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.msg('Need '+kc.toUpperCase()+' KEY (press E)', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'); break; }
+    }
+
+    // trap triggering
+    player.trapCooldown = Math.max(0, player.trapCooldown - dt);
+    if (player.trapCooldown <= 0) {
+      if (tile===T.TRAP_SPIKE) {
+        const trapDmg = 8 + game.floor * 2;
+        player.takeDamage(trapDmg);
+        player.trapCooldown = 1.0;
+        this.msg('Spike trap! -'+trapDmg+' HP','#ff6644');
+        spawnParticles(player.x, player.y, 'SPARK', '#ff6644', 5);
+      } else if (tile===T.TRAP_SLOW) {
+        player.speedBoost = -1.5;
+        player.speedTimer = 3;
+        player.trapCooldown = 3.0;
+        this.msg('Slow trap!','#8866ff');
+        spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
+      }
+    }
+
+    // special room effects
+    for (const r of dungeon.rooms) {
+      if (r.healFont && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (player.hp < player.maxHp) {
+          player.hp = Math.min(player.maxHp, player.hp + 5 * dt);
+          if (Math.random()<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
+        }
+      }
+      if (r.xpShrine && !r.shrineUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+          r.shrineUsed = true;
+          const xp = 30 + game.floor * 10;
+          player.gainXP(xp);
+          this.msg('XP Shrine: +'+xp+' XP!','#aa00ff');
+          spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#aa00ff', 15);
+        }
+        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.msg('Press E at shrine','#aa00ff');
+      }
+    }
+
+    // quest tracking
+    if (this.quest && !this.quest.done && !this.quest.failed) {
+      if (this.quest.timer !== undefined) {
+        this.quest.timer -= dt;
+        if (this.quest.timer <= 0) { this.quest.failed = true; this.msg('Quest failed!','#ff3333'); }
+      }
+      if (!this.quest.failed && this.quest.check()) {
+        this.quest.done = true;
+        this.quest.reward();
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#39ff14', 20);
+      }
+    }
 
     // pause
     if (jp('Escape')) this.setState('PAUSED');
@@ -2821,6 +3184,26 @@ const game = {
 
     drawWorld(dungeon,cam.x,cam.y);
 
+    // Special room markers
+    for (const r of dungeon.rooms) {
+      if (r.healFont) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=12; ctx.shadowColor='#00ff88'; ctx.globalAlpha=0.6+Math.sin(Date.now()/400)*0.2;
+        ctx.fillStyle='#00ff88'; ctx.font='16px monospace'; ctx.textAlign='center';
+        ctx.fillText('+', sx, sy+5);
+        ctx.restore();
+      }
+      if (r.xpShrine && !r.shrineUsed) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=15; ctx.shadowColor='#aa00ff'; ctx.globalAlpha=0.6+Math.sin(Date.now()/500)*0.2;
+        ctx.fillStyle='#aa00ff'; ctx.font='16px monospace'; ctx.textAlign='center';
+        ctx.fillText('☆', sx, sy+5);
+        ctx.restore();
+      }
+    }
+
     // items
     for (const it of items) it.draw(cam.x,cam.y);
 
@@ -2859,6 +3242,28 @@ const game = {
 
     drawHUD(player);
     drawMinimap(dungeon,player);
+
+    // Quest HUD (below minimap)
+    if (game.quest) {
+      const q = game.quest;
+      const qx = W - 128 - safeRight, qy = 96 + safeTop;
+      ctx.save();
+      ctx.font='10px monospace'; ctx.textAlign='right';
+      if (q.done) {
+        ctx.fillStyle='#39ff14'; ctx.fillText('✓ '+q.label, W-8-safeRight, qy);
+      } else if (q.failed) {
+        ctx.fillStyle='#ff3333'; ctx.fillText('✗ '+q.label, W-8-safeRight, qy);
+      } else {
+        ctx.shadowBlur=4; ctx.shadowColor='#39ff14';
+        ctx.fillStyle='#39ff14'; ctx.fillText('⚡ '+q.label, W-8-safeRight, qy);
+        if (q.timer !== undefined) {
+          ctx.fillStyle=q.timer<10?'#ff3333':'#aaaacc';
+          ctx.fillText(Math.ceil(q.timer)+'s', W-8-safeRight, qy+14);
+        }
+      }
+      ctx.restore();
+    }
+
     drawMessages();
     drawTouchUI();
   },
