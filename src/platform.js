@@ -1353,6 +1353,16 @@ const audio = (() => {
       osc('triangle', 1200, 1800, 0.05, t + 0.1, 0.1, bus);
       noise(0.04, t + 0.05, 0.08, 8000, bus);
     },
+    generatorDestroy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.2);
+      // Electric overload burst — ascending whine + crack + EMP pulse
+      osc('sawtooth', 400, 2400, 0.08, t, 0.15, bus);
+      osc('square', 600, 1800, 0.05, t + 0.02, 0.12, bus);
+      osc('sine', 80, 40, 0.08, t + 0.05, 0.2, bus);
+      noise(0.07, t + 0.08, 0.1, 5000, bus);
+      osc('triangle', 1200, 300, 0.04, t + 0.12, 0.15, bus);
+    },
     comboTick(count) {
       const c = getCtx(); const t = c.currentTime;
       // Ascending pitch with combo — quick chirp

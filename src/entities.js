@@ -8,6 +8,7 @@ let vcores  = [];
 let crates  = [];
 let beacons = [];
 let mines   = [];
+let shieldGens = [];
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
@@ -136,6 +137,8 @@ function applyOnKill(enemy) {
   damageCratesInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Damage nearby beacons
   damageBeaconsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  // Damage nearby shield generators
+  damageShieldGensInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Trigger nearby mines
   triggerMinesInRadius(enemy.x, enemy.y, aoeR, game.dungeon.map);
 }
@@ -254,7 +257,8 @@ class Enemy {
       this._phState='cooldown'; this._phTimer=1.5; this.visible=true;
       audio.phantomUncloak();
     }
-    // MIMIC: damage forces reveal
+    // MIMIC: damage forces reveal (capture state first for shield gen DR check)
+    const wasDisguised = this._disguised;
     if (this._disguised) this.revealMimic(game.player);
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
@@ -270,6 +274,11 @@ class Enemy {
         audio.shieldBreak();
       }
       if (dmg <= 0) return absorbed;
+    }
+    // Shield Generator DR — reduce incoming damage while room generator is active
+    // Skip if enemy was disguised when hit (mimic first-hit shouldn't benefit)
+    if (!wasDisguised && isEnemyShieldGenProtected(this)) {
+      dmg = Math.max(1, Math.round(dmg * (1 - SHIELD_GEN_DR)));
     }
     const actual = Math.min(this.hp, dmg);
     this.hp -= dmg;
@@ -384,6 +393,8 @@ class Enemy {
       damageCratesInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Damage nearby beacons
       damageBeaconsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      // Damage nearby shield generators
+      damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Trigger nearby mines
       triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
     }
@@ -2173,6 +2184,17 @@ class Enemy {
       if (this.eliteAffix === 'PHASING' && this.phaseImmune) {
         ctx.globalAlpha = 0.15 + Math.sin(this.bobAngle * 12) * 0.1;
       }
+      // Shield Generator protection: subtle cyan glow
+      if (isEnemyShieldGenProtected(this)) {
+        ctx.save();
+        ctx.globalAlpha = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
+        ctx.shadowBlur = 10; ctx.shadowColor = '#00ccff';
+        ctx.fillStyle = '#00ccff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.2, 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+      }
       // small hp bar
       if (this.hp<this.maxHp || this.shieldHp > 0 || this._isBounty) {
         ctx.shadowBlur=0;
@@ -2390,6 +2412,8 @@ function detonateVCore(c) {
   damageCratesInRadius(c.x, c.y, r, dmg, map);
   // Damage nearby beacons
   damageBeaconsInRadius(c.x, c.y, r, dmg, map);
+  // Damage nearby shield generators
+  damageShieldGensInRadius(c.x, c.y, r, dmg, map);
   // Trigger nearby mines
   triggerMinesInRadius(c.x, c.y, r, map);
 }
@@ -2700,6 +2724,8 @@ function detonateMine(m) {
   damageCratesInRadius(m.x, m.y, r, m.dmg, map);
   // Damage nearby beacons
   damageBeaconsInRadius(m.x, m.y, r, m.dmg, map);
+  // Damage nearby shield generators
+  damageShieldGensInRadius(m.x, m.y, r, m.dmg, map);
   // Remove from array
   const idx = mines.indexOf(m);
   if (idx >= 0) mines.splice(idx, 1);
@@ -2807,6 +2833,139 @@ function drawMines(camX, camY) {
     }
 
     ctx.restore();
+  }
+}
+
+// ─── Shield Generators ────────────────────────────────────────────────────────
+const SHIELD_GEN_DR = 0.35; // 35% damage reduction to room enemies
+
+function createShieldGen(x, y, floor, room) {
+  const maxHp = 15 + floor * 4;
+  return { x, y, hp: maxHp, maxHp, dead: false, room, floor, bob: Math.random() * TWO_PI };
+}
+
+function damageShieldGen(g, dmg) {
+  if (!g || g.dead) return;
+  g.hp -= dmg;
+  if (g.hp <= 0) destroyShieldGen(g);
+  else spawnParticles(g.x, g.y, 'SPARK', '#00ccff', 4);
+}
+
+function destroyShieldGen(g) {
+  g.dead = true;
+  spawnParticles(g.x, g.y, 'EXPLOSION', '#00ccff', 18);
+  spawnParticles(g.x, g.y, 'SPARK', '#88eeff', 10);
+  audio.generatorDestroy();
+  // Credit reward
+  const d = getDiff();
+  const amt = Math.round(game.floor * 5 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  game.player.credits += amt;
+  spawnDmgText(g.x, g.y - 0.3, '+' + amt + '◈', '#00ccff');
+  // EMP burst — stun enemies in radius (LOS-gated)
+  const empR = 3, empDur = 0.8, map = game.dungeon.map;
+  for (const e of enemies) {
+    if (e.dead || e.isBoss || e._disguised) continue;
+    if (dist(e.x, e.y, g.x, g.y) < empR && hasLOS(g.x, g.y, e.x, e.y, map)) {
+      e.stunTimer = Math.max(e.stunTimer || 0, empDur);
+      spawnParticles(e.x, e.y, 'SPARK', '#00ccff', 3);
+      spawnDmgText(e.x, e.y, 'STUN', '#00ccff');
+    }
+  }
+  triggerShake(4, 0.15);
+  const idx = shieldGens.indexOf(g);
+  if (idx >= 0) shieldGens.splice(idx, 1);
+}
+
+function damageShieldGensInRadius(wx, wy, radius, dmg, map) {
+  for (let i = shieldGens.length - 1; i >= 0; i--) {
+    const g = shieldGens[i];
+    if (g.dead) continue;
+    if (dist(wx, wy, g.x, g.y) < radius && hasLOS(wx, wy, g.x, g.y, map)) {
+      damageShieldGen(g, dmg);
+    }
+  }
+}
+
+// Check if an enemy is protected by a shield generator (room + spatial bounds)
+function isEnemyShieldGenProtected(e) {
+  if (e.dead || e._disguised) return false;
+  for (const g of shieldGens) {
+    if (g.dead) continue;
+    if (e.room !== g.room) continue;
+    // Spatial bounds check — enemy must be physically inside the room
+    const r = g.room;
+    if (e.x >= r.x && e.x < r.x + r.w && e.y >= r.y && e.y < r.y + r.h) return true;
+  }
+  return false;
+}
+
+function updateShieldGens(dt) {
+  for (const g of shieldGens) {
+    if (g.dead) continue;
+    g.bob += dt * 2;
+  }
+}
+
+function drawShieldGens(camX, camY) {
+  for (const g of shieldGens) {
+    if (g.dead) continue;
+    const tx = Math.floor(g.x), ty = Math.floor(g.y);
+    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    const sx = g.x * TILE - camX, sy = g.y * TILE - camY;
+    const pulse = 0.6 + 0.3 * Math.sin(g.bob * 2);
+    const t = g.bob;
+
+    // Draw energy beams to shielded enemies in room
+    const r = g.room;
+    for (const e of enemies) {
+      if (e.dead || e._disguised || e.room !== r) continue;
+      if (e.x < r.x || e.x >= r.x + r.w || e.y < r.y || e.y >= r.y + r.h) continue;
+      const ex = e.x * TILE - camX, ey = e.y * TILE - camY;
+      ctx.save();
+      ctx.globalAlpha = 0.15 + 0.1 * Math.sin(t * 3 + e.x);
+      ctx.strokeStyle = '#00ccff';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Generator body — rotating hexagonal frame
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.shadowBlur = 12; ctx.shadowColor = '#00ccff';
+    ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 1.5;
+    ctx.translate(sx, sy);
+    const rot = t * 0.5;
+    ctx.rotate(rot);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (TWO_PI / 6) * i;
+      const hx = Math.cos(a) * 7, hy = Math.sin(a) * 7;
+      if (i === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath(); ctx.stroke();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.restore();
+
+    // Inner core — bright dot
+    ctx.save();
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 4);
+    ctx.shadowBlur = 8; ctx.shadowColor = '#44eeff';
+    ctx.fillStyle = '#44eeff';
+    ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+    ctx.restore();
+
+    // HP bar when damaged
+    if (g.hp < g.maxHp) {
+      const bw = 16, bh = 2, bx = sx - bw / 2, by = sy - 14;
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#113'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#00ccff'; ctx.fillRect(bx, by, bw * (g.hp / g.maxHp), bh);
+      ctx.restore();
+    }
   }
 }
 

@@ -576,6 +576,9 @@ const game = {
     // update proximity mines
     updateMines(dt);
 
+    // update shield generators
+    updateShieldGens(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -2418,6 +2421,9 @@ const game = {
 
     // alarm beacons
     drawBeacons(cam.x, cam.y);
+
+    // shield generators (below items/enemies, above ground effects)
+    drawShieldGens(cam.x, cam.y);
 
     // proximity mines (below items/enemies, above ground effects)
     drawMines(cam.x, cam.y);

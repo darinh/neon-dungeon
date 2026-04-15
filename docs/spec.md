@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.1
+# NEON DUNGEON — Game Specification v4.2
 
 ## Vision
 
@@ -327,6 +327,75 @@ into them. Chain reactions between clustered mines create satisfying cascades.
 - `audio.mineArm()` — metallic click + ascending square-wave warning tone.
 - `audio.mineExplode()` — concussive blast: low sine thud 60→30 Hz + square
   crack 200→80 + high noise burst + debris rattle.
+
+### Shield Generators (floor 5+)
+
+Destructible environmental devices that project a damage-reduction field on all
+enemies in their room. Forces target prioritisation — destroy the generator
+first, or fight through the resistance.
+
+**Placement:**
+- One per qualifying room, ~30% chance.
+- Normal rooms only (no special `roomType`), room must have ≥ 3 spawned
+  enemies, area ≥ 5×5 tiles.
+- Interior position (2+ tiles from room boundary), not near other
+  environmental objects (crates, beacons, mines, vcores — 1.5-tile spacing).
+- Never spawns in a room that already has an alarm beacon.
+- `shieldGens[]` global entity array. `createShieldGen(x, y, floor, room)`.
+
+**Stats:**
+- HP: `15 + floor × 4`
+- Passive object — no attack, no movement, no activation trigger.
+
+**Shield Effect:**
+- All non-boss, non-disguised enemies in the same room take **35% reduced
+  damage** while the generator is active (`SHIELD_GEN_DR = 0.35`).
+- Damage reduction applies in `enemy.takeDamage()` after elite SHIELDED
+  shield absorption but before final HP subtraction. Minimum 1 damage.
+- Spatial check: enemy must be physically inside the room bounds (not just
+  spawn-room reference), preventing kited enemies from keeping the buff.
+- `isEnemyShieldGenProtected(e)` helper.
+
+**Damage Sources:**
+- Player projectile direct hit (0.6-tile collision radius).
+- AoE: VCore, grenade, mine, VOLATILE/EXPLOSIVE_KILLS/Detonation affix
+  explosions — `damageShieldGensInRadius()` wired at every existing AoE
+  callsite (mirrors `damageBeaconsInRadius`).
+- Hackware EMP Burst: deals 15 damage to generators in range (4 tiles,
+  LOS-gated).
+- Hackware Static Field: damages generators in range each 1 s tick
+  (same cadence as enemy damage).
+- NOT damaged by enemy projectiles.
+
+**On Destruction:**
+- EMP burst: all non-boss, non-disguised enemies within 3 tiles stunned for
+  0.8 s (LOS-gated). Weaker than player EMP hackware.
+- Credit reward: `floor × 5` (with difficulty, meta, and Credit Siphon
+  multipliers).
+- Cyan explosion + spark particles, camera shake.
+- `audio.generatorDestroy()` SFX.
+
+**Room-Clear:** Shield generators do **not** block room-clear (unlike alarm
+beacons). They are a combat modifier, not a gate.
+
+**Visual:**
+- Idle: Rotating cyan hexagonal frame (6-vertex stroke) with bright inner
+  core dot. Pulsing glow.
+- Active: Dashed cyan energy beams drawn from generator to each protected
+  enemy in room (skips disguised mimics).
+- Protected enemies: subtle cyan underglow (`isEnemyShieldGenProtected`
+  check in `enemy.draw()`).
+- HP bar shown when damaged (cyan, 16 px wide, 2 px tall).
+
+**Minimap:** Cyan 2 px dot with glow (compact minimap). Pulsing at ~1 Hz.
+
+**Save/Load:** Not persisted — floor regenerates on continue (same as all
+environmental objects).
+
+**Audio:**
+- `audio.generatorDestroy()` — electric overload burst: ascending sawtooth
+  whine 400→2400 Hz + square layer 600→1800 + sub-bass sine 80→40 +
+  noise crack + descending triangle tail 1200→300.
 
 ### Secret Rooms (Cracked Walls)
 
@@ -2653,3 +2722,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v59.0   | Proximity mines: hidden explosive traps (floor 3+, ~40% chance per normal room ≥ 5×5, 0–1 per room). `mines[]` entity array. Dormant: subtle shimmer, revealed permanently when player within 3 tiles. Armed when player/enemy within 0.9 tiles (0.8 s fuse) or shot by player projectile (0.3 s fuse). Detonation: 2-tile AoE (12 + floor × 3 dmg, bypasses defense, LOS-gated). Damages player and enemies. Chain-detonates nearby mines (staggered 0.1–0.15 s). Also triggered by VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation AoE. Mine explosions prime VCores, damage crates/beacons. Enemy projectiles don't trigger mines. Minimap: hidden when dormant, orange dot when revealed/armed. `audio.mineArm()` (click + ascending tone), `audio.mineExplode()` (concussive blast). Spec v3.9. SW cache v71. |
 | v60.0   | PHANTOM enemy rework (floor 5+): stealth assassin with 4-state machine (cloaked→telegraph→attacking→cooldown). Cloaked: alpha 0.08, 1.3× speed, subtle shimmer, repositions in room on re-cloak. Telegraph: 0.4 s warning with expanding purple ring + aim indicator, alpha pulsing 0.3–0.5. Attacking: 2-shot purple burst (0.15 s gap, speed 8, range 14). Cooldown: 1.5 s visible retreat window. Damage interrupt: hit while cloaked/telegraph → forced to cooldown (1.5 s reveal). Close-range escape: repositions if player < 2.5 tiles while cloaked. Thermal Optics augment: dim purple pulsing minimap dot when cloaked. Sentry/Auto-Laser skip cloaked, can target telegraph+. Mines trigger normally on cloaked phantoms. Stats: HP 35, ATK 10, SPD 2.5, XP 30, credits 12. Spawn weight: base 2, perFloor 2, minFloor 5. TYPE_CAPS: 2. Elite eligible (PHASING excluded). `audio.phantomCloak()` (descending fade), `audio.phantomUncloak()` (ascending reveal), `audio.phantomStrike()` (energy bolt). Spec v4.0. SW cache v72. |
 | v61.0   | MIMIC enemy (floor 7+): ambush predator disguised as data pickup. 50% per non-boss floor. Disguised: renders as random-colour item with bob + glow, subtle white shimmer tell every ~2.5 s. Hidden from minimap, sentry/auto-laser, room-clear. Revealed by: player proximity (1.5 tiles) or any damage source (projectiles, AoE, mines, VCores, Static Field, Reactive Armor). 0.3 s reveal telegraph (purple burst ring + particles + `audio.mimicReveal()`). Combat: fast melee zigzag chase (SPD 3.0 burst for 3 s → 2.2 base, CRAWLER pattern). Guaranteed single item drop on death (suppresses normal drop roll). Excluded from bounty, ENEMY_WEIGHTS, elite rolls, challenge waves. EMP/Gravity skip disguised; Nano Swarm skips homing but proximity hits reveal. Stats: HP 30 + floor×3 (scaled), ATK 14, SPD 2.2, XP 25, credits 10. Colour: `#cc33ff` (violet). Separate spawn pass in `populateFloor` (normal rooms, area ≥ 16). Spec v4.1. SW cache v73. |
+| v62.0   | Shield Generators: destructible environmental devices (floor 5+, ~30% chance per normal room with ≥ 3 enemies, area ≥ 5×5). `shieldGens[]` entity array with HP (`15 + floor × 4`). Projects 35% damage reduction to all non-boss, non-disguised enemies in the same room while active (`SHIELD_GEN_DR`, spatial bounds check). Damaged by player projectiles, AoE explosions (VCore/grenade/mine/VOLATILE/EXPLOSIVE_KILLS/Detonation), hackware EMP (15 dmg), and Static Field (per-tick). Never in beacon rooms (prevents mitigation stacking). On destruction: 3-tile EMP burst stuns enemies 0.8 s (LOS-gated), credit reward (`floor × 5` with multipliers), cyan explosion particles. Protected enemies get subtle cyan underglow. Visual: rotating cyan hexagonal frame with bright core, dashed energy beams to protected enemies. Minimap: cyan 2 px pulsing dot. Room-clear NOT blocked by generators. `audio.generatorDestroy()` electric overload burst SFX. Spec v4.2. SW cache v74. |
