@@ -737,6 +737,18 @@ function drawMinimap(dungeon, player) {
     ctx.fillStyle = c.primed ? '#ff2200' : '#ff6622';
     ctx.fillRect(MX+c.x*sx-0.5, MY+c.y*sy-0.5, 1.5, 1.5);
   }
+  // Alarm beacons — pulsing red dots
+  for (const b of beacons) {
+    if (b.dead) continue;
+    const tx = Math.floor(b.x), ty = Math.floor(b.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    const bp = b.active ? (0.5 + 0.5 * Math.sin((game.floorTime||0) * 6)) : (0.6 + 0.3 * Math.sin((game.floorTime||0) * 2));
+    ctx.globalAlpha = bp;
+    ctx.shadowBlur = 4; ctx.shadowColor = '#ff2222';
+    ctx.fillStyle = b.active ? '#ff0000' : '#ff3333';
+    ctx.fillRect(MX+b.x*sx-1, MY+b.y*sy-1, 2, 2);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
 
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
@@ -1053,7 +1065,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1114,6 +1126,17 @@ function populateFloor(dungeon, floorNum) {
         if (nearCrate) continue;
         dungeon.map[cy][cx] = T.CRATE;
         crates.push(createCrate(cx, cy, floorNum));
+      }
+    }
+
+    // Alarm beacons (floor 4+, normal rooms only, ~40% chance, 0–1 per room)
+    if (floorNum >= 4 && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.4) {
+      const bx = room.x + rndInt(2, room.w - 3) + 0.5;
+      const by = room.y + rndInt(2, room.h - 3) + 0.5;
+      const btx = Math.floor(bx), bty = Math.floor(by);
+      if (dungeon.map[bty]?.[btx] === T.FLOOR) {
+        beacons.push(createBeacon(bx, by, floorNum, room));
+        room._hadEnemies = true; // ensure room-clear tracking covers beacon rooms
       }
     }
 
