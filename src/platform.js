@@ -1239,6 +1239,20 @@ const audio = (() => {
       osc('triangle', 900, 1400, 0.04, t + 0.05, 0.12);
       osc('sine', 1200, 1600, 0.03, t + 0.1, 0.1);
     },
+    chargerWindup() {
+      const c = getCtx(); const t = c.currentTime;
+      // Building rumble — rising sub bass + metallic grind
+      osc('sawtooth', 60, 180, 0.07, t, 0.25);
+      osc('square', 100, 300, 0.04, t + 0.05, 0.2);
+      noise(0.04, t + 0.1, 0.15, 1500);
+    },
+    chargerImpact() {
+      const c = getCtx(); const t = c.currentTime;
+      // Heavy thud — deep bass hit + metallic crash
+      osc('sine', 80, 30, 0.1, t, 0.12);
+      osc('square', 120, 40, 0.06, t, 0.08);
+      noise(0.08, t, 0.06, 3000);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.5
+# NEON DUNGEON — Game Specification v3.6
 
 ## Vision
 
@@ -411,12 +411,13 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot; **inflicts shock** | 25  |
 | SUMMONER     | 35      | 8   | Stays at range, periodically summons minion drones | 30  |
 | HEALER       | 25      | 6   | Stays at range, periodically heals wounded allies | 22  |
+| CHARGER      | 45      | 14  | Slow patrol, telegraphed charge rush, melee   | 22  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
-GRENADIER appears floor 5+, HEALER appears floor 5+, TELEPORTER appears floor
-6+, SUMMONER appears floor 6+, SNIPER appears floor 7+.
+CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
+TELEPORTER appears floor 6+, SUMMONER appears floor 6+, SNIPER appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -615,6 +616,50 @@ archetype duo — the summoner adds bodies, the healer keeps them alive.
     wounded allies to heal from the larger enemy count
   - FORTIFIED (1.4× HP): Slightly harder to kill, allies have more HP to
     restore
+
+#### CHARGER (floor 4+)
+
+Aggressive melee rusher that telegraphs a charge and barrels toward the
+player at high speed. Creates "dodge this!" moments that reward positioning
+and dash timing. Unlike CRAWLER (constant pursuit) or TELEPORTER (blink
+ambush), the CHARGER is a visible, predictable but dangerous threat — you
+can see it winding up, but you need to move fast.
+
+- **Behaviour:** Patrols slowly (SPD 1.5). When player is in LOS at 3–10
+  tiles and charge is off cooldown, begins a 0.6 s windup telegraph, locking
+  direction toward the player's position at the start of the windup. On
+  windup completion, rushes at 5.5 tiles/s in the locked direction for 0.4 s
+  (~2.2 tile lunge). Passes through other enemies but not walls.
+  - **On player hit:** 1.5× ATK damage + 2-tile knockback + camera shake.
+    Returns to idle with charge cooldown.
+  - **On wall collision:** Charge ends, 1.0 s stun (reuses `stunTimer`),
+    sparks + camera shake.
+  - **On charge expiry (no hit/wall):** 1.0 s stun, vulnerable.
+  - **Point-blank (< 2 tiles):** Uses standard melee attack instead of
+    charging. After melee, charge cooldown refreshes to 1.5 s minimum to
+    prevent immediate follow-up charge.
+  - **Windup cancellation:** If LOS breaks or player cloaks during windup,
+    charge is cancelled with a 1.0 s cooldown.
+- **Charge cooldown:** `max(2.5, 3.5 − floor × 0.1)` seconds, scaled by
+  OVERCLOCK (÷1.2).
+- **Stats:** HP 45, ATK 14, SPD 1.5, XP 22.
+- **Visual:** Bright orange (`#ff6600`). During windup: pulsing orange glow
+  with dashed direction indicator line. During charge: larger bright orange
+  aura with spark trail particles. Post-charge stun: spinning yellow star
+  particles (dazed effect).
+- **Audio:** `chargerWindup()` — building rumble (sawtooth 60→180, square
+  100→300, noise burst). `chargerImpact()` — heavy thud (sine 80→30, square
+  120→40, noise crash).
+- **Credits:** 9
+- **Cap:** 2 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite eligible:** Yes — all standard affixes apply. BERSERKER affix
+  makes charges faster via `berserkerMul()`. ARMORED charges are especially
+  dangerous.
+- **Modifier interactions:**
+  - OVERCLOCK (÷1.2 cooldowns): Charges more frequently
+  - SWARM (0.6× HP): Glass cannon — hits hard but drops fast
+  - FORTIFIED (1.4× HP): Tanky charger, very dangerous in packs
+  - CHARGED (1.4× projectile speed): No effect (melee-only enemy)
 
 ### Difficulty Modes
 
@@ -2298,3 +2343,6 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v51.0   | Teleport pads: linked inter-room fast travel. 1–2 pairs of warp pads per non-boss floor (floor 3+), placed in distant rooms (Manhattan ≥ 15). Press E to warp to paired pad. 3 s cooldown, 0.3 s arrival invincibility. Blocked when source/destination is in sealed boss/challenge room. `T.TELEPORT_PAD` (20) tile. Violet pulsing `⬡` glyph, spark particles on use. Minimap: violet 3 px POI + expanded "WARP" label. `audio.teleportPad()` ascending warp SFX. `dungeon.teleportPads` in floor gen return. No save format change. SW cache v63. |
 | v52.0   | Bounty targets: one enemy per non-boss floor (2+) designated as high-value bounty with 2× HP, 1.5× ATK, gold aura + crown marker, always-visible HP bar with "BOUNTY" label. Reveal SFX + "BOUNTY TARGET SPOTTED" message on first LOS contact. Kill rewards: `30 + floor × 8` credits (Credit Siphon applies), `150 × floor` score, guaranteed bonus item drop, gold explosion particles + camera shake. New BOUNTY quest type ("Eliminate the bounty target", reward: XP + 40 CR). Minimap: gold 4 px pulsing dot (regular), gold boss-sized dot (expanded). HUD: `⊕ BOUNTY` pulsing indicator while alive. `player.bountiesCollected` stat in save/load + Game Over/Victory screens. Bounty targets exclude elite + boss + shard enemies. `audio.bountyReveal()` (ominous brass stab), `audio.bountyKill()` (triumphant C major arpeggio). SW cache v64. |
 | v53.0   | Two new floor modifiers (pool of 6→8): CORROSIVE ☣ (toxic atmosphere — all player damage taken +2 flat after DEF; kill credits ×1.5 stacking with Credit Siphon) and CHARGED ⊕ (supercharged projectiles — all projectile speeds ×1.4, player projectile damage ×1.2 including sentry drone and plasma orb). CORROSIVE creates an economic risk/reward tradeoff: more fragile but richer. CHARGED creates a faster, twitchier combat feel where accuracy matters more. No new game states, audio, tiles, or save format changes. SW cache v65. |
+| v54.0   | SUMMONER enemy (floor 6+): support spawner that stays at range and periodically summons DRONE minions (max 3 active). `_summons[]` tracks refs; cascade despawn on summoner death via `_despawning` flag. Summoned minions yield 0 XP/credits/drops. Orphan guard in `pendingEnemySpawns` flush. `audio.summon()` SFX. TYPE_CAPS: 1. No elite roll. SW cache v66. |
+| v55.0   | HEALER enemy (floor 5+): support healer that restores wounded non-boss allies within 6 tiles for 15% maxHp per pulse. `_healTimer`/`_healBeam` state. Retreats if player closes within 4 tiles. `audio.heal()` SFX. TYPE_CAPS: 1. No elite roll. SW cache v67. |
+| v56.0   | CHARGER enemy (floor 4+): charge-attack melee rusher. Patrols slowly (SPD 1.5), telegraphs charge with 0.6 s windup (pulsing orange glow + direction indicator), then rushes at 5.5 tiles/s in locked direction for 0.4 s (~2.2-tile lunge). On hit: 1.5× ATK + 2-tile knockback + camera shake. On miss/wall: 1.0 s stun (reuses `stunTimer`), vulnerable. Point-blank (< 2 tiles) uses standard melee instead. `_chgState` (idle/windup/charging), `_chgCooldown` timer. `audio.chargerWindup()` (rising rumble), `audio.chargerImpact()` (heavy thud). Daze star particles on post-charge stun. TYPE_CAPS: 2. Elite eligible. SW cache v68. |

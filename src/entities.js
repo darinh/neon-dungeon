@@ -6,11 +6,11 @@ let items   = [];
 let hazardZones = [];
 let vcores  = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -24,7 +24,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -389,6 +389,7 @@ class Enemy {
       // Cancel sniper charge on stun — don't let it resume after stun ends
       if (this._laserTimer > 0) { this._laserTimer = 0; this._laserTarget = null; this._sniperCooldown = 0.8; }
       if (this._chargeState && this._chargeState !== 'idle') { this._chargeState = 'idle'; this._chargeDur = 0; this.bossTimers.charge = 1.5; }
+      if (this._chgState && this._chgState !== 'idle') { this._chgState = 'idle'; this._chgCooldown = 2.0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       return; // skip all AI, leave attack/shoot timers frozen
@@ -417,6 +418,7 @@ class Enemy {
       case 'SNIPER':   this.aiSniper(dt,player,map,d,los);   break;
       case 'SUMMONER': this.aiSummoner(dt,player,map,d,los); break;
       case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
+      case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'WARDEN':   this.aiBossWarden(dt,player,map,d,los);   break;
@@ -847,6 +849,103 @@ class Enemy {
       if (ratio < bestRatio) { bestRatio = ratio; best = e; }
     }
     return best;
+  }
+
+  aiCharger(dt,player,map,d,los) {
+    this._chgCooldown = Math.max(0, (this._chgCooldown || 0) - dt);
+    const bm = this.berserkerMul();
+
+    // ── Charging state: rush in locked direction ──
+    if (this._chgState === 'charging') {
+      this._chgDur -= dt;
+      const cspd = 5.5 * bm;
+      const nx = this.x + this._chgDx * cspd * dt;
+      const ny = this.y + this._chgDy * cspd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      let hitWall = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; }
+      else hitWall = true;
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; }
+      else hitWall = true;
+
+      // Hit check: damage player within 1.2 tiles during charge
+      if (dist(this.x, this.y, player.x, player.y) < 1.2 && canTargetPlayer()) {
+        const dealt = player.takeDamage(Math.round(this.atk * 1.5), this.type);
+        if (dealt > 0) {
+          const [kx, ky] = norm(player.x - this.x, player.y - this.y);
+          // Wall-aware knockback: check each axis independently
+          // Wall-aware knockback: check each axis independently
+          const nx = player.x + kx * 2, ny = player.y + ky * 2;
+          const fxK = Math.floor(nx), fyK = Math.floor(player.y);
+          const xfK = Math.floor(player.x), yfK = Math.floor(ny);
+          if (fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK])) player.x = nx;
+          if (xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK])) player.y = ny;
+          spawnParticles(player.x, player.y, 'SPARK', '#ff6600', 8);
+          triggerShake(5, 0.15);
+          audio.chargerImpact();
+        }
+        this._chgState = 'idle';
+        this._chgCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        return;
+      }
+
+      // Wall collision or duration expired → stunned
+      if (hitWall || this._chgDur <= 0) {
+        if (hitWall) {
+          spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 6);
+          triggerShake(3, 0.1);
+          audio.chargerImpact();
+        }
+        this._chgState = 'idle';
+        this.stunTimer = Math.max(this.stunTimer, 1.0);
+        this._chgCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        return;
+      }
+
+      // Charge trail particles
+      if (Math.random() < dt * 20) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
+      return;
+    }
+
+    // ── Windup state: telegraph before charging ──
+    if (this._chgState === 'windup') {
+      if (!los || !canTargetPlayer()) {
+        this._chgState = 'idle';
+        this._chgCooldown = 1.0;
+        return;
+      }
+      this._chgWindup -= dt;
+      if (Math.random() < dt * 10) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
+      if (this._chgWindup <= 0) {
+        this._chgState = 'charging';
+        this._chgDur = 0.4;
+        audio.chargerWindup();
+      }
+      return;
+    }
+
+    // ── Idle state: patrol, approach, or initiate charge ──
+    if (los && d < 2) {
+      // Point-blank: melee attack, don't charge
+      this.moveToward(player.x, player.y, this.spd, dt, map);
+      if (d < 1.2) {
+        this.meleeAttack(player);
+        this._chgCooldown = Math.max(this._chgCooldown, 1.5);
+      }
+    } else if (los && d >= 3 && d <= 10 && this._chgCooldown <= 0) {
+      // In charge range — begin windup
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      this._chgDx = dx; this._chgDy = dy;
+      this._chgState = 'windup';
+      this._chgWindup = 0.6;
+    } else if (los && d < 8) {
+      // Too close for charge or on cooldown — approach
+      this.moveToward(player.x, player.y, this.spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.patrol(dt, map);
+    }
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -1690,6 +1789,59 @@ class Enemy {
         }
         ctx.restore();
       }
+      // CHARGER: windup glow + charge trail
+      if (this.type === 'CHARGER') {
+        if (this._chgState === 'windup') {
+          ctx.save();
+          const wPulse = 0.3 + 0.3 * Math.sin(this.bobAngle * 8);
+          ctx.globalAlpha = wPulse;
+          ctx.shadowBlur = 14 + wPulse * 8;
+          ctx.shadowColor = '#ff6600';
+          ctx.fillStyle = '#ff6600';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 1.6, 0, TWO_PI);
+          ctx.fill();
+          // Direction indicator line
+          ctx.globalAlpha = 0.6;
+          ctx.strokeStyle = '#ff6600';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.lineDashOffset = -this.bobAngle * 12;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + (this._chgDx || 0) * sz * 3, sy + (this._chgDy || 0) * sz * 3);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        } else if (this._chgState === 'charging') {
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = '#ff6600';
+          ctx.fillStyle = '#ff4400';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 1.8, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        } else if (this.stunTimer > 0 && this._chgCooldown > 2.0) {
+          // Post-charge daze: spinning stars
+          ctx.save();
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = '#ffcc00';
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#ffcc00';
+          const starY = sy - sz - 6;
+          for (let i = 0; i < 3; i++) {
+            const a = this.bobAngle * 3 + (i / 3) * TWO_PI;
+            const starX = sx + Math.cos(a) * 6;
+            const starYi = starY + Math.sin(a) * 2;
+            ctx.beginPath();
+            ctx.arc(starX, starYi, 1.5, 0, TWO_PI);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
       // Bounty target: gold aura + crown marker
       if (this._isBounty) {
         ctx.save();
@@ -1835,6 +1987,7 @@ const ENEMY_WEIGHTS = {
   SNIPER:     { base: 1,  perFloor: 2, minFloor: 7 },  // glass-cannon laser sight
   SUMMONER:   { base: 1,  perFloor: 2, minFloor: 6 },  // spawns minion drones
   HEALER:     { base: 1,  perFloor: 2, minFloor: 5 },  // heals wounded allies
+  CHARGER:    { base: 2,  perFloor: 2, minFloor: 4 },  // charge-attack melee rusher
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -1870,6 +2023,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SNIPER':   hp=20;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
     case 'SUMMONER': hp=35;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
     case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
+    case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=330; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -1896,6 +2050,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
+  if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
