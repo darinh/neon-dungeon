@@ -562,25 +562,33 @@ function clampToBossRoom(entity) {
 }
 
 function hasLOS(x1, y1, x2, y2, map) {
-  let dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
-  let sx = x1<x2?1:-1, sy = y1<y2?1:-1;
-  let err = dx - dy;
   let cx = Math.floor(x1), cy = Math.floor(y1);
   const ex = Math.floor(x2), ey = Math.floor(y2);
+  let dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
+  let sx = cx<ex?1:-1, sy = cy<ey?1:-1;
+  let err = dx - dy;
   for (let i=0; i<100; i++) {
     if (cx===ex && cy===ey) return true;
     if (cx<0||cy<0||cx>=MAP_W||cy>=MAP_H) return false;
     if (!isSeeThrough(map[cy][cx])) return false;
     const e2 = 2*err;
-    if (e2 > -dy) { err -= dy; cx += sx; }
-    if (e2 <  dx) { err += dx; cy += sy; }
+    let nx = cx, ny = cy;
+    if (e2 > -dy) { err -= dy; nx += sx; }
+    if (e2 <  dx) { err += dx; ny += sy; }
+    // Diagonal corner-cut block: can't see through touching wall corners
+    if (nx !== cx && ny !== cy) {
+      if (!isSeeThrough(map[cy]?.[nx]) && !isSeeThrough(map[ny]?.[cx])) return false;
+    }
+    cx = nx; cy = ny;
   }
   return true;
 }
 
 // Tile helpers
 function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL; }
-function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
+function isSeeThrough(t) {
+  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G;
+}
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
@@ -2715,6 +2723,7 @@ function generateFloor(floorNum) {
   // fog of war
   const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
+  const visible = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
 
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
@@ -3087,38 +3096,71 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
 function updateLighting(dungeon, px, py) {
+  const map = dungeon.map;
   const r = game.modifier === 'BLACKOUT' ? 5 : 9;
   const tx = Math.floor(px), ty = Math.floor(py);
-  for (let dy=-r; dy<=r; dy++)
-    for (let dx=-r; dx<=r; dx++) {
-      const x=tx+dx, y=ty+dy;
-      if (x<0||y<0||x>=MAP_W||y>=MAP_H) continue;
-      if (dungeon.secretMask[y][x]) continue; // hide unrevealed secret rooms
-      const d = Math.sqrt(dx*dx+dy*dy);
-      if (d <= r) {
-        const l = Math.max(0, 1 - d/r);
-        dungeon.light[y][x] = Math.max(dungeon.light[y][x], l);
-        dungeon.visited[y][x] = 1;
-      }
+  // Clear light and visible each frame (per-row typed-array fill)
+  for (let y = 0; y < MAP_H; y++) {
+    dungeon.light[y].fill(0);
+    dungeon.visible[y].fill(0);
+  }
+  // Player FOV — LOS-based
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++) {
+      const x = tx + dx, y = ty + dy;
+      if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+      if (dungeon.secretMask[y][x]) continue;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > r) continue;
+      if (!tileHasLOS(px, py, x, y, map)) continue;
+      const l = Math.max(0, 1 - d / r);
+      dungeon.light[y][x] = l;
+      dungeon.visible[y][x] = 1;
+      dungeon.visited[y][x] = 1;
     }
-  // sconce lights
+  // Sconce ambient — only brightens already-visited tiles, no visibility grant
   for (const sc of dungeon.lights) {
-    const sdx=sc.x-tx, sdy=sc.y-ty;
-    if (Math.abs(sdx)>6||Math.abs(sdy)>6) continue;
-    for (let dy=-4; dy<=4; dy++)
-      for (let dx=-4; dx<=4; dx++) {
-        const x=sc.x+dx, y=sc.y+dy;
-        if (x<0||y<0||x>=MAP_W||y>=MAP_H) continue;
+    const sdx = sc.x - tx, sdy = sc.y - ty;
+    if (Math.abs(sdx) > 6 || Math.abs(sdy) > 6) continue;
+    for (let dy = -4; dy <= 4; dy++)
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = sc.x + dx, y = sc.y + dy;
+        if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
         if (dungeon.secretMask[y][x]) continue;
-        const d=Math.sqrt(dx*dx+dy*dy);
-        if (d<=4) dungeon.light[y][x]=Math.max(dungeon.light[y][x],0.4*(1-d/4));
+        if (!dungeon.visited[y][x]) continue;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d <= 4) dungeon.light[y][x] = Math.max(dungeon.light[y][x], 0.4 * (1 - d / 4));
       }
   }
+}
+
+// LOS check for FOV: like hasLOS but uses isSeeThrough and blocks diagonal corner-cuts
+function tileHasLOS(x1, y1, tx, ty, map) {
+  let cx = Math.floor(x1), cy = Math.floor(y1);
+  if (cx === tx && cy === ty) return true;
+  let dx = Math.abs(tx - cx), dy = Math.abs(ty - cy);
+  const sx = cx < tx ? 1 : -1, sy = cy < ty ? 1 : -1;
+  let err = dx - dy;
+  for (let i = 0; i < 100; i++) {
+    const e2 = 2 * err;
+    let nx = cx, ny = cy;
+    if (e2 > -dy) { err -= dy; nx += sx; }
+    if (e2 < dx)  { err += dx; ny += sy; }
+    // Diagonal corner-cut block: both intermediate tiles must be see-through
+    if (nx !== cx && ny !== cy) {
+      if (!isSeeThrough(map[cy]?.[nx]) && !isSeeThrough(map[ny]?.[cx])) return false;
+    }
+    cx = nx; cy = ny;
+    if (cx === tx && cy === ty) return true;
+    if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H) return false;
+    if (!isSeeThrough(map[cy][cx])) return false;
+  }
+  return true;
 }
 
 // ─── Projectiles ─────────────────────────────────────────────────────────────
@@ -3170,6 +3212,29 @@ class Projectile {
       else { spawnParticles(prevX,prevY,'SPARK',this.colour,3); }
       this.dead=true; return;
     }
+    // Block diagonal corner-cutting (projectiles slipping through touching wall corners)
+    const ptx=Math.floor(prevX), pty=Math.floor(prevY);
+    if (tx!==ptx && ty!==pty) {
+      const xBlocked = tx<0||tx>=MAP_W||pty<0||pty>=MAP_H||!isPassable(map[pty][tx]);
+      const yBlocked = ptx<0||ptx>=MAP_W||ty<0||ty>=MAP_H||!isPassable(map[ty][ptx]);
+      if (xBlocked && yBlocked) {
+        if (this.isGrenade) {
+          detonateGrenade(prevX, prevY, this.grenadeDmg);
+          this.dead = true; return;
+        }
+        if (this.bouncesLeft > 0) {
+          this.bouncesLeft--;
+          this.x = prevX; this.y = prevY;
+          this.dx = -this.dx; this.dy = -this.dy;
+          this.x += this.dx * 0.05; this.y += this.dy * 0.05;
+          spawnParticles(prevX, prevY, 'SPARK', '#00ffff', 4);
+          audio.ricochet();
+          return;
+        }
+        spawnParticles(prevX, prevY, 'SPARK', this.colour, 3);
+        this.dead = true; return;
+      }
+    }
     if (!isPassable(map[ty][tx])) {
       // Grenades detonate at last passable position on wall hit
       if (this.isGrenade) {
@@ -3181,7 +3246,6 @@ class Projectile {
         this.bouncesLeft--;
         this.x=prevX; this.y=prevY;
         // Axis-separated wall detection
-        const ptx=Math.floor(prevX), pty=Math.floor(prevY);
         const ntx=Math.floor(prevX+mx), nty=Math.floor(prevY+my);
         const xWall=ntx<0||ntx>=MAP_W||!isPassable(map[pty][ntx]);
         const yWall=nty<0||nty>=MAP_H||!isPassable(map[nty][ptx]);
@@ -3857,6 +3921,8 @@ class Item {
   }
   update(dt) { this.bob+=dt*2; }
   draw(camX,camY) {
+    const tx=Math.floor(this.x), ty=Math.floor(this.y);
+    if (!game.dungeon?.visible?.[ty]?.[tx]) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*2;
     ctx.save();
     ctx.shadowBlur=12; ctx.shadowColor=this.type.colour;
@@ -3875,6 +3941,8 @@ class KeyItem {
   }
   update(dt) { this.bob+=dt*2; }
   draw(camX,camY) {
+    const tx=Math.floor(this.x), ty=Math.floor(this.y);
+    if (!game.dungeon?.visible?.[ty]?.[tx]) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*3;
     ctx.save();
     ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
@@ -5143,6 +5211,9 @@ class Enemy {
 
   draw(camX,camY) {
     if (this.dead) return;
+    // FOV gating: only draw enemies the player can currently see
+    const etx = Math.floor(this.x), ety = Math.floor(this.y);
+    if (!game.dungeon?.visible?.[ety]?.[etx]) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     if (sx<-40||sx>W+40||sy<-40||sy>H+40) return;
 
@@ -6004,13 +6075,18 @@ class Player {
 // ─── Camera ───────────────────────────────────────────────────────────────────
 function getCamera(player) {
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
+  // Allow camera overscroll near edges so player remains visible under minimap / touch controls
+  const leftPad = 5 * TILE;
+  const rightPad = Math.max(5 * TILE, 130 + safeRight);
+  const topPad = Math.max(5 * TILE, 92 + safeTop);
+  const bottomPad = 5 * TILE;
   const camX = W >= worldW
     ? -(W - worldW) / 2
-    : clamp(player.x * TILE - W / 2, 0, worldW - W);
+    : clamp(player.x * TILE - W / 2, -leftPad, worldW - W + rightPad);
   const botClear = layout.hudH / 2;
   const camY = H >= worldH
     ? -(H - worldH) / 2
-    : clamp(player.y * TILE - H / 2 + botClear, 0, worldH - H + botClear);
+    : clamp(player.y * TILE - H / 2 + botClear, -topPad, worldH - H + botClear + bottomPad);
   return { x: camX, y: camY };
 }
 
@@ -6622,16 +6698,18 @@ function drawMinimap(dungeon, player) {
     }
   }
 
-  // enemies — visible in visited areas, or everywhere with THERMAL_OPTICS
+  // enemies — only in current LOS, or everywhere with THERMAL_OPTICS
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   for (const e of enemies) {
     if (e.dead) continue;
-    if (!thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
+    const tx = Math.floor(e.x), ty = Math.floor(e.y);
+    const inSight = !!dungeon.visible[ty]?.[tx];
+    if (!thermalOptics && !inSight) continue;
     if (e.elite && e.eliteAffix) {
       ctx.fillStyle=ELITE_AFFIXES[e.eliteAffix].colour;
       ctx.fillRect(MX+e.x*sx-1.5,MY+e.y*sy-1.5,3,3);
     } else {
-      ctx.fillStyle= thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)] ? '#ff666688' : '#ff3333';
+      ctx.fillStyle= thermalOptics && !inSight ? '#ff666688' : '#ff3333';
       ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
     }
   }
@@ -6806,7 +6884,9 @@ function drawExpandedMinimap(dungeon, player) {
   const dotSz = Math.max(3, Math.round(sx * 0.5));
   for (const e of enemies) {
     if (e.dead) continue;
-    if (!thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
+    const tx = Math.floor(e.x), ty = Math.floor(e.y);
+    const inSight = !!dungeon.visible[ty]?.[tx];
+    if (!thermalOptics && !inSight) continue;
     const ex = mx + e.x * sx, ey = my + e.y * sy;
     if (e.isBoss) {
       const bPulse = 0.6 + 0.4 * Math.sin((game.floorTime || 0) * 4);
@@ -6818,7 +6898,7 @@ function drawExpandedMinimap(dungeon, player) {
       ctx.fillStyle = ELITE_AFFIXES[e.eliteAffix].colour;
       ctx.fillRect(ex - dotSz * 0.7, ey - dotSz * 0.7, dotSz * 1.4, dotSz * 1.4);
     } else {
-      const vis = thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)];
+      const vis = thermalOptics && !inSight;
       ctx.fillStyle = vis ? '#ff666688' : '#ff3333';
       ctx.fillRect(ex - dotSz * 0.5, ey - dotSz * 0.5, dotSz, dotSz);
     }
@@ -7175,6 +7255,8 @@ const game = {
     // Strip floor-only shield bonus from previous floor
     this.player.def-=this.player.shieldBonus;
     this.player.shieldBonus=0;
+    // Keys are floor-scoped: keep them for this floor, clear on fresh floor transitions
+    if (savedModifier === undefined) this.player.keys = { red:0, blue:0, gold:0 };
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
     this.dungeon=generateFloor(n);
     // Reset boss state before populating (populateFloor sets them for boss floors)
@@ -7841,7 +7923,6 @@ const game = {
         if (isDoor(dt)) {
           const kc=doorKeyColour(dt);
           if (player.keys[kc] > 0) {
-            player.keys[kc]--;
             dungeon.map[dy][dx]=T.DOOR_OPEN;
             this.msg('Unlocked '+kc+' door!', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
             spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00', 8);
@@ -9297,6 +9378,7 @@ const game = {
 
     // Special room markers
     for (const r of dungeon.rooms) {
+      if (!dungeon.visible[r.cy]?.[r.cx]) continue;
       if (r.healFont) {
         const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
         ctx.save();
