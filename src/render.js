@@ -852,6 +852,17 @@ function drawMinimap(dungeon, player) {
     if (!l.deadB) { ctx.fillRect(MX + l.x2 * sx - 1, MY + l.y2 * sy - 1, 2, 2); }
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
+  // Wall turrets — small dots (red-orange hostile, green hacked)
+  for (const wt of wallTurrets) {
+    if (wt.dead) continue;
+    const tx = Math.floor(wt.x), ty = Math.floor(wt.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = wt.hacked ? '#00ffaa' : '#ff4400';
+    ctx.shadowBlur = 2; ctx.shadowColor = wt.hacked ? '#00cc88' : '#cc3300';
+    ctx.fillRect(MX + wt.x * sx - 1, MY + wt.y * sy - 1, 2, 2);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
 
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
@@ -1171,7 +1182,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[]; wallTurrets=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1475,6 +1486,65 @@ function populateFloor(dungeon, floorNum) {
           if (!tooClose) {
             const cycling = Math.random() < 0.2;
             lasers.push(createLaser(pick.x1, pick.y1, pick.x2, pick.y2, floorNum, room, pick.axis, cycling));
+          }
+        }
+      }
+    }
+
+    // Wall turrets (floor 5+, normal rooms, ~25% chance, not in camera rooms, room ≥6×6)
+    if (floorNum >= 5 && !rt && room.w >= 6 && room.h >= 6 && Math.random() < 0.25) {
+      const hasCamera = cameras.some(c => c.room === room);
+      if (!hasCamera) {
+        // Reuse camera wall-mount algorithm: interior floor adjacent to wall, not near doors/corners
+        const mounts = [];
+        const m = dungeon.map;
+        for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
+          for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
+            if (m[ty]?.[tx] !== T.FLOOR) continue;
+            const dirs = [
+              { dx: 0, dy: -1, side: 'N' },
+              { dx: 0, dy: 1,  side: 'S' },
+              { dx: -1, dy: 0, side: 'W' },
+              { dx: 1, dy: 0,  side: 'E' },
+            ];
+            for (const { dx, dy, side } of dirs) {
+              if (m[ty + dy]?.[tx + dx] !== T.WALL) continue;
+              let nearDoor = false;
+              for (let ddy = -1; ddy <= 1 && !nearDoor; ddy++) {
+                for (let ddx = -1; ddx <= 1 && !nearDoor; ddx++) {
+                  const nt = m[ty + ddy]?.[tx + ddx];
+                  if (isDoor(nt) || nt === T.DOOR_OPEN || nt === T.STAIRS) nearDoor = true;
+                }
+              }
+              if (nearDoor) continue;
+              let wallCount = 0;
+              if (m[ty - 1]?.[tx] === T.WALL) wallCount++;
+              if (m[ty + 1]?.[tx] === T.WALL) wallCount++;
+              if (m[ty]?.[tx - 1] === T.WALL) wallCount++;
+              if (m[ty]?.[tx + 1] === T.WALL) wallCount++;
+              if (wallCount > 1) continue;
+              mounts.push({ tx, ty, side });
+            }
+          }
+        }
+        // Shuffle and pick 1-2 turrets
+        for (let i = mounts.length - 1; i > 0; i--) { const j = rndInt(0, i); [mounts[i], mounts[j]] = [mounts[j], mounts[i]]; }
+        const count = Math.min(rndInt(1, 2), mounts.length);
+        for (let k = 0; k < count; k++) {
+          const pick = mounts[k];
+          const cx = pick.tx + 0.5, cy = pick.ty + 0.5;
+          let tooClose = false;
+          for (const b of beacons)    { if (dist(cx, cy, b.x, b.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const v of vcores)  { if (dist(cx, cy, v.x, v.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const c2 of crates) { if (dist(cx, cy, c2.tx + 0.5, c2.ty + 0.5) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const mn of mines)  { if (dist(cx, cy, mn.x, mn.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const g of shieldGens) { if (dist(cx, cy, g.x, g.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const cm of cameras) { if (dist(cx, cy, cm.x, cm.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const l of lasers)  { if (dist(cx, cy, l.x1, l.y1) < 1.5 || dist(cx, cy, l.x2, l.y2) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const wt of wallTurrets) { if (dist(cx, cy, wt.x, wt.y) < 2.5) { tooClose = true; break; } }
+          if (!tooClose) {
+            wallTurrets.push(createWallTurret(cx, cy, floorNum, room, pick.side));
+            room._hadEnemies = true; // hostile turrets block room-clear
           }
         }
       }

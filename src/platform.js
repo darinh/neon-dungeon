@@ -1537,6 +1537,32 @@ const audio = (() => {
       osc('sine', 1047, 1047, 0.10, t + 0.24, 0.2, bus); // C6
       osc('triangle', 1047, 1568, 0.04, t + 0.3, 0.15, bus); // shimmer
       noise(0.03, t + 0.25, 0.1, 8000, bus);
+    },
+    turretFire() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.6, 0.15, 0.15);
+      // Short mechanical burst — mid-frequency snap
+      osc('square', 200, 100, 0.06, t, 0.06, bus);
+      osc('sawtooth', 400, 200, 0.04, t + 0.01, 0.04, bus);
+      noise(0.05, t, 0.05, 4000, bus);
+    },
+    turretHack() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.2, 0.2);
+      // Rising digital chirp — success sound
+      osc('sine', 400, 900, 0.06, t, 0.15, bus);
+      osc('square', 600, 1200, 0.03, t + 0.05, 0.1, bus);
+      osc('triangle', 800, 1600, 0.04, t + 0.1, 0.12, bus);
+      noise(0.02, t + 0.12, 0.08, 6000, bus);
+    },
+    turretDestroy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.2, 0.2);
+      // Metallic crunch + sparks
+      osc('sawtooth', 180, 60, 0.08, t, 0.12, bus);
+      osc('square', 120, 40, 0.06, t + 0.02, 0.1, bus);
+      noise(0.08, t, 0.15, 3000, bus);
+      noise(0.04, t + 0.08, 0.1, 8000, bus);
     }
   };
 })();

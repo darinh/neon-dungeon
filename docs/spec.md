@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.5
+# NEON DUNGEON — Game Specification v4.6
 
 ## Vision
 
@@ -597,6 +597,99 @@ generation. On reveal (`revealSecretRoom`):
 sine rumble 80→30 Hz + triangle sub 40→20 Hz + 3 staggered debris clinks
 (sine 800–1400→half Hz).
 
+### Wall Turrets (floor 5+)
+
+**Concept:** Wall-mounted automated defense turrets. Environmental entities
+(not enemies) that the player must destroy or hack. The hack-or-destroy
+decision adds a meaningful tactical choice: hack a turret with EMP to gain
+an ally for the room, or shoot it down for credits.
+
+**Placement:** 1–2 per qualifying normal room (floor 5+, room ≥ 6×6, not
+spawn, boss, or special room type). ~25% of eligible rooms. Mutually
+exclusive with security cameras (both use wall-mount positions, too busy
+together). Can coexist with beacons, shield generators, lasers, mines,
+crates, and volatile cores. Uses the same wall-mount-point algorithm as
+cameras: interior floor tile adjacent to a solid wall, not near doors,
+stairs, or corners (single-wall adjacency only), not within 1.5 tiles of
+other environmental entities, 2.5 tiles between wall turrets.
+
+**Entity: `wallTurrets[]` array.** Each entry:
+`{ x, y, hp, maxHp, dead, hacked, room, floor, wallSide, baseAngle,
+scanAngle, scanDir, shootTimer, disabled, disableTimer, bob, hackFlash }`.
+HP scales with floor: `12 + floor × 3`.
+
+**Behavior — Hostile (default):**
+- Scans for player within 6-tile range with LOS.
+- Fires an enemy projectile (`fromPlayer=false`) every 1.8 s.
+- Projectile: speed 7, range 10, colour `#ff4400` (red-orange).
+- Damage: `round(5 + floor × 1.5)`.
+- Barrel rotates to track detected player; sweeps ±60° when idle.
+- Phase Cloak: turret loses target (cloaked player not targetable).
+
+**Behavior — Hacked (player ally):**
+- Targets nearest non-boss, non-disguised enemy in same room with LOS,
+  within 7-tile range.
+- Fires allied projectiles (`fromPlayer=false`, `isAllyTurret=true`) every
+  1.5 s (slightly faster than hostile).
+- Damage: same formula, colour `#00ffaa` (green-cyan).
+- Allied projectiles hit enemies (shield deflection applies) but do NOT
+  apply player augments, weapon affixes, or perk effects — they are a
+  separate damage source ("Wall Turret").
+- Lasts until turret is destroyed (persists across room visits on same floor).
+
+**Hacking mechanic:**
+- EMP Burst converts all wall turrets in blast radius to `hacked=true`
+  (permanent, LOS-gated).
+- This extends EMP's existing environmental interaction pattern (cameras,
+  shield generators, lasers).
+- Audio: `audio.turretHack()`. Floating text: `◇ HACKED`.
+- Brief green pulse visual on hack.
+
+**Damage sources:**
+- Player projectiles (when hostile).
+- All AoE sources: Volatile Core detonation, grenade explosion, volatile/
+  explosive-kills death explosion, weapon EXPLOSIVE affix on-kill, LEAPER
+  shockwave, mine detonation.
+- Static Field: damages hostile turrets at 1 s intervals.
+- Enemy projectiles damage hacked turrets.
+- Turrets are NOT damaged by toxic pools, plasma vents, or arc grids (they
+  are wall-mounted, not floor-level).
+
+**On destruction:**
+- Credits: `floor × 3` (economy multipliers apply).
+- Particles: orange explosion + orange sparks.
+- Room-clear re-evaluation triggered.
+- `audio.turretDestroy()` SFX.
+
+**Room-clear interaction:**
+- Hostile wall turrets **block** room-clear (like alarm beacons). The player
+  must either destroy or hack all turrets before the room is cleared.
+- Hacked wall turrets do **not** block room-clear.
+- Hacking a turret triggers room-clear re-evaluation (the blocking condition
+  changed).
+- `room._hadEnemies` is set when turrets are placed, enabling the room-clear
+  tracking path.
+
+**Minimap:**
+- Compact minimap: small dot — `#ff4400` (red-orange) hostile, `#00ffaa`
+  (green) hacked.
+- Expanded minimap: not rendered separately (turrets sit on FLOOR tiles).
+
+**Visual (canvas draw):**
+- Wall mount base: dark rectangle against wall.
+- Rotating barrel: red-orange (hostile) or green-cyan (hacked) glow, darker
+  muzzle tip. Grey when disabled.
+- HP bar appears when damaged.
+- Hack flash: brief expanding green glow on conversion.
+
+**Audio:**
+- `audio.turretFire()` — short mechanical burst (square 200→100 Hz +
+  sawtooth 400→200 Hz + noise snap).
+- `audio.turretHack()` — rising digital chirp (ascending sine/square/
+  triangle + noise tail).
+- `audio.turretDestroy()` — metallic crunch + sparks (sawtooth 180→60 Hz +
+  square 120→40 Hz + two noise layers).
+
 ---
 
 ## Player
@@ -765,7 +858,7 @@ current one (cooldown resets on equip). Available from floor 3.
 
 | Module         | Cooldown | Effect                                             | Colour  | Icon |
 |----------------|----------|----------------------------------------------------|---------|------|
-| EMP Burst      | 10 s     | Stun enemies within 4 tiles (LOS required) for 2s. Bosses: 1s. Visual: expanding cyan ring. | `#00ddff` | ⚡ |
+| EMP Burst      | 10 s     | Stun enemies within 4 tiles (LOS required) for 2s. Bosses: 1s. Hacks wall turrets (converts hostile→allied). Visual: expanding cyan ring. | `#00ddff` | ⚡ |
 | Phase Cloak    | 14 s     | 2.5s invisibility + damage immunity. Enemies lose targeting. Projectiles pass through. Player can still shoot. | `#cc44ff` | ◇ |
 | Nano Swarm     | 10 s     | Release 6 homing nanite particles. Each deals 8 damage on contact (0.5s hit cooldown per nanite). Homes toward nearest visible enemy. 4s lifetime. | `#44ff88` | ☢ |
 | Gravity Well   | 16 s     | Place a pull point at aim position. Pulls enemies within 5 tiles toward center for 3s. Bosses immune to pull. LOS required. Collision-aware movement. | `#ff8800` | ◎ |
@@ -2946,3 +3039,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v64.0   | Laser Tripwires: wall-mounted emitter pairs projecting destructible laser beams across rooms (floor 3+, ~25% chance per normal room ≥ 5 tiles wide/tall, mutually exclusive with cameras/beacons). `lasers[]` entity array. Independent emitter HP (`10 + floor × 3`) — destroying either disables beam. ~20% cycle on/off (1.5 s each, 0.2 s rearm grace). Beam crossing: segment intersection + 0.25-tile proximity, deals `8 + floor × 2` damage + 0.3 s shock (shockTimer). 2 s hit cooldown. Dash bypasses, Phase Cloak bypasses (canTargetPlayer). Crates dynamically block beam (per-frame LOS). EMP disables 3 s. Static Field damages emitters (1 s interval, object-ref Map keys). Does NOT block room-clear. Minimap: thin red/orange line. `audio.laserHit()`, `audio.laserDisable()`, `audio.laserDestroy()` SFX. Spec v4.3. SW cache v76. |
 | v65.0   | LEAPER enemy (floor 5+): jumping shockwave attacker with 4-state machine (idle→windup→airborne→recovery). Windup: 0.5 s telegraph. Airborne: 0.35 s jump to player position. Landing: 2-tile AoE (LOS-gated, ATK×1.2). Recovery: 1 s vulnerable window. One airborne per room. Airborne/recovery continue during stun. Proper env damage helpers. Stats: HP 30, ATK 11, SPD 3.0, XP 22. TYPE_CAPS: 2. Elite eligible. `audio.leaperWindup()`, `audio.leaperLand()`. Spec v4.4. SW cache v77. |
 | v66.0   | Toxic Pools: corrosive environmental hazard tiles (floor 3+, `T.TOXIC:22`). Clusters of 2–4 green tiles placed in ~30% of normal rooms. Deal `(2 + floor × 0.5) HP/s` to both player AND enemies (bosses immune). 30% movement slow on player and enemies while in pool (bosses immune to slow). Dash/Phase Cloak grants immunity. Disguised mimics excluded from damage. Enemy damage uses 0.5 s interval with `isProc: true` to prevent weapon affix procs. Death recap source: `Toxic Pool` (#33ff00). `audio.toxicBurn()` low gurgling SFX. Spec v4.5. SW cache v78. |
+| v67.0   | Wall Turrets: hackable wall-mounted auto-turrets (floor 5+). `wallTurrets[]` entity array. 1–2 per ~25% of qualifying rooms (≥6×6, mutually exclusive with cameras). Hostile: fire at player every 1.8s (6-tile range, `5 + floor × 1.5` dmg). EMP Burst **hacks** turrets (converts hostile→allied, permanent). Hacked: target nearest enemy in room (7-tile range, 1.5s cooldown), fire `isAllyTurret` projectiles (no player augments/perks). Hostile turrets block room-clear; hacked do not. HP: `12 + floor × 3`. Damaged by player projectiles, all AoE, Static Field. Enemy projectiles damage hacked turrets. Death recap source: `Wall Turret`. `audio.turretFire/turretHack/turretDestroy()`. Spec v4.6. SW cache v79. |
