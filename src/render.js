@@ -1063,7 +1063,7 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
@@ -1122,7 +1122,7 @@ function populateFloor(dungeon, floorNum) {
   // Bounty target designation (floor 2+, non-boss floors)
   const isBossFloor = floorNum === 3 || floorNum === 6 || floorNum === 10;
   if (floorNum >= 2 && !isBossFloor) {
-    const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite);
+    const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite && !e._summoned);
     if (candidates.length > 0) {
       const bounty = candidates[rndInt(0, candidates.length - 1)];
       bounty._isBounty = true;

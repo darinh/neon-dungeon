@@ -1224,6 +1224,14 @@ const audio = (() => {
       osc('square', 350, 650, 0.06, t + 0.02, 0.1);
       noise(0.05, t, 0.08, 3000);
     },
+    summon() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising harmonic sweep — eerie portal opening
+      osc('sine', 200, 600, 0.07, t, 0.2);
+      osc('triangle', 300, 900, 0.04, t + 0.05, 0.18);
+      osc('sine', 500, 1200, 0.03, t + 0.1, 0.12);
+      noise(0.03, t + 0.08, 0.1, 4000);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop
