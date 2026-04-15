@@ -1759,7 +1759,7 @@ class Player {
     if (!options.ignoreShield && this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
       this.energyShieldTimer=30;
-      this.invincibleTimer=0.3;
+      this.invincibleTimer=0.5;
       this.hitsBlocked++;
       audio.shieldBreak();
       spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
