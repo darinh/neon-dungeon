@@ -822,10 +822,15 @@ const game = {
 
     // environmental hazards (separate from traps — own cooldowns, bypass armor)
     if (tile === T.PLASMA && !isPlayerDamageImmune()) {
-      // Continuous burn: direct HP reduction, bypasses defense/invincibility
+      // Continuous burn: bypasses defense and hit i-frames, but still respects shield/SECOND_WIND.
       const burnDps = (3 + this.floor) * getDiff().envDmg;
-      player.hp = Math.max(0, player.hp - burnDps * dt);
-      player.logDamage('Plasma', burnDps * dt);
+      player.takeDamage(burnDps * dt, 'Plasma', {
+        ignoreInvincible: true,
+        ignoreDefense: true,
+        skipHitInvincible: true,
+        skipHitEffects: true,
+        skipReactiveArmor: true,
+      });
       player.plasmaBurnTimer = Math.max(0, player.plasmaBurnTimer - dt);
       if (player.plasmaBurnTimer <= 0) {
         const dmgShown = Math.round(burnDps);
@@ -834,20 +839,23 @@ const game = {
         audio.plasmaBurn();
         player.plasmaBurnTimer = 0.5;
       }
-      if (player.hp <= 0) { player.hp = 0; player.killedBy = 'Plasma'; audio.gameOver(); this.endRun(false); }
     }
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && !isPlayerDamageImmune() && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
       const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
-      player.hp = Math.max(0, player.hp - zapDmg);
-      player.logDamage('Arc Grid', zapDmg);
+      player.takeDamage(zapDmg, 'Arc Grid', {
+        ignoreInvincible: true,
+        ignoreDefense: true,
+        skipHitInvincible: true,
+        skipHitEffects: true,
+        skipReactiveArmor: true,
+      });
       player.arcCooldown = 0.8;
       player.flashTimer = 0.15;
       this.msg('Arc zap! -'+zapDmg+' HP','#44ccff');
       spawnParticles(player.x, player.y, 'SPARK', '#88eeff', 6);
       audio.arcZap();
-      if (player.hp <= 0) { player.hp = 0; player.killedBy = 'Arc Grid'; audio.gameOver(); this.endRun(false); }
     }
 
     // special room effects

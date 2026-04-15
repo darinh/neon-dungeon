@@ -1751,11 +1751,12 @@ class Player {
     }
   }
 
-  takeDamage(dmg, source) {
-    if (this.invincibleTimer>0) return;
-    if (isPlayerDamageImmune()) return; // dash i-frames + phase cloak
+  takeDamage(dmg, source, opts) {
+    const options = opts || {};
+    if (!options.ignoreInvincible && this.invincibleTimer>0) return;
+    if (!options.ignoreImmunity && isPlayerDamageImmune()) return; // dash i-frames + phase cloak
     // Energy shield absorbs the hit
-    if (this.energyShield && this.perks.ENERGY_SHIELD) {
+    if (!options.ignoreShield && this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
       this.energyShieldTimer=30;
       this.invincibleTimer=0.3;
@@ -1767,19 +1768,27 @@ class Player {
       triggerShake(4, 0.15);
       return;
     }
-    const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
-    const actual=Math.max(1,dmg-this.def-titaniumReduction);
+    let actual;
+    if (options.ignoreDefense) {
+      actual = Math.max(0, dmg);
+    } else {
+      const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
+      actual = Math.max(1, dmg - this.def - titaniumReduction);
+    }
+    if (actual <= 0) return;
     this.hp=Math.max(0,this.hp-actual);
     const src = source || 'Unknown';
     this.logDamage(src, actual);
-    this.invincibleTimer=0.5;
-    this.flashTimer=0.2;
-    spawnDmgText(this.x, this.y, actual, '#ff4444');
-    triggerShake(Math.min(actual * 0.4, 8), 0.2);
-    audio.hit(true);
-    spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
+    if (!options.skipHitInvincible) this.invincibleTimer = 0.5;
+    if (!options.skipHitEffects) {
+      this.flashTimer = 0.2;
+      spawnDmgText(this.x, this.y, actual, '#ff4444');
+      triggerShake(Math.min(actual * 0.4, 8), 0.2);
+      audio.hit(true);
+      spawnParticles(this.x, this.y, 'BLOOD', '#ff4444', 5);
+    }
     // REACTIVE_ARMOR augment: emit damage pulse on hit
-    if (hasAugment('REACTIVE_ARMOR') && this.reactiveArmorCD <= 0) {
+    if (!options.skipReactiveArmor && hasAugment('REACTIVE_ARMOR') && this.reactiveArmorCD <= 0) {
       this.reactiveArmorCD = 8;
       audio.reactiveArmor();
       const rRadius = 2.5;
@@ -2113,4 +2122,3 @@ class Player {
     }
   }
 }
-
