@@ -788,6 +788,25 @@ function drawMinimap(dungeon, player) {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
 
+  // Security cameras — small red triangles
+  for (const cam of cameras) {
+    if (cam.dead) continue;
+    const tx = Math.floor(cam.x), ty = Math.floor(cam.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    const pulse = cam.state === 'alerted' ? 0.9 : 0.5 + 0.3 * Math.sin((game.floorTime||0) * 2);
+    ctx.globalAlpha = pulse;
+    ctx.shadowBlur = 3; ctx.shadowColor = '#ff3300';
+    ctx.fillStyle = cam.state === 'alerted' ? '#ff4422' : '#ff3300';
+    const px = MX + cam.x * sx, py = MY + cam.y * sy;
+    ctx.beginPath();
+    ctx.moveTo(px, py - 1.5);
+    ctx.lineTo(px - 1.5, py + 1.5);
+    ctx.lineTo(px + 1.5, py + 1.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
   // player dot
@@ -1105,7 +1124,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1260,6 +1279,61 @@ function populateFloor(dungeon, floorNum) {
           if (!tooClose) for (const c of crates) { if (dist(gx, gy, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
           if (!tooClose) for (const m of mines) { if (dist(gx, gy, m.x, m.y) < 1.5) { tooClose = true; break; } }
           if (!tooClose) shieldGens.push(createShieldGen(gx, gy, floorNum, room));
+        }
+      }
+    }
+
+    // Security cameras (floor 4+, normal rooms, ~30% chance, not in beacon rooms, room ≥6×6)
+    if (floorNum >= 4 && !rt && room.w >= 6 && room.h >= 6 && Math.random() < 0.3) {
+      const hasBeacon = beacons.some(b => b.room === room);
+      if (!hasBeacon) {
+        // Find valid wall mount points: interior floor tile adjacent to solid wall, not near doors/corners
+        const mounts = [];
+        const m = dungeon.map;
+        for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
+          for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
+            if (m[ty]?.[tx] !== T.FLOOR) continue;
+            // Check each cardinal direction for an adjacent wall
+            const dirs = [
+              { dx: 0, dy: -1, side: 'N' },
+              { dx: 0, dy: 1,  side: 'S' },
+              { dx: -1, dy: 0, side: 'W' },
+              { dx: 1, dy: 0,  side: 'E' },
+            ];
+            for (const { dx, dy, side } of dirs) {
+              const adjTile = m[ty + dy]?.[tx + dx];
+              if (adjTile !== T.WALL) continue;
+              // Not near doors (manhattan ≤ 1)
+              let nearDoor = false;
+              for (let ddy = -1; ddy <= 1 && !nearDoor; ddy++) {
+                for (let ddx = -1; ddx <= 1 && !nearDoor; ddx++) {
+                  const nt = m[ty + ddy]?.[tx + ddx];
+                  if (isDoor(nt) || nt === T.DOOR_OPEN || nt === T.STAIRS) nearDoor = true;
+                }
+              }
+              if (nearDoor) continue;
+              // Not a corner tile (avoid awkward 2-wall adjacency)
+              let wallCount = 0;
+              if (m[ty - 1]?.[tx] === T.WALL) wallCount++;
+              if (m[ty + 1]?.[tx] === T.WALL) wallCount++;
+              if (m[ty]?.[tx - 1] === T.WALL) wallCount++;
+              if (m[ty]?.[tx + 1] === T.WALL) wallCount++;
+              if (wallCount > 1) continue;
+              mounts.push({ tx, ty, side });
+            }
+          }
+        }
+        if (mounts.length > 0) {
+          const pick = mounts[rndInt(0, mounts.length - 1)];
+          const cx = pick.tx + 0.5, cy = pick.ty + 0.5;
+          // Not near other environmental objects
+          let tooClose = false;
+          for (const b of beacons) { if (dist(cx, cy, b.x, b.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const v of vcores) { if (dist(cx, cy, v.x, v.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const c of crates) { if (dist(cx, cy, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const mn of mines) { if (dist(cx, cy, mn.x, mn.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const g of shieldGens) { if (dist(cx, cy, g.x, g.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) cameras.push(createCamera(cx, cy, floorNum, room, pick.side));
         }
       }
     }
