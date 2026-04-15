@@ -1326,6 +1326,27 @@ const audio = (() => {
       osc('sine', 1400, 2000, 0.05, t, 0.05);
       osc('square', 800, 400, 0.03, t + 0.01, 0.04);
       noise(0.03, t, 0.03, 5000);
+    },
+    bountyReveal() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.3);
+      // Ominous low brass stab + rising shimmer — "high-value target spotted"
+      osc('sawtooth', 120, 80, 0.10, t, 0.35, bus);
+      osc('square', 140, 90, 0.06, t + 0.02, 0.3, bus);
+      osc('sine', 600, 1400, 0.05, t + 0.15, 0.25, bus);
+      osc('triangle', 900, 1800, 0.03, t + 0.2, 0.2, bus);
+      noise(0.04, t + 0.1, 0.15, 4000, bus);
+    },
+    bountyKill() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.25, 0.25);
+      // Triumphant chime — ascending golden tones + sparkle
+      osc('sine', 523, 523, 0.08, t, 0.12, bus);         // C5
+      osc('sine', 659, 659, 0.08, t + 0.08, 0.12, bus);  // E5
+      osc('sine', 784, 784, 0.08, t + 0.16, 0.12, bus);  // G5
+      osc('sine', 1047, 1047, 0.10, t + 0.24, 0.2, bus); // C6
+      osc('triangle', 1047, 1568, 0.04, t + 0.3, 0.15, bus); // shimmer
+      noise(0.03, t + 0.25, 0.1, 8000, bus);
     }
   };
 })();

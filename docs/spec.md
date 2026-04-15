@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.3
+# NEON DUNGEON — Game Specification v3.4
 
 ## Vision
 
@@ -1992,6 +1992,66 @@ Linked pairs of warp pads providing fast travel between distant rooms.
 
 **Regeneration:** Pads are part of floor generation, not saved/loaded independently. `dungeon.teleportPads` array stores `{x1,y1,x2,y2,pairIndex}` per pair. Cooldown resets on floor transition.
 
+### Bounty Targets (floor 2+, non-boss)
+
+One enemy per qualifying floor is designated as a high-value Bounty Target with
+enhanced stats, distinctive visuals, and bonus rewards for elimination.
+
+**Designation (in `populateFloor`, after all enemies spawned):**
+- Eligible candidates: non-boss, non-shard, non-elite enemies.
+- One candidate selected at random → `enemy._isBounty = true`.
+- Stats boosted: 2× HP (`maxHp` updated), 1.5× ATK.
+- Boss floors (3, 6, 10) never receive bounty targets.
+- Bounty designation is not saved — regenerated with floor on continue.
+
+**Visual:**
+- **Gold aura:** pulsing `#ffd700` circle behind the enemy (0.3–0.45 alpha,
+  1.4× body radius, shadow glow 16–22 px).
+- **Crown icon:** gold 5-point crown shape drawn above the enemy's head.
+- **HP bar:** always visible (even at full HP), wider than normal (20 px),
+  gold fill with "BOUNTY" micro-label above the bar.
+- **Minimap (regular):** gold 4 px pulsing dot (same as boss size, gold colour).
+  Only visible when enemy is in LOS or THERMAL_OPTICS augment active.
+- **Minimap (expanded):** gold dot matching boss size with shadow glow.
+- **HUD:** `⊕ BOUNTY` label in gold below quest text, pulsing, while bounty is
+  alive.
+
+**Reveal:**
+- First time the bounty becomes visible (FOV check): `audio.bountyReveal()` plays,
+  `⊕ BOUNTY TARGET SPOTTED` message in gold.
+- One-shot: `_bountyRevealed` flag prevents re-trigger.
+
+**Rewards (on kill via `Enemy.die()`):**
+- Credits: `30 + floor × 8` (×1.5 with Credit Siphon augment).
+- Score: `150 × floor`.
+- Guaranteed bonus item drop (in addition to normal drop roll).
+- `BOUNTY ELIMINATED +{cr} CR +{score} pts` message in gold.
+- Gold explosion particles (20) + camera shake (5 px, 0.2 s).
+- `player.bountiesCollected++` stat tracked.
+
+**Quest — BOUNTY:**
+- `id: 'BOUNTY'`, label: "Eliminate the bounty target".
+- Available only on non-boss floors where a bounty exists (added to quest pool dynamically).
+- Check: no living bounty enemy in the `enemies` array.
+- Reward: `+XP (50 + floor × 10)` + `+40 credits`.
+- Boss floors always get EXTERMINATE (unchanged).
+
+**Audio:**
+- `audio.bountyReveal()` — ominous low brass stab (dual sawtooth/square sweep
+  120→80 Hz) + rising shimmer (sine 600→1400 Hz + triangle 900→1800 Hz) +
+  noise burst (4 kHz). Reverb 0.3.
+- `audio.bountyKill()` — triumphant ascending C major arpeggio (C5→E5→G5→C6,
+  sine voices, 80 ms spacing) + sparkle shimmer (triangle 1047→1568 Hz) +
+  noise glitter (8 kHz). Reverb 0.25.
+
+**Save/Load:**
+- `player.bountiesCollected` saved in checkpoint, restored on continue.
+  Old saves default to `0` (no `SAVE_VERSION` bump needed).
+- Bounty designation itself is not saved (regenerated per floor, like volatile cores).
+
+**Stats display:** `{N} bounties` shown on Game Over and Victory run-summary
+line (between "events" and "blocked" stats), omitted when 0.
+
 ### Floor Events — Risk/Reward Encounters
 
 Interactive event terminals offering binary choices with different risk/reward profiles. One event room per non-boss floor (2–9).
@@ -2155,3 +2215,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v49.0   | Sentry Drone: persistent upgrade (max level 3) — autonomous orbiting drones that auto-fire homing shots at nearby enemies. 2.0-tile orbit radius, 1.8 rad/s rotation. Each drone independently targets nearest visible enemy within 8 tiles (LOS-required, Phantom-aware) and fires homing projectile (8 dmg, speed 8, range 8, #00e5ff). Fire cooldown shared: 2.0 / 1.6 / 1.2 s. Visual: cyan diamond with bright core and outer glow. `audio.sentryFire()` SFX (soft ascending chirp). Added to UPGRADES pool (rarity 7). Death recap: 'Sentry Drone' source with #00e5ff colour. SW cache v61. |
 | v50.0   | Status effects: player debuffs + VOLTAIC weapon affix. (1) CRAWLER melee inflicts burn (2 s, floor-scaling DPS, orange underglow + fire particles, routed through `takeDamage` — respects SECOND_WIND). (2) SNIPER projectile inflicts shock (0.4 s movement suppress, yellow flash + sparks, aiming/shooting/dash still work). (3) Both debuffs gated on successful damage — blocked/evaded hits don't apply. (4) New weapon suffix "of Storms" (VOLTAIC): stuns enemies 0.6 s (0.3 s bosses) with 2 s per-enemy ICD preventing perma-stun. (5) `Player.takeDamage()` now returns actual damage dealt (0 if blocked) for conditional status application. (6) Status bar badges: 🔥 BURN, ⚡ SHOCK. (7) Player visual indicators: burn orange glow, shock yellow flash. (8) `audio.playerBurn()`, `audio.playerShock()`, `audio.voltaicHit()` SFX. (9) Debuffs clear on floor transition. SW cache v62. |
 | v51.0   | Teleport pads: linked inter-room fast travel. 1–2 pairs of warp pads per non-boss floor (floor 3+), placed in distant rooms (Manhattan ≥ 15). Press E to warp to paired pad. 3 s cooldown, 0.3 s arrival invincibility. Blocked when source/destination is in sealed boss/challenge room. `T.TELEPORT_PAD` (20) tile. Violet pulsing `⬡` glyph, spark particles on use. Minimap: violet 3 px POI + expanded "WARP" label. `audio.teleportPad()` ascending warp SFX. `dungeon.teleportPads` in floor gen return. No save format change. SW cache v63. |
+| v52.0   | Bounty targets: one enemy per non-boss floor (2+) designated as high-value bounty with 2× HP, 1.5× ATK, gold aura + crown marker, always-visible HP bar with "BOUNTY" label. Reveal SFX + "BOUNTY TARGET SPOTTED" message on first LOS contact. Kill rewards: `30 + floor × 8` credits (Credit Siphon applies), `150 × floor` score, guaranteed bonus item drop, gold explosion particles + camera shake. New BOUNTY quest type ("Eliminate the bounty target", reward: XP + 40 CR). Minimap: gold 4 px pulsing dot (regular), gold boss-sized dot (expanded). HUD: `⊕ BOUNTY` pulsing indicator while alive. `player.bountiesCollected` stat in save/load + Game Over/Victory screens. Bounty targets exclude elite + boss + shard enemies. `audio.bountyReveal()` (ominous brass stab), `audio.bountyKill()` (triumphant C major arpeggio). SW cache v64. |

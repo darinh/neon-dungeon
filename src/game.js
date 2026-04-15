@@ -179,6 +179,14 @@ const game = {
         },
         reward: ()=>{ this.player.score+=500*floorNum; this.msg('Pacifist bonus! +'+500*floorNum+' pts','#39ff14'); }},
     ];
+    // BOUNTY quest: available on non-boss floors where a bounty target exists
+    const hasBounty = enemies.some(e => e._isBounty && !e.dead);
+    if (hasBounty) {
+      questTypes.push({
+        id:'BOUNTY', label:'Eliminate the bounty target', check: ()=>!enemies.some(e => e._isBounty && !e.dead),
+        reward: ()=>{ this.player.gainXP(50+floorNum*10); this.player.credits+=40; this.msg('Quest complete! +XP +40 CR','#ffd700'); }
+      });
+    }
     // Boss floors always get EXTERMINATE
     if (floorNum===3||floorNum===6||floorNum===10) {
       this.quest = {...questTypes[0], done:false, failed:false};
@@ -282,6 +290,7 @@ const game = {
       hitsBlocked: p.hitsBlocked,
       roomsCleared: p.roomsCleared,
       eventsResolved: p.eventsResolved,
+      bountiesCollected: p.bountiesCollected,
       floor: this.floor,
       score: p.score,
       level: p.level,
@@ -348,6 +357,7 @@ const game = {
         hitsBlocked:p.hitsBlocked,
         roomsCleared:p.roomsCleared,
         eventsResolved:p.eventsResolved,
+        bountiesCollected:p.bountiesCollected,
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
         secondWindUsed:p.secondWindUsed,
@@ -403,6 +413,7 @@ const game = {
     p.hitsBlocked=s.hitsBlocked||0;
     p.roomsCleared=s.roomsCleared||0;
     p.eventsResolved=s.eventsResolved||0;
+    p.bountiesCollected=s.bountiesCollected||0;
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
@@ -528,6 +539,15 @@ const game = {
       tickEnemyStatusEffects(e, dt);
       tickEliteAffix(e, dt);
       e.update(dt,player,dungeon.map);
+      // Bounty reveal: play sound the first time the bounty becomes visible
+      if (e._isBounty && !e.dead && !e._bountyRevealed) {
+        const etx = Math.floor(e.x), ety = Math.floor(e.y);
+        if (dungeon.visible?.[ety]?.[etx]) {
+          e._bountyRevealed = true;
+          audio.bountyReveal();
+          this.msg('⊕ BOUNTY TARGET SPOTTED', '#ffd700');
+        }
+      }
     }
 
     // decay chain lightning bolts
@@ -2505,6 +2525,20 @@ const game = {
       ctx.restore();
     }
 
+    // Bounty target HUD indicator (below quest)
+    const bountyAlive = enemies.some(e => e._isBounty && !e.dead);
+    if (bountyAlive) {
+      const by2 = 96 + safeTop + (game.quest ? 16 : 0);
+      ctx.save();
+      ctx.font='bold 9px monospace'; ctx.textAlign='right';
+      const bPulse = 0.7 + 0.3 * Math.sin(Date.now() / 400);
+      ctx.globalAlpha = bPulse;
+      ctx.shadowBlur=4; ctx.shadowColor='#ffd700';
+      ctx.fillStyle='#ffd700';
+      ctx.fillText('⊕ BOUNTY', W-8-safeRight, by2);
+      ctx.restore();
+    }
+
     // Challenge wave HUD
     if (game.challengeSealed && !game.challengeComplete) {
       const wy = 96 + safeTop + (game.quest ? 18 : 0);
@@ -3339,6 +3373,7 @@ const game = {
     let runLine = `${r.enemiesKilled||0} slain`;
     if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
     if (r.eventsResolved) runLine += `  •  ${r.eventsResolved} events`;
+    if (r.bountiesCollected) runLine += `  •  ${r.bountiesCollected} bounties`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += lh;
@@ -3416,6 +3451,7 @@ const game = {
     let runLine = `${r.enemiesKilled||0} slain`;
     if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
     if (r.eventsResolved) runLine += `  •  ${r.eventsResolved} events`;
+    if (r.bountiesCollected) runLine += `  •  ${r.bountiesCollected} bounties`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += narrow ? 20 : 24;

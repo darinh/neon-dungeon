@@ -309,6 +309,18 @@ class Enemy {
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       game.player.adrenalineTimer = 2;
     }
+    // Bounty target: bonus rewards
+    if (this._isBounty) {
+      const bCr = Math.round((30 + game.floor * 8) * creditSiphonMul);
+      game.player.credits += bCr;
+      game.player.score += 150 * game.floor;
+      game.player.bountiesCollected++;
+      items.push(new Item(this.x, this.y)); // guaranteed bonus drop
+      audio.bountyKill();
+      game.msg('BOUNTY ELIMINATED  +' + bCr + ' CR  +' + (150 * game.floor) + ' pts', '#ffd700');
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#ffd700', 20);
+      triggerShake(5, 0.2);
+    }
     // Death explosion: VOLATILE modifier and/or EXPLOSIVE_KILLS perk (shared helper, non-stacking)
     const wantExplosion = (game.modifier === 'VOLATILE' || game.player.perks.EXPLOSIVE_KILLS) && !this.isBoss && !this._volatileKill;
     if (wantExplosion) {
@@ -1498,6 +1510,35 @@ class Enemy {
           ctx.restore();
         }
       }
+      // Bounty target: gold aura + crown marker
+      if (this._isBounty) {
+        ctx.save();
+        const bPulse = 0.3 + 0.15 * Math.sin(this.bobAngle * 2.5);
+        ctx.globalAlpha = bPulse;
+        ctx.shadowBlur = 16 + Math.sin(this.bobAngle * 1.5) * 6;
+        ctx.shadowColor = '#ffd700';
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+        // Crown icon above head
+        ctx.save();
+        ctx.fillStyle = '#ffd700';
+        ctx.shadowBlur = 4; ctx.shadowColor = '#ffd700';
+        const cy2 = sy - sz - 5;
+        ctx.beginPath();
+        ctx.moveTo(sx - 4, cy2 + 3);
+        ctx.lineTo(sx - 4, cy2);
+        ctx.lineTo(sx - 2, cy2 + 2);
+        ctx.lineTo(sx, cy2 - 1);
+        ctx.lineTo(sx + 2, cy2 + 2);
+        ctx.lineTo(sx + 4, cy2);
+        ctx.lineTo(sx + 4, cy2 + 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
       // elite diamond marker (coloured by affix)
       if (this.elite) {
         const affCol = this.eliteAffix ? ELITE_AFFIXES[this.eliteAffix].colour : '#ffffff';
@@ -1546,15 +1587,23 @@ class Enemy {
         ctx.globalAlpha = 0.15 + Math.sin(this.bobAngle * 12) * 0.1;
       }
       // small hp bar
-      if (this.hp<this.maxHp || this.shieldHp > 0) {
+      if (this.hp<this.maxHp || this.shieldHp > 0 || this._isBounty) {
         ctx.shadowBlur=0;
-        const barW = 16, barH = 2, barY = sy - 12;
+        const barW = this._isBounty ? 20 : 16, barH = 2, barY = sy - 12;
         ctx.fillStyle='#333';
         ctx.fillRect(sx-barW/2, barY, barW, barH);
         // HP portion
-        const hpCol = this.elite ? '#ffffff' : this.colour;
+        const hpCol = this._isBounty ? '#ffd700' : this.elite ? '#ffffff' : this.colour;
         ctx.fillStyle=hpCol;
         ctx.fillRect(sx-barW/2, barY, barW*(this.hp/this.maxHp), barH);
+        // "BOUNTY" label above HP bar
+        if (this._isBounty) {
+          ctx.save();
+          ctx.font='bold 5px monospace'; ctx.textAlign='center';
+          ctx.fillStyle='#ffd700'; ctx.shadowBlur=3; ctx.shadowColor='#ffd700';
+          ctx.fillText('BOUNTY', sx, barY - 2);
+          ctx.restore();
+        }
         // Shield portion (stacked above HP bar)
         if (this.shieldHp > 0) {
           ctx.fillStyle='#4488ff';
@@ -1838,6 +1887,7 @@ class Player {
     this.cloakTimer=0;          // phase cloak duration remaining
     this.regenTimer=0;          // HP_REGEN perk timer
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
+    this.bountiesCollected=0;   // bounty targets eliminated this run
     // Augments — passive cybernetic implants
     this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
     this.adrenalineTimer=0;     // ADRENALINE_INJECTOR speed buff timer
