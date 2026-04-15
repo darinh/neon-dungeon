@@ -1063,7 +1063,7 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
