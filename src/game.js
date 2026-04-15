@@ -126,6 +126,8 @@ const game = {
     this.challengeComplete=false;
     // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
+    // Clear player debuffs on floor transition
+    if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
     populateFloor(this.dungeon,n);
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     if (hasAugment('ECHO_MAPPER')) {
