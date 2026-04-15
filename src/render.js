@@ -749,6 +749,22 @@ function drawMinimap(dungeon, player) {
     ctx.fillRect(MX+b.x*sx-1, MY+b.y*sy-1, 2, 2);
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
+  // Proximity mines — orange dots (only when revealed or armed)
+  for (const m of mines) {
+    if (m.dead) continue;
+    if (!m.revealed && m.state !== 'armed') continue;
+    const tx = Math.floor(m.x), ty = Math.floor(m.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    if (m.state === 'armed') {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 12);
+      ctx.fillStyle = '#ff4400';
+    } else {
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#ff8800';
+    }
+    ctx.fillRect(MX+m.x*sx-0.5, MY+m.y*sy-0.5, 1.5, 1.5);
+    ctx.globalAlpha = 1;
+  }
 
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
@@ -1065,7 +1081,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1137,6 +1153,21 @@ function populateFloor(dungeon, floorNum) {
       if (dungeon.map[bty]?.[btx] === T.FLOOR) {
         beacons.push(createBeacon(bx, by, floorNum, room));
         room._hadEnemies = true; // ensure room-clear tracking covers beacon rooms
+      }
+    }
+
+    // Proximity mines (floor 3+, normal rooms only, ~40% chance, 0–1 per room)
+    if (floorNum >= 3 && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.4) {
+      const mx = room.x + rndInt(2, room.w - 3) + 0.5;
+      const my = room.y + rndInt(2, room.h - 3) + 0.5;
+      const mtx = Math.floor(mx), mty = Math.floor(my);
+      if (dungeon.map[mty]?.[mtx] === T.FLOOR) {
+        // Not near beacons, vcores, or crates (1.5+ tile spacing)
+        let tooClose = false;
+        for (const b of beacons) { if (dist(mx, my, b.x, b.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const v of vcores) { if (dist(mx, my, v.x, v.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const c of crates) { if (dist(mx, my, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) mines.push(createMine(mx, my, floorNum, room));
       }
     }
 

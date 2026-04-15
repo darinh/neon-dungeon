@@ -1291,6 +1291,23 @@ const audio = (() => {
       osc('sine', 80, 60, 0.06, t, 0.3, bus);
       noise(0.04, t + 0.1, 0.15, 2000, bus);
     },
+    mineArm() {
+      const c = getCtx(); const t = c.currentTime;
+      // Metallic click + ascending warning tone
+      noise(0.06, t, 0.03, 8000);
+      osc('square', 800, 1400, 0.05, t + 0.03, 0.12);
+      osc('sine', 600, 1000, 0.04, t + 0.05, 0.1);
+    },
+    mineExplode() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.25);
+      // Sharp concussive blast — low thud + high crack + debris rattle
+      osc('sine', 60, 30, 0.12, t, 0.15, bus);
+      osc('square', 200, 80, 0.06, t, 0.1, bus);
+      noise(0.1, t, 0.08, 4000, bus);
+      noise(0.04, t + 0.08, 0.12, 2000, bus);
+      osc('triangle', 120, 50, 0.04, t + 0.05, 0.15, bus);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop

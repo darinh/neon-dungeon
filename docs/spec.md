@@ -271,6 +271,63 @@ and crates). `beacons=[]` reset in `populateFloor()`.
 - `audio.beaconTrigger()` — alert klaxon: two-tone square 500/700 Hz
   alternating + sub-bass sine 80→60 + low noise (reverb send).
 
+### Proximity Mines (floor 3+)
+
+**Concept:** Hidden explosive traps that add spatial awareness and tactical depth.
+Semi-hidden on floor tiles, they detonate when stepped on by any entity.
+Player agency: spot and avoid, shoot to pre-detonate from range, or lure enemies
+into them. Chain reactions between clustered mines create satisfying cascades.
+
+**Entity model:** `mines[]` array (entity-based, like beacons/vcores — not tile-based).
+
+**Placement:**
+- Floor 3+, normal rooms only (no `roomType`), room ≥ 5×5.
+- ~40% chance per qualifying room, 0–1 mine per room.
+- Interior position (2 tiles from room boundary), on `T.FLOOR` tile.
+- Minimum 1.5-tile spacing from beacons, vcores, and crates.
+
+**Mine properties:**
+- `state`: `dormant` → `armed` → `detonated` (strict one-way state machine).
+- `revealed`: persistent flag — once the player gets close, stays visible for the floor.
+- `dmg`: `12 + floor × 3` (environmental — bypasses player defense).
+
+**Constants:**
+- `MINE_TRIGGER_RADIUS = 0.9` — proximity trigger distance.
+- `MINE_REVEAL_RADIUS = 3.0` — distance at which mine becomes visible.
+- `MINE_BLAST_RADIUS = 2.0` — AoE explosion radius.
+- `MINE_FUSE_NORMAL = 0.8` — fuse time when walked into.
+- `MINE_FUSE_SHOT = 0.3` — fuse time when shot by player projectile.
+
+**Trigger conditions:**
+- Player or enemy within `MINE_TRIGGER_RADIUS` → arm with normal fuse.
+- Player projectile hit (within 0.6 tiles) → arm with short fuse.
+- AoE from VCore, grenade, VOLATILE/EXPLOSIVE_KILLS death, Detonation affix → arm
+  with staggered fuse (0.1–0.15s) for cascade effect.
+- Enemy projectiles do NOT trigger mines (consistent with beacons).
+
+**Detonation effects (LOS-gated):**
+- Damages all enemies in blast radius.
+- Damages player (bypasses defense, respects immunity/i-frames).
+- Chains to nearby dormant mines (staggered).
+- Primes nearby VCores.
+- Damages nearby crates and beacons.
+
+**Visual:**
+- Dormant: very subtle shimmer (α ≈ 0.08–0.13, orange 3px circle).
+- Revealed: brighter orange glow (α ≈ 0.3–0.5) with hazard ring.
+- Armed: rapid red flash with expanding warning ring.
+- Detonation: orange/yellow explosion particle burst + camera shake.
+
+**Minimap:**
+- Dormant: hidden.
+- Revealed: orange 1.5px dot.
+- Armed: flashing orange dot.
+
+**Audio:**
+- `audio.mineArm()` — metallic click + ascending square-wave warning tone.
+- `audio.mineExplode()` — concussive blast: low sine thud 60→30 Hz + square
+  crack 200→80 + high noise burst + debris rattle.
+
 ### Secret Rooms (Cracked Walls)
 
 **Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
@@ -2494,3 +2551,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v56.0   | CHARGER enemy (floor 4+): charge-attack melee rusher. Patrols slowly (SPD 1.5), telegraphs charge with 0.6 s windup (pulsing orange glow + direction indicator), then rushes at 5.5 tiles/s in locked direction for 0.4 s (~2.2-tile lunge). On hit: 1.5× ATK + 2-tile knockback + camera shake. On miss/wall: 1.0 s stun (reuses `stunTimer`), vulnerable. Point-blank (< 2 tiles) uses standard melee instead. `_chgState` (idle/windup/charging), `_chgCooldown` timer. `audio.chargerWindup()` (rising rumble), `audio.chargerImpact()` (heavy thud). Daze star particles on post-charge stun. TYPE_CAPS: 2. Elite eligible. SW cache v68. |
 | v57.0   | Destructible crates: environmental cover objects (floor 2+, 0–2 per normal room ≥ 6×6). `T.CRATE` (21) tile — not passable, not see-through (full cover). `crates[]` entity array with HP (`15 + floor × 5`). Damaged by projectile impact, VCore/grenade/VOLATILE/EXPLOSIVE_KILLS explosions, weapon affix AoE, and CHARGER charge collisions. On destruction: tile reverts to `T.FLOOR`, 25% credit drop (`floor × 4`). Enemy/item spawn passability guard. Minimap: `#2a3a4e`. `audio.crateBreak()` metallic crunch SFX. Spec v3.7. SW cache v69. |
 | v58.0   | Alarm beacons: environmental alarm devices (floor 4+, ~40% chance per normal room ≥ 5×5). `beacons[]` entity array with HP (`10 + floor × 3`). When player enters room, 4 s countdown starts. Destroy beacon → credit reward (`floor × 3` with multipliers). Countdown expires → 2–3 reinforcement enemies spawn. Damaged by player projectiles and AoE explosions (VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation affix). Enemy projectiles cannot damage beacons. Room-clear blocked until beacon resolved. Visual: pulsing red diamond + antenna (idle), flashing diamond + expanding rings + countdown (active). Minimap: pulsing red dot. `audio.beaconAlarm()`, `audio.beaconDestroy()`, `audio.beaconTrigger()` SFX. Spec v3.8. SW cache v70. |
+| v59.0   | Proximity mines: hidden explosive traps (floor 3+, ~40% chance per normal room ≥ 5×5, 0–1 per room). `mines[]` entity array. Dormant: subtle shimmer, revealed permanently when player within 3 tiles. Armed when player/enemy within 0.9 tiles (0.8 s fuse) or shot by player projectile (0.3 s fuse). Detonation: 2-tile AoE (12 + floor × 3 dmg, bypasses defense, LOS-gated). Damages player and enemies. Chain-detonates nearby mines (staggered 0.1–0.15 s). Also triggered by VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation AoE. Mine explosions prime VCores, damage crates/beacons. Enemy projectiles don't trigger mines. Minimap: hidden when dormant, orange dot when revealed/armed. `audio.mineArm()` (click + ascending tone), `audio.mineExplode()` (concussive blast). Spec v3.9. SW cache v71. |
