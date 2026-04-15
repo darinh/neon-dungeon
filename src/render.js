@@ -210,6 +210,29 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
+        case T.TOXIC: {
+          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          // Pulsing green/chartreuse corrosive pool
+          const tPulse = 0.25 + 0.12 * Math.sin(lastTime / 500 + tx * 0.9 + ty * 1.1);
+          ctx.globalAlpha = brightness * tPulse;
+          ctx.fillStyle='#22aa00';
+          ctx.fillRect(sx+1,sy+1,TILE-2,TILE-2);
+          // Bright core
+          ctx.globalAlpha = brightness * tPulse * 0.7;
+          ctx.fillStyle='#44ff22';
+          ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+          // Bubbling particles
+          ctx.shadowBlur=4; ctx.shadowColor='#33ff00';
+          ctx.fillStyle='#88ff44';
+          ctx.globalAlpha = brightness * 0.5;
+          const tb1x = sx + 5 + Math.sin(lastTime/350 + tx*1.7) * 3;
+          const tb1y = sy + 5 + Math.cos(lastTime/400 + ty*1.5) * 3;
+          ctx.fillRect(tb1x, tb1y, 2, 2);
+          const tb2x = sx + TILE - 7 + Math.cos(lastTime/300 + tx*2.1) * 2;
+          const tb2y = sy + TILE - 7 + Math.sin(lastTime/380 + ty*1.9) * 2;
+          ctx.fillRect(tb2x, tb2y, 2, 2);
+          break;
+        }
         case T.CRATE: {
           // Dark metallic crate with cyan neon outlines
           ctx.fillStyle = '#141422';
@@ -651,6 +674,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) col='#202040';
       else if (tile===T.PLASMA) col='#ff6600';
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
+      else if (tile===T.TOXIC) col='#33ff00';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
       else if (tile===T.VENDOR) col='#39ff14';
       else if (tile===T.LORE) col='#ffb700';
@@ -905,6 +929,7 @@ function drawExpandedMinimap(dungeon, player) {
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#252545';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((game.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
+      else if (tile === T.TOXIC) col = '#33ff00';
       else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
       else if (tile === T.VENDOR) col = '#39ff14';
       else if (tile === T.LORE) col = '#ffb700';

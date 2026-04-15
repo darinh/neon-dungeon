@@ -550,6 +550,25 @@ const game = {
       }
     }
 
+    // ── Toxic Pool enemy damage ──
+    for (const e of enemies) {
+      if (e.dead || e._disguised) continue; // skip dead and disguised mimics
+      const etx = Math.floor(e.x), ety = Math.floor(e.y);
+      if (dungeon.map[ety]?.[etx] === T.TOXIC) {
+        e._toxicDmgCD = (e._toxicDmgCD || 0) - dt;
+        if (e._toxicDmgCD <= 0) {
+          const toxDmg = Math.round((2 + this.floor * 0.5) * getDiff().envDmg * 0.5); // ×0.5 for half-second interval
+          if (!e.isBoss) e.takeDamage(toxDmg, { name: 'Toxic Pool', isProc: true });
+          e._toxicDmgCD = 0.5;
+        }
+        // Refresh slow while on toxic tile (bosses immune to slow)
+        if (!e.isBoss) {
+          e.slowTimer = Math.max(e.slowTimer, 0.3);
+          e.slowFactor = Math.min(e.slowFactor, 0.7);
+        }
+      }
+    }
+
     // decay chain lightning bolts
     if (this._chainBolts) {
       for (let i=this._chainBolts.length-1;i>=0;i--) {
@@ -994,6 +1013,30 @@ const game = {
       this.msg('Arc zap! -'+zapDmg+' HP','#44ccff');
       spawnParticles(player.x, player.y, 'SPARK', '#88eeff', 6);
       audio.arcZap();
+    }
+
+    // ── Toxic Pool (damages player + slows) ──
+    if (tile === T.TOXIC && !isPlayerDamageImmune()) {
+      const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg;
+      player.takeDamage(toxDps * dt, 'Toxic Pool', {
+        ignoreInvincible: true,
+        ignoreDefense: true,
+        skipHitInvincible: true,
+        skipHitEffects: true,
+        skipReactiveArmor: true,
+      });
+      player.toxicBurnTimer = Math.max(0, player.toxicBurnTimer - dt);
+      if (player.toxicBurnTimer <= 0) {
+        const dmgShown = Math.round(toxDps);
+        this.msg('Toxic! -'+dmgShown+'/s','#33ff00');
+        spawnParticles(player.x, player.y, 'SPARK', '#44ff22', 3);
+        audio.toxicBurn();
+        player.toxicBurnTimer = 0.5;
+      }
+      // Slow player while in pool (30% reduction via flag, read in Player.update)
+      player.toxicSlowActive = true;
+    } else {
+      player.toxicSlowActive = false;
     }
 
     // special room effects

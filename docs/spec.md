@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.4
+# NEON DUNGEON — Game Specification v4.5
 
 ## Vision
 
@@ -59,7 +59,7 @@ Each floor is generated fresh using Binary Space Partitioning:
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
-LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | VOID
+LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | TOXIC | VOID
 
 ### Doors & Locked Doors
 
@@ -100,6 +100,17 @@ Animated bubbling visual with pulsing glow. Orange on minimap.
 deal `10 + floor × 2` HP damage per zap (0.8 s cooldown between hits),
 bypassing defense. Blue/white crackling visual when active, dim when off.
 Cyan on minimap (pulses with phase).
+
+**Toxic Pools** (floor 3+): Clusters of 2–4 green/chartreuse tiles placed in
+normal rooms (never in spawn, boss, or special rooms). ~30% of eligible rooms.
+Deal continuous corrosive damage at `(2 + floor × 0.5) HP/s` to **both player
+AND enemies**, bypassing defense and invincibility frames. Enemies take damage
+at 0.5 s intervals (bosses immune). Movement through pools is slowed by 30%
+for player and enemies (bosses immune to slow). Player dash and Phase Cloak
+grant full immunity (damage + slow). Disguised mimics are not damaged (would
+break the item-disguise gimmick). Animated green bubbling visual with
+chartreuse glow. Green (#33ff00) on minimap. Death recap source: `Toxic Pool`.
+`audio.toxicBurn()` — low gurgling/bubbling (filtered noise + low sine).
 
 **Volatile Cores** (floor 3+): Unstable power cells scattered 0–2 per normal
 room (excluded from spawn, boss, special, and challenge rooms). Entities in
@@ -2933,3 +2944,5 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v62.0   | Shield Generators: destructible environmental devices (floor 5+, ~30% chance per normal room with ≥ 3 enemies, area ≥ 5×5). `shieldGens[]` entity array with HP (`15 + floor × 4`). Projects 35% damage reduction to all non-boss, non-disguised enemies in the same room while active (`SHIELD_GEN_DR`, spatial bounds check). Damaged by player projectiles, AoE explosions (VCore/grenade/mine/VOLATILE/EXPLOSIVE_KILLS/Detonation), hackware EMP (15 dmg), and Static Field (per-tick). Never in beacon rooms (prevents mitigation stacking). On destruction: 3-tile EMP burst stuns enemies 0.8 s (LOS-gated), credit reward (`floor × 5` with multipliers), cyan explosion particles. Protected enemies get subtle cyan underglow. Visual: rotating cyan hexagonal frame with bright core, dashed energy beams to protected enemies. Minimap: cyan 2 px pulsing dot. Room-clear NOT blocked by generators. `audio.generatorDestroy()` electric overload burst SFX. Spec v4.2. SW cache v74. |
 | v63.0   | Security Cameras: wall-mounted surveillance devices (floor 4+, ~30% chance per normal room ≥ 6×6, not in beacon rooms). `cameras[]` entity array. 60° vision cone, ±60° sweep at 45°/s, 5-tile range. States: scanning→alerted(1.5s)→triggered. Detection: room bounds + cone sector + LOS + `canTargetPlayer()`. Destroy: credits + room-clear re-eval. Alerted blocks room-clear. 0.5 s rearm debounce. Cone raycast-clipped in draw. Damaged by projectiles, EMP (15 dmg), Static Field (per-tick). `audio.cameraDetect()`, `audio.cameraAlert()`, `audio.cameraDestroy()` SFX. Spec v4.2. SW cache v75. |
 | v64.0   | Laser Tripwires: wall-mounted emitter pairs projecting destructible laser beams across rooms (floor 3+, ~25% chance per normal room ≥ 5 tiles wide/tall, mutually exclusive with cameras/beacons). `lasers[]` entity array. Independent emitter HP (`10 + floor × 3`) — destroying either disables beam. ~20% cycle on/off (1.5 s each, 0.2 s rearm grace). Beam crossing: segment intersection + 0.25-tile proximity, deals `8 + floor × 2` damage + 0.3 s shock (shockTimer). 2 s hit cooldown. Dash bypasses, Phase Cloak bypasses (canTargetPlayer). Crates dynamically block beam (per-frame LOS). EMP disables 3 s. Static Field damages emitters (1 s interval, object-ref Map keys). Does NOT block room-clear. Minimap: thin red/orange line. `audio.laserHit()`, `audio.laserDisable()`, `audio.laserDestroy()` SFX. Spec v4.3. SW cache v76. |
+| v65.0   | LEAPER enemy (floor 5+): jumping shockwave attacker with 4-state machine (idle→windup→airborne→recovery). Windup: 0.5 s telegraph. Airborne: 0.35 s jump to player position. Landing: 2-tile AoE (LOS-gated, ATK×1.2). Recovery: 1 s vulnerable window. One airborne per room. Airborne/recovery continue during stun. Proper env damage helpers. Stats: HP 30, ATK 11, SPD 3.0, XP 22. TYPE_CAPS: 2. Elite eligible. `audio.leaperWindup()`, `audio.leaperLand()`. Spec v4.4. SW cache v77. |
+| v66.0   | Toxic Pools: corrosive environmental hazard tiles (floor 3+, `T.TOXIC:22`). Clusters of 2–4 green tiles placed in ~30% of normal rooms. Deal `(2 + floor × 0.5) HP/s` to both player AND enemies (bosses immune). 30% movement slow on player and enemies while in pool (bosses immune to slow). Dash/Phase Cloak grants immunity. Disguised mimics excluded from damage. Enemy damage uses 0.5 s interval with `isProc: true` to prevent weapon affix procs. Death recap source: `Toxic Pool` (#33ff00). `audio.toxicBurn()` low gurgling SFX. Spec v4.5. SW cache v78. |

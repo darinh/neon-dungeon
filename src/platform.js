@@ -8,7 +8,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 const DEFAULT_KEY_MAP = {
@@ -563,7 +563,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC; }
 function isSeeThrough(t) {
   return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
 }
@@ -917,6 +917,12 @@ const audio = (() => {
       osc('square', 2400, 600, 0.08, t, 0.06);
       osc('square', 1800, 400, 0.06, t + 0.03, 0.05);
       noise(0.07, t, 0.08, 3000);
+    },
+    toxicBurn() {
+      const c = getCtx(); const t = c.currentTime;
+      noise(0.04, t, 0.18, 600);
+      osc('sine', 90, 40, 0.03, t, 0.15);
+      osc('triangle', 120, 55, 0.02, t + 0.05, 0.12);
     },
     transition() {
       const c = getCtx(); const t = c.currentTime;
