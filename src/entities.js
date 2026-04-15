@@ -9,6 +9,7 @@ let crates  = [];
 let beacons = [];
 let mines   = [];
 let shieldGens = [];
+let cameras = [];
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
@@ -139,6 +140,8 @@ function applyOnKill(enemy) {
   damageBeaconsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Damage nearby shield generators
   damageShieldGensInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  // Damage nearby cameras
+  damageCamerasInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Trigger nearby mines
   triggerMinesInRadius(enemy.x, enemy.y, aoeR, game.dungeon.map);
 }
@@ -395,6 +398,8 @@ class Enemy {
       damageBeaconsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Damage nearby shield generators
       damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      // Damage nearby cameras
+      damageCamerasInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Trigger nearby mines
       triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
     }
@@ -2414,6 +2419,8 @@ function detonateVCore(c) {
   damageBeaconsInRadius(c.x, c.y, r, dmg, map);
   // Damage nearby shield generators
   damageShieldGensInRadius(c.x, c.y, r, dmg, map);
+  // Damage nearby cameras
+  damageCamerasInRadius(c.x, c.y, r, dmg, map);
   // Trigger nearby mines
   triggerMinesInRadius(c.x, c.y, r, map);
 }
@@ -2726,6 +2733,8 @@ function detonateMine(m) {
   damageBeaconsInRadius(m.x, m.y, r, m.dmg, map);
   // Damage nearby shield generators
   damageShieldGensInRadius(m.x, m.y, r, m.dmg, map);
+  // Damage nearby cameras
+  damageCamerasInRadius(m.x, m.y, r, m.dmg, map);
   // Remove from array
   const idx = mines.indexOf(m);
   if (idx >= 0) mines.splice(idx, 1);
@@ -2964,6 +2973,265 @@ function drawShieldGens(camX, camY) {
       ctx.globalAlpha = 0.7;
       ctx.fillStyle = '#113'; ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = '#00ccff'; ctx.fillRect(bx, by, bw * (g.hp / g.maxHp), bh);
+      ctx.restore();
+    }
+  }
+}
+
+// ─── Security Cameras ─────────────────────────────────────────────────────────
+const CAMERA_CONE_HALF = Math.PI / 6;   // 30° half-angle → 60° beam
+const CAMERA_SWEEP_HALF = Math.PI / 3;  // 60° half-sweep → 120° total coverage
+const CAMERA_RANGE = 5;                 // tiles
+const CAMERA_SWEEP_SPD = Math.PI / 4;   // 45°/s
+const CAMERA_ALERT_TIME = 1.5;          // seconds before reinforcements
+const CAMERA_REARM_CD = 0.5;            // debounce after losing detection
+
+// Wall direction → base facing angle (into room)
+const WALL_FACING = { N: Math.PI / 2, S: -Math.PI / 2, E: Math.PI, W: 0 };
+
+function createCamera(x, y, floor, room, wallSide) {
+  const maxHp = 12 + floor * 3;
+  const baseAngle = WALL_FACING[wallSide];
+  return {
+    x, y, hp: maxHp, maxHp, dead: false, room, floor, wallSide,
+    baseAngle,
+    sweepAngle: 0, sweepDir: 1,      // current offset from base, oscillation direction
+    state: 'scanning',                // scanning | alerted | triggered
+    alertTimer: 0,
+    rearmCd: 0,                       // debounce after returning to scanning
+    bob: Math.random() * TWO_PI,
+  };
+}
+
+function damageCamera(c, dmg) {
+  if (!c || c.dead) return;
+  c.hp -= dmg;
+  if (c.hp <= 0) destroyCamera(c);
+  else spawnParticles(c.x, c.y, 'SPARK', '#ff4444', 4);
+}
+
+function destroyCamera(c) {
+  c.dead = true;
+  c.state = 'triggered'; // prevent further logic
+  spawnParticles(c.x, c.y, 'EXPLOSION', '#ff4444', 14);
+  spawnParticles(c.x, c.y, 'SPARK', '#ff8844', 8);
+  audio.cameraDestroy();
+  const d = getDiff();
+  const amt = Math.round(game.floor * 4 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  game.player.credits += amt;
+  spawnDmgText(c.x, c.y - 0.3, '+' + amt + '◈', '#ff4444');
+  const idx = cameras.indexOf(c);
+  if (idx >= 0) cameras.splice(idx, 1);
+  game.enemyDiedThisFrame = true; // re-evaluate room-clear
+}
+
+function damageCamerasInRadius(wx, wy, radius, dmg, map) {
+  for (let i = cameras.length - 1; i >= 0; i--) {
+    const c = cameras[i];
+    if (c.dead) continue;
+    if (dist(wx, wy, c.x, c.y) < radius && hasLOS(wx, wy, c.x, c.y, map)) {
+      damageCamera(c, dmg);
+    }
+  }
+}
+
+// Normalize angle to [-PI, PI]
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= TWO_PI;
+  while (a < -Math.PI) a += TWO_PI;
+  return a;
+}
+
+function updateCameras(dt) {
+  const p = game.player;
+  const map = game.dungeon?.map;
+  if (!map) return;
+  for (let i = cameras.length - 1; i >= 0; i--) {
+    const c = cameras[i];
+    if (c.dead) continue;
+    c.bob += dt * 2;
+
+    // Sweep oscillation
+    c.sweepAngle += CAMERA_SWEEP_SPD * c.sweepDir * dt;
+    if (c.sweepAngle > CAMERA_SWEEP_HALF) { c.sweepAngle = CAMERA_SWEEP_HALF; c.sweepDir = -1; }
+    if (c.sweepAngle < -CAMERA_SWEEP_HALF) { c.sweepAngle = -CAMERA_SWEEP_HALF; c.sweepDir = 1; }
+
+    const currentAngle = c.baseAngle + c.sweepAngle;
+
+    // Tick rearm cooldown
+    if (c.rearmCd > 0) c.rearmCd -= dt;
+
+    // Detection check: player in room, in cone, LOS, targetable
+    const r = c.room;
+    const inRoom = p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+    let detected = false;
+    if (inRoom && canTargetPlayer()) {
+      const dx = p.x - c.x, dy = p.y - c.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < CAMERA_RANGE && d > 0.1) {
+        const angleToPlayer = Math.atan2(dy, dx);
+        const diff = Math.abs(normalizeAngle(angleToPlayer - currentAngle));
+        if (diff < CAMERA_CONE_HALF && hasLOS(c.x, c.y, p.x, p.y, map)) {
+          detected = true;
+        }
+      }
+    }
+
+    if (c.state === 'scanning') {
+      if (detected && c.rearmCd <= 0) {
+        c.state = 'alerted';
+        c.alertTimer = CAMERA_ALERT_TIME;
+        audio.cameraDetect();
+        game.msg('⚠ CAMERA ALERT', '#ff6644');
+      }
+    } else if (c.state === 'alerted') {
+      if (!detected) {
+        // Player left cone — return to scanning with debounce
+        c.state = 'scanning';
+        c.rearmCd = CAMERA_REARM_CD;
+        game.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocked while alerted)
+      } else {
+        c.alertTimer -= dt;
+        if (c.alertTimer <= 0) {
+          // Alert triggered — spawn reinforcements
+          c.state = 'triggered';
+          c.dead = true;
+          audio.cameraAlert();
+          game.msg('⚠ SECURITY RESPONSE INCOMING', '#ff3333');
+          spawnParticles(c.x, c.y, 'EXPLOSION', '#ff3333', 12);
+          const count = rndInt(2, 3);
+          for (let j = 0; j < count; j++) {
+            const type = pickEnemyType(c.floor);
+            let ex, ey, att = 0;
+            do {
+              ex = r.x + rnd(1, r.w - 1);
+              ey = r.y + rnd(1, r.h - 1);
+              att++;
+            } while (att < 20 && (
+              !isPassable(map[Math.floor(ey)]?.[Math.floor(ex)]) ||
+              dist(ex, ey, p.x, p.y) < 3
+            ));
+            if (!isPassable(map[Math.floor(ey)]?.[Math.floor(ex)])) continue;
+            pendingEnemySpawns.push({ type, x: ex, y: ey, floor: c.floor, room: r });
+          }
+          cameras.splice(i, 1);
+        }
+      }
+    }
+  }
+}
+
+function drawCameras(camX, camY) {
+  const map = game.dungeon?.map;
+  for (const c of cameras) {
+    if (c.dead) continue;
+    const tx = Math.floor(c.x), ty = Math.floor(c.y);
+    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    const sx = c.x * TILE - camX, sy = c.y * TILE - camY;
+    const currentAngle = c.baseAngle + c.sweepAngle;
+
+    // Draw vision cone (raycast-clipped against walls)
+    const coneSteps = 16;
+    const coneColor = c.state === 'alerted' ? '#ff4422' : '#ff2200';
+    const coneAlpha = c.state === 'alerted'
+      ? 0.18 + 0.12 * Math.sin(c.bob * 8) // fast pulse when alerted
+      : 0.08 + 0.03 * Math.sin(c.bob * 2);
+
+    ctx.save();
+    ctx.globalAlpha = coneAlpha;
+    ctx.fillStyle = coneColor;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    for (let s = 0; s <= coneSteps; s++) {
+      const a = currentAngle - CAMERA_CONE_HALF + (CAMERA_CONE_HALF * 2) * (s / coneSteps);
+      // Raycast to find effective range (clip at walls)
+      let reach = CAMERA_RANGE;
+      for (let step = 0.5; step <= CAMERA_RANGE; step += 0.5) {
+        const rx = c.x + Math.cos(a) * step;
+        const ry = c.y + Math.sin(a) * step;
+        const rtx = Math.floor(rx), rty = Math.floor(ry);
+        if (rtx < 0 || rty < 0 || rtx >= 80 || rty >= 50) { reach = step - 0.5; break; }
+        const tile = map[rty]?.[rtx];
+        if (tile !== undefined && !isSeeThrough(tile)) { reach = step - 0.25; break; }
+      }
+      reach = Math.max(0.5, reach);
+      const ex = sx + Math.cos(a) * reach * TILE;
+      const ey = sy + Math.sin(a) * reach * TILE;
+      ctx.lineTo(ex, ey);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Cone edge lines (raycast-clipped to match filled cone)
+    ctx.globalAlpha = coneAlpha * 1.5;
+    ctx.strokeStyle = coneColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const edgeA of [currentAngle - CAMERA_CONE_HALF, currentAngle + CAMERA_CONE_HALF]) {
+      let reach = CAMERA_RANGE;
+      for (let step = 0.5; step <= CAMERA_RANGE; step += 0.5) {
+        const rx = c.x + Math.cos(edgeA) * step;
+        const ry = c.y + Math.sin(edgeA) * step;
+        const rtx = Math.floor(rx), rty = Math.floor(ry);
+        if (rtx < 0 || rty < 0 || rtx >= 80 || rty >= 50) { reach = step - 0.5; break; }
+        const tile = map[rty]?.[rtx];
+        if (tile !== undefined && !isSeeThrough(tile)) { reach = step - 0.25; break; }
+      }
+      reach = Math.max(0.5, reach);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(edgeA) * reach * TILE, sy + Math.sin(edgeA) * reach * TILE);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Draw camera body
+    ctx.save();
+    const baseColour = c.state === 'alerted' ? '#ff4422' : '#cc2200';
+    const glowColour = c.state === 'alerted' ? '#ff6644' : '#ff3300';
+    ctx.shadowBlur = c.state === 'alerted' ? 10 : 5;
+    ctx.shadowColor = glowColour;
+
+    // Camera housing (small rectangle oriented to wall)
+    ctx.translate(sx, sy);
+    ctx.rotate(c.baseAngle);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-4, -3, 8, 6);
+    ctx.fillStyle = baseColour;
+    ctx.fillRect(-3, -2, 6, 4);
+
+    // Lens dot
+    const lensPulse = c.state === 'alerted' ? 1.0 : 0.6 + 0.3 * Math.sin(c.bob * 2);
+    ctx.globalAlpha = lensPulse;
+    ctx.fillStyle = c.state === 'alerted' ? '#ff8866' : '#ff4400';
+    ctx.beginPath();
+    ctx.arc(2, 0, 2, 0, TWO_PI);
+    ctx.fill();
+
+    ctx.restore();
+
+    // Alert countdown bar
+    if (c.state === 'alerted') {
+      const bw = 16, bh = 2;
+      const bx = sx - bw / 2, by = sy - 12;
+      const pct = c.alertTimer / CAMERA_ALERT_TIME;
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#331100';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = pct > 0.3 ? '#ff6622' : '#ff2200';
+      ctx.fillRect(bx, by, bw * pct, bh);
+      ctx.restore();
+    }
+
+    // HP bar when damaged
+    if (c.hp < c.maxHp) {
+      const bw = 16, bh = 2, bx = sx - bw / 2, by = sy - 14;
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#113';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#ff4444';
+      ctx.fillRect(bx, by, bw * (c.hp / c.maxHp), bh);
       ctx.restore();
     }
   }

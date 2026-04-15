@@ -399,6 +399,78 @@ environmental objects).
 
 ### Secret Rooms (Cracked Walls)
 
+### Security Cameras (floor 4+)
+
+Wall-mounted surveillance devices that sweep a vision cone and detect the
+player. On detection, a 1.5-second alert countdown begins — if not destroyed
+or evaded, the camera triggers reinforcement spawns.
+
+**Placement:** 0–1 per qualifying normal room (not spawn, boss, secret, or
+special rooms). ~30% chance per eligible room. Room must be ≥ 6 × 6.
+Not placed in rooms that already contain alarm beacons (prevents alarm
+stacking). Mounted on interior floor tiles adjacent to a solid wall, excluding
+door-adjacent tiles and corner tiles (> 1 adjacent wall). Camera faces into the
+room perpendicular to its wall.
+
+**Entity array:** `cameras[]` in `entities.js`. Properties: `{x, y, hp, maxHp,
+dead, room, floor, wallSide, baseAngle, sweepAngle, sweepDir, state,
+alertTimer, rearmCd, bob}`.
+
+**HP:** `12 + floor × 3`.
+
+**Detection Cone:**
+- Beam half-angle: 30° (60° total beam width).
+- Sweep oscillation: ±60° from base facing (120° total coverage over time).
+- Sweep speed: 45°/s.
+- Range: 5 tiles.
+- Detection requires: player inside camera's room bounds, player in cone
+  sector, line-of-sight check (`hasLOS`), and `canTargetPlayer()` (respects
+  Phase Cloak).
+
+**States:**
+- `scanning` — default. Cone sweeps back and forth. Transitions to `alerted`
+  when player is detected (subject to 0.5 s rearm cooldown after a previous
+  alert).
+- `alerted` — 1.5 s countdown. Alert timer bar shown. If player leaves cone
+  before timer expires → back to `scanning` (with rearm cooldown). If timer
+  reaches zero → `triggered`.
+- `triggered` — camera is destroyed. 2–3 reinforcement enemies spawned in
+  room via `pendingEnemySpawns` (same pattern as alarm beacons).
+
+**Damage:**
+- Damaged by: player projectiles, EMP hackware (15 dmg), Static Field
+  (10 dmg/s, 1 s interval), volatile core blasts, mine blasts, grenade AoE,
+  reactive armor AoE, enemy death AoE.
+- NOT damaged by enemy projectiles.
+- On destroy: red/orange explosion + spark particles, credit reward
+  (`floor × 4` with multipliers), `audio.cameraDestroy()` SFX. Triggers
+  room-clear re-evaluation.
+
+**Room-Clear:** Scanning cameras do **not** block room-clear. Alerted cameras
+**do** block room-clear (prevents "ROOM CLEARED!" immediately followed by
+reinforcements).
+
+**Visual:**
+- Cone: semi-transparent red sector, raycast-clipped against walls (does not
+  render through walls). Alerted state: fast red-yellow pulse. Scanning: subtle
+  slow pulse.
+- Body: small dark rectangle on the wall tile with a red lens dot. Oriented
+  to wall direction.
+- Alert bar: 16 px wide countdown bar (orange → red as time depletes).
+- HP bar: shown when damaged (red, 16 px wide, 2 px tall).
+
+**Minimap:** Small red triangle with glow. Alerted cameras pulse brighter.
+
+**Save/Load:** Not persisted — floor regenerates on continue.
+
+**Audio:**
+- `audio.cameraDetect()` — short rising two-tone chirp (square wave
+  800→1200 + 1200→1600).
+- `audio.cameraAlert()` — alarm siren: descending sawtooth 1400→600 +
+  square 1000→400 + noise crackle + sub-bass sine 200→80.
+- `audio.cameraDestroy()` — electronic crunch: noise burst + descending
+  sawtooth 600→200 + sine tail 300→100.
+
 **Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
 BSP room is walled off completely and one narrow entrance cluster (1–2 tiles)
 is replaced with `T.CRACKED` tiles. The room is invisible to the player until

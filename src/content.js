@@ -630,6 +630,8 @@ function activateHackware(player) {
       hackwareEffects.push({ type:'emp_ring', x:player.x, y:player.y, age:0, maxAge:0.4, radius });
       // EMP damages shield generators
       if (map) damageShieldGensInRadius(player.x, player.y, radius, 15, map);
+      // EMP damages security cameras
+      if (map) damageCamerasInRadius(player.x, player.y, radius, 15, map);
       break;
     }
     case 'PHASE_CLOAK': {
@@ -782,6 +784,17 @@ function updateHackwareEffects(dt) {
           if (now - lastHit >= 1.0) {
             fx.hitMap.set(g, now);
             damageShieldGen(g, fx.dmg);
+          }
+        }
+      }
+      // Static field damages security cameras (1s interval, reuse hitMap)
+      for (const cam of cameras) {
+        if (cam.dead) continue;
+        if (dist(cam.x, cam.y, fx.x, fx.y) < fx.radius && map && hasLOS(cam.x, cam.y, fx.x, fx.y, map)) {
+          const lastHit = fx.hitMap.get(cam) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(cam, now);
+            damageCamera(cam, fx.dmg);
           }
         }
       }
@@ -2367,6 +2380,17 @@ class Projectile {
         }
       }
     }
+    // Player projectiles can damage security cameras
+    if (!this.dead && this.fromPlayer) {
+      for (const cam of cameras) {
+        if (cam.dead) continue;
+        if (dist(this.x, this.y, cam.x, cam.y) < 0.6) {
+          damageCamera(cam, this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
     // Player projectiles trigger proximity mines (pre-detonate from range)
     if (!this.dead && this.fromPlayer) {
       for (const m of mines) {
@@ -2437,6 +2461,7 @@ function detonateGrenade(x, y, dmg) {
   damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageShieldGensInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  damageCamerasInRadius(x, y, 1.5, dmg, game.dungeon.map);
   triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
 }
 

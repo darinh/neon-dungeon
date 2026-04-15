@@ -1363,6 +1363,29 @@ const audio = (() => {
       noise(0.07, t + 0.08, 0.1, 5000, bus);
       osc('triangle', 1200, 300, 0.04, t + 0.12, 0.15, bus);
     },
+    cameraDetect() {
+      const c = getCtx(); const t = c.currentTime;
+      // Short warning chirp — rising two-tone alert
+      osc('square', 800, 1200, 0.06, t, 0.08);
+      osc('square', 1200, 1600, 0.05, t + 0.1, 0.08);
+    },
+    cameraAlert() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.25, 0.15);
+      // Alarm siren — descending saw burst + noise crackle
+      osc('sawtooth', 1400, 600, 0.07, t, 0.2, bus);
+      osc('square', 1000, 400, 0.05, t + 0.05, 0.15, bus);
+      noise(0.06, t + 0.1, 0.12, 4000, bus);
+      osc('sine', 200, 80, 0.06, t + 0.15, 0.1, bus);
+    },
+    cameraDestroy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.15);
+      // Electronic crunch — short burst + spark
+      noise(0.08, t, 0.08, 6000, bus);
+      osc('sawtooth', 600, 200, 0.06, t, 0.1, bus);
+      osc('sine', 300, 100, 0.05, t + 0.05, 0.08, bus);
+    },
     comboTick(count) {
       const c = getCtx(); const t = c.currentTime;
       // Ascending pitch with combo — quick chirp

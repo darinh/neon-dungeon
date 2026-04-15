@@ -579,6 +579,9 @@ const game = {
     // update shield generators
     updateShieldGens(dt);
 
+    // update security cameras
+    updateCameras(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -642,6 +645,8 @@ const game = {
         if (enemies.some(e => !e.dead && !e._disguised && e.room === room)) continue;
         // Block room-clear until alarm beacons are resolved
         if (beacons.some(b => !b.dead && b.room === room)) continue;
+        // Block room-clear while a camera is actively alerted
+        if (cameras.some(c => !c.dead && c.state === 'alerted' && c.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
         lastCx = room.cx; lastCy = room.cy;
@@ -2424,6 +2429,9 @@ const game = {
 
     // shield generators (below items/enemies, above ground effects)
     drawShieldGens(cam.x, cam.y);
+
+    // security cameras (draw cone before enemies for layering)
+    drawCameras(cam.x, cam.y);
 
     // proximity mines (below items/enemies, above ground effects)
     drawMines(cam.x, cam.y);
