@@ -2232,6 +2232,9 @@ class Projectile {
       const xBlocked = tx<0||tx>=MAP_W||pty<0||pty>=MAP_H||!isPassable(map[pty][tx]);
       const yBlocked = ptx<0||ptx>=MAP_W||ty<0||ty>=MAP_H||!isPassable(map[ty][ptx]);
       if (xBlocked && yBlocked) {
+        // Damage crates at blocked corner tiles
+        if (tx >= 0 && tx < MAP_W && pty >= 0 && pty < MAP_H && map[pty][tx] === T.CRATE) damageCrateAtTile(tx, pty, this.dmg);
+        if (ptx >= 0 && ptx < MAP_W && ty >= 0 && ty < MAP_H && map[ty][ptx] === T.CRATE) damageCrateAtTile(ptx, ty, this.dmg);
         if (this.isGrenade) {
           detonateGrenade(prevX, prevY, this.grenadeDmg);
           this.dead = true; return;
@@ -2250,6 +2253,8 @@ class Projectile {
       }
     }
     if (!isPassable(map[ty][tx])) {
+      // Damage crates on impact
+      if (map[ty][tx] === T.CRATE) damageCrateAtTile(tx, ty, this.dmg);
       // Grenades detonate at last passable position on wall hit
       if (this.isGrenade) {
         detonateGrenade(prevX, prevY, this.grenadeDmg);
@@ -2380,6 +2385,7 @@ function detonateGrenade(x, y, dmg) {
   spawnParticles(x, y, 'EXPLOSION', '#ff6622', 10);
   audio.grenadeExplode();
   primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
+  damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
 }
 
 function updateHazardZones(dt, player) {

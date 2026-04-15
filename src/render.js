@@ -210,6 +210,36 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
+        case T.CRATE: {
+          // Dark metallic crate with cyan neon outlines
+          ctx.fillStyle = '#141422';
+          ctx.fillRect(sx, sy, TILE, TILE);
+          // Outer edge
+          ctx.fillStyle = '#1e1e38';
+          ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+          // Inner panel
+          ctx.fillStyle = '#12121f';
+          ctx.fillRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
+          // Neon cyan outlines
+          ctx.globalAlpha = brightness * 0.7;
+          ctx.shadowBlur = 4; ctx.shadowColor = '#44ccff';
+          ctx.strokeStyle = '#44ccff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sx + 1.5, sy + 1.5, TILE - 3, TILE - 3);
+          // Circuit-line detail (cross)
+          ctx.globalAlpha = brightness * 0.4;
+          ctx.beginPath();
+          ctx.moveTo(sx + TILE / 2, sy + 4);
+          ctx.lineTo(sx + TILE / 2, sy + TILE - 4);
+          ctx.moveTo(sx + 4, sy + TILE / 2);
+          ctx.lineTo(sx + TILE - 4, sy + TILE / 2);
+          ctx.stroke();
+          // Centre glow dot
+          ctx.globalAlpha = brightness * 0.5;
+          ctx.fillStyle = '#44ccff';
+          ctx.fillRect(sx + TILE / 2 - 1, sy + TILE / 2 - 1, 2, 2);
+          break;
+        }
         case T.CRACKED: {
           // Render as wall base
           ctx.fillStyle='#1a1a2e';
@@ -609,7 +639,7 @@ function drawMinimap(dungeon, player) {
       if (!visited && echoMap) {
         // Echo mapper: dimmed layout, no POIs, no details, skip secret rooms
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile===T.WALL||tile===T.CRACKED) col='#0d0d1a';
+        if (tile===T.WALL||tile===T.CRACKED||tile===T.CRATE) col='#0d0d1a';
         else if (isPassable(tile)||tile===T.DOOR) col='#141428';
         if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
         continue;
@@ -629,6 +659,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.LOCKED_B) col='#3388ff';
       else if (tile===T.LOCKED_G) col='#ffcc00';
       else if (tile===T.CHALLENGE_GATE) col='#ff6633';
+      else if (tile===T.CRATE) col='#2a3a4e';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
       // Collect POI tiles for marker overlay
       if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) {
@@ -769,7 +800,7 @@ function drawExpandedMinimap(dungeon, player) {
 
       if (!visited && echoMap) {
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile === T.WALL || tile === T.CRACKED) col = '#0d0d1a';
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
         else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
         if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
         continue;
@@ -791,6 +822,7 @@ function drawExpandedMinimap(dungeon, player) {
       else if (tile === T.LOCKED_B) col = '#3388ff';
       else if (tile === T.LOCKED_G) col = '#ffcc00';
       else if (tile === T.CHALLENGE_GATE) col = '#ff6633';
+      else if (tile === T.CRATE) col = '#2a3a4e';
       if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
 
       if (tile === T.STAIRS || tile === T.TERMINAL || tile === T.VENDOR || tile === T.LORE ||
@@ -1021,7 +1053,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1054,6 +1086,37 @@ function populateFloor(dungeon, floorNum) {
     const rt = room.roomType || null;
     const enemyMod = rt==='medbay' ? 0.3 : rt==='vault' ? 1.5 : rt==='armory' ? 0.5 : 1;
 
+    // Destructible crates (floor 2+, normal rooms only, 0–2 per room)
+    if (floorNum >= 2 && !rt && room.w >= 6 && room.h >= 6) {
+      const crateCount = rndInt(0, 2);
+      for (let j = 0; j < crateCount; j++) {
+        // Interior positions only — 2 tiles from room boundary
+        const cx = room.x + rndInt(2, room.w - 3);
+        const cy = room.y + rndInt(2, room.h - 3);
+        if (dungeon.map[cy]?.[cx] !== T.FLOOR) continue;
+        // Not adjacent to doors or stairs (manhattan ≤ 1)
+        let nearDoor = false;
+        for (let dy = -1; dy <= 1 && !nearDoor; dy++) {
+          for (let dx = -1; dx <= 1 && !nearDoor; dx++) {
+            const nt = dungeon.map[cy + dy]?.[cx + dx];
+            if (isDoor(nt) || nt === T.STAIRS || nt === T.DOOR_OPEN) nearDoor = true;
+          }
+        }
+        if (nearDoor) continue;
+        // Not adjacent to another crate
+        let nearCrate = false;
+        for (let dy = -1; dy <= 1 && !nearCrate; dy++) {
+          for (let dx = -1; dx <= 1 && !nearCrate; dx++) {
+            if (dy === 0 && dx === 0) continue;
+            if (dungeon.map[cy + dy]?.[cx + dx] === T.CRATE) nearCrate = true;
+          }
+        }
+        if (nearCrate) continue;
+        dungeon.map[cy][cx] = T.CRATE;
+        crates.push(createCrate(cx, cy, floorNum));
+      }
+    }
+
     // Enemy count scales with floor, capped by room area
     const minE = 2 + Math.floor(floorNum / 3);
     const maxE = Math.min(8, 4 + Math.floor(floorNum / 2));
@@ -1062,6 +1125,7 @@ function populateFloor(dungeon, floorNum) {
     if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.5));
 
     let roomElite = false;  // max 1 elite per room
+    let spawnedCount = 0;
     const typeCounts = {};  // per-type caps within room
     const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2 };
     for (let j=0;j<count;j++) {
@@ -1074,18 +1138,21 @@ function populateFloor(dungeon, floorNum) {
         );
         type = open.length ? open[rndInt(0, open.length - 1)] : 'GUARD';
       }
-      typeCounts[type] = (typeCounts[type] || 0) + 1;
 
       const ex=room.x+rnd(1,room.w-1), ey=room.y+rnd(1,room.h-1);
+      if (!isPassable(dungeon.map[Math.floor(ey)]?.[Math.floor(ex)])) continue;
+      typeCounts[type] = (typeCounts[type] || 0) + 1;
       const e = spawnEnemy(type,ex,ey,floorNum,room, !roomElite);
       if (e.elite) roomElite = true;
       enemies.push(e);
+      spawnedCount++;
     }
-    if (count > 0) room._hadEnemies = true;
+    if (spawnedCount > 0) room._hadEnemies = true;
 
     const itemCount=rndInt(0,2) + (room.hasLoot ? 2 : 0); // locked rooms get bonus loot
     for (let j=0;j<itemCount;j++) {
       const ix=room.x+rnd(1,room.w-1), iy=room.y+rnd(1,room.h-1);
+      if (!isPassable(dungeon.map[Math.floor(iy)]?.[Math.floor(ix)])) continue;
       items.push(new Item(ix,iy));
     }
 

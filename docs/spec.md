@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.6
+# NEON DUNGEON — Game Specification v3.7
 
 ## Vision
 
@@ -124,6 +124,70 @@ visited tiles near the player but do not reveal new tiles.
 **Fog of war:** tiles seen once remain visited; currently lit tiles render at
 minimum 20% brightness, visited-but-unlit tiles render at 12% brightness (dim
 memory effect). Unvisited tiles are not drawn.
+
+### Destructible Crates (floor 2+)
+
+**Concept:** Environmental cover objects that block movement, projectiles, and
+line of sight. Can be destroyed by sustained fire or explosions. Adds tactical
+positioning and dynamic terrain changes during combat.
+
+**Placement:** 0–2 crates per qualifying normal room (not spawn, boss, secret,
+challenge, or any special room type). Rooms must be at least 6×6 tiles.
+Positions are interior-only (≥ 2 tiles from room boundary), never adjacent to
+doors, stairs, or other crates. Placed before enemies/items/volatile cores
+during floor population.
+
+**Tile: `T.CRATE` (value 21).** Not passable, not see-through. Blocks
+movement, projectiles (via `isPassable`), and line of sight (via
+`isSeeThrough`). Enemies cannot path through crates. Reverts to `T.FLOOR`
+when destroyed.
+
+**Entity: `crates[]` array.** Each entry: `{ tx, ty, hp, maxHp }` (integer
+tile coordinates + health). HP scales with floor: `15 + floor × 5`.
+
+**Damage sources:**
+- **Projectile impact:** Any projectile (player or enemy) that hits a crate
+  tile via the standard wall-collision path deals its damage to the crate.
+  All three terrain-impact paths covered (diagonal corner-cut, normal wall
+  hit, ricochet bounce).
+- **Volatile Core detonation:** Crates within the 2.2-tile blast radius (LOS
+  gated) take full detonation damage.
+- **Grenade explosion:** Crates within the 1.5-tile blast radius take grenade
+  damage.
+- **VOLATILE / EXPLOSIVE_KILLS death explosion:** Crates in radius take damage.
+- **Weapon affix AoE (EXPLOSIVE affix):** Crates in radius take damage.
+- **CHARGER charge impact:** When a charging CHARGER collides with a crate
+  wall, the crate takes `1.5× ATK` damage (same as charge hit damage).
+
+**On destruction:**
+- Tile becomes `T.FLOOR`, entity removed from `crates[]`.
+- Particle burst: gray debris + cyan sparks.
+- `audio.crateBreak()` metallic crunch SFX.
+- 25% chance to scatter `floor × 4` credits with floating text.
+- LOS and fog of war update naturally on the next frame since the tile type
+  changed.
+
+**Enemy/item spawn safety:** Enemy and item spawn positions are validated
+against tile passability — entities will not spawn on crate tiles.
+
+**Visual (tile rendering):** Dark metallic base with neon cyan outlines,
+inner circuit-line cross pattern, centre glow dot. Fits the cyberpunk
+aesthetic.
+
+**Minimap:** `#2a3a4e` (dark blue-gray), distinguishable from walls. Echo
+mapper path shows crates as wall-like obstacles.
+
+**Interactions with other systems:**
+- Crates block all LOS-dependent effects (enemy targeting, auto-laser,
+  saw blade, sentry drone, nano swarm, static field). This is intentional
+  — cover provides full protection from line-of-sight effects.
+- Enemies that lose LOS behind crates behave according to their existing
+  AI (melee types continue pathing toward player; ranged types stop firing).
+- Volatile cores skip crate tiles during placement (they check `T.FLOOR`).
+- Not saved/restored — regenerated on floor load (same as volatile cores).
+
+**Audio: `audio.crateBreak()`** — metallic impact: sine 150→40 Hz + square
+90→25 Hz + broadband noise + 3 staggered debris clinks (sine 600–1400→half Hz).
 
 ### Secret Rooms (Cracked Walls)
 
@@ -2346,3 +2410,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v54.0   | SUMMONER enemy (floor 6+): support spawner that stays at range and periodically summons DRONE minions (max 3 active). `_summons[]` tracks refs; cascade despawn on summoner death via `_despawning` flag. Summoned minions yield 0 XP/credits/drops. Orphan guard in `pendingEnemySpawns` flush. `audio.summon()` SFX. TYPE_CAPS: 1. No elite roll. SW cache v66. |
 | v55.0   | HEALER enemy (floor 5+): support healer that restores wounded non-boss allies within 6 tiles for 15% maxHp per pulse. `_healTimer`/`_healBeam` state. Retreats if player closes within 4 tiles. `audio.heal()` SFX. TYPE_CAPS: 1. No elite roll. SW cache v67. |
 | v56.0   | CHARGER enemy (floor 4+): charge-attack melee rusher. Patrols slowly (SPD 1.5), telegraphs charge with 0.6 s windup (pulsing orange glow + direction indicator), then rushes at 5.5 tiles/s in locked direction for 0.4 s (~2.2-tile lunge). On hit: 1.5× ATK + 2-tile knockback + camera shake. On miss/wall: 1.0 s stun (reuses `stunTimer`), vulnerable. Point-blank (< 2 tiles) uses standard melee instead. `_chgState` (idle/windup/charging), `_chgCooldown` timer. `audio.chargerWindup()` (rising rumble), `audio.chargerImpact()` (heavy thud). Daze star particles on post-charge stun. TYPE_CAPS: 2. Elite eligible. SW cache v68. |
+| v57.0   | Destructible crates: environmental cover objects (floor 2+, 0–2 per normal room ≥ 6×6). `T.CRATE` (21) tile — not passable, not see-through (full cover). `crates[]` entity array with HP (`15 + floor × 5`). Damaged by projectile impact, VCore/grenade/VOLATILE/EXPLOSIVE_KILLS explosions, weapon affix AoE, and CHARGER charge collisions. On destruction: tile reverts to `T.FLOOR`, 25% credit drop (`floor × 4`). Enemy/item spawn passability guard. Minimap: `#2a3a4e`. `audio.crateBreak()` metallic crunch SFX. Spec v3.7. SW cache v69. |

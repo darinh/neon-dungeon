@@ -8,7 +8,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 const DEFAULT_KEY_MAP = {
@@ -565,7 +565,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 // Tile helpers
 function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD; }
 function isSeeThrough(t) {
-  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G;
+  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
 }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -1194,6 +1194,19 @@ const audio = (() => {
       noise(0.16, t + 0.01, 0.18, 3200, bus, { filterType: 'bandpass', filterFreq2: 800, q: 0.8 });
       noise(0.06, t + 0.03, 0.08, 6000, bus, { filterType: 'highpass', pan: 0.2 });
       osc('sawtooth', 200, 60, 0.06, t + 0.02, 0.15, bus, { pan: 0.1 });
+    },
+    crateBreak() {
+      const c = getCtx(); const t = c.currentTime;
+      // Metallic crunch: short impact + rattling debris
+      osc('sine', 150, 40, 0.10, t, 0.15);
+      osc('square', 90, 25, 0.06, t, 0.12);
+      noise(0.10, t, 0.10, 3000);
+      // Debris scatter clinks
+      for (let i = 0; i < 3; i++) {
+        const d = 0.04 + i * 0.05;
+        const f = 600 + Math.random() * 800;
+        osc('sine', f, f * 0.3, 0.03, t + d, 0.05);
+      }
     },
     sentryFire() {
       const c = getCtx(); const t = c.currentTime;
