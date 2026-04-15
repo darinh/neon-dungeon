@@ -10,7 +10,7 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 
 ## Technical Constraints
 
-- **Delivery:** Single `index.html` file, zero external dependencies
+- **Delivery:** Modular JavaScript source files loaded by `index.html`, zero external dependencies
 - **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 14–30 CSS px)
 - **Audio:** Web Audio API (synthesised — no audio files)
 - **Persistence:** `localStorage` for high-score table (top 10 entries) and save game (checkpoint at floor entry; deleted on game over/victory)
@@ -78,8 +78,9 @@ blue, gold). Target priority:
 
 All narrow entrance clusters of the target room are converted to locked tiles
 (same colour). Wide clusters (> 2 tiles) are walled off to prevent bypass. This
-ensures the room is truly gated — one key unlocks one tile, but all entrances
-are blocked.
+ensures the room is truly gated. Picking up a key grants that colour for the
+remainder of the current floor (doors of that colour do not consume the key).
+Closed and locked doors block line-of-sight until opened.
 
 Number of locked rooms per floor: 1 (floor 2–3), 2 (floor 4–6), 3 (floor 7+).
 Keys are placed via BFS reachability from spawn to guarantee no softlocks. If a
@@ -101,12 +102,14 @@ bypassing defense. Blue/white crackling visual when active, dim when off.
 Cyan on minimap (pulses with phase).
 
 **Lighting:** Each floor tile has a computed light level (0–1) based on
-distance from the nearest light source (player torch radius = 9 tiles,
-static wall sconces in rooms — radius 4, 0.4× brightness). Light decays
-linearly to zero at the torch edge. **Fog of war:** visited tiles retain
-their peak light level permanently; lit tiles render at minimum 20%
-brightness, visited tiles with zero light render at 12% brightness
-(dim memory effect). Unvisited tiles are not drawn.
+distance from the player torch (radius = 9 tiles; BLACKOUT: 5), with LOS
+gating. Walls, cracked walls, and closed/locked doors block vision; diagonal
+corner peeking is blocked. Light decays linearly to zero at the torch edge.
+Static wall sconces (radius 4, 0.4× brightness) add ambient light to already
+visited tiles near the player but do not reveal new tiles.
+**Fog of war:** tiles seen once remain visited; currently lit tiles render at
+minimum 20% brightness, visited-but-unlit tiles render at 12% brightness (dim
+memory effect). Unvisited tiles are not drawn.
 
 ### Secret Rooms (Cracked Walls)
 
@@ -1312,11 +1315,12 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   not affect aim or game logic. Reset on floor transitions.
 - **HUD:** Semi-transparent panel bottom-left (HP bar, weapon, floor, score)
 - **Minimap:** Top-right corner, 120×80 px, fog-of-war (visited rooms only).
-  POI markers: visited key locations get larger pulsing glow markers drawn above
-  tile/enemy layers — stairs/terminal (white, 3 px), vendor (green, 3 px), lore
-  (amber, 2 px), sealed boss entrance (red, 4 px, fast pulse). Player dot (cyan,
-  4 px) always on top. Tapping the minimap on touch devices opens the expanded
-  view.
+  Enemy dots are shown only for enemies currently in player LOS (THERMAL_OPTICS
+  still reveals all enemies as dim red). POI markers: visited key locations get
+  larger pulsing glow markers drawn above tile/enemy layers — stairs/terminal
+  (white, 3 px), vendor (green, 3 px), lore (amber, 2 px), sealed boss entrance
+  (red, 4 px, fast pulse). Player dot (cyan, 4 px) always on top. Tapping the
+  minimap on touch devices opens the expanded view.
 - **Expanded Minimap:** Pressing `Tab` during PLAYING opens a full-screen modal
   map overlay. Gameplay freezes while the overlay is visible. The map fills ~85%
   of the screen (responsive to viewport size, respects safe areas) and maintains
@@ -1324,10 +1328,11 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   the small minimap, plus: room-type icons at visited special room centres
   (⚔ armory, ✚ medbay, ◈ shrine, ◆ vault, $ vendor, ⬡ implant, ◎ event,
   ⚡ challenge, ☠ boss); text labels on POI tiles (EXIT/CORE, SHOP, LORE,
-  CHALLENGE, IMPLANT, EVENT); larger enemy dots (boss dots pulse); and a colour
-  legend along the bottom. Unrevealed secret rooms are never shown. ECHO_MAPPER
-  augment reveals layout as dimmed tiles (same as small minimap). Dismissed with
-  `Tab` or `Escape` (desktop) or any tap (touch). Cleared automatically on floor
+  CHALLENGE, IMPLANT, EVENT); larger enemy dots (boss dots pulse, LOS-gated
+  unless THERMAL_OPTICS); and a colour legend along the bottom. Unrevealed
+  secret rooms are never shown. ECHO_MAPPER augment reveals layout as dimmed
+  tiles (same as small minimap). Dismissed with `Tab` or `Escape` (desktop) or
+  any tap (touch). Cleared automatically on floor
   transitions, state changes, and run start/end. `Tab` is a reserved UI key and
   cannot be rebound.
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
@@ -2046,3 +2051,12 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v42.0   | Static Field hackware (5th ability): electric zone-control module placed at aim position. 3-tile radius, 5s duration, 12s cooldown. Enemies inside take 10 dmg/s (1s hit interval, LOS required) and are slowed 40% (bosses: 15% slow). Slow uses stronger-wins logic (`Math.max`/`Math.min`) to not truncate existing effects. Max 1 field active — recasting replaces the old one. Visual: pulsing cyan ring with 3 rotating arc segments, white core spark, ambient spark particles. `audio.hackwareStaticField()` SFX. `hackwareEffects` per-enemy `hitMap` for damage intervals. Auto-included in vendor/pickup via `HACKWARE_KEYS`. No SAVE_VERSION bump. SW cache v49 |
 | v43.0   | Expanded minimap overlay: Tab toggles full-screen modal map overlay during gameplay. Shows room layout with colour-coded tiles, room type icons (`ROOM_ICONS`), POI labels (`ROOM_LABEL_COLOURS`), enemy dots (live positions, bosses larger), and legend. Gameplay freezes while overlay is active. Touch: tap minimap corner to open, any tap to close. `game.mapExpanded` bool cleared in `setState()` + `loadFloor()`. `drawExpandedMinimap()` renders scaled dungeon with pan centering. ECHO_MAPPER dimmed tiles respected. Tab added to `RESERVED_KEYS`. SW cache v50 |
 | v44.0   | Boss HUD bar: cinematic full-width health bar at top of screen during boss encounters. Shows boss display name (colour-matched), wide HP bar with ghost-trail damage animation (0.25×maxHp/s decay), phase threshold notch marks (white vertical lines at phase boundaries), HP text with phase indicator. `BOSS_NAMES` constant (promoted from local `bossNames`). `BOSS_PHASE_MARKS` table + `getBossPhaseMarks(boss)` handles both percentage-based (WARDEN/CONDUCTOR/OMEGA/GENESIS) and absolute-HP (SENTINEL/HIVE) thresholds. Slide-in animation via `easeOutCubic()`. `game.bossBarAnim` + `game.bossHpGhost` state, reset in `loadFloor()`. Replaces small overhead boss HP bar in `Enemy.draw()`. Drawn after minimap in render order. SW cache v51 |
+| v45.0   | Visibility + traversal fixes: LOS-based player FOV now blocks through walls, closed/locked doors, and diagonal corner-peeking; `dungeon.visible` tracks current-frame visibility while `visited` remains fog-memory. Enemy/item/key world rendering is visibility-gated. Minimap/enlarged minimap enemy dots now require LOS (except THERMAL_OPTICS dim reveal). Projectile corner-cutting through touching wall corners blocked (including ricochet handling). Camera gains edge overscroll padding to keep player readable near minimap/touch occlusion at map boundaries. Locked-door keys are now floor-scoped passes (not consumed per door) and reset on fresh floor transitions. |
+| v46.0   | Runtime decomposition for maintainability: the monolithic inline game script was split into ordered source files (`src/platform.js`, `src/content.js`, `src/entities.js`, `src/render.js`, `src/game.js`) loaded by `index.html`. Gameplay logic remains behavior-equivalent while enabling safer targeted edits and clearer ownership boundaries. Service worker pre-cache updated to include the new script assets; SW cache v52. |
+| v47.0   | Audio quality upgrade: procedural soundtrack engine now uses state-specific harmonic progressions, recurring motifs, denser rhythm programming, richer drone voicing, and dynamic timbral automation across idle/explore/combat/tension/boss states. Key gameplay SFX were re-layered with improved envelopes, filter motion, stereo placement, and wet/dry spatial depth while preserving existing `audio.*` API method names and gameplay behavior. Service worker cache bumped to v53. |
+| v47.1   | Audio comfort retune: reduced harshness and ear fatigue on repeated `audio.lowHealth()` pulses, heavy `audio.bossEnter()` stingers, and Railgun fire/impact transients by lowering peak gain, taming high-frequency crack layers, and reducing wet send on those cues while preserving event timing and API shape. Service worker cache bumped to v54. |
+| v47.2   | Lore terminal readability UX fix: entering `READING` no longer immediately dismisses when interact is still held. Added `game.readingInteractArmed` gating so interact-to-close only activates after the interact key is released once, while Escape/Enter/tap still close immediately. Lore close hint is now binding-aware via `KEY_DISPLAY(km('interact'))`, so rebinding interact shows accurate instructions. This preserves responsive controls and prevents accidental lore skips. Service worker cache bumped to v55. |
+| v47.3   | Hazard-zone fairness fix: ground AoE ticks (grenades and shared `hazardZones`) now respect `isPlayerDamageImmune()` in addition to `player.invincibleTimer`. Dash i-frames and Phase Cloak immunity now behave consistently against hazard ticks, matching projectile damage rules. Service worker cache bumped to v56. |
+| v47.4   | Environmental hazard consistency fix: plasma burn and arc-grid zap now route through `player.takeDamage(..., opts)` with `ignoreDefense`, so they still bypass armor but no longer bypass Energy Shield and SECOND_WIND. Added optional damage flags (`ignoreDefense`, `ignoreInvincible`, `ignoreImmunity`, `ignoreShield`, `skipHitInvincible`, `skipHitEffects`, `skipReactiveArmor`) to preserve existing behavior where needed without duplicating death/perk logic. Service worker cache bumped to v57. |
+| v47.5   | Energy Shield fairness tweak: shield-break now grants 0.5s invincibility (was 0.3s), matching normal post-hit i-frames so the defensive perk never makes players more vulnerable to rapid follow-up hits. Service worker cache bumped to v58. |
+| v47.6   | Quest wording clarity: EXPLORE quest label changed from "Visit every room" to "Visit all visible rooms" to match actual completion logic (normal rooms + revealed secret rooms required, unrevealed secrets do not block completion). Service worker cache bumped to v59. |
