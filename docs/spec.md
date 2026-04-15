@@ -1562,7 +1562,7 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 ### Settings Payload
 
 ```json
-{ "sfxVol": 1.0, "musicVol": 1.0, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
+{ "sfxVol": 1.0, "musicVol": 1.0, "screenShake": true, "damageNumbers": true, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
 ```
 
 ### Volume Controls
@@ -1570,6 +1570,11 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 - **SFX Volume** (0–100%): multiplied by base master gain (0.7). Applied via `audio.setSfxVolume(v)` using short linear ramp (0.02 s) to avoid zipper noise.
 - **Music Volume** (0–100%): multiplied by base music bus gain (0.12). Applied via `audio.setMusicVolume(v)`.
 - Both are applied at node creation time (lazy init) AND when the setter is called, ensuring correct volume regardless of when AudioContext initialises.
+
+### Display Toggles
+
+- **Screen Shake** (ON/OFF, default ON): `settings.screenShake`. When OFF, `triggerShake()` is a no-op — camera offset stays at zero.
+- **Damage Numbers** (ON/OFF, default ON): `settings.damageNumbers`. When OFF, `spawnDmgText()` is a no-op — no floating text spawns.
 
 ### Key Rebinding
 
@@ -1598,17 +1603,19 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 Layout (canvas-rendered, no HTML overlays):
 1. SFX Volume slider (horizontal bar, click/drag or ◀▶ keys, 5% step)
 2. Music Volume slider
-3. Rebind rows (one per action, showing action label + current key)
-4. "RESET TO DEFAULTS" button
-5. "BACK" button (returns to previous state)
+3. Screen Shake toggle (◀▶ or Enter/click to toggle ON/OFF)
+4. Damage Numbers toggle
+5. Rebind rows (one per action, showing action label + current key)
+6. "RESET TO DEFAULTS" button (resets volumes, toggles, and key bindings)
+7. "BACK" button (returns to previous state)
 
-Navigation: ↑↓ select row, ◀▶ adjust sliders, Enter/click to rebind, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
+Navigation: ↑↓ select row, ◀▶ adjust sliders or toggle options, Enter/click to rebind or toggle, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
 
 `_settingsFrom` tracks whether settings was opened from `'MENU'` or `'PAUSED'`, used by the back action to return to the correct state.
 
 ### Validation
 
-On load, settings are merged with defaults: volumes clamped to [0, 1], missing keyMap entries filled from `DEFAULT_KEY_MAP`, invalid/corrupt JSON silently falls back to defaults.
+On load, settings are merged with defaults: volumes clamped to [0, 1], booleans validated with `typeof`, missing keyMap entries filled from `DEFAULT_KEY_MAP`, invalid/corrupt JSON silently falls back to defaults.
 
 ---
 
@@ -2007,3 +2014,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v38.0   | CONDUCTOR boss (floor 6 alternate): area-denial pattern boss with electromagnetic projectile patterns and hazard zones. Floor 6 randomly selects NEURAL HIVE or CONDUCTOR. No add spawning (direct contrast to HIVE's summoner archetype). Stats: HP 520, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan). Phase 1 (>55%): 8-way radial arc burst (3.5s CD, rotation offset per volley) + 1 electric hazard zone (6s CD). Phase 2 (55%–25%): 12-way burst (3s) + 2 hazard zones (5s) + conduit beam (fast single shot, 4s). Phase 3 (≤25%): 12-way burst (2.5s) + 2 zones (4s) + discharge AoE (1.5s magnetic pull channel → 25×diff damage + knockback + 6 radial sparks, 5s CD). Hazard zones: 0.8s arming delay with pulsing dashed warning ring, 3-tile minimum distance from player, radius 1.5, 4s duration, `Conductor Field` damage source. Magnetic pull: 1.0 tiles/sec toward boss, passability-checked, room-clamped. Visual: rotating segmented arc ring, pulsing cyan glow during discharge channel. `hazardZones` system extended with `armTimer` (arming delay) and `source` (custom damage source) — backwards compatible. 2 new audio SFX (`audio.conductorArc()`, `audio.conductorPulse()`). No SAVE_VERSION bump. SW cache v45 |
 | v39.0   | GENESIS PROTOCOL boss (floor 10 alternate): geometric precision pattern boss — spiral salvos, targeting lances, hazard grid zones, purge ring. Floor 10 randomly selects OMEGA CORE or GENESIS PROTOCOL. Stats: HP 1000, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold). Phase 1 (>55%): 6-arm spiral salvo (3s, rotating offset) + targeting lance (4s, 0.5s telegraph, aim-locks at start, cancels on LOS/cloak/stun). Phase 2 (55%–25%): 8-arm spiral (2.5s) + 3-spread lance (3.5s) + 2 hazard zones (5s). Phase 3 (≤25%): 10-arm spiral (2s) + 5-spread lance (3s) + 3 zones (4s) + purge ring (8s, 6 zones in circle with 1 gap). Timer seeding on phase transition + spawn prevents first-frame spam. Dynamic terminal lock text replaces hardcoded OMEGA reference. `audio.genesisLance()` / `audio.genesisPurge()` SFX. No SAVE_VERSION bump. SW cache v46 |
 | v40.0   | Settings menu: `SETTINGS` game state accessible from main menu and pause screen. SFX and music volume sliders (0–100%, `localStorage` key `neonDungeonSettings`). Key rebinding for 9 actions (up/down/left/right/interact/hackware/voidshard/dash/shoot) with swap-on-conflict, reserved key protection (Escape/Enter/Q/digits), and Escape-to-cancel capture. Arrow keys always work as movement alternates. `ShiftRight` always works as dash alternate. Touch buttons emit mapped key codes via `km(action)`. In-game hints reflect current bindings via `KEY_DISPLAY()`. Pause screen updated to 3 options (Resume/Settings/Quit). Volume applied at AudioContext init AND on change (handles lazy init). Short linear ramp (0.02s) on volume changes prevents zipper noise. Settings validated and merged with defaults on load. No SAVE_VERSION bump. SW cache v47 |
+| v41.0   | Display toggles in settings: Screen Shake (ON/OFF) and Damage Numbers (ON/OFF). Both default ON. `triggerShake()` and `spawnDmgText()` gated by `settings.screenShake`/`settings.damageNumbers`. Toggles between volume sliders and key rebind section. ◀▶/Enter/click to toggle. `resetAll()` replaces `resetKeys()` — resets volumes, toggles, and key bindings. Boolean settings validated with `typeof` on load. Backward compatible: old payloads without toggle keys default to ON. No SAVE_VERSION bump. SW cache v48 |
