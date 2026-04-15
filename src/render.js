@@ -644,7 +644,14 @@ function drawMinimap(dungeon, player) {
     const tx = Math.floor(e.x), ty = Math.floor(e.y);
     const inSight = !!dungeon.visible[ty]?.[tx];
     if (!thermalOptics && !inSight) continue;
-    if (e.elite && e.eliteAffix) {
+    if (e._isBounty) {
+      const bPulse = 0.7 + 0.3 * Math.sin((game.floorTime||0) * 3);
+      ctx.globalAlpha=bPulse;
+      ctx.shadowBlur=4; ctx.shadowColor='#ffd700';
+      ctx.fillStyle='#ffd700';
+      ctx.fillRect(MX+e.x*sx-2,MY+e.y*sy-2,4,4);
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    } else if (e.elite && e.eliteAffix) {
       ctx.fillStyle=ELITE_AFFIXES[e.eliteAffix].colour;
       ctx.fillRect(MX+e.x*sx-1.5,MY+e.y*sy-1.5,3,3);
     } else {
@@ -842,6 +849,12 @@ function drawExpandedMinimap(dungeon, player) {
       ctx.globalAlpha = bPulse;
       ctx.shadowBlur = 8; ctx.shadowColor = '#ff3333';
       ctx.fillStyle = '#ff3333';
+      ctx.fillRect(ex - dotSz, ey - dotSz, dotSz * 2, dotSz * 2);
+    } else if (e._isBounty) {
+      const bPulse2 = 0.7 + 0.3 * Math.sin((game.floorTime || 0) * 3);
+      ctx.globalAlpha = bPulse2;
+      ctx.shadowBlur = 6; ctx.shadowColor = '#ffd700';
+      ctx.fillStyle = '#ffd700';
       ctx.fillRect(ex - dotSz, ey - dotSz, dotSz * 2, dotSz * 2);
     } else if (e.elite && e.eliteAffix) {
       ctx.fillStyle = ELITE_AFFIXES[e.eliteAffix].colour;
@@ -1103,6 +1116,20 @@ function populateFloor(dungeon, floorNum) {
     }
     if (rt==='event') {
       room.eventUsed = false;
+    }
+  }
+
+  // Bounty target designation (floor 2+, non-boss floors)
+  const isBossFloor = floorNum === 3 || floorNum === 6 || floorNum === 10;
+  if (floorNum >= 2 && !isBossFloor) {
+    const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite);
+    if (candidates.length > 0) {
+      const bounty = candidates[rndInt(0, candidates.length - 1)];
+      bounty._isBounty = true;
+      bounty._bountyRevealed = false;
+      bounty.hp = Math.round(bounty.hp * 2);
+      bounty.maxHp = bounty.hp;
+      bounty.atk = Math.round(bounty.atk * 1.5);
     }
   }
 
