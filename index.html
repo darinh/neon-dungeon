@@ -7941,7 +7941,16 @@ const game = {
       const dt=dungeon.map[dy][dx];
       if (dt===T.CRACKED) { this.hint={text:'Faint cracks... (press '+KEY_DISPLAY(km('interact'))+')',colour:'#ffb700'}; break; }
       if (dt===T.DOOR) { this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to open door',colour:'#aa8844'}; break; }
-      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press '+KEY_DISPLAY(km('interact'))+')', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
+      if (isDoor(dt)) {
+        const kc=doorKeyColour(dt);
+        const colour = dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00';
+        if (player.keys[kc] > 0) {
+          this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to unlock '+kc.toUpperCase()+' door', colour};
+        } else {
+          this.hint={text:'Need '+kc.toUpperCase()+' KEY (press '+KEY_DISPLAY(km('interact'))+')', colour};
+        }
+        break;
+      }
       if (dt===T.CHALLENGE_GATE && !game.challengeComplete) { this.hint={text:'⚔ CHALLENGE ROOM — enter at your own risk',colour:'#ff6633'}; break; }
     }
 
