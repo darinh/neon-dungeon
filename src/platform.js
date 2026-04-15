@@ -1232,6 +1232,13 @@ const audio = (() => {
       osc('sine', 500, 1200, 0.03, t + 0.1, 0.12);
       noise(0.03, t + 0.08, 0.1, 4000);
     },
+    heal() {
+      const c = getCtx(); const t = c.currentTime;
+      // Soft ascending chime — gentle restoration
+      osc('sine', 600, 1200, 0.06, t, 0.15);
+      osc('triangle', 900, 1400, 0.04, t + 0.05, 0.12);
+      osc('sine', 1200, 1600, 0.03, t + 0.1, 0.1);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop

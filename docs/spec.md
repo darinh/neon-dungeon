@@ -410,12 +410,13 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | TELEPORTER   | 25      | 12  | Blinks around room, fires ranged bursts      | 22  |
 | SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot; **inflicts shock** | 25  |
 | SUMMONER     | 35      | 8   | Stays at range, periodically summons minion drones | 30  |
+| HEALER       | 25      | 6   | Stays at range, periodically heals wounded allies | 22  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
-GRENADIER appears floor 5+, TELEPORTER appears floor 6+, SUMMONER appears
-floor 6+, SNIPER appears floor 7+.
+GRENADIER appears floor 5+, HEALER appears floor 5+, TELEPORTER appears floor
+6+, SUMMONER appears floor 6+, SNIPER appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -582,6 +583,39 @@ instantly despawn its active minions, or deal with the swarm first.
 - **Elite exclusion:** SUMMONERs never roll elite — the combination of elite
   durability with continuous minion spawning would be a balance spike.
 
+#### HEALER (floor 5+)
+
+Support enemy that periodically heals the most wounded nearby ally. Creates a
+tactical priority puzzle: kill the healer first to stop regeneration, or
+eliminate the threats it sustains. Pairs with SUMMONER to form a support
+archetype duo — the summoner adds bodies, the healer keeps them alive.
+
+- **Behaviour:** Stays at 4–12 tile range. Retreats if player closes to
+  within 4 tiles (same retreat logic as GRENADIER/SUMMONER — falls back to
+  patrol if wall-blocked). At range, scans for wounded allies within 6 tiles
+  and heals the most damaged one.
+- **Heal cooldown:** `max(2.0, 3.0 − floor × 0.1)` seconds, scaled by
+  OVERCLOCK (÷1.2) and berserkerMul. Initial cooldown 1.5 s on spawn.
+- **Heal amount:** 15% of the target's `maxHp` per pulse.
+- **Target selection:** Chooses the non-boss enemy within 6 tiles with the
+  lowest HP/maxHP ratio. Cannot self-heal. Skips full-HP allies.
+- **Stats:** HP 25, ATK 6, SPD 1.8, XP 22.
+- **Visual:** Teal (`#44ffaa`). Pulsing teal cross symbol above head. When
+  healing, a dashed teal beam connects healer to target (0.4 s duration,
+  animated dash offset). Teal particles at both healer and target on heal.
+- **Audio:** `heal()` — soft ascending chime (sine 600→1200, triangle
+  900→1400, sine 1200→1600).
+- **Credits:** 8
+- **Cap:** 1 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite exclusion:** HEALERs never roll elite — a durable healer that
+  requires sustained focus fire would be frustrating, not challenging.
+- **Modifier interactions:**
+  - OVERCLOCK (÷1.2 cooldowns): Heals more frequently
+  - SWARM (0.6× HP): Extremely fragile — easy to burst down, but more
+    wounded allies to heal from the larger enemy count
+  - FORTIFIED (1.4× HP): Slightly harder to kill, allies have more HP to
+    restore
+
 ### Difficulty Modes
 
 Three selectable difficulty levels, chosen from the main menu on the NEW GAME
@@ -683,6 +717,7 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | GRENADIER | 1           | +2        | 5         |
 | TELEPORTER| 1           | +2        | 6         |
 | SNIPER    | 1           | +2        | 7         |
+| HEALER    | 1           | +2        | 5         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
@@ -690,16 +725,17 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 floor 10 averages 5–8 (capped by room area).
 
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
-max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper
-per room. Excess rolls reroll among uncapped, floor-eligible types; final
-fallback is GUARD.
+max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper,
+max 1 summoner, max 1 healer per room. Excess rolls reroll among uncapped,
+floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
 
 Base 8% chance per spawn on floor 3 and above (scaled by difficulty: 4% EASY,
 12% HARD). Maximum 1 elite per room. Never applied to bosses, boss-summoned
-adds, or SNIPERs (elite ATK multiplier on a glass cannon would produce unfair
-damage spikes).
+adds, SNIPERs (elite ATK multiplier on a glass cannon would produce unfair
+damage spikes), SUMMONERs (elite durability + continuous spawning), or HEALERs
+(elite durability would make the healer frustratingly hard to prioritise).
 
 | Stat     | Multiplier |
 |----------|------------|

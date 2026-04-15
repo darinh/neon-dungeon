@@ -6,11 +6,11 @@ let items   = [];
 let hazardZones = [];
 let vcores  = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -24,7 +24,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -416,6 +416,7 @@ class Enemy {
       case 'TELEPORTER':this.aiTeleporter(dt,player,map,d,los);break;
       case 'SNIPER':   this.aiSniper(dt,player,map,d,los);   break;
       case 'SUMMONER': this.aiSummoner(dt,player,map,d,los); break;
+      case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'WARDEN':   this.aiBossWarden(dt,player,map,d,los);   break;
@@ -795,6 +796,57 @@ class Enemy {
     audio.summon();
     spawnParticles(this.x, this.y, 'MUZZLE', '#bb44ff', 8);
     spawnParticles(sx, sy, 'SPARK', '#bb44ff', 6);
+  }
+
+  aiHealer(dt,player,map,d,los) {
+    this._healTimer = Math.max(0, (this._healTimer || 0) - dt);
+    this._healBeam = this._healBeam ? { ...this._healBeam, t: this._healBeam.t - dt } : null;
+    if (this._healBeam && this._healBeam.t <= 0) this._healBeam = null;
+    const bm = this.berserkerMul();
+    if (los && d < 4) {
+      // Too close — retreat
+      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+      const nx = this.x + dx * retreatSpd * dt;
+      const ny = this.y + dy * retreatSpd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      let moved = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
+      if (!moved) this.patrol(dt, map);
+    } else if (los && d <= 12) {
+      // In heal range — find wounded ally and heal
+      if (this._healTimer <= 0) {
+        const target = this._findHealTarget();
+        if (target) {
+          const healAmt = Math.round(target.maxHp * 0.15);
+          target.hp = Math.min(target.maxHp, target.hp + healAmt);
+          this._healBeam = { tx: target.x, ty: target.y, t: 0.4 };
+          this._healTimer = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+          audio.heal();
+          spawnParticles(this.x, this.y, 'MUZZLE', '#44ffaa', 5);
+          spawnParticles(target.x, target.y, 'SPARK', '#44ffaa', 6);
+        }
+      }
+    } else if (d > 12 && los) {
+      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
+  _findHealTarget() {
+    let best = null, bestRatio = 1;
+    for (const e of enemies) {
+      if (e === this || e.dead || e.isBoss) continue;
+      if (e.hp >= e.maxHp) continue;
+      const ed = dist(this.x, this.y, e.x, e.y);
+      if (ed > 6) continue;
+      const ratio = e.hp / e.maxHp;
+      if (ratio < bestRatio) { bestRatio = ratio; best = e; }
+    }
+    return best;
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -1603,6 +1655,41 @@ class Enemy {
         ctx.setLineDash([]);
         ctx.restore();
       }
+      // HEALER: teal cross + heal beam to target
+      if (this.type === 'HEALER') {
+        ctx.save();
+        const hPulse = 0.3 + 0.15 * Math.sin(this.bobAngle * 2.5);
+        ctx.globalAlpha = hPulse;
+        ctx.strokeStyle = '#44ffaa';
+        ctx.shadowBlur = 8 + Math.sin(this.bobAngle * 2) * 4;
+        ctx.shadowColor = '#44ffaa';
+        ctx.lineWidth = 2;
+        // Cross symbol above head
+        const crossY = sy - sz * 0.8;
+        const cs = 4;
+        ctx.beginPath();
+        ctx.moveTo(sx - cs, crossY); ctx.lineTo(sx + cs, crossY);
+        ctx.moveTo(sx, crossY - cs); ctx.lineTo(sx, crossY + cs);
+        ctx.stroke();
+        // Heal beam
+        if (this._healBeam) {
+          const beamAlpha = Math.min(1, this._healBeam.t / 0.2) * 0.6;
+          ctx.globalAlpha = beamAlpha;
+          ctx.strokeStyle = '#44ffaa';
+          ctx.shadowBlur = 12;
+          ctx.lineWidth = 2 + Math.sin(this.bobAngle * 6) * 1;
+          ctx.setLineDash([4, 4]);
+          ctx.lineDashOffset = -this.bobAngle * 8;
+          const bx = this._healBeam.tx * TILE - camX;
+          const by = this._healBeam.ty * TILE - camY;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      }
       // Bounty target: gold aura + crown marker
       if (this._isBounty) {
         ctx.save();
@@ -1747,6 +1834,7 @@ const ENEMY_WEIGHTS = {
   TELEPORTER: { base: 1,  perFloor: 2, minFloor: 6 },  // deep-floor blinker
   SNIPER:     { base: 1,  perFloor: 2, minFloor: 7 },  // glass-cannon laser sight
   SUMMONER:   { base: 1,  perFloor: 2, minFloor: 6 },  // spawns minion drones
+  HEALER:     { base: 1,  perFloor: 2, minFloor: 5 },  // heals wounded allies
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -1781,6 +1869,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'TELEPORTER':hp=25;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
     case 'SNIPER':   hp=20;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
     case 'SUMMONER': hp=35;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
+    case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=330; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -1806,13 +1895,14 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
+  if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, or summoners
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
