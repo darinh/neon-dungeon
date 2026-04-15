@@ -169,12 +169,13 @@ const touch = {
   joystick: { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0 },
   aim:      { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0, shooting:false },
   // button touch IDs
-  btnE: null, btnV: null, btnDash: null, btnPause: null,
+  btnE: null, btnV: null, btnF: null, btnDash: null, btnPause: null,
 };
 
 // Button definitions — positions updated dynamically by updateBtns()
 const BTNS = {
   E:     { x:0, y:0, r:30, label:'E',  colour:'#00f5ff' },
+  F:     { x:0, y:0, r:28, label:'F',  colour:'#ff8800', hidden:true },
   V:     { x:0, y:0, r:28, label:'V',  colour:'#aa00ff' },
   DASH:  { x:0, y:0, r:28, label:'⇧',  colour:'#ffb700' },
   PAUSE: { x:0, y:0, r:20, label:'II', colour:'#ff00c8' },
@@ -183,9 +184,12 @@ function updateBtns() {
   // Scale up buttons on small screens (min ~44 CSS px diameter)
   const minR = 22 / gameScale;
   BTNS.E.r     = Math.max(30, minR);
+  BTNS.F.r     = Math.max(28, minR);
   BTNS.V.r     = Math.max(28, minR);
   BTNS.DASH.r  = Math.max(28, minR);
   BTNS.PAUSE.r = Math.max(20, Math.ceil(minR * 0.7));
+  // Show F button only when player has hackware equipped
+  BTNS.F.hidden = !(game.player && game.player.hackware);
   // Position from edges, respecting safe-area insets
   const pr = Math.max(10, safeRight);
   const pb = Math.max(10, safeBottom);
@@ -195,8 +199,10 @@ function updateBtns() {
   BTNS.E.y     = btnY;
   BTNS.DASH.x  = W - pr - 160;
   BTNS.DASH.y  = btnY;
-  BTNS.V.x     = W - pr - 90;
-  BTNS.V.y     = btnY;
+  BTNS.F.x     = W - pr - 90;
+  BTNS.F.y     = btnY;
+  BTNS.V.x     = W - pr - 20;
+  BTNS.V.y     = btnY - 55;
   BTNS.PAUSE.x = W - pr - 30;
   BTNS.PAUSE.y = pt + 30;
 }
@@ -295,6 +301,7 @@ canvas.addEventListener('touchstart', e => {
     }
     // button priority
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('KeyE'); continue; }
+    if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) { touch.btnF=t.identifier; justPressed.add('KeyF'); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add('KeyV'); continue; }
     if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add('ShiftLeft'); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
@@ -340,6 +347,7 @@ canvas.addEventListener('touchend', e => {
     if (t.identifier===touch.joystick.id) { touch.joystick.active=false; touch.joystick.dx=0; touch.joystick.dy=0; }
     if (t.identifier===touch.aim.id)      { touch.aim.active=false; touch.aim.shooting=false; touch.aim.dx=0; touch.aim.dy=0; mouse.down=false; }
     if (t.identifier===touch.btnE)   touch.btnE=null;
+    if (t.identifier===touch.btnF)   touch.btnF=null;
     if (t.identifier===touch.btnV)   touch.btnV=null;
     if (t.identifier===touch.btnDash) touch.btnDash=null;
     if (t.identifier===touch.btnPause) touch.btnPause=null;
@@ -354,11 +362,13 @@ canvas.addEventListener('touchcancel', e => {
 function resetTouch() {
   touch.joystick.active=false; touch.joystick.id=null; touch.joystick.dx=0; touch.joystick.dy=0;
   touch.aim.active=false; touch.aim.id=null; touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=false;
-  touch.btnE=null; touch.btnV=null; touch.btnDash=null; touch.btnPause=null;
+  touch.btnE=null; touch.btnF=null; touch.btnV=null; touch.btnDash=null; touch.btnPause=null;
   mouse.down=false;
 }
 
 function drawTouchUI() {
+  // Update F button visibility per-frame (player may equip hackware mid-run)
+  BTNS.F.hidden = !(game.player && game.player.hackware);
   // Left joystick (move)
   if (touch.joystick.active) {
     const {baseX:bx,baseY:by,dx,dy}=touch.joystick;
@@ -401,10 +411,13 @@ function drawTouchUI() {
   }
   // Buttons
   for (const [key,btn] of Object.entries(BTNS)) {
-    const active = (key==='E'&&touch.btnE!==null)||(key==='V'&&touch.btnV!==null)||(key==='DASH'&&touch.btnDash!==null)||(key==='PAUSE'&&touch.btnPause!==null);
+    if (btn.hidden) continue;
+    const active = (key==='E'&&touch.btnE!==null)||(key==='F'&&touch.btnF!==null)||(key==='V'&&touch.btnV!==null)||(key==='DASH'&&touch.btnDash!==null)||(key==='PAUSE'&&touch.btnPause!==null);
     ctx.save();
     // Show cooldown overlay on dash button
     if (key==='DASH' && game.player && game.player.dashCooldown > 0) {
+      ctx.globalAlpha = 0.25;
+    } else if (key==='F' && game.player && game.player.hackwareCooldown > 0) {
       ctx.globalAlpha = 0.25;
     } else {
       ctx.globalAlpha = active ? 0.9 : 0.45;
@@ -944,6 +957,48 @@ const audio = (() => {
       noise(0.10, t, 0.12, 4000, bus);
       osc('sine', 600, 200, 0.08, t, 0.1, bus);
       osc('triangle', 1200, 400, 0.04, t, 0.08, bus);
+    },
+    hackwareEMP() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.4);
+      // Electric discharge burst
+      osc('sawtooth', 200, 60, 0.15, t, 0.2, bus);
+      osc('square', 1200, 200, 0.1, t, 0.15, bus);
+      noise(0.2, t, 0.1, 5000, bus);
+      osc('sine', 80, 40, 0.12, t + 0.05, 0.3);
+    },
+    hackwareCloak() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.5, 0.8);
+      // Shimmering phase-out
+      osc('sine', 800, 1600, 0.08, t, 0.3, bus);
+      osc('triangle', 1200, 2000, 0.05, t + 0.05, 0.25, bus);
+      osc('sine', 400, 200, 0.06, t + 0.1, 0.2, bus);
+    },
+    hackwareSwarm() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.3);
+      // Buzzing swarm release
+      osc('sawtooth', 300, 600, 0.08, t, 0.15, bus);
+      osc('sawtooth', 320, 640, 0.06, t + 0.02, 0.12, bus);
+      noise(0.08, t, 0.2, 3000, bus);
+      osc('sine', 200, 400, 0.05, t + 0.1, 0.15, bus);
+    },
+    hackwareGravity() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.6);
+      // Deep gravity implosion
+      osc('sine', 300, 40, 0.15, t, 0.4, bus);
+      osc('triangle', 600, 100, 0.08, t, 0.3, bus);
+      osc('sine', 50, 30, 0.2, t + 0.1, 0.5);
+      noise(0.06, t + 0.2, 0.15, 1000, bus);
+    },
+    hackwareCloakEnd() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.4);
+      // Shimmer back in
+      osc('sine', 1600, 600, 0.06, t, 0.2, bus);
+      osc('triangle', 1200, 400, 0.04, t + 0.05, 0.15, bus);
     }
   };
 })();
@@ -1022,6 +1077,210 @@ function rollEliteAffix(enemyType) {
     return true;
   });
   return eligible[rndInt(0, eligible.length - 1)];
+}
+
+// ─── Hackware — Collectible Active Abilities ──────────────────────────────────
+const HACKWARE = {
+  EMP_BURST:    { name:'EMP Burst',    desc:'Stun nearby enemies for 2s',      colour:'#00ddff', icon:'⚡', cooldown:10 },
+  PHASE_CLOAK:  { name:'Phase Cloak',  desc:'2.5s invisibility & immunity',    colour:'#cc44ff', icon:'◇', cooldown:14 },
+  NANO_SWARM:   { name:'Nano Swarm',   desc:'Homing nanites deal 48 damage',   colour:'#44ff88', icon:'☢', cooldown:10 },
+  GRAVITY_WELL: { name:'Gravity Well', desc:'Pull enemies to target for 3s',   colour:'#ff8800', icon:'◎', cooldown:16 },
+};
+const HACKWARE_KEYS = Object.keys(HACKWARE);
+
+let hackwareEffects = []; // active world-space hackware effects (gravity wells, swarm particles)
+
+function canTargetPlayer() {
+  const p = game.player;
+  if (!p || p.hp <= 0) return false;
+  if (p.cloakTimer > 0) return false;
+  return true;
+}
+
+function isPlayerDamageImmune() {
+  const p = game.player;
+  if (!p) return false;
+  if (p.dashTimer > 0) return true;
+  if (p.cloakTimer > 0) return true;
+  return false;
+}
+
+function activateHackware(player) {
+  if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
+  const hw = HACKWARE[player.hackware];
+  if (!hw) return;
+  player.hackwareCooldown = hw.cooldown;
+  const map = game.dungeon ? game.dungeon.map : null;
+
+  switch (player.hackware) {
+    case 'EMP_BURST': {
+      audio.hackwareEMP();
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#00ddff', 20);
+      triggerShake(5, 0.2);
+      const radius = 4;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = dist(player.x, player.y, e.x, e.y);
+        if (d < radius && map && hasLOS(player.x, player.y, e.x, e.y, map)) {
+          const dur = e.isBoss ? 1 : 2; // bosses get reduced stun
+          e.stunTimer = Math.max(e.stunTimer || 0, dur);
+          spawnParticles(e.x, e.y, 'SPARK', '#00ddff', 4);
+          spawnDmgText(e.x, e.y, 'STUN', '#00ddff');
+        }
+      }
+      // Visual: expanding ring effect
+      hackwareEffects.push({ type:'emp_ring', x:player.x, y:player.y, age:0, maxAge:0.4, radius });
+      break;
+    }
+    case 'PHASE_CLOAK': {
+      audio.hackwareCloak();
+      player.cloakTimer = 2.5;
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#cc44ff', 12);
+      game.msg('◇ PHASE CLOAK ACTIVE', '#cc44ff');
+      break;
+    }
+    case 'NANO_SWARM': {
+      audio.hackwareSwarm();
+      spawnParticles(player.x, player.y, 'SPARK', '#44ff88', 8);
+      for (let i = 0; i < 6; i++) {
+        const angle = (TWO_PI / 6) * i;
+        hackwareEffects.push({
+          type:'swarm', x:player.x, y:player.y,
+          vx:Math.cos(angle)*3, vy:Math.sin(angle)*3,
+          age:0, maxAge:4, dmg:8, hitCd:0
+        });
+      }
+      break;
+    }
+    case 'GRAVITY_WELL': {
+      audio.hackwareGravity();
+      // Place at aim position
+      const cam = getCamera(player);
+      const wx = (mouse.x + cam.x) / TILE;
+      const wy = (mouse.y + cam.y) / TILE;
+      hackwareEffects.push({
+        type:'gravity', x:wx, y:wy, age:0, maxAge:3, radius:5
+      });
+      spawnParticles(wx, wy, 'EXPLOSION', '#ff8800', 15);
+      triggerShake(3, 0.15);
+      break;
+    }
+  }
+}
+
+function updateHackwareEffects(dt) {
+  const map = game.dungeon ? game.dungeon.map : null;
+  for (let i = hackwareEffects.length - 1; i >= 0; i--) {
+    const fx = hackwareEffects[i];
+    fx.age += dt;
+    if (fx.age >= fx.maxAge) { hackwareEffects.splice(i, 1); continue; }
+
+    if (fx.type === 'swarm') {
+      // Home toward nearest visible enemy
+      let best = null, bestD = 8;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = dist(fx.x, fx.y, e.x, e.y);
+        if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) { best = e; bestD = d; }
+      }
+      if (best) {
+        const [dx, dy] = norm(best.x - fx.x, best.y - fx.y);
+        const spd = 6;
+        fx.vx += dx * spd * dt * 4;
+        fx.vy += dy * spd * dt * 4;
+        const mag = Math.sqrt(fx.vx * fx.vx + fx.vy * fx.vy);
+        if (mag > spd) { fx.vx = (fx.vx / mag) * spd; fx.vy = (fx.vy / mag) * spd; }
+      }
+      fx.x += fx.vx * dt;
+      fx.y += fx.vy * dt;
+      // Hit detection
+      fx.hitCd = Math.max(0, fx.hitCd - dt);
+      if (fx.hitCd <= 0) {
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (dist(fx.x, fx.y, e.x, e.y) < 0.6) {
+            e.takeDamage(fx.dmg, { name:'Nano Swarm', isProc:true });
+            fx.hitCd = 0.5;
+            spawnParticles(fx.x, fx.y, 'SPARK', '#44ff88', 3);
+            break;
+          }
+        }
+      }
+      // Trail particle
+      if (Math.random() < dt * 10) spawnParticles(fx.x, fx.y, 'MUZZLE', '#44ff88', 1);
+    }
+
+    if (fx.type === 'gravity') {
+      // Pull enemies toward center (collision-aware)
+      const pullStr = 4;
+      for (const e of enemies) {
+        if (e.dead || e.isBoss) continue; // bosses immune to pull
+        const d = dist(e.x, e.y, fx.x, fx.y);
+        if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+          e.moveToward(fx.x, fx.y, pullStr, dt, map);
+        }
+      }
+      // Ambient vortex particles
+      if (Math.random() < dt * 8) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.5 + Math.random() * fx.radius * 0.5;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff8800', 1);
+      }
+    }
+    // emp_ring is visual only, handled in draw
+  }
+}
+
+function drawHackwareEffects(camX, camY) {
+  for (const fx of hackwareEffects) {
+    if (fx.type === 'emp_ring') {
+      const progress = fx.age / fx.maxAge;
+      const r = fx.radius * TILE * progress;
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      ctx.save();
+      ctx.globalAlpha = 0.6 * (1 - progress);
+      ctx.strokeStyle = '#00ddff';
+      ctx.shadowBlur = 15; ctx.shadowColor = '#00ddff';
+      ctx.lineWidth = 3 * (1 - progress);
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      ctx.restore();
+    }
+    if (fx.type === 'swarm') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.shadowBlur = 8; ctx.shadowColor = '#44ff88';
+      ctx.fillStyle = '#44ff88';
+      ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+      ctx.restore();
+    }
+    if (fx.type === 'gravity') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const fade = 1 - (fx.age / fx.maxAge);
+      const r = fx.radius * TILE;
+      ctx.save();
+      // Pulsing ring
+      const pulse = 0.5 + Math.sin(fx.age * 8) * 0.2;
+      ctx.globalAlpha = fade * 0.25 * pulse;
+      ctx.fillStyle = '#ff8800';
+      ctx.shadowBlur = 20; ctx.shadowColor = '#ff8800';
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      // Core
+      ctx.globalAlpha = fade * 0.7;
+      ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TWO_PI); ctx.fill();
+      // Rotating arms
+      ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 2;
+      ctx.globalAlpha = fade * 0.4;
+      for (let arm = 0; arm < 3; arm++) {
+        const a = fx.age * 4 + (TWO_PI / 3) * arm;
+        ctx.beginPath();
+        ctx.moveTo(sx + Math.cos(a) * 8, sy + Math.sin(a) * 8);
+        ctx.lineTo(sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
 }
 
 // Eligibility: exclude useless affix+weapon combos
@@ -1555,6 +1814,19 @@ function getStatusEffects(player) {
     fx.push({ id: 'dash-cd', icon: '⇧', label: player.dashCooldown.toFixed(1) + 's', colour: '#7a6a33' });
   } else {
     fx.push({ id: 'dash', icon: '⇧', label: 'RDY', colour: '#ffb700' });
+  }
+  // Hackware cooldown
+  if (player.hackware) {
+    const hw = HACKWARE[player.hackware];
+    if (player.hackwareCooldown > 0) {
+      fx.push({ id: 'hw-cd', icon: hw.icon, label: player.hackwareCooldown.toFixed(1)+'s', colour: '#665533' });
+    } else {
+      fx.push({ id: 'hw-rdy', icon: hw.icon, label: 'RDY', colour: hw.colour });
+    }
+  }
+  // Phase cloak active
+  if (player.cloakTimer > 0) {
+    fx.push({ id: 'cloak', icon: '◇', label: player.cloakTimer.toFixed(1)+'s', colour: '#cc44ff' });
   }
   return fx;
 }
@@ -2270,7 +2542,8 @@ class Projectile {
       }
     } else if (!this.isGrenade) {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
-      if (!player.invincibleTimer && dist(this.x,this.y,player.x,player.y)<0.5) {
+      // Cloaked player: projectiles pass through
+      if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
         player.takeDamage(this.dmg, this.ownerType || 'Projectile');
         this.dead=true;
       }
@@ -2419,6 +2692,29 @@ function makeWeaponOption() {
   };
 }
 
+function makeHackwareOption(exclude) {
+  // Pick a random hackware module different from what player has and the excluded id
+  const current = game.player ? game.player.hackware : null;
+  const eligible = HACKWARE_KEYS.filter(k => {
+    if (exclude && exclude === 'HACKWARE_' + k) return false;
+    return true;
+  });
+  if (eligible.length === 0) return null;
+  const key = eligible[rndInt(0, eligible.length - 1)];
+  const hw = HACKWARE[key];
+  const replaces = current ? HACKWARE[current] : null;
+  return {
+    id:'HACKWARE_'+key, name:hw.name,
+    desc:hw.desc + (replaces ? ' [replaces '+replaces.name+']' : ''),
+    colour:hw.colour, rarity:0, persistent:false, isHackware:true,
+    fn: p => {
+      p.hackware = key;
+      p.hackwareCooldown = 0; // fresh cooldown on equip
+      game.msg(hw.icon+' '+hw.name+' INSTALLED', hw.colour);
+    }
+  };
+}
+
 function pickUpgradeOption(exclude) {
   // Build eligible pool: exclude maxed persistent upgrades and the excluded id
   const pool = UPGRADES.filter(u => {
@@ -2429,6 +2725,11 @@ function pickUpgradeOption(exclude) {
     }
     return true;
   });
+  // 12% chance for a hackware option (floor 3+)
+  if (game.floor >= 3 && Math.random() < 0.12 && (!exclude || !exclude.startsWith('HACKWARE_'))) {
+    const hw = makeHackwareOption(exclude);
+    if (hw) return hw;
+  }
   // 20% chance for a weapon option (always eligible)
   if (Math.random() < 0.2 && (!exclude || !exclude.startsWith('WEAPON_'))) return makeWeaponOption();
   if (pool.length === 0) return makeWeaponOption();
@@ -2498,6 +2799,18 @@ function generateShopItems(floor, player, dungeon) {
         fn: p => { p.keys[kc]++; game.msg('Bought '+kc.toUpperCase()+' KEY!', tileCol); }
       });
     }
+  }
+  // Offer a hackware module on floor 3+ (~40% chance per vendor)
+  if (floor >= 3 && Math.random() < 0.4) {
+    const hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)];
+    const hw = HACKWARE[hwKey];
+    const replaces = player.hackware ? HACKWARE[player.hackware] : null;
+    pool.push({
+      id:'SHOP_HW_'+hwKey, name:hw.name, isHackware:true,
+      desc:hw.desc + (replaces ? ' [replaces '+replaces.name+']' : ''),
+      colour:hw.colour, price: 90 + floor * 10,
+      fn: p => { p.hackware=hwKey; p.hackwareCooldown=0; game.msg(hw.icon+' '+hw.name+' INSTALLED',hw.colour); }
+    });
   }
   // Fill remaining slots from UPGRADES pool
   const used = new Set(pool.map(p => p.id));
@@ -2754,6 +3067,7 @@ class Enemy {
     // Weapon affix status effects
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
+    this.stunTimer=0;                     // hackware EMP stun duration
     this._lastHitCtx=null;                // weapon context of last hit (for on-kill effects)
   }
 
@@ -2854,12 +3168,22 @@ class Enemy {
     if (this.dead) return;
     this.bobAngle+=dt*3;
     this.flashTimer=Math.max(0,this.flashTimer-dt);
+
+    // Stun: freeze AI + cooldown timers while stunned
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
+      return; // skip all AI, leave attack/shoot timers frozen
+    }
+
     this.attackTimer=Math.max(0,this.attackTimer-dt);
     this.shootTimer =Math.max(0,this.shootTimer-dt);
     this.spawnCooldown=Math.max(0,this.spawnCooldown-dt);
 
     const d = dist(this.x,this.y,player.x,player.y);
-    const los = d<15 && hasLOS(this.x,this.y,player.x,player.y,map);
+    // Cloak: enemies lose LOS when player is cloaked
+    const targetable = canTargetPlayer();
+    const los = targetable && d<15 && hasLOS(this.x,this.y,player.x,player.y,map);
 
     // type-specific AI
     switch(this.type) {
@@ -2909,7 +3233,7 @@ class Enemy {
   }
 
   meleeAttack(player) {
-    if (this.attackTimer<=0) {
+    if (this.attackTimer<=0 && canTargetPlayer()) {
       player.takeDamage(this.atk, this.type);
       const baseCd = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       this.attackTimer = baseCd / this.berserkerMul();
@@ -2945,7 +3269,7 @@ class Enemy {
   }
 
   aiCrawler(dt,player,map,d,los) {
-    if (los||d<8) {
+    if (los||(d<8 && canTargetPlayer())) {
       this.zigzag+=dt*5;
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
       const perp={x:-dy,y:dx};
@@ -2958,7 +3282,7 @@ class Enemy {
 
   aiPhantom(dt,player,map,d,los) {
     this.teleportTimer=Math.max(0,this.teleportTimer-dt);
-    if (d>3) {
+    if (d>3 || !canTargetPlayer()) {
       this.visible=false;
       if (this.teleportTimer<=0 && this.room) {
         this.x=this.room.x+rnd(1,this.room.w-1);
@@ -2974,7 +3298,7 @@ class Enemy {
 
   aiDrone(dt,player,map,d,los) {
     const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07) / (game.modifier==='OVERCLOCK'?1.2:1);
-    if (d<15) {
+    if (d<15 && canTargetPlayer()) {
       // Drones respect walls when boss room is sealed
       const canPhase = !game.bossSealed;
       this.moveToward(player.x,player.y,this.spd,dt,map,canPhase);
@@ -3061,7 +3385,7 @@ class Enemy {
   }
 
   aiShard(dt,player,map,d,los) {
-    if (los || d < 8) {
+    if (los || (d < 8 && canTargetPlayer())) {
       this.zigzag += dt * 6;
       const [dx, dy] = norm(player.x - this.x, player.y - this.y);
       const perp = { x: -dy, y: dx };
@@ -3077,8 +3401,8 @@ class Enemy {
     if (this._materialize > 0) this._materialize -= dt;
     if (this._warpFade > 0) this._warpFade -= dt * 1.5;
 
-    // Emergency blink if player gets close (skip if just teleported)
-    if (d < 2 && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
+    // Emergency blink if player gets close (skip if just teleported or player cloaked)
+    if (d < 2 && canTargetPlayer() && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
 
     // Teleport cycle
     if (this.teleportTimer <= 0 && this.room) {
@@ -3648,6 +3972,10 @@ class Player {
     this.enemiesKilled=0;       // total enemies killed this run
     this.hitsBlocked=0;         // energy shield blocks
     this.roomsCleared=0;        // rooms fully cleared of enemies
+    // Hackware — active ability
+    this.hackware=null;         // HACKWARE key or null
+    this.hackwareCooldown=0;    // cooldown remaining
+    this.cloakTimer=0;          // phase cloak duration remaining
   }
 
   logDamage(source, amount) {
@@ -3672,6 +4000,7 @@ class Player {
 
   takeDamage(dmg, source) {
     if (this.invincibleTimer>0) return;
+    if (isPlayerDamageImmune()) return; // dash i-frames + phase cloak
     // Energy shield absorbs the hit
     if (this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
@@ -3752,6 +4081,18 @@ class Player {
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     this.dashCooldown=Math.max(0,this.dashCooldown-dt);
+    // Hackware cooldown + cloak timer
+    this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
+    if (this.cloakTimer > 0) {
+      this.cloakTimer -= dt;
+      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#cc44ff', 1);
+      if (this.cloakTimer <= 0) {
+        this.cloakTimer = 0;
+        audio.hackwareCloakEnd();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#cc44ff', 8);
+        game.msg('◇ CLOAK EXPIRED', '#886699');
+      }
+    }
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
 
     // Dash afterimage trail fade
@@ -3819,6 +4160,7 @@ class Player {
 
     // void shard
     if (jp('KeyV')) this.useVoidShard();
+    if (jp('KeyF')) activateHackware(this);
 
     // dash activation
     if ((jp('ShiftLeft')||jp('ShiftRight'))&&this.dashCooldown<=0&&this.hp>0) {
@@ -3920,9 +4262,14 @@ class Player {
     }
 
     ctx.save();
+    // Phase cloak: ghostly transparent player
+    if (this.cloakTimer > 0) {
+      const flicker = 0.15 + Math.sin(performance.now() * 0.01) * 0.1;
+      ctx.globalAlpha = flicker;
+    }
     // body
-    ctx.shadowBlur=15; ctx.shadowColor=col;
-    ctx.fillStyle=col;
+    ctx.shadowBlur=15; ctx.shadowColor=this.cloakTimer > 0 ? '#cc44ff' : col;
+    ctx.fillStyle=this.cloakTimer > 0 ? '#cc44ff' : col;
     ctx.beginPath();
     ctx.arc(sx,sy,7,0,TWO_PI);
     ctx.fill();
@@ -4253,6 +4600,13 @@ function drawHUD(player) {
       ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
       ctx.fillText(`V×${player.shards}`, statsX + 74, r2 + 22);
     }
+    // Hackware indicator (compact)
+    if (player.hackware) {
+      const hw = HACKWARE[player.hackware];
+      ctx.fillStyle=player.hackwareCooldown>0?'#665533':hw.colour; ctx.font=`${fs}px monospace`;
+      const hwX = player.shards > 0 ? statsX + 120 : statsX + 74;
+      ctx.fillText(`F:${hw.icon}`, hwX, r2 + 22);
+    }
     // Energy shield recharge indicator
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
       ctx.fillStyle='#4488ff'; ctx.font=`${fs}px monospace`;
@@ -4312,6 +4666,17 @@ function drawHUD(player) {
 
     if (player.shards > 0) {
       ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Void Shard ×${player.shards}`, colBase + 220, y + 22);
+    }
+    // Hackware indicator (landscape)
+    if (player.hackware) {
+      const hw = HACKWARE[player.hackware];
+      const hwCol = player.hackwareCooldown > 0 ? '#665533' : hw.colour;
+      ctx.fillStyle=hwCol;
+      const hwLabel = player.hackwareCooldown > 0
+        ? `[F] ${hw.icon}${hw.name} ${player.hackwareCooldown.toFixed(1)}s`
+        : `[F] ${hw.icon}${hw.name} RDY`;
+      const hwX = player.shards > 0 ? colBase + 380 : colBase + 220;
+      ctx.fillText(hwLabel, hwX, y + 22);
     }
     // Energy shield recharge indicator
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -4536,7 +4901,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -4858,6 +5223,7 @@ const game = {
       bestCombo: combo.best,
       runTime: this.runTime || 0,
       victory: victory,
+      hackware: p.hackware,
     };
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
@@ -4915,7 +5281,9 @@ const game = {
         damageLog:{...p.damageLog},
         enemiesKilled:p.enemiesKilled,
         hitsBlocked:p.hitsBlocked,
-        roomsCleared:p.roomsCleared
+        roomsCleared:p.roomsCleared,
+        hackware:p.hackware,
+        hackwareCooldown:p.hackwareCooldown
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -4963,6 +5331,8 @@ const game = {
     p.enemiesKilled=s.enemiesKilled||0;
     p.hitsBlocked=s.hitsBlocked||0;
     p.roomsCleared=s.roomsCleared||0;
+    p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
+    p.hackwareCooldown=s.hackwareCooldown||0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
@@ -5162,6 +5532,7 @@ const game = {
     updateShake(dt);
     updateCombo(dt);
     updateAmbient(dt);
+    updateHackwareEffects(dt);
     if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
@@ -5349,7 +5720,7 @@ const game = {
     }
 
     // environmental hazards (separate from traps — own cooldowns, bypass armor)
-    if (tile === T.PLASMA) {
+    if (tile === T.PLASMA && !isPlayerDamageImmune()) {
       // Continuous burn: direct HP reduction, bypasses defense/invincibility
       const burnDps = (3 + this.floor) * getDiff().envDmg;
       player.hp = Math.max(0, player.hp - burnDps * dt);
@@ -5365,7 +5736,7 @@ const game = {
       if (player.hp <= 0) { player.hp = 0; player.killedBy = 'Plasma'; audio.gameOver(); this.endRun(false); }
     }
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
-    if (tile === T.ARC && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
+    if (tile === T.ARC && !isPlayerDamageImmune() && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
       const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
       player.hp = Math.max(0, player.hp - zapDmg);
@@ -6012,6 +6383,7 @@ const game = {
 
     // hazard zones (ground effects — below items/enemies)
     drawHazardZones(cam.x, cam.y);
+    drawHackwareEffects(cam.x, cam.y);
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
@@ -6232,6 +6604,13 @@ const game = {
         ctx.fillText('Lv '+(curLvl)+'→'+(curLvl+1)+': '+opt.levelDesc(curLvl), cx + cw/2, cardY + 134);
       }
 
+      // Hackware badge
+      if (opt.isHackware) {
+        ctx.fillStyle=opt.colour;
+        ctx.font=`bold ${narrow?9:10}px monospace`;
+        ctx.fillText('⚙ HACKWARE [F]', cx + cw/2, cardY + 134);
+      }
+
       // Weapon stats line for weapon options
       if (opt.id && opt.id.startsWith('WEAPON_')) {
         ctx.fillStyle='#ffcc44';
@@ -6374,6 +6753,13 @@ const game = {
         ctx.fillStyle = '#888899';
         ctx.font = `${narrow ? 9 : 11}px monospace`;
         ctx.fillText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), cx + cw / 2, cardY + 108);
+      }
+
+      // Hackware badge
+      if (item.isHackware) {
+        ctx.fillStyle = item.colour;
+        ctx.font = `bold ${narrow ? 8 : 10}px monospace`;
+        ctx.fillText('⚙ HACKWARE [F]', cx + cw / 2, cardY + 108);
       }
 
       // Price
