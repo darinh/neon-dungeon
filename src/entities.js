@@ -291,7 +291,8 @@ class Enemy {
     if (!this.isShard) game.player.enemiesKilled++;
     const baseCr = CREDIT_VALUES[this.type] || 5;
     const creditSiphonMul = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul);
+    const corrosiveMul = game.modifier === 'CORROSIVE' ? 1.5 : 1;
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul);
     game.player.credits += cr;
     if (this.isBoss) game.bossesCleared++;
     // Vampiric perk: heal on kill
@@ -311,7 +312,7 @@ class Enemy {
     }
     // Bounty target: bonus rewards
     if (this._isBounty) {
-      const bCr = Math.round((30 + game.floor * 8) * creditSiphonMul);
+      const bCr = Math.round((30 + game.floor * 8) * creditSiphonMul * corrosiveMul);
       game.player.credits += bCr;
       game.player.score += 150 * game.floor;
       game.player.bountiesCollected++;
@@ -1952,6 +1953,7 @@ class Player {
       const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
       actual = Math.max(1, dmg - this.def - titaniumReduction);
     }
+    if (game.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
     if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
     const src = source || 'Unknown';
