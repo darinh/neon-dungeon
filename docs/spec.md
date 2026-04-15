@@ -409,11 +409,13 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
 | TELEPORTER   | 25      | 12  | Blinks around room, fires ranged bursts      | 22  |
 | SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot; **inflicts shock** | 25  |
+| SUMMONER     | 35      | 8   | Stays at range, periodically summons minion drones | 30  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
-GRENADIER appears floor 5+, TELEPORTER appears floor 6+, SNIPER appears floor 7+.
+GRENADIER appears floor 5+, TELEPORTER appears floor 6+, SUMMONER appears
+floor 6+, SNIPER appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -543,6 +545,42 @@ movement; punishes standing still.
   multiplier would produce unfair damage spikes.
 - **Cooldown between shots:** `max(2.5, 3.5 − floor × 0.1)` seconds,
   scaled by berserkerMul and OVERCLOCK.
+
+#### SUMMONER (floor 6+)
+
+Support enemy that periodically summons temporary DRONE minions. Creates a
+tactical priority puzzle: kill the summoner to stop reinforcements and
+instantly despawn its active minions, or deal with the swarm first.
+
+- **Behaviour:** Stays at 6–14 tile range. Retreats if player closes to
+  within 5 tiles (same retreat logic as GRENADIER — falls back to patrol if
+  wall-blocked). At range, periodically summons a DRONE minion.
+- **Summon cooldown:** `max(3.5, 5 − floor × 0.15)` seconds, scaled by
+  OVERCLOCK (÷1.2) and berserkerMul. Initial cooldown 2.0 s on spawn.
+- **Minion cap:** Maximum 3 active summoned drones at once. Dead summons are
+  pruned from the tracker before the cap is checked.
+- **Summoned minions:** Created via `pendingEnemySpawns` (deferred to next
+  frame, same as SPLITTER → SHARD). Summoned drones are marked
+  `_summoned = true` with a back-reference `_summonerRef`. They:
+  - Give **0 XP** and **0 credits** (prevents farming)
+  - Do not drop items
+  - Do not build combo streak
+  - Do not count toward `enemiesKilled`
+  - Are excluded from bounty candidate pool
+- **Cascade death:** When the summoner dies, all its active minions instantly
+  despawn (silent death — particles only, no rewards, no death effects, no
+  volatile explosions). The despawn sets `_despawning = true` before calling
+  `die()`, which exits early after spark particles.
+- **Stats:** HP 35, ATK 8, SPD 1.5, XP 30.
+- **Visual:** Violet (`#bb44ff`). Pulsing double-ring aura (outer solid ring,
+  inner rotating dashes). Summoning produces violet particles at both the
+  summoner and the spawn point.
+- **Audio:** `summon()` — rising harmonic sweep (sine 200→600, triangle
+  300→900, sine 500→1200, noise tail).
+- **Credits:** 12
+- **Cap:** 1 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite exclusion:** SUMMONERs never roll elite — the combination of elite
+  durability with continuous minion spawning would be a balance spike.
 
 ### Difficulty Modes
 

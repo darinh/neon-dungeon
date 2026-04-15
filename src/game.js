@@ -603,11 +603,19 @@ const game = {
       if (enemies[i].dead) enemies.splice(i,1);
     }
 
-    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs)
+    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs)
     if (pendingEnemySpawns.length) {
       for (const s of pendingEnemySpawns) {
+        // Skip orphan summons whose summoner died this frame
+        if (s._summoned && (!s._summonerRef || s._summonerRef.dead)) continue;
         const e = spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false);
         if (s._challengeWave) e._challengeWave = true;
+        if (s._summoned && s._summonerRef) {
+          e._summoned = true;
+          e._summonerRef = s._summonerRef;
+          e.xpValue = 0; // no XP farming from summons
+          s._summonerRef._summons.push(e);
+        }
         enemies.push(e);
       }
       pendingEnemySpawns.length = 0;
@@ -1162,7 +1170,7 @@ const game = {
           if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.3));
           const effectiveFloor = Math.min(this.floor + 1, 9);
           const typeCounts = {};
-          const TYPE_CAPS = { PHANTOM:1, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1 };
+          const TYPE_CAPS = { PHANTOM:1, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1, SUMMONER:1 };
           for (let j = 0; j < count; j++) {
             let type = pickEnemyType(effectiveFloor);
             if ((typeCounts[type]||0) >= (TYPE_CAPS[type]||99)) {
