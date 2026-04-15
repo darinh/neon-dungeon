@@ -1629,6 +1629,45 @@ Badges flow left-to-right from the safe-area left edge; overflow stops before
 minimap region (`W - 130 - safeRight`). Y position shifts up (`hudTop - 32`)
 when key indicators are present to avoid collision.
 
+### Augment System
+
+Cybernetic implants that provide permanent passive effects for the run. Max **3** equipped augments (`MAX_AUGMENTS`).
+
+**Acquisition:**
+- **Implant Shrine rooms**: New room type (`roomType: 'implant'`) on floors 2–9 (non-boss), ~50% spawn rate per floor. Tile `T.IMPLANT_SHRINE` (18) — glowing purple diamond at room center. Press E to activate: choose 1 of 2 offered augments. When at max slots, visiting gives credits instead.
+- **Vendor**: ~20% chance to sell an augment on floor 3+. Price: 120 + floor × 15.
+- No duplicates: owned augments are excluded from all offer rolls.
+
+**Augment Pool (12 augments):**
+
+| ID | Name | Icon | Colour | Effect |
+|----|------|------|--------|--------|
+| NEURAL_LINK | Neural Link | 🧠 | `#cc44ff` | +25% XP from all sources |
+| TITANIUM_PLATING | Titanium Plating | 🛡 | `#4488cc` | Reduce all damage taken by 1 (after DEF, min 1) |
+| MAGNETIC_FIELD | Magnetic Field | 🧲 | `#44ff88` | Double item pickup radius (0.7 → 1.4 tiles) |
+| THERMAL_OPTICS | Thermal Optics | 👁 | `#ffcc00` | Enemies always visible on minimap (dimmed in unvisited rooms) |
+| ADRENALINE_INJECTOR | Adrenaline Injector | 💉 | `#ff4444` | On kill: +30% move speed for 2s |
+| OVERCLOCKER | Overclocker | ⚡ | `#00ddff` | Hackware cooldowns −30% |
+| ECHO_MAPPER | Echo Mapper | 📡 | `#ffffff` | Reveal floor layout on minimap when entering a floor (dimmed, no details; does not satisfy EXPLORE quest or reveal secret rooms) |
+| CREDIT_SIPHON | Credit Siphon | 💰 | `#ffaa00` | +50% credits from all sources (kills, room clears, secrets, challenges, implant shrine fallback) |
+| SCAVENGER_NANITES | Scavenger Nanites | 🔧 | `#88ff44` | 10% chance on enemy kill: heal +5 HP (SHARDs excluded) |
+| KINETIC_AMPLIFIER | Kinetic Amplifier | 🚀 | `#ff8800` | +20% player projectile speed |
+| TEMPORAL_DILATION | Temporal Dilation | ⏳ | `#88ccff` | All enemies 15% slower (affects movement and retreat speed) |
+| REACTIVE_ARMOR | Reactive Armor | 💥 | `#ff6644` | When taking damage, emit a 2.5-tile damage pulse (10 + floor × 2 dmg, LOS-gated). 8s cooldown. |
+
+**Game State:** `AUGMENT_CHOICE` — 2-card UI (keyboard 1/2, arrows + Enter, mouse/touch). Pauses gameplay while selecting.
+
+**UI:**
+- Implant shrine rendered as pulsing purple `◆` glyph on the tile and room center overlay
+- Minimap: purple 3px POI marker
+- Status bar: `◆ N/3` badge showing augment count
+- Death recap: lists installed augments below perks
+- Adrenaline Injector and Reactive Armor cooldown shown as status badges
+
+**Save/Load:** `player.augments` object saved with game state. Old saves default to `{}` (no `SAVE_VERSION` bump required). Augment timers (`adrenalineTimer`, `reactiveArmorCD`) reset naturally.
+
+**Audio:** `audio.augmentChoice()` (4-note ascending crystalline chime), `audio.augmentInstall()` (digital installation beep), `audio.reactiveArmor()` (descending pulse).
+
 ---
 
 ## Changelog
@@ -1687,3 +1726,4 @@ when key indicators are present to avoid collision.
 | v31.0   | Challenge rooms: optional wave-based arena encounters. One per non-boss floor (2–9). `T.CHALLENGE_GATE` tile (17) — passable red/amber archway. Room sealed on entry (same pattern as boss seal), 2–3 waves of enemies (floor-scaled, one level harder), inter-wave pause with HUD counter, guaranteed rewards on completion (2 items + credits + XP + score). Wave enemies tagged `_challengeWave` for independent tracking. Drone phase check respects challenge seal. EXTERMINATE quest accounts for pending waves. Room-clear rewards excluded during active encounter. Sealed walls get red tint + minimap pulse + ambient WISP particles. Proximity hint on approach. `audio.challengeWave()` two-tone alarm SFX. No save format change (challenge state resets on floor load). SW cache v38 |
 | v32.0   | Perk choice system: deterministic perks replaced with choose-one-of-three at levels 2/4/6/8. 15-perk pool (`PERK_POOL`): 4 existing (Laser Sight, Threat Sense, Piercing Rounds, Energy Shield) + 11 new (Vampiric, Adrenaline, Rapid Fire, Critical Hit, Thick Armor, Berserker, Dash Master, Nano Repair, Explosive Kills, Multi-Shot, Second Wind). Auto-Laser capstone at level 10 unchanged. `PERK_CHOICE` game state with 3-card UI (keyboard 1/2/3, arrows+Enter, mouse/touch). `game.pendingPerkChoices[]` queue for multi-level jumps, rolled fresh per choice. `rollPerkChoices()` Fisher-Yates shuffle excluding owned. `applyPerk()` + `grantCapstone()` replace `checkPerkUnlocks()`. `player.effectiveAtk()` for Berserker scaling. Explosive Kills merges with VOLATILE modifier (shared AoE, perk-only doesn't hurt player). Multi-Shot spawns bonus 60%-damage projectile directly (no recursive shoot). Critical Hit rolled per projectile (`proj.isCrit`). Second Wind revives at 30% HP once per floor. Status badges for Berserker and Second Wind. Death recap shows chosen perks. `audio.perkChoice()` + `audio.secondWind()` SFX. SAVE_VERSION 9.0. SW cache v39 |
 | v33.0   | Procedural ambient music system: 4-layer synthesised soundtrack via Web Audio. Drone (2 detuned sawtooths → lowpass → LFO), Pulse (sub kick + hi-hat), Arp (minor pentatonic square wave sequences, 70% probability), Bass (triangle root pulses). 5 music states: idle/explore/combat/boss/tension — crossfade transitions (1.5s). Floor-dependent tuning: C2→B♭1→A♭1→F1 root descent, 100→130 BPM acceleration. Combat/boss tempo boost. Separate music bus (gain 0.12 → dedicated compressor → destination) isolates from SFX dynamics. `music.tick()` in main loop with 250ms Web Audio lookahead scheduling. Cached noise buffer for hi-hats. Pause mutes + stops scheduling (no `AudioContext.suspend()`). Music state resolved per frame in `updatePlaying()`: boss > tension > combat > explore. `music.setFloor(n)` retunes drone via exponential ramp. `music.stop()` on endRun/menu. No save format change. SW cache v40 |
+| v34.0   | Augment system: cybernetic implants with permanent passive effects. 12 augments (Neural Link, Titanium Plating, Magnetic Field, Thermal Optics, Adrenaline Injector, Overclocker, Echo Mapper, Credit Siphon, Scavenger Nanites, Kinetic Amplifier, Temporal Dilation, Reactive Armor). Max 3 per run. New `implant` room type (floors 2–9, ~50% spawn rate) with `T.IMPLANT_SHRINE` tile (18). `AUGMENT_CHOICE` game state with 2-card UI. Vendor sells augments (~20% on floor 3+). Capped players get credits at shrines. `AUGMENTS` table, `rollAugmentChoices()`, `makeAugmentShopOption()`, `hasAugment()` helper. Effect hooks: `gainXP()` (Neural Link ×1.25), `takeDamage()` (Titanium Plating −1, Reactive Armor pulse), item pickup (Magnetic Field ×2 radius), `drawMinimap()` (Thermal Optics + Echo Mapper), `Enemy.die()` (Adrenaline Injector speed buff, Scavenger Nanites heal, Credit Siphon ×1.5), `activateHackware()` (Overclocker ×0.7 CD), `Projectile` constructor (Kinetic Amplifier ×1.2 speed), `Enemy.moveToward()` (Temporal Dilation ×0.85). `player.augments` saved (no SAVE_VERSION bump — defaults to {} on old saves). Status badges for augment count, Adrenaline buff, Reactive cooldown. Death recap lists augments. 3 new audio SFX. SW cache v41 |

@@ -30,7 +30,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -241,7 +241,7 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE') {
+      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE' || game.state === 'AUGMENT_CHOICE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -498,7 +498,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -872,6 +872,29 @@ const audio = (() => {
       osc('triangle', 400, 1600, 0.08, t + 0.1, 0.4, bus);
       osc('sine', 100, 100, 0.15, t, 0.3);
       noise(0.1, t + 0.05, 0.15, 2000, bus);
+    },
+    augmentChoice() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.5, 0.9);
+      [523, 659, 880, 1047].forEach((f, i) => {
+        osc('sine',     f, f*1.02, 0.12, t + i * 0.07, 0.3, bus);
+        osc('triangle', f*2, f*2.02, 0.05, t + i * 0.07, 0.25, bus);
+      });
+      noise(0.06, t, 0.04, 5000, bus);
+    },
+    augmentInstall() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.6);
+      osc('square', 300, 1200, 0.10, t, 0.15, bus);
+      osc('sine',   600, 2400, 0.08, t + 0.05, 0.12, bus);
+      osc('sine',   150, 150,  0.12, t, 0.2);
+      noise(0.12, t + 0.02, 0.06, 3000, bus);
+    },
+    reactiveArmor() {
+      const c = getCtx(); const t = c.currentTime;
+      osc('sawtooth', 200, 80, 0.15, t, 0.12);
+      osc('square', 150, 60, 0.1, t + 0.02, 0.1);
+      noise(0.18, t, 0.08, 1200);
     },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
@@ -1429,7 +1452,7 @@ function activateHackware(player) {
   if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
-  player.hackwareCooldown = hw.cooldown;
+  player.hackwareCooldown = hw.cooldown * (hasAugment('OVERCLOCKER') ? 0.7 : 1);
   const map = game.dungeon ? game.dungeon.map : null;
 
   switch (player.hackware) {
@@ -2157,6 +2180,19 @@ function getStatusEffects(player) {
   if (player.perks.SECOND_WIND && !player.secondWindUsed) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
   }
+  // Augment count
+  const augCount = Object.keys(player.augments || {}).length;
+  if (augCount > 0) {
+    fx.push({ id: 'augments', icon: '◆', label: augCount + '/' + MAX_AUGMENTS, colour: '#cc44ff' });
+  }
+  // Adrenaline Injector speed buff active
+  if (player.adrenalineTimer > 0) {
+    fx.push({ id: 'adr-buff', icon: '💉', label: player.adrenalineTimer.toFixed(1)+'s', colour: '#ff4444' });
+  }
+  // Reactive Armor cooldown
+  if (hasAugment('REACTIVE_ARMOR') && player.reactiveArmorCD > 0) {
+    fx.push({ id: 'reactive-cd', icon: '💥', label: Math.ceil(player.reactiveArmorCD)+'s', colour: '#993322' });
+  }
   return fx;
 }
 
@@ -2429,7 +2465,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a'};
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a'};
   const specialRooms = [];
   const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -2646,6 +2682,21 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Implant Room (floor 2+, non-boss, ~50% chance): augment shrine ─────
+  let implantRoom = null;
+  if (floorNum >= 2 && !bossRoom && Math.random() < 0.5) {
+    const implantEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && !r.roomType &&
+      !specialRooms.includes(r) && r.w * r.h >= 16
+    );
+    if (implantEligible.length > 0) {
+      implantRoom = implantEligible[rndInt(0, implantEligible.length - 1)];
+      implantRoom.roomType = 'implant';
+      specialRooms.push(implantRoom);
+      map[implantRoom.cy][implantRoom.cx] = T.IMPLANT_SHRINE;
+    }
+  }
+
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
@@ -2726,7 +2777,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -2807,7 +2858,8 @@ class Projectile {
   constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     this.x=x; this.y=y;
     [this.dx,this.dy]=norm(dx,dy);
-    this.spd=spd; this.dmg=dmg;
+    this.spd= fromPlayer && hasAugment('KINETIC_AMPLIFIER') ? spd * 1.2 : spd;
+    this.dmg=dmg;
     this.maxRange=range; this.travelled=0;
     this.colour=colour; this.piercing=piercing;
     this.maxPierces=piercing?Infinity:0;
@@ -3148,6 +3200,62 @@ function grantCapstone(player) {
   }
 }
 
+// ─── Augments (Cybernetic Implants) ──────────────────────────────────────────
+const MAX_AUGMENTS = 3;
+const AUGMENTS = {
+  NEURAL_LINK:      { name:'Neural Link',         icon:'🧠', colour:'#cc44ff', desc:'+25% XP from all sources' },
+  TITANIUM_PLATING: { name:'Titanium Plating',     icon:'🛡', colour:'#4488cc', desc:'Reduce all damage by 1' },
+  MAGNETIC_FIELD:   { name:'Magnetic Field',       icon:'🧲', colour:'#44ff88', desc:'Double item pickup radius' },
+  THERMAL_OPTICS:   { name:'Thermal Optics',       icon:'👁', colour:'#ffcc00', desc:'Enemies visible on minimap' },
+  ADRENALINE_INJECTOR:{ name:'Adrenaline Injector',icon:'💉', colour:'#ff4444', desc:'Kill: +30% speed for 2s' },
+  OVERCLOCKER:      { name:'Overclocker',          icon:'⚡', colour:'#00ddff', desc:'Hackware cooldowns −30%' },
+  ECHO_MAPPER:      { name:'Echo Mapper',          icon:'📡', colour:'#ffffff', desc:'Reveal floor layout on entry' },
+  CREDIT_SIPHON:    { name:'Credit Siphon',        icon:'💰', colour:'#ffaa00', desc:'+50% credits from all sources' },
+  SCAVENGER_NANITES:{ name:'Scavenger Nanites',    icon:'🔧', colour:'#88ff44', desc:'10% kill chance: +5 HP' },
+  KINETIC_AMPLIFIER:{ name:'Kinetic Amplifier',    icon:'🚀', colour:'#ff8800', desc:'+20% projectile speed' },
+  TEMPORAL_DILATION:{ name:'Temporal Dilation',     icon:'⏳', colour:'#88ccff', desc:'All enemies 15% slower' },
+  REACTIVE_ARMOR:   { name:'Reactive Armor',        icon:'💥', colour:'#ff6644', desc:'When hit, emit damage pulse' },
+};
+const AUGMENT_KEYS = Object.keys(AUGMENTS);
+function hasAugment(id) { return !!(game.player && game.player.augments[id]); }
+
+function rollAugmentChoices(player, count) {
+  const owned = player.augments || {};
+  const available = AUGMENT_KEYS.filter(id => !owned[id]);
+  // Fisher-Yates shuffle
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = rndInt(0, i);
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  return available.slice(0, count);
+}
+
+function makeAugmentShopOption(exclude) {
+  const owned = game.player ? game.player.augments || {} : {};
+  const slots = Object.keys(owned).length;
+  if (slots >= MAX_AUGMENTS) return null;
+  const available = AUGMENT_KEYS.filter(id => !owned[id] && id !== exclude);
+  if (!available.length) return null;
+  const id = available[rndInt(0, available.length - 1)];
+  const aug = AUGMENTS[id];
+  return {
+    id: 'SHOP_AUG_' + id, name: aug.name, isAugment: true,
+    desc: aug.icon + ' ' + aug.desc + ' [AUGMENT]',
+    colour: aug.colour, price: 120 + (game.floor || 1) * 15,
+    fn: p => {
+      // Guard: don't exceed max slots or install duplicates
+      if (Object.keys(p.augments).length >= MAX_AUGMENTS || p.augments[id]) {
+        game.msg('AUGMENT SLOTS FULL', '#993366');
+        return;
+      }
+      p.augments[id] = true;
+      audio.augmentInstall();
+      game.msg(aug.icon + ' ' + aug.name + ' INSTALLED', aug.colour);
+      spawnParticles(p.x, p.y, 'EXPLOSION', aug.colour, 12);
+    }
+  };
+}
+
 // ─── Vendor / Shop ───────────────────────────────────────────────────────────
 // Shop prices are explicit per upgrade id (not derived from rarity which is spawn weight)
 const SHOP_PRICES = {
@@ -3197,6 +3305,11 @@ function generateShopItems(floor, player, dungeon) {
       colour:hw.colour, price: 90 + floor * 10,
       fn: p => { p.hackware=hwKey; p.hackwareCooldown=0; game.msg(hw.icon+' '+hw.name+' INSTALLED',hw.colour); }
     });
+  }
+  // Offer an augment on floor 3+ (~20% chance, if player has room)
+  if (floor >= 3 && Math.random() < 0.2) {
+    const augOpt = makeAugmentShopOption(null);
+    if (augOpt) pool.push(augOpt);
   }
   // Fill remaining slots from UPGRADES pool
   const used = new Set(pool.map(p => p.id));
@@ -3513,7 +3626,8 @@ class Enemy {
     if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
     if (!this.isShard) game.player.enemiesKilled++;
     const baseCr = CREDIT_VALUES[this.type] || 5;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul);
+    const creditSiphonMul = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul);
     game.player.credits += cr;
     if (this.isBoss) game.bossesCleared++;
     // Vampiric perk: heal on kill
@@ -3521,6 +3635,15 @@ class Enemy {
       const heal = 2;
       game.player.hp = Math.min(game.player.maxHp, game.player.hp + heal);
       spawnDmgText(game.player.x, game.player.y, '+'+heal, '#ff3366');
+    }
+    // SCAVENGER_NANITES augment: 10% kill chance to heal 5 HP
+    if (hasAugment('SCAVENGER_NANITES') && !this.isShard && Math.random() < 0.10) {
+      game.player.hp = Math.min(game.player.maxHp, game.player.hp + 5);
+      spawnDmgText(game.player.x, game.player.y, '+5', '#88ff44');
+    }
+    // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
+    if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
+      game.player.adrenalineTimer = 2;
     }
     // Death explosion: VOLATILE modifier and/or EXPLOSIVE_KILLS perk (shared helper, non-stacking)
     const wantExplosion = (game.modifier === 'VOLATILE' || game.player.perks.EXPLOSIVE_KILLS) && !this.isBoss && !this._volatileKill;
@@ -3607,7 +3730,7 @@ class Enemy {
   }
 
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
-    spd = modSpeed(spd) * this.slowFactor * this.berserkerMul();
+    spd = modSpeed(spd) * this.slowFactor * this.berserkerMul() * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     let [dx,dy]=norm(tx-this.x,ty-this.y);
     const nx=this.x+dx*spd*dt, ny=this.y+dy*spd*dt;
     if (ignoreWalls) { this.x=nx; this.y=ny; return; }
@@ -3736,7 +3859,7 @@ class Enemy {
     if (los && d < 5) {
       // Too close — retreat
       const [dx, dy] = norm(this.x - player.x, this.y - player.y);
-      const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm;
+      const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
       const nx = this.x + dx * retreatSpd * dt;
       const ny = this.y + dy * retreatSpd * dt;
       const fx = Math.floor(nx), fy = Math.floor(this.y);
@@ -4375,6 +4498,10 @@ class Player {
     this.cloakTimer=0;          // phase cloak duration remaining
     this.regenTimer=0;          // HP_REGEN perk timer
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
+    // Augments — passive cybernetic implants
+    this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
+    this.adrenalineTimer=0;     // ADRENALINE_INJECTOR speed buff timer
+    this.reactiveArmorCD=0;     // REACTIVE_ARMOR cooldown
   }
 
   logDamage(source, amount) {
@@ -4390,7 +4517,8 @@ class Player {
   }
 
   gainXP(amount) {
-    this.xp+=Math.round(amount * getMetaXPMultiplier());
+    const augMul = hasAugment('NEURAL_LINK') ? 1.25 : 1;
+    this.xp+=Math.round(amount * getMetaXPMultiplier() * augMul);
     while (this.xp>=this.xpNeeded() && this.level<10) {
       this.xp-=this.xpNeeded();
       this.level++;
@@ -4426,7 +4554,8 @@ class Player {
       triggerShake(4, 0.15);
       return;
     }
-    const actual=Math.max(1,dmg-this.def);
+    const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
+    const actual=Math.max(1,dmg-this.def-titaniumReduction);
     this.hp=Math.max(0,this.hp-actual);
     const src = source || 'Unknown';
     this.logDamage(src, actual);
@@ -4436,6 +4565,20 @@ class Player {
     triggerShake(Math.min(actual * 0.4, 8), 0.2);
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
+    // REACTIVE_ARMOR augment: emit damage pulse on hit
+    if (hasAugment('REACTIVE_ARMOR') && this.reactiveArmorCD <= 0) {
+      this.reactiveArmorCD = 8;
+      audio.reactiveArmor();
+      const rRadius = 2.5;
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#ff6644', 14);
+      const map = game.dungeon ? game.dungeon.map : null;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (dist(this.x, this.y, e.x, e.y) < rRadius && (!map || hasLOS(this.x, this.y, e.x, e.y, map))) {
+          e.takeDamage(10 + game.floor * 2, 'Reactive Armor');
+        }
+      }
+    }
     if (this.hp<=0) {
       // SECOND_WIND perk: revive once per floor
       if (this.perks.SECOND_WIND && !this.secondWindUsed) {
@@ -4540,6 +4683,9 @@ class Player {
       }
     }
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
+    // Augment timers
+    if (this.adrenalineTimer > 0) this.adrenalineTimer = Math.max(0, this.adrenalineTimer - dt);
+    if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
 
     // Dash afterimage trail fade
     for (let i=this.dashTrail.length-1;i>=0;i--) {
@@ -4595,6 +4741,7 @@ class Player {
     }
 
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
+    if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
     let mx=0,my=0;
     if (keys.has('KeyW')||keys.has('ArrowUp'))    my=-1;
@@ -4835,6 +4982,17 @@ function drawWorld(dungeon, camX, camY) {
           ctx.font='13px monospace';
           ctx.fillText('◈',sx+2,sy+14);
           break;
+        case T.IMPLANT_SHRINE: {
+          ctx.fillStyle='#0f0a1a';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          const impPulse = 0.6 + 0.4 * Math.sin(lastTime / 700 + tx * 0.9 + ty * 0.6);
+          ctx.shadowBlur=12; ctx.shadowColor='#cc44ff';
+          ctx.fillStyle=`rgba(204,68,255,${impPulse})`;
+          ctx.font='14px monospace';
+          ctx.fillText('◆',sx+3,sy+14);
+          break;
+        }
         case T.LORE: {
           ctx.fillStyle='#1a1208';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -5229,17 +5387,27 @@ function drawMinimap(dungeon, player) {
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
   const pois = [];
+  const echoMap = game.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
   for (let ty=0;ty<MAP_H;ty++) {
     for (let tx=0;tx<MAP_W;tx++) {
-      if (!dungeon.visited[ty][tx]) continue;
+      const visited = dungeon.visited[ty][tx];
+      if (!visited && !echoMap) continue;
       const tile=dungeon.map[ty][tx];
       const px2=MX+tx*sx, py2=MY+ty*sy;
       let col=null;
+      if (!visited && echoMap) {
+        // Echo mapper: dimmed layout, no POIs, no details, skip secret rooms
+        if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
+        if (tile===T.WALL||tile===T.CRACKED) col='#0d0d1a';
+        else if (isPassable(tile)||tile===T.DOOR) col='#141428';
+        if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
+        continue;
+      }
       if (tile===T.WALL||tile===T.CRACKED) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
               (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
-      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW) col='#202040';
+      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE) col='#202040';
       else if (tile===T.PLASMA) col='#ff6600';
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
@@ -5252,20 +5420,22 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.CHALLENGE_GATE) col='#ff6633';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
       // Collect POI tiles for marker overlay
-      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE) {
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE) {
         pois.push({tile, px:px2+sx/2, py:py2+sy/2});
       }
     }
   }
 
-  // enemies in visited areas
+  // enemies — visible in visited areas, or everywhere with THERMAL_OPTICS
+  const thermalOptics = hasAugment('THERMAL_OPTICS');
   for (const e of enemies) {
-    if (e.dead||!dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
+    if (e.dead) continue;
+    if (!thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
     if (e.elite && e.eliteAffix) {
       ctx.fillStyle=ELITE_AFFIXES[e.eliteAffix].colour;
       ctx.fillRect(MX+e.x*sx-1.5,MY+e.y*sy-1.5,3,3);
     } else {
-      ctx.fillStyle='#ff3333';
+      ctx.fillStyle= thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)] ? '#ff666688' : '#ff3333';
       ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
     }
   }
@@ -5277,6 +5447,7 @@ function drawMinimap(dungeon, player) {
     if (p.tile===T.STAIRS||p.tile===T.TERMINAL) { col='#ffffff'; sz=3; }
     else if (p.tile===T.VENDOR) { col='#39ff14'; sz=3; }
     else if (p.tile===T.CHALLENGE_GATE) { col='#ff6633'; sz=3; }
+    else if (p.tile===T.IMPLANT_SHRINE) { col='#cc44ff'; sz=3; }
     else { col='#ffb700'; sz=2; } // LORE
     ctx.globalAlpha=pulse;
     ctx.shadowBlur=5; ctx.shadowColor=col;
@@ -5521,6 +5692,9 @@ const game = {
   challengeEntrances: [],
   challengeWaveDelay: 0,
   challengeComplete: false,
+  // Augment state
+  augmentChoice: null,        // {options: [id, id], selected: 0}
+  mapRevealed: false,         // ECHO_MAPPER: show floor layout on minimap
   // Perk choice state
   pendingPerkChoices: [], // queued level milestones awaiting perk selection
   perkChoice: null,       // {options: [id, id, id], selected: 0}
@@ -5592,6 +5766,12 @@ const game = {
     // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
     populateFloor(this.dungeon,n);
+    // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
+    if (hasAugment('ECHO_MAPPER')) {
+      this.mapRevealed = true;
+    } else {
+      this.mapRevealed = false;
+    }
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
     messages=[];
@@ -5651,6 +5831,7 @@ const game = {
     combo.best=0;
     this.pendingPerkChoices=[];
     this.perkChoice=null;
+    this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
     this.loadFloor(1);
@@ -5705,7 +5886,7 @@ const game = {
       items.push(new Item(ix, iy));
     }
     // Bonus credit pickup worth floor-scaled amount
-    const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier() * getDiff().creditMul);
+    const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier() * getDiff().creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
     this.player.credits += secretCr;
     this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
@@ -5799,7 +5980,8 @@ const game = {
         roomsCleared:p.roomsCleared,
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
-        secondWindUsed:p.secondWindUsed
+        secondWindUsed:p.secondWindUsed,
+        augments:p.augments||{}
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -5813,6 +5995,7 @@ const game = {
     combo.best=0;
     this.pendingPerkChoices=[];
     this.perkChoice=null;
+    this.augmentChoice=null;
     let save;
     try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ save = null; }
     if (!save || !save.player || save.v !== SAVE_VERSION) {
@@ -5852,6 +6035,7 @@ const game = {
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
+    p.augments=s.augments||{};
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
@@ -5869,6 +6053,7 @@ const game = {
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
       case 'PERK_CHOICE':    this.updatePerkChoice(); break;
+      case 'AUGMENT_CHOICE': this.updateAugmentChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
@@ -5986,7 +6171,8 @@ const game = {
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
-      if (!it.dead && dist(player.x,player.y,it.x,it.y)<0.7) {
+      const pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
+      if (!it.dead && dist(player.x,player.y,it.x,it.y)<pickupRadius) {
         if (it.isKey) {
           audio.pickup();
           items.splice(i,1);
@@ -5994,8 +6180,8 @@ const game = {
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
           continue;
         }
-        // Defer upgrade pickup if a perk choice is pending (don't override PERK_CHOICE)
-        if (this.pendingPerkChoices.length || this.perkChoice) continue;
+        // Defer upgrade pickup if a perk/augment choice is pending
+        if (this.pendingPerkChoices.length || this.perkChoice || this.augmentChoice) continue;
         audio.pickup();
         items.splice(i,1);
         // Generate 2 upgrade options
@@ -6036,7 +6222,7 @@ const game = {
         clears++;
         lastCx = room.cx; lastCy = room.cy;
         const d = getDiff();
-        const cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul);
+        const cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         player.credits += cr;
         player.score += 50 * this.floor;
         player.roomsCleared++;
@@ -6294,9 +6480,34 @@ const game = {
         }
         if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at shrine',colour:'#aa00ff'};
       }
+      // Implant shrine interaction
+      if (r.roomType === 'implant' && !r.implantUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+          r.implantUsed = true;
+          const slots = Object.keys(player.augments).length;
+          if (slots >= MAX_AUGMENTS) {
+            // Capped: give credits instead
+            const cr = 50 + game.floor * 15;
+            const siphon = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
+            player.credits += Math.round(cr * siphon);
+            this.msg('AUGMENT SLOTS FULL — +' + Math.round(cr * siphon) + ' CR', '#cc44ff');
+            spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#cc44ff', 12);
+          } else {
+            const opts = rollAugmentChoices(player, 2);
+            if (opts.length === 0) {
+              this.msg('ALL AUGMENTS OWNED', '#cc44ff');
+            } else {
+              this.augmentChoice = { options: opts, selected: 0, room: r };
+              this.setState('AUGMENT_CHOICE');
+              audio.augmentChoice();
+            }
+          }
+        }
+        if (!r.implantUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press E at implant shrine',colour:'#cc44ff'};
+      }
       if (r.shopItems && r.shopItems.some(i => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
-          // Revalidate shop items (maxed upgrades, stale prices, unneeded keys)
+          // Revalidate shop items (maxed upgrades, stale prices, unneeded keys, owned/capped augments)
           for (const si of r.shopItems) {
             if (si.sold) continue;
             if (si.persistent && player.upgrades[si.id] >= si.maxLevel) { si.sold = true; continue; }
@@ -6306,6 +6517,11 @@ const game = {
             if (si.id && si.id.startsWith('SHOP_KEY_')) {
               const kc = si.id.replace('SHOP_KEY_','').toLowerCase();
               if (player.keys[kc] > 0) si.sold = true;
+            }
+            // Mark augment items as sold if already owned or at cap
+            if (si.isAugment && si.id && si.id.startsWith('SHOP_AUG_')) {
+              const augId = si.id.replace('SHOP_AUG_','');
+              if (player.augments[augId] || Object.keys(player.augments).length >= MAX_AUGMENTS) si.sold = true;
             }
           }
           if (!r.shopItems.some(i => !i.sold)) continue; // all invalidated
@@ -6458,7 +6674,7 @@ const game = {
             audio.roomClear();
             // Rewards
             const d = getDiff();
-            const cr2 = Math.round(this.floor * 20 * getMetaCreditMultiplier() * d.creditMul);
+            const cr2 = Math.round(this.floor * 20 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
             player.credits += cr2;
             player.score += 500 * this.floor;
             player.gainXP(this.floor * 15);
@@ -6597,6 +6813,131 @@ const game = {
     this.perkChoice = null;
     if (this.pendingPerkChoices.length) { this.openNextPerkChoice(); return; }
     this.setState('PLAYING');
+  },
+
+  // ─── Augment Choice ──────────────────────────────────────────────────────
+  openAugmentChoice(options) {
+    this.augmentChoice = { options, selected: 0 };
+    this.setState('AUGMENT_CHOICE');
+    audio.augmentChoice();
+  },
+
+  updateAugmentChoice() {
+    const ac = this.augmentChoice;
+    if (!ac) { this.setState('PLAYING'); return; }
+    if (jp('Digit1')) { this.applyAugmentChoice(0); return; }
+    if (jp('Digit2') && ac.options.length > 1) { this.applyAugmentChoice(1); return; }
+    if (jp('ArrowLeft') || jp('KeyA'))  ac.selected = Math.max(0, ac.selected - 1);
+    if (jp('ArrowRight')|| jp('KeyD'))  ac.selected = Math.min(ac.options.length - 1, ac.selected + 1);
+    if (jp('Enter') || jp('Space'))     { this.applyAugmentChoice(ac.selected); return; }
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const count = ac.options.length;
+      const cw = narrow ? Math.min(180, (W - 20) / count - 8) : Math.min(240, (W - 40) / count - 12);
+      const gap = narrow ? 10 : 16;
+      const totalW = cw * count + gap * (count - 1);
+      const startX = (W - totalW) / 2;
+      const cardY = H * 0.22;
+      const cardH = narrow ? Math.min(240, H * 0.52) : Math.min(280, H * 0.48);
+      for (let i = 0; i < count; i++) {
+        const cx = startX + i * (cw + gap);
+        if (mouse.x >= cx && mouse.x <= cx + cw && mouse.y >= cardY && mouse.y <= cardY + cardH) {
+          this.applyAugmentChoice(i); return;
+        }
+      }
+    }
+  },
+
+  applyAugmentChoice(idx) {
+    const ac = this.augmentChoice;
+    if (!ac || idx < 0 || idx >= ac.options.length) { this.setState('PLAYING'); return; }
+    const id = ac.options[idx];
+    const aug = AUGMENTS[id];
+    this.player.augments[id] = true;
+    audio.augmentInstall();
+    this.msg(aug.icon + ' ' + aug.name + ' INSTALLED', aug.colour);
+    spawnParticles(this.player.x, this.player.y, 'EXPLOSION', aug.colour, 15);
+    this.augmentChoice = null;
+    this.setState('PLAYING');
+  },
+
+  renderAugmentChoice() {
+    const ac = this.augmentChoice;
+    if (!ac) return;
+    const narrow = layout.compact;
+    ctx.save();
+    // Dimmed overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, W, H);
+    // Title
+    const titleFs = narrow ? 18 : 24;
+    ctx.font = 'bold ' + titleFs + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 10; ctx.shadowColor = '#cc44ff';
+    ctx.fillStyle = '#cc44ff';
+    const slots = Object.keys(this.player.augments).length;
+    ctx.fillText('CHOOSE AUGMENT (' + slots + '/' + MAX_AUGMENTS + ')', W / 2, H * 0.14);
+    ctx.shadowBlur = 0;
+    // Subtitle
+    ctx.font = (narrow ? 10 : 12) + 'px monospace';
+    ctx.fillStyle = '#8866aa';
+    ctx.fillText('Cybernetic implant — permanent passive effect', W / 2, H * 0.14 + titleFs + 4);
+    // Cards
+    const count = ac.options.length;
+    const cw = narrow ? Math.min(180, (W - 20) / count - 8) : Math.min(240, (W - 40) / count - 12);
+    const gap = narrow ? 10 : 16;
+    const totalW = cw * count + gap * (count - 1);
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.22;
+    const cardH = narrow ? Math.min(240, H * 0.52) : Math.min(280, H * 0.48);
+    for (let i = 0; i < count; i++) {
+      const id = ac.options[i];
+      const aug = AUGMENTS[id];
+      const cx = startX + i * (cw + gap);
+      const sel = i === ac.selected;
+      // Card background
+      ctx.fillStyle = sel ? '#1a0a2a' : '#0d0615';
+      ctx.strokeStyle = sel ? aug.colour : '#442266';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.fillRect(cx, cardY, cw, cardH);
+      ctx.strokeRect(cx, cardY, cw, cardH);
+      if (sel) {
+        ctx.shadowBlur = 12; ctx.shadowColor = aug.colour;
+        ctx.strokeRect(cx, cardY, cw, cardH);
+        ctx.shadowBlur = 0;
+      }
+      // Icon
+      const iconFs = narrow ? 28 : 36;
+      ctx.font = iconFs + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = aug.colour;
+      ctx.fillText(aug.icon, cx + cw / 2, cardY + (narrow ? 35 : 45));
+      // Name
+      const nameFs = narrow ? 11 : 13;
+      ctx.font = 'bold ' + nameFs + 'px monospace';
+      ctx.fillStyle = aug.colour;
+      ctx.fillText(aug.name, cx + cw / 2, cardY + (narrow ? 58 : 72));
+      // Description — word wrap
+      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.fillStyle = '#ccbbdd';
+      const words = aug.desc.split(' ');
+      let line = '', lineY = cardY + (narrow ? 75 : 92);
+      const maxW = cw - 16;
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxW && line) {
+          ctx.fillText(line, cx + cw / 2, lineY);
+          lineY += narrow ? 13 : 15;
+          line = w;
+        } else { line = test; }
+      }
+      if (line) ctx.fillText(line, cx + cw / 2, lineY);
+      // Key hint
+      ctx.font = (narrow ? 9 : 10) + 'px monospace';
+      ctx.fillStyle = sel ? '#ffffff' : '#665588';
+      ctx.fillText('[' + (i + 1) + ']', cx + cw / 2, cardY + cardH - (narrow ? 8 : 12));
+    }
+    ctx.restore();
   },
 
   // ─── Vendor Shop ─────────────────────────────────────────────────────────
@@ -6920,6 +7261,7 @@ const game = {
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
+      case 'AUGMENT_CHOICE': this.renderPlaying(); this.renderAugmentChoice(); break;
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'READING':        this.renderPlaying(); this.renderReading(); break;
       case 'ARCHIVES':  this.renderArchives(); break;
@@ -7065,6 +7407,14 @@ const game = {
         ctx.shadowBlur=15; ctx.shadowColor='#aa00ff'; ctx.globalAlpha=0.6+Math.sin(Date.now()/500)*0.2;
         ctx.fillStyle='#aa00ff'; ctx.font='16px monospace'; ctx.textAlign='center';
         ctx.fillText('☆', sx, sy+5);
+        ctx.restore();
+      }
+      if (r.roomType === 'implant' && !r.implantUsed) {
+        const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
+        ctx.save();
+        ctx.shadowBlur=18; ctx.shadowColor='#cc44ff'; ctx.globalAlpha=0.6+Math.sin(Date.now()/600)*0.3;
+        ctx.fillStyle='#cc44ff'; ctx.font='18px monospace'; ctx.textAlign='center';
+        ctx.fillText('◆', sx, sy+6);
         ctx.restore();
       }
       if (r.shopItems && r.shopItems.some(i => !i.sold)) {
@@ -8066,6 +8416,14 @@ const game = {
       ctx.fillStyle = '#668899';
       const perkNames = ownedPerks.map(id => PERK_POOL[id].icon + ' ' + PERK_POOL[id].name).join('  ');
       ctx.fillText(perkNames, W/2, y); y += narrow ? 16 : 20;
+    }
+    // Augments installed this run
+    const ownedAugs = Object.keys(this.player.augments || {}).filter(id => AUGMENTS[id]);
+    if (ownedAugs.length) {
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      ctx.fillStyle = '#9966cc';
+      const augNames = ownedAugs.map(id => AUGMENTS[id].icon + ' ' + AUGMENTS[id].name).join('  ');
+      ctx.fillText(augNames, W/2, y); y += narrow ? 16 : 20;
     }
     // Run stats
     y += narrow ? 2 : 4;
