@@ -189,6 +189,88 @@ mapper path shows crates as wall-like obstacles.
 **Audio: `audio.crateBreak()`** — metallic impact: sine 150→40 Hz + square
 90→25 Hz + broadband noise + 3 staggered debris clinks (sine 600–1400→half Hz).
 
+### Alarm Beacons (floor 4+)
+
+**Concept:** Environmental alarm devices that create time-pressure moments.
+When the player enters a room containing an active beacon, a countdown starts.
+Destroy it before time runs out or face a reinforcement wave. Adds "rush to
+the beacon!" tactical decisions and rewards aggressive, precise play.
+
+**Placement:** 0–1 per qualifying normal room (not spawn, boss, secret,
+challenge, event, implant, vendor, or any special `roomType`). Floor 4+ only.
+Room must be ≥ 5×5 tiles. ~40% chance per eligible room. Interior position
+(≥ 2 tiles from room boundary), must be on `T.FLOOR`. Placed before enemies
+during floor population.
+
+**Entity: `beacons[]` array.** Each entry:
+`{ x, y, hp, maxHp, active, timer, dead, room, floor, bob, ringTimer }`.
+HP scales with floor: `10 + floor × 3`. Entity-only (no tile type) — does
+not block movement, projectiles, or LOS.
+
+**Countdown:** 4 seconds (`BEACON_COUNTDOWN`). Starts when the player's
+position is within the beacon's room bounds. One-shot: once triggered or
+destroyed, the beacon is removed from the array.
+
+**Activation:**
+- Player enters room → `active = true`, timer starts at 4 s.
+- `audio.beaconAlarm()` plays, HUD message "⚠ ALARM BEACON ACTIVE".
+- Visual: rapid red flashing diamond, expanding concentric ring pulses,
+  countdown number displayed above beacon.
+
+**On countdown expiry (timer ≤ 0):**
+- Beacon is removed (`dead = true`).
+- Spawns 2–3 reinforcement enemies via `pendingEnemySpawns`.
+- Enemy type: `pickEnemyType(floor)` (same distribution as room spawns).
+- Spawn positions: random interior tile in the room, passable, ≥ 3 tiles
+  from player (bounded 20 retries, skip if no valid position found).
+- `audio.beaconTrigger()` plays, HUD message "⚠ REINFORCEMENTS INCOMING".
+
+**Damage sources (player-only):**
+- **Player projectile hit:** Projectile within 0.6 tiles of beacon deals
+  projectile damage to beacon. Enemy projectiles do NOT damage beacons.
+- **Volatile Core detonation:** `damageBeaconsInRadius()` called from
+  `detonateVCore()`.
+- **Grenade explosion:** `damageBeaconsInRadius()` called from
+  `detonateGrenade()`.
+- **VOLATILE / EXPLOSIVE_KILLS death explosion:** `damageBeaconsInRadius()`
+  called from `Enemy.die()`.
+- **Weapon affix AoE (of Detonation):** `damageBeaconsInRadius()` called
+  from `applyOnKill()`.
+
+**On destruction (HP ≤ 0):**
+- Beacon removed (`dead = true`), no reinforcements.
+- Particle burst: red explosion + orange sparks.
+- `audio.beaconDestroy()` digital shutdown chirp.
+- Credit reward: `floor × 3` with economy multipliers (meta credit
+  multiplier, difficulty credit multiplier, CREDIT_SIPHON augment ×1.5).
+
+**Room-clear interaction:** Room-clear check is blocked while an unresolved
+beacon exists in the room (`beacons.some(b => !b.dead && b.room === room)`).
+This prevents premature room-clear rewards when enemies are killed from
+outside before the beacon activates. `room._hadEnemies` is set `true` on
+beacon placement to ensure room-clear tracking is active.
+
+**Visual:**
+- Idle: pulsing red diamond (rotated square) with red glow, vertical
+  antenna line with tip dot, small ⚠ warning symbol below.
+- Active: rapid-flashing red diamond (sin-based on/off), expanding
+  concentric ring pulse (0.8 s cycle, fading outward), countdown integer
+  displayed above in red monospace.
+
+**Minimap:** Red pulsing 2×2 dot, only when in LOS. Active beacons pulse
+faster (6 Hz) than idle beacons (2 Hz).
+
+**Save/Load:** Not saved — regenerated on floor load (same as volatile cores
+and crates). `beacons=[]` reset in `populateFloor()`.
+
+**Audio:**
+- `audio.beaconAlarm()` — escalating electronic alarm: square 600→1200 +
+  square 800→1400 + sine 400→900 + noise burst.
+- `audio.beaconDestroy()` — digital shutdown chirp: sine 1200→200 + square
+  800→100 + high noise burst.
+- `audio.beaconTrigger()` — alert klaxon: two-tone square 500/700 Hz
+  alternating + sub-bass sine 80→60 + low noise (reverb send).
+
 ### Secret Rooms (Cracked Walls)
 
 **Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
@@ -2411,3 +2493,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v55.0   | HEALER enemy (floor 5+): support healer that restores wounded non-boss allies within 6 tiles for 15% maxHp per pulse. `_healTimer`/`_healBeam` state. Retreats if player closes within 4 tiles. `audio.heal()` SFX. TYPE_CAPS: 1. No elite roll. SW cache v67. |
 | v56.0   | CHARGER enemy (floor 4+): charge-attack melee rusher. Patrols slowly (SPD 1.5), telegraphs charge with 0.6 s windup (pulsing orange glow + direction indicator), then rushes at 5.5 tiles/s in locked direction for 0.4 s (~2.2-tile lunge). On hit: 1.5× ATK + 2-tile knockback + camera shake. On miss/wall: 1.0 s stun (reuses `stunTimer`), vulnerable. Point-blank (< 2 tiles) uses standard melee instead. `_chgState` (idle/windup/charging), `_chgCooldown` timer. `audio.chargerWindup()` (rising rumble), `audio.chargerImpact()` (heavy thud). Daze star particles on post-charge stun. TYPE_CAPS: 2. Elite eligible. SW cache v68. |
 | v57.0   | Destructible crates: environmental cover objects (floor 2+, 0–2 per normal room ≥ 6×6). `T.CRATE` (21) tile — not passable, not see-through (full cover). `crates[]` entity array with HP (`15 + floor × 5`). Damaged by projectile impact, VCore/grenade/VOLATILE/EXPLOSIVE_KILLS explosions, weapon affix AoE, and CHARGER charge collisions. On destruction: tile reverts to `T.FLOOR`, 25% credit drop (`floor × 4`). Enemy/item spawn passability guard. Minimap: `#2a3a4e`. `audio.crateBreak()` metallic crunch SFX. Spec v3.7. SW cache v69. |
+| v58.0   | Alarm beacons: environmental alarm devices (floor 4+, ~40% chance per normal room ≥ 5×5). `beacons[]` entity array with HP (`10 + floor × 3`). When player enters room, 4 s countdown starts. Destroy beacon → credit reward (`floor × 3` with multipliers). Countdown expires → 2–3 reinforcement enemies spawn. Damaged by player projectiles and AoE explosions (VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation affix). Enemy projectiles cannot damage beacons. Room-clear blocked until beacon resolved. Visual: pulsing red diamond + antenna (idle), flashing diamond + expanding rings + countdown (active). Minimap: pulsing red dot. `audio.beaconAlarm()`, `audio.beaconDestroy()`, `audio.beaconTrigger()` SFX. Spec v3.8. SW cache v70. |

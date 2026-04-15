@@ -2329,6 +2329,17 @@ class Projectile {
         }
       }
     }
+    // Player projectiles can damage alarm beacons
+    if (!this.dead && this.fromPlayer) {
+      for (const b of beacons) {
+        if (b.dead) continue;
+        if (dist(this.x, this.y, b.x, b.y) < 0.6) {
+          damageBeacon(b, this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
   }
   draw(camX,camY) {
     // Ricochet trail — fading cyan line behind bouncing projectiles
@@ -2386,6 +2397,7 @@ function detonateGrenade(x, y, dmg) {
   audio.grenadeExplode();
   primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
   damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
 }
 
 function updateHazardZones(dt, player) {

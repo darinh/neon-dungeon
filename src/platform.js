@@ -1266,6 +1266,31 @@ const audio = (() => {
       osc('square', 120, 40, 0.06, t, 0.08);
       noise(0.08, t, 0.06, 3000);
     },
+    beaconAlarm() {
+      const c = getCtx(); const t = c.currentTime;
+      // Escalating electronic alarm — pulsing siren
+      osc('square', 600, 1200, 0.06, t, 0.15);
+      osc('square', 800, 1400, 0.04, t + 0.15, 0.15);
+      osc('sine', 400, 900, 0.05, t + 0.05, 0.2);
+      noise(0.03, t, 0.1, 3000);
+    },
+    beaconDestroy() {
+      const c = getCtx(); const t = c.currentTime;
+      // Digital shutdown chirp — descending + static burst
+      osc('sine', 1200, 200, 0.08, t, 0.15);
+      osc('square', 800, 100, 0.04, t + 0.02, 0.12);
+      noise(0.06, t + 0.05, 0.08, 4000);
+    },
+    beaconTrigger() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.3);
+      // Alert klaxon — two-tone alarm + rumble
+      osc('square', 500, 500, 0.08, t, 0.12, bus);
+      osc('square', 700, 700, 0.08, t + 0.12, 0.12, bus);
+      osc('square', 500, 500, 0.06, t + 0.24, 0.1, bus);
+      osc('sine', 80, 60, 0.06, t, 0.3, bus);
+      noise(0.04, t + 0.1, 0.15, 2000, bus);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop

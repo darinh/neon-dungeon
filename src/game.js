@@ -570,6 +570,9 @@ const game = {
     // update volatile cores
     updateVCores(dt);
 
+    // update alarm beacons
+    updateBeacons(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -631,6 +634,8 @@ const game = {
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
         if (room.roomType === 'challenge' && !room.challengeComplete) continue;
         if (enemies.some(e => !e.dead && e.room === room)) continue;
+        // Block room-clear until alarm beacons are resolved
+        if (beacons.some(b => !b.dead && b.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
         lastCx = room.cx; lastCy = room.cy;
@@ -2404,6 +2409,9 @@ const game = {
 
     // volatile cores (below items, above ground effects)
     drawVCores(cam.x, cam.y);
+
+    // alarm beacons
+    drawBeacons(cam.x, cam.y);
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
