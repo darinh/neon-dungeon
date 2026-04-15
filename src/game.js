@@ -157,7 +157,7 @@ const game = {
     const questTypes = [
       { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0 && (!game.challengeSealed || game.challengeComplete),
         reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
-      { id:'EXPLORE', label:'Visit every room', check: ()=>{
+      { id:'EXPLORE', label:'Visit all visible rooms', check: ()=>{
           const d=this.dungeon;
           return d.rooms.every(r=>r.roomType==='secret' && !r.secretRevealed || d.visited[r.cy]?.[r.cx]);
         },
