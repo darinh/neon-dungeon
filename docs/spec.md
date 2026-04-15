@@ -928,6 +928,7 @@ and range so the player can make an informed decision.
 | OVERCLOCK | Overclock | 3 | +0.5 permanent speed per level | 10 |
 | ARMOR_UP | Reinforced Armor | 5 | +3 permanent DEF per level | 12 |
 | RICOCHET | Ricochet Module | 3 | Bullets bounce off walls (1/2/3 bounces) | 8 |
+| SENTRY_DRONE | Sentry Drone | 3 | +1 orbiting drone, 8 dmg homing shots; cd: 2.0 / 1.6 / 1.2 s | 7 |
 
 ### Orbital Weapons (Saw Blade)
 
@@ -971,6 +972,26 @@ behind bouncing projectiles — a short line of recent positions rendered with
 increasing opacity toward the projectile head. Trail starts from the moment the
 projectile is fired (not just after the first bounce), highlighting the ricochet
 path through walls.
+
+### Sentry Drone
+
+Autonomous drones that orbit the player at 2.0 tile radius, rotating at
+1.8 rad/s. Each drone independently targets the nearest visible enemy within
+8 tiles and fires a homing projectile (8 damage, speed 8, range 8,
+colour #00e5ff). Fire cooldown: `2.0 − (level−1) × 0.4` seconds (shared
+across all drones — all fire simultaneously). Levels 1–3 add additional
+drones evenly spaced around the orbit.
+
+**Targeting:** Each drone finds the nearest enemy within 8 tiles that has
+line-of-sight from the drone's position. Phantom enemies are skipped when
+invisible. Projectiles use homing steering (same system as Plasma Orb).
+
+**Visual:** Cyan diamond shape (#00e5ff) with bright core (#aaffff) and
+outer glow. Orbits the player independently from Saw Blades (separate
+angle counter at different speed).
+
+**Audio:** Soft electronic chirp (`audio.sentryFire()`) — ascending sine +
+triangle, very quick (60 ms), spatially panned.
 
 ### Removed Items
 
@@ -2075,3 +2096,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v47.5   | Energy Shield fairness tweak: shield-break now grants 0.5s invincibility (was 0.3s), matching normal post-hit i-frames so the defensive perk never makes players more vulnerable to rapid follow-up hits. Service worker cache bumped to v58. |
 | v47.6   | Quest wording clarity: EXPLORE quest label changed from "Visit every room" to "Visit all visible rooms" to match actual completion logic (normal rooms + revealed secret rooms required, unrevealed secrets do not block completion). Service worker cache bumped to v59. |
 | v48.0   | Volatile Cores: explosive power cells in normal rooms (floor 3+, 0–2 per room). Projectile impact primes a 0.55 s fuse; detonation deals `30 + floor × 3` AoE damage (2.2-tile radius, LOS-gated) to enemies AND player (risk/reward tactical element). Chain-react to nearby cores for cascading explosions. Grenade, VOLATILE, and EXPLOSIVE_KILLS explosions also prime cores in radius. `vcores[]` global, `createVCore()`, `primeVCoresInRadius()`, `detonateVCore()`, `updateVCores()`, `drawVCores()`. Minimap orange dots. Death recap source: 'Volatile Core'. `audio.corePrime()` + `audio.coreDetonate()` SFX. SW cache v60. |
+| v49.0   | Sentry Drone: persistent upgrade (max level 3) — autonomous orbiting drones that auto-fire homing shots at nearby enemies. 2.0-tile orbit radius, 1.8 rad/s rotation. Each drone independently targets nearest visible enemy within 8 tiles (LOS-required, Phantom-aware) and fires homing projectile (8 dmg, speed 8, range 8, #00e5ff). Fire cooldown shared: 2.0 / 1.6 / 1.2 s. Visual: cyan diamond with bright core and outer glow. `audio.sentryFire()` SFX (soft ascending chirp). Added to UPGRADES pool (rarity 7). Death recap: 'Sentry Drone' source with #00e5ff colour. SW cache v61. |

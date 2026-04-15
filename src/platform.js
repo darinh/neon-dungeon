@@ -1195,6 +1195,12 @@ const audio = (() => {
       noise(0.06, t + 0.03, 0.08, 6000, bus, { filterType: 'highpass', pan: 0.2 });
       osc('sawtooth', 200, 60, 0.06, t + 0.02, 0.15, bus, { pan: 0.1 });
     },
+    sentryFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Soft electronic chirp — light and quick
+      osc('sine', 1800, 2400, 0.04, t, 0.06, null, { pan: (Math.random() - 0.5) * 0.3 });
+      osc('triangle', 900, 1200, 0.025, t, 0.04);
+    },
     autoLaser() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.25, 0.2);
