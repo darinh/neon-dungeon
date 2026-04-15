@@ -619,7 +619,19 @@ function activateHackware(player) {
         if (e.dead) continue;
         if (e._disguised) continue; // don't reveal mimics via stun text
         const d = dist(player.x, player.y, e.x, e.y);
-        if (d < radius && map && hasLOS(player.x, player.y, e.x, e.y, map)) {
+        // WRAITH: EMP bypasses LOS to force materialization (hard counter)
+        const losOk = e._wrPhased ? true : (map && hasLOS(player.x, player.y, e.x, e.y, map));
+        if (d < radius && losOk) {
+          // Force WRAITH out of phased state before applying stun
+          if (e._wrPhased) {
+            const emerge = e._wrFindEmergeTile(map, player);
+            if (emerge) {
+              e.x = emerge.x; e.y = emerge.y;
+              e._wrState = 'corporeal'; e._wrTimer = 2.0; e._wrPhased = false;
+              audio.wraithPhaseIn();
+            }
+            // If no valid tile, WRAITH stays phased (extremely rare edge case)
+          }
           const dur = e.isBoss ? 1 : 2; // bosses get reduced stun
           e.stunTimer = Math.max(e.stunTimer || 0, dur);
           spawnParticles(e.x, e.y, 'SPARK', '#00ddff', 4);
@@ -730,6 +742,7 @@ function updateHackwareEffects(dt) {
       for (const e of enemies) {
         if (e.dead) continue;
         if (e._disguised) continue; // don't home toward disguised mimics
+        if (e._wrPhased) continue; // can't target phased WRAITHs
         const d = dist(fx.x, fx.y, e.x, e.y);
         if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) { best = e; bestD = d; }
       }
@@ -748,6 +761,7 @@ function updateHackwareEffects(dt) {
       if (fx.hitCd <= 0) {
         for (const e of enemies) {
           if (e.dead) continue;
+          if (e._wrPhased) continue;
           if (dist(fx.x, fx.y, e.x, e.y) < 0.6) {
             e.takeDamage(fx.dmg, { name:'Nano Swarm', isProc:true });
             fx.hitCd = 0.5;
@@ -766,6 +780,7 @@ function updateHackwareEffects(dt) {
       for (const e of enemies) {
         if (e.dead || e.isBoss) continue; // bosses immune to pull
         if (e._disguised) continue; // don't pull disguised mimics
+        if (e._wrPhased) continue; // can't pull phased WRAITHs
         const d = dist(e.x, e.y, fx.x, fx.y);
         if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
           e.moveToward(fx.x, fx.y, pullStr, dt, map);
@@ -783,6 +798,7 @@ function updateHackwareEffects(dt) {
       const now = fx.age;
       for (const e of enemies) {
         if (e.dead) continue;
+        if (e._wrPhased) continue;
         const d = dist(e.x, e.y, fx.x, fx.y);
         if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
           // Apply slow (stronger-wins: don't truncate existing longer/stronger slows)
@@ -2402,6 +2418,7 @@ class Projectile {
     if (this.fromPlayer) {
       for (const e of enemies) {
         if (e.dead||this.hitEnemies.has(e)) continue;
+        if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
           // Reflection check — REFLECTOR bounces projectiles back (including piercing)
           if (e.reflectsProjectile(this)) {
@@ -2538,6 +2555,7 @@ class Projectile {
     if (!this.dead && this.isAllyTurret) {
       for (const e of enemies) {
         if (e.dead || this.hitEnemies.has(e)) continue;
+        if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x, this.y, e.x, e.y) < 0.6) {
           if (e.blocksProjectile(this) && !this.piercing) {
             spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
@@ -3009,6 +3027,7 @@ function applyEventEffect(event, choice, player, gm) {
         let stunned = 0;
         for (const e of enemies) {
           if (e.dead || e.room !== room) continue;
+          if (e._wrPhased) continue; // can't stun phased WRAITHs
           e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 1 : 3);
           const dmg = Math.min(e.hp - 1, 25);
           if (dmg > 0) e.takeDamage(dmg, 'Overload');

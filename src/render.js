@@ -709,6 +709,16 @@ function drawMinimap(dungeon, player) {
       ctx.globalAlpha = 1;
       continue;
     }
+    // Phased WRAITHs: only show via Thermal Optics (dim spectral cyan-green)
+    if (e._wrPhased) {
+      if (!thermalOptics) continue;
+      const wrPulse = 0.2 + 0.15 * Math.sin((game.floorTime||0) * 5);
+      ctx.globalAlpha = wrPulse;
+      ctx.fillStyle = '#66ffcc';
+      ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
+      ctx.globalAlpha = 1;
+      continue;
+    }
     if (!thermalOptics && !inSight) continue;
     if (e._isBounty) {
       const bPulse = 0.7 + 0.3 * Math.sin((game.floorTime||0) * 3);
@@ -1011,6 +1021,17 @@ function drawExpandedMinimap(dungeon, player) {
   for (const e of enemies) {
     if (e.dead) continue;
     if (e._disguised) continue; // disguised mimics hidden from expanded minimap
+    // Phased WRAITHs: only show via Thermal Optics
+    if (e._wrPhased) {
+      if (!thermalOptics) continue;
+      const wrPulse = 0.2 + 0.15 * Math.sin((game.floorTime||0) * 5);
+      ctx.globalAlpha = wrPulse;
+      ctx.fillStyle = '#66ffcc';
+      const ex = mx + e.x * sx, ey = my + e.y * sy;
+      ctx.fillRect(ex - dotSz * 0.5, ey - dotSz * 0.5, dotSz, dotSz);
+      ctx.globalAlpha = 1;
+      continue;
+    }
     const tx = Math.floor(e.x), ty = Math.floor(e.y);
     const inSight = !!dungeon.visible[ty]?.[tx];
     if (!thermalOptics && !inSight) continue;
@@ -1173,6 +1194,7 @@ function drawThreatIndicators(camX, camY) {
     if (e.dead) continue;
     if (e.type === 'PHANTOM' && !e.visible) continue;
     if (e._disguised) continue;
+    if (e._wrPhased) continue;
     const dx = e.x - px, dy = e.y - py;
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d < 1 || d > range) continue;
@@ -1307,7 +1329,7 @@ function populateFloor(dungeon, floorNum) {
     let roomElite = false;  // max 1 elite per room
     let spawnedCount = 0;
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1 };
+    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1, WRAITH: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit

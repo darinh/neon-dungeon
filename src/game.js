@@ -553,6 +553,7 @@ const game = {
     // ── Toxic Pool enemy damage ──
     for (const e of enemies) {
       if (e.dead || e._disguised) continue; // skip dead and disguised mimics
+      if (e._wrPhased) continue; // phased WRAITHs are intangible
       const etx = Math.floor(e.x), ety = Math.floor(e.y);
       if (dungeon.map[ety]?.[etx] === T.TOXIC) {
         e._toxicDmgCD = (e._toxicDmgCD || 0) - dt;
@@ -727,6 +728,7 @@ const game = {
         const by = player.y + Math.sin(a) * 1.5;
         for (const e of enemies) {
           if (e.dead || player.orbitalHits.has(e)) continue;
+          if (e._wrPhased) continue;
           if (dist(bx, by, e.x, e.y) < 0.6 && hasLOS(bx, by, e.x, e.y, dungeon.map)) {
             e.takeDamage(12, 'Saw Blade');
             player.orbitalHits.set(e, 0.5);
@@ -748,6 +750,7 @@ const game = {
         for (const e of enemies) {
           if (e.dead) continue;
           if (e._disguised) continue;
+          if (e._wrPhased) continue;
           const d = dist(player.x, player.y, e.x, e.y);
           if (d < nearD) { nearD = d; nearest = e; }
         }
@@ -780,6 +783,7 @@ const game = {
             if (e.dead) continue;
             if (e.type === 'PHANTOM' && !e.visible) continue;
             if (e._disguised) continue;
+            if (e._wrPhased) continue;
             const d = dist(droneX, droneY, e.x, e.y);
             if (d < nearD && hasLOS(droneX, droneY, e.x, e.y, dungeon.map)) {
               nearD = d; nearest = e;
@@ -810,6 +814,7 @@ const game = {
           if (e.dead) continue;
           if (e.type === 'PHANTOM' && !e.visible) continue;
           if (e._disguised) continue;
+          if (e._wrPhased) continue;
           const d = dist(player.x, player.y, e.x, e.y);
           if (d <= minD && hasLOS(player.x, player.y, e.x, e.y, dungeon.map)) {
             minD = d; target = e;
