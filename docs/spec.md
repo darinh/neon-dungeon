@@ -101,6 +101,20 @@ deal `10 + floor × 2` HP damage per zap (0.8 s cooldown between hits),
 bypassing defense. Blue/white crackling visual when active, dim when off.
 Cyan on minimap (pulses with phase).
 
+**Volatile Cores** (floor 3+): Unstable power cells scattered 0–2 per normal
+room (excluded from spawn, boss, special, and challenge rooms). Entities in
+the `vcores[]` array, not tile types. When struck by any projectile (player or
+enemy), the core is primed (0.55 s fuse). When the fuse expires, the core
+detonates: `30 + floor × 3` damage in a 2.2-tile radius (LOS-gated), damages
+both enemies and the player (risk/reward). Detonations chain-react to nearby
+unprimed cores (staggered 0.15–0.35 s fuse). Grenade explosions, VOLATILE
+enemy death explosions, and EXPLOSIVE_KILLS perk detonations also prime cores
+within their blast radius. Not saved (regenerated on floor load). Visual:
+pulsing amber/orange glow (idle), rapid red flash with yellow core (primed),
+big orange-red particle burst on detonation. Minimap: small orange dot (only
+in LOS). `audio.corePrime()` rising alarm tick, `audio.coreDetonate()` heavy
+explosion with sub-bass and debris crackle.
+
 **Lighting:** Each floor tile has a computed light level (0–1) based on
 distance from the player torch (radius = 9 tiles; BLACKOUT: 5), with LOS
 gating. Walls, cracked walls, and closed/locked doors block vision; diagonal
@@ -2060,3 +2074,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v47.4   | Environmental hazard consistency fix: plasma burn and arc-grid zap now route through `player.takeDamage(..., opts)` with `ignoreDefense`, so they still bypass armor but no longer bypass Energy Shield and SECOND_WIND. Added optional damage flags (`ignoreDefense`, `ignoreInvincible`, `ignoreImmunity`, `ignoreShield`, `skipHitInvincible`, `skipHitEffects`, `skipReactiveArmor`) to preserve existing behavior where needed without duplicating death/perk logic. Service worker cache bumped to v57. |
 | v47.5   | Energy Shield fairness tweak: shield-break now grants 0.5s invincibility (was 0.3s), matching normal post-hit i-frames so the defensive perk never makes players more vulnerable to rapid follow-up hits. Service worker cache bumped to v58. |
 | v47.6   | Quest wording clarity: EXPLORE quest label changed from "Visit every room" to "Visit all visible rooms" to match actual completion logic (normal rooms + revealed secret rooms required, unrevealed secrets do not block completion). Service worker cache bumped to v59. |
+| v48.0   | Volatile Cores: explosive power cells in normal rooms (floor 3+, 0–2 per room). Projectile impact primes a 0.55 s fuse; detonation deals `30 + floor × 3` AoE damage (2.2-tile radius, LOS-gated) to enemies AND player (risk/reward tactical element). Chain-react to nearby cores for cascading explosions. Grenade, VOLATILE, and EXPLOSIVE_KILLS explosions also prime cores in radius. `vcores[]` global, `createVCore()`, `primeVCoresInRadius()`, `detonateVCore()`, `updateVCores()`, `drawVCores()`. Minimap orange dots. Death recap source: 'Volatile Core'. `audio.corePrime()` + `audio.coreDetonate()` SFX. SW cache v60. |

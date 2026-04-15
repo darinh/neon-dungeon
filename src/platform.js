@@ -1179,6 +1179,22 @@ const audio = (() => {
       osc('square', 60, 20, 0.06, t, 0.2);
       noise(0.08, t, 0.15, 2000);
     },
+    corePrime() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising alarm tick
+      osc('square', 1200, 1800, 0.06, t, 0.06);
+      osc('sine', 600, 900, 0.04, t + 0.03, 0.04);
+    },
+    coreDetonate() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.35, 0.5);
+      // Heavy explosion: sub thump + crackle + debris
+      osc('sine', 60, 22, 0.22, t, 0.35, bus, { attack: 0.002 });
+      osc('triangle', 120, 40, 0.10, t, 0.25, bus, { pan: -0.15 });
+      noise(0.16, t + 0.01, 0.18, 3200, bus, { filterType: 'bandpass', filterFreq2: 800, q: 0.8 });
+      noise(0.06, t + 0.03, 0.08, 6000, bus, { filterType: 'highpass', pan: 0.2 });
+      osc('sawtooth', 200, 60, 0.06, t + 0.02, 0.15, bus, { pan: 0.1 });
+    },
     autoLaser() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.25, 0.2);

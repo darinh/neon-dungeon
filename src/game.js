@@ -541,6 +541,9 @@ const game = {
     // update hazard zones (grenade AoE)
     updateHazardZones(dt, player);
 
+    // update volatile cores
+    updateVCores(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -2285,6 +2288,9 @@ const game = {
     // hazard zones (ground effects — below items/enemies)
     drawHazardZones(cam.x, cam.y);
     drawHackwareEffects(cam.x, cam.y);
+
+    // volatile cores (below items, above ground effects)
+    drawVCores(cam.x, cam.y);
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
