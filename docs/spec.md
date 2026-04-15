@@ -326,6 +326,7 @@ current one (cooldown resets on equip). Available from floor 3.
 | Phase Cloak    | 14 s     | 2.5s invisibility + damage immunity. Enemies lose targeting. Projectiles pass through. Player can still shoot. | `#cc44ff` | ◇ |
 | Nano Swarm     | 10 s     | Release 6 homing nanite particles. Each deals 8 damage on contact (0.5s hit cooldown per nanite). Homes toward nearest visible enemy. 4s lifetime. | `#44ff88` | ☢ |
 | Gravity Well   | 16 s     | Place a pull point at aim position. Pulls enemies within 5 tiles toward center for 3s. Bosses immune to pull. LOS required. Collision-aware movement. | `#ff8800` | ◎ |
+| Static Field   | 12 s     | Place an electric zone at aim position. 3-tile radius, 5s duration. Enemies inside take 10 dmg/s (1s hit interval, LOS required) and are slowed 40% (bosses: 15%). Max 1 field active; recasting replaces the existing field. | `#44ccff` | ⌁ |
 
 #### Enemy Stun Mechanic
 
@@ -350,6 +351,18 @@ When cloaked (`player.cloakTimer > 0`):
 - Player rendered as ghostly purple with shimmer effect
 - Bosses still use area attacks (radial patterns) but damage is blocked
 - Audio: shimmer on activation, shimmer-out on expiry
+
+#### Static Field Mechanic
+
+When deployed (`hackwareEffects` entry with `type:'static_field'`):
+- Placed at aim position (same targeting as Gravity Well)
+- 3-tile radius, 5-second duration
+- Enemies inside with LOS to field center: 10 damage per second (1s hit interval per enemy), slowed to 60% speed (bosses: 85%)
+- Slow uses stronger-wins logic: `slowTimer = Math.max(existing, 0.3)`, `slowFactor = Math.min(existing, factor)`
+- Max 1 active field — recasting removes the previous one
+- Visual: pulsing cyan ring with 3 rotating arc segments, white core spark, ambient spark particles
+- Audio: electric crackle on deployment (one-shot)
+- Damage source: `Static Field` (for death recap)
 
 #### Persistence
 
@@ -1460,6 +1473,7 @@ BPM is further multiplied by state: combat ×0.85 beat duration, boss ×0.75. Dr
 | Hackware Cloak end | Shimmer-in: sine 1600→600 Hz + triangle 1200→400 Hz, reverb (0.4) |
 | Hackware Swarm   | Buzzing release: detuned sawtooth pair 300→600 + 320→640 Hz + noise (3 kHz) + sine 200→400 Hz, reverb (0.3) |
 | Hackware Gravity  | Deep implosion: sine 300→40 Hz + triangle 600→100 Hz + sub 50→30 Hz + noise (1 kHz), reverb (0.6) |
+| Hackware Static Field | Electric crackle: noise burst (3 kHz) + sawtooth 800→200 Hz + square 1200→400 Hz + sub 100→60 Hz, reverb (0.5) |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -2015,3 +2029,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v39.0   | GENESIS PROTOCOL boss (floor 10 alternate): geometric precision pattern boss — spiral salvos, targeting lances, hazard grid zones, purge ring. Floor 10 randomly selects OMEGA CORE or GENESIS PROTOCOL. Stats: HP 1000, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold). Phase 1 (>55%): 6-arm spiral salvo (3s, rotating offset) + targeting lance (4s, 0.5s telegraph, aim-locks at start, cancels on LOS/cloak/stun). Phase 2 (55%–25%): 8-arm spiral (2.5s) + 3-spread lance (3.5s) + 2 hazard zones (5s). Phase 3 (≤25%): 10-arm spiral (2s) + 5-spread lance (3s) + 3 zones (4s) + purge ring (8s, 6 zones in circle with 1 gap). Timer seeding on phase transition + spawn prevents first-frame spam. Dynamic terminal lock text replaces hardcoded OMEGA reference. `audio.genesisLance()` / `audio.genesisPurge()` SFX. No SAVE_VERSION bump. SW cache v46 |
 | v40.0   | Settings menu: `SETTINGS` game state accessible from main menu and pause screen. SFX and music volume sliders (0–100%, `localStorage` key `neonDungeonSettings`). Key rebinding for 9 actions (up/down/left/right/interact/hackware/voidshard/dash/shoot) with swap-on-conflict, reserved key protection (Escape/Enter/Q/digits), and Escape-to-cancel capture. Arrow keys always work as movement alternates. `ShiftRight` always works as dash alternate. Touch buttons emit mapped key codes via `km(action)`. In-game hints reflect current bindings via `KEY_DISPLAY()`. Pause screen updated to 3 options (Resume/Settings/Quit). Volume applied at AudioContext init AND on change (handles lazy init). Short linear ramp (0.02s) on volume changes prevents zipper noise. Settings validated and merged with defaults on load. No SAVE_VERSION bump. SW cache v47 |
 | v41.0   | Display toggles in settings: Screen Shake (ON/OFF) and Damage Numbers (ON/OFF). Both default ON. `triggerShake()` and `spawnDmgText()` gated by `settings.screenShake`/`settings.damageNumbers`. Toggles between volume sliders and key rebind section. ◀▶/Enter/click to toggle. `resetAll()` replaces `resetKeys()` — resets volumes, toggles, and key bindings. Boolean settings validated with `typeof` on load. Backward compatible: old payloads without toggle keys default to ON. No SAVE_VERSION bump. SW cache v48 |
+| v42.0   | Static Field hackware (5th ability): electric zone-control module placed at aim position. 3-tile radius, 5s duration, 12s cooldown. Enemies inside take 10 dmg/s (1s hit interval, LOS required) and are slowed 40% (bosses: 15% slow). Slow uses stronger-wins logic (`Math.max`/`Math.min`) to not truncate existing effects. Max 1 field active — recasting replaces the old one. Visual: pulsing cyan ring with 3 rotating arc segments, white core spark, ambient spark particles. `audio.hackwareStaticField()` SFX. `hackwareEffects` per-enemy `hitMap` for damage intervals. Auto-included in vendor/pickup via `HACKWARE_KEYS`. No SAVE_VERSION bump. SW cache v49 |

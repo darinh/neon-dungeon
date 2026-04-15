@@ -1214,6 +1214,15 @@ const audio = (() => {
       osc('sine', 50, 30, 0.2, t + 0.1, 0.5);
       noise(0.06, t + 0.2, 0.15, 1000, bus);
     },
+    hackwareStaticField() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.5);
+      // Electric crackle deployment
+      noise(0.1, t, 0.25, 3000, bus);
+      osc('sawtooth', 800, 200, 0.06, t, 0.3, bus);
+      osc('square', 1200, 400, 0.04, t + 0.05, 0.2, bus);
+      osc('sine', 100, 60, 0.12, t + 0.1, 0.4);
+    },
     hackwareCloakEnd() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.4);
@@ -1590,6 +1599,7 @@ const HACKWARE = {
   PHASE_CLOAK:  { name:'Phase Cloak',  desc:'2.5s invisibility & immunity',    colour:'#cc44ff', icon:'◇', cooldown:14 },
   NANO_SWARM:   { name:'Nano Swarm',   desc:'Homing nanites deal 48 damage',   colour:'#44ff88', icon:'☢', cooldown:10 },
   GRAVITY_WELL: { name:'Gravity Well', desc:'Pull enemies to target for 3s',   colour:'#ff8800', icon:'◎', cooldown:16 },
+  STATIC_FIELD: { name:'Static Field', desc:'Electric zone: 10 dps + slow',    colour:'#44ccff', icon:'⌁', cooldown:12 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1670,6 +1680,25 @@ function activateHackware(player) {
       triggerShake(3, 0.15);
       break;
     }
+    case 'STATIC_FIELD': {
+      audio.hackwareStaticField();
+      // Place at aim position (same pattern as Gravity Well)
+      const cam2 = getCamera(player);
+      const sx = (mouse.x + cam2.x) / TILE;
+      const sy = (mouse.y + cam2.y) / TILE;
+      // Remove any existing static field (max 1 active)
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'static_field') hackwareEffects.splice(j, 1);
+      }
+      hackwareEffects.push({
+        type:'static_field', x:sx, y:sy, age:0, maxAge:5, radius:3,
+        dmg:10, hitMap:new Map()
+      });
+      spawnParticles(sx, sy, 'EXPLOSION', '#44ccff', 15);
+      triggerShake(3, 0.15);
+      game.msg('⌁ STATIC FIELD DEPLOYED', '#44ccff');
+      break;
+    }
   }
 }
 
@@ -1732,6 +1761,33 @@ function updateHackwareEffects(dt) {
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff8800', 1);
       }
     }
+    if (fx.type === 'static_field') {
+      // Damage and slow enemies inside the field (LOS required)
+      const now = fx.age;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = dist(e.x, e.y, fx.x, fx.y);
+        if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+          // Apply slow (stronger-wins: don't truncate existing longer/stronger slows)
+          const factor = e.isBoss ? 0.85 : 0.6;
+          e.slowTimer = Math.max(e.slowTimer || 0, 0.3);
+          e.slowFactor = Math.min(e.slowFactor || 1, factor);
+          // Damage on 1-second interval per enemy
+          const lastHit = fx.hitMap.get(e) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(e, now);
+            e.takeDamage(fx.dmg, { name:'Static Field', isProc:true });
+            spawnParticles(e.x, e.y, 'SPARK', '#44ccff', 3);
+          }
+        }
+      }
+      // Ambient crackling particles
+      if (Math.random() < dt * 6) {
+        const a = Math.random() * TWO_PI;
+        const r = Math.random() * fx.radius;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'SPARK', '#44ccff', 1);
+      }
+    }
     // emp_ring is visual only, handled in draw
   }
 }
@@ -1785,10 +1841,39 @@ function drawHackwareEffects(camX, camY) {
       }
       ctx.restore();
     }
+    if (fx.type === 'static_field') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const fade = 1 - (fx.age / fx.maxAge) * 0.3; // slow fade, stays visible
+      const r = fx.radius * TILE;
+      ctx.save();
+      // Pulsing electric ring
+      const pulse = 0.6 + Math.sin(fx.age * 10) * 0.2;
+      ctx.globalAlpha = fade * 0.15 * pulse;
+      ctx.fillStyle = '#44ccff';
+      ctx.shadowBlur = 25; ctx.shadowColor = '#44ccff';
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      // Outer ring stroke
+      ctx.globalAlpha = fade * 0.5;
+      ctx.strokeStyle = '#44ccff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      // Rotating arc segments (3 arcs, 60° each)
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = fade * 0.6;
+      for (let seg = 0; seg < 3; seg++) {
+        const a = fx.age * 3 + (TWO_PI / 3) * seg;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 0.7, a, a + Math.PI / 3);
+        ctx.stroke();
+      }
+      // Core spark
+      ctx.globalAlpha = fade * 0.8;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(sx, sy, 3 + Math.sin(fx.age * 15) * 1.5, 0, TWO_PI); ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
-// Eligibility: exclude useless affix+weapon combos
 function affixEligible(affixId, baseWeapon) {
   if (affixId === 'PRECISE'  && baseWeapon.spread === 0) return false;
   if (affixId === 'TWIN'     && baseWeapon.melee)        return false;
@@ -3815,6 +3900,7 @@ const SOURCE_LABELS = {
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
   'Conductor Field':'Conductor Field', 'Conductor Pulse':'Conductor Pulse',
   'Genesis Lance':'Genesis Lance', 'Genesis Field':'Genesis Field', 'Genesis Purge':'Genesis Purge',
+  'Nano Swarm':'Nano Swarm', 'Static Field':'Static Field',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
@@ -3825,6 +3911,7 @@ const SOURCE_COLOURS = {
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
   'Conductor Field':'#00ccff', 'Conductor Pulse':'#00ccff',
   'Genesis Lance':'#ffcc00', 'Genesis Field':'#ffcc00', 'Genesis Purge':'#ffcc00',
+  'Nano Swarm':'#44ff88', 'Static Field':'#44ccff',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
