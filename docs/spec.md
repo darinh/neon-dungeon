@@ -670,11 +670,18 @@ AI parameters tighten with floor progression:
 
 ### Bosses (appear on floors 3, 6, 10)
 
-| Boss           | HP    | Phases | Special                                           |
-|----------------|-------|--------|---------------------------------------------------|
-| SENTINEL MK-I  | 300   | 2      | Laser sweep + shield burst                        |
-| NEURAL HIVE    | 500   | 3      | Spawns crawlers, psionic shockwave                |
-| OMEGA CORE     | 1000  | 4      | All previous attacks, room-filling void orbs      |
+**Boss Pool System:** Each boss floor randomly selects from a pool of bosses.
+Floor 3 has two variants (SENTINEL MK-I or WARDEN); floors 6 and 10 currently
+have one each. The selection is made during `populateFloor()` each time the floor
+is generated (including continue from save). `game.bossType` tracks the active
+boss type for death messaging.
+
+| Boss           | Floor | HP    | Phases | Special                                           |
+|----------------|-------|-------|--------|---------------------------------------------------|
+| SENTINEL MK-I  | 3     | 300   | 2      | Laser sweep + shield burst                        |
+| WARDEN         | 3     | 330   | 2      | Telegraphed charge + ground slam                  |
+| NEURAL HIVE    | 6     | 500   | 3      | Spawns crawlers, psionic shockwave                |
+| OMEGA CORE     | 10    | 1000  | 4      | All previous attacks, room-filling void orbs      |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
@@ -717,6 +724,39 @@ sting, and a HUD warning (`⚠ OMEGA PHASE N` / `⚠ HIVE PHASE N`).
 - HIVE homing missile → targeted shot at player (phase 1+)
 - HIVE crawler spawns → 60 % crawler / 40 % drone mix (phase 2+)
 - HIVE psionic shockwave → AoE pulse (phase 4, ≤7 tile range, 25 dmg)
+
+#### WARDEN — Phase Breakdown
+
+Floor 3 alternate boss. Melee-focused armored enforcer that pressures the
+player's positioning through telegraphed charges and ground slams.
+
+**Stats:** HP 330, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber).
+
+| Phase | HP Range    | Attacks                                                    |
+|-------|-------------|------------------------------------------------------------|
+| 1     | 100 %–40 %  | Telegraphed charge (0.6 s wind-up) + 4-way spark burst     |
+| 2     | 40 %–0 %    | Faster charge (0.45 s wind-up) + ground slam AoE           |
+
+**Charge mechanic:**
+1. Wind-up: 0.6 s (phase 1) / 0.45 s (phase 2). Pulsing amber dashed line
+   telegraph from boss toward player. Direction locked at wind-up start.
+2. Charge: 0.3 s burst at 3× speed along locked direction. Room-clamped.
+3. Hit: contact damage (ATK × difficulty) + 2-tile knockback if player within
+   1.5 tiles during charge. Charge ends on hit.
+4. Miss: 4 spark projectiles in cardinal directions (60 % ATK, range 8, speed 5).
+5. Cooldown: 3.5 s (phase 1), 2.5 s (phase 2).
+
+**Cancel conditions:** LOS break or player cloak cancels wind-up (not active
+charge). Stun cancels any charge state (handled in `Enemy.update()` stun block).
+
+**Ground slam (phase 2, 5 s cooldown):** When player within 4 tiles and boss is
+idle (not charging): radial knockback (3 tiles) + 22 × difficulty damage +
+6 radial spark projectiles. Screen shake (6 px). `audio.wardenSlam()`.
+
+**Movement:** Actively pursues player when LOS (unlike SENTINEL's random patrol).
+Patrols room center when no LOS.
+
+**Audio:** `audio.wardenCharge()` (low rumble), `audio.wardenSlam()` (bass impact).
 
 ---
 
@@ -1813,3 +1853,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v34.0   | Augment system: cybernetic implants with permanent passive effects. 12 augments (Neural Link, Titanium Plating, Magnetic Field, Thermal Optics, Adrenaline Injector, Overclocker, Echo Mapper, Credit Siphon, Scavenger Nanites, Kinetic Amplifier, Temporal Dilation, Reactive Armor). Max 3 per run. New `implant` room type (floors 2–9, ~50% spawn rate) with `T.IMPLANT_SHRINE` tile (18). `AUGMENT_CHOICE` game state with 2-card UI. Vendor sells augments (~20% on floor 3+). Capped players get credits at shrines. `AUGMENTS` table, `rollAugmentChoices()`, `makeAugmentShopOption()`, `hasAugment()` helper. Effect hooks: `gainXP()` (Neural Link ×1.25), `takeDamage()` (Titanium Plating −1, Reactive Armor pulse), item pickup (Magnetic Field ×2 radius), `drawMinimap()` (Thermal Optics + Echo Mapper), `Enemy.die()` (Adrenaline Injector speed buff, Scavenger Nanites heal, Credit Siphon ×1.5), `activateHackware()` (Overclocker ×0.7 CD), `Projectile` constructor (Kinetic Amplifier ×1.2 speed), `Enemy.moveToward()` (Temporal Dilation ×0.85). `player.augments` saved (no SAVE_VERSION bump — defaults to {} on old saves). Status badges for augment count, Adrenaline buff, Reactive cooldown. Death recap lists augments. 3 new audio SFX. SW cache v41 |
 | v35.0   | Floor events: risk/reward encounter terminals offering binary choices. 8 event types: Stasis Pod (heal+XP / item), Corrupted Terminal (60% hackware 40% alarm / credits), Arms Cache (weapon reroll −HP / item), Radiation Leak (augment −HP / credits+score), Rogue AI (reveal minimap / trade credits for XP), Power Junction (stun+damage room enemies / heal 60%), Ghost Signal (credits+XP+score / combo boost), Emergency Drop (heal+item / hackware CD reset+credits). New `event` room type (floors 2–9, every non-boss floor). `T.EVENT_TERMINAL` tile (19) — pulsing teal terminal. `EVENT_CHOICE` game state with 2-card UI (keyboard 1/2, arrows+Enter, mouse/touch). `EVENTS` table, `rollEvent()` filters by player state (skips augment event at cap, bargain event if broke), `applyEventEffect()` executes outcomes. Choices include safe options (credits, items, score) and risky options (weapon reroll with trap damage, augment with HP cost, hackware with 40% enemy spawn). Event rooms excluded from lore placement. `player.eventsResolved` stat tracked in save/load and shown on Game Over/Victory screens. Credit Siphon augment synergy applies to credit rewards. Pending perk choices checked after event resolution (XP grants may trigger level-ups). 2 new audio SFX (`audio.eventTerminal()`, `audio.eventResolve()`). Minimap: teal 3px POI marker. No SAVE_VERSION bump — defaults on old saves. SW cache v42 |
 | v36.0   | SNIPER enemy (floor 7+): glass-cannon marksman with laser-sight charging mechanic. 1.5s visible red laser line locks on player position (does NOT track), then fires speed-14 high-damage projectile. Room-gated aggro (only activates when player is inside sniper's room). Cancel conditions: cloak, LOS break, stun, player flees room, player closes to <3 tiles (triggers flee). Fixed charge time (unaffected by OVERCLOCK/berserker — telegraph stays fair). Post-fire reposition to far tile in room. Post-cancel cooldown prevents stutter re-lock. Stun clears charge state (handled in Enemy.update stun early-return). Elite excluded (ATK 15 too high for elite multiplier). Stats: HP 20, ATK 15, SPD 2.5, XP 25, credits 10, cap 1/room. Visual: hot pink-red `#ff2266`, idle scope glint, pulsing laser line + target dot during charge. 2 new audio SFX (`audio.sniperCharge()`, `audio.sniperFire()`). No SAVE_VERSION bump. SW cache v43 |
+| v37.0   | WARDEN boss (floor 3 alternate): melee-focused armored enforcer with telegraphed charge + ground slam. Boss pool system — floor 3 randomly selects SENTINEL MK-I or WARDEN. Boss death message now keyed by `game.bossType` (stored at spawn) instead of floor number, fixing a latent bug where the `e` variable leaked from entrance-tile restoration loop. Stats: HP 330, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber). Phase 1 (>40% HP): 0.6s wind-up charge at 3× speed with amber dashed-line telegraph, contact damage + knockback on hit, 4-way spark burst on miss, 3.5s CD. Phase 2 (≤40%): faster charge (0.45s wind-up, 2.5s CD) + ground slam AoE (knockback + 22×diff damage + 6 radial sparks, 5s CD, `audio.wardenSlam()`). Charge direction locked at wind-up start (does NOT track). Cancel: cloak/LOS break cancels wind-up; stun cancels any charge state (in `Enemy.update()` stun block). Active charge continues through cloak (committed). Pursues player aggressively when LOS (vs SENTINEL's random patrol). `BOSS_POOLS` replaces `bossTypes` dict. 2 new audio SFX (`audio.wardenCharge()`, `audio.wardenSlam()`). No SAVE_VERSION bump. SW cache v44 |

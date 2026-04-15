@@ -925,6 +925,21 @@ const audio = (() => {
       osc('sawtooth', 1200, 200, 0.12, t, 0.08, bus);
       osc('sine', 60, 30, 0.10, t + 0.02, 0.15);
     },
+    wardenCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Low rumble + rising whoosh
+      osc('sawtooth', 80, 200, 0.12, t, 0.25);
+      noise(0.10, t + 0.05, 0.20, 1200);
+      osc('sine', 50, 50, 0.08, t, 0.30);
+    },
+    wardenSlam() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.4);
+      // Heavy bass impact + debris rattle
+      osc('sine', 40, 20, 0.25, t, 0.20, bus);
+      noise(0.20, t + 0.02, 0.12, 2000, bus);
+      osc('square', 120, 60, 0.10, t + 0.03, 0.15);
+    },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.6);
@@ -3657,22 +3672,22 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, OMEGA:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
   TELEPORTER:'Teleporter', SNIPER:'Sniper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
-  HIVE:'Neural Hive', OMEGA:'Omega Core',
+  WARDEN:'Warden', HIVE:'Neural Hive', OMEGA:'Omega Core',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
-  'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb',
+  'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
   TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SHARD:'#00cc66', SENTINEL:'#ff4444',
-  HIVE:'#aa00ff', OMEGA:'#ff00c8',
+  WARDEN:'#ff8800', HIVE:'#aa00ff', OMEGA:'#ff00c8',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
-  'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff',
+  'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -3967,6 +3982,7 @@ class Enemy {
       this.stunTimer -= dt;
       // Cancel sniper charge on stun — don't let it resume after stun ends
       if (this._laserTimer > 0) { this._laserTimer = 0; this._laserTarget = null; this._sniperCooldown = 0.8; }
+      if (this._chargeState && this._chargeState !== 'idle') { this._chargeState = 'idle'; this._chargeDur = 0; this.bossTimers.charge = 1.5; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       return; // skip all AI, leave attack/shoot timers frozen
     }
@@ -3994,6 +4010,7 @@ class Enemy {
       case 'SNIPER':   this.aiSniper(dt,player,map,d,los);   break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
+      case 'WARDEN':   this.aiBossWarden(dt,player,map,d,los);   break;
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
       case 'OMEGA':    this.aiBossOmega(dt,player,map,d,los);    break;
     }
@@ -4351,6 +4368,107 @@ class Enemy {
     }
   }
 
+  aiBossWarden(dt,player,map,d,los) {
+    const hpPct = this.hp / this.maxHp;
+    this.phase = hpPct <= 0.4 ? 2 : 1;
+
+    if (this.phase !== this.prevPhase) {
+      spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 20);
+      audio.phaseShift();
+      game.msg('⚠ WARDEN PHASE 2', '#ff8800');
+      this.prevPhase = this.phase;
+    }
+
+    const T = this.bossTimers;
+    T.charge = (T.charge || 0) - dt;
+    T.slam   = (T.slam   || 0) - dt;
+    T.move   = (T.move   || 0) - dt;
+
+    // Charge wind-up → charge → recovery
+    if (this._chargeState === 'windup') {
+      // Cancel wind-up if player cloaks or LOS breaks
+      if (!los) {
+        this._chargeState = 'idle';
+        T.charge = 1.5;
+      } else {
+        this._chargeWindup -= dt;
+        if (this._chargeWindup <= 0) {
+          this._chargeState = 'charging';
+          this._chargeDur = 0.3;
+          audio.wardenCharge();
+        }
+      }
+    } else if (this._chargeState === 'charging') {
+      this._chargeDur -= dt;
+      const cspd = this.spd * 3;
+      this.x += this._chargeDx * cspd * dt;
+      this.y += this._chargeDy * cspd * dt;
+      // Clamp to room
+      if (this.room) {
+        this.x = Math.max(this.room.x + 0.5, Math.min(this.room.x + this.room.w - 0.5, this.x));
+        this.y = Math.max(this.room.y + 0.5, Math.min(this.room.y + this.room.h - 0.5, this.y));
+      }
+      // Hit check: damage player if within 1.5 tiles during charge
+      if (dist(this.x, this.y, player.x, player.y) < 1.5) {
+        player.takeDamage(Math.round(this.atk * getDiff().enemyAtk), 'WARDEN');
+        const [kx, ky] = norm(player.x - this.x, player.y - this.y);
+        player.x += kx * 2; player.y += ky * 2;
+        clampToBossRoom(player);
+        spawnParticles(player.x, player.y, 'SPARK', '#ff8800', 6);
+        triggerShake(4, 0.15);
+        this._chargeState = 'idle';
+        T.charge = this.phase === 2 ? 2.5 : 3.5;
+      } else if (this._chargeDur <= 0) {
+        // Charge ended without hitting — spark burst at endpoint
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * TWO_PI;
+          const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 5, Math.round(this.atk * 0.6), 8, '#ff8800', false, false);
+          bp.ownerType = 'WARDEN'; projectiles.push(bp);
+        }
+        spawnParticles(this.x, this.y, 'SPARK', '#ff8800', 8);
+        triggerShake(4, 0.15);
+        this._chargeState = 'idle';
+        T.charge = this.phase === 2 ? 2.5 : 3.5;
+      }
+    } else {
+      // Idle — pursue player or initiate charge
+      if (T.charge <= 0 && los) {
+        // Begin wind-up
+        const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+        this._chargeDx = dx; this._chargeDy = dy;
+        this._chargeState = 'windup';
+        this._chargeWindup = this.phase === 2 ? 0.45 : 0.6;
+        T.charge = 99;
+      } else if (los) {
+        this.moveToward(player.x, player.y, this.spd, dt, map);
+      } else {
+        if (T.move <= 0) {
+          if (this.room) this.patrolTarget = {x: this.room.cx + rnd(-4, 4), y: this.room.cy + rnd(-4, 4)};
+          T.move = 2;
+        }
+        if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, this.spd * 0.7, dt, map);
+      }
+    }
+
+    // Phase 2: Ground slam when player is close
+    if (this.phase === 2 && T.slam <= 0 && d < 4 && this._chargeState === 'idle') {
+      audio.wardenSlam();
+      triggerShake(6, 0.2);
+      const [kx, ky] = norm(player.x - this.x, player.y - this.y);
+      player.x += kx * 3; player.y += ky * 3;
+      clampToBossRoom(player);
+      player.takeDamage(Math.round(22 * getDiff().enemyAtk), 'Warden Slam');
+      // Radial spark projectiles
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TWO_PI;
+        const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 4, Math.round(this.atk * 0.5), 6, '#ff8800', false, false);
+        bp.ownerType = 'WARDEN'; projectiles.push(bp);
+      }
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#ff8800', 15);
+      T.slam = 5;
+    }
+  }
+
   aiBossHive(dt,player,map,d,los) {
     if (this.hp<150) this.phase=3;
     else if (this.hp<350) this.phase=2;
@@ -4580,6 +4698,29 @@ class Enemy {
         }
       }
 
+      // WARDEN: charge wind-up telegraph line
+      if (this.type === 'WARDEN' && this._chargeState === 'windup') {
+        const windupTotal = this.phase === 2 ? 0.45 : 0.6;
+        const progress = 1 - this._chargeWindup / windupTotal;
+        const len = 6 * TILE * progress;
+        const ex = sx + this._chargeDx * len;
+        const ey = sy + this._chargeDy * len;
+        ctx.save();
+        const pulse = 0.5 + 0.5 * Math.sin(progress * 16);
+        ctx.globalAlpha = (0.2 + progress * 0.5) * pulse;
+        ctx.strokeStyle = '#ff8800';
+        ctx.shadowBlur = 6 + progress * 10;
+        ctx.shadowColor = '#ff8800';
+        ctx.lineWidth = 2 + progress * 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
       const sz=this.type==='OMEGA'?22:18;
       ctx.beginPath();
       ctx.arc(sx,sy,sz,0,TWO_PI);
@@ -4799,10 +4940,11 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SNIPER':   hp=20;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
+    case 'WARDEN':  hp=330; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
     case 'OMEGA':   hp=1000;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
   }
-  const isBoss = ['SENTINEL','HIVE','OMEGA'].includes(type);
+  const isBoss = ['SENTINEL','WARDEN','HIVE','OMEGA'].includes(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
   if (!isBoss) {
     if (game.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
@@ -4818,6 +4960,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
+  if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses or snipers
   if (allowElite !== false && !isBoss && type !== 'SNIPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
@@ -5972,7 +6115,7 @@ function populateFloor(dungeon, floorNum) {
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
-  const bossTypes={3:'SENTINEL',6:'HIVE',10:'OMEGA'};
+  const BOSS_POOLS={3:['SENTINEL','WARDEN'],6:['HIVE'],10:['OMEGA']};
 
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
@@ -5981,11 +6124,13 @@ function populateFloor(dungeon, floorNum) {
     if (room.roomType==='challenge') continue; // wave-spawned during encounter
 
     if (bossRoom && room===bossRoom) {
-      const btype=bossTypes[floorNum];
+      const pool=BOSS_POOLS[floorNum];
+      const btype=pool?pool[Math.floor(Math.random()*pool.length)]:null;
       if (btype) {
         const b=spawnEnemy(btype,room.cx,room.cy,floorNum,room);
         enemies.push(b);
         game.bossRoom=bossRoom;
+        game.bossType=btype;
         game.bossEntrances=dungeon.bossEntrances||[];
         game.bossSealed=false;
         game.bossAlive=true;
@@ -6077,6 +6222,7 @@ const game = {
   transitionText: '',
   menuParticles: [],
   bossRoom: null,
+  bossType: null,
   bossEntrances: [],
   bossSealed: false,
   bossAlive: false,
@@ -6160,6 +6306,7 @@ const game = {
     this.dungeon=generateFloor(n);
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
+    this.bossType=null;
     this.bossEntrances=[];
     this.bossSealed=false;
     this.bossAlive=false;
@@ -7006,14 +7153,14 @@ const game = {
       this.bossAlive=false;
       // Restore entrance tiles
       if (this.bossSealed) {
-        for (const e of this.bossEntrances) {
-          if (e.origTile !== undefined) { dungeon.map[e.y][e.x] = e.origTile; delete e.origTile; }
+        for (const ent of this.bossEntrances) {
+          if (ent.origTile !== undefined) { dungeon.map[ent.y][ent.x] = ent.origTile; delete ent.origTile; }
         }
         audio.roomUnseal();
       }
       this.bossSealed=false;
-      const bossNames={3:'SENTINEL MK-I',6:'NEURAL HIVE',10:'OMEGA CORE'};
-      game.msg((bossNames[this.floor]||'BOSS')+' DESTROYED','#39ff14');
+      const bossNames={SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',OMEGA:'OMEGA CORE'};
+      game.msg((bossNames[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
     // ── Challenge room: seal, wave spawn, unseal ─────────────────────────
