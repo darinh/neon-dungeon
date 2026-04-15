@@ -2259,6 +2259,19 @@ class Projectile {
         this.dead=true;
       }
     }
+    // Any projectile can prime volatile cores (skip if already consumed)
+    if (!this.dead) {
+      for (const c of vcores) {
+        if (c.dead || c.primed) continue;
+        if (dist(this.x, this.y, c.x, c.y) < 0.6) {
+          c.primed = true; c.timer = 0.55;
+          audio.corePrime();
+          spawnParticles(c.x, c.y, 'SPARK', '#ff6622', 6);
+          if (!this.fromPlayer) { this.dead = true; return; }
+          break; // player projectile: prime one core per frame, continue flying
+        }
+      }
+    }
   }
   draw(camX,camY) {
     // Ricochet trail — fading cyan line behind bouncing projectiles
@@ -2314,6 +2327,7 @@ function detonateGrenade(x, y, dmg) {
   hazardZones.push({ x, y, radius: 1.5, age: 0, maxAge: 3, tickCd: 0, armTimer: 0, dmg, colour: '#ff6622' });
   spawnParticles(x, y, 'EXPLOSION', '#ff6622', 10);
   audio.grenadeExplode();
+  primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
 }
 
 function updateHazardZones(dt, player) {

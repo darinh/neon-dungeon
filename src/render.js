@@ -679,6 +679,15 @@ function drawMinimap(dungeon, player) {
       ctx.fillRect(MX+ce.x*sx+sx/2-2, MY+ce.y*sy+sy/2-2, 4, 4);
     }
   }
+  // Volatile cores — small orange dots
+  for (const c of vcores) {
+    if (c.dead) continue;
+    const tx = Math.floor(c.x), ty = Math.floor(c.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    ctx.fillStyle = c.primed ? '#ff2200' : '#ff6622';
+    ctx.fillRect(MX+c.x*sx-0.5, MY+c.y*sy-0.5, 1.5, 1.5);
+  }
+
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
   // player dot
@@ -986,7 +995,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1052,6 +1061,17 @@ function populateFloor(dungeon, floorNum) {
     for (let j=0;j<itemCount;j++) {
       const ix=room.x+rnd(1,room.w-1), iy=room.y+rnd(1,room.h-1);
       items.push(new Item(ix,iy));
+    }
+
+    // Volatile cores (floors 3+, normal rooms only, 0–2 per room)
+    if (floorNum >= 3 && !rt) {
+      const coreCount = rndInt(0, 2);
+      for (let j = 0; j < coreCount; j++) {
+        const cx = room.x + rnd(1, room.w - 1);
+        const cy = room.y + rnd(1, room.h - 1);
+        const tile = dungeon.map[Math.floor(cy)]?.[Math.floor(cx)];
+        if (tile === T.FLOOR) vcores.push(createVCore(cx, cy));
+      }
     }
 
     // Special room bonuses
