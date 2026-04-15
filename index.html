@@ -43,7 +43,7 @@ const ACTION_LABELS = {
   interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
   dash:'Dash', shoot:'Shoot'
 };
-const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3']);
+const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab']);
 const KEY_DISPLAY = k => {
   if (!k) return '???';
   if (k.startsWith('Key')) return k.slice(3);
@@ -376,11 +376,16 @@ canvas.addEventListener('touchstart', e => {
       continue;
     }
     // button priority
+    // Expanded map: any tap closes (modal — takes priority)
+    if (game.mapExpanded) { justPressed.add('Tab'); continue; }
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
     if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }
     if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
+    // Tap minimap area to expand (after buttons so pause isn't stolen)
+    const _mx = W - 120 - 8 - safeRight, _my = 8 + safeTop;
+    if (cx >= _mx - 2 && cx <= _mx + 122 && cy >= _my - 2 && cy <= _my + 82) { justPressed.add('Tab'); continue; }
     // left half = joystick
     if (cx < W/2 && !touch.joystick.active) {
       touch.joystick.active=true; touch.joystick.id=t.identifier;
@@ -6580,6 +6585,228 @@ function drawMinimap(dungeon, player) {
   ctx.restore();
 }
 
+// ─── Expanded Minimap ─────────────────────────────────────────────────────────
+const ROOM_ICONS = {
+  armory:'⚔', medbay:'✚', shrine:'◈', vault:'◆', vendor:'$',
+  secret:'?', challenge:'⚡', implant:'⬡', event:'◎', boss:'☠'
+};
+const ROOM_LABEL_COLOURS = {
+  armory:'#ff8844', medbay:'#44ff88', shrine:'#cc66ff', vault:'#ffdd44',
+  vendor:'#39ff14', secret:'#ffb700', challenge:'#ff6633', implant:'#cc44ff',
+  event:'#44ffcc', boss:'#ff3333'
+};
+
+function drawExpandedMinimap(dungeon, player) {
+  const pad = 20;
+  const ratio = MAP_W / MAP_H; // 80/50 = 1.6
+  // Fit to ~85% of screen, respecting safe areas
+  const maxW = (W - 2 * pad - safeLeft - safeRight) * 0.85;
+  const maxH = (H - 2 * pad - safeTop - safeBottom) * 0.85;
+  let mw, mh;
+  if (maxW / ratio <= maxH) { mw = maxW; mh = maxW / ratio; }
+  else { mh = maxH; mw = maxH * ratio; }
+  mw = Math.round(mw); mh = Math.round(mh);
+  const mx = Math.round((W - mw) / 2);
+  const my = Math.round((H - mh) / 2);
+  const sx = mw / MAP_W, sy = mh / MAP_H;
+
+  ctx.save();
+
+  // Dim backdrop
+  ctx.fillStyle = 'rgba(0,0,10,0.82)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Map border
+  ctx.strokeStyle = '#2d2d5e'; ctx.lineWidth = 2;
+  ctx.strokeRect(mx - 2, my - 2, mw + 4, mh + 4);
+  ctx.fillStyle = 'rgba(8,8,20,0.92)';
+  ctx.fillRect(mx, my, mw, mh);
+
+  const echoMap = game.mapRevealed;
+  const thermalOptics = hasAugment('THERMAL_OPTICS');
+  const pois = [];
+  const roomCenters = [];
+
+  // Tiles
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      const visited = dungeon.visited[ty][tx];
+      if (!visited && !echoMap) continue;
+      const tile = dungeon.map[ty][tx];
+      const px = mx + tx * sx, py = my + ty * sy;
+      let col = null;
+
+      if (!visited && echoMap) {
+        if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
+        if (tile === T.WALL || tile === T.CRACKED) col = '#0d0d1a';
+        else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
+        if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
+        continue;
+      }
+
+      if (tile === T.WALL || tile === T.CRACKED) {
+        col = (game.bossSealed && game.bossEntrances.some(e => e.x === tx && e.y === ty)) ||
+              (game.challengeSealed && game.challengeEntrances.some(e => e.x === tx && e.y === ty))
+          ? '#5e2d2d' : '#1a1a2e';
+      }
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL) col = '#252545';
+      else if (tile === T.PLASMA) col = '#ff6600';
+      else if (tile === T.ARC) col = Math.sin((game.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
+      else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
+      else if (tile === T.VENDOR) col = '#39ff14';
+      else if (tile === T.LORE) col = '#ffb700';
+      else if (tile === T.DOOR) col = '#664422';
+      else if (tile === T.LOCKED_R) col = '#ff3333';
+      else if (tile === T.LOCKED_B) col = '#3388ff';
+      else if (tile === T.LOCKED_G) col = '#ffcc00';
+      else if (tile === T.CHALLENGE_GATE) col = '#ff6633';
+      if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
+
+      if (tile === T.STAIRS || tile === T.TERMINAL || tile === T.VENDOR || tile === T.LORE ||
+          tile === T.CHALLENGE_GATE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL) {
+        pois.push({ tile, px: px + sx / 2, py: py + sy / 2 });
+      }
+    }
+  }
+
+  // Room labels (visited special rooms only)
+  const fs = Math.max(8, Math.min(12, Math.round(sx * 1.8)));
+  ctx.font = `bold ${fs}px monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const r of dungeon.rooms) {
+    if (!r.roomType) continue;
+    // Skip unrevealed secret rooms
+    if (r.roomType === 'secret' && (!r.secretRevealed)) continue;
+    // Only show if room center is visited
+    if (!dungeon.visited[r.cy]?.[r.cx]) continue;
+    const type = (game.bossRoom && r === game.bossRoom) ? 'boss' : r.roomType;
+    const icon = ROOM_ICONS[type] || '';
+    const col = ROOM_LABEL_COLOURS[type] || '#aaaacc';
+    const lx = mx + r.cx * sx + sx / 2;
+    const ly = my + r.cy * sy + sy / 2;
+    ctx.globalAlpha = 0.85;
+    ctx.shadowBlur = 4; ctx.shadowColor = col;
+    ctx.fillStyle = col;
+    ctx.fillText(icon, lx, ly);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
+  // Boss room label
+  if (game.bossRoom && dungeon.visited[game.bossRoom.cy]?.[game.bossRoom.cx]) {
+    const br = game.bossRoom;
+    const icon = ROOM_ICONS.boss;
+    const col = ROOM_LABEL_COLOURS.boss;
+    const lx = mx + br.cx * sx + sx / 2;
+    const ly = my + br.cy * sy + sy / 2;
+    ctx.globalAlpha = 0.9;
+    ctx.shadowBlur = 6; ctx.shadowColor = col;
+    ctx.fillStyle = col;
+    ctx.fillText(icon, lx, ly);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
+  // Enemies
+  const dotSz = Math.max(3, Math.round(sx * 0.5));
+  for (const e of enemies) {
+    if (e.dead) continue;
+    if (!thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
+    const ex = mx + e.x * sx, ey = my + e.y * sy;
+    if (e.isBoss) {
+      const bPulse = 0.6 + 0.4 * Math.sin((game.floorTime || 0) * 4);
+      ctx.globalAlpha = bPulse;
+      ctx.shadowBlur = 8; ctx.shadowColor = '#ff3333';
+      ctx.fillStyle = '#ff3333';
+      ctx.fillRect(ex - dotSz, ey - dotSz, dotSz * 2, dotSz * 2);
+    } else if (e.elite && e.eliteAffix) {
+      ctx.fillStyle = ELITE_AFFIXES[e.eliteAffix].colour;
+      ctx.fillRect(ex - dotSz * 0.7, ey - dotSz * 0.7, dotSz * 1.4, dotSz * 1.4);
+    } else {
+      const vis = thermalOptics && !dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)];
+      ctx.fillStyle = vis ? '#ff666688' : '#ff3333';
+      ctx.fillRect(ex - dotSz * 0.5, ey - dotSz * 0.5, dotSz, dotSz);
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
+  // POI markers with labels
+  const pulse = 0.65 + 0.35 * Math.sin((game.floorTime || 0) * 2.5);
+  const poiFs = Math.max(7, Math.min(10, Math.round(sx * 1.4)));
+  ctx.font = `${poiFs}px monospace`;
+  for (const p of pois) {
+    let col, label, sz = Math.max(4, Math.round(sx * 0.6));
+    if (p.tile === T.STAIRS || p.tile === T.TERMINAL) { col = '#ffffff'; label = game.floor === 10 ? 'CORE' : 'EXIT'; }
+    else if (p.tile === T.VENDOR) { col = '#39ff14'; label = 'SHOP'; }
+    else if (p.tile === T.CHALLENGE_GATE) { col = '#ff6633'; label = 'CHALLENGE'; }
+    else if (p.tile === T.IMPLANT_SHRINE) { col = '#cc44ff'; label = 'IMPLANT'; }
+    else if (p.tile === T.EVENT_TERMINAL) { col = '#44ffcc'; label = 'EVENT'; }
+    else { col = '#ffb700'; label = 'LORE'; sz = Math.max(3, Math.round(sx * 0.45)); }
+    ctx.globalAlpha = pulse;
+    ctx.shadowBlur = 6; ctx.shadowColor = col;
+    ctx.fillStyle = col;
+    ctx.fillRect(p.px - sz / 2, p.py - sz / 2, sz, sz);
+    // Label below marker
+    ctx.textAlign = 'center';
+    ctx.fillText(label, p.px, p.py + sz / 2 + poiFs + 1);
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  // Sealed entrance markers
+  if (game.bossSealed && game.bossEntrances) {
+    const bPulse = 0.5 + 0.5 * Math.sin((game.floorTime || 0) * 4);
+    ctx.globalAlpha = bPulse; ctx.shadowBlur = 6; ctx.shadowColor = '#ff3333'; ctx.fillStyle = '#ff3333';
+    for (const be of game.bossEntrances) {
+      if (!dungeon.visited[be.y]?.[be.x]) continue;
+      ctx.fillRect(mx + be.x * sx + sx / 2 - 3, my + be.y * sy + sy / 2 - 3, 6, 6);
+    }
+  }
+  if (game.challengeSealed && game.challengeEntrances) {
+    const cPulse = 0.5 + 0.5 * Math.sin((game.floorTime || 0) * 3.5);
+    ctx.globalAlpha = cPulse; ctx.shadowBlur = 6; ctx.shadowColor = '#ff6633'; ctx.fillStyle = '#ff6633';
+    for (const ce of game.challengeEntrances) {
+      if (!dungeon.visited[ce.y]?.[ce.x]) continue;
+      ctx.fillRect(mx + ce.x * sx + sx / 2 - 3, my + ce.y * sy + sy / 2 - 3, 6, 6);
+    }
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  // Player dot
+  const pDot = Math.max(5, Math.round(sx * 0.8));
+  ctx.shadowBlur = 10; ctx.shadowColor = '#00f5ff';
+  ctx.fillStyle = '#00f5ff';
+  ctx.fillRect(mx + player.x * sx - pDot / 2, my + player.y * sy - pDot / 2, pDot, pDot);
+  ctx.shadowBlur = 0;
+
+  // Title + hint
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.shadowBlur = 8; ctx.shadowColor = '#00f5ff';
+  ctx.fillStyle = '#00f5ff'; ctx.font = 'bold 14px monospace';
+  ctx.fillText(`FLOOR ${game.floor} MAP`, W / 2, my - 22);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#666688'; ctx.font = '11px monospace';
+  const hint = isTouchDevice() ? 'TAP TO CLOSE' : 'TAB / ESC TO CLOSE';
+  ctx.fillText(hint, W / 2, my + mh + 8);
+
+  // Legend (bottom-left of map)
+  const legendX = mx + 6, legendY = my + mh + 24;
+  const lFs = Math.max(8, Math.min(10, fs - 1));
+  ctx.font = `${lFs}px monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const legend = [
+    ['#00f5ff','● You'], ['#ff3333','● Enemy'], ['#ffffff','■ Exit'],
+    ['#39ff14','■ Shop'], ['#ffb700','■ Lore'], ['#cc44ff','■ Implant'],
+    ['#44ffcc','■ Event'], ['#ff6633','■ Challenge']
+  ];
+  let lx = legendX;
+  for (const [col, label] of legend) {
+    ctx.fillStyle = col;
+    const tw = ctx.measureText(label).width;
+    if (lx + tw > mx + mw) break;
+    ctx.fillText(label, lx, legendY);
+    lx += tw + 12;
+  }
+
+  ctx.restore();
+}
+
 // ─── Messages ─────────────────────────────────────────────────────────────────
 let messages=[];
 function drawMessages() {
@@ -6796,6 +7023,7 @@ const game = {
   // Augment state
   augmentChoice: null,        // {options: [id, id], selected: 0}
   mapRevealed: false,         // ECHO_MAPPER: show floor layout on minimap
+  mapExpanded: false,         // Tab toggle: full-screen map overlay
   // Perk choice state
   pendingPerkChoices: [], // queued level milestones awaiting perk selection
   perkChoice: null,       // {options: [id, id, id], selected: 0}
@@ -6806,6 +7034,7 @@ const game = {
 
   setState(s, callback) {
     this.state=s;
+    this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; music.stop(); }
     else if (s === 'PAUSED') music.pause();
     else if (s === 'PLAYING') music.resume();
@@ -6874,6 +7103,7 @@ const game = {
     } else {
       this.mapRevealed = false;
     }
+    this.mapExpanded = false;
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
     messages=[];
@@ -7224,6 +7454,14 @@ const game = {
     this.floorTime = (this.floorTime || 0) + dt;
     this.runTime = (this.runTime || 0) + dt;
     this.hint = null;
+
+    // Expanded map modal — freeze gameplay, only handle dismiss
+    if (this.mapExpanded) {
+      if (jp('Tab') || jp('Escape')) this.mapExpanded = false;
+      justPressed.clear();
+      return;
+    }
+    if (jp('Tab')) { this.mapExpanded = true; justPressed.clear(); return; }
 
     player.update(dt,dungeon.map);
 
@@ -8804,7 +9042,7 @@ const game = {
 
     switch(this.state) {
       case 'MENU':      this.renderMenu();     break;
-      case 'PLAYING':   this.renderPlaying();  break;
+      case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;

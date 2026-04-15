@@ -1315,7 +1315,21 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
   POI markers: visited key locations get larger pulsing glow markers drawn above
   tile/enemy layers — stairs/terminal (white, 3 px), vendor (green, 3 px), lore
   (amber, 2 px), sealed boss entrance (red, 4 px, fast pulse). Player dot (cyan,
-  4 px) always on top.
+  4 px) always on top. Tapping the minimap on touch devices opens the expanded
+  view.
+- **Expanded Minimap:** Pressing `Tab` during PLAYING opens a full-screen modal
+  map overlay. Gameplay freezes while the overlay is visible. The map fills ~85%
+  of the screen (responsive to viewport size, respects safe areas) and maintains
+  the 80:50 tile ratio. Shows all visited tiles with the same colour scheme as
+  the small minimap, plus: room-type icons at visited special room centres
+  (⚔ armory, ✚ medbay, ◈ shrine, ◆ vault, $ vendor, ⬡ implant, ◎ event,
+  ⚡ challenge, ☠ boss); text labels on POI tiles (EXIT/CORE, SHOP, LORE,
+  CHALLENGE, IMPLANT, EVENT); larger enemy dots (boss dots pulse); and a colour
+  legend along the bottom. Unrevealed secret rooms are never shown. ECHO_MAPPER
+  augment reveals layout as dimmed tiles (same as small minimap). Dismissed with
+  `Tab` or `Escape` (desktop) or any tap (touch). Cleared automatically on floor
+  transitions, state changes, and run start/end. `Tab` is a reserved UI key and
+  cannot be rebound.
 - **Glow FX:** `ctx.shadowBlur` on all neon elements
 - **Ambient particles:** Separate `ambientParticles[]` array (cap 80) with
   five emitter types that spawn in visited, non-secret tiles within torch radius:
