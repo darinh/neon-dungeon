@@ -1604,6 +1604,22 @@ const audio = (() => {
       osc('triangle', 150, 600, 0.04, t + 0.05, 0.25, bus);
       noise(0.04, t + 0.15, 0.2, 6000, bus);
       osc('square', 300, 500, 0.02, t + 0.2, 0.1, bus);
+    },
+    nexusLink() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.6, 0.2, 0.15);
+      // Subtle electronic connection buzz
+      osc('sine', 600, 800, 0.02, t, 0.08, bus);
+      osc('triangle', 900, 1100, 0.015, t + 0.02, 0.06, bus);
+    },
+    nexusDeath() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.9, 0.4, 0.3);
+      // Electromagnetic feedback pulse — descending + crackling
+      osc('sawtooth', 1200, 200, 0.08, t, 0.4, bus);
+      osc('square', 800, 100, 0.05, t + 0.05, 0.35, bus);
+      noise(0.06, t + 0.1, 0.3, 4000, bus);
+      osc('sine', 400, 80, 0.04, t + 0.15, 0.25, bus);
     }
   };
 })();

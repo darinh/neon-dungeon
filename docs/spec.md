@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.7
+# NEON DUNGEON — Game Specification v5.0
 
 ## Vision
 
@@ -932,6 +932,7 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | REFLECTOR    | 40      | 10  | Reflective shield bounces projectiles back     | 28  |
 | DISRUPTOR    | 30      | 9   | Deploys persistent area-denial fields          | 25  |
 | WRAITH       | 35      | 13  | Phases through walls, emerges to attack         | 30  |
+| NEXUS        | 40      | 8   | Links to allies granting DR, death stuns linked | 35  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
@@ -941,7 +942,8 @@ LEAPER appears floor 5+,
 TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 6+,
 SNIPER appears floor 7+,
 REFLECTOR appears floor 7+,
-WRAITH appears floor 8+.
+WRAITH appears floor 8+,
+NEXUS appears floor 9+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -1488,6 +1490,74 @@ from unpredictable angles. The only enemy type that can move through walls.
     - SWARM (0.6× HP): Glass cannon that phases often.
     - FORTIFIED (1.4× HP): Harder to burst during corporeal window.
     - CORROSIVE (+2 flat dmg): Ranged attacks hit harder.
+
+#### NEXUS (floor 9+)
+
+Neural command node that links to nearby allies, buffing their durability. Creates
+priority-targeting decisions: kill the NEXUS to stun all linked enemies, or burn
+through tougher allies first.
+
+| Stat | Value |
+|------|-------|
+| HP   | 40 (base) |
+| ATK  | 8 |
+| SPD  | 1.8 |
+| XP   | 35 |
+| Credits | 12 |
+| Colour | `#00eedd` (teal) |
+| TYPE_CAPS | 1 per room |
+
+**AI:** HEALER-like retreat pattern. Stays at 4–10 tile range. Retreats if
+player within 4 tiles (toward nearest ally cluster when possible). Fires weak
+teal projectiles (speed 6, range 12). Fire rate scales with link count:
+2.0 s base → 1.0 s with 3 links (further reduced by OVERCLOCK modifier and
+berserker affix).
+
+**Neural Links:**
+- Maintains up to 3 links to closest non-boss, non-NEXUS allies within 5 tiles
+  (same room). Links break at 7 tiles (hysteresis prevents churn).
+- Link update interval: 0.5 s.
+- **Cannot link to:** bosses, other NEXi, phased WRAITHs (`_wrPhased`), disguised
+  MIMICs (`_disguised`), invisible PHANTOMs.
+- Linked enemies receive **25% damage reduction** (applied after Shield Generator
+  DR, multiplicative — both active = 51.25% total DR).
+- Links are rendered as animated teal dashed beams with a subtle glow on linked
+  enemies.
+- **Stun breaks all links** (via EMP, weapon shock, shield gen destruction EMP).
+  Links re-form naturally after stun ends (next AI update cycle).
+
+**Death — Neural Feedback:**
+When NEXUS dies, all currently linked enemies suffer neural feedback:
+- **Stun**: 1.5 s (standard stun, max'd with existing `stunTimer`)
+- **Damage**: `10 + floor × 2` (applied via `takeDamage('Neural Feedback')` —
+  respects shields and elite DR)
+- **Visual**: 20-particle teal explosion + screen shake
+- **Audio**: `audio.nexusDeath()` — descending electromagnetic feedback pulse.
+
+**Interactions:**
+- **EMP**: Standard stun (2 s regular, 1 s boss — N/A since non-boss). Breaks all
+  links during stun.
+- **Shield Gen**: NEXUS benefits from Shield Generator DR if in same room.
+- **Auto-targeting**: Fully targetable by sentry drones, plasma orbs, hacked
+  turrets, etc.
+- **Projectile collision**: Standard — no reflection or blocking.
+
+**Elite eligible:** Yes. Elite NEXUS gains extra HP/ATK/SPD and elite affix,
+making it harder to prioritize-kill while allies receive DR.
+
+**Modifier interactions:**
+- OVERCLOCK: Fire rate increased.
+- SWARM (0.6× HP): Fragile but still links allies.
+- FORTIFIED (1.4× HP): Tankier node, harder to burst.
+- CORROSIVE (+2 flat dmg): Ranged attacks hit slightly harder.
+
+**Visual:** Teal (`#00eedd`) with pulsing dashed orbital ring. Inner diamond
+symbol. Neural links are animated dashed beams. Standard minimap red dot (no
+stealth). Death: teal particle explosion.
+
+**Audio:** `audio.nexusLink()` — subtle electronic connection buzz when new link
+forms. `audio.nexusDeath()` — descending electromagnetic feedback pulse +
+crackling.
 
 #### MIMIC (floor 7+)
 
@@ -3237,3 +3307,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v68.0   | REFLECTOR enemy (floor 7+): tactical mid-range enemy with 90° reflective energy shield that bounces player projectiles back at them. Shield tracks player with 0.33 s lag (3 rad/s smooth lerp). Reflected projectiles: velocity reversed, `fromPlayer=false`, 60% damage, ricochet/homing cleared, `travelled` reset. Piercing projectiles reflected (unlike SHIELDER which piercing bypasses). Ally turret shots blocked (not reflected). Shield persists during stun (stops tracking). AI: holds position 4–10 tiles, retreats < 4, fires every 2.5 s. Stats: HP 40, ATK 10, SPD 1.8, XP 28, credits 12. Colour: `#88ddff`. `reflectsProjectile()` + extended `blocksProjectile()`. Visual: cyan arc + white mirror highlight + segmented edge ticks. `audio.reflect()` crystalline ping. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 7. Spec v4.7. SW cache v80. |
 | v69.0   | DISRUPTOR enemy (floor 6+): area-denial specialist deploying persistent electromagnetic interference fields. AI maintains 5–9 tile range, retreats < 4, deploys 2-tile radius fields every 4 s near player (validated passable tile, ±0.75 offset), secondary ranged attack every 2.5 s. Fields: 5 s duration, `(3 + floor × 0.5) × envDmg` DPS at 0.5 s interval (ignoreDefense, ignoreInvincible), hackware cooldown frozen, 20% movement slow. Non-stacking debuffs (binary flag). Dash/Phase Cloak immune. Max 2 fields per disruptor; oldest replaced at cap. Fields persist after disruptor death. EMP destroys fields in radius. `disruptionFields[]` global array, `updateDisruptionFields()`, `drawDisruptionFields()`. Stats: HP 30, ATK 9, SPD 2.0, XP 25, credits 10. Colour: `#ff44aa`. Status badge: `⊘ DISRUPTED`. Minimap: magenta pulsing dot. `audio.disruptorDeploy()` (descending warble), `audio.disruptorField()` (static crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 6. Spec v4.8. SW cache v81. |
 | v70.0   | WRAITH enemy (floor 8+): ethereal wall-phasing predator with 4-state machine (`_wrState`). `phased` (2–3 s): moves through walls ignoring `isPassable()`, speed ×1.2, untargetable, immune to all damage (`_wrPhased` flag → `takeDamage()` early return, projectile/AoE/targeting skips). `emerging` (0.5 s): telegraph at passable tile near player (1.2–3.5 range, `_wrFindEmergeTile()` 20-attempt search + fallbacks). `corporeal` (2–3 s): normal combat, ranged attack every 1.5 s, damage extends timer (+0.3 s/hit, 0.5 s ICD, cap 3 s). `fading` (0.4 s): phase-out telegraph, still damageable. EMP hard counter: bypasses LOS, forces materialization + 2 s stun. Stun forces corporeal. Burn ticks suppressed while phased. Chain lightning/saw blade/nano swarm/gravity/static field skip phased. Room clear blocked by phased WRAITHs. Minimap: hidden unless Thermal Optics (dim spectral dot). Visual: alpha 0.1 (phased)→0.85 (corporeal), emerging glow ring, fading dashed ring. Emerging bypasses FOV gating. Stats: HP 35, ATK 13, SPD 2.8, XP 30, credits 12. Colour: `#66ffcc`. `audio.wraithPhaseOut()` (descending whoosh), `audio.wraithPhaseIn()` (ascending whoosh + crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 8. Spec v4.9. SW cache v82. |
+| v71.0   | NEXUS enemy (floor 9+): neural command node that links to nearby allies granting 25% DR. AI: HEALER-like retreat pattern (4–10 tile range), fires teal projectiles (speed 6, range 12), fire rate scales with link count (2.0 s → 1.0 s with 3 links). Neural links: up to 3 allies within 5 tiles (same room, break at 7), 0.5 s update interval. Cannot link: bosses, other NEXi, phased WRAITHs, disguised MIMICs, invisible PHANTOMs. DR applied in `takeDamage()` after Shield Gen DR (multiplicative). Stun breaks all links; re-form after stun ends. Retreat targets nearest ally cluster to maintain links. Death neural feedback: stun all linked enemies 1.5 s + deal `10 + floor × 2` damage (via `takeDamage('Neural Feedback')`), teal explosion + screen shake. `_nxLinks[]` array, `_nxBoosted` flag on linked enemies, `_nxUpdateLinks()` + `_nxFindAllyCluster()` helpers. Stats: HP 40, ATK 8, SPD 1.8, XP 35, credits 12. Colour: `#00eedd` (teal). Visual: dashed orbital ring + inner diamond, animated teal dashed beam links with glow on linked enemies. `audio.nexusLink()` electronic buzz, `audio.nexusDeath()` electromagnetic feedback pulse. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 9. Spec v5.0. SW cache v83. |

@@ -14,11 +14,11 @@ let lasers  = [];
 let wallTurrets = [];
 let disruptionFields = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -34,11 +34,12 @@ const SOURCE_LABELS = {
   'Wall Turret':'Wall Turret',
   'Reflected':'Reflected',
   'Disruption Field':'Disruption Field',
+  'Neural Feedback':'Neural Feedback',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -55,6 +56,7 @@ const SOURCE_COLOURS = {
   'Reflected':'#88ddff',
   'Disruption Field':'#ff44aa',
   'Wraith':'#66ffcc',
+  'Neural Feedback':'#00eedd',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -316,6 +318,10 @@ class Enemy {
     if (!wasDisguised && isEnemyShieldGenProtected(this)) {
       dmg = Math.max(1, Math.round(dmg * (1 - SHIELD_GEN_DR)));
     }
+    // NEXUS link DR — linked enemies take 25% less damage
+    if (this._nxBoosted) {
+      dmg = Math.max(1, Math.round(dmg * 0.75));
+    }
     const actual = Math.min(this.hp, dmg);
     this.hp -= dmg;
     this.flashTimer = 0.1;
@@ -441,6 +447,20 @@ class Enemy {
       // Trigger nearby mines
       triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
     }
+    // NEXUS death: neural feedback — stun + damage all linked enemies
+    if (this.type === 'NEXUS' && this._nxLinks) {
+      const feedbackDmg = 10 + (game.floor || 1) * 2;
+      for (const linked of this._nxLinks) {
+        if (linked.dead) continue;
+        linked._nxBoosted = false;
+        linked.stunTimer = Math.max(linked.stunTimer || 0, 1.5);
+        linked.takeDamage(feedbackDmg, 'Neural Feedback');
+      }
+      this._nxLinks = [];
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#00eedd', 20);
+      triggerShake(5, 0.2);
+      audio.nexusDeath();
+    }
     // SPLITTER: queue 2 SHARDs (deferred to avoid same-frame hits)
     if (this.type === 'SPLITTER') {
       audio.enemySplit();
@@ -471,6 +491,11 @@ class Enemy {
       if (this._chgState && this._chgState !== 'idle') { this._chgState = 'idle'; this._chgCooldown = 2.0; }
       if (this._lpState === 'windup') { this._lpState = 'idle'; this._lpCooldown = 1.5; this._lpHeight = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
+      // NEXUS: stun breaks all neural links
+      if (this._nxLinks && this._nxLinks.length > 0) {
+        for (const e of this._nxLinks) { if (e && !e.dead) e._nxBoosted = false; }
+        this._nxLinks = [];
+      }
       // WRAITH: stun forces corporeal — must find valid tile first
       if (this._wrState && this._wrState !== 'corporeal') {
         const emerge = this._wrFindEmergeTile(map, game.player);
@@ -520,6 +545,7 @@ class Enemy {
       case 'REFLECTOR':this.aiReflector(dt,player,map,d,los);break;
       case 'DISRUPTOR':this.aiDisruptor(dt,player,map,d,los);break;
       case 'WRAITH':  this.aiWraith(dt,player,map,d,los);  break;
+      case 'NEXUS':   this.aiNexus(dt,player,map,d,los);  break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -1555,6 +1581,114 @@ class Enemy {
     }
   }
 
+  // ── NEXUS: Neural Command Node — links to nearby allies, buffing with DR ──
+  aiNexus(dt, player, map, d, los) {
+    const bm = this.berserkerMul();
+    // Update links every 0.5s
+    this._nxLinkTimer = Math.max(0, (this._nxLinkTimer || 0) - dt);
+    if (this._nxLinkTimer <= 0) {
+      this._nxUpdateLinks();
+      this._nxLinkTimer = 0.5;
+    }
+    // Fire rate scales with link count: 2.0s base → 1.0s with 3 links
+    this._nxFireTimer = Math.max(0, (this._nxFireTimer || 0) - dt);
+    const linkCount = this._nxLinks ? this._nxLinks.length : 0;
+    const fireInterval = Math.max(1.0, 2.0 - linkCount * 0.33) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+
+    if (los && d < 4) {
+      // Too close — retreat toward nearest ally cluster
+      const ally = this._nxFindAllyCluster();
+      let tx, ty;
+      if (ally) {
+        tx = ally.x; ty = ally.y;
+      } else {
+        tx = this.x + (this.x - player.x);
+        ty = this.y + (this.y - player.y);
+      }
+      this.moveToward(tx, ty, this.spd, dt, map);
+    } else if (los && d <= 10) {
+      // In range — fire at player
+      if (this._nxFireTimer <= 0) {
+        this.fireAt(player.x, player.y, 6, this.atk, 12, '#00eedd');
+        this._nxFireTimer = fireInterval;
+      }
+      // Drift toward ally cluster to maintain links
+      const ally = this._nxFindAllyCluster();
+      if (ally && dist(this.x, this.y, ally.x, ally.y) > 3) {
+        this.moveToward(ally.x, ally.y, this.spd * 0.4, dt, map);
+      }
+    } else if (d > 10 && los) {
+      this.moveToward(player.x, player.y, this.spd * 0.5, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
+  _nxUpdateLinks() {
+    if (!this._nxLinks) this._nxLinks = [];
+    const oldLinks = this._nxLinks;
+    // If stunned, all links break
+    if (this.stunTimer > 0) {
+      for (const e of oldLinks) { if (e && !e.dead) e._nxBoosted = false; }
+      this._nxLinks = [];
+      return;
+    }
+    // Find up to 3 closest valid allies within 5 tiles
+    const candidates = [];
+    for (const e of enemies) {
+      if (e === this || e.dead || e.isBoss) continue;
+      if (e.type === 'NEXUS') continue;
+      if (e._wrPhased) continue;
+      if (e._disguised) continue;
+      if (e.type === 'PHANTOM' && !e.visible) continue;
+      if (e.room !== this.room) continue;
+      const ed = dist(this.x, this.y, e.x, e.y);
+      if (ed > 5) continue;
+      candidates.push({ e, d: ed });
+    }
+    candidates.sort((a, b) => a.d - b.d);
+    // Keep existing links if still valid (within 7-tile break range), fill up to 3
+    const kept = [];
+    for (const linked of oldLinks) {
+      if (linked.dead || dist(this.x, this.y, linked.x, linked.y) > 7) continue;
+      if (linked._wrPhased || linked._disguised) continue;
+      if (linked.type === 'PHANTOM' && !linked.visible) continue;
+      if (linked.room !== this.room) continue;
+      kept.push(linked);
+    }
+    // Add new links from candidates
+    const MAX_LINKS = 3;
+    for (const c of candidates) {
+      if (kept.length >= MAX_LINKS) break;
+      if (!kept.includes(c.e)) kept.push(c.e);
+    }
+    // Clear boost on enemies no longer linked
+    for (const e of oldLinks) {
+      if (e && !e.dead && !kept.includes(e)) e._nxBoosted = false;
+    }
+    this._nxLinks = kept;
+    // Apply boost flag; audio only on newly formed links
+    for (const e of this._nxLinks) {
+      if (!e._nxBoosted) audio.nexusLink();
+      e._nxBoosted = true;
+    }
+  }
+
+  _nxFindAllyCluster() {
+    let best = null, bestCount = 0;
+    for (const e of enemies) {
+      if (e === this || e.dead || e.room !== this.room) continue;
+      if (e.isBoss || e._wrPhased || e._disguised) continue;
+      let nearby = 0;
+      for (const o of enemies) {
+        if (o === e || o === this || o.dead || o.room !== this.room) continue;
+        if (dist(e.x, e.y, o.x, o.y) < 4) nearby++;
+      }
+      if (nearby > bestCount) { bestCount = nearby; best = e; }
+    }
+    return best;
+  }
+
   aiBossSentinel(dt,player,map,d,los) {
     if (this.hp<100) this.phase=2; else this.phase=1;
     if (this.phase!==this.prevPhase) {
@@ -2401,6 +2535,63 @@ class Enemy {
         ctx.stroke();
         ctx.restore();
       }
+      // NEXUS: orbital ring + link beams to buffed allies
+      if (this.type === 'NEXUS') {
+        ctx.save();
+        // Pulsing orbital ring
+        const nPulse = 0.2 + 0.12 * Math.sin(this.bobAngle * 2.5);
+        ctx.globalAlpha = nPulse;
+        ctx.strokeStyle = '#00eedd';
+        ctx.shadowBlur = 10 + Math.sin(this.bobAngle * 2) * 5;
+        ctx.shadowColor = '#00eedd';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 7]);
+        ctx.lineDashOffset = this.bobAngle * 10;
+        const ringR = sz * 1.5 + Math.sin(this.bobAngle * 3) * 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, ringR, 0, TWO_PI);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Inner diamond symbol
+        ctx.globalAlpha = nPulse * 1.4;
+        ctx.fillStyle = '#00eedd';
+        ctx.lineWidth = 1;
+        const ds = 4;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - ds * 1.2);
+        ctx.lineTo(sx + ds, sy);
+        ctx.lineTo(sx, sy + ds * 1.2);
+        ctx.lineTo(sx - ds, sy);
+        ctx.closePath();
+        ctx.stroke();
+        // Neural link beams to linked allies
+        if (this._nxLinks && this.stunTimer <= 0) {
+          for (const linked of this._nxLinks) {
+            if (linked.dead) continue;
+            const lx = linked.x * TILE - camX;
+            const ly = linked.y * TILE - camY;
+            const beamAlpha = 0.25 + 0.1 * Math.sin(this.bobAngle * 4);
+            ctx.globalAlpha = beamAlpha;
+            ctx.strokeStyle = '#00eedd';
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = 1.5 + Math.sin(this.bobAngle * 5) * 0.5;
+            ctx.setLineDash([4, 5]);
+            ctx.lineDashOffset = -this.bobAngle * 8;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(lx, ly);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Small teal glow on linked enemy
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = '#00eedd';
+            ctx.beginPath();
+            ctx.arc(lx, ly, sz * 0.8, 0, TWO_PI);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      }
       // Teleporter: afterimage at previous warp origin
       if (this.type === 'TELEPORTER' && this._warpFade > 0) {
         ctx.save();
@@ -2848,6 +3039,7 @@ const ENEMY_WEIGHTS = {
   REFLECTOR:  { base: 1,  perFloor: 2, minFloor: 7 },  // projectile-reflecting shield
   DISRUPTOR:  { base: 1,  perFloor: 2, minFloor: 6 },  // area-denial field deployer
   WRAITH:     { base: 1,  perFloor: 2, minFloor: 8 },  // wall-phasing ethereal predator
+  NEXUS:      { base: 1,  perFloor: 2, minFloor: 9 },  // neural command node, buffs linked allies
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2888,6 +3080,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'REFLECTOR':hp=40;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
     case 'DISRUPTOR':hp=30;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
     case 'WRAITH':  hp=35;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
+    case 'NEXUS':   hp=40;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -2927,6 +3120,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
   if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
   if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+Math.random(); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
+  if (type==='NEXUS')    { e._nxLinks=[]; e._nxLinkTimer=0; e._nxFireTimer=1.0; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
