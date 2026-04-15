@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.2
+# NEON DUNGEON — Game Specification v3.3
 
 ## Vision
 
@@ -1965,6 +1965,33 @@ Certain enemy types inflict status effects on successful hits. Effects only appl
 
 **Death recap integration:** 'Burn' and 'Shock' entries in `SOURCE_LABELS`/`SOURCE_COLOURS`.
 
+### Teleport Pads (floor 3+, non-boss)
+
+Linked pairs of warp pads providing fast travel between distant rooms.
+
+**Generation:**
+- 1 pad pair on floors 3–5, 2 pairs on floors 6–9. Boss floors excluded.
+- Pads placed at room centers of eligible rooms (not spawn/stair/special/boss, area ≥ 16 tiles, center tile is FLOOR).
+- Pair selection maximizes Manhattan distance between rooms (minimum 15 tiles apart).
+- Placed after all other special rooms and tile mutations to prevent overwrite.
+- `T.TELEPORT_PAD` (20) tile type. Passable, see-through.
+
+**Interaction:**
+- Press E within pad tile → teleport to paired pad (+0.5 tile centering).
+- 3 s cooldown after use (shared across all pads on the floor). Cooldown shown in hint.
+- 0.3 s invincibility on arrival (prevents instant damage at destination).
+- Blocked when source or destination is inside a sealed boss/challenge room.
+- Proximity hint: "Press E to warp" (violet).
+
+**Visual:**
+- Tile: pulsing violet `⬡` hexagon glyph on dark floor (`#bb44ff`).
+- Spark particles at origin and destination on use.
+- Minimap: violet 3 px POI marker. Expanded minimap label: "WARP".
+
+**Audio:** `audio.teleportPad()` — ascending digital warp sweep + sparkle.
+
+**Regeneration:** Pads are part of floor generation, not saved/loaded independently. `dungeon.teleportPads` array stores `{x1,y1,x2,y2,pairIndex}` per pair. Cooldown resets on floor transition.
+
 ### Floor Events — Risk/Reward Encounters
 
 Interactive event terminals offering binary choices with different risk/reward profiles. One event room per non-boss floor (2–9).
@@ -2127,3 +2154,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v48.0   | Volatile Cores: explosive power cells in normal rooms (floor 3+, 0–2 per room). Projectile impact primes a 0.55 s fuse; detonation deals `30 + floor × 3` AoE damage (2.2-tile radius, LOS-gated) to enemies AND player (risk/reward tactical element). Chain-react to nearby cores for cascading explosions. Grenade, VOLATILE, and EXPLOSIVE_KILLS explosions also prime cores in radius. `vcores[]` global, `createVCore()`, `primeVCoresInRadius()`, `detonateVCore()`, `updateVCores()`, `drawVCores()`. Minimap orange dots. Death recap source: 'Volatile Core'. `audio.corePrime()` + `audio.coreDetonate()` SFX. SW cache v60. |
 | v49.0   | Sentry Drone: persistent upgrade (max level 3) — autonomous orbiting drones that auto-fire homing shots at nearby enemies. 2.0-tile orbit radius, 1.8 rad/s rotation. Each drone independently targets nearest visible enemy within 8 tiles (LOS-required, Phantom-aware) and fires homing projectile (8 dmg, speed 8, range 8, #00e5ff). Fire cooldown shared: 2.0 / 1.6 / 1.2 s. Visual: cyan diamond with bright core and outer glow. `audio.sentryFire()` SFX (soft ascending chirp). Added to UPGRADES pool (rarity 7). Death recap: 'Sentry Drone' source with #00e5ff colour. SW cache v61. |
 | v50.0   | Status effects: player debuffs + VOLTAIC weapon affix. (1) CRAWLER melee inflicts burn (2 s, floor-scaling DPS, orange underglow + fire particles, routed through `takeDamage` — respects SECOND_WIND). (2) SNIPER projectile inflicts shock (0.4 s movement suppress, yellow flash + sparks, aiming/shooting/dash still work). (3) Both debuffs gated on successful damage — blocked/evaded hits don't apply. (4) New weapon suffix "of Storms" (VOLTAIC): stuns enemies 0.6 s (0.3 s bosses) with 2 s per-enemy ICD preventing perma-stun. (5) `Player.takeDamage()` now returns actual damage dealt (0 if blocked) for conditional status application. (6) Status bar badges: 🔥 BURN, ⚡ SHOCK. (7) Player visual indicators: burn orange glow, shock yellow flash. (8) `audio.playerBurn()`, `audio.playerShock()`, `audio.voltaicHit()` SFX. (9) Debuffs clear on floor transition. SW cache v62. |
+| v51.0   | Teleport pads: linked inter-room fast travel. 1–2 pairs of warp pads per non-boss floor (floor 3+), placed in distant rooms (Manhattan ≥ 15). Press E to warp to paired pad. 3 s cooldown, 0.3 s arrival invincibility. Blocked when source/destination is in sealed boss/challenge room. `T.TELEPORT_PAD` (20) tile. Violet pulsing `⬡` glyph, spark particles on use. Minimap: violet 3 px POI + expanded "WARP" label. `audio.teleportPad()` ascending warp SFX. `dungeon.teleportPads` in floor gen return. No save format change. SW cache v63. |

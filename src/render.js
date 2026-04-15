@@ -108,6 +108,17 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('◈',sx+3,sy+14);
           break;
         }
+        case T.TELEPORT_PAD: {
+          ctx.fillStyle='#0f0a1a';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          const tpPulse = 0.5 + 0.5 * Math.sin(lastTime / 400 + tx * 1.5 + ty * 1.1);
+          ctx.shadowBlur=14; ctx.shadowColor='#bb44ff';
+          ctx.fillStyle=`rgba(187,68,255,${tpPulse})`;
+          ctx.font='14px monospace';
+          ctx.fillText('⬡',sx+2,sy+14);
+          break;
+        }
         case T.LORE: {
           ctx.fillStyle='#1a1208';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -607,7 +618,7 @@ function drawMinimap(dungeon, player) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
               (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
-      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL) col='#202040';
+      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) col='#202040';
       else if (tile===T.PLASMA) col='#ff6600';
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
@@ -620,7 +631,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.CHALLENGE_GATE) col='#ff6633';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
       // Collect POI tiles for marker overlay
-      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL) {
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) {
         pois.push({tile, px:px2+sx/2, py:py2+sy/2});
       }
     }
@@ -651,6 +662,7 @@ function drawMinimap(dungeon, player) {
     else if (p.tile===T.CHALLENGE_GATE) { col='#ff6633'; sz=3; }
     else if (p.tile===T.IMPLANT_SHRINE) { col='#cc44ff'; sz=3; }
     else if (p.tile===T.EVENT_TERMINAL) { col='#44ffcc'; sz=3; }
+    else if (p.tile===T.TELEPORT_PAD) { col='#bb44ff'; sz=3; }
     else { col='#ffb700'; sz=2; } // LORE
     ctx.globalAlpha=pulse;
     ctx.shadowBlur=5; ctx.shadowColor=col;
@@ -761,7 +773,7 @@ function drawExpandedMinimap(dungeon, player) {
               (game.challengeSealed && game.challengeEntrances.some(e => e.x === tx && e.y === ty))
           ? '#5e2d2d' : '#1a1a2e';
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL) col = '#252545';
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#252545';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((game.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
@@ -775,7 +787,7 @@ function drawExpandedMinimap(dungeon, player) {
       if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
 
       if (tile === T.STAIRS || tile === T.TERMINAL || tile === T.VENDOR || tile === T.LORE ||
-          tile === T.CHALLENGE_GATE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL) {
+          tile === T.CHALLENGE_GATE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) {
         pois.push({ tile, px: px + sx / 2, py: py + sy / 2 });
       }
     }
@@ -853,6 +865,7 @@ function drawExpandedMinimap(dungeon, player) {
     else if (p.tile === T.CHALLENGE_GATE) { col = '#ff6633'; label = 'CHALLENGE'; }
     else if (p.tile === T.IMPLANT_SHRINE) { col = '#cc44ff'; label = 'IMPLANT'; }
     else if (p.tile === T.EVENT_TERMINAL) { col = '#44ffcc'; label = 'EVENT'; }
+    else if (p.tile === T.TELEPORT_PAD) { col = '#bb44ff'; label = 'WARP'; }
     else { col = '#ffb700'; label = 'LORE'; sz = Math.max(3, Math.round(sx * 0.45)); }
     ctx.globalAlpha = pulse;
     ctx.shadowBlur = 6; ctx.shadowColor = col;

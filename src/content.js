@@ -2054,6 +2054,39 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Teleport Pads (floor 3+, non-boss): linked pairs for fast travel ───
+  const teleportPads = [];
+  if (floorNum >= 3 && !bossRoom) {
+    const padEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && !r.roomType &&
+      !specialRooms.includes(r) && r.w * r.h >= 16 &&
+      map[r.cy][r.cx] === T.FLOOR
+    );
+    // Want pairs of rooms far apart — sort by BFS distance from spawn and pair extremes
+    const pairCount = floorNum >= 6 ? 2 : 1;
+    const shuffled = padEligible.sort(() => Math.random() - 0.5);
+    const used = new Set();
+    for (let p = 0; p < pairCount && shuffled.length - used.size >= 2; p++) {
+      let bestA = null, bestB = null, bestDist = 0;
+      for (let i = 0; i < shuffled.length; i++) {
+        if (used.has(i)) continue;
+        for (let j = i + 1; j < shuffled.length; j++) {
+          if (used.has(j)) continue;
+          const d = Math.abs(shuffled[i].cx - shuffled[j].cx) + Math.abs(shuffled[i].cy - shuffled[j].cy);
+          if (d > bestDist) { bestDist = d; bestA = i; bestB = j; }
+        }
+      }
+      if (bestA !== null && bestDist >= 15) {
+        const rA = shuffled[bestA], rB = shuffled[bestB];
+        map[rA.cy][rA.cx] = T.TELEPORT_PAD;
+        map[rB.cy][rB.cx] = T.TELEPORT_PAD;
+        teleportPads.push({ x1: rA.cx, y1: rA.cy, x2: rB.cx, y2: rB.cy, pairIndex: p });
+        used.add(bestA);
+        used.add(bestB);
+      }
+    }
+  }
+
   // Room colour map (floor tile → tint)
   const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
   for (const r of rooms) {
@@ -2073,7 +2106,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────

@@ -53,6 +53,8 @@ const game = {
   // Perk choice state
   pendingPerkChoices: [], // queued level milestones awaiting perk selection
   perkChoice: null,       // {options: [id, id, id], selected: 0}
+  // Teleport pad state
+  teleportCooldown: 0, // seconds remaining before pads can be used again
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -128,6 +130,8 @@ const game = {
     if (this.player) this.player.secondWindUsed = false;
     // Clear player debuffs on floor transition
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
+    // Reset teleport pad cooldown
+    this.teleportCooldown = 0;
     populateFloor(this.dungeon,n);
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     if (hasAugment('ECHO_MAPPER')) {
@@ -627,6 +631,7 @@ const game = {
     updateAmbient(dt);
     updateHackwareEffects(dt);
     if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
+    if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
     // Nano Regen
@@ -765,6 +770,50 @@ const game = {
         return;
       }
       this.hint={text: isTouchDevice() ? 'Tap '+KEY_DISPLAY(km('interact'))+' to access data terminal' : 'Press '+KEY_DISPLAY(km('interact'))+' to access data terminal',colour:'#ffb700'};
+    }
+
+    // teleport pad interaction
+    if (tile===T.TELEPORT_PAD) {
+      const pads = dungeon.teleportPads || [];
+      let paired = null;
+      for (const p of pads) {
+        if (p.x1===tx && p.y1===ty) { paired = { x:p.x2, y:p.y2 }; break; }
+        if (p.x2===tx && p.y2===ty) { paired = { x:p.x1, y:p.y1 }; break; }
+      }
+      if (paired) {
+        // Check if destination is in a sealed boss/challenge room
+        const destSealed = (this.bossSealed && this.bossRoom &&
+          paired.x >= this.bossRoom.x && paired.x < this.bossRoom.x + this.bossRoom.w &&
+          paired.y >= this.bossRoom.y && paired.y < this.bossRoom.y + this.bossRoom.h) ||
+          (this.challengeSealed && this.challengeRoom &&
+          paired.x >= this.challengeRoom.x && paired.x < this.challengeRoom.x + this.challengeRoom.w &&
+          paired.y >= this.challengeRoom.y && paired.y < this.challengeRoom.y + this.challengeRoom.h);
+        // Also block if source is in a sealed room (no escaping)
+        const srcSealed = (this.bossSealed && this.bossRoom &&
+          player.x >= this.bossRoom.x && player.x < this.bossRoom.x + this.bossRoom.w &&
+          player.y >= this.bossRoom.y && player.y < this.bossRoom.y + this.bossRoom.h) ||
+          (this.challengeSealed && this.challengeRoom &&
+          player.x >= this.challengeRoom.x && player.x < this.challengeRoom.x + this.challengeRoom.w &&
+          player.y >= this.challengeRoom.y && player.y < this.challengeRoom.y + this.challengeRoom.h);
+
+        if (srcSealed || destSealed) {
+          this.hint={text:'Warp pad disabled — room sealed',colour:'#ff3333'};
+        } else if (this.teleportCooldown > 0) {
+          this.hint={text:'Warp recharging... '+Math.ceil(this.teleportCooldown)+'s',colour:'#8844aa'};
+        } else {
+          if (jp(km('interact'))) {
+            spawnParticles(player.x, player.y, 'SPARK', '#bb44ff', 15);
+            player.x = paired.x + 0.5;
+            player.y = paired.y + 0.5;
+            spawnParticles(player.x, player.y, 'SPARK', '#bb44ff', 15);
+            player.invincibleTimer = Math.max(player.invincibleTimer, 0.3);
+            this.teleportCooldown = 3;
+            audio.teleportPad();
+            this.msg('WARPED','#bb44ff');
+          }
+          this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to warp',colour:'#bb44ff'};
+        }
+      }
     }
 
     const bossBlocking = tile===T.TERMINAL && this.bossAlive;
