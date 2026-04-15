@@ -743,12 +743,12 @@ const audio = (() => {
         }
       } else if (n === 'Railgun') {
         // Charge whip + crack + resonant tail
-        const bus = wetDry(1, 0.45, 0.6);
-        osc('sine', 1800, 4200, 0.045, t, 0.11, bus, { attack:0.015, pan:-0.2, filterType:'bandpass', filterFreq:1800, filterFreq2:4200 });
-        osc('triangle', 1200, 3600, 0.04, t + 0.015, 0.09, bus, { pan:0.2, filterType:'bandpass', filterFreq:1500, filterFreq2:3800 });
-        noise(0.11, t + 0.07, 0.05, 9000, bus, { filterType:'highpass', pan:0.05 });
-        osc('sine', 2700, 680, 0.12, t + 0.07, 0.32, bus, { attack:0.0015, q:6, filterType:'bandpass', filterFreq:2600, filterFreq2:900 });
-        osc('triangle', 1300, 320, 0.05, t + 0.08, 0.26, bus, { pan:0.18 });
+        const bus = wetDry(1, 0.3, 0.6);
+        osc('sine', 1800, 4200, 0.038, t, 0.11, bus, { attack:0.015, pan:-0.2, filterType:'bandpass', filterFreq:1800, filterFreq2:4200 });
+        osc('triangle', 1200, 3600, 0.034, t + 0.015, 0.09, bus, { pan:0.2, filterType:'bandpass', filterFreq:1500, filterFreq2:3800 });
+        noise(0.085, t + 0.07, 0.05, 7200, bus, { filterType:'highpass', pan:0.05 });
+        osc('sine', 2700, 680, 0.095, t + 0.07, 0.32, bus, { attack:0.0015, q:4.5, filterType:'bandpass', filterFreq:2200, filterFreq2:820 });
+        osc('triangle', 1300, 320, 0.04, t + 0.08, 0.26, bus, { pan:0.18 });
       } else if (n === 'Plasma Sword') {
         // Energized slash: stereo whoosh with ionized edge
         const bus = wetDry(1, 0.22, 0.24);
@@ -789,10 +789,10 @@ const audio = (() => {
           noise(0.05, t, 0.025, 3600, null, { filterType:'bandpass', filterFreq2:1800, q:1.3 });
         } else if (n === 'Railgun') {
           // Rail impact: metallic crack + resonant ring
-          const bus = wetDry(1, 0.34, 0.32);
-          noise(0.11, t, 0.035, 7000, bus, { filterType:'highpass' });
-          osc('sine', 2000, 620, 0.09, t, 0.2, bus, { filterType:'bandpass', filterFreq:2100, filterFreq2:850, q:6 });
-          osc('triangle', 1300, 420, 0.04, t + 0.02, 0.18, bus, { pan:0.18 });
+          const bus = wetDry(1, 0.2, 0.32);
+          noise(0.085, t, 0.035, 6500, bus, { filterType:'highpass' });
+          osc('sine', 2000, 620, 0.075, t, 0.2, bus, { filterType:'bandpass', filterFreq:2100, filterFreq2:850, q:5 });
+          osc('triangle', 1300, 420, 0.032, t + 0.02, 0.18, bus, { pan:0.18 });
         } else if (n === 'Plasma Sword') {
           // Plasma cut: ion sizzle and short ring
           osc('sawtooth', 960, 220, 0.1, t, 0.09, null, { filterType:'bandpass', filterFreq:2600, filterFreq2:650 });
@@ -841,13 +841,13 @@ const audio = (() => {
     },
     bossEnter() {
       const c = getCtx(); const t = c.currentTime;
-      const bus = wetDry(1, 0.82, 2.4);
-      osc('sawtooth', 55, 52, 0.28, t, 2.2, bus, { pan:-0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
-      osc('sawtooth', 57, 54, 0.24, t, 2.2, bus, { pan:0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
-      osc('triangle', 110, 104, 0.13, t + 0.35, 1.7, bus, { attack:0.15, filterType:'lowpass', filterFreq:900, filterFreq2:320 });
-      noise(0.2, t, 2.0, 260, bus, { filterType:'lowpass', filterFreq2:140, q:0.7 });
-      osc('sine', 30, 26, 0.22, t + 0.12, 1.9, bus, { attack:0.02 });
-      osc('sine', 42, 36, 0.1, t + 0.62, 1.1, bus, { pan:-0.08 });
+      const bus = wetDry(1, 0.7, 2.4);
+      osc('sawtooth', 55, 52, 0.23, t, 2.2, bus, { pan:-0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
+      osc('sawtooth', 57, 54, 0.2, t, 2.2, bus, { pan:0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
+      osc('triangle', 110, 104, 0.11, t + 0.35, 1.7, bus, { attack:0.15, filterType:'lowpass', filterFreq:900, filterFreq2:320 });
+      noise(0.14, t, 2.0, 260, bus, { filterType:'lowpass', filterFreq2:140, q:0.7 });
+      osc('sine', 30, 26, 0.16, t + 0.12, 1.9, bus, { attack:0.02 });
+      osc('sine', 42, 36, 0.08, t + 0.62, 1.1, bus, { pan:-0.08 });
     },
     descend() {
       const c = getCtx(); const t = c.currentTime;
@@ -903,9 +903,9 @@ const audio = (() => {
     lowHealth() {
       // Heartbeat-style warning: two quick sub thumps
       const c = getCtx(); const t = c.currentTime;
-      osc('sine', 62, 38, 0.12, t, 0.13, null, { pan:-0.1, attack:0.002 });
-      osc('sine', 62, 38, 0.1, t + 0.2, 0.11, null, { pan:0.1, attack:0.002 });
-      noise(0.03, t, 0.08, 260, null, { filterType:'lowpass', filterFreq2:150 });
+      osc('sine', 62, 38, 0.085, t, 0.13, null, { pan:-0.1, attack:0.002 });
+      osc('sine', 62, 38, 0.07, t + 0.2, 0.11, null, { pan:0.1, attack:0.002 });
+      noise(0.02, t, 0.08, 260, null, { filterType:'lowpass', filterFreq2:150 });
     },
     plasmaBurn() {
       const c = getCtx(); const t = c.currentTime;
