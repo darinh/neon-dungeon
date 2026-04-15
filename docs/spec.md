@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.8
+# NEON DUNGEON — Game Specification v2.9
 
 ## Vision
 
@@ -537,8 +537,32 @@ Base 8% chance per spawn on floor 3 and above (scaled by difficulty: 4% EASY,
 | XP value | ×1.25      |
 
 **Visual:** Pulsing neon glow (oscillating `shadowBlur` driven by `bobAngle`)
-and a white diamond marker above the enemy. Elite HP bars render in white
-instead of the type colour.
+and a diamond marker above the enemy (coloured by affix). Elite HP bars render
+in white instead of the type colour. Glow colour matches the elite affix.
+
+#### Elite Affixes
+
+Every elite enemy spawns with exactly one random affix that grants a special
+ability. Each affix creates a distinct tactical challenge requiring different
+player strategies.
+
+| Affix        | Colour    | Behaviour                                                         |
+|--------------|-----------|-------------------------------------------------------------------|
+| SHIELDED     | `#4488ff` | Energy shield absorbs damage (40% of max HP). Regenerates 8 HP/s after 2 s of not being hit. Must break shield before dealing HP damage. Blue ring visual, separate shield bar above HP bar. |
+| BERSERKER    | `#ff2222` | Speed and attack rate increase as HP drops (up to +50% at 0 HP). Red aura intensifies with missing HP. Affects movement, melee cooldown, and ranged shoot cooldown. |
+| REGENERATING | `#22ff44` | Heals 2.5% of max HP per second. Green particles when healing. Forces sustained aggression — letting a Regenerating elite disengage means fighting full HP again. |
+| PHASING      | `#cc88ff` | Cycles on a 4 s timer: 3 s vulnerable, 1 s invulnerable. Ghost flicker and semi-transparency during immune window. `audio.phaseShift()` plays on phase-in. Not rolled on PHANTOMs (redundant with invisibility). |
+
+**Minimap:** Elite enemies render as 3 px dots in their affix colour (vs 2 px
+red for normal enemies).
+
+**Implementation:** `ELITE_AFFIXES` table + `rollEliteAffix(enemyType)` for
+random selection with eligibility filtering. `tickEliteAffix(enemy, dt)` handles
+per-frame logic (shield regen, HP regen, phase cycling). `berserkerMul()` method
+on Enemy returns speed/cooldown multiplier. Shield absorption handled in
+`takeDamage()` before HP damage. Phasing immunity checked at top of
+`takeDamage()`. Enemy class stores `eliteAffix`, `shieldHp`, `shieldMax`,
+`shieldRegenDelay`, `phaseTimer`, `phaseImmune`.
 
 ### Aggression Scaling
 
@@ -1416,3 +1440,4 @@ when key indicators are present to avoid collision.
 | v26.0   | Status effect indicators: three visual systems for active effect communication. (1) Low-HP danger vignette — red pulsing radial gradient at screen edges when HP ≤ 25%, severity-scaled intensity, heartbeat-synced pulse, drawn before HUD. (2) Floor modifier banner — 3 s animated pill sliding from top on floor entry, icon + name + description (compact: icon + label only), replaces `game.msg()` announcement, gated to new transitions (not save resume). (3) Status effect bar — row of compact badges above HUD showing active modifier, slow debuff, energy shield state, nano regen, dash cooldown/ready. Per-effect smooth alpha fade via `statusFx` keyed state. `game.modBannerTimer` ticked in `updatePlaying()`. SW cache v33 |
 | v27.0   | Room-clear rewards: killing all enemies in a room grants bonus credits (`10 + floor × 5`, scaled by difficulty and meta credit multiplier), +50 × floor score, green particle burst at room center, floating "+N◆" text, and `audio.roomClear()` ascending triple chime. Detection runs only when an enemy dies (`game.enemyDiedThisFrame` flag set in `Enemy.die()`), placed after dead-enemy removal and pending-spawn flush in `updatePlaying()` so SPLITTER → SHARD sequences are handled correctly. `room._hadEnemies` flag set during `populateFloor()` (only when count > 0) and `revealSecretRoom()`. `game.clearedRooms` Set tracks rewarded rooms per floor (reset in `loadFloor()`). Multi-room clears in a single frame (e.g. VOLATILE chain) batched into one audio/message. `player.roomsCleared` stat tracked in save/load and shown on Game Over / Victory screens ("N cleared"). Boss room excluded (has own death sequence). Spawn room excluded (no enemies). SW cache v34 |
 | v28.0   | Weapon affixes: random modifiers on weapons for loot variety and replayability. 5 prefixes (stat modifiers: Rapid, Heavy, Extended, Twin, Precise) and 5 suffixes (effects: Flame/burn, Frost/slow, Vampirism/leech, Thunder/chain, Detonation/explode). Floor-gated rarity: common (no affix, floor 1), uncommon (1 affix, floor 2+), rare (2 affixes, floor 4+). Affix eligibility filters prevent dead rolls (Precise on zero-spread, Twin/Extended on melee). Affixed weapons are unique cloned objects with `buildWeapon()`/`rollWeapon()` pattern. `applyHitEffects()` + `applyOnKill()` centralize proc logic with `isProc` guard against recursion. `tickEnemyStatusEffects()` handles burn DOT and slow decay per enemy per frame. Enemy class gains `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`. Visual: burn underglow, frost tint, chain lightning bolts (jagged yellow), rarity-coloured HUD weapon name + upgrade card borders. Save format: weapon stored as `{_base, _affixes}` object. SAVE_VERSION 8.0. SW cache v35 |
+| v29.0   | Elite enemy affixes: each elite enemy (floor 3+) now spawns with one random affix that grants a special ability. 4 affixes: SHIELDED (energy shield absorbs damage, 40% max HP, regenerates 8/s after 2s), BERSERKER (speed + attack rate scale up to +50% as HP drops), REGENERATING (heals 2.5% maxHp/s), PHASING (1s invulnerable every 4s cycle). `ELITE_AFFIXES` table, `rollEliteAffix()` with eligibility filter (PHASING excluded from PHANTOM). `tickEliteAffix()` per-frame behaviour. `berserkerMul()` method on Enemy. Shield absorption in `takeDamage()` before HP. Phase immunity check at top of `takeDamage()`. Visual: affix-coloured diamond marker, affix-coloured glow, SHIELDED blue ring + separate shield bar, BERSERKER red aura intensifies, PHASING ghost flicker, REGENERATING green particles. Minimap: 3px affix-coloured dots for elites. SW cache v36 |

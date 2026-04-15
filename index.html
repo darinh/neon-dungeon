@@ -1006,6 +1006,24 @@ const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');
 const AFFIX_SUFFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'suffix');
 
+// ─── Elite Enemy Affixes ──────────────────────────────────────────────────────
+const ELITE_AFFIXES = {
+  SHIELDED:     { label:'Shielded',     colour:'#4488ff', desc:'Energy shield absorbs damage', icon:'◈' },
+  BERSERKER:    { label:'Berserker',    colour:'#ff2222', desc:'Faster at low HP',             icon:'⚡' },
+  REGENERATING: { label:'Regenerating', colour:'#22ff44', desc:'Slowly heals over time',       icon:'♻' },
+  PHASING:      { label:'Phasing',      colour:'#cc88ff', desc:'Periodically invulnerable',    icon:'◇' },
+};
+const ELITE_AFFIX_KEYS = Object.keys(ELITE_AFFIXES);
+
+function rollEliteAffix(enemyType) {
+  // Filter out redundant combos
+  const eligible = ELITE_AFFIX_KEYS.filter(k => {
+    if (k === 'PHASING' && enemyType === 'PHANTOM') return false; // already phases
+    return true;
+  });
+  return eligible[rndInt(0, eligible.length - 1)];
+}
+
 // Eligibility: exclude useless affix+weapon combos
 function affixEligible(affixId, baseWeapon) {
   if (affixId === 'PRECISE'  && baseWeapon.spread === 0) return false;
@@ -2644,15 +2662,24 @@ function tickEnemyStatusEffects(enemy, dt) {
   // Burn
   if (enemy.burnTimer > 0) {
     enemy.burnTimer -= dt;
-    const dmg = enemy.burnDps * dt;
-    enemy.hp -= dmg;
-    if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
-    if (enemy.hp <= 0 && !enemy.dead) {
-      enemy.hp = 0;
-      // Preserve original weapon hitCtx so on-kill effects (Detonation) can fire
-      if (!enemy._lastHitCtx) enemy._lastHitCtx = { name:'Burn', isProc:true };
-      else enemy._lastHitCtx.isProc = false; // burn kill from weapon → allow on-kill procs
-      enemy.die();
+    // PHASING: burn timer ticks but deals no damage during immune window
+    if (!enemy.phaseImmune) {
+      let dmg = enemy.burnDps * dt;
+      // SHIELDED: burn resets regen delay and damages shield first
+      if (enemy.eliteAffix === 'SHIELDED') enemy.shieldRegenDelay = 0;
+      if (enemy.shieldHp > 0) {
+        const absorbed = Math.min(enemy.shieldHp, dmg);
+        enemy.shieldHp -= absorbed;
+        dmg -= absorbed;
+      }
+      if (dmg > 0) enemy.hp -= dmg;
+      if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
+      if (enemy.hp <= 0 && !enemy.dead) {
+        enemy.hp = 0;
+        if (!enemy._lastHitCtx) enemy._lastHitCtx = { name:'Burn', isProc:true };
+        else enemy._lastHitCtx.isProc = false;
+        enemy.die();
+      }
     }
     if (enemy.burnTimer <= 0) { enemy.burnTimer = 0; enemy.burnDps = 0; }
   }
@@ -2660,6 +2687,35 @@ function tickEnemyStatusEffects(enemy, dt) {
   if (enemy.slowTimer > 0) {
     enemy.slowTimer -= dt;
     if (enemy.slowTimer <= 0) { enemy.slowTimer = 0; enemy.slowFactor = 1; }
+  }
+}
+
+// Tick elite affix behaviours (called per enemy per frame)
+function tickEliteAffix(enemy, dt) {
+  if (!enemy.elite || !enemy.eliteAffix) return;
+  const aff = enemy.eliteAffix;
+  // SHIELDED: regenerate shield after 2s of not being hit
+  if (aff === 'SHIELDED' && enemy.shieldHp < enemy.shieldMax) {
+    enemy.shieldRegenDelay += dt;
+    if (enemy.shieldRegenDelay >= 2) {
+      enemy.shieldHp = Math.min(enemy.shieldMax, enemy.shieldHp + 8 * dt);
+      if (Math.random() < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#4488ff', 1);
+    }
+  }
+  // BERSERKER: speed/attack multiplier scales with missing HP (up to +50%)
+  // (Applied dynamically in moveToward and meleeAttack via berserkerMul())
+  // REGENERATING: heal 2.5% maxHp per second
+  if (aff === 'REGENERATING' && enemy.hp < enemy.maxHp) {
+    enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.025 * dt);
+    if (Math.random() < dt * 2) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#22ff44', 1);
+  }
+  // PHASING: cycle 0→4s, immune during 3→4
+  if (aff === 'PHASING') {
+    enemy.phaseTimer += dt;
+    if (enemy.phaseTimer >= 4) enemy.phaseTimer -= 4;
+    const wasImmune = enemy.phaseImmune;
+    enemy.phaseImmune = enemy.phaseTimer >= 3;
+    if (enemy.phaseImmune && !wasImmune) audio.phaseShift();
   }
 }
 
@@ -2691,6 +2747,10 @@ class Enemy {
     this.prevPhase=1;
     this.shieldAngle=0;    // SHIELDER: facing angle toward player
     this.grenadeTimer=0;   // GRENADIER: cooldown between lobs
+    // Elite affix state
+    this.eliteAffix=null;
+    this.shieldHp=0; this.shieldMax=0; this.shieldRegenDelay=0;
+    this.phaseTimer=0; this.phaseImmune=false;
     // Weapon affix status effects
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
@@ -2699,8 +2759,28 @@ class Enemy {
 
   takeDamage(dmg, hitCtx) {
     if (this.dead) return 0;
+    // PHASING elite affix: immune during phase window
+    if (this.phaseImmune) {
+      spawnDmgText(this.x, this.y, 'PHASE', '#cc88ff');
+      return 0;
+    }
     if (this.type==='PHANTOM' && !this.visible) { this.visible=true; }
-    const actual = Math.min(this.hp, dmg); // clamp to remaining HP
+    // SHIELDED: any hit resets shield regen delay
+    if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
+    // SHIELDED elite affix: absorb with shield first
+    if (this.shieldHp > 0) {
+      const absorbed = Math.min(this.shieldHp, dmg);
+      this.shieldHp -= absorbed;
+      dmg -= absorbed;
+      this.flashTimer = 0.1;
+      spawnDmgText(this.x, this.y, absorbed, '#4488ff');
+      if (this.shieldHp <= 0) {
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#4488ff', 10);
+        audio.shieldBreak();
+      }
+      if (dmg <= 0) return absorbed;
+    }
+    const actual = Math.min(this.hp, dmg);
     this.hp -= dmg;
     this.flashTimer = 0.1;
     spawnDmgText(this.x, this.y, dmg, this.hp <= 0 ? '#ffcc00' : '#ffffff');
@@ -2799,8 +2879,14 @@ class Enemy {
     }
   }
 
+  // BERSERKER elite affix: multiplier scales with missing HP (1.0 → 1.5)
+  berserkerMul() {
+    if (this.eliteAffix !== 'BERSERKER') return 1;
+    return 1 + 0.5 * (1 - this.hp / this.maxHp);
+  }
+
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
-    spd = modSpeed(spd) * this.slowFactor;
+    spd = modSpeed(spd) * this.slowFactor * this.berserkerMul();
     let [dx,dy]=norm(tx-this.x,ty-this.y);
     const nx=this.x+dx*spd*dt, ny=this.y+dy*spd*dt;
     if (ignoreWalls) { this.x=nx; this.y=ny; return; }
@@ -2825,7 +2911,8 @@ class Enemy {
   meleeAttack(player) {
     if (this.attackTimer<=0) {
       player.takeDamage(this.atk, this.type);
-      this.attackTimer = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
+      const baseCd = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
+      this.attackTimer = baseCd / this.berserkerMul();
       spawnParticles(player.x,player.y,'SPARK','#ff4444',5);
     }
   }
@@ -2853,7 +2940,7 @@ class Enemy {
     const cooldown = Math.max(1.0, 2.0 - (game.floor || 1) * 0.11) / (game.modifier==='OVERCLOCK'?1.2:1);
     if (los && d<12 && this.shootTimer<=0) {
       this.fireAt(player.x,player.y,8,this.atk,13,'#ffb700');
-      this.shootTimer=cooldown;
+      this.shootTimer=cooldown / this.berserkerMul();
     }
   }
 
@@ -2893,7 +2980,7 @@ class Enemy {
       this.moveToward(player.x,player.y,this.spd,dt,map,canPhase);
       if (this.shootTimer<=0) {
         this.fireAt(player.x,player.y,7,this.atk,16,'#00aaff');
-        this.shootTimer=cooldown;
+        this.shootTimer=cooldown / this.berserkerMul();
       }
     }
   }
@@ -2924,23 +3011,23 @@ class Enemy {
 
   aiGrenadier(dt,player,map,d,los) {
     this.grenadeTimer = Math.max(0, this.grenadeTimer - dt);
+    const bm = this.berserkerMul();
     if (los && d < 5) {
       // Too close — retreat
       const [dx, dy] = norm(this.x - player.x, this.y - player.y);
-      const nx = this.x + dx * modSpeed(this.spd) * this.slowFactor * dt;
-      const ny = this.y + dy * modSpeed(this.spd) * this.slowFactor * dt;
+      const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm;
+      const nx = this.x + dx * retreatSpd * dt;
+      const ny = this.y + dy * retreatSpd * dt;
       const fx = Math.floor(nx), fy = Math.floor(this.y);
       const xf = Math.floor(this.x), yf = Math.floor(ny);
-      // Only move if passable; if blocked, strafe instead of getting stuck
       let moved = false;
       if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
       if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
-      if (!moved) this.patrol(dt, map); // fallback: strafe/reposition
+      if (!moved) this.patrol(dt, map);
     } else if (los && d <= 12) {
-      // In range — lob grenades
       if (this.grenadeTimer <= 0) {
         this.lobGrenade(player.x, player.y, map);
-        this.grenadeTimer = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier==='OVERCLOCK'?1.2:1);
+        this.grenadeTimer = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier==='OVERCLOCK'?1.2:1) / bm;
       }
     } else if (d > 12 && los) {
       this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
@@ -3024,7 +3111,7 @@ class Enemy {
     if (this._burstLeft > 0 && los && this.shootTimer <= 0) {
       this.fireAt(player.x, player.y, 8, this.atk, 14, this.colour);
       this._burstLeft--;
-      this.shootTimer = 0.25;
+      this.shootTimer = 0.25 / this.berserkerMul();
     }
   }
 
@@ -3270,7 +3357,8 @@ class Enemy {
     const col=this.flashTimer>0?'#ffffff':this.colour;
     const elitePulse = this.elite ? 12 + Math.sin(this.bobAngle * 2) * 8 : 0;
     ctx.shadowBlur=this.isBoss?20: this.elite ? 10 + elitePulse : 10;
-    ctx.shadowColor=col;
+    const eliteGlow = this.eliteAffix ? ELITE_AFFIXES[this.eliteAffix].colour : col;
+    ctx.shadowColor= this.elite ? eliteGlow : col;
     ctx.fillStyle=col;
 
     if (this.isBoss) {
@@ -3335,10 +3423,11 @@ class Enemy {
         ctx.fillRect(osx - sz / 2, osy - sz / 2, sz, sz);
         ctx.restore();
       }
-      // elite diamond marker
+      // elite diamond marker (coloured by affix)
       if (this.elite) {
-        ctx.fillStyle='#ffffff';
-        ctx.shadowColor='#ffffff';
+        const affCol = this.eliteAffix ? ELITE_AFFIXES[this.eliteAffix].colour : '#ffffff';
+        ctx.fillStyle=affCol;
+        ctx.shadowColor=affCol;
         ctx.shadowBlur=6;
         ctx.beginPath();
         ctx.moveTo(sx, sy - sz - 4);
@@ -3348,13 +3437,54 @@ class Enemy {
         ctx.closePath();
         ctx.fill();
       }
+      // SHIELDED affix: blue shield ring
+      if (this.eliteAffix === 'SHIELDED' && this.shieldHp > 0) {
+        ctx.save();
+        const sFrac = this.shieldHp / this.shieldMax;
+        ctx.strokeStyle = '#4488ff';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 8 + Math.sin(this.bobAngle * 3) * 4;
+        ctx.shadowColor = '#4488ff';
+        ctx.globalAlpha = 0.5 + sFrac * 0.4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.3, 0, TWO_PI * sFrac);
+        ctx.stroke();
+        ctx.restore();
+      }
+      // BERSERKER affix: intensifying red aura
+      if (this.eliteAffix === 'BERSERKER') {
+        const rage = 1 - this.hp / this.maxHp; // 0→1 as HP drops
+        if (rage > 0.1) {
+          ctx.save();
+          ctx.globalAlpha = rage * 0.35;
+          ctx.shadowBlur = 10 + rage * 12;
+          ctx.shadowColor = '#ff2222';
+          ctx.fillStyle = '#ff2222';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * (1.0 + rage * 0.4), 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      // PHASING affix: ghost flicker during immune window
+      if (this.eliteAffix === 'PHASING' && this.phaseImmune) {
+        ctx.globalAlpha = 0.15 + Math.sin(this.bobAngle * 12) * 0.1;
+      }
       // small hp bar
-      if (this.hp<this.maxHp) {
+      if (this.hp<this.maxHp || this.shieldHp > 0) {
         ctx.shadowBlur=0;
+        const barW = 16, barH = 2, barY = sy - 12;
         ctx.fillStyle='#333';
-        ctx.fillRect(sx-8,sy-12,16,2);
-        ctx.fillStyle= this.elite ? '#ffffff' : this.colour;
-        ctx.fillRect(sx-8,sy-12,16*(this.hp/this.maxHp),2);
+        ctx.fillRect(sx-barW/2, barY, barW, barH);
+        // HP portion
+        const hpCol = this.elite ? '#ffffff' : this.colour;
+        ctx.fillStyle=hpCol;
+        ctx.fillRect(sx-barW/2, barY, barW*(this.hp/this.maxHp), barH);
+        // Shield portion (stacked above HP bar)
+        if (this.shieldHp > 0) {
+          ctx.fillStyle='#4488ff';
+          ctx.fillRect(sx-barW/2, barY - 3, barW*(this.shieldHp/this.shieldMax), barH);
+        }
       }
     }
     // Burn indicator — flickering orange underglow
@@ -3459,6 +3589,15 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e.atk = Math.round(e.atk * 1.3);
     e.spd *= 1.15;
     e.xpValue = Math.round(e.xpValue * 1.25);
+    // Roll elite affix
+    e.eliteAffix = rollEliteAffix(type);
+    if (e.eliteAffix === 'SHIELDED') {
+      e.shieldMax = Math.round(e.maxHp * 0.4);
+      e.shieldHp  = e.shieldMax;
+    }
+    if (e.eliteAffix === 'PHASING') {
+      e.phaseTimer = rnd(0, 3); // stagger start so not all phase together
+    }
   }
   return e;
 }
@@ -4282,8 +4421,13 @@ function drawMinimap(dungeon, player) {
   // enemies in visited areas
   for (const e of enemies) {
     if (e.dead||!dungeon.visited[Math.floor(e.y)]?.[Math.floor(e.x)]) continue;
-    ctx.fillStyle='#ff3333';
-    ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
+    if (e.elite && e.eliteAffix) {
+      ctx.fillStyle=ELITE_AFFIXES[e.eliteAffix].colour;
+      ctx.fillRect(MX+e.x*sx-1.5,MY+e.y*sy-1.5,3,3);
+    } else {
+      ctx.fillStyle='#ff3333';
+      ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
+    }
   }
 
   // POI markers — larger glowing indicators for key locations
@@ -4926,6 +5070,7 @@ const game = {
     // update enemies
     for (const e of enemies) {
       tickEnemyStatusEffects(e, dt);
+      tickEliteAffix(e, dt);
       e.update(dt,player,dungeon.map);
     }
 
