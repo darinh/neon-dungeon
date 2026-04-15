@@ -32,6 +32,64 @@ const SAVE_VERSION = '9.0';
 
 const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19 };
 
+// ─── Settings ────────────────────────────────────────────────────────────────
+const DEFAULT_KEY_MAP = {
+  up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
+  interact:'KeyE', hackware:'KeyF', voidshard:'KeyV',
+  dash:'ShiftLeft', shoot:'Space'
+};
+const ACTION_LABELS = {
+  up:'Move Up', down:'Move Down', left:'Move Left', right:'Move Right',
+  interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
+  dash:'Dash', shoot:'Shoot'
+};
+const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3']);
+const KEY_DISPLAY = k => {
+  if (!k) return '???';
+  if (k.startsWith('Key')) return k.slice(3);
+  if (k.startsWith('Digit')) return k.slice(5);
+  if (k.startsWith('Arrow')) return '↑↓←→'[['Up','Down','Left','Right'].indexOf(k.slice(5))] || k.slice(5);
+  const map = {ShiftLeft:'L-Shift',ShiftRight:'R-Shift',Space:'Space',
+    ControlLeft:'L-Ctrl',ControlRight:'R-Ctrl',AltLeft:'L-Alt',AltRight:'R-Alt',
+    Tab:'Tab',Backspace:'Bksp',CapsLock:'Caps',Backquote:'`',
+    Minus:'-',Equal:'=',BracketLeft:'[',BracketRight:']',
+    Backslash:'\\',Semicolon:';',Quote:"'",Comma:',',Period:'.',Slash:'/'};
+  return map[k] || k;
+};
+
+const settings = {
+  sfxVol: 1.0,
+  musicVol: 1.0,
+  keyMap: { ...DEFAULT_KEY_MAP },
+  load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem('neonDungeonSettings'));
+      if (!raw) return;
+      if (typeof raw.sfxVol === 'number') this.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
+      if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
+      if (raw.keyMap && typeof raw.keyMap === 'object') {
+        for (const a of Object.keys(DEFAULT_KEY_MAP)) {
+          if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
+        }
+      }
+    } catch(e) {}
+  },
+  save() {
+    try {
+      localStorage.setItem('neonDungeonSettings', JSON.stringify({
+        sfxVol: this.sfxVol, musicVol: this.musicVol, keyMap: this.keyMap
+      }));
+    } catch(e) {}
+  },
+  resetKeys() { this.keyMap = { ...DEFAULT_KEY_MAP }; this.save(); }
+};
+settings.load();
+
+// Key-map lookup: km('interact') returns the current key code for that action
+function km(action) { return settings.keyMap[action]; }
+// Alternate keys that always work alongside the mapped key
+const ALT_KEYS = { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', dash:'ShiftRight' };
+
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -162,6 +220,7 @@ canvas.addEventListener('mousemove', e => {
 });
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
+window.addEventListener('mouseup',   e => { mouse.down = false; });
 
 // ─── Touch Controls ──────────────────────────────────────────────────────────
 const JR = 55; // joystick base radius
@@ -247,9 +306,16 @@ canvas.addEventListener('touchstart', e => {
         justPressed.add('MouseLeft');
         continue;
       }
+      if (game.state === 'SETTINGS') {
+        mouse.x = cx; mouse.y = cy;
+        justPressed.add('MouseLeft');
+        continue;
+      }
       if (game.state === 'PAUSED') {
-        if (cy > H/2) justPressed.add('KeyQ');
-        else justPressed.add('Escape');
+        // 3 zones: top third = resume, middle third = settings, bottom third = quit
+        if (cy < H * 0.38) justPressed.add('Escape');
+        else if (cy < H * 0.62) justPressed.add('KeyS');
+        else justPressed.add('KeyQ');
       }
       else if (game.state === 'MENU') {
         // Hit-test against actual menu item positions
@@ -300,10 +366,10 @@ canvas.addEventListener('touchstart', e => {
       continue;
     }
     // button priority
-    if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('KeyE'); continue; }
-    if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) { touch.btnF=t.identifier; justPressed.add('KeyF'); continue; }
-    if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add('KeyV'); continue; }
-    if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add('ShiftLeft'); continue; }
+    if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
+    if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
+    if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }
+    if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
     // left half = joystick
     if (cx < W/2 && !touch.joystick.active) {
@@ -517,7 +583,7 @@ const audio = (() => {
       compressor.ratio.value = 4;
       compressor.connect(actx.destination);
       master = actx.createGain();
-      master.gain.value = 0.7;
+      master.gain.value = 0.7 * settings.sfxVol;
       master.connect(compressor);
       // Reverb bus: ConvolverNode with procedural impulse response
       reverbNode = actx.createConvolver();
@@ -594,6 +660,14 @@ const audio = (() => {
 
   return {
     resume,
+    setSfxVolume(v) {
+      settings.sfxVol = v;
+      if (master) { const t = actx.currentTime; master.gain.cancelScheduledValues(t); master.gain.linearRampToValueAtTime(0.7 * v, t + 0.02); }
+    },
+    setMusicVolume(v) {
+      settings.musicVol = v;
+      if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.12 * v, t + 0.02); }
+    },
     getMusicBus() {
       const c = getCtx();
       if (!musicBus) {
@@ -601,7 +675,7 @@ const audio = (() => {
         mc.threshold.value = -18; mc.ratio.value = 2; mc.attack.value = 0.05;
         mc.connect(c.destination);
         musicBus = c.createGain();
-        musicBus.gain.value = 0.12;
+        musicBus.gain.value = 0.12 * settings.musicVol;
         musicBus.connect(mc);
       }
       return { bus: musicBus, ctx: c };
@@ -5654,10 +5728,10 @@ class Player {
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
     let mx=0,my=0;
-    if (keys.has('KeyW')||keys.has('ArrowUp'))    my=-1;
-    if (keys.has('KeyS')||keys.has('ArrowDown'))  my= 1;
-    if (keys.has('KeyA')||keys.has('ArrowLeft'))  mx=-1;
-    if (keys.has('KeyD')||keys.has('ArrowRight')) mx= 1;
+    if (keys.has(km('up'))||keys.has(ALT_KEYS.up))       my=-1;
+    if (keys.has(km('down'))||keys.has(ALT_KEYS.down))   my= 1;
+    if (keys.has(km('left'))||keys.has(ALT_KEYS.left))   mx=-1;
+    if (keys.has(km('right'))||keys.has(ALT_KEYS.right)) mx= 1;
     // touch joystick
     if (touch.joystick.active) { mx+=touch.joystick.dx; my+=touch.joystick.dy; }
 
@@ -5673,11 +5747,11 @@ class Player {
     }
 
     // void shard
-    if (jp('KeyV')) this.useVoidShard();
-    if (jp('KeyF')) activateHackware(this);
+    if (jp(km('voidshard'))) this.useVoidShard();
+    if (jp(km('hackware'))) activateHackware(this);
 
     // dash activation
-    if ((jp('ShiftLeft')||jp('ShiftRight'))&&this.dashCooldown<=0&&this.hp>0) {
+    if ((jp(km('dash'))||jp(ALT_KEYS.dash))&&this.dashCooldown<=0&&this.hp>0) {
       let dx, dy;
       if (mx||my) {
         [dx,dy]=norm(mx,my);
@@ -6990,6 +7064,7 @@ const game = {
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
+      case 'SETTINGS':       this.updateSettings(); break;
       case 'FADE':        this.updateFade(dt);    break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
@@ -7008,6 +7083,7 @@ const game = {
     opts.push({ label:`NEW GAME — ${d.label}  ◀▶`, action:()=>this.startGame(), colour:d.colour, isDiffRow:true });
     const meta = loadMeta();
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
+    opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
     return opts;
   },
 
@@ -7028,12 +7104,12 @@ const game = {
     const opts = this.getMenuOptions();
     const n = opts.length;
     if (this.menuSel === undefined || this.menuSel >= n) this.menuSel = 0;
-    if (jp('ArrowUp')||jp('KeyW'))   this.menuSel = (this.menuSel - 1 + n) % n;
-    if (jp('ArrowDown')||jp('KeyS')) this.menuSel = (this.menuSel + 1) % n;
+    if (jp(ALT_KEYS.up)||jp(km('up')))   this.menuSel = (this.menuSel - 1 + n) % n;
+    if (jp(ALT_KEYS.down)||jp(km('down'))) this.menuSel = (this.menuSel + 1) % n;
     // Left/Right cycles difficulty on the NEW GAME row
-    if (opts[this.menuSel]?.isDiffRow && (jp('ArrowLeft')||jp('KeyA')||jp('ArrowRight')||jp('KeyD'))) {
+    if (opts[this.menuSel]?.isDiffRow && (jp(ALT_KEYS.left)||jp(km('left'))||jp(ALT_KEYS.right)||jp(km('right')))) {
       const idx = DIFF_ORDER.indexOf(this.difficulty);
-      const dir = (jp('ArrowRight')||jp('KeyD')) ? 1 : -1;
+      const dir = (jp(ALT_KEYS.right)||jp(km('right'))) ? 1 : -1;
       this.difficulty = DIFF_ORDER[(idx + dir + DIFF_ORDER.length) % DIFF_ORDER.length];
       audio.menuSelect();
     }
@@ -7070,7 +7146,7 @@ const game = {
     if (afx||afy) player.facing={x:afx,y:afy};
 
     // shoot (suppressed during dash)
-    if ((mouse.down||keys.has('Space')) && player.shootCooldown<=0 && player.dashTimer<=0) {
+    if ((mouse.down||keys.has(km('shoot'))) && player.shootCooldown<=0 && player.dashTimer<=0) {
       player.shoot(worldAimX,worldAimY,dungeon.map);
     }
 
@@ -7267,7 +7343,7 @@ const game = {
     const tile=dungeon.map[ty]?.[tx];
 
     if (tile===T.LORE) {
-      if (jp('KeyE')) {
+      if (jp(km('interact'))) {
         const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !player.loreRead.has(i));
         const idx = unseen.length > 0 ? unseen[Math.floor(Math.random() * unseen.length)] : Math.floor(Math.random() * LORE_ENTRIES.length);
         player.loreRead.add(idx);
@@ -7281,22 +7357,22 @@ const game = {
         this.setState('READING');
         return;
       }
-      this.hint={text: isTouchDevice() ? 'Tap E to access data terminal' : 'Press E to access data terminal',colour:'#ffb700'};
+      this.hint={text: isTouchDevice() ? 'Tap '+KEY_DISPLAY(km('interact'))+' to access data terminal' : 'Press '+KEY_DISPLAY(km('interact'))+' to access data terminal',colour:'#ffb700'};
     }
 
     const bossBlocking = tile===T.TERMINAL && this.bossAlive;
-    if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp('KeyE')) {
+    if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp(km('interact'))) {
       this.descend();
     }
-    if (tile===T.STAIRS) this.hint={text:'Press E to descend',colour:'#ffff00'};
+    if (tile===T.STAIRS) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to descend',colour:'#ffff00'};
     if (tile===T.TERMINAL && bossBlocking) {
       const bossLabel = {OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'}[this.bossType] || 'the boss';
       this.hint={text:'CORE terminal locked — destroy ' + bossLabel + ' first',colour:'#ff3333'};
     }
-    if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press E to interface with CORE terminal',colour:'#00f5ff'};
+    if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to interface with CORE terminal',colour:'#00f5ff'};
 
     // door interaction (check adjacent tiles when pressing E)
-    if (jp('KeyE')) {
+    if (jp(km('interact'))) {
       const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
       for (const [ddx,ddy] of dirs) {
         const dx=tx+ddx, dy=ty+ddy;
@@ -7344,9 +7420,9 @@ const game = {
       const dx=tx+ddx, dy=ty+ddy;
       if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
       const dt=dungeon.map[dy][dx];
-      if (dt===T.CRACKED) { this.hint={text:'Faint cracks... (press E)',colour:'#ffb700'}; break; }
-      if (dt===T.DOOR) { this.hint={text:'Press E to open door',colour:'#aa8844'}; break; }
-      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press E)', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
+      if (dt===T.CRACKED) { this.hint={text:'Faint cracks... (press '+KEY_DISPLAY(km('interact'))+')',colour:'#ffb700'}; break; }
+      if (dt===T.DOOR) { this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to open door',colour:'#aa8844'}; break; }
+      if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press '+KEY_DISPLAY(km('interact'))+')', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
       if (dt===T.CHALLENGE_GATE && !game.challengeComplete) { this.hint={text:'⚔ CHALLENGE ROOM — enter at your own risk',colour:'#ff6633'}; break; }
     }
 
@@ -7407,18 +7483,18 @@ const game = {
         }
       }
       if (r.xpShrine && !r.shrineUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
-        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.shrineUsed = true;
           const xp = 30 + game.floor * 10;
           player.gainXP(xp);
           this.msg('XP Shrine: +'+xp+' XP!','#aa00ff');
           spawnParticles(r.cx+0.5, r.cy+0.5, 'EXPLOSION', '#aa00ff', 15);
         }
-        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at shrine',colour:'#aa00ff'};
+        if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at shrine',colour:'#aa00ff'};
       }
       // Implant shrine interaction
       if (r.roomType === 'implant' && !r.implantUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
-        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.implantUsed = true;
           const slots = Object.keys(player.augments).length;
           if (slots >= MAX_AUGMENTS) {
@@ -7439,21 +7515,21 @@ const game = {
             }
           }
         }
-        if (!r.implantUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press E at implant shrine',colour:'#cc44ff'};
+        if (!r.implantUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at implant shrine',colour:'#cc44ff'};
       }
       // Event terminal interaction
       if (r.roomType === 'event' && !r.eventUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
-        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.eventUsed = true;
           const ev = rollEvent(player);
           this.eventChoice = { event: ev, selected: 0, room: r };
           this.setState('EVENT_CHOICE');
           audio.eventTerminal();
         }
-        if (!r.eventUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press E at terminal',colour:'#44ffcc'};
+        if (!r.eventUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at terminal',colour:'#44ffcc'};
       }
       if (r.shopItems && r.shopItems.some(i => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
-        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           // Revalidate shop items (maxed upgrades, stale prices, unneeded keys, owned/capped augments)
           for (const si of r.shopItems) {
             if (si.sold) continue;
@@ -7479,7 +7555,7 @@ const game = {
           this.setState('SHOPPING');
           return;
         }
-        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press E at vendor',colour:'#39ff14'};
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at vendor',colour:'#39ff14'};
       }
     }
 
@@ -7656,6 +7732,7 @@ const game = {
 
   updatePaused() {
     if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
+    else if (jp('KeyS')) { audio.menuSelect(); this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
     else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
   },
 
@@ -7663,12 +7740,12 @@ const game = {
     const pc = this.powerupChoice;
     if (!pc) { this.setState('PLAYING'); return; }
     // Keyboard: left/right to select, 1/2 for direct pick, 3/Escape to skip
-    if (jp('ArrowLeft') || jp('KeyA'))  pc.selected = 0;
-    if (jp('ArrowRight')|| jp('KeyD'))  pc.selected = 1;
+    if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
+    if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
     if (jp('Digit1')) { pc.selected=0; this.applyPowerupChoice(0); return; }
     if (jp('Digit2')) { pc.selected=1; this.applyPowerupChoice(1); return; }
     if (jp('Digit3') || jp('Escape') || jp('KeyQ')) { this.applyPowerupChoice(-1); return; }
-    if (jp('Enter') || jp('Space'))    { this.applyPowerupChoice(pc.selected); return; }
+    if (jp('Enter') || jp(km('shoot')))    { this.applyPowerupChoice(pc.selected); return; }
     // Mouse/touch: check click on cards or skip
     if (jp('MouseLeft')) {
       const cw = Math.min(280, W * 0.35);
@@ -7728,9 +7805,9 @@ const game = {
     if (jp('Digit1')) { this.applyPerkChoice(0); return; }
     if (jp('Digit2')) { this.applyPerkChoice(1); return; }
     if (jp('Digit3') && pc.options.length > 2) { this.applyPerkChoice(2); return; }
-    if (jp('ArrowLeft') || jp('KeyA'))  pc.selected = Math.max(0, pc.selected - 1);
-    if (jp('ArrowRight')|| jp('KeyD'))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
-    if (jp('Enter') || jp('Space'))     { this.applyPerkChoice(pc.selected); return; }
+    if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = Math.max(0, pc.selected - 1);
+    if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
+    if (jp('Enter') || jp(km('shoot')))     { this.applyPerkChoice(pc.selected); return; }
     // Mouse/touch
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
@@ -7774,9 +7851,9 @@ const game = {
     if (!ac) { this.setState('PLAYING'); return; }
     if (jp('Digit1')) { this.applyAugmentChoice(0); return; }
     if (jp('Digit2') && ac.options.length > 1) { this.applyAugmentChoice(1); return; }
-    if (jp('ArrowLeft') || jp('KeyA'))  ac.selected = Math.max(0, ac.selected - 1);
-    if (jp('ArrowRight')|| jp('KeyD'))  ac.selected = Math.min(ac.options.length - 1, ac.selected + 1);
-    if (jp('Enter') || jp('Space'))     { this.applyAugmentChoice(ac.selected); return; }
+    if (jp(ALT_KEYS.left) || jp(km('left')))  ac.selected = Math.max(0, ac.selected - 1);
+    if (jp(ALT_KEYS.right)|| jp(km('right')))  ac.selected = Math.min(ac.options.length - 1, ac.selected + 1);
+    if (jp('Enter') || jp(km('shoot')))     { this.applyAugmentChoice(ac.selected); return; }
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
       const count = ac.options.length;
@@ -7893,9 +7970,9 @@ const game = {
     if (!ec) { this.setState('PLAYING'); return; }
     if (jp('Digit1')) { this.applyEventChoice('a'); return; }
     if (jp('Digit2')) { this.applyEventChoice('b'); return; }
-    if (jp('ArrowLeft') || jp('KeyA'))  ec.selected = 0;
-    if (jp('ArrowRight')|| jp('KeyD'))  ec.selected = 1;
-    if (jp('Enter') || jp('Space'))     { this.applyEventChoice(ec.selected === 0 ? 'a' : 'b'); return; }
+    if (jp(ALT_KEYS.left) || jp(km('left')))  ec.selected = 0;
+    if (jp(ALT_KEYS.right)|| jp(km('right')))  ec.selected = 1;
+    if (jp('Enter') || jp(km('shoot')))     { this.applyEventChoice(ec.selected === 0 ? 'a' : 'b'); return; }
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
       const cw = narrow ? Math.min(200, (W - 20) / 2 - 8) : Math.min(260, (W - 40) / 2 - 12);
@@ -8027,8 +8104,8 @@ const game = {
 
     // Keyboard navigation
     if (jp('Escape') || jp('KeyQ')) { audio.menuSelect(); this.setState('PLAYING'); return; }
-    if (jp('ArrowLeft') || jp('KeyA'))  this.shopSelected = Math.max(0, this.shopSelected - 1);
-    if (jp('ArrowRight')|| jp('KeyD'))  this.shopSelected = Math.min(2, this.shopSelected + 1);
+    if (jp(ALT_KEYS.left) || jp(km('left')))  this.shopSelected = Math.max(0, this.shopSelected - 1);
+    if (jp(ALT_KEYS.right)|| jp(km('right')))  this.shopSelected = Math.min(2, this.shopSelected + 1);
 
     // Direct buy by number
     for (let i = 0; i < 3; i++) {
@@ -8038,7 +8115,7 @@ const game = {
       }
     }
     // Enter on selected
-    if (jp('Enter') || jp('Space')) {
+    if (jp('Enter') || jp(km('shoot'))) {
       if (!items[this.shopSelected].sold) this.tryShopBuy(this.shopSelected);
       return;
     }
@@ -8099,7 +8176,7 @@ const game = {
   },
 
   updateReading() {
-    if (jp('KeyE') || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
+    if (jp(km('interact')) || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
       audio.menuSelect();
       this.setState('PLAYING');
     }
@@ -8311,8 +8388,8 @@ const game = {
   updateArchives() {
     const n = META_UPGRADES.length;
     if (this.archivesSel === undefined) this.archivesSel = 0;
-    if (jp('ArrowUp')||jp('KeyW'))   this.archivesSel = (this.archivesSel - 1 + n) % n;
-    if (jp('ArrowDown')||jp('KeyS')) this.archivesSel = (this.archivesSel + 1) % n;
+    if (jp(ALT_KEYS.up)||jp(km('up')))   this.archivesSel = (this.archivesSel - 1 + n) % n;
+    if (jp(ALT_KEYS.down)||jp(km('down'))) this.archivesSel = (this.archivesSel + 1) % n;
     if (jp('Escape')||jp('KeyQ'))    { audio.menuSelect(); this.setState('MENU'); return; }
     if (jp('Enter')||jp('MouseLeft')) {
       const u = META_UPGRADES[this.archivesSel];
@@ -8326,6 +8403,261 @@ const game = {
       saveMeta(meta);
       audio.purchase();
     }
+  },
+
+  // ─── Settings ────────────────────────────────────────────────────────────────
+  _settingsFrom: 'MENU',
+  _settingsSel: 0,
+  _settingsCapture: null,  // action name being rebound, or null
+  _settingsDrag: null,     // 'sfx' or 'music' while dragging a slider
+
+  updateSettings() {
+    const actions = Object.keys(DEFAULT_KEY_MAP);
+    // Total items: 2 sliders + N rebind rows + 1 reset row + 1 back row
+    const totalRows = 2 + actions.length + 2;
+
+    // Key capture mode — wait for next keydown
+    if (this._settingsCapture) {
+      // On touch devices, tap (MouseLeft) cancels capture since there's no keyboard
+      if (isTouchDevice() && justPressed.has('MouseLeft')) { this._settingsCapture = null; return; }
+      for (const code of justPressed) {
+        if (code === 'Escape') { this._settingsCapture = null; return; }
+        if (code === 'MouseLeft') continue;   // ignore mouse click during capture
+        if (RESERVED_KEYS.has(code)) continue; // reserved keys can't be bound
+        // Swap: if another action already uses this code, swap them
+        const curAction = this._settingsCapture;
+        const oldCode = settings.keyMap[curAction];
+        for (const a of actions) {
+          if (a !== curAction && settings.keyMap[a] === code) {
+            settings.keyMap[a] = oldCode; break;
+          }
+        }
+        settings.keyMap[curAction] = code;
+        settings.save();
+        this._settingsCapture = null;
+        audio.menuSelect();
+        return;
+      }
+      return;
+    }
+
+    // Slider dragging
+    if (this._settingsDrag && mouse.down) {
+      const narrow = layout.compact;
+      const sliderX = narrow ? 120 : 200;
+      const sliderW = narrow ? (W - 240) : 400;
+      let val = (mouse.x - sliderX) / sliderW;
+      val = Math.max(0, Math.min(1, val));
+      if (this._settingsDrag === 'sfx') audio.setSfxVolume(val);
+      else audio.setMusicVolume(val);
+      settings.save();
+      return;
+    }
+    if (this._settingsDrag && !mouse.down) { this._settingsDrag = null; }
+
+    // Navigation
+    if (jp(ALT_KEYS.up) || jp(km('up')))     this._settingsSel = (this._settingsSel - 1 + totalRows) % totalRows;
+    if (jp(ALT_KEYS.down) || jp(km('down')))  this._settingsSel = (this._settingsSel + 1) % totalRows;
+
+    // Left/right on volume sliders
+    const sel = this._settingsSel;
+    if (sel < 2) {
+      const step = 0.05;
+      if (jp(ALT_KEYS.left) || jp(km('left'))) {
+        if (sel === 0) audio.setSfxVolume(Math.max(0, settings.sfxVol - step));
+        else audio.setMusicVolume(Math.max(0, settings.musicVol - step));
+        settings.save();
+      }
+      if (jp(ALT_KEYS.right) || jp(km('right'))) {
+        if (sel === 0) audio.setSfxVolume(Math.min(1, settings.sfxVol + step));
+        else audio.setMusicVolume(Math.min(1, settings.musicVol + step));
+        settings.save();
+      }
+    }
+
+    // Mouse click hit-testing
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const startY = narrow ? 80 : 100;
+      const rowH = narrow ? 28 : 34;
+      const sliderX = narrow ? 120 : 200;
+      const sliderW = narrow ? (W - 240) : 400;
+      const mx = mouse.x, my = mouse.y;
+
+      // Slider click
+      for (let i = 0; i < 2; i++) {
+        const ry = startY + i * rowH;
+        if (my >= ry - 8 && my <= ry + 14 && mx >= sliderX && mx <= sliderX + sliderW) {
+          let val = (mx - sliderX) / sliderW;
+          val = Math.max(0, Math.min(1, val));
+          if (i === 0) audio.setSfxVolume(val);
+          else audio.setMusicVolume(val);
+          this._settingsDrag = i === 0 ? 'sfx' : 'music';
+          this._settingsSel = i;
+          settings.save();
+          audio.menuSelect();
+          return;
+        }
+      }
+      // Rebind rows click
+      for (let i = 0; i < actions.length; i++) {
+        const ry = startY + (2 + i) * rowH;
+        if (my >= ry - 8 && my <= ry + 14) {
+          this._settingsSel = 2 + i;
+          this._settingsCapture = actions[i];
+          audio.menuSelect();
+          return;
+        }
+      }
+      // Reset defaults row
+      const resetY = startY + (2 + actions.length) * rowH;
+      if (my >= resetY - 8 && my <= resetY + 14) {
+        settings.resetKeys();
+        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+        settings.save();
+        audio.menuSelect();
+        return;
+      }
+      // Back row
+      const backY = startY + (2 + actions.length + 1) * rowH;
+      if (my >= backY - 8 && my <= backY + 14) {
+        audio.menuSelect();
+        this.setState(this._settingsFrom || 'MENU');
+        return;
+      }
+    }
+
+    // Enter on selected row
+    if (jp('Enter') || jp(km('shoot'))) {
+      if (sel >= 2 && sel < 2 + actions.length) {
+        this._settingsCapture = actions[sel - 2];
+        audio.menuSelect();
+      } else if (sel === 2 + actions.length) {
+        // Reset defaults
+        settings.resetKeys();
+        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+        settings.save();
+        audio.menuSelect();
+      } else if (sel === totalRows - 1) {
+        audio.menuSelect();
+        this.setState(this._settingsFrom || 'MENU');
+      }
+    }
+
+    // Escape goes back
+    if (jp('Escape') || jp('KeyQ')) {
+      audio.menuSelect();
+      this.setState(this._settingsFrom || 'MENU');
+    }
+  },
+
+  renderSettings() {
+    const narrow = layout.compact;
+    const actions = Object.keys(DEFAULT_KEY_MAP);
+    const totalRows = 2 + actions.length + 2;
+    const startY = narrow ? 80 : 100;
+    const rowH = narrow ? 28 : 34;
+    const fs = narrow ? 13 : 16;
+    const labelX = narrow ? 20 : 40;
+    const sliderX = narrow ? 120 : 200;
+    const sliderW = narrow ? (W - 240) : 400;
+    const sel = this._settingsSel;
+
+    // Title
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 20; ctx.shadowColor = '#00f5ff';
+    ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${narrow ? 28 : 38}px monospace`;
+    ctx.fillText('SETTINGS', W/2, narrow ? 50 : 60);
+    ctx.restore();
+
+    ctx.save();
+    ctx.font = `${fs}px monospace`;
+
+    // ── Audio section ──
+    const volLabels = ['SFX VOLUME', 'MUSIC VOLUME'];
+    const volVals = [settings.sfxVol, settings.musicVol];
+    for (let i = 0; i < 2; i++) {
+      const ry = startY + i * rowH;
+      const isSel = sel === i;
+      ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
+      ctx.textAlign = 'left';
+      ctx.fillText(volLabels[i], labelX, ry);
+      // Slider track
+      const trackY = ry - 4;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(sliderX, trackY, sliderW, 10);
+      // Slider fill
+      const fillW = sliderW * volVals[i];
+      ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
+      ctx.fillRect(sliderX, trackY, fillW, 10);
+      // Slider knob
+      ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
+      ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 14);
+      // Percentage
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
+      ctx.fillText(`${Math.round(volVals[i] * 100)}%`, sliderX + sliderW + (narrow ? 40 : 60), ry);
+    }
+
+    // ── Controls section ──
+    const sectionY = startY + 2 * rowH - 10;
+    ctx.fillStyle = '#555577'; ctx.textAlign = 'left';
+    ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
+    ctx.fillText('─── CONTROLS ───', labelX, sectionY);
+    ctx.font = `${fs}px monospace`;
+
+    for (let i = 0; i < actions.length; i++) {
+      const ry = startY + (2 + i) * rowH;
+      const a = actions[i];
+      const isSel = sel === 2 + i;
+      const isCapturing = this._settingsCapture === a;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isSel ? '#ff00c8' : '#888899';
+      ctx.fillText(ACTION_LABELS[a], labelX, ry);
+      ctx.textAlign = 'center';
+      if (isCapturing) {
+        const blink = Math.sin(Date.now() / 200) > 0 ? 1 : 0.3;
+        ctx.globalAlpha = blink;
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillText(isTouchDevice() ? 'TAP TO CANCEL' : 'PRESS A KEY...', W/2, ry);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
+        ctx.fillText(KEY_DISPLAY(settings.keyMap[a]), W/2, ry);
+        // Show default if different
+        if (settings.keyMap[a] !== DEFAULT_KEY_MAP[a]) {
+          ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+          ctx.fillText(`(default: ${KEY_DISPLAY(DEFAULT_KEY_MAP[a])})`, W/2 + (narrow ? 60 : 80), ry);
+          ctx.font = `${fs}px monospace`;
+        }
+      }
+    }
+
+    // Reset defaults row
+    const resetIdx = 2 + actions.length;
+    const resetY = startY + resetIdx * rowH;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
+    ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
+
+    // Back row
+    const backIdx = resetIdx + 1;
+    const backY = startY + backIdx * rowH;
+    ctx.fillStyle = sel === backIdx ? '#00f5ff' : '#666677';
+    ctx.fillText('[ BACK ]', W/2, backY);
+
+    ctx.restore();
+
+    // Navigation hint
+    ctx.save(); ctx.textAlign = 'center';
+    ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+    if (isTouchDevice()) {
+      ctx.fillText('Tap to adjust · ESC to go back', W/2, H - 20);
+    } else {
+      ctx.fillText('↑↓ Navigate · ◀▶ Adjust Volume · Enter to rebind · ESC Back', W/2, H - 20);
+    }
+    ctx.restore();
   },
 
   render() {
@@ -8343,6 +8675,7 @@ const game = {
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'READING':        this.renderPlaying(); this.renderReading(); break;
       case 'ARCHIVES':  this.renderArchives(); break;
+      case 'SETTINGS':  this.renderSettings(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
@@ -8448,10 +8781,10 @@ const game = {
     ctx.fillStyle='#555577'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     if (isTouch) {
       ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
-      ctx.fillText('E: Interact  |  ⇧: Dash  |  V: Void Shard  |  ‖: Pause', W/2, hintY + 16);
+      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
     } else {
-      ctx.fillText('WASD: Move  |  Mouse: Aim  |  Click/Space: Shoot', W/2, hintY);
-      ctx.fillText('E: Interact  |  Shift: Dash  |  V: Void Shard  |  ESC: Pause', W/2, hintY + 16);
+      ctx.fillText(KEY_DISPLAY(km('up'))+KEY_DISPLAY(km('left'))+KEY_DISPLAY(km('down'))+KEY_DISPLAY(km('right'))+': Move  |  Mouse: Aim  |  Click/'+KEY_DISPLAY(km('shoot'))+': Shoot', W/2, hintY);
+      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  '+KEY_DISPLAY(km('dash'))+': Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ESC: Pause', W/2, hintY + 16);
     }
     ctx.restore();
 
@@ -8645,11 +8978,13 @@ const game = {
     ctx.fillText('PAUSED',W/2, narrow ? 200 : 240);
     ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
     if (isTouch) {
-      ctx.fillText('TAP TOP — Resume',W/2, narrow ? 260 : 300);
-      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, narrow ? 290 : 330);
+      ctx.fillText('TAP TOP — Resume',W/2, narrow ? 255 : 295);
+      ctx.fillText('TAP MIDDLE — Settings',W/2, narrow ? 280 : 320);
+      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, narrow ? 305 : 345);
     } else {
-      ctx.fillText('ESC — Resume',W/2, narrow ? 260 : 300);
-      ctx.fillText('Q   — Quit to Menu',W/2, narrow ? 290 : 330);
+      ctx.fillText('ESC — Resume',W/2, narrow ? 255 : 295);
+      ctx.fillText('S   — Settings',W/2, narrow ? 280 : 320);
+      ctx.fillText('Q   — Quit to Menu',W/2, narrow ? 305 : 345);
     }
     ctx.restore();
   },
