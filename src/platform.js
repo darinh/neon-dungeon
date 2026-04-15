@@ -1620,6 +1620,23 @@ const audio = (() => {
       osc('square', 800, 100, 0.05, t + 0.05, 0.35, bus);
       noise(0.06, t + 0.1, 0.3, 4000, bus);
       osc('sine', 400, 80, 0.04, t + 0.15, 0.25, bus);
+    },
+    siphonDrain() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.5, 0.3, 0.2);
+      // Vampiric draining — descending hollow tone + wet siphon
+      osc('sawtooth', 500, 200, 0.04, t, 0.25, bus);
+      osc('sine', 300, 120, 0.03, t + 0.05, 0.2, bus);
+      noise(0.02, t + 0.08, 0.15, 3000, bus);
+    },
+    siphonFrenzy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.4, 0.25);
+      // Heart-beating bass activation — dual low thuds + rising tension
+      osc('sine', 60, 40, 0.08, t, 0.15, bus);
+      osc('sine', 60, 40, 0.06, t + 0.2, 0.12, bus);
+      osc('sawtooth', 200, 600, 0.04, t + 0.1, 0.3, bus);
+      noise(0.03, t + 0.15, 0.2, 2000, bus);
     }
   };
 })();

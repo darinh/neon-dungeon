@@ -2463,6 +2463,15 @@ class Projectile {
           player.shockTimer = Math.max(player.shockTimer, 0.4);
           if (!wasShocked) audio.playerShock();
         }
+        // SIPHON life steal: heal owner for % of damage dealt
+        if (dealt > 0 && this.ownerType === 'SIPHON' && this._owner && !this._owner.dead) {
+          const stealPct = this._owner._spFrenzy ? 0.75 : 0.50;
+          const heal = Math.ceil(dealt * stealPct);
+          this._owner.hp = Math.min(this._owner.maxHp, this._owner.hp + heal);
+          this._owner._spDrainBeam = { px: player.x, py: player.y, t: 0.3 };
+          spawnParticles(this._owner.x, this._owner.y, 'SPARK', '#44ff88', 4);
+          audio.siphonDrain();
+        }
         this.dead=true;
       }
     }
