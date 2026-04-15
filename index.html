@@ -3920,6 +3920,23 @@ const SOURCE_COLOURS = {
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
+const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
+// Phase transition thresholds as hpPct values (descending); absolute-HP bosses computed at draw time
+const BOSS_PHASE_MARKS = {
+  SENTINEL: null, // absolute: [100/maxHp]
+  WARDEN:   [0.4],
+  HIVE:     null, // absolute: [350/maxHp, 150/maxHp]
+  CONDUCTOR:[0.55, 0.25],
+  OMEGA:    [0.7, 0.4, 0.2],
+  GENESIS:  [0.7, 0.35],
+};
+function getBossPhaseMarks(boss) {
+  const fixed = BOSS_PHASE_MARKS[boss.type];
+  if (fixed) return fixed;
+  if (boss.type === 'SENTINEL') return [100 / boss.maxHp];
+  if (boss.type === 'HIVE') return [350 / boss.maxHp, 150 / boss.maxHp];
+  return [];
+}
 let pendingEnemySpawns = [];
 
 // ─── Weapon Affix Effect Application ─────────────────────────────────────────
@@ -5270,12 +5287,7 @@ class Enemy {
       ctx.beginPath();
       ctx.arc(sx,sy,sz,0,TWO_PI);
       ctx.fill();
-      // boss HP bar
-      ctx.shadowBlur=0;
-      ctx.fillStyle='#333';
-      ctx.fillRect(sx-25,sy-30,50,5);
-      ctx.fillStyle=this.colour;
-      ctx.fillRect(sx-25,sy-30,50*(this.hp/this.maxHp),5);
+      // boss HP shown in cinematic HUD bar (drawBossBar), not overhead
     } else {
       const sz=TILE*(this.isShard?0.25:0.4);
       ctx.fillRect(sx-sz/2, sy-sz/2, sz, sz);
@@ -6476,6 +6488,91 @@ function drawHUD(player) {
   }
 }
 
+// ─── Boss HUD Bar ─────────────────────────────────────────────────────────────
+function drawBossBar() {
+  if (!game.bossAlive && game.bossBarAnim <= 0) return;
+  const boss = enemies.find(e => e.isBoss && !e.dead);
+  if (!boss && game.bossBarAnim <= 0) return;
+
+  const anim = game.bossBarAnim;
+  const slideY = -30 * (1 - easeOutCubic(anim));
+  const alpha = anim;
+
+  // Constrain width to avoid minimap overlap (minimap at W-128-safeRight)
+  const minimapLeft = W - 128 - safeRight - 12; // 12px margin
+  const maxBarW = Math.max(100, (minimapLeft - safeLeft) * 0.8);
+  const barW = Math.min(320, maxBarW);
+  const barH = 8;
+  const barX = Math.min((W - barW) / 2, minimapLeft - barW);
+  const barY = 16 + safeTop + slideY;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Boss name
+  const name = BOSS_NAMES[game.bossType] || game.bossType || 'BOSS';
+  const barCx = barX + barW / 2;
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px monospace';
+  const col = boss ? boss.colour : '#ff3333';
+  ctx.shadowBlur = 8; ctx.shadowColor = col;
+  ctx.fillStyle = col;
+  ctx.fillText(name, barCx, barY - 3);
+
+  if (!boss) { ctx.restore(); return; }
+
+  // Bar frame
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#2d2d5e'; ctx.lineWidth = 1;
+  ctx.strokeRect(barX - 1, barY - 1, barW + 2, barH + 2);
+
+  // Bar background
+  ctx.fillStyle = '#111122';
+  ctx.fillRect(barX, barY, barW, barH);
+
+  // Ghost HP (trailing damage indicator)
+  const ghostFrac = Math.max(0, Math.min(1, game.bossHpGhost / boss.maxHp));
+  if (ghostFrac > 0) {
+    ctx.fillStyle = 'rgba(255,100,100,0.25)';
+    ctx.fillRect(barX, barY, barW * ghostFrac, barH);
+  }
+
+  // Actual HP bar with subtle gradient
+  const hpFrac = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+  if (hpFrac > 0) {
+    ctx.shadowBlur = 4; ctx.shadowColor = col;
+    ctx.fillStyle = col;
+    ctx.fillRect(barX, barY, barW * hpFrac, barH);
+    // Bright highlight on top edge
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(barX, barY, barW * hpFrac, 2);
+  }
+  ctx.shadowBlur = 0;
+
+  // Phase threshold notch marks
+  const marks = getBossPhaseMarks(boss);
+  for (const m of marks) {
+    if (m > 0 && m < 1) {
+      const nx = barX + barW * m;
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillRect(nx - 0.5, barY - 2, 1, barH + 4);
+    }
+  }
+
+  // HP text + phase label
+  ctx.font = '8px monospace';
+  ctx.fillStyle = '#8888aa';
+  ctx.textAlign = 'center';
+  const hpText = `${Math.ceil(boss.hp)}/${boss.maxHp}`;
+  const phaseText = boss.phase > 1 ? `  P${boss.phase}` : '';
+  ctx.fillText(hpText + phaseText, barCx, barY + barH + 9);
+
+  ctx.restore();
+}
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
 // ─── Minimap ──────────────────────────────────────────────────────────────────
 function drawMinimap(dungeon, player) {
   const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
@@ -6998,6 +7095,8 @@ const game = {
   bossEntrances: [],
   bossSealed: false,
   bossAlive: false,
+  bossBarAnim: 0,
+  bossHpGhost: 0,
   modifier: null,
   modBannerTimer: 0,
   bossesCleared: 0,
@@ -7084,6 +7183,8 @@ const game = {
     this.bossEntrances=[];
     this.bossSealed=false;
     this.bossAlive=false;
+    this.bossBarAnim=0;
+    this.bossHpGhost=0;
     this.clearedRooms=new Set();
     this._chainBolts=[];
     // Reset challenge room state
@@ -7703,7 +7804,7 @@ const game = {
     }
     if (tile===T.STAIRS) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to descend',colour:'#ffff00'};
     if (tile===T.TERMINAL && bossBlocking) {
-      const bossLabel = {OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'}[this.bossType] || 'the boss';
+      const bossLabel = BOSS_NAMES[this.bossType] || 'the boss';
       this.hint={text:'CORE terminal locked — destroy ' + bossLabel + ' first',colour:'#ff3333'};
     }
     if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to interface with CORE terminal',colour:'#00f5ff'};
@@ -7947,8 +8048,24 @@ const game = {
         audio.roomUnseal();
       }
       this.bossSealed=false;
-      const bossNames={SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
-      game.msg((bossNames[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
+      game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
+    }
+
+    // Boss HUD bar animation
+    if (this.bossAlive) {
+      if (this.bossBarAnim < 1) this.bossBarAnim = Math.min(1, this.bossBarAnim + dt * 2.5);
+      const boss = enemies.find(e => e.isBoss && !e.dead);
+      if (boss) {
+        if (this.bossHpGhost === 0) this.bossHpGhost = boss.hp;
+        if (this.bossHpGhost > boss.hp) {
+          this.bossHpGhost = Math.max(boss.hp, this.bossHpGhost - boss.maxHp * dt * 0.25);
+        } else {
+          this.bossHpGhost = boss.hp;
+        }
+      }
+    } else if (this.bossBarAnim > 0) {
+      // Fade out after boss death
+      this.bossBarAnim = Math.max(0, this.bossBarAnim - dt * 2);
     }
 
     // ── Challenge room: seal, wave spawn, unseal ─────────────────────────
@@ -9283,6 +9400,7 @@ const game = {
     drawStatusBar(player);
     drawThreatIndicators(cam.x, cam.y);
     drawMinimap(dungeon,player);
+    drawBossBar();
 
     // Difficulty badge below minimap (non-NORMAL only)
     if (game.difficulty !== 'NORMAL') {
