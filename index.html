@@ -60,6 +60,8 @@ const KEY_DISPLAY = k => {
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
+  screenShake: true,
+  damageNumbers: true,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -67,6 +69,8 @@ const settings = {
       if (!raw) return;
       if (typeof raw.sfxVol === 'number') this.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
+      if (typeof raw.screenShake === 'boolean') this.screenShake = raw.screenShake;
+      if (typeof raw.damageNumbers === 'boolean') this.damageNumbers = raw.damageNumbers;
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -77,11 +81,17 @@ const settings = {
   save() {
     try {
       localStorage.setItem('neonDungeonSettings', JSON.stringify({
-        sfxVol: this.sfxVol, musicVol: this.musicVol, keyMap: this.keyMap
+        sfxVol: this.sfxVol, musicVol: this.musicVol,
+        screenShake: this.screenShake, damageNumbers: this.damageNumbers,
+        keyMap: this.keyMap
       }));
     } catch(e) {}
   },
-  resetKeys() { this.keyMap = { ...DEFAULT_KEY_MAP }; this.save(); }
+  resetAll() {
+    this.sfxVol = 1.0; this.musicVol = 1.0;
+    this.screenShake = true; this.damageNumbers = true;
+    this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
+  }
 };
 settings.load();
 
@@ -2147,6 +2157,7 @@ function drawAmbient(camX, camY) {
 // ─── Floating Damage Numbers ─────────────────────────────────────────────────
 let floatingTexts = [];
 function spawnDmgText(wx, wy, text, colour) {
+  if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
   floatingTexts.push({
     x: wx * TILE + rnd(-6, 6), y: wy * TILE - 8,
@@ -2180,13 +2191,14 @@ function drawFloatingTexts(camX, camY) {
 // ─── Screen Shake ────────────────────────────────────────────────────────────
 const shake = { intensity: 0, timer: 0, ox: 0, oy: 0 };
 function triggerShake(intensity, duration = 0.25) {
+  if (!settings.screenShake) return;
   if (intensity > shake.intensity) {
     shake.intensity = intensity;
     shake.timer = duration;
   }
 }
 function updateShake(dt) {
-  if (shake.timer <= 0) { shake.ox = shake.oy = 0; return; }
+  if (!settings.screenShake || shake.timer <= 0) { shake.intensity = 0; shake.timer = 0; shake.ox = shake.oy = 0; return; }
   shake.timer -= dt;
   const t = Math.max(0, shake.timer);
   const mag = shake.intensity * (t / 0.25);  // decay linearly
@@ -8413,8 +8425,10 @@ const game = {
 
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
-    // Total items: 2 sliders + N rebind rows + 1 reset row + 1 back row
-    const totalRows = 2 + actions.length + 2;
+    const TOGGLE_START = 2;   // row index where toggles begin
+    const CTRL_START = 4;     // row index where key rebind rows begin
+    // Total items: 2 sliders + 2 toggles + N rebind rows + 1 reset row + 1 back row
+    const totalRows = CTRL_START + actions.length + 2;
 
     // Key capture mode — wait for next keydown
     if (this._settingsCapture) {
@@ -8459,9 +8473,10 @@ const game = {
     if (jp(ALT_KEYS.up) || jp(km('up')))     this._settingsSel = (this._settingsSel - 1 + totalRows) % totalRows;
     if (jp(ALT_KEYS.down) || jp(km('down')))  this._settingsSel = (this._settingsSel + 1) % totalRows;
 
-    // Left/right on volume sliders
     const sel = this._settingsSel;
-    if (sel < 2) {
+
+    // Left/right on volume sliders
+    if (sel < TOGGLE_START) {
       const step = 0.05;
       if (jp(ALT_KEYS.left) || jp(km('left'))) {
         if (sel === 0) audio.setSfxVolume(Math.max(0, settings.sfxVol - step));
@@ -8472,6 +8487,17 @@ const game = {
         if (sel === 0) audio.setSfxVolume(Math.min(1, settings.sfxVol + step));
         else audio.setMusicVolume(Math.min(1, settings.musicVol + step));
         settings.save();
+      }
+    }
+
+    // Left/right or Enter toggles display options
+    const toggleKeys = ['screenShake', 'damageNumbers'];
+    if (sel >= TOGGLE_START && sel < CTRL_START) {
+      if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
+        const key = toggleKeys[sel - TOGGLE_START];
+        settings[key] = !settings[key];
+        settings.save();
+        audio.menuSelect();
       }
     }
 
@@ -8499,27 +8525,37 @@ const game = {
           return;
         }
       }
+      // Toggle rows click
+      for (let i = 0; i < toggleKeys.length; i++) {
+        const ry = startY + (TOGGLE_START + i) * rowH;
+        if (my >= ry - 8 && my <= ry + 14) {
+          this._settingsSel = TOGGLE_START + i;
+          settings[toggleKeys[i]] = !settings[toggleKeys[i]];
+          settings.save();
+          audio.menuSelect();
+          return;
+        }
+      }
       // Rebind rows click
       for (let i = 0; i < actions.length; i++) {
-        const ry = startY + (2 + i) * rowH;
+        const ry = startY + (CTRL_START + i) * rowH;
         if (my >= ry - 8 && my <= ry + 14) {
-          this._settingsSel = 2 + i;
+          this._settingsSel = CTRL_START + i;
           this._settingsCapture = actions[i];
           audio.menuSelect();
           return;
         }
       }
       // Reset defaults row
-      const resetY = startY + (2 + actions.length) * rowH;
+      const resetY = startY + (CTRL_START + actions.length) * rowH;
       if (my >= resetY - 8 && my <= resetY + 14) {
-        settings.resetKeys();
+        settings.resetAll();
         audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
-        settings.save();
         audio.menuSelect();
         return;
       }
       // Back row
-      const backY = startY + (2 + actions.length + 1) * rowH;
+      const backY = startY + (CTRL_START + actions.length + 1) * rowH;
       if (my >= backY - 8 && my <= backY + 14) {
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
@@ -8527,16 +8563,14 @@ const game = {
       }
     }
 
-    // Enter on selected row
+    // Enter on selected row (toggles handled above)
     if (jp('Enter') || jp(km('shoot'))) {
-      if (sel >= 2 && sel < 2 + actions.length) {
-        this._settingsCapture = actions[sel - 2];
+      if (sel >= CTRL_START && sel < CTRL_START + actions.length) {
+        this._settingsCapture = actions[sel - CTRL_START];
         audio.menuSelect();
-      } else if (sel === 2 + actions.length) {
-        // Reset defaults
-        settings.resetKeys();
+      } else if (sel === CTRL_START + actions.length) {
+        settings.resetAll();
         audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
-        settings.save();
         audio.menuSelect();
       } else if (sel === totalRows - 1) {
         audio.menuSelect();
@@ -8554,7 +8588,9 @@ const game = {
   renderSettings() {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
-    const totalRows = 2 + actions.length + 2;
+    const TOGGLE_START = 2;
+    const CTRL_START = 4;
+    const totalRows = CTRL_START + actions.length + 2;
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -8600,17 +8636,32 @@ const game = {
       ctx.fillText(`${Math.round(volVals[i] * 100)}%`, sliderX + sliderW + (narrow ? 40 : 60), ry);
     }
 
+    // ── Display section ──
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS'];
+    const toggleKeys = ['screenShake', 'damageNumbers'];
+    for (let i = 0; i < toggleLabels.length; i++) {
+      const ry = startY + (TOGGLE_START + i) * rowH;
+      const isSel = sel === TOGGLE_START + i;
+      const on = settings[toggleKeys[i]];
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
+      ctx.fillText(toggleLabels[i], labelX, ry);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = on ? (isSel ? '#00ff88' : '#22aa66') : (isSel ? '#ff4466' : '#884444');
+      ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
+    }
+
     // ── Controls section ──
-    const sectionY = startY + 2 * rowH - 10;
+    const sectionY = startY + CTRL_START * rowH - 10;
     ctx.fillStyle = '#555577'; ctx.textAlign = 'left';
     ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
     ctx.fillText('─── CONTROLS ───', labelX, sectionY);
     ctx.font = `${fs}px monospace`;
 
     for (let i = 0; i < actions.length; i++) {
-      const ry = startY + (2 + i) * rowH;
+      const ry = startY + (CTRL_START + i) * rowH;
       const a = actions[i];
-      const isSel = sel === 2 + i;
+      const isSel = sel === CTRL_START + i;
       const isCapturing = this._settingsCapture === a;
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#ff00c8' : '#888899';
@@ -8635,7 +8686,7 @@ const game = {
     }
 
     // Reset defaults row
-    const resetIdx = 2 + actions.length;
+    const resetIdx = CTRL_START + actions.length;
     const resetY = startY + resetIdx * rowH;
     ctx.textAlign = 'center';
     ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
@@ -8655,7 +8706,7 @@ const game = {
     if (isTouchDevice()) {
       ctx.fillText('Tap to adjust · ESC to go back', W/2, H - 20);
     } else {
-      ctx.fillText('↑↓ Navigate · ◀▶ Adjust Volume · Enter to rebind · ESC Back', W/2, H - 20);
+      ctx.fillText('↑↓ Navigate · ◀▶ Adjust/Toggle · Enter to rebind · ESC Back', W/2, H - 20);
     }
     ctx.restore();
   },
