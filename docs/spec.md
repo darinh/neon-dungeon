@@ -1196,6 +1196,55 @@ All audio routes through a master gain bus (0.7) → DynamicsCompressor (thresho
 
 A single 2-second white-noise AudioBuffer is generated once at init and reused for all noise-burst voices.
 
+**Music bus** (separate from SFX): `audio.getMusicBus()` returns a dedicated gain node (0.12) → lightweight DynamicsCompressor (threshold −18 dB, ratio 2:1) → destination. This isolates music dynamics from the SFX compressor so continuous music layers don't steal headroom from transient sound effects.
+
+### Procedural Music System
+
+The `music` module generates a continuous, layered soundtrack using Web Audio oscillators and noise — no audio files. Music responds to gameplay state, floor depth, and combat intensity.
+
+**Layers:**
+
+| Layer | Voices | Role |
+|-------|--------|------|
+| Drone | 2 detuned sawtooth oscillators → lowpass filter (180 Hz, LFO-modulated ±60 Hz at 0.15 Hz) | Atmospheric bed — always present during gameplay |
+| Pulse | Sub kick (sine 80→40 Hz) on beats 1,3 + hi-hat (cached noise, highpass 8 kHz) on all beats | Rhythmic drive — activates during combat/boss |
+| Arp | Square wave notes from minor pentatonic scale, 70% probability per 8th note | Melodic texture — active during exploration, reduced in combat |
+| Bass | Triangle wave root note, 8th notes (combat) or quarter notes (boss) | Low-end reinforcement — combat/boss only |
+
+**Music states and layer targets:**
+
+| State | Drone | Pulse | Arp | Bass | Trigger |
+|-------|-------|-------|-----|------|---------|
+| `idle` | 0 | 0 | 0 | 0 | MENU, GAME_OVER, VICTORY |
+| `explore` | 1.0 | 0 | 0.6 | 0 | PLAYING with no enemies in player's room |
+| `combat` | 0.8 | 1.0 | 0.25 | 0.7 | PLAYING with live enemies in player's room |
+| `boss` | 1.1 | 1.0 | 0 | 1.0 | Boss room sealed (`bossSealed`) |
+| `tension` | 0.7 | 0.4 | 0.35 | 0 | Challenge room sealed (`challengeSealed`) |
+
+State transitions crossfade layer gains over 1.5 s (0.8 s for boss). State priority: boss > tension > combat > explore.
+
+**Floor-dependent tuning:**
+
+| Floors | Root | Base BPM | Character |
+|--------|------|----------|-----------|
+| 1–3 | C2 (MIDI 36) | 100 | Brighter, slower — introductory |
+| 4–6 | B♭1 (MIDI 34) | 110 | Darker, moderate pace |
+| 7–9 | A♭1 (MIDI 32) | 120 | Deep, driving |
+| 10 | F1 (MIDI 29) | 130 | Lowest, fastest — final boss |
+
+BPM is further multiplied by state: combat ×0.85 beat duration, boss ×0.75. Drone pitch transitions smoothly via `exponentialRampToValueAtTime` on floor change.
+
+**Arp patterns** (minor pentatonic intervals cycled per beat):
+- Tier 0 (floors 1–3): root → 5th → octave+3rd → 5th
+- Tier 1 (floors 4–6): ♭3 → 5th → root → ♭7
+- Tier 2 (floors 7–9): 4th → root → 5th → ♭3
+
+**Scheduling:** `music.tick()` runs every frame from the main game loop. It uses Web Audio `currentTime` lookahead scheduling (250 ms ahead) to schedule rhythmic events on precise 8th-note boundaries — no `setInterval`. Already-scheduled notes from a previous state fade naturally through the layer gain crossfade.
+
+**Pause handling:** `music.pause()` mutes all layer gains over 0.3 s and stops scheduling. `music.resume()` restores gains and resets the beat clock to `currentTime + 0.1`. This avoids `AudioContext.suspend()` which would kill UI sounds in the pause menu.
+
+**Drone lifecycle:** Persistent oscillators created once per run, retuned on floor change, stopped on `music.stop()` (run end / menu). Short-lived rhythmic voices (pulse/arp/bass) are created and auto-disposed per beat.
+
 ### Sound Effects
 
 | Event            | Sound description                                                                |
@@ -1637,3 +1686,4 @@ when key indicators are present to avoid collision.
 | v30.0   | Hackware system: collectible active abilities with cooldowns. 4 modules: EMP Burst (AoE stun 2s in 4-tile radius, LOS-gated, bosses 1s, 10s CD), Phase Cloak (2.5s invisibility + full damage immunity, enemies lose targeting, 14s CD), Nano Swarm (6 homing particles × 8 dmg each, 4s lifetime, 10s CD), Gravity Well (pull enemies within 5 tiles toward aim point for 3s, bosses immune, collision-aware, 16s CD). `HACKWARE` table, `activateHackware()`, `updateHackwareEffects()`, `drawHackwareEffects()`. Central `canTargetPlayer()` helper gates all enemy AI when player is cloaked. `isPlayerDamageImmune()` gates `player.takeDamage()`, plasma burn, arc zap, and projectile-player collisions for both dash and cloak. `Enemy.stunTimer` freezes AI + cooldown timers. F key + touch button (shown only when equipped). `makeHackwareOption()` for powerup choice (~12% on floor 3+). Vendor offers hackware (~40% on floor 3+). Status bar badges: hackware cooldown/ready + cloak active. HUD indicators in both compact and landscape layouts. Save/load: `player.hackware` + `player.hackwareCooldown` (no save version bump — defaults on old saves). `hackwareEffects[]` cleared in `populateFloor()`. 5 new audio SFX (EMP/Cloak/CloakEnd/Swarm/Gravity). SW cache v37 |
 | v31.0   | Challenge rooms: optional wave-based arena encounters. One per non-boss floor (2–9). `T.CHALLENGE_GATE` tile (17) — passable red/amber archway. Room sealed on entry (same pattern as boss seal), 2–3 waves of enemies (floor-scaled, one level harder), inter-wave pause with HUD counter, guaranteed rewards on completion (2 items + credits + XP + score). Wave enemies tagged `_challengeWave` for independent tracking. Drone phase check respects challenge seal. EXTERMINATE quest accounts for pending waves. Room-clear rewards excluded during active encounter. Sealed walls get red tint + minimap pulse + ambient WISP particles. Proximity hint on approach. `audio.challengeWave()` two-tone alarm SFX. No save format change (challenge state resets on floor load). SW cache v38 |
 | v32.0   | Perk choice system: deterministic perks replaced with choose-one-of-three at levels 2/4/6/8. 15-perk pool (`PERK_POOL`): 4 existing (Laser Sight, Threat Sense, Piercing Rounds, Energy Shield) + 11 new (Vampiric, Adrenaline, Rapid Fire, Critical Hit, Thick Armor, Berserker, Dash Master, Nano Repair, Explosive Kills, Multi-Shot, Second Wind). Auto-Laser capstone at level 10 unchanged. `PERK_CHOICE` game state with 3-card UI (keyboard 1/2/3, arrows+Enter, mouse/touch). `game.pendingPerkChoices[]` queue for multi-level jumps, rolled fresh per choice. `rollPerkChoices()` Fisher-Yates shuffle excluding owned. `applyPerk()` + `grantCapstone()` replace `checkPerkUnlocks()`. `player.effectiveAtk()` for Berserker scaling. Explosive Kills merges with VOLATILE modifier (shared AoE, perk-only doesn't hurt player). Multi-Shot spawns bonus 60%-damage projectile directly (no recursive shoot). Critical Hit rolled per projectile (`proj.isCrit`). Second Wind revives at 30% HP once per floor. Status badges for Berserker and Second Wind. Death recap shows chosen perks. `audio.perkChoice()` + `audio.secondWind()` SFX. SAVE_VERSION 9.0. SW cache v39 |
+| v33.0   | Procedural ambient music system: 4-layer synthesised soundtrack via Web Audio. Drone (2 detuned sawtooths → lowpass → LFO), Pulse (sub kick + hi-hat), Arp (minor pentatonic square wave sequences, 70% probability), Bass (triangle root pulses). 5 music states: idle/explore/combat/boss/tension — crossfade transitions (1.5s). Floor-dependent tuning: C2→B♭1→A♭1→F1 root descent, 100→130 BPM acceleration. Combat/boss tempo boost. Separate music bus (gain 0.12 → dedicated compressor → destination) isolates from SFX dynamics. `music.tick()` in main loop with 250ms Web Audio lookahead scheduling. Cached noise buffer for hi-hats. Pause mutes + stops scheduling (no `AudioContext.suspend()`). Music state resolved per frame in `updatePlaying()`: boss > tension > combat > explore. `music.setFloor(n)` retunes drone via exponential ramp. `music.stop()` on endRun/menu. No save format change. SW cache v40 |
