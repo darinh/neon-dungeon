@@ -1629,6 +1629,48 @@ Badges flow left-to-right from the safe-area left edge; overflow stops before
 minimap region (`W - 130 - safeRight`). Y position shifts up (`hudTop - 32`)
 when key indicators are present to avoid collision.
 
+### Floor Events — Risk/Reward Encounters
+
+Interactive event terminals offering binary choices with different risk/reward profiles. One event room per non-boss floor (2–9).
+
+**Room Generation:**
+- Room type `'event'`, `T.EVENT_TERMINAL` tile (19) at room center.
+- Eligible rooms: not spawn/stair/special, area ≥ 16 tiles, no existing `roomType`.
+- Room colour: `#0a1a1a` (dark teal). Excluded from lore terminal placement.
+
+**Interaction:**
+- Press E within 1.5 tiles of terminal → `EVENT_CHOICE` game state.
+- Hint text: "Press E at terminal" (teal) when within 2.5 tiles.
+- One use per room (`room.eventUsed` flag).
+
+**EVENT_CHOICE UI:**
+- Dimmed overlay, event icon + name + description, two choice cards.
+- Input: 1/2 keys, Left/Right arrows, Enter/Space, mouse click, touch tap.
+- Each card shows: label, description, outcome summary, key hint.
+
+**8 Events** (selected randomly per terminal, filtered by player state):
+
+| Event | Choice A (risky) | Choice B (safe) |
+|-------|------------------|-----------------|
+| Stasis Pod | +40% HP heal, +XP | Random item drop |
+| Corrupted Terminal | 60% hackware / 40% enemy wave | +credits |
+| Arms Cache | Weapon reroll (floor+1), −15 HP | Random item |
+| Radiation Leak | +augment, −20 HP | +credits +score |
+| Rogue AI | Reveal entire minimap | −50 CR → +XP |
+| Power Junction | Stun + damage room enemies | Heal 60% |
+| Ghost Signal | +credits +XP +score | Combo boost ×5 |
+| Emergency Drop | Heal 30% + item | Hackware CD reset + credits |
+
+**Filtering:** Radiation Leak excluded when augment slots full. Rogue AI excluded when credits < 50.
+
+**Synergies:** Credit Siphon augment applies ×1.5 to credit rewards. XP-granting events may trigger perk choices (checked after event resolution). Weapon reroll uses `rollWeapon(base, floor+1)`.
+
+**Audio:** `audio.eventTerminal()` on activation, `audio.eventResolve()` on choice.
+
+**Visual:** Tile rendered as pulsing teal `◈` glyph. Minimap: teal 3px POI marker.
+
+**Stats:** `player.eventsResolved` counter shown on Game Over / Victory screens.
+
 ### Augment System
 
 Cybernetic implants that provide permanent passive effects for the run. Max **3** equipped augments (`MAX_AUGMENTS`).
@@ -1727,3 +1769,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v32.0   | Perk choice system: deterministic perks replaced with choose-one-of-three at levels 2/4/6/8. 15-perk pool (`PERK_POOL`): 4 existing (Laser Sight, Threat Sense, Piercing Rounds, Energy Shield) + 11 new (Vampiric, Adrenaline, Rapid Fire, Critical Hit, Thick Armor, Berserker, Dash Master, Nano Repair, Explosive Kills, Multi-Shot, Second Wind). Auto-Laser capstone at level 10 unchanged. `PERK_CHOICE` game state with 3-card UI (keyboard 1/2/3, arrows+Enter, mouse/touch). `game.pendingPerkChoices[]` queue for multi-level jumps, rolled fresh per choice. `rollPerkChoices()` Fisher-Yates shuffle excluding owned. `applyPerk()` + `grantCapstone()` replace `checkPerkUnlocks()`. `player.effectiveAtk()` for Berserker scaling. Explosive Kills merges with VOLATILE modifier (shared AoE, perk-only doesn't hurt player). Multi-Shot spawns bonus 60%-damage projectile directly (no recursive shoot). Critical Hit rolled per projectile (`proj.isCrit`). Second Wind revives at 30% HP once per floor. Status badges for Berserker and Second Wind. Death recap shows chosen perks. `audio.perkChoice()` + `audio.secondWind()` SFX. SAVE_VERSION 9.0. SW cache v39 |
 | v33.0   | Procedural ambient music system: 4-layer synthesised soundtrack via Web Audio. Drone (2 detuned sawtooths → lowpass → LFO), Pulse (sub kick + hi-hat), Arp (minor pentatonic square wave sequences, 70% probability), Bass (triangle root pulses). 5 music states: idle/explore/combat/boss/tension — crossfade transitions (1.5s). Floor-dependent tuning: C2→B♭1→A♭1→F1 root descent, 100→130 BPM acceleration. Combat/boss tempo boost. Separate music bus (gain 0.12 → dedicated compressor → destination) isolates from SFX dynamics. `music.tick()` in main loop with 250ms Web Audio lookahead scheduling. Cached noise buffer for hi-hats. Pause mutes + stops scheduling (no `AudioContext.suspend()`). Music state resolved per frame in `updatePlaying()`: boss > tension > combat > explore. `music.setFloor(n)` retunes drone via exponential ramp. `music.stop()` on endRun/menu. No save format change. SW cache v40 |
 | v34.0   | Augment system: cybernetic implants with permanent passive effects. 12 augments (Neural Link, Titanium Plating, Magnetic Field, Thermal Optics, Adrenaline Injector, Overclocker, Echo Mapper, Credit Siphon, Scavenger Nanites, Kinetic Amplifier, Temporal Dilation, Reactive Armor). Max 3 per run. New `implant` room type (floors 2–9, ~50% spawn rate) with `T.IMPLANT_SHRINE` tile (18). `AUGMENT_CHOICE` game state with 2-card UI. Vendor sells augments (~20% on floor 3+). Capped players get credits at shrines. `AUGMENTS` table, `rollAugmentChoices()`, `makeAugmentShopOption()`, `hasAugment()` helper. Effect hooks: `gainXP()` (Neural Link ×1.25), `takeDamage()` (Titanium Plating −1, Reactive Armor pulse), item pickup (Magnetic Field ×2 radius), `drawMinimap()` (Thermal Optics + Echo Mapper), `Enemy.die()` (Adrenaline Injector speed buff, Scavenger Nanites heal, Credit Siphon ×1.5), `activateHackware()` (Overclocker ×0.7 CD), `Projectile` constructor (Kinetic Amplifier ×1.2 speed), `Enemy.moveToward()` (Temporal Dilation ×0.85). `player.augments` saved (no SAVE_VERSION bump — defaults to {} on old saves). Status badges for augment count, Adrenaline buff, Reactive cooldown. Death recap lists augments. 3 new audio SFX. SW cache v41 |
+| v35.0   | Floor events: risk/reward encounter terminals offering binary choices. 8 event types: Stasis Pod (heal+XP / item), Corrupted Terminal (60% hackware 40% alarm / credits), Arms Cache (weapon reroll −HP / item), Radiation Leak (augment −HP / credits+score), Rogue AI (reveal minimap / trade credits for XP), Power Junction (stun+damage room enemies / heal 60%), Ghost Signal (credits+XP+score / combo boost), Emergency Drop (heal+item / hackware CD reset+credits). New `event` room type (floors 2–9, every non-boss floor). `T.EVENT_TERMINAL` tile (19) — pulsing teal terminal. `EVENT_CHOICE` game state with 2-card UI (keyboard 1/2, arrows+Enter, mouse/touch). `EVENTS` table, `rollEvent()` filters by player state (skips augment event at cap, bargain event if broke), `applyEventEffect()` executes outcomes. Choices include safe options (credits, items, score) and risky options (weapon reroll with trap damage, augment with HP cost, hackware with 40% enemy spawn). Event rooms excluded from lore placement. `player.eventsResolved` stat tracked in save/load and shown on Game Over/Victory screens. Credit Siphon augment synergy applies to credit rewards. Pending perk choices checked after event resolution (XP grants may trigger level-ups). 2 new audio SFX (`audio.eventTerminal()`, `audio.eventResolve()`). Minimap: teal 3px POI marker. No SAVE_VERSION bump — defaults on old saves. SW cache v42 |

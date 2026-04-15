@@ -30,7 +30,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -241,7 +241,7 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE' || game.state === 'AUGMENT_CHOICE') {
+      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE' || game.state === 'AUGMENT_CHOICE' || game.state === 'EVENT_CHOICE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -498,7 +498,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -895,6 +895,21 @@ const audio = (() => {
       osc('sawtooth', 200, 80, 0.15, t, 0.12);
       osc('square', 150, 60, 0.1, t + 0.02, 0.1);
       noise(0.18, t, 0.08, 1200);
+    },
+    eventTerminal() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.5, 0.8);
+      osc('sine', 220, 440, 0.08, t, 0.15, bus);
+      osc('triangle', 330, 660, 0.06, t + 0.08, 0.12, bus);
+      osc('square', 110, 55, 0.04, t + 0.15, 0.1, bus);
+      noise(0.05, t, 0.2, 1800, bus);
+    },
+    eventResolve() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.6);
+      osc('sine', 400, 1000, 0.10, t, 0.18, bus);
+      osc('triangle', 600, 1400, 0.07, t + 0.06, 0.14, bus);
+      osc('sine', 200, 200, 0.08, t, 0.12);
     },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
@@ -2465,7 +2480,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a'};
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a'};
   const specialRooms = [];
   const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -2697,6 +2712,21 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Event Room (floor 2+, non-boss): risk/reward encounter terminal ───
+  let eventRoom = null;
+  if (floorNum >= 2 && !bossRoom) {
+    const eventEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && !r.roomType &&
+      !specialRooms.includes(r) && r.w * r.h >= 16
+    );
+    if (eventEligible.length > 0) {
+      eventRoom = eventEligible[rndInt(0, eventEligible.length - 1)];
+      eventRoom.roomType = 'event';
+      specialRooms.push(eventRoom);
+      map[eventRoom.cy][eventRoom.cx] = T.EVENT_TERMINAL;
+    }
+  }
+
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
@@ -2742,7 +2772,7 @@ function generateFloor(floorNum) {
   if (floorNum >= 2 && !bossRoom) {
     const loreEligible = rooms.filter(r =>
       r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
-      r.roomType !== 'secret' && r.w * r.h >= 12
+      r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
     );
     const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : 1);
     const loreRooms = loreEligible.sort(() => Math.random() - 0.5).slice(0, numLore);
@@ -2777,7 +2807,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -2818,7 +2848,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -3254,6 +3284,235 @@ function makeAugmentShopOption(exclude) {
       spawnParticles(p.x, p.y, 'EXPLOSION', aug.colour, 12);
     }
   };
+}
+
+// ─── Floor Events (Risk/Reward Encounters) ──────────────────────────────────
+const EVENTS = [
+  { id:'STASIS_POD',         name:'Stasis Pod',          desc:'A cryo-pod hums with residual power. Frost clings to the glass.',
+    icon:'❄', colour:'#66ccff',
+    a:{ label:'WAKE',    desc:'Revive the occupant. They offer supplies.', summary:'+heal +XP' },
+    b:{ label:'SALVAGE', desc:'Strip the pod for usable parts.',           summary:'+item' } },
+  { id:'CORRUPTED_TERMINAL', name:'Corrupted Terminal',   desc:'A terminal sparks with corrupted data streams. Something is buried in the noise.',
+    icon:'⌁', colour:'#ff4488',
+    a:{ label:'HACK',    desc:'Extract the data. Risk of triggering alarms.', summary:'60% hackware / 40% alarm' },
+    b:{ label:'PURGE',   desc:'Wipe the terminal. Sell the scrap.',           summary:'+credits' } },
+  { id:'ARMS_CACHE',         name:'Arms Cache',           desc:'A sealed weapons locker with a cracked biometric reader.',
+    icon:'⚔', colour:'#ff8844',
+    a:{ label:'FORCE OPEN', desc:'Pry it open. The trap mechanism is still live.', summary:'+weapon −HP' },
+    b:{ label:'BYPASS',     desc:'Reroute the lock. Takes what you can carry.',    summary:'+item' } },
+  { id:'RADIATION_LEAK',     name:'Radiation Leak',        desc:'Green luminescence seeps from a cracked containment pipe. Your skin tingles.',
+    icon:'☢', colour:'#44ff44',
+    a:{ label:'ABSORB', desc:'Channel the radiation. Permanent cybernetic integration.', summary:'+augment −HP' },
+    b:{ label:'SEAL',   desc:'Patch the leak. Collect the containment reward.',          summary:'+credits +score' } },
+  { id:'ROGUE_AI',           name:'Rogue AI',              desc:'A fragmented AI personality flickers to life in the terminal. It watches you.',
+    icon:'◉', colour:'#aa88ff',
+    a:{ label:'LISTEN',  desc:'Let it share what it knows about this floor.',  summary:'reveal map' },
+    b:{ label:'BARGAIN', desc:'Trade credits for concentrated data packets.',  summary:'−50◆ +XP' } },
+  { id:'POWER_JUNCTION',     name:'Power Junction',        desc:'A sparking power distribution node. The air smells of ozone.',
+    icon:'⚡', colour:'#ffcc00',
+    a:{ label:'OVERLOAD', desc:'Send a surge through the floor\'s grid.',     summary:'stun+damage room enemies' },
+    b:{ label:'SIPHON',   desc:'Drain the node into your systems.',           summary:'+heal 60%' } },
+  { id:'GHOST_SIGNAL',       name:'Ghost Signal',          desc:'A faint encrypted transmission loops on repeat. Source: deeper in the facility.',
+    icon:'📡', colour:'#44ffcc',
+    a:{ label:'TRACE',   desc:'Decode the signal. Extract embedded data.',   summary:'+credits +XP' },
+    b:{ label:'AMPLIFY', desc:'Boost the signal. The adrenaline spike is intense.', summary:'+combo ×5' } },
+  { id:'EMERGENCY_DROP',     name:'Emergency Drop',        desc:'A supply pod is jammed in a ceiling vent. Red emergency lights still blink.',
+    icon:'📦', colour:'#ff6666',
+    a:{ label:'PRY OPEN', desc:'Force the pod open. Grab what falls out.', summary:'+heal +item' },
+    b:{ label:'HOTWIRE',  desc:'Tap the pod\'s power cell for your systems.', summary:'reset hackware CD +credits' } },
+];
+
+function rollEvent(player) {
+  const available = EVENTS.filter(e => {
+    if (e.id === 'RADIATION_LEAK' && Object.keys(player.augments || {}).length >= MAX_AUGMENTS) return false;
+    if (e.id === 'ROGUE_AI' && player.credits < 50) return false;
+    return true;
+  });
+  if (!available.length) return EVENTS[rndInt(0, EVENTS.length - 1)];
+  return available[rndInt(0, available.length - 1)];
+}
+
+function applyEventEffect(event, choice, player, gm) {
+  const floor = gm.floor;
+  const d = getDiff();
+  if (choice === 'a') {
+    switch (event.id) {
+      case 'STASIS_POD': {
+        const heal = Math.round(player.maxHp * 0.4);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        const xp = 20 + floor * 8;
+        player.gainXP(xp);
+        gm.msg('+' + heal + ' HP, +' + xp + ' XP', '#66ccff');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#66ccff', 12);
+        break;
+      }
+      case 'CORRUPTED_TERMINAL': {
+        if (Math.random() < 0.6) {
+          if (!player.hackware) {
+            const hw = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)];
+            player.hackware = hw;
+            player.hackwareCooldown = 0;
+            gm.msg('HACKWARE: ' + HACKWARE[hw].name, HACKWARE[hw].colour);
+            spawnParticles(player.x, player.y, 'EXPLOSION', HACKWARE[hw].colour, 12);
+          } else {
+            const cr = 60 + floor * 10;
+            player.credits += cr;
+            gm.msg('Data extracted: +' + cr + ' CR', '#ff4488');
+          }
+        } else {
+          gm.msg('⚠ ALARM TRIGGERED!', '#ff2222');
+          const room = gm.eventChoice.room;
+          for (let i = 0; i < 3; i++) {
+            const ex = room.cx + rnd(-3, 3), ey = room.cy + rnd(-3, 3);
+            const e = spawnEnemy(pickEnemyType(floor), ex, ey, floor, room, false);
+            if (e) enemies.push(e);
+          }
+          spawnParticles(player.x, player.y, 'EXPLOSION', '#ff2222', 15);
+        }
+        break;
+      }
+      case 'ARMS_CACHE': {
+        const bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
+        const baseKey = bases[rndInt(0, bases.length - 1)];
+        player.weapon = rollWeapon(baseKey, Math.min(10, floor + 1));
+        const dmg = 15;
+        player.takeDamage(dmg, 'Trap');
+        gm.msg('NEW WEAPON: ' + player.weapon.name + ' (−' + dmg + ' HP)', '#ff8844');
+        spawnParticles(player.x, player.y, 'SPARK', '#ff8844', 10);
+        break;
+      }
+      case 'RADIATION_LEAK': {
+        const owned = player.augments || {};
+        const slots = Object.keys(owned).length;
+        if (slots < MAX_AUGMENTS) {
+          const available = AUGMENT_KEYS.filter(id => !owned[id]);
+          if (available.length) {
+            const id = available[rndInt(0, available.length - 1)];
+            player.augments[id] = true;
+            audio.augmentInstall();
+            gm.msg(AUGMENTS[id].icon + ' ' + AUGMENTS[id].name + ' INSTALLED', AUGMENTS[id].colour);
+            spawnParticles(player.x, player.y, 'EXPLOSION', AUGMENTS[id].colour, 12);
+          }
+        }
+        const dmg = 20;
+        player.takeDamage(dmg, 'Radiation');
+        break;
+      }
+      case 'ROGUE_AI': {
+        const dungeon = gm.dungeon;
+        for (let ty = 0; ty < MAP_H; ty++)
+          for (let tx = 0; tx < MAP_W; tx++)
+            if (!dungeon.secretMask[ty][tx] && dungeon.map[ty][tx] !== T.VOID)
+              dungeon.visited[ty][tx] = 1;
+        gm.msg('MAP DATA DOWNLOADED', '#aa88ff');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#aa88ff', 15);
+        break;
+      }
+      case 'POWER_JUNCTION': {
+        const room = gm.eventChoice.room;
+        let stunned = 0;
+        for (const e of enemies) {
+          if (e.dead || e.room !== room) continue;
+          e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 1 : 3);
+          const dmg = Math.min(e.hp - 1, 25);
+          if (dmg > 0) e.takeDamage(dmg, 'Overload');
+          stunned++;
+        }
+        gm.msg(stunned > 0 ? stunned + ' ENEMIES STUNNED' : 'NO TARGETS', '#ffcc00');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#ffcc00', 12);
+        break;
+      }
+      case 'GHOST_SIGNAL': {
+        const cr = 40 + floor * 12;
+        const xp = 25 + floor * 8;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        player.gainXP(xp);
+        player.score += 100 * floor;
+        gm.msg('+' + cr + ' CR, +' + xp + ' XP, +' + (100 * floor) + ' PTS', '#44ffcc');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#44ffcc', 12);
+        break;
+      }
+      case 'EMERGENCY_DROP': {
+        const heal = Math.round(player.maxHp * 0.3);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        items.push(new Item(player.x, player.y));
+        gm.msg('+' + heal + ' HP + ITEM', '#ff6666');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#ff6666', 12);
+        break;
+      }
+    }
+  } else {
+    switch (event.id) {
+      case 'STASIS_POD': {
+        items.push(new Item(player.x, player.y));
+        gm.msg('SALVAGED: ITEM DROP', '#66ccff');
+        spawnParticles(player.x, player.y, 'SPARK', '#66ccff', 8);
+        break;
+      }
+      case 'CORRUPTED_TERMINAL': {
+        const cr = 50 + floor * 10;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        gm.msg('+' + cr + ' CR (purged)', '#ff4488');
+        spawnParticles(player.x, player.y, 'SPARK', '#ff4488', 8);
+        break;
+      }
+      case 'ARMS_CACHE': {
+        items.push(new Item(player.x, player.y));
+        gm.msg('BYPASSED: ITEM DROP', '#ff8844');
+        spawnParticles(player.x, player.y, 'SPARK', '#ff8844', 8);
+        break;
+      }
+      case 'RADIATION_LEAK': {
+        const cr = 60 + floor * 12;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        player.score += 150 * floor;
+        gm.msg('+' + cr + ' CR, +' + (150 * floor) + ' PTS', '#44ff44');
+        spawnParticles(player.x, player.y, 'SPARK', '#44ff44', 8);
+        break;
+      }
+      case 'ROGUE_AI': {
+        if (player.credits >= 50) {
+          player.credits -= 50;
+          const xp = 60 + floor * 12;
+          player.gainXP(xp);
+          gm.msg('−50 CR → +' + xp + ' XP', '#aa88ff');
+        } else {
+          gm.msg('NOT ENOUGH CREDITS', '#993366');
+        }
+        spawnParticles(player.x, player.y, 'SPARK', '#aa88ff', 8);
+        break;
+      }
+      case 'POWER_JUNCTION': {
+        const heal = Math.round(player.maxHp * 0.6);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        gm.msg('+' + heal + ' HP', '#ffcc00');
+        spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 10);
+        break;
+      }
+      case 'GHOST_SIGNAL': {
+        combo.count = 5;
+        combo.timer = 3;
+        combo.flashTimer = 0.3;
+        gm.msg('SIGNAL BOOST: COMBO ×' + comboMultiplier().toFixed(1), '#44ffcc');
+        spawnParticles(player.x, player.y, 'SPARK', '#44ffcc', 10);
+        break;
+      }
+      case 'EMERGENCY_DROP': {
+        if (player.hackware) {
+          player.hackwareCooldown = 0;
+          const cr = 30 + floor * 8;
+          player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+          gm.msg('HACKWARE RESET + ' + cr + ' CR', '#ff6666');
+        } else {
+          const cr = 60 + floor * 10;
+          player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+          gm.msg('+' + cr + ' CR (no hackware)', '#ff6666');
+        }
+        spawnParticles(player.x, player.y, 'SPARK', '#ff6666', 8);
+        break;
+      }
+    }
+  }
 }
 
 // ─── Vendor / Shop ───────────────────────────────────────────────────────────
@@ -4492,6 +4751,7 @@ class Player {
     this.enemiesKilled=0;       // total enemies killed this run
     this.hitsBlocked=0;         // energy shield blocks
     this.roomsCleared=0;        // rooms fully cleared of enemies
+    this.eventsResolved=0;      // floor events completed
     // Hackware — active ability
     this.hackware=null;         // HACKWARE key or null
     this.hackwareCooldown=0;    // cooldown remaining
@@ -4993,6 +5253,17 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('◆',sx+3,sy+14);
           break;
         }
+        case T.EVENT_TERMINAL: {
+          ctx.fillStyle='#0a1a1a';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          const evPulse = 0.5 + 0.5 * Math.sin(lastTime / 500 + tx * 1.3 + ty * 0.8);
+          ctx.shadowBlur=14; ctx.shadowColor='#44ffcc';
+          ctx.fillStyle=`rgba(68,255,204,${evPulse})`;
+          ctx.font='14px monospace';
+          ctx.fillText('◈',sx+3,sy+14);
+          break;
+        }
         case T.LORE: {
           ctx.fillStyle='#1a1208';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -5407,7 +5678,7 @@ function drawMinimap(dungeon, player) {
         col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
               (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
-      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE) col='#202040';
+      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL) col='#202040';
       else if (tile===T.PLASMA) col='#ff6600';
       else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
       else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
@@ -5420,7 +5691,7 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.CHALLENGE_GATE) col='#ff6633';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
       // Collect POI tiles for marker overlay
-      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE) {
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL) {
         pois.push({tile, px:px2+sx/2, py:py2+sy/2});
       }
     }
@@ -5448,6 +5719,7 @@ function drawMinimap(dungeon, player) {
     else if (p.tile===T.VENDOR) { col='#39ff14'; sz=3; }
     else if (p.tile===T.CHALLENGE_GATE) { col='#ff6633'; sz=3; }
     else if (p.tile===T.IMPLANT_SHRINE) { col='#cc44ff'; sz=3; }
+    else if (p.tile===T.EVENT_TERMINAL) { col='#44ffcc'; sz=3; }
     else { col='#ffb700'; sz=2; } // LORE
     ctx.globalAlpha=pulse;
     ctx.shadowBlur=5; ctx.shadowColor=col;
@@ -5638,6 +5910,9 @@ function populateFloor(dungeon, floorNum) {
       // Generate shop inventory for this vendor room
       room.shopItems = generateShopItems(floorNum, game.player, dungeon);
       room.vendorVisited = false;
+    }
+    if (rt==='event') {
+      room.eventUsed = false;
     }
   }
 
@@ -5913,6 +6188,7 @@ const game = {
       enemiesKilled: p.enemiesKilled,
       hitsBlocked: p.hitsBlocked,
       roomsCleared: p.roomsCleared,
+      eventsResolved: p.eventsResolved,
       floor: this.floor,
       score: p.score,
       level: p.level,
@@ -5978,6 +6254,7 @@ const game = {
         enemiesKilled:p.enemiesKilled,
         hitsBlocked:p.hitsBlocked,
         roomsCleared:p.roomsCleared,
+        eventsResolved:p.eventsResolved,
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
         secondWindUsed:p.secondWindUsed,
@@ -6032,6 +6309,7 @@ const game = {
     p.enemiesKilled=s.enemiesKilled||0;
     p.hitsBlocked=s.hitsBlocked||0;
     p.roomsCleared=s.roomsCleared||0;
+    p.eventsResolved=s.eventsResolved||0;
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
@@ -6054,6 +6332,7 @@ const game = {
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
       case 'PERK_CHOICE':    this.updatePerkChoice(); break;
       case 'AUGMENT_CHOICE': this.updateAugmentChoice(); break;
+      case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
@@ -6505,6 +6784,17 @@ const game = {
         }
         if (!r.implantUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press E at implant shrine',colour:'#cc44ff'};
       }
+      // Event terminal interaction
+      if (r.roomType === 'event' && !r.eventUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+        if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
+          r.eventUsed = true;
+          const ev = rollEvent(player);
+          this.eventChoice = { event: ev, selected: 0, room: r };
+          this.setState('EVENT_CHOICE');
+          audio.eventTerminal();
+        }
+        if (!r.eventUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press E at terminal',colour:'#44ffcc'};
+      }
       if (r.shopItems && r.shopItems.some(i => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp('KeyE')) {
           // Revalidate shop items (maxed upgrades, stale prices, unneeded keys, owned/capped augments)
@@ -6940,6 +7230,136 @@ const game = {
     ctx.restore();
   },
 
+  // ─── Event Choice ────────────────────────────────────────────────────────
+  updateEventChoice() {
+    const ec = this.eventChoice;
+    if (!ec) { this.setState('PLAYING'); return; }
+    if (jp('Digit1')) { this.applyEventChoice('a'); return; }
+    if (jp('Digit2')) { this.applyEventChoice('b'); return; }
+    if (jp('ArrowLeft') || jp('KeyA'))  ec.selected = 0;
+    if (jp('ArrowRight')|| jp('KeyD'))  ec.selected = 1;
+    if (jp('Enter') || jp('Space'))     { this.applyEventChoice(ec.selected === 0 ? 'a' : 'b'); return; }
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const cw = narrow ? Math.min(200, (W - 20) / 2 - 8) : Math.min(260, (W - 40) / 2 - 12);
+      const gap = narrow ? 10 : 16;
+      const totalW = cw * 2 + gap;
+      const startX = (W - totalW) / 2;
+      const cardY = H * 0.34;
+      const cardH = narrow ? Math.min(180, H * 0.40) : Math.min(220, H * 0.38);
+      for (let i = 0; i < 2; i++) {
+        const cx = startX + i * (cw + gap);
+        if (mouse.x >= cx && mouse.x <= cx + cw && mouse.y >= cardY && mouse.y <= cardY + cardH) {
+          this.applyEventChoice(i === 0 ? 'a' : 'b'); return;
+        }
+      }
+    }
+  },
+
+  applyEventChoice(choice) {
+    const ec = this.eventChoice;
+    if (!ec) { this.setState('PLAYING'); return; }
+    audio.eventResolve();
+    applyEventEffect(ec.event, choice, this.player, this);
+    this.eventChoice = null;
+    // If effect killed the player (e.g. trap damage), endRun already fired — don't overwrite
+    if (this.player.hp <= 0 || this.state === 'GAME_OVER' || this.state === 'NAME_ENTRY' || this.state === 'VICTORY') return;
+    this.player.eventsResolved++;
+    this.setState('PLAYING');
+    // Check for pending perk choices (XP-granting events may trigger level-ups)
+    if (this.pendingPerkChoices && this.pendingPerkChoices.length > 0 && this.state === 'PLAYING') {
+      this.openNextPerkChoice();
+    }
+  },
+
+  renderEventChoice() {
+    const ec = this.eventChoice;
+    if (!ec) return;
+    const ev = ec.event;
+    const narrow = layout.compact;
+    ctx.save();
+    // Dimmed overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, W, H);
+    // Event icon + name
+    const titleFs = narrow ? 16 : 22;
+    ctx.font = 'bold ' + titleFs + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 12; ctx.shadowColor = ev.colour;
+    ctx.fillStyle = ev.colour;
+    ctx.fillText(ev.icon + ' ' + ev.name.toUpperCase(), W / 2, H * 0.10);
+    ctx.shadowBlur = 0;
+    // Event description — word wrap
+    ctx.font = (narrow ? 10 : 12) + 'px monospace';
+    ctx.fillStyle = '#aaccbb';
+    const descWords = ev.desc.split(' ');
+    let dLine = '', dY = H * 0.10 + titleFs + 6;
+    const maxDescW = narrow ? W - 40 : W * 0.65;
+    for (const w of descWords) {
+      const test = dLine ? dLine + ' ' + w : w;
+      if (ctx.measureText(test).width > maxDescW && dLine) {
+        ctx.fillText(dLine, W / 2, dY);
+        dY += narrow ? 14 : 16;
+        dLine = w;
+      } else { dLine = test; }
+    }
+    if (dLine) ctx.fillText(dLine, W / 2, dY);
+    // Choice cards
+    const cw = narrow ? Math.min(200, (W - 20) / 2 - 8) : Math.min(260, (W - 40) / 2 - 12);
+    const gap = narrow ? 10 : 16;
+    const totalW = cw * 2 + gap;
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.34;
+    const cardH = narrow ? Math.min(180, H * 0.40) : Math.min(220, H * 0.38);
+    const choices = [ev.a, ev.b];
+    for (let i = 0; i < 2; i++) {
+      const ch = choices[i];
+      const cx = startX + i * (cw + gap);
+      const sel = i === ec.selected;
+      // Card background
+      ctx.fillStyle = sel ? '#0a1a1a' : '#060f0f';
+      ctx.strokeStyle = sel ? ev.colour : '#224444';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.fillRect(cx, cardY, cw, cardH);
+      ctx.strokeRect(cx, cardY, cw, cardH);
+      if (sel) {
+        ctx.shadowBlur = 10; ctx.shadowColor = ev.colour;
+        ctx.strokeRect(cx, cardY, cw, cardH);
+        ctx.shadowBlur = 0;
+      }
+      // Choice label
+      const labelFs = narrow ? 13 : 16;
+      ctx.font = 'bold ' + labelFs + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = sel ? ev.colour : '#88bbaa';
+      ctx.fillText(ch.label, cx + cw / 2, cardY + (narrow ? 22 : 28));
+      // Choice description — word wrap
+      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.fillStyle = '#99bbaa';
+      const cWords = ch.desc.split(' ');
+      let cLine = '', cY = cardY + (narrow ? 40 : 50);
+      const cMaxW = cw - 16;
+      for (const w of cWords) {
+        const test = cLine ? cLine + ' ' + w : w;
+        if (ctx.measureText(test).width > cMaxW && cLine) {
+          ctx.fillText(cLine, cx + cw / 2, cY);
+          cY += narrow ? 13 : 15;
+          cLine = w;
+        } else { cLine = test; }
+      }
+      if (cLine) ctx.fillText(cLine, cx + cw / 2, cY);
+      // Summary tag
+      ctx.font = 'bold ' + (narrow ? 9 : 10) + 'px monospace';
+      ctx.fillStyle = sel ? '#ffffff' : '#557766';
+      ctx.fillText(ch.summary, cx + cw / 2, cardY + cardH - (narrow ? 24 : 30));
+      // Key hint
+      ctx.font = (narrow ? 9 : 10) + 'px monospace';
+      ctx.fillStyle = sel ? '#ffffff' : '#446655';
+      ctx.fillText('[' + (i + 1) + ']', cx + cw / 2, cardY + cardH - (narrow ? 8 : 12));
+    }
+    ctx.restore();
+  },
+
   // ─── Vendor Shop ─────────────────────────────────────────────────────────
   updateShopping() {
     const room = this.shopRoom;
@@ -7262,6 +7682,7 @@ const game = {
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
       case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
       case 'AUGMENT_CHOICE': this.renderPlaying(); this.renderAugmentChoice(); break;
+      case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'READING':        this.renderPlaying(); this.renderReading(); break;
       case 'ARCHIVES':  this.renderArchives(); break;
@@ -8359,6 +8780,7 @@ const game = {
     const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
     let runLine = `${r.enemiesKilled||0} slain`;
     if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
+    if (r.eventsResolved) runLine += `  •  ${r.eventsResolved} events`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += lh;
@@ -8435,6 +8857,7 @@ const game = {
     const timeStr = `${mins}:${String(secs).padStart(2,'0')}`;
     let runLine = `${r.enemiesKilled||0} slain`;
     if (r.roomsCleared) runLine += `  •  ${r.roomsCleared} cleared`;
+    if (r.eventsResolved) runLine += `  •  ${r.eventsResolved} events`;
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += narrow ? 20 : 24;
