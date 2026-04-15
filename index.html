@@ -911,6 +911,20 @@ const audio = (() => {
       osc('triangle', 600, 1400, 0.07, t + 0.06, 0.14, bus);
       osc('sine', 200, 200, 0.08, t, 0.12);
     },
+    sniperCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising warning chirp — two quick ascending pips
+      osc('sine', 800, 1600, 0.06, t, 0.08);
+      osc('sine', 900, 1800, 0.05, t + 0.1, 0.08);
+    },
+    sniperFire() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.3);
+      // Sharp supersonic crack + low thud
+      noise(0.20, t, 0.06, 8000, bus);
+      osc('sawtooth', 1200, 200, 0.12, t, 0.08, bus);
+      osc('sine', 60, 30, 0.10, t + 0.02, 0.15);
+    },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.6);
@@ -3643,11 +3657,11 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SHARD:0, SENTINEL:80, HIVE:120, OMEGA:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   HIVE:'Neural Hive', OMEGA:'Omega Core',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb',
@@ -3655,7 +3669,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SHARD:'#00cc66', SENTINEL:'#ff4444',
   HIVE:'#aa00ff', OMEGA:'#ff00c8',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff',
@@ -3951,6 +3965,8 @@ class Enemy {
     // Stun: freeze AI + cooldown timers while stunned
     if (this.stunTimer > 0) {
       this.stunTimer -= dt;
+      // Cancel sniper charge on stun — don't let it resume after stun ends
+      if (this._laserTimer > 0) { this._laserTimer = 0; this._laserTarget = null; this._sniperCooldown = 0.8; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       return; // skip all AI, leave attack/shoot timers frozen
     }
@@ -3975,6 +3991,7 @@ class Enemy {
       case 'GRENADIER':this.aiGrenadier(dt,player,map,d,los);break;
       case 'SPLITTER': this.aiSplitter(dt,player,map,d,los);break;
       case 'TELEPORTER':this.aiTeleporter(dt,player,map,d,los);break;
+      case 'SNIPER':   this.aiSniper(dt,player,map,d,los);   break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
@@ -4216,6 +4233,81 @@ class Enemy {
       this._burstLeft--;
       this.shootTimer = 0.25 / this.berserkerMul();
     }
+  }
+
+  aiSniper(dt,player,map,d,los) {
+    this._sniperCooldown = Math.max(0, (this._sniperCooldown || 0) - dt);
+    this._repositionTimer = Math.max(0, (this._repositionTimer || 0) - dt);
+
+    // Room-gated: only aggro when player is inside this sniper's room
+    const inRoom = this.room && player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+                   player.y >= this.room.y && player.y < this.room.y + this.room.h;
+
+    // Cancel charge conditions: lost LOS, player cloaked, stunned, or player fled room
+    if (this._laserTimer > 0) {
+      if (!los || !canTargetPlayer() || !inRoom || this.stunTimer > 0 || d < 3) {
+        this._laserTimer = 0;
+        this._laserTarget = null;
+        this._sniperCooldown = 0.8; // post-cancel cooldown
+        if (d < 3 && canTargetPlayer()) {
+          // Flee if too close
+          const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+          this.moveToward(this.x + fx * 5, this.y + fy * 5, this.spd * 1.3, dt, map);
+        }
+        return;
+      }
+      // Charging — count down (fixed rate, unaffected by OVERCLOCK/berserker)
+      this._laserTimer -= dt;
+      if (this._laserTimer <= 0) {
+        // Fire along the locked direction
+        const tx = this._laserTarget.x, ty = this._laserTarget.y;
+        const [dx, dy] = norm(tx - this.x, ty - this.y);
+        const p = new Projectile(this.x, this.y, dx, dy, 14, this.atk, 20, this.colour, false, false);
+        p.ownerType = this.type;
+        projectiles.push(p);
+        audio.sniperFire();
+        this._laserTarget = null;
+        this._repositionTimer = 1.0 / this.berserkerMul() / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        this._sniperCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / this.berserkerMul() / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+      }
+      return;
+    }
+
+    // Repositioning after firing — move to a far tile in the room
+    if (this._repositionTimer > 0 && this.room) {
+      if (!this._repositionTarget) {
+        // Pick a passable tile far from player
+        let bestX = this.x, bestY = this.y, bestDist = 0;
+        for (let a = 0; a < 15; a++) {
+          const nx = this.room.x + rnd(1, this.room.w - 1);
+          const ny = this.room.y + rnd(1, this.room.h - 1);
+          const fx = Math.floor(nx), fy = Math.floor(ny);
+          if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) {
+            const dd = dist(nx, ny, player.x, player.y);
+            if (dd > bestDist) { bestX = nx; bestY = ny; bestDist = dd; }
+          }
+        }
+        this._repositionTarget = { x: bestX, y: bestY };
+      }
+      this.moveToward(this._repositionTarget.x, this._repositionTarget.y, this.spd * 1.5, dt, map);
+      if (dist(this.x, this.y, this._repositionTarget.x, this._repositionTarget.y) < 0.5) {
+        this._repositionTarget = null;
+        this._repositionTimer = 0;
+      }
+      return;
+    }
+    this._repositionTarget = null;
+
+    // Idle / patrol / lock-on
+    if (inRoom && los && d < 15 && canTargetPlayer() && this._sniperCooldown <= 0) {
+      // Lock on
+      this._laserTarget = { x: player.x, y: player.y };
+      this._laserTimer = 1.5;
+      audio.sniperCharge();
+    } else if (!inRoom || !los) {
+      this.patrol(dt, map);
+    }
+    // If in room with LOS but on cooldown, hold position (menacing idle)
   }
 
   aiBossSentinel(dt,player,map,d,los) {
@@ -4526,6 +4618,46 @@ class Enemy {
         ctx.fillRect(osx - sz / 2, osy - sz / 2, sz, sz);
         ctx.restore();
       }
+      // Sniper: laser sight line during charge + idle scope glint
+      if (this.type === 'SNIPER') {
+        if (this._laserTimer > 0 && this._laserTarget) {
+          const progress = 1 - this._laserTimer / 1.5;
+          const lx = this._laserTarget.x * TILE - camX;
+          const ly = this._laserTarget.y * TILE - camY;
+          ctx.save();
+          // Pulsing laser line
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 20);
+          ctx.globalAlpha = (0.15 + progress * 0.5) * pulse;
+          ctx.strokeStyle = '#ff2266';
+          ctx.shadowBlur = 6 + progress * 10;
+          ctx.shadowColor = '#ff2266';
+          ctx.lineWidth = 1 + progress * 1.5;
+          ctx.setLineDash([4, 6 - progress * 4]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(lx, ly);
+          ctx.stroke();
+          // Target dot
+          ctx.globalAlpha = 0.3 + progress * 0.5;
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#ff2266';
+          ctx.beginPath();
+          ctx.arc(lx, ly, 3 + progress * 2, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        } else {
+          // Idle scope glint
+          ctx.save();
+          ctx.globalAlpha = 0.25 + Math.sin(this.bobAngle * 3) * 0.1;
+          ctx.fillStyle = '#ff2266';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = '#ff2266';
+          ctx.beginPath();
+          ctx.arc(sx, sy - sz * 0.6, 1.5, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
       // elite diamond marker (coloured by affix)
       if (this.elite) {
         const affCol = this.eliteAffix ? ELITE_AFFIXES[this.eliteAffix].colour : '#ffffff';
@@ -4631,6 +4763,7 @@ const ENEMY_WEIGHTS = {
   SPLITTER: { base: 2,  perFloor: 2, minFloor: 4 },  // splits into SHARDs on death
   GRENADIER:  { base: 1,  perFloor: 2, minFloor: 5 },  // late-game zone denial
   TELEPORTER: { base: 1,  perFloor: 2, minFloor: 6 },  // deep-floor blinker
+  SNIPER:     { base: 1,  perFloor: 2, minFloor: 7 },  // glass-cannon laser sight
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -4663,6 +4796,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'GRENADIER':hp=30; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
     case 'SPLITTER':hp=40;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
     case 'TELEPORTER':hp=25;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
+    case 'SNIPER':   hp=20;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
@@ -4683,9 +4817,10 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='PHANTOM') e.visible=false;
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
+  if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
   if (isBoss) { e.maxHp=e.hp; }
-  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses
-  if (allowElite !== false && !isBoss && floorNum >= 3 && Math.random() < d.eliteRate) {
+  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses or snipers
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -5871,7 +6006,7 @@ function populateFloor(dungeon, floorNum) {
 
     let roomElite = false;  // max 1 elite per room
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1 };
+    const TYPE_CAPS = { PHANTOM: 1, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
@@ -6921,7 +7056,7 @@ const game = {
           if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.3));
           const effectiveFloor = Math.min(this.floor + 1, 9);
           const typeCounts = {};
-          const TYPE_CAPS = { PHANTOM:1, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1 };
+          const TYPE_CAPS = { PHANTOM:1, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1 };
           for (let j = 0; j < count; j++) {
             let type = pickEnemyType(effectiveFloor);
             if ((typeCounts[type]||0) >= (TYPE_CAPS[type]||99)) {
