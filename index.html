@@ -30,7 +30,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '8.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17 };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -498,7 +498,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE; }
 function isSeeThrough(t) { return t!==T.WALL && t!==T.VOID && t!==T.CRACKED; }
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
@@ -834,6 +834,17 @@ const audio = (() => {
       osc('sine',     800,  1000, 0.10, t + 0.08, 0.1, bus);
       osc('sine',     1000, 1400, 0.12, t + 0.16, 0.15, bus);
       osc('triangle', 1200, 1600, 0.05, t + 0.16, 0.12, bus);
+    },
+    challengeWave() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.8);
+      // Alarm horn — two-tone brass stab
+      osc('sawtooth', 220, 200, 0.15, t, 0.2, bus);
+      osc('sawtooth', 330, 310, 0.12, t, 0.2, bus);
+      osc('square',   440, 420, 0.06, t + 0.05, 0.15, bus);
+      // Percussive hit
+      noise(0.18, t, 0.08, 1500, bus);
+      osc('sine', 60, 35, 0.2, t, 0.25);
     },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
@@ -1551,7 +1562,8 @@ function updateAmbient(dt) {
           if (Math.random() < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
         }
       } else if (tile === T.WALL) {
-        if (game.bossSealed && game.bossEntrances && game.bossEntrances.some(e => e.x === tx && e.y === ty)) {
+        if ((game.bossSealed && game.bossEntrances && game.bossEntrances.some(e => e.x === tx && e.y === ty)) ||
+            (game.challengeSealed && game.challengeEntrances && game.challengeEntrances.some(e => e.x === tx && e.y === ty))) {
           if (Math.random() < 0.18) emitters.push({ kind: 'WISP', tx, ty });
         }
       }
@@ -2100,7 +2112,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005'};
+  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a'};
   const specialRooms = [];
   const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -2289,6 +2301,34 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Challenge Room (floor 2+, non-boss): optional wave-based arena ─────
+  let challengeRoom = null;
+  const challengeEntrances = [];
+  if (floorNum >= 2 && !bossRoom) {
+    const challengeEligible = rooms.filter(r =>
+      r !== spawnRoom && r !== farthest && !r.roomType &&
+      !specialRooms.includes(r) && r.w * r.h >= 30
+    );
+    const shuffledCh = challengeEligible.sort(() => Math.random() - 0.5);
+    for (const r of shuffledCh) {
+      const cls = getEntranceClusters(r);
+      // Only pick rooms where ALL entrance clusters are narrow (≤2 tiles)
+      if (cls.length === 0) continue;
+      if (cls.some(cl => cl.length > 2)) continue;
+      r.roomType = 'challenge';
+      challengeRoom = r;
+      specialRooms.push(r);
+      // Replace entrance tiles with challenge gates
+      for (const cl of cls) {
+        for (const e of cl) {
+          map[e.y][e.x] = T.CHALLENGE_GATE;
+          challengeEntrances.push({ x: e.x, y: e.y });
+        }
+      }
+      break; // one per floor
+    }
+  }
+
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
@@ -2410,7 +2450,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -3159,7 +3199,7 @@ class Enemy {
         if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H || !isPassable(map[fy][fx])) {
           sx = this.x; sy = this.y;
         }
-        pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: game.floor, room: this.room });
+        pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: game.floor, room: this.room, _challengeWave: !!this._challengeWave });
       }
     }
   }
@@ -3300,7 +3340,7 @@ class Enemy {
     const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07) / (game.modifier==='OVERCLOCK'?1.2:1);
     if (d<15 && canTargetPlayer()) {
       // Drones respect walls when boss room is sealed
-      const canPhase = !game.bossSealed;
+      const canPhase = !game.bossSealed && !game.challengeSealed;
       this.moveToward(player.x,player.y,this.spd,dt,map,canPhase);
       if (this.shootTimer<=0) {
         this.fireAt(player.x,player.y,7,this.atk,16,'#00aaff');
@@ -4330,7 +4370,8 @@ function drawWorld(dungeon, camX, camY) {
       ctx.globalAlpha=brightness;
       switch(tile) {
         case T.WALL: {
-          const isSealed = game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty);
+          const isSealed = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
+                           (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty));
           ctx.fillStyle = isSealed ? '#2e1a1a' : '#1a1a2e';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle = isSealed ? '#5e2d2d' : '#2d2d5e';
@@ -4498,6 +4539,21 @@ function drawWorld(dungeon, camX, camY) {
             ctx.lineTo(mx+2, sy+TILE-3);
             ctx.stroke();
           }
+          break;
+        }
+        case T.CHALLENGE_GATE: {
+          ctx.fillStyle='#1a0a0a';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          const gatePulse = 0.5 + 0.3 * Math.sin(lastTime / 500 + tx * 0.9 + ty * 1.1);
+          ctx.globalAlpha = brightness * gatePulse;
+          ctx.shadowBlur=10; ctx.shadowColor='#ff6633';
+          ctx.fillStyle='#ff6633';
+          ctx.fillRect(sx, sy, 3, TILE);
+          ctx.fillRect(sx+TILE-3, sy, 3, TILE);
+          ctx.fillRect(sx, sy, TILE, 3);
+          ctx.globalAlpha = brightness * gatePulse * 0.4;
+          ctx.fillStyle='#ff9933';
+          ctx.fillRect(sx+3, sy+3, TILE-6, TILE-6);
           break;
         }
       }
@@ -4763,7 +4819,8 @@ function drawMinimap(dungeon, player) {
       const px2=MX+tx*sx, py2=MY+ty*sy;
       let col=null;
       if (tile===T.WALL||tile===T.CRACKED) {
-        col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
+        col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
+              (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
       }
       else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW) col='#202040';
       else if (tile===T.PLASMA) col='#ff6600';
@@ -4775,9 +4832,10 @@ function drawMinimap(dungeon, player) {
       else if (tile===T.LOCKED_R) col='#ff3333';
       else if (tile===T.LOCKED_B) col='#3388ff';
       else if (tile===T.LOCKED_G) col='#ffcc00';
+      else if (tile===T.CHALLENGE_GATE) col='#ff6633';
       if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
       // Collect POI tiles for marker overlay
-      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE) {
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE) {
         pois.push({tile, px:px2+sx/2, py:py2+sy/2});
       }
     }
@@ -4801,6 +4859,7 @@ function drawMinimap(dungeon, player) {
     let col, sz;
     if (p.tile===T.STAIRS||p.tile===T.TERMINAL) { col='#ffffff'; sz=3; }
     else if (p.tile===T.VENDOR) { col='#39ff14'; sz=3; }
+    else if (p.tile===T.CHALLENGE_GATE) { col='#ff6633'; sz=3; }
     else { col='#ffb700'; sz=2; } // LORE
     ctx.globalAlpha=pulse;
     ctx.shadowBlur=5; ctx.shadowColor=col;
@@ -4816,6 +4875,17 @@ function drawMinimap(dungeon, player) {
     for (const be of game.bossEntrances) {
       if (!dungeon.visited[be.y]?.[be.x]) continue;
       ctx.fillRect(MX+be.x*sx+sx/2-2, MY+be.y*sy+sy/2-2, 4, 4);
+    }
+  }
+  // Challenge entrance markers when sealed
+  if (game.challengeSealed && game.challengeEntrances) {
+    const cPulse = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 3.5);
+    ctx.globalAlpha=cPulse;
+    ctx.shadowBlur=6; ctx.shadowColor='#ff6633';
+    ctx.fillStyle='#ff6633';
+    for (const ce of game.challengeEntrances) {
+      if (!dungeon.visited[ce.y]?.[ce.x]) continue;
+      ctx.fillRect(MX+ce.x*sx+sx/2-2, MY+ce.y*sy+sy/2-2, 4, 4);
     }
   }
   ctx.globalAlpha=1; ctx.shadowBlur=0;
@@ -4913,6 +4983,7 @@ function populateFloor(dungeon, floorNum) {
     const room=dungeon.rooms[i];
     if (room===spawnRoom) continue;
     if (room.roomType==='secret') continue; // lazy-spawn on reveal
+    if (room.roomType==='challenge') continue; // wave-spawned during encounter
 
     if (bossRoom && room===bossRoom) {
       const btype=bossTypes[floorNum];
@@ -5025,6 +5096,14 @@ const game = {
   currentLore: null,   // lore text being displayed in READING state
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
+  // Challenge room state
+  challengeRoom: null,
+  challengeSealed: false,
+  challengeWave: 0,
+  challengeMaxWaves: 0,
+  challengeEntrances: [],
+  challengeWaveDelay: 0,
+  challengeComplete: false,
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -5078,6 +5157,14 @@ const game = {
     this.bossAlive=false;
     this.clearedRooms=new Set();
     this._chainBolts=[];
+    // Reset challenge room state
+    this.challengeRoom=this.dungeon.challengeRoom||null;
+    this.challengeEntrances=this.dungeon.challengeEntrances||[];
+    this.challengeSealed=false;
+    this.challengeWave=0;
+    this.challengeMaxWaves=0;
+    this.challengeWaveDelay=0;
+    this.challengeComplete=false;
     populateFloor(this.dungeon,n);
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
@@ -5100,7 +5187,7 @@ const game = {
 
   generateQuest(floorNum) {
     const questTypes = [
-      { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0,
+      { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0 && (!game.challengeSealed || game.challengeComplete),
         reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
       { id:'EXPLORE', label:'Visit every room', check: ()=>{
           const d=this.dungeon;
@@ -5492,7 +5579,9 @@ const game = {
     // flush deferred enemy spawns (e.g. SPLITTER → SHARDs)
     if (pendingEnemySpawns.length) {
       for (const s of pendingEnemySpawns) {
-        enemies.push(spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false));
+        const e = spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false);
+        if (s._challengeWave) e._challengeWave = true;
+        enemies.push(e);
       }
       pendingEnemySpawns.length = 0;
     }
@@ -5505,6 +5594,7 @@ const game = {
       for (const room of dungeon.rooms) {
         if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
+        if (room.roomType === 'challenge' && !room.challengeComplete) continue;
         if (enemies.some(e => !e.dead && e.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
@@ -5699,6 +5789,7 @@ const game = {
       if (dt===T.CRACKED) { this.hint={text:'Faint cracks... (press E)',colour:'#ffb700'}; break; }
       if (dt===T.DOOR) { this.hint={text:'Press E to open door',colour:'#aa8844'}; break; }
       if (isDoor(dt)) { const kc=doorKeyColour(dt); this.hint={text:'Need '+kc.toUpperCase()+' KEY (press E)', colour:dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00'}; break; }
+      if (dt===T.CHALLENGE_GATE && !game.challengeComplete) { this.hint={text:'⚔ CHALLENGE ROOM — enter at your own risk',colour:'#ff6633'}; break; }
     }
 
     // trap triggering
@@ -5846,6 +5937,109 @@ const game = {
       this.bossSealed=false;
       const bossNames={3:'SENTINEL MK-I',6:'NEURAL HIVE',10:'OMEGA CORE'};
       game.msg((bossNames[this.floor]||'BOSS')+' DESTROYED','#39ff14');
+    }
+
+    // ── Challenge room: seal, wave spawn, unseal ─────────────────────────
+    if (this.challengeRoom && !this.challengeComplete) {
+      const cr = this.challengeRoom;
+      // Seal when player is clearly inside the challenge room (same pattern as boss)
+      if (!this.challengeSealed) {
+        const onEntrance = this.challengeEntrances.some(e =>
+          Math.floor(player.x)===e.x && Math.floor(player.y)===e.y);
+        if (!onEntrance &&
+            player.x >= cr.x && player.x < cr.x + cr.w &&
+            player.y >= cr.y && player.y < cr.y + cr.h) {
+          this.challengeSealed = true;
+          this.challengeMaxWaves = Math.min(3, 1 + Math.floor(this.floor / 3));
+          this.challengeWave = 0;
+          this.challengeWaveDelay = 0.5; // brief delay before first wave
+          for (const e of this.challengeEntrances) {
+            e.origTile = dungeon.map[e.y][e.x];
+            dungeon.map[e.y][e.x] = T.WALL;
+          }
+          // Nudge player off sealed tiles
+          const ptx = Math.floor(player.x), pty = Math.floor(player.y);
+          if (!isPassable(dungeon.map[pty]?.[ptx])) {
+            player.x = cr.cx + 0.5; player.y = cr.cy + 0.5;
+          }
+          audio.roomSeal();
+          this.msg('⚠ CHALLENGE ROOM SEALED','#ff6633');
+        }
+      }
+      // Wave delay countdown + spawn
+      if (this.challengeSealed && this.challengeWaveDelay > 0) {
+        this.challengeWaveDelay -= dt;
+        if (this.challengeWaveDelay <= 0) {
+          this.challengeWaveDelay = 0;
+          this.challengeWave++;
+          // Spawn wave enemies inside the challenge room
+          const d = getDiff();
+          const areaCap = Math.floor(cr.w * cr.h / 6);
+          let count = Math.min(areaCap, Math.round((3 + this.floor) * d.enemyHp));
+          if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.3));
+          const effectiveFloor = Math.min(this.floor + 1, 9);
+          const typeCounts = {};
+          const TYPE_CAPS = { PHANTOM:1, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1 };
+          for (let j = 0; j < count; j++) {
+            let type = pickEnemyType(effectiveFloor);
+            if ((typeCounts[type]||0) >= (TYPE_CAPS[type]||99)) {
+              const open = ENEMY_TYPES_LIST.filter(t =>
+                (typeCounts[t]||0) < (TYPE_CAPS[t]||99) &&
+                !(ENEMY_WEIGHTS[t].minFloor && effectiveFloor < ENEMY_WEIGHTS[t].minFloor)
+              );
+              type = open.length ? open[rndInt(0, open.length-1)] : 'GUARD';
+            }
+            typeCounts[type] = (typeCounts[type]||0) + 1;
+            // Spawn away from player
+            let ex, ey, attempts = 0;
+            do {
+              ex = cr.x + rnd(1, cr.w-1);
+              ey = cr.y + rnd(1, cr.h-1);
+              attempts++;
+            } while (attempts < 20 && Math.abs(ex - player.x) + Math.abs(ey - player.y) < 3);
+            const e = spawnEnemy(type, ex, ey, this.floor, cr, this.challengeWave > 1);
+            e._challengeWave = true;
+            enemies.push(e);
+          }
+          cr._hadEnemies = true;
+          audio.challengeWave();
+          this.msg('WAVE ' + this.challengeWave + '/' + this.challengeMaxWaves, '#ff9933');
+        }
+      }
+      // Wave cleared — next wave or victory
+      if (this.challengeSealed && this.challengeWaveDelay <= 0 && this.challengeWave > 0) {
+        const alive = enemies.filter(e => !e.dead && e._challengeWave);
+        if (alive.length === 0) {
+          if (this.challengeWave >= this.challengeMaxWaves) {
+            // Challenge complete — unseal and reward
+            this.challengeComplete = true;
+            this.challengeSealed = false;
+            cr.challengeComplete = true;
+            for (const e of this.challengeEntrances) {
+              if (e.origTile !== undefined) { dungeon.map[e.y][e.x] = e.origTile; delete e.origTile; }
+            }
+            audio.roomUnseal();
+            audio.roomClear();
+            // Rewards
+            const d = getDiff();
+            const cr2 = Math.round(this.floor * 20 * getMetaCreditMultiplier() * d.creditMul);
+            player.credits += cr2;
+            player.score += 500 * this.floor;
+            player.gainXP(this.floor * 15);
+            // Drop guaranteed items
+            for (let j = 0; j < 2; j++) {
+              const ix = cr.x + rnd(1, cr.w-1), iy = cr.y + rnd(1, cr.h-1);
+              items.push(new Item(ix, iy));
+            }
+            spawnParticles(cr.cx, cr.cy, 'EXPLOSION', '#ff9933', 25);
+            spawnDmgText(cr.cx, cr.cy, '+' + cr2 + '◈', '#ff9933');
+            this.msg('⚡ CHALLENGE COMPLETE!', '#ff9933');
+          } else {
+            // Inter-wave pause
+            this.challengeWaveDelay = 2.0;
+          }
+        }
+      }
     }
   },
 
@@ -6480,6 +6674,25 @@ const game = {
           ctx.fillStyle=q.timer<10?'#ff3333':'#aaaacc';
           ctx.fillText(Math.ceil(q.timer)+'s', W-8-safeRight, qy+14);
         }
+      }
+      ctx.restore();
+    }
+
+    // Challenge wave HUD
+    if (game.challengeSealed && !game.challengeComplete) {
+      const wy = 96 + safeTop + (game.quest ? 18 : 0);
+      ctx.save();
+      ctx.font='bold 12px monospace'; ctx.textAlign='right';
+      const wPulse = 0.7 + 0.3 * Math.sin(Date.now() / 300);
+      ctx.globalAlpha = wPulse;
+      ctx.shadowBlur=6; ctx.shadowColor='#ff6633';
+      ctx.fillStyle='#ff9933';
+      if (game.challengeWaveDelay > 0 && game.challengeWave === 0) {
+        ctx.fillText('⚔ CHALLENGE STARTING...', W-8-safeRight, wy);
+      } else if (game.challengeWaveDelay > 0) {
+        ctx.fillText('⚔ NEXT WAVE IN ' + Math.ceil(game.challengeWaveDelay) + 's', W-8-safeRight, wy);
+      } else {
+        ctx.fillText('⚔ WAVE ' + game.challengeWave + '/' + game.challengeMaxWaves, W-8-safeRight, wy);
       }
       ctx.restore();
     }
