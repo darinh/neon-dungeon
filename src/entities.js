@@ -250,7 +250,10 @@ class Enemy {
       spawnDmgText(this.x, this.y, 'PHASE', '#cc88ff');
       return 0;
     }
-    if (this.type==='PHANTOM' && !this.visible) { this.visible=true; }
+    if (this.type==='PHANTOM' && (this._phState==='cloaked'||this._phState==='telegraph')) {
+      this._phState='cooldown'; this._phTimer=1.5; this.visible=true;
+      audio.phantomUncloak();
+    }
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first
@@ -529,19 +532,113 @@ class Enemy {
   }
 
   aiPhantom(dt,player,map,d,los) {
-    this.teleportTimer=Math.max(0,this.teleportTimer-dt);
-    if (d>3 || !canTargetPlayer()) {
-      this.visible=false;
-      if (this.teleportTimer<=0 && this.room) {
-        this.x=this.room.x+rnd(1,this.room.w-1);
-        this.y=this.room.y+rnd(1,this.room.h-1);
-        this.teleportTimer=4;
+    const bm = this.berserkerMul();
+    const ocMul = game.modifier==='OVERCLOCK' ? 1.2 : 1;
+
+    // ── Cloaked: stalk toward player, transition to telegraph ──
+    if (this._phState === 'cloaked') {
+      this._phTimer -= dt * ocMul;
+      if (los && canTargetPlayer() && d < 10) {
+        const spd = modSpeed(this.spd * 1.3) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+        this.moveToward(player.x, player.y, spd, dt, map);
+      } else {
+        this.patrol(dt, map);
       }
-    } else {
-      this.visible=true;
-      this.moveToward(player.x,player.y,this.spd,dt,map);
-      if (d<1.2) this.meleeAttack(player);
+      // Close-range escape: reposition if player walks into us
+      if (d < 2.5 && canTargetPlayer()) {
+        this._phReposition(map, player);
+        this._phTimer = 1.5 + Math.random();
+        return;
+      }
+      // Ready to attack: need LOS, target, and be in sweet range
+      if (this._phTimer <= 0 && los && canTargetPlayer() && d >= 2.5 && d <= 8) {
+        this._phState = 'telegraph';
+        this._phTimer = 0.4;
+        this.visible = true;
+        const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+        this._phAimDx = dx; this._phAimDy = dy;
+        return;
+      }
+      // Timer expired but can't attack — reset
+      if (this._phTimer <= 0) this._phTimer = 1.0 + Math.random() * 1.5;
+      return;
     }
+
+    // ── Telegraph: warning shimmer before attack ──
+    if (this._phState === 'telegraph') {
+      if (!los || !canTargetPlayer()) {
+        this._phState = 'cloaked';
+        this._phTimer = 1.5 + Math.random();
+        this.visible = false;
+        return;
+      }
+      this._phTimer -= dt;
+      if (this._phTimer <= 0) {
+        this._phState = 'attacking';
+        this._phBurstLeft = 2;
+        this._phBurstDelay = 0;
+        audio.phantomUncloak();
+      }
+      return;
+    }
+
+    // ── Attacking: fire burst of 2 shots ──
+    if (this._phState === 'attacking') {
+      this._phBurstDelay -= dt;
+      if (this._phBurstLeft > 0 && this._phBurstDelay <= 0) {
+        const p = new Projectile(this.x, this.y, this._phAimDx, this._phAimDy,
+          8, this.atk, 14, this.colour, false, false);
+        p.ownerType = this.type;
+        projectiles.push(p);
+        audio.phantomStrike();
+        spawnParticles(this.x, this.y, 'MUZZLE', this.colour, 2);
+        this._phBurstLeft--;
+        this._phBurstDelay = 0.15;
+      }
+      if (this._phBurstLeft <= 0 && this._phBurstDelay <= 0) {
+        this._phState = 'cooldown';
+        this._phTimer = 1.5 / bm;
+      }
+      return;
+    }
+
+    // ── Cooldown: visible and retreating, then re-cloak ──
+    if (this._phState === 'cooldown') {
+      this._phTimer -= dt;
+      if (d < 5 && canTargetPlayer()) {
+        const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+        const rSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+        const nx = this.x + fx * rSpd * dt;
+        const ny = this.y + fy * rSpd * dt;
+        const fxI = Math.floor(nx), fyI = Math.floor(this.y);
+        const xfI = Math.floor(this.x), yfI = Math.floor(ny);
+        if (fxI >= 0 && fyI >= 0 && fxI < MAP_W && fyI < MAP_H && isPassable(map[fyI][fxI])) this.x = nx;
+        if (xfI >= 0 && xfI < MAP_W && yfI >= 0 && yfI < MAP_H && isPassable(map[yfI][xfI])) this.y = ny;
+      }
+      if (this._phTimer <= 0) {
+        this._phState = 'cloaked';
+        this._phTimer = 2 + Math.random() * 2;
+        this.visible = false;
+        audio.phantomCloak();
+        if (!los || d > 8) this._phReposition(map, player);
+      }
+      return;
+    }
+  }
+
+  _phReposition(map, player) {
+    if (!this.room) return;
+    let bestX = this.x, bestY = this.y, bestD = 0;
+    for (let a = 0; a < 15; a++) {
+      const nx = this.room.x + rnd(1, this.room.w - 1);
+      const ny = this.room.y + rnd(1, this.room.h - 1);
+      const fx = Math.floor(nx), fy = Math.floor(ny);
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) {
+        const dd = dist(nx, ny, player.x, player.y);
+        if (dd > bestD && dd > 3) { bestX = nx; bestY = ny; bestD = dd; }
+      }
+    }
+    this.x = bestX; this.y = bestY;
   }
 
   aiDrone(dt,player,map,d,los) {
@@ -1540,7 +1637,10 @@ class Enemy {
     if (sx<-40||sx>W+40||sy<-40||sy>H+40) return;
 
     let alpha=1;
-    if (this.type==='PHANTOM' && !this.visible) alpha=0.08;
+    if (this.type==='PHANTOM') {
+      if (this._phState==='cloaked') alpha=0.08;
+      else if (this._phState==='telegraph') alpha=0.3+0.2*Math.sin(this.bobAngle*8);
+    }
     if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
 
     ctx.save();
@@ -1860,6 +1960,49 @@ class Enemy {
           ctx.restore();
         }
       }
+      // PHANTOM: cloaked shimmer + telegraph ring
+      if (this.type === 'PHANTOM') {
+        if (this._phState === 'cloaked') {
+          // Subtle digital glitch shimmer
+          ctx.save();
+          const shPulse = 0.04 + 0.04 * Math.sin(this.bobAngle * 6);
+          ctx.globalAlpha = shPulse;
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = this.colour;
+          ctx.strokeStyle = this.colour;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.lineDashOffset = -this.bobAngle * 10;
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        } else if (this._phState === 'telegraph') {
+          // Expanding purple warning ring
+          ctx.save();
+          const tPulse = 0.4 + 0.3 * Math.sin(this.bobAngle * 10);
+          ctx.globalAlpha = tPulse;
+          ctx.shadowBlur = 12 + tPulse * 8;
+          ctx.shadowColor = this.colour;
+          ctx.strokeStyle = this.colour;
+          ctx.lineWidth = 2;
+          const ringR = sz * (1.2 + 0.8 * (1 - Math.max(0, this._phTimer) / 0.4));
+          ctx.beginPath();
+          ctx.arc(sx, sy, ringR, 0, TWO_PI);
+          ctx.stroke();
+          // Aim indicator
+          ctx.globalAlpha = 0.5;
+          ctx.setLineDash([3, 3]);
+          ctx.lineDashOffset = -this.bobAngle * 15;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + (this._phAimDx || 0) * sz * 3, sy + (this._phAimDy || 0) * sz * 3);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
       // Bounty target: gold aura + crown marker
       if (this._isBounty) {
         ctx.save();
@@ -1996,7 +2139,7 @@ const ENEMY_WEIGHTS = {
   GUARD:    { base: 40, perFloor: -3 },   // common early, fades
   TURRET:   { base: 20, perFloor: 1 },    // steady
   CRAWLER:  { base: 10, perFloor: 3 },    // ramps up mid-game
-  PHANTOM:  { base: 5,  perFloor: 4 },    // late-game threat
+  PHANTOM:  { base: 2,  perFloor: 2, minFloor: 5 },  // stealth assassin
   DRONE:    { base: 5,  perFloor: 3 },    // late-game ranged
   SHIELDER: { base: 3,  perFloor: 2, minFloor: 3 },  // mid-game tank
   SPLITTER: { base: 2,  perFloor: 2, minFloor: 4 },  // splits into SHARDs on death
@@ -2062,7 +2205,14 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   e.room=room;
   e.isBoss=isBoss;
   e.elite=false;
-  if (type==='PHANTOM') e.visible=false;
+  if (type==='PHANTOM') {
+    e.visible=false;
+    e._phState='cloaked';
+    e._phTimer=2+Math.random()*2;
+    e._phBurstLeft=0;
+    e._phBurstDelay=0;
+    e._phAimDx=0; e._phAimDy=0;
+  }
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }

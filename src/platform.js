@@ -1308,6 +1308,27 @@ const audio = (() => {
       noise(0.04, t + 0.08, 0.12, 2000, bus);
       osc('triangle', 120, 50, 0.04, t + 0.05, 0.15, bus);
     },
+    phantomCloak() {
+      const c = getCtx(); const t = c.currentTime;
+      // Descending digital fade-out — shimmer dissolve
+      osc('sine', 1200, 300, 0.06, t, 0.2);
+      osc('triangle', 800, 200, 0.03, t + 0.03, 0.15);
+      noise(0.03, t + 0.05, 0.12, 3000);
+    },
+    phantomUncloak() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp ascending reveal — digital materialise
+      osc('sine', 400, 1400, 0.08, t, 0.15);
+      osc('square', 600, 1800, 0.04, t + 0.02, 0.12);
+      noise(0.05, t, 0.06, 5000);
+    },
+    phantomStrike() {
+      const c = getCtx(); const t = c.currentTime;
+      // Quick energy bolt — electric snap
+      osc('square', 900, 400, 0.06, t, 0.08);
+      osc('sine', 1200, 600, 0.04, t + 0.01, 0.06);
+      noise(0.04, t, 0.04, 6000);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop
