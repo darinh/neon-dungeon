@@ -12,11 +12,11 @@ let shieldGens = [];
 let cameras = [];
 let lasers  = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -25,13 +25,14 @@ const SOURCE_LABELS = {
   'Nano Swarm':'Nano Swarm', 'Static Field':'Static Field',
   'Volatile Core':'Volatile Core',
   'Sentry Drone':'Sentry Drone',
+  'Leaper Shockwave':'Leaper Shockwave',
   'Burn':'Burn', 'Shock':'Shock',
   'laser':'Laser Tripwire',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -40,6 +41,7 @@ const SOURCE_COLOURS = {
   'Nano Swarm':'#44ff88', 'Static Field':'#44ccff',
   'Volatile Core':'#ff6622',
   'Sentry Drone':'#00e5ff',
+  'Leaper Shockwave':'#22ff88',
   'Burn':'#ff6600', 'Shock':'#ffee44',
   'laser':'#ff6644',
 };
@@ -438,8 +440,13 @@ class Enemy {
       if (this._laserTimer > 0) { this._laserTimer = 0; this._laserTarget = null; this._sniperCooldown = 0.8; }
       if (this._chargeState && this._chargeState !== 'idle') { this._chargeState = 'idle'; this._chargeDur = 0; this.bossTimers.charge = 1.5; }
       if (this._chgState && this._chgState !== 'idle') { this._chgState = 'idle'; this._chgCooldown = 2.0; }
+      if (this._lpState === 'windup') { this._lpState = 'idle'; this._lpCooldown = 1.5; this._lpHeight = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
+      // LEAPER airborne/recovery must complete even while stunned (can't freeze mid-air)
+      if (this._lpState === 'airborne' || this._lpState === 'recovery') {
+        this.aiLeaper(dt, player, map, 0, false);
+      }
       return; // skip all AI, leave attack/shoot timers frozen
     }
 
@@ -467,6 +474,7 @@ class Enemy {
       case 'SUMMONER': this.aiSummoner(dt,player,map,d,los); break;
       case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
       case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
+      case 'LEAPER':  this.aiLeaper(dt,player,map,d,los);  break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -1087,6 +1095,118 @@ class Enemy {
       this._chgWindup = 0.6;
     } else if (los && d < 8) {
       // Too close for charge or on cooldown — approach
+      this.moveToward(player.x, player.y, this.spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
+  // ─── LEAPER AI ─────────────────────────────────────────────────────────────
+  aiLeaper(dt,player,map,d,los) {
+    this._lpCooldown = Math.max(0, (this._lpCooldown || 0) - dt);
+
+    // ── Recovery: vulnerable after landing ──
+    if (this._lpState === 'recovery') {
+      this._lpRecovery -= dt;
+      if (this._lpRecovery <= 0) {
+        this._lpState = 'idle';
+        this._lpCooldown = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1);
+      }
+      return;
+    }
+
+    // ── Airborne: lerp to locked target position ──
+    if (this._lpState === 'airborne') {
+      this._lpAirTime -= dt;
+      const t = 1 - Math.max(0, this._lpAirTime) / 0.35;
+      this.x = this._lpFromX + (this._lpTargetX - this._lpFromX) * t;
+      this.y = this._lpFromY + (this._lpTargetY - this._lpFromY) * t;
+      // Parabolic height for visual (stored for draw, not real position)
+      this._lpHeight = 4 * t * (1 - t) * 1.5; // peak at 1.5 tiles height
+
+      if (this._lpAirTime <= 0) {
+        // Land at target
+        this.x = this._lpTargetX;
+        this.y = this._lpTargetY;
+        this._lpHeight = 0;
+        this._lpState = 'recovery';
+        this._lpRecovery = 1.0;
+        audio.leaperLand();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#22ff88', 14);
+        triggerShake(4, 0.15);
+
+        // Shockwave: 2-tile radius, LOS-gated, damages player + env
+        const shockR = 2;
+        const shockDmg = Math.round(this.atk * 1.2);
+        if (dist(this.x, this.y, player.x, player.y) < shockR && canTargetPlayer() &&
+            hasLOS(this.x, this.y, player.x, player.y, map)) {
+          player.takeDamage(shockDmg, 'Leaper Shockwave');
+        }
+        // Environmental damage via proper helpers (handle destruction + rewards)
+        if (typeof damageCratesInRadius === 'function') damageCratesInRadius(this.x, this.y, shockR, shockDmg, map);
+        primeVCoresInRadius(this.x, this.y, shockR, map);
+        damageBeaconsInRadius(this.x, this.y, shockR, shockDmg, map);
+        damageShieldGensInRadius(this.x, this.y, shockR, shockDmg, map);
+        damageCamerasInRadius(this.x, this.y, shockR, shockDmg, map);
+        damageLasersInRadius(this.x, this.y, shockR, shockDmg, map);
+        // Trigger nearby mines
+        for (const m of mines) {
+          if (m.dead || m.state === 'detonated') continue;
+          if (dist(this.x, this.y, m.x, m.y) < shockR) {
+            m.state = 'armed';
+            m.fuse = 0.1;
+          }
+        }
+      }
+      return;
+    }
+
+    // ── Windup: telegraph before jump ──
+    if (this._lpState === 'windup') {
+      if (!los || !canTargetPlayer()) {
+        this._lpState = 'idle';
+        this._lpCooldown = 1.0;
+        return;
+      }
+      this._lpWindup -= dt;
+      if (Math.random() < dt * 12) spawnParticles(this.x, this.y, 'SPARK', '#22ff88', 1);
+      if (this._lpWindup <= 0) {
+        // Validate landing tile: must be passable and have LOS from current pos
+        const tx = Math.floor(this._lpTargetX), ty = Math.floor(this._lpTargetY);
+        if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H &&
+            isPassable(map[ty][tx]) && hasLOS(this.x, this.y, this._lpTargetX, this._lpTargetY, map)) {
+          this._lpState = 'airborne';
+          this._lpAirTime = 0.35;
+          this._lpFromX = this.x;
+          this._lpFromY = this.y;
+          this._lpHeight = 0;
+          audio.leaperWindup();
+        } else {
+          // Invalid target — cancel
+          this._lpState = 'idle';
+          this._lpCooldown = 1.0;
+        }
+      }
+      return;
+    }
+
+    // ── Idle: patrol, approach, or initiate leap ──
+    if (this.stunTimer > 0) return; // stun prevents leap initiation
+    if (los && d >= 3 && d <= 10 && this._lpCooldown <= 0) {
+      // Check no other leaper is already airborne/winding up
+      const anotherLeaping = enemies.some(e =>
+        e !== this && e.type === 'LEAPER' && !e.dead && e.room === this.room &&
+        (e._lpState === 'windup' || e._lpState === 'airborne'));
+      if (!anotherLeaping) {
+        this._lpState = 'windup';
+        this._lpWindup = 0.5;
+        this._lpTargetX = player.x;
+        this._lpTargetY = player.y;
+        return;
+      }
+    }
+    if (los && d < 6) {
       this.moveToward(player.x, player.y, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
@@ -1718,10 +1838,9 @@ class Enemy {
     // FOV gating: only draw enemies the player can currently see
     const etx = Math.floor(this.x), ety = Math.floor(this.y);
     if (!game.dungeon?.visible?.[ety]?.[etx]) return;
-    const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
-    if (sx<-40||sx>W+40||sy<-40||sy>H+40) return;
-
-    // MIMIC disguise: render as item
+    const sx=this.x*TILE-camX, syBase=this.y*TILE-camY;
+    const sy = syBase - (this._lpHeight || 0) * TILE;
+    if (sx<-40||sx>W+40||syBase<-40||syBase>H+40) return;
     if (this._disguised) {
       const bobY = Math.sin(this._mimicBob) * 2;
       ctx.save();
@@ -2077,6 +2196,87 @@ class Enemy {
           ctx.restore();
         }
       }
+      // LEAPER: windup glow + targeting reticle + airborne shadow/height + recovery daze
+      if (this.type === 'LEAPER') {
+        if (this._lpState === 'windup') {
+          // Pulsing green glow around leaper
+          ctx.save();
+          const wPulse = 0.3 + 0.3 * Math.sin(this.bobAngle * 8);
+          ctx.globalAlpha = wPulse;
+          ctx.shadowBlur = 14 + wPulse * 8;
+          ctx.shadowColor = '#22ff88';
+          ctx.fillStyle = '#22ff88';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 1.6, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+          // Targeting reticle at locked target position
+          if (this._lpTargetX != null) {
+            ctx.save();
+            const rtx = this._lpTargetX * TILE - camX;
+            const rty = this._lpTargetY * TILE - camY;
+            const rPulse = 0.3 + 0.2 * Math.sin(this.bobAngle * 10);
+            ctx.globalAlpha = rPulse;
+            ctx.strokeStyle = '#22ff88';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#22ff88';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.lineDashOffset = -this.bobAngle * 8;
+            ctx.beginPath();
+            ctx.arc(rtx, rty, TILE * 2, 0, TWO_PI);
+            ctx.stroke();
+            // Inner crosshair
+            ctx.setLineDash([]);
+            ctx.globalAlpha = rPulse * 0.8;
+            const ch = 4;
+            ctx.beginPath();
+            ctx.moveTo(rtx - ch, rty); ctx.lineTo(rtx + ch, rty);
+            ctx.moveTo(rtx, rty - ch); ctx.lineTo(rtx, rty + ch);
+            ctx.stroke();
+            ctx.restore();
+          }
+        } else if (this._lpState === 'airborne') {
+          // Shadow circle on ground (grows as leaper descends)
+          const progress = 1 - Math.max(0, this._lpAirTime) / 0.35;
+          const shadowR = sz * (0.5 + progress * 1.0);
+          const landSx = this._lpTargetX * TILE - camX;
+          const landSy = this._lpTargetY * TILE - camY;
+          ctx.save();
+          ctx.globalAlpha = 0.15 + progress * 0.2;
+          ctx.fillStyle = '#000000';
+          ctx.beginPath();
+          ctx.ellipse(landSx, landSy, shadowR, shadowR * 0.5, 0, 0, TWO_PI);
+          ctx.fill();
+          // Shockwave radius indicator
+          ctx.globalAlpha = 0.1 + progress * 0.15;
+          ctx.strokeStyle = '#22ff88';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 5]);
+          ctx.beginPath();
+          ctx.arc(landSx, landSy, TILE * 2, 0, TWO_PI);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        } else if (this._lpState === 'recovery') {
+          // Dazed spinning stars (similar to charger post-charge)
+          ctx.save();
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = '#22ff88';
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#22ff88';
+          const starY = sy - sz - 6;
+          for (let i = 0; i < 3; i++) {
+            const a = this.bobAngle * 3 + (i / 3) * TWO_PI;
+            const starX = sx + Math.cos(a) * 6;
+            const starYi = starY + Math.sin(a) * 2;
+            ctx.beginPath();
+            ctx.arc(starX, starYi, 1.5, 0, TWO_PI);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
       // PHANTOM: cloaked shimmer + telegraph ring
       if (this.type === 'PHANTOM') {
         if (this._phState === 'cloaked') {
@@ -2277,6 +2477,7 @@ const ENEMY_WEIGHTS = {
   SUMMONER:   { base: 1,  perFloor: 2, minFloor: 6 },  // spawns minion drones
   HEALER:     { base: 1,  perFloor: 2, minFloor: 5 },  // heals wounded allies
   CHARGER:    { base: 2,  perFloor: 2, minFloor: 4 },  // charge-attack melee rusher
+  LEAPER:     { base: 2,  perFloor: 2, minFloor: 5 },  // jumping shockwave attacker
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2313,6 +2514,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SUMMONER': hp=35;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
     case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
     case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
+    case 'LEAPER':  hp=30;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -2348,6 +2550,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
+  if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
