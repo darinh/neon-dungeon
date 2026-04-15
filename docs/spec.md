@@ -931,6 +931,7 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | LEAPER       | 30      | 11  | Fast, jumps to player position, shockwave on landing | 22  |
 | REFLECTOR    | 40      | 10  | Reflective shield bounces projectiles back     | 28  |
 | DISRUPTOR    | 30      | 9   | Deploys persistent area-denial fields          | 25  |
+| WRAITH       | 35      | 13  | Phases through walls, emerges to attack         | 30  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
@@ -939,7 +940,8 @@ CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
 LEAPER appears floor 5+,
 TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 6+,
 SNIPER appears floor 7+,
-REFLECTOR appears floor 7+.
+REFLECTOR appears floor 7+,
+WRAITH appears floor 8+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -1415,6 +1417,78 @@ decisions to mid-to-late-game combat encounters.
     - FORTIFIED (1.4× HP): Harder to burst down before fields stack.
     - CORROSIVE (+2 flat dmg): Field damage + corrosive extra hurts.
 
+#### WRAITH (floor 8+)
+
+Ethereal wall-phasing predator that shifts between corporeal and intangible
+states. Forces players to deal with an enemy that ignores walls and emerges
+from unpredictable angles. The only enemy type that can move through walls.
+
+- **Stats:** HP 35, ATK 13, SPD 2.8, XP 30, credits 12. Colour: `#66ffcc` (spectral cyan-green).
+- **Spawn weight:** base 1, perFloor 2, minFloor 8.
+- **TYPE_CAPS:** 1 (max one per room).
+- **AI (aiWraith) — 4-state machine (`_wrState`):**
+  1. `phased` (2–3 s) — Moves through walls toward player, ignoring `isPassable()`.
+     Speed ×1.2. Respects map bounds. Untargetable and immune to all damage.
+     Ghost trail particles while moving.
+  2. `emerging` (0.5 s) — Telegraph at emergence point near player (1.5–3.5 tile range,
+     passable tile required). Growing pulsing glow. Still intangible. Always drawn
+     regardless of FOV (warns player).
+  3. `corporeal` (2–3 s) — Normal combat. Approaches player at medium range (3–6 tiles),
+     retreats if closer. Fires ranged attack every 1.5 s (÷ berserkerMul). Takes damage
+     normally. Damage extends corporeal timer (+0.3 s per hit, 0.5 s ICD, cap 3 s) —
+     rewarding focus fire.
+  4. `fading` (0.4 s) — Phase-out telegraph. Still damageable (punish window). Flickering
+     dashed ring visual.
+- **Init state:** `_wrState: 'phased'`, `_wrTimer: 1.5 + random()`, `_wrPhased: true`,
+  `_wrFireTimer: 0`, `_wrHitICD: 0`.
+- **`_wrPhased` flag:** True during `phased` and `fading→phased` transition. Controls:
+  - Projectile collision skip (player and ally turret projectiles pass through).
+  - Auto-targeting skip (sentry drone, plasma orb, auto-laser, saw blade).
+  - Hackware effect skip (nano swarm, gravity well, static field).
+  - Burn damage skip (tick runs, damage suppressed).
+  - Chain lightning skip (not selected as chain target).
+  - Toxic pool damage skip.
+  - Minimap: hidden unless Thermal Optics augment (dim spectral dot, 5 Hz pulse).
+  - Off-screen threat indicators: hidden.
+  - `takeDamage()` early return: spawns 'PHASED' text in `#66ffcc`.
+
+- **Emergence tile selection (`_wrFindEmergeTile`):**
+  20 random attempts to find passable tile within 1.2–3.5 tiles of player. Fallback:
+  current position (if passable), then nearest passable tile in expanding search.
+
+- **Interactions:**
+  - **EMP Burst (hard counter):** Forces immediate materialization (bypasses LOS
+    requirement). Applies standard 2 s stun. Calls `_wrFindEmergeTile` for placement.
+    `audio.wraithPhaseIn()` on forced emergence.
+  - **Stun:** Any stun while phased forces `_wrState = 'corporeal'`, resets timer to 2 s.
+  - **Room-clear:** Phased WRAITHs still block room clear (alive in room).
+  - **Phase Cloak:** Standard `canTargetPlayer()` check — no special interaction.
+  - **Disruption fields:** No effect on phased WRAITH.
+  - Does not block projectiles (no shield mechanic).
+
+- **Visual:**
+  - Phased: alpha 0.1, barely visible ghost.
+  - Emerging: alpha 0.2→0.85, growing glow ring (cyan-green, increasing shadow blur).
+  - Corporeal: alpha 0.85, standard body with spectral glow.
+  - Fading: alpha 0.85→0.3, flickering dashed ring outline.
+  - FOV bypass: emerging state always rendered (regardless of tile visibility).
+
+- **Audio:**
+  - `audio.wraithPhaseOut()` — ethereal descending whoosh (sine 800→200 Hz + noise).
+  - `audio.wraithPhaseIn()` — ethereal ascending whoosh (sine 200→800 Hz + crackle).
+  - Standard `audio.shoot(false)` for ranged attack.
+
+- **Death Recap:** source `Wraith` (#66ffcc).
+
+- **Elite eligible:** Yes — all standard affixes apply.
+  - SHIELDED WRAITH: tanky; shield absorbs hits during brief corporeal window.
+  - PHASING: double intangibility layers — exceptionally hard to pin down.
+  - BERSERKER: phasing doesn't scale with missing HP (timer-based, not HP-based).
+  - Floor modifier interactions:
+    - SWARM (0.6× HP): Glass cannon that phases often.
+    - FORTIFIED (1.4× HP): Harder to burst during corporeal window.
+    - CORROSIVE (+2 flat dmg): Ranged attacks hit harder.
+
 #### MIMIC (floor 7+)
 
 Ambush predator disguised as a data pickup. Creates late-game tension when
@@ -1573,8 +1647,8 @@ floor 10 averages 5–8 (capped by room area).
 
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
 max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper,
-max 1 summoner, max 1 healer, max 2 chargers, max 2 leapers, max 1 reflector
-per room. Excess rolls reroll among uncapped,
+max 1 summoner, max 1 healer, max 2 chargers, max 2 leapers, max 1 reflector,
+max 1 wraith per room. Excess rolls reroll among uncapped,
 floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
@@ -3162,3 +3236,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v67.0   | Wall Turrets: hackable wall-mounted auto-turrets (floor 5+). `wallTurrets[]` entity array. 1–2 per ~25% of qualifying rooms (≥6×6, mutually exclusive with cameras). Hostile: fire at player every 1.8s (6-tile range, `5 + floor × 1.5` dmg). EMP Burst **hacks** turrets (converts hostile→allied, permanent). Hacked: target nearest enemy in room (7-tile range, 1.5s cooldown), fire `isAllyTurret` projectiles (no player augments/perks). Hostile turrets block room-clear; hacked do not. HP: `12 + floor × 3`. Damaged by player projectiles, all AoE, Static Field. Enemy projectiles damage hacked turrets. Death recap source: `Wall Turret`. `audio.turretFire/turretHack/turretDestroy()`. Spec v4.6. SW cache v79. |
 | v68.0   | REFLECTOR enemy (floor 7+): tactical mid-range enemy with 90° reflective energy shield that bounces player projectiles back at them. Shield tracks player with 0.33 s lag (3 rad/s smooth lerp). Reflected projectiles: velocity reversed, `fromPlayer=false`, 60% damage, ricochet/homing cleared, `travelled` reset. Piercing projectiles reflected (unlike SHIELDER which piercing bypasses). Ally turret shots blocked (not reflected). Shield persists during stun (stops tracking). AI: holds position 4–10 tiles, retreats < 4, fires every 2.5 s. Stats: HP 40, ATK 10, SPD 1.8, XP 28, credits 12. Colour: `#88ddff`. `reflectsProjectile()` + extended `blocksProjectile()`. Visual: cyan arc + white mirror highlight + segmented edge ticks. `audio.reflect()` crystalline ping. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 7. Spec v4.7. SW cache v80. |
 | v69.0   | DISRUPTOR enemy (floor 6+): area-denial specialist deploying persistent electromagnetic interference fields. AI maintains 5–9 tile range, retreats < 4, deploys 2-tile radius fields every 4 s near player (validated passable tile, ±0.75 offset), secondary ranged attack every 2.5 s. Fields: 5 s duration, `(3 + floor × 0.5) × envDmg` DPS at 0.5 s interval (ignoreDefense, ignoreInvincible), hackware cooldown frozen, 20% movement slow. Non-stacking debuffs (binary flag). Dash/Phase Cloak immune. Max 2 fields per disruptor; oldest replaced at cap. Fields persist after disruptor death. EMP destroys fields in radius. `disruptionFields[]` global array, `updateDisruptionFields()`, `drawDisruptionFields()`. Stats: HP 30, ATK 9, SPD 2.0, XP 25, credits 10. Colour: `#ff44aa`. Status badge: `⊘ DISRUPTED`. Minimap: magenta pulsing dot. `audio.disruptorDeploy()` (descending warble), `audio.disruptorField()` (static crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 6. Spec v4.8. SW cache v81. |
+| v70.0   | WRAITH enemy (floor 8+): ethereal wall-phasing predator with 4-state machine (`_wrState`). `phased` (2–3 s): moves through walls ignoring `isPassable()`, speed ×1.2, untargetable, immune to all damage (`_wrPhased` flag → `takeDamage()` early return, projectile/AoE/targeting skips). `emerging` (0.5 s): telegraph at passable tile near player (1.2–3.5 range, `_wrFindEmergeTile()` 20-attempt search + fallbacks). `corporeal` (2–3 s): normal combat, ranged attack every 1.5 s, damage extends timer (+0.3 s/hit, 0.5 s ICD, cap 3 s). `fading` (0.4 s): phase-out telegraph, still damageable. EMP hard counter: bypasses LOS, forces materialization + 2 s stun. Stun forces corporeal. Burn ticks suppressed while phased. Chain lightning/saw blade/nano swarm/gravity/static field skip phased. Room clear blocked by phased WRAITHs. Minimap: hidden unless Thermal Optics (dim spectral dot). Visual: alpha 0.1 (phased)→0.85 (corporeal), emerging glow ring, fading dashed ring. Emerging bypasses FOV gating. Stats: HP 35, ATK 13, SPD 2.8, XP 30, credits 12. Colour: `#66ffcc`. `audio.wraithPhaseOut()` (descending whoosh), `audio.wraithPhaseIn()` (ascending whoosh + crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 8. Spec v4.9. SW cache v82. |

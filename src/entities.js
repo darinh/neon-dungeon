@@ -14,11 +14,11 @@ let lasers  = [];
 let wallTurrets = [];
 let disruptionFields = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -38,7 +38,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -54,6 +54,7 @@ const SOURCE_COLOURS = {
   'Wall Turret':'#ff4400',
   'Reflected':'#88ddff',
   'Disruption Field':'#ff44aa',
+  'Wraith':'#66ffcc',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -100,6 +101,7 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
         let best = null, bestD = 3;
         for (const e of enemies) {
           if (e === enemy || e.dead) continue;
+          if (e._wrPhased) continue;
           const d = dist(enemy.x, enemy.y, e.x, e.y);
           if (d < bestD) { bestD = d; best = e; }
         }
@@ -171,7 +173,7 @@ function tickEnemyStatusEffects(enemy, dt) {
   if (enemy.burnTimer > 0) {
     enemy.burnTimer -= dt;
     // PHASING: burn timer ticks but deals no damage during immune window
-    if (!enemy.phaseImmune) {
+    if (!enemy.phaseImmune && !enemy._wrPhased) {
       let dmg = enemy.burnDps * dt;
       // SHIELDED: burn resets regen delay and damages shield first
       if (enemy.eliteAffix === 'SHIELDED') enemy.shieldRegenDelay = 0;
@@ -274,6 +276,18 @@ class Enemy {
     if (this.phaseImmune) {
       spawnDmgText(this.x, this.y, 'PHASE', '#cc88ff');
       return 0;
+    }
+    // WRAITH: immune while phased or emerging — damage extends corporeal timer
+    if (this._wrPhased) {
+      spawnDmgText(this.x, this.y, 'PHASED', '#66ffcc');
+      return 0;
+    }
+    if (this.type === 'WRAITH' && this._wrState === 'corporeal') {
+      // Extend corporeal window on hit (ICD 0.5s, +0.3s per hit, cap 3s)
+      if ((this._wrHitICD || 0) <= 0) {
+        this._wrTimer = Math.min(3.0, this._wrTimer + 0.3);
+        this._wrHitICD = 0.5;
+      }
     }
     if (this.type==='PHANTOM' && (this._phState==='cloaked'||this._phState==='telegraph')) {
       this._phState='cooldown'; this._phTimer=1.5; this.visible=true;
@@ -403,6 +417,7 @@ class Enemy {
       }
       for (const e of enemies) {
         if (e === this || e.dead) continue;
+        if (e._wrPhased) continue;
         if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, game.dungeon.map)) {
           e._volatileKill = true;
           e.takeDamage(vdmg, game.modifier === 'VOLATILE' ? 'Volatile' : 'Explosion');
@@ -456,6 +471,19 @@ class Enemy {
       if (this._chgState && this._chgState !== 'idle') { this._chgState = 'idle'; this._chgCooldown = 2.0; }
       if (this._lpState === 'windup') { this._lpState = 'idle'; this._lpCooldown = 1.5; this._lpHeight = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
+      // WRAITH: stun forces corporeal — must find valid tile first
+      if (this._wrState && this._wrState !== 'corporeal') {
+        const emerge = this._wrFindEmergeTile(map, game.player);
+        if (emerge) {
+          this.x = emerge.x; this.y = emerge.y;
+          this._wrState = 'corporeal'; this._wrTimer = 2.0;
+          this._wrPhased = false;
+          audio.wraithPhaseIn();
+        } else {
+          // No valid tile — clear stun, stay phased (can't materialize in wall)
+          this.stunTimer = 0;
+        }
+      }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       // LEAPER airborne/recovery must complete even while stunned (can't freeze mid-air)
       if (this._lpState === 'airborne' || this._lpState === 'recovery') {
@@ -491,6 +519,7 @@ class Enemy {
       case 'LEAPER':  this.aiLeaper(dt,player,map,d,los);  break;
       case 'REFLECTOR':this.aiReflector(dt,player,map,d,los);break;
       case 'DISRUPTOR':this.aiDisruptor(dt,player,map,d,los);break;
+      case 'WRAITH':  this.aiWraith(dt,player,map,d,los);  break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -814,6 +843,135 @@ class Enemy {
     }
   }
 
+  // ── WRAITH: ethereal wall-phasing predator ──
+  aiWraith(dt, player, map, d, los) {
+    const bm = this.berserkerMul();
+    const ocMul = game.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    this._wrHitICD = Math.max(0, (this._wrHitICD || 0) - dt);
+
+    // ── Phased: move through walls toward player ──
+    if (this._wrState === 'phased') {
+      this._wrTimer -= dt * ocMul;
+      // Move toward player ignoring walls, respecting map bounds and room bounds
+      const spd = modSpeed(this.spd * 1.2) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const nx = this.x + dx * spd * dt;
+      const ny = this.y + dy * spd * dt;
+      // Clamp to map bounds
+      this.x = Math.max(0.1, Math.min(MAP_W - 0.1, nx));
+      this.y = Math.max(0.1, Math.min(MAP_H - 0.1, ny));
+      // Ghost trail particle
+      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#66ffcc', 1);
+      // Ready to emerge: close enough or timer expired
+      if (this._wrTimer <= 0 || (d < 3 && canTargetPlayer())) {
+        // Find nearest passable tile to emerge on — stay phased if none found
+        const ex = this._wrFindEmergeTile(map, player);
+        if (ex) {
+          this.x = ex.x; this.y = ex.y;
+          this._wrState = 'emerging';
+          this._wrTimer = 0.5;
+          audio.wraithPhaseIn();
+        } else {
+          this._wrTimer = 0.5; // retry shortly
+        }
+      }
+      return;
+    }
+
+    // ── Emerging: telegraph before materializing ──
+    if (this._wrState === 'emerging') {
+      this._wrTimer -= dt;
+      if (this._wrTimer <= 0) {
+        this._wrState = 'corporeal';
+        this._wrTimer = 2.0 + Math.random();
+        this._wrPhased = false;
+        this._wrFireTimer = 0.3; // brief delay before first shot
+      }
+      return;
+    }
+
+    // ── Corporeal: normal combat behavior ──
+    if (this._wrState === 'corporeal') {
+      this._wrTimer -= dt * ocMul;
+      this._wrFireTimer = Math.max(0, (this._wrFireTimer || 0) - dt);
+      // Approach or retreat based on distance
+      if (los && d > 6) {
+        this.moveToward(player.x, player.y, this.spd, dt, map);
+      } else if (d < 3) {
+        // Retreat
+        const [rx, ry] = norm(this.x - player.x, this.y - player.y);
+        const rSpd = modSpeed(this.spd * 0.8) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+        const nx = this.x + rx * rSpd * dt;
+        const ny = this.y + ry * rSpd * dt;
+        const fxI = Math.floor(nx), fyI = Math.floor(this.y);
+        const xfI = Math.floor(this.x), yfI = Math.floor(ny);
+        if (fxI >= 0 && fyI >= 0 && fxI < MAP_W && fyI < MAP_H && isPassable(map[fyI][fxI])) this.x = nx;
+        if (xfI >= 0 && xfI < MAP_W && yfI >= 0 && yfI < MAP_H && isPassable(map[yfI][xfI])) this.y = ny;
+      } else if (los) {
+        this.moveToward(player.x, player.y, this.spd * 0.5, dt, map);
+      } else {
+        this.patrol(dt, map);
+      }
+      // Ranged attack
+      if (this._wrFireTimer <= 0 && los && canTargetPlayer() && d < 10) {
+        this.fireAt(player.x, player.y, 6, this.atk, 12, this.colour);
+        this._wrFireTimer = 1.5 / bm;
+      }
+      // Ready to phase out
+      if (this._wrTimer <= 0) {
+        this._wrState = 'fading';
+        this._wrTimer = 0.4;
+        audio.wraithPhaseOut();
+      }
+      return;
+    }
+
+    // ── Fading: phase-out telegraph, still damageable ──
+    if (this._wrState === 'fading') {
+      this._wrTimer -= dt;
+      if (this._wrTimer <= 0) {
+        this._wrState = 'phased';
+        this._wrTimer = 2.0 + Math.random();
+        this._wrPhased = true;
+      }
+      return;
+    }
+  }
+
+  _wrFindEmergeTile(map, player) {
+    // Try to emerge near player on a passable tile
+    let bestX = null, bestY = null, bestD = Infinity;
+    for (let a = 0; a < 20; a++) {
+      const angle = Math.random() * TWO_PI;
+      const r = 1.5 + Math.random() * 2;
+      const nx = player.x + Math.cos(angle) * r;
+      const ny = player.y + Math.sin(angle) * r;
+      const tx = Math.floor(nx), ty = Math.floor(ny);
+      if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) continue;
+      if (!isPassable(map[ty][tx])) continue;
+      const dd = dist(nx, ny, player.x, player.y);
+      if (dd < bestD && dd > 1.2) { bestX = nx; bestY = ny; bestD = dd; }
+    }
+    if (bestX !== null) return { x: bestX, y: bestY };
+    // Fallback: current position if passable
+    const cx = Math.floor(this.x), cy = Math.floor(this.y);
+    if (cx >= 0 && cy >= 0 && cx < MAP_W && cy < MAP_H && isPassable(map[cy][cx])) {
+      return { x: this.x, y: this.y };
+    }
+    // Emergency: search outward for any passable tile
+    for (let r = 1; r < 6; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const tx = Math.floor(this.x) + dx, ty = Math.floor(this.y) + dy;
+          if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
+            return { x: tx + 0.5, y: ty + 0.5 };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   blocksProjectile(proj) {
     // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/orbitals)
     if (this.type === 'SHIELDER' && !this.dead) {
@@ -1120,6 +1278,7 @@ class Enemy {
     let best = null, bestRatio = 1;
     for (const e of enemies) {
       if (e === this || e.dead || e.isBoss) continue;
+      if (e._wrPhased) continue; // can't heal phased WRAITHs
       if (e.hp >= e.maxHp) continue;
       const ed = dist(this.x, this.y, e.x, e.y);
       if (ed > 6) continue;
@@ -1965,7 +2124,8 @@ class Enemy {
     if (this.dead) return;
     // FOV gating: only draw enemies the player can currently see
     const etx = Math.floor(this.x), ety = Math.floor(this.y);
-    if (!game.dungeon?.visible?.[ety]?.[etx]) return;
+    // WRAITH emerging telegraph is always visible (warns player)
+    if (!game.dungeon?.visible?.[ety]?.[etx] && !(this.type === 'WRAITH' && this._wrState === 'emerging')) return;
     const sx=this.x*TILE-camX, syBase=this.y*TILE-camY;
     const sy = syBase - (this._lpHeight || 0) * TILE;
     if (sx<-40||sx>W+40||syBase<-40||syBase>H+40) return;
@@ -2004,6 +2164,12 @@ class Enemy {
     if (this.type==='PHANTOM') {
       if (this._phState==='cloaked') alpha=0.08;
       else if (this._phState==='telegraph') alpha=0.3+0.2*Math.sin(this.bobAngle*8);
+    }
+    if (this.type==='WRAITH') {
+      if (this._wrState==='phased') alpha=0.1;
+      else if (this._wrState==='emerging') alpha=0.2 + (1 - this._wrTimer / 0.5) * 0.65;
+      else if (this._wrState==='fading') alpha=0.3 + (this._wrTimer / 0.4) * 0.55;
+      else alpha=0.85;
     }
     if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
 
@@ -2205,6 +2371,34 @@ class Enemy {
         ctx.beginPath();
         ctx.arc(sx, sy, sz * 1.5, 0, TWO_PI);
         ctx.fill();
+        ctx.restore();
+      }
+      // Wraith: emerging glow telegraph
+      if (this.type === 'WRAITH' && this._wrState === 'emerging') {
+        ctx.save();
+        const prog = 1 - this._wrTimer / 0.5;
+        ctx.globalAlpha = 0.2 + prog * 0.5;
+        ctx.shadowBlur = 12 + prog * 10;
+        ctx.shadowColor = '#66ffcc';
+        ctx.fillStyle = '#66ffcc';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * (1 + prog * 0.8), 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+      }
+      // Wraith: fading flicker
+      if (this.type === 'WRAITH' && this._wrState === 'fading') {
+        ctx.save();
+        const prog = 1 - this._wrTimer / 0.4;
+        ctx.globalAlpha = 0.3 * (1 - prog);
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#66ffcc';
+        ctx.strokeStyle = '#66ffcc';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * (1.2 + prog * 0.5), 0, TWO_PI);
+        ctx.stroke();
         ctx.restore();
       }
       // Teleporter: afterimage at previous warp origin
@@ -2653,6 +2847,7 @@ const ENEMY_WEIGHTS = {
   LEAPER:     { base: 2,  perFloor: 2, minFloor: 5 },  // jumping shockwave attacker
   REFLECTOR:  { base: 1,  perFloor: 2, minFloor: 7 },  // projectile-reflecting shield
   DISRUPTOR:  { base: 1,  perFloor: 2, minFloor: 6 },  // area-denial field deployer
+  WRAITH:     { base: 1,  perFloor: 2, minFloor: 8 },  // wall-phasing ethereal predator
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2692,6 +2887,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'LEAPER':  hp=30;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
     case 'REFLECTOR':hp=40;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
     case 'DISRUPTOR':hp=30;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
+    case 'WRAITH':  hp=35;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -2730,6 +2926,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
   if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
   if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
+  if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+Math.random(); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
@@ -3271,6 +3468,7 @@ function destroyShieldGen(g) {
   const empR = 3, empDur = 0.8, map = game.dungeon.map;
   for (const e of enemies) {
     if (e.dead || e.isBoss || e._disguised) continue;
+    if (e._wrPhased) continue;
     if (dist(e.x, e.y, g.x, g.y) < empR && hasLOS(g.x, g.y, e.x, e.y, map)) {
       e.stunTimer = Math.max(e.stunTimer || 0, empDur);
       spawnParticles(e.x, e.y, 'SPARK', '#00ccff', 3);
@@ -4044,6 +4242,7 @@ function updateWallTurrets(dt) {
       let best = null, bestD = Infinity;
       for (const e of enemies) {
         if (e.dead || e.isBoss || e._disguised) continue;
+        if (e._wrPhased) continue;
         if (e.room !== r) continue;
         const d = dist(t.x, t.y, e.x, e.y);
         if (d < WTURRET_RANGE_HACKED && d < bestD && hasLOS(t.x, t.y, e.x, e.y, map)) {
@@ -4383,6 +4582,7 @@ class Player {
       const map = game.dungeon ? game.dungeon.map : null;
       for (const e of enemies) {
         if (e.dead) continue;
+        if (e._wrPhased) continue;
         if (dist(this.x, this.y, e.x, e.y) < rRadius && (!map || hasLOS(this.x, this.y, e.x, e.y, map))) {
           e.takeDamage(10 + game.floor * 2, 'Reactive Armor');
         }
@@ -4418,6 +4618,7 @@ class Player {
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
         if (e.dead) continue;
+        if (e._wrPhased) continue;
         if (dist(this.x,this.y,e.x,e.y)<w.range) {
           e.takeDamage(meleeDmg, hitCtx);
           if (meleeCrit) spawnDmgText(e.x, e.y, 'CRIT!', '#ffdd00');
@@ -4467,7 +4668,7 @@ class Player {
     if (!this.shards) return;
     this.shards--;
     for (const e of enemies) {
-      if (!e.dead && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
+      if (!e.dead && !e._wrPhased && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
     }
     spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
     game.msg('VOID SHARD DETONATED!','#aa00ff');

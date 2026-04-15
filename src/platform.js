@@ -1587,6 +1587,23 @@ const audio = (() => {
       // Soft static crackle — interference hit
       noise(0.03, t, 0.08, 4000, bus);
       osc('square', 120, 80, 0.02, t, 0.06, bus);
+    },
+    wraithPhaseOut() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.3, 0.2);
+      // Ethereal descending whoosh
+      osc('sine', 800, 200, 0.05, t, 0.35, bus);
+      osc('triangle', 600, 150, 0.03, t + 0.05, 0.3, bus);
+      noise(0.025, t + 0.1, 0.25, 3000, bus);
+    },
+    wraithPhaseIn() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.3, 0.2);
+      // Ethereal ascending whoosh + materialization crackle
+      osc('sine', 200, 800, 0.06, t, 0.3, bus);
+      osc('triangle', 150, 600, 0.04, t + 0.05, 0.25, bus);
+      noise(0.04, t + 0.15, 0.2, 6000, bus);
+      osc('square', 300, 500, 0.02, t + 0.2, 0.1, bus);
     }
   };
 })();
