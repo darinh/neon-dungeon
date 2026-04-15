@@ -5,6 +5,7 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 let vcores  = [];
+let crates  = [];
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
@@ -129,6 +130,8 @@ function applyOnKill(enemy) {
   if (p && dist(p.x, p.y, enemy.x, enemy.y) < aoeR && hasLOS(enemy.x, enemy.y, p.x, p.y, game.dungeon.map)) {
     p.takeDamage(Math.round(aoeDmg * 0.5), 'Detonation');
   }
+  // Destroy nearby crates
+  damageCratesInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
 }
 
 // Tick enemy status effects (called in update loop per enemy)
@@ -361,6 +364,8 @@ class Enemy {
       }
       // Chain to volatile cores
       primeVCoresInRadius(this.x, this.y, vr, game.dungeon.map);
+      // Destroy nearby crates
+      damageCratesInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
     }
     // SPLITTER: queue 2 SHARDs (deferred to avoid same-frame hits)
     if (this.type === 'SPLITTER') {
@@ -896,6 +901,9 @@ class Enemy {
           spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 6);
           triggerShake(3, 0.1);
           audio.chargerImpact();
+          // Smash crates on impact
+          if (fx >= 0 && fx < MAP_W && fy >= 0 && fy < MAP_H && map[fy]?.[fx] === T.CRATE) damageCrateAtTile(fx, fy, Math.round(this.atk * 1.5));
+          if (xf >= 0 && xf < MAP_W && yf >= 0 && yf < MAP_H && map[yf]?.[xf] === T.CRATE) damageCrateAtTile(xf, yf, Math.round(this.atk * 1.5));
         }
         this._chgState = 'idle';
         this.stunTimer = Math.max(this.stunTimer, 1.0);
@@ -2116,6 +2124,8 @@ function detonateVCore(c) {
   }
   // Chain to nearby cores
   primeVCoresInRadius(c.x, c.y, r, map);
+  // Destroy nearby crates
+  damageCratesInRadius(c.x, c.y, r, dmg, map);
 }
 
 function updateVCores(dt) {
@@ -2168,6 +2178,55 @@ function drawVCores(camX, camY) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', sx, sy - 9);
     ctx.restore();
+  }
+}
+
+// ─── Crates ───────────────────────────────────────────────────────────────────
+function createCrate(tx, ty, floor) {
+  const maxHp = 15 + floor * 5;
+  return { tx, ty, hp: maxHp, maxHp };
+}
+
+function getCrateAt(tx, ty) {
+  for (const c of crates) if (c.tx === tx && c.ty === ty) return c;
+  return null;
+}
+
+function damageCrate(c, dmg) {
+  if (!c || c.hp <= 0) return;
+  c.hp -= dmg;
+  if (c.hp <= 0) destroyCrate(c);
+  else spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#88aacc', 3);
+}
+
+function destroyCrate(c) {
+  const map = game.dungeon.map;
+  map[c.ty][c.tx] = T.FLOOR;
+  spawnParticles(c.tx + 0.5, c.ty + 0.5, 'EXPLOSION', '#667788', 10);
+  spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
+  audio.crateBreak();
+  // 25% chance to drop credits
+  if (Math.random() < 0.25) {
+    const amt = game.floor * 4;
+    game.player.credits = (game.player.credits || 0) + amt;
+    spawnDmgText(c.tx + 0.5, c.ty + 0.2, '+' + amt + '◈', '#39ff14');
+  }
+  const idx = crates.indexOf(c);
+  if (idx >= 0) crates.splice(idx, 1);
+}
+
+function damageCrateAtTile(tx, ty, dmg) {
+  const c = getCrateAt(tx, ty);
+  if (c) damageCrate(c, dmg);
+}
+
+function damageCratesInRadius(wx, wy, radius, dmg, map) {
+  for (let i = crates.length - 1; i >= 0; i--) {
+    const c = crates[i];
+    const cx = c.tx + 0.5, cy = c.ty + 0.5;
+    if (dist(wx, wy, cx, cy) < radius && hasLOS(wx, wy, cx, cy, map)) {
+      damageCrate(c, dmg);
+    }
   }
 }
 
