@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v2.9
+# NEON DUNGEON — Game Specification v3.0
 
 ## Vision
 
@@ -859,6 +859,98 @@ perks.
   re-runs for all levels up to `player.level`. Saves from before Auto-Laser was
   added will retroactively unlock it on load if the player is level 10.
 
+### Challenge Rooms (floor 2+, non-boss)
+
+**Concept:** Optional sealed arena encounters with wave-based enemy spawns and
+guaranteed rewards. One challenge room per qualifying floor (floors 2–9,
+non-boss). Provides a risk/reward decision each floor — entering triggers a
+locked-in combat encounter with escalating waves.
+
+**Room selection:** From rooms not already assigned a special type (spawn,
+stair, boss, vendor, secret, armory, medbay, shrine, vault), minimum area
+30 tiles, and ALL entrance clusters must be narrow (≤ 2 tiles). If no
+qualifying room exists, the floor simply has no challenge room. Room type:
+`'challenge'`. Floor tint: `#1a0a0a` (dark red).
+
+**Tile: `T.CHALLENGE_GATE` (value 17).** Passable and see-through — players
+walk through freely. Renders as a glowing red/amber archway (pulsing glow,
+3 px vertical bars + top bar). On minimap: `#ff6633` tile colour and 3 px
+amber POI marker. Proximity hint when adjacent: `"⚔ CHALLENGE ROOM — enter
+at your own risk"` in `#ff6633`.
+
+**No enemies or items are spawned during `populateFloor()`.** The room starts
+empty; all content is wave-spawned during the encounter.
+
+**Encounter trigger:** Same pattern as boss seal — when the player is fully
+inside the room bounds and not standing on an entrance tile:
+1. All `T.CHALLENGE_GATE` tiles become `T.WALL` (sealed).
+2. `audio.roomSeal()` plays. Message: `"⚠ CHALLENGE ROOM SEALED"`.
+3. Wave timer starts (0.5 s before first wave).
+4. Player is nudged off any sealed tile if standing on one.
+
+**Wave count:** `min(3, 1 + floor ÷ 3)`:
+- Floors 2–3: 2 waves
+- Floors 4–9: 3 waves
+
+**Enemies per wave:** `min(areaCap, round((3 + floor) × difficulty.enemyHp))`
+where `areaCap = room.w × room.h ÷ 6`. SWARM modifier applies ×1.3.
+Enemy types selected via `pickEnemyType(min(floor + 1, 9))` — one floor level
+harder than normal. Per-type caps within each wave (tighter than normal rooms):
+PHANTOM 1, TURRET 2, DRONE 1, SHIELDER 1, SPLITTER 1, GRENADIER 1,
+TELEPORTER 1. Enemies spawn at random positions away from the player (≥ 3
+tile manhattan distance, up to 20 attempts). Elites allowed from wave 2+.
+
+**Wave enemies are tagged** with `_challengeWave = true` so the encounter
+can track them independently of other enemies on the floor.
+
+**Inter-wave pause:** 2.0 seconds between waves. During the pause, the HUD
+shows `"⚔ NEXT WAVE IN Ns"`. `audio.challengeWave()` plays at wave start.
+
+**Wave clear detection:** `enemies.filter(e => !e.dead && e._challengeWave).length === 0`.
+Uses the explicit tag, not `e.room`, to avoid false positives from wandering
+or escaped enemies.
+
+**On challenge complete:**
+1. Entrance tiles restored to `T.CHALLENGE_GATE` (unseal).
+2. `audio.roomUnseal()` + `audio.roomClear()` play.
+3. Rewards: +2 item drops, `floor × 20` credits (scaled by difficulty + meta),
+   `floor × 15` XP, `500 × floor` score.
+4. Orange explosion particles + floating text at room center.
+5. Message: `"⚡ CHALLENGE COMPLETE!"` in `#ff9933`.
+6. `room.challengeComplete = true` — prevents re-triggering.
+
+**Sealed wall rendering:** Same as boss sealed walls — red tint, shadowBlur
+glow. Minimap shows sealed challenge entrances as pulsing 4 px orange dots.
+Ambient WISP particles emitted from sealed challenge walls.
+
+**Drone phase check:** Drones respect sealed challenge walls (cannot phase
+through). `canPhase = !game.bossSealed && !game.challengeSealed`.
+
+**Quest interactions:**
+- **EXTERMINATE:** Accounts for pending challenge waves. Quest check requires
+  `enemies.length === 0 && (!game.challengeSealed || game.challengeComplete)`.
+  If the player never enters the challenge room, EXTERMINATE completes normally
+  since no challenge enemies exist.
+- **EXPLORE:** Challenge room is a normal room for visit checks — entering
+  it marks the center tile as visited (and triggers the encounter).
+- **SPEEDRUN/PACIFIST:** Unaffected — the challenge room is optional.
+
+**Room-clear rewards:** Active challenge rooms (`roomType === 'challenge'`
+where `!room.challengeComplete`) are excluded from the normal room-clear
+reward scan. Only after challenge completion can the room trigger a room-clear.
+
+**HUD — wave counter:** Displayed below the quest indicator (shifted down
+18 px if quest is visible). Shows `"⚔ CHALLENGE STARTING..."`, `"⚔ NEXT
+WAVE IN Ns"`, or `"⚔ WAVE N/M"` in `#ff9933` with pulsing glow.
+
+**Audio: `audio.challengeWave()`** — two-tone brass alarm stab (sawtooth
+220+330 Hz) + square harmonic (440 Hz) + percussive noise burst + sub-bass
+(60→35 Hz). Plays at the start of each wave.
+
+**Save/load:** No extra save fields needed. Save checkpoints occur at floor
+entry (before the player can enter a challenge room). On continue, the floor
+is regenerated fresh and the challenge room is unvisited.
+
 ### Vendor / Shop System
 
 **Credits:** A spendable currency earned by killing enemies. Each enemy type
@@ -1502,3 +1594,4 @@ when key indicators are present to avoid collision.
 | v28.0   | Weapon affixes: random modifiers on weapons for loot variety and replayability. 5 prefixes (stat modifiers: Rapid, Heavy, Extended, Twin, Precise) and 5 suffixes (effects: Flame/burn, Frost/slow, Vampirism/leech, Thunder/chain, Detonation/explode). Floor-gated rarity: common (no affix, floor 1), uncommon (1 affix, floor 2+), rare (2 affixes, floor 4+). Affix eligibility filters prevent dead rolls (Precise on zero-spread, Twin/Extended on melee). Affixed weapons are unique cloned objects with `buildWeapon()`/`rollWeapon()` pattern. `applyHitEffects()` + `applyOnKill()` centralize proc logic with `isProc` guard against recursion. `tickEnemyStatusEffects()` handles burn DOT and slow decay per enemy per frame. Enemy class gains `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`. Visual: burn underglow, frost tint, chain lightning bolts (jagged yellow), rarity-coloured HUD weapon name + upgrade card borders. Save format: weapon stored as `{_base, _affixes}` object. SAVE_VERSION 8.0. SW cache v35 |
 | v29.0   | Elite enemy affixes: each elite enemy (floor 3+) now spawns with one random affix that grants a special ability. 4 affixes: SHIELDED (energy shield absorbs damage, 40% max HP, regenerates 8/s after 2s), BERSERKER (speed + attack rate scale up to +50% as HP drops), REGENERATING (heals 2.5% maxHp/s), PHASING (1s invulnerable every 4s cycle). `ELITE_AFFIXES` table, `rollEliteAffix()` with eligibility filter (PHASING excluded from PHANTOM). `tickEliteAffix()` per-frame behaviour. `berserkerMul()` method on Enemy. Shield absorption in `takeDamage()` before HP. Phase immunity check at top of `takeDamage()`. Visual: affix-coloured diamond marker, affix-coloured glow, SHIELDED blue ring + separate shield bar, BERSERKER red aura intensifies, PHASING ghost flicker, REGENERATING green particles. Minimap: 3px affix-coloured dots for elites. SW cache v36 |
 | v30.0   | Hackware system: collectible active abilities with cooldowns. 4 modules: EMP Burst (AoE stun 2s in 4-tile radius, LOS-gated, bosses 1s, 10s CD), Phase Cloak (2.5s invisibility + full damage immunity, enemies lose targeting, 14s CD), Nano Swarm (6 homing particles × 8 dmg each, 4s lifetime, 10s CD), Gravity Well (pull enemies within 5 tiles toward aim point for 3s, bosses immune, collision-aware, 16s CD). `HACKWARE` table, `activateHackware()`, `updateHackwareEffects()`, `drawHackwareEffects()`. Central `canTargetPlayer()` helper gates all enemy AI when player is cloaked. `isPlayerDamageImmune()` gates `player.takeDamage()`, plasma burn, arc zap, and projectile-player collisions for both dash and cloak. `Enemy.stunTimer` freezes AI + cooldown timers. F key + touch button (shown only when equipped). `makeHackwareOption()` for powerup choice (~12% on floor 3+). Vendor offers hackware (~40% on floor 3+). Status bar badges: hackware cooldown/ready + cloak active. HUD indicators in both compact and landscape layouts. Save/load: `player.hackware` + `player.hackwareCooldown` (no save version bump — defaults on old saves). `hackwareEffects[]` cleared in `populateFloor()`. 5 new audio SFX (EMP/Cloak/CloakEnd/Swarm/Gravity). SW cache v37 |
+| v31.0   | Challenge rooms: optional wave-based arena encounters. One per non-boss floor (2–9). `T.CHALLENGE_GATE` tile (17) — passable red/amber archway. Room sealed on entry (same pattern as boss seal), 2–3 waves of enemies (floor-scaled, one level harder), inter-wave pause with HUD counter, guaranteed rewards on completion (2 items + credits + XP + score). Wave enemies tagged `_challengeWave` for independent tracking. Drone phase check respects challenge seal. EXTERMINATE quest accounts for pending waves. Room-clear rewards excluded during active encounter. Sealed walls get red tint + minimap pulse + ambient WISP particles. Proximity hint on approach. `audio.challengeWave()` two-tone alarm SFX. No save format change (challenge state resets on floor load). SW cache v38 |
