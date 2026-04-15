@@ -2323,7 +2323,7 @@ function updateHazardZones(dt, player) {
     if (z.armTimer > 0) z.armTimer -= dt;
     z.tickCd = Math.max(0, z.tickCd - dt);
     if (z.age >= z.maxAge) { hazardZones.splice(i, 1); continue; }
-    if (z.armTimer <= 0 && z.tickCd <= 0 && !player.invincibleTimer &&
+    if (z.armTimer <= 0 && z.tickCd <= 0 && !player.invincibleTimer && !isPlayerDamageImmune() &&
         dist(player.x, player.y, z.x, z.y) < z.radius &&
         hasLOS(z.x, z.y, player.x, player.y, game.dungeon.map)) {
       player.takeDamage(z.dmg, z.source || 'Grenade');
