@@ -13,11 +13,11 @@ let cameras = [];
 let lasers  = [];
 let wallTurrets = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -31,11 +31,12 @@ const SOURCE_LABELS = {
   'laser':'Laser Tripwire',
   'Toxic Pool':'Toxic Pool',
   'Wall Turret':'Wall Turret',
+  'Reflected':'Reflected',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -49,6 +50,7 @@ const SOURCE_COLOURS = {
   'laser':'#ff6644',
   'Toxic Pool':'#33ff00',
   'Wall Turret':'#ff4400',
+  'Reflected':'#88ddff',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -484,6 +486,7 @@ class Enemy {
       case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
       case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
       case 'LEAPER':  this.aiLeaper(dt,player,map,d,los);  break;
+      case 'REFLECTOR':this.aiReflector(dt,player,map,d,los);break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -715,15 +718,71 @@ class Enemy {
     }
   }
 
+  aiReflector(dt,player,map,d,los) {
+    // Smooth-lerp shield facing toward player (with tracking lag)
+    if (los) {
+      const target = Math.atan2(player.y - this.y, player.x - this.x);
+      let diff = target - this._rfAngle;
+      while (diff > Math.PI) diff -= TWO_PI;
+      while (diff < -Math.PI) diff += TWO_PI;
+      this._rfAngle += diff * Math.min(1, 3 * dt);
+    }
+    const bm = this.berserkerMul();
+    if (los && d < 4) {
+      // Too close — retreat
+      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+      const nx = this.x + dx * retreatSpd * dt;
+      const ny = this.y + dy * retreatSpd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      let moved = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
+      if (!moved) this.patrol(dt, map);
+    } else if (los && d <= 10) {
+      // Hold position and fire
+      this.state = 'ATTACK';
+      if (this.shootTimer <= 0) {
+        this.fireAt(player.x, player.y, 7, this.atk, 14, this.colour);
+        this.shootTimer = 2.5 / bm;
+      }
+    } else if (los && d > 10) {
+      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+    } else {
+      this.state = 'PATROL';
+      this.patrol(dt, map);
+    }
+  }
+
   blocksProjectile(proj) {
-    // 120° frontal arc shield — blocks player projectiles (not piercing/orbitals)
-    if (this.type !== 'SHIELDER' || this.dead) return false;
-    // Use reversed projectile direction (where it's coming FROM)
+    // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/orbitals)
+    if (this.type === 'SHIELDER' && !this.dead) {
+      const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
+      let diff = incomingAngle - this.shieldAngle;
+      while (diff > Math.PI) diff -= TWO_PI;
+      while (diff < -Math.PI) diff += TWO_PI;
+      return Math.abs(diff) < Math.PI / 3;
+    }
+    // REFLECTOR: 90° arc — blocks ally turret projectiles (player projs are reflected instead)
+    if (this.type === 'REFLECTOR' && !this.dead) {
+      const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
+      let diff = incomingAngle - this._rfAngle;
+      while (diff > Math.PI) diff -= TWO_PI;
+      while (diff < -Math.PI) diff += TWO_PI;
+      return Math.abs(diff) < Math.PI / 4;
+    }
+    return false;
+  }
+
+  reflectsProjectile(proj) {
+    // REFLECTOR: 90° frontal arc reflects player projectiles back at them
+    if (this.type !== 'REFLECTOR' || this.dead) return false;
     const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
-    let diff = incomingAngle - this.shieldAngle;
+    let diff = incomingAngle - this._rfAngle;
     while (diff > Math.PI) diff -= TWO_PI;
     while (diff < -Math.PI) diff += TWO_PI;
-    return Math.abs(diff) < Math.PI / 3;
+    return Math.abs(diff) < Math.PI / 4;
   }
 
   aiGrenadier(dt,player,map,d,los) {
@@ -2044,6 +2103,38 @@ class Enemy {
         ctx.stroke();
         ctx.restore();
       }
+      // Reflector: draw 90° mirror shield with inner highlight
+      if (this.type === 'REFLECTOR') {
+        ctx.save();
+        const rR = sz * 1.3;
+        const pulse = 0.7 + Math.sin(this.bobAngle * 3) * 0.2;
+        // Outer arc — cyan
+        ctx.strokeStyle = '#88ddff';
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#88ddff';
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(sx, sy, rR, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
+        ctx.stroke();
+        // Inner mirror highlight — white
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sx, sy, rR - 2, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
+        ctx.stroke();
+        // Edge ticks — segmented look
+        for (let i = -2; i <= 2; i++) {
+          const a = this._rfAngle + (i / 4) * (Math.PI / 2);
+          ctx.beginPath();
+          ctx.moveTo(sx + Math.cos(a) * (rR - 1), sy + Math.sin(a) * (rR - 1));
+          ctx.lineTo(sx + Math.cos(a) * (rR + 3), sy + Math.sin(a) * (rR + 3));
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       // Teleporter: afterimage at previous warp origin
       if (this.type === 'TELEPORTER' && this._warpFade > 0) {
         ctx.save();
@@ -2488,6 +2579,7 @@ const ENEMY_WEIGHTS = {
   HEALER:     { base: 1,  perFloor: 2, minFloor: 5 },  // heals wounded allies
   CHARGER:    { base: 2,  perFloor: 2, minFloor: 4 },  // charge-attack melee rusher
   LEAPER:     { base: 2,  perFloor: 2, minFloor: 5 },  // jumping shockwave attacker
+  REFLECTOR:  { base: 1,  perFloor: 2, minFloor: 7 },  // projectile-reflecting shield
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2525,6 +2617,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
     case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
     case 'LEAPER':  hp=30;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
+    case 'REFLECTOR':hp=40;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -2561,6 +2654,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
   if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
+  if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;

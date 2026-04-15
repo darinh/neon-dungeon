@@ -1172,6 +1172,14 @@ const audio = (() => {
       osc('sine', 2400, 900, 0.04, t, 0.06);
       noise(0.03, t, 0.03, 4000);
     },
+    reflect() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp crystalline ping + ascending shimmer
+      osc('sine', 2200, 3200, 0.07, t, 0.08);
+      osc('triangle', 3000, 4000, 0.04, t + 0.02, 0.06);
+      osc('sine', 1600, 2000, 0.03, t + 0.04, 0.1);
+      noise(0.02, t, 0.02, 6000);
+    },
     grenadeLob() {
       const c = getCtx(); const t = c.currentTime;
       // Hollow thunk + rising whoosh

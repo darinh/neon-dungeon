@@ -2391,6 +2391,25 @@ class Projectile {
       for (const e of enemies) {
         if (e.dead||this.hitEnemies.has(e)) continue;
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
+          // Reflection check — REFLECTOR bounces projectiles back (including piercing)
+          if (e.reflectsProjectile(this)) {
+            this.dx = -this.dx;
+            this.dy = -this.dy;
+            this.fromPlayer = false;
+            this.dmg = Math.round(this.dmg * 0.6);
+            this.ownerType = 'Reflected';
+            this.hitEnemies = new Set();
+            this.homing = null;
+            this.bouncesLeft = 0;
+            this._hasRicochet = false;
+            this.travelled = 0;
+            this._effects = [];
+            this._affixes = [];
+            this.isCrit = false;
+            spawnParticles(this.x, this.y, 'SPARK', '#88ddff', 8);
+            audio.reflect();
+            return;
+          }
           // Shield deflection check (skip for piercing weapons)
           if (e.blocksProjectile(this) && !this.piercing) {
             spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);

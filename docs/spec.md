@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.6
+# NEON DUNGEON — Game Specification v4.7
 
 ## Vision
 
@@ -929,13 +929,15 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | HEALER       | 25      | 6   | Stays at range, periodically heals wounded allies | 22  |
 | CHARGER      | 45      | 14  | Slow patrol, telegraphed charge rush, melee   | 22  |
 | LEAPER       | 30      | 11  | Fast, jumps to player position, shockwave on landing | 22  |
+| REFLECTOR    | 40      | 10  | Reflective shield bounces projectiles back     | 28  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
 CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
 LEAPER appears floor 5+,
-TELEPORTER appears floor 6+, SUMMONER appears floor 6+, SNIPER appears floor 7+.
+TELEPORTER appears floor 6+, SUMMONER appears floor 6+, SNIPER appears floor 7+,
+REFLECTOR appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -1299,6 +1301,60 @@ cadence.
   - FORTIFIED (1.4× HP): Hard to burst during cooldown window
   - CHARGED (1.4× projectile speed): Projectiles faster + 1.2× damage
 
+#### REFLECTOR (floor 7+)
+
+Tactical mid-range enemy with a reflective energy shield that bounces player
+projectiles back at them. Unlike the SHIELDER (which absorbs projectiles),
+the REFLECTOR weaponizes the player's own firepower. Creates risk/reward
+decisions: high-damage weapons like the Railgun become dangerous to fire
+at a REFLECTOR head-on. Forces flanking, melee, or AoE strategies.
+
+- **Reflective shield** (90° frontal arc):
+  - Tracks toward player with smooth angle lerp (3 rad/s ≈ 0.33 s lag).
+    Does NOT snap instantly like SHIELDER — circling the REFLECTOR opens
+    the flanks.
+  - Player projectiles hitting the arc are reflected back:
+    - Velocity reversed (dx, dy negated).
+    - `fromPlayer` set to `false` — becomes a hostile projectile.
+    - Damage reduced to 60% of original.
+    - Death recap source: `Reflected` (`#88ddff`).
+    - Homing cleared (Plasma Orb loses tracking).
+    - Ricochet cleared (reflected shots don't wall-bounce).
+    - Travelled distance reset (full range after reflection).
+  - **Piercing included:** Railgun and other piercing shots are reflected
+    (unlike SHIELDER, which piercing bypasses). Only melee (Saw Blade
+    orbital), AoE (EMP, Static Field, grenades), hitscan (Auto-Laser),
+    and flanking bypass the shield.
+  - Ally turret projectiles hitting the arc are blocked (absorbed, not
+    reflected) — reuses `blocksProjectile()` path.
+  - Shield persists during stun (passive energy field, not active control)
+    but stops tracking — easy to flank a stunned REFLECTOR.
+- **AI behaviour:**
+  - Holds position at 4–10 tile range. Retreats if player closes within
+    4 tiles (same retreat pattern as GRENADIER). Approaches slowly if
+    player is beyond 10 tiles. Patrols when no LOS.
+  - Fires a basic projectile at the player every 2.5 s (colour-matched).
+- **Stats:** HP 40, ATK 10, SPD 1.8, XP 28.
+- **Visual:** Pale cyan (`#88ddff`). 90° reflective arc with outer cyan
+  stroke, white inner "mirror" highlight, and segmented edge ticks.
+  Distinct from SHIELDER's wider, solid teal arc. Pulsing glow amplitude
+  keyed to `bobAngle × 3` (faster than SHIELDER's `× 2`).
+- **Audio:** `audio.reflect()` — sharp crystalline ping with ascending
+  shimmer (sine 2200→3200, triangle 3000→4000, sine 1600→2000, noise).
+  Distinct from SHIELDER's heavy metallic clang.
+- **Credits:** 12
+- **Cap:** 1 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite eligible:** Yes — all standard affixes apply. ARMORED REFLECTORs
+  are especially durable. PHASING creates challenging tracking scenarios.
+  BERSERKER speeds up their shots.
+- **Spawn weight:** base 1, perFloor 2, minFloor 7. Late-game tactical
+  threat alongside SNIPER and MIMIC.
+- **Modifier interactions:**
+  - OVERCLOCK (÷ fire rate): Shoots more frequently.
+  - SWARM (0.6× HP): Fragile but multiple per floor.
+  - FORTIFIED (1.4× HP): Very tanky — demands flanking.
+  - CHARGED (1.4× projectile speed): Own shots + reflected shots travel faster.
+
 #### MIMIC (floor 7+)
 
 Ambush predator disguised as a data pickup. Creates late-game tension when
@@ -1446,6 +1502,9 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | TELEPORTER| 1           | +2        | 6         |
 | SNIPER    | 1           | +2        | 7         |
 | HEALER    | 1           | +2        | 5         |
+| CHARGER   | 2           | +2        | 4         |
+| LEAPER    | 2           | +2        | 5         |
+| REFLECTOR | 1           | +2        | 7         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
@@ -1454,7 +1513,8 @@ floor 10 averages 5–8 (capped by room area).
 
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
 max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper,
-max 1 summoner, max 1 healer per room. Excess rolls reroll among uncapped,
+max 1 summoner, max 1 healer, max 2 chargers, max 2 leapers, max 1 reflector
+per room. Excess rolls reroll among uncapped,
 floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
@@ -2034,7 +2094,7 @@ is regenerated fresh and the challenge room is unvisited.
 
 **Credits:** A spendable currency earned by killing enemies. Each enemy type
 has a base credit value: GUARD 8, TURRET 6, CRAWLER 4, PHANTOM 12, DRONE 5,
-SHIELDER 10, GRENADIER 7, SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
+SHIELDER 10, GRENADIER 7, REFLECTOR 12, SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
 `Math.round(base × (1 + floor × 0.15))`. Credits are displayed on the HUD
 (green `◈` symbol) and saved/restored with the checkpoint system.
 
@@ -3040,3 +3100,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v65.0   | LEAPER enemy (floor 5+): jumping shockwave attacker with 4-state machine (idle→windup→airborne→recovery). Windup: 0.5 s telegraph. Airborne: 0.35 s jump to player position. Landing: 2-tile AoE (LOS-gated, ATK×1.2). Recovery: 1 s vulnerable window. One airborne per room. Airborne/recovery continue during stun. Proper env damage helpers. Stats: HP 30, ATK 11, SPD 3.0, XP 22. TYPE_CAPS: 2. Elite eligible. `audio.leaperWindup()`, `audio.leaperLand()`. Spec v4.4. SW cache v77. |
 | v66.0   | Toxic Pools: corrosive environmental hazard tiles (floor 3+, `T.TOXIC:22`). Clusters of 2–4 green tiles placed in ~30% of normal rooms. Deal `(2 + floor × 0.5) HP/s` to both player AND enemies (bosses immune). 30% movement slow on player and enemies while in pool (bosses immune to slow). Dash/Phase Cloak grants immunity. Disguised mimics excluded from damage. Enemy damage uses 0.5 s interval with `isProc: true` to prevent weapon affix procs. Death recap source: `Toxic Pool` (#33ff00). `audio.toxicBurn()` low gurgling SFX. Spec v4.5. SW cache v78. |
 | v67.0   | Wall Turrets: hackable wall-mounted auto-turrets (floor 5+). `wallTurrets[]` entity array. 1–2 per ~25% of qualifying rooms (≥6×6, mutually exclusive with cameras). Hostile: fire at player every 1.8s (6-tile range, `5 + floor × 1.5` dmg). EMP Burst **hacks** turrets (converts hostile→allied, permanent). Hacked: target nearest enemy in room (7-tile range, 1.5s cooldown), fire `isAllyTurret` projectiles (no player augments/perks). Hostile turrets block room-clear; hacked do not. HP: `12 + floor × 3`. Damaged by player projectiles, all AoE, Static Field. Enemy projectiles damage hacked turrets. Death recap source: `Wall Turret`. `audio.turretFire/turretHack/turretDestroy()`. Spec v4.6. SW cache v79. |
+| v68.0   | REFLECTOR enemy (floor 7+): tactical mid-range enemy with 90° reflective energy shield that bounces player projectiles back at them. Shield tracks player with 0.33 s lag (3 rad/s smooth lerp). Reflected projectiles: velocity reversed, `fromPlayer=false`, 60% damage, ricochet/homing cleared, `travelled` reset. Piercing projectiles reflected (unlike SHIELDER which piercing bypasses). Ally turret shots blocked (not reflected). Shield persists during stun (stops tracking). AI: holds position 4–10 tiles, retreats < 4, fires every 2.5 s. Stats: HP 40, ATK 10, SPD 1.8, XP 28, credits 12. Colour: `#88ddff`. `reflectsProjectile()` + extended `blocksProjectile()`. Visual: cyan arc + white mirror highlight + segmented edge ticks. `audio.reflect()` crystalline ping. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 7. Spec v4.7. SW cache v80. |
