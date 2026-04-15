@@ -628,6 +628,8 @@ function activateHackware(player) {
       }
       // Visual: expanding ring effect
       hackwareEffects.push({ type:'emp_ring', x:player.x, y:player.y, age:0, maxAge:0.4, radius });
+      // EMP damages shield generators
+      if (map) damageShieldGensInRadius(player.x, player.y, radius, 15, map);
       break;
     }
     case 'PHASE_CLOAK': {
@@ -771,6 +773,17 @@ function updateHackwareEffects(dt) {
         const a = Math.random() * TWO_PI;
         const r = Math.random() * fx.radius;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'SPARK', '#44ccff', 1);
+      }
+      // Static field damages shield generators (1s interval, reuse hitMap with string key)
+      for (const g of shieldGens) {
+        if (g.dead) continue;
+        if (dist(g.x, g.y, fx.x, fx.y) < fx.radius && map && hasLOS(g.x, g.y, fx.x, fx.y, map)) {
+          const lastHit = fx.hitMap.get(g) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(g, now);
+            damageShieldGen(g, fx.dmg);
+          }
+        }
       }
     }
     // emp_ring is visual only, handled in draw
@@ -2343,6 +2356,17 @@ class Projectile {
         }
       }
     }
+    // Player projectiles can damage shield generators
+    if (!this.dead && this.fromPlayer) {
+      for (const g of shieldGens) {
+        if (g.dead) continue;
+        if (dist(this.x, this.y, g.x, g.y) < 0.6) {
+          damageShieldGen(g, this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
     // Player projectiles trigger proximity mines (pre-detonate from range)
     if (!this.dead && this.fromPlayer) {
       for (const m of mines) {
@@ -2412,6 +2436,7 @@ function detonateGrenade(x, y, dmg) {
   primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
   damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  damageShieldGensInRadius(x, y, 1.5, dmg, game.dungeon.map);
   triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
 }
 
