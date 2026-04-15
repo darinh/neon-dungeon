@@ -612,33 +612,71 @@ const audio = (() => {
 
   function resume() { const c = getCtx(); if (c.state === 'suspended') c.resume(); }
 
-  // Core voice: oscillator → gain → target node
-  function osc(type, freq1, freq2, vol, start, dur, target) {
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function panOut(target, pan, lifetime) {
+    const c = getCtx();
+    const out = target || master;
+    if (!c.createStereoPanner || Math.abs(pan || 0) < 0.01) return out;
+    const p = c.createStereoPanner();
+    p.pan.value = clamp(pan, -1, 1);
+    p.connect(out);
+    setTimeout(() => { try { p.disconnect(); } catch (e) {} }, Math.max(80, (lifetime || 0.2) * 1000));
+    return p;
+  }
+
+  // Core voice: oscillator → gain/filter → optional pan → target node
+  function osc(type, freq1, freq2, vol, start, dur, target, opt) {
     const c = getCtx();
     const o = c.createOscillator();
     const g = c.createGain();
+    const opts = opt || {};
+    const attack = opts.attack == null ? 0.002 : opts.attack;
+    const releaseAt = start + (opts.release == null ? dur : opts.release);
     o.type = type;
-    o.frequency.setValueAtTime(freq1, start);
+    if (opts.detune) o.detune.value = opts.detune;
+    o.frequency.setValueAtTime(Math.max(1, freq1), start);
     if (freq2 !== freq1) o.frequency.exponentialRampToValueAtTime(Math.max(freq2, 1), start + dur);
-    g.gain.setValueAtTime(vol, start);
-    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-    o.connect(g); g.connect(target || master);
-    o.start(start); o.stop(start + dur + 0.02);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, releaseAt);
+
+    let tail = g;
+    if (opts.filterType) {
+      const flt = c.createBiquadFilter();
+      flt.type = opts.filterType;
+      const ff = Math.max(40, opts.filterFreq || Math.max(freq1, freq2, 300));
+      flt.frequency.setValueAtTime(ff, start);
+      if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
+      if (opts.q != null) flt.Q.value = opts.q;
+      g.connect(flt);
+      tail = flt;
+    }
+    o.connect(g);
+    tail.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
+    o.start(start);
+    o.stop(releaseAt + 0.04);
   }
 
   // Noise burst from cached buffer
-  function noise(vol, start, dur, filterFreq, target) {
+  function noise(vol, start, dur, filterFreq, target, opt) {
     const c = getCtx();
     const src = c.createBufferSource();
     src.buffer = noiseBuf;
     const flt = c.createBiquadFilter();
-    flt.type = 'lowpass';
-    flt.frequency.value = filterFreq || 800;
+    const opts = opt || {};
+    flt.type = opts.filterType || 'lowpass';
+    const ff = Math.max(40, filterFreq || 800);
+    flt.frequency.setValueAtTime(ff, start);
+    if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
+    if (opts.q != null) flt.Q.value = opts.q;
     const g = c.createGain();
-    g.gain.setValueAtTime(vol, start);
+    const attack = opts.attack == null ? 0.001 : opts.attack;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
     g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-    src.connect(flt); flt.connect(g); g.connect(target || master);
-    src.start(start); src.stop(start + dur + 0.02);
+    src.connect(flt); flt.connect(g); g.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
+    src.start(start); src.stop(start + dur + 0.03);
   }
 
   // Reverb send helper — routes signal to both dry and wet buses
@@ -684,116 +722,132 @@ const audio = (() => {
     shoot(isPlayer, weapon) {
       const c = getCtx(); const t = c.currentTime;
       if (!isPlayer) {
-        osc('sawtooth', 300, 200, 0.07, t, 0.08);
-        osc('square',   150, 100, 0.04, t, 0.06);
+        const pan = Math.random() * 0.3 - 0.15;
+        noise(0.05, t, 0.05, 2400, null, { filterType:'bandpass', filterFreq2:1400, q:1.1, pan });
+        osc('triangle', 320, 180, 0.05, t, 0.09, null, { pan:-pan * 0.4, attack:0.003 });
+        osc('sine', 100, 70, 0.03, t, 0.11, null, { pan:pan * 0.25 });
         return;
       }
       const n = weapon && weapon.name;
       if (n === 'Scatter Gun') {
-        // Shotgun blast: base thump + per-pellet cracks with randomised pitch
-        noise(0.18, t, 0.07, 2500);
-        osc('sine', 100, 50, 0.08, t, 0.05);
-        for (let i = 0; i < 4; i++) {
+        // Shotgun blast: body thump + wide pellet transients
+        const bus = wetDry(1, 0.28, 0.35);
+        noise(0.16, t, 0.08, 2400, bus, { filterType:'bandpass', filterFreq2:900, q:0.9 });
+        osc('sine', 120, 52, 0.10, t, 0.10, bus, { attack:0.002 });
+        for (let i = 0; i < 6; i++) {
           const dt = i * 0.008 + Math.random() * 0.006;
-          const p = 0.85 + Math.random() * 0.3;
-          noise(0.08, t + dt, 0.04, 600 + Math.random() * 1200);
-          osc('square', 220 * p, 110 * p, 0.06, t + dt, 0.05);
+          const p = 0.82 + Math.random() * 0.36;
+          const pan = (i / 5 - 0.5) * 0.8 + (Math.random() * 0.1 - 0.05);
+          noise(0.06, t + dt, 0.045, 700 + Math.random() * 1800, bus, { filterType:'bandpass', filterFreq2:500 + Math.random() * 900, q:0.7, pan });
+          osc('square', 240 * p, 105 * p, 0.045, t + dt, 0.055, bus, { pan, attack:0.0015 });
         }
       } else if (n === 'Railgun') {
-        // Charge whine + sharp crack + lingering ring
-        const bus = wetDry(1, 0.3, 0.35);
-        osc('sine',     3200, 6400, 0.06, t, 0.08, bus);
-        osc('sawtooth', 1600, 4800, 0.04, t, 0.06, bus);
-        noise(0.12, t + 0.06, 0.04, 8000, bus);
-        osc('sine',     2400, 800,  0.10, t + 0.06, 0.25, bus);
+        // Charge whip + crack + resonant tail
+        const bus = wetDry(1, 0.45, 0.6);
+        osc('sine', 1800, 4200, 0.045, t, 0.11, bus, { attack:0.015, pan:-0.2, filterType:'bandpass', filterFreq:1800, filterFreq2:4200 });
+        osc('triangle', 1200, 3600, 0.04, t + 0.015, 0.09, bus, { pan:0.2, filterType:'bandpass', filterFreq:1500, filterFreq2:3800 });
+        noise(0.11, t + 0.07, 0.05, 9000, bus, { filterType:'highpass', pan:0.05 });
+        osc('sine', 2700, 680, 0.12, t + 0.07, 0.32, bus, { attack:0.0015, q:6, filterType:'bandpass', filterFreq:2600, filterFreq2:900 });
+        osc('triangle', 1300, 320, 0.05, t + 0.08, 0.26, bus, { pan:0.18 });
       } else if (n === 'Plasma Sword') {
-        // Energized melee whoosh: fast sweep + harmonics
-        osc('sawtooth', 600, 150,  0.12, t, 0.10);
-        osc('triangle', 1200, 300, 0.06, t, 0.08);
-        noise(0.06, t, 0.04, 3000);
+        // Energized slash: stereo whoosh with ionized edge
+        const bus = wetDry(1, 0.22, 0.24);
+        noise(0.09, t, 0.06, 2600, bus, { filterType:'bandpass', filterFreq2:1300, q:1.2, pan:-0.25 });
+        osc('sawtooth', 820, 180, 0.10, t, 0.12, bus, { pan:-0.15, filterType:'lowpass', filterFreq:4000, filterFreq2:900 });
+        osc('triangle', 1500, 340, 0.06, t + 0.01, 0.1, bus, { pan:0.2 });
+        osc('sine', 280, 120, 0.04, t + 0.015, 0.08, bus, { pan:0.12 });
       } else if (n === 'Void Cannon') {
-        // Deep resonant thump + sub pulse + distortion edge
-        const bus = wetDry(1, 0.25, 0.3);
-        osc('sine',     80,  35, 0.18, t, 0.25, bus);
-        osc('sawtooth', 160, 60, 0.08, t, 0.18, bus);
-        osc('square',   320, 80, 0.05, t, 0.12, bus);
-        noise(0.06, t, 0.06, 500, bus);
+        // Deep impact: sub pressure + gritty harmonic bloom
+        const bus = wetDry(1, 0.38, 0.5);
+        osc('sine', 76, 28, 0.2, t, 0.32, bus, { attack:0.003, pan:-0.05 });
+        osc('triangle', 152, 54, 0.09, t, 0.22, bus, { filterType:'lowpass', filterFreq:900, filterFreq2:400 });
+        osc('square', 300, 74, 0.05, t + 0.01, 0.14, bus, { pan:0.15, filterType:'bandpass', filterFreq:900, filterFreq2:300 });
+        noise(0.08, t, 0.09, 650, bus, { filterType:'lowpass', filterFreq2:320, q:0.5 });
       } else {
-        // Pulse Pistol (default): sine chirp + triangle harmonic + noise click
-        osc('sine',    880, 440,  0.15, t, 0.09);
-        osc('triangle',1760, 880, 0.06, t, 0.06);
-        noise(0.08, t, 0.03, 4000);
+        // Pulse Pistol: focused chirp with short stereo tail
+        const bus = wetDry(1, 0.16, 0.22);
+        noise(0.05, t, 0.025, 5200, bus, { filterType:'highpass', pan:0.05 });
+        osc('sine', 920, 420, 0.14, t, 0.1, bus, { attack:0.002, pan:-0.08, filterType:'bandpass', filterFreq:1400, filterFreq2:700, q:0.7 });
+        osc('triangle', 1840, 820, 0.06, t + 0.005, 0.07, bus, { pan:0.12 });
+        osc('sine', 210, 120, 0.04, t, 0.08, bus, { pan:-0.03 });
       }
     },
     hit(isPlayer, weaponName) {
       const c = getCtx(); const t = c.currentTime;
       if (isPlayer) {
-        // Impact: noise burst + low sine thump + sub-bass
-        noise(0.3, t, 0.12, 250);
-        osc('sine',    80, 30, 0.25, t, 0.15);
-        osc('triangle',40, 20, 0.12, t, 0.1);
+        // Player hurt: chest thump + brittle impact transient
+        const bus = wetDry(1, 0.26, 0.28);
+        noise(0.22, t, 0.1, 500, bus, { filterType:'lowpass', filterFreq2:220, pan:-0.08 });
+        noise(0.08, t, 0.04, 3500, bus, { filterType:'highpass', pan:0.1 });
+        osc('sine', 86, 28, 0.22, t, 0.17, bus, { attack:0.002 });
+        osc('triangle', 46, 20, 0.1, t + 0.01, 0.12, bus, { pan:0.04 });
       } else {
         const n = weaponName;
         if (n === 'Scatter Gun') {
-          // Quick plink: bright but short
-          osc('sine',    800, 300, 0.08, t, 0.04);
-          noise(0.05, t, 0.02, 3000);
+          // Pellet hit: bright granular ping
+          osc('sine', 980, 320, 0.085, t, 0.055, null, { pan:Math.random() * 0.25 - 0.12 });
+          noise(0.05, t, 0.025, 3600, null, { filterType:'bandpass', filterFreq2:1800, q:1.3 });
         } else if (n === 'Railgun') {
-          // Metallic crack + lingering ring
-          const bus = wetDry(1, 0.2, 0.2);
-          noise(0.10, t, 0.03, 6000, bus);
-          osc('sine', 1800, 600, 0.08, t, 0.15, bus);
+          // Rail impact: metallic crack + resonant ring
+          const bus = wetDry(1, 0.34, 0.32);
+          noise(0.11, t, 0.035, 7000, bus, { filterType:'highpass' });
+          osc('sine', 2000, 620, 0.09, t, 0.2, bus, { filterType:'bandpass', filterFreq:2100, filterFreq2:850, q:6 });
+          osc('triangle', 1300, 420, 0.04, t + 0.02, 0.18, bus, { pan:0.18 });
         } else if (n === 'Plasma Sword') {
-          // Electric sizzle
-          osc('sawtooth', 900, 200, 0.10, t, 0.07);
-          noise(0.06, t, 0.03, 4000);
+          // Plasma cut: ion sizzle and short ring
+          osc('sawtooth', 960, 220, 0.1, t, 0.09, null, { filterType:'bandpass', filterFreq:2600, filterFreq2:650 });
+          noise(0.07, t, 0.04, 4200, null, { filterType:'bandpass', filterFreq2:1800, q:0.9 });
         } else if (n === 'Void Cannon') {
-          // Deep resonant thud
-          const bus = wetDry(1, 0.15, 0.15);
-          osc('sine', 120, 40, 0.12, t, 0.12, bus);
-          noise(0.08, t, 0.06, 400, bus);
+          // Void impact: compressed low slam
+          const bus = wetDry(1, 0.25, 0.25);
+          osc('sine', 130, 36, 0.14, t, 0.16, bus, { attack:0.002 });
+          noise(0.08, t, 0.08, 500, bus, { filterType:'lowpass', filterFreq2:260 });
+          osc('triangle', 220, 80, 0.04, t + 0.01, 0.1, bus, { pan:-0.1 });
         } else {
-          // Pulse Pistol / default: bright transient ping + body
-          osc('sine',    600, 200, 0.12, t, 0.06);
-          osc('triangle',1200,400, 0.05, t, 0.04);
+          // Pulse impact: quick bright ping with body
+          osc('sine', 720, 210, 0.12, t, 0.075, null, { pan:Math.random() * 0.2 - 0.1 });
+          osc('triangle', 1320, 460, 0.05, t, 0.055);
+          noise(0.03, t, 0.02, 3000, null, { filterType:'bandpass', filterFreq2:1800 });
         }
       }
     },
     death() {
       const c = getCtx(); const t = c.currentTime;
-      const bus = wetDry(1, 0.4, 0.4);
-      osc('sawtooth', 400, 60, 0.18, t, 0.4, bus);
-      osc('square',   200, 30, 0.1,  t, 0.35, bus);
-      noise(0.15, t + 0.05, 0.2, 600, bus);
-      osc('sine',     60,  25, 0.15, t, 0.3);
+      const bus = wetDry(1, 0.5, 0.8);
+      osc('sawtooth', 440, 70, 0.16, t, 0.44, bus, { pan:-0.2, filterType:'lowpass', filterFreq:2400, filterFreq2:500 });
+      osc('square', 220, 34, 0.09, t + 0.01, 0.36, bus, { pan:0.15 });
+      osc('sine', 72, 24, 0.14, t, 0.34, bus, { attack:0.003 });
+      noise(0.14, t + 0.04, 0.22, 700, bus, { filterType:'lowpass', filterFreq2:250, q:0.7 });
+      noise(0.05, t + 0.02, 0.08, 2600, bus, { filterType:'highpass', pan:0.1 });
     },
     levelUp() {
       const c = getCtx(); const t = c.currentTime;
-      const bus = wetDry(1, 0.5, 0.5);
+      const bus = wetDry(1, 0.65, 0.9);
       [523, 659, 784, 1047].forEach((f, i) => {
         const s = t + i * 0.1;
-        osc('sine',     f,     f,     0.2,  s, 0.2, bus);
-        osc('triangle', f*1.003,f*1.003,0.08,s, 0.18, bus);
-        osc('triangle', f*0.997,f*0.997,0.08,s, 0.18, bus);
+        const pan = (i - 1.5) * 0.18;
+        osc('sine', f, f, 0.19, s, 0.24, bus, { pan, attack:0.01 });
+        osc('triangle', f * 1.004, f * 1.004, 0.07, s, 0.2, bus, { pan:pan - 0.08 });
+        osc('triangle', f * 0.996, f * 0.996, 0.07, s, 0.2, bus, { pan:pan + 0.08 });
+        noise(0.025, s, 0.05, 4200, bus, { filterType:'highpass', pan:pan * -0.5 });
       });
     },
     pickup() {
       const c = getCtx(); const t = c.currentTime;
       // Quick ascending sparkle
-      osc('sine',     400, 1200, 0.15, t, 0.12);
-      osc('triangle', 800, 2400, 0.06, t, 0.1);
+      osc('sine', 420, 1260, 0.14, t, 0.13, null, { pan:-0.08 });
+      osc('triangle', 840, 2480, 0.06, t, 0.11, null, { pan:0.12 });
+      noise(0.025, t, 0.035, 5200, null, { filterType:'highpass' });
     },
     bossEnter() {
       const c = getCtx(); const t = c.currentTime;
-      const bus = wetDry(1, 0.7, 2.0);
-      osc('sawtooth', 55,   55,   0.3,  t, 2.0, bus);
-      osc('sawtooth', 57,   57,   0.25, t, 2.0, bus);
-      // Octave harmonic swell
-      osc('sawtooth', 110,  110,  0.12, t + 0.4, 1.5, bus);
-      // Filtered noise rumble
-      noise(0.2, t, 1.8, 200, bus);
-      // Sub-bass pulse
-      osc('sine',     27.5, 27.5, 0.2,  t + 0.2, 1.6);
+      const bus = wetDry(1, 0.82, 2.4);
+      osc('sawtooth', 55, 52, 0.28, t, 2.2, bus, { pan:-0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
+      osc('sawtooth', 57, 54, 0.24, t, 2.2, bus, { pan:0.22, filterType:'lowpass', filterFreq:700, filterFreq2:220 });
+      osc('triangle', 110, 104, 0.13, t + 0.35, 1.7, bus, { attack:0.15, filterType:'lowpass', filterFreq:900, filterFreq2:320 });
+      noise(0.2, t, 2.0, 260, bus, { filterType:'lowpass', filterFreq2:140, q:0.7 });
+      osc('sine', 30, 26, 0.22, t + 0.12, 1.9, bus, { attack:0.02 });
+      osc('sine', 42, 36, 0.1, t + 0.62, 1.1, bus, { pan:-0.08 });
     },
     descend() {
       const c = getCtx(); const t = c.currentTime;
@@ -828,17 +882,17 @@ const audio = (() => {
     phaseShift() {
       // Boss phase transition: digital alarm sweep + sub pulse + metallic ring
       const c = getCtx(); const t = c.currentTime;
-      const bus = wetDry(1, 0.45, 0.8);
+      const bus = wetDry(1, 0.55, 1.0);
       // Rising alarm sweep
-      osc('sawtooth', 200, 1200, 0.12, t, 0.25, bus);
-      osc('sawtooth', 205, 1210, 0.10, t, 0.25, bus);
+      osc('sawtooth', 220, 1400, 0.12, t, 0.28, bus, { pan:-0.22, filterType:'bandpass', filterFreq:500, filterFreq2:2400, q:1.2 });
+      osc('sawtooth', 226, 1410, 0.10, t, 0.28, bus, { pan:0.22, filterType:'bandpass', filterFreq:520, filterFreq2:2500, q:1.2 });
       // Sub pulse
-      osc('sine', 55, 40, 0.15, t + 0.05, 0.3);
+      osc('sine', 56, 38, 0.16, t + 0.04, 0.34, bus, { attack:0.003 });
       // Metallic ring
-      osc('sine', 1800, 900, 0.08, t + 0.15, 0.5, bus);
-      osc('triangle', 2400, 1200, 0.04, t + 0.15, 0.4, bus);
+      osc('sine', 1900, 860, 0.085, t + 0.13, 0.54, bus, { pan:-0.14, filterType:'bandpass', filterFreq:2200, filterFreq2:850, q:5 });
+      osc('triangle', 2500, 1120, 0.045, t + 0.13, 0.46, bus, { pan:0.14 });
       // Noise burst
-      noise(0.10, t + 0.1, 0.12, 3000, bus);
+      noise(0.12, t + 0.1, 0.14, 3400, bus, { filterType:'bandpass', filterFreq2:1500, q:1.1 });
     },
     menuSelect() {
       // Quick UI blip: short bright chirp
@@ -849,9 +903,9 @@ const audio = (() => {
     lowHealth() {
       // Heartbeat-style warning: two quick sub thumps
       const c = getCtx(); const t = c.currentTime;
-      osc('sine', 60, 40, 0.12, t, 0.12);
-      osc('sine', 60, 40, 0.10, t + 0.18, 0.10);
-      noise(0.03, t, 0.06, 200);
+      osc('sine', 62, 38, 0.12, t, 0.13, null, { pan:-0.1, attack:0.002 });
+      osc('sine', 62, 38, 0.1, t + 0.2, 0.11, null, { pan:0.1, attack:0.002 });
+      noise(0.03, t, 0.08, 260, null, { filterType:'lowpass', filterFreq2:150 });
     },
     plasmaBurn() {
       const c = getCtx(); const t = c.currentTime;
@@ -1223,4 +1277,3 @@ const audio = (() => {
     }
   };
 })();
-
