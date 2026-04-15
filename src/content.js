@@ -632,6 +632,19 @@ function activateHackware(player) {
       if (map) damageShieldGensInRadius(player.x, player.y, radius, 15, map);
       // EMP damages security cameras
       if (map) damageCamerasInRadius(player.x, player.y, radius, 15, map);
+      // EMP disables laser tripwires in radius (check emitters AND beam segment)
+      for (const l of lasers) {
+        if (l.dead) continue;
+        // Point-to-segment distance from EMP center to beam line
+        const ax = l.x1, ay = l.y1, bx = l.x2, by = l.y2;
+        const abx = bx - ax, aby = by - ay;
+        const apx = player.x - ax, apy = player.y - ay;
+        const ab2 = abx * abx + aby * aby;
+        const t = ab2 > 0 ? Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2)) : 0;
+        const closestX = ax + t * abx, closestY = ay + t * aby;
+        const beamDist = dist(player.x, player.y, closestX, closestY);
+        if (beamDist < radius) { l.disabled = true; l.disableTimer = LASER_DISABLE_DUR; audio.laserDisable(); }
+      }
       break;
     }
     case 'PHASE_CLOAK': {
@@ -795,6 +808,25 @@ function updateHackwareEffects(dt) {
           if (now - lastHit >= 1.0) {
             fx.hitMap.set(cam, now);
             damageCamera(cam, fx.dmg);
+          }
+        }
+      }
+      // Static field damages laser tripwire emitters (1s interval)
+      for (const l of lasers) {
+        if (l.dead) continue;
+        if (!l.deadA && dist(l.x1, l.y1, fx.x, fx.y) < fx.radius && map && hasLOS(l.x1, l.y1, fx.x, fx.y, map)) {
+          const lastHit = fx.hitMap.get(l) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(l, now);
+            damageLaserEmitter(l, 'A', fx.dmg);
+          }
+        }
+        if (l.dead) continue;
+        if (!l.deadB && dist(l.x2, l.y2, fx.x, fx.y) < fx.radius && map && hasLOS(l.x2, l.y2, fx.x, fx.y, map)) {
+          const lastHit = fx.hitMap.get(l._emitB) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(l._emitB, now);
+            damageLaserEmitter(l, 'B', fx.dmg);
           }
         }
       }
@@ -2391,6 +2423,23 @@ class Projectile {
         }
       }
     }
+    // Player projectiles can damage laser tripwire emitters
+    if (!this.dead && this.fromPlayer) {
+      for (const l of lasers) {
+        if (l.dead) continue;
+        if (!l.deadA && dist(this.x, this.y, l.x1, l.y1) < 0.5) {
+          damageLaserEmitter(l, 'A', this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+        if (l.dead) continue;
+        if (!l.deadB && dist(this.x, this.y, l.x2, l.y2) < 0.5) {
+          damageLaserEmitter(l, 'B', this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
     // Player projectiles trigger proximity mines (pre-detonate from range)
     if (!this.dead && this.fromPlayer) {
       for (const m of mines) {
@@ -2462,6 +2511,7 @@ function detonateGrenade(x, y, dmg) {
   damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageShieldGensInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageCamerasInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  damageLasersInRadius(x, y, 1.5, dmg, game.dungeon.map);
   triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
 }
 
