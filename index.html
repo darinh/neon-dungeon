@@ -28,7 +28,7 @@ let gameScale = 1;
 const TILE = 20;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
-const SAVE_VERSION = '8.0';
+const SAVE_VERSION = '9.0';
 
 const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17 };
 
@@ -241,7 +241,7 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (game.state !== 'PLAYING' && game.state !== 'FADE') {
       if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING') {
+      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -838,13 +838,28 @@ const audio = (() => {
     challengeWave() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.8);
-      // Alarm horn — two-tone brass stab
       osc('sawtooth', 220, 200, 0.15, t, 0.2, bus);
       osc('sawtooth', 330, 310, 0.12, t, 0.2, bus);
       osc('square',   440, 420, 0.06, t + 0.05, 0.15, bus);
-      // Percussive hit
       noise(0.18, t, 0.08, 1500, bus);
       osc('sine', 60, 35, 0.2, t, 0.25);
+    },
+    perkChoice() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.5, 0.8);
+      [659, 784, 988].forEach((f, i) => {
+        osc('sine',     f, f, 0.15, t + i * 0.08, 0.25, bus);
+        osc('triangle', f*1.5, f*1.5, 0.06, t + i * 0.08, 0.2, bus);
+      });
+      noise(0.08, t, 0.05, 4000, bus);
+    },
+    secondWind() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.6, 1.2);
+      osc('sine', 200, 800, 0.2, t, 0.5, bus);
+      osc('triangle', 400, 1600, 0.08, t + 0.1, 0.4, bus);
+      osc('sine', 100, 100, 0.15, t, 0.3);
+      noise(0.1, t + 0.05, 0.15, 2000, bus);
     },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
@@ -1840,6 +1855,14 @@ function getStatusEffects(player) {
   if (player.cloakTimer > 0) {
     fx.push({ id: 'cloak', icon: '◇', label: player.cloakTimer.toFixed(1)+'s', colour: '#cc44ff' });
   }
+  // Berserker active (below 25% HP)
+  if (player.perks.BERSERKER && player.hp > 0 && player.hp / player.maxHp <= 0.25) {
+    fx.push({ id: 'berserker', icon: '🔥', label: 'RAGE', colour: '#ff4400' });
+  }
+  // Second Wind available
+  if (player.perks.SECOND_WIND && !player.secondWindUsed) {
+    fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
+  }
   return fx;
 }
 
@@ -2575,6 +2598,7 @@ class Projectile {
             this.dead = true; return;
           }
           e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[] });
+          if (this.isCrit) spawnDmgText(e.x, e.y - 0.3, 'CRIT!', '#ffdd00');
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
           this.hitEnemies.add(e);
           if (this.hitEnemies.size > this.maxPierces) { this.dead=true; return; }
@@ -2784,21 +2808,49 @@ const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
 function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 
 // ─── Level-Up Perks ──────────────────────────────────────────────────────────
-// Passive abilities unlocked automatically at specific levels
-const PERKS = {
-  LASER_SIGHT:     { level:2,  name:'Laser Sight',     desc:'Shows aim trajectory',          colour:'#00f5ff' },
-  THREAT_SENSE:    { level:4,  name:'Threat Sense',     desc:'Detects nearby off-screen foes', colour:'#ff6644' },
-  PIERCING_ROUNDS: { level:6,  name:'Piercing Rounds',  desc:'Shots pierce through one enemy', colour:'#ff00c8' },
-  ENERGY_SHIELD:   { level:8,  name:'Energy Shield',    desc:'Absorbs one hit every 30s',      colour:'#4488ff' },
-  AUTO_LASER:      { level:10, name:'Auto-Laser',       desc:'Fires beam at nearest foe',      colour:'#ff2222' },
+// Choose-one-of-three at levels 2, 4, 6, 8. Auto-Laser capstone at level 10.
+const PERK_POOL = {
+  LASER_SIGHT:     { name:'Laser Sight',     icon:'◎', desc:'Shows aim trajectory',                colour:'#00f5ff' },
+  THREAT_SENSE:    { name:'Threat Sense',     icon:'⚠', desc:'Detects nearby off-screen foes',      colour:'#ff6644' },
+  PIERCING_ROUNDS: { name:'Piercing Rounds',  icon:'⟫', desc:'Shots pierce one extra enemy',        colour:'#ff00c8' },
+  ENERGY_SHIELD:   { name:'Energy Shield',    icon:'🛡', desc:'Absorbs one hit every 30s',           colour:'#4488ff' },
+  VAMPIRIC:        { name:'Vampiric',         icon:'♥', desc:'Heal 2 HP per kill',                  colour:'#ff3366' },
+  ADRENALINE:      { name:'Adrenaline',       icon:'⚡', desc:'+20% move speed',                     colour:'#39ff14' },
+  RAPID_FIRE:      { name:'Rapid Fire',       icon:'»', desc:'-15% fire cooldown',                  colour:'#ffaa00' },
+  CRITICAL_HIT:    { name:'Critical Hit',     icon:'✦', desc:'15% chance for 2× damage',            colour:'#ffdd00' },
+  THICK_ARMOR:     { name:'Thick Armor',      icon:'█', desc:'+3 DEF',                              colour:'#88aacc' },
+  BERSERKER:       { name:'Berserker',        icon:'🔥', desc:'+40% ATK below 25% HP',               colour:'#ff4400' },
+  DASH_MASTER:     { name:'Dash Master',      icon:'⇒', desc:'Dash cooldown halved',                colour:'#ffb700' },
+  HP_REGEN:        { name:'Nano Repair',      icon:'✚', desc:'Regen 1 HP every 3s',                 colour:'#00ff88' },
+  EXPLOSIVE_KILLS: { name:'Explosive Kills',  icon:'💥', desc:'Enemies explode on death',            colour:'#ff6600' },
+  MULTI_SHOT:      { name:'Multi-Shot',       icon:'⫸', desc:'Fire an extra 60%-damage projectile', colour:'#cc44ff' },
+  SECOND_WIND:     { name:'Second Wind',      icon:'↺', desc:'Revive once per floor at 30% HP',     colour:'#00ddff' },
 };
-function checkPerkUnlocks(player, level) {
-  for (const [id, perk] of Object.entries(PERKS)) {
-    if (perk.level === level && !player.perks[id]) {
-      player.perks[id] = true;
-      if (id === 'ENERGY_SHIELD') player.energyShield = true;
-      setTimeout(() => game.msg('⚡ PERK: '+perk.name, perk.colour), 200);
-    }
+const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
+const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
+
+function rollPerkChoices(player, count) {
+  const available = Object.keys(PERK_POOL).filter(id => !player.perks[id]);
+  // Fisher-Yates shuffle, take first `count`
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  return available.slice(0, Math.min(count, available.length));
+}
+
+function applyPerk(player, id) {
+  player.perks[id] = true;
+  const perk = PERK_POOL[id];
+  if (id === 'ENERGY_SHIELD') player.energyShield = true;
+  if (id === 'THICK_ARMOR') player.def += 3;
+  if (perk) setTimeout(() => game.msg('⚡ PERK: '+perk.name, perk.colour), 200);
+}
+
+function grantCapstone(player) {
+  if (!player.perks.AUTO_LASER) {
+    player.perks.AUTO_LASER = true;
+    setTimeout(() => game.msg('⚡ CAPSTONE: '+PERK_CAPSTONE.name, PERK_CAPSTONE.colour), 200);
   }
 }
 
@@ -3170,21 +3222,32 @@ class Enemy {
     const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul);
     game.player.credits += cr;
     if (this.isBoss) game.bossesCleared++;
-    // VOLATILE: AoE explosion on death (non-boss, non-chain)
-    if (game.modifier === 'VOLATILE' && !this.isBoss && !this._volatileKill) {
-      const vr = 2, vdmg = 15 + game.floor * 2;
-      spawnParticles(this.x, this.y, 'EXPLOSION', '#ff4422', 18);
+    // Vampiric perk: heal on kill
+    if (game.player.perks.VAMPIRIC && !this.isShard) {
+      const heal = 2;
+      game.player.hp = Math.min(game.player.maxHp, game.player.hp + heal);
+      spawnDmgText(game.player.x, game.player.y, '+'+heal, '#ff3366');
+    }
+    // Death explosion: VOLATILE modifier and/or EXPLOSIVE_KILLS perk (shared helper, non-stacking)
+    const wantExplosion = (game.modifier === 'VOLATILE' || game.player.perks.EXPLOSIVE_KILLS) && !this.isBoss && !this._volatileKill;
+    if (wantExplosion) {
+      const bothActive = game.modifier === 'VOLATILE' && game.player.perks.EXPLOSIVE_KILLS;
+      const vr = bothActive ? 2.5 : 2;
+      const vdmg = (bothActive ? 20 : 15) + game.floor * 2;
+      const col = game.modifier === 'VOLATILE' ? '#ff4422' : '#ff6600';
+      spawnParticles(this.x, this.y, 'EXPLOSION', col, 18);
       triggerShake(6, 0.2);
       const p = game.player;
-      if (dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
+      // VOLATILE hurts the player; perk-only does not
+      if (game.modifier === 'VOLATILE' && dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
         p.takeDamage(vdmg, 'Volatile');
       }
       for (const e of enemies) {
         if (e === this || e.dead) continue;
         if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, game.dungeon.map)) {
-          e._volatileKill = true; // prevent chain explosions
-          e.takeDamage(vdmg, 'Volatile');
-          if (!e.dead) e._volatileKill = false; // survivors can still explode later
+          e._volatileKill = true;
+          e.takeDamage(vdmg, game.modifier === 'VOLATILE' ? 'Volatile' : 'Explosion');
+          if (!e.dead) e._volatileKill = false;
         }
       }
     }
@@ -4016,6 +4079,8 @@ class Player {
     this.hackware=null;         // HACKWARE key or null
     this.hackwareCooldown=0;    // cooldown remaining
     this.cloakTimer=0;          // phase cloak duration remaining
+    this.regenTimer=0;          // HP_REGEN perk timer
+    this.secondWindUsed=false;  // SECOND_WIND: used this floor?
   }
 
   logDamage(source, amount) {
@@ -4023,6 +4088,12 @@ class Player {
   }
 
   xpNeeded() { return this.level*80; }
+
+  effectiveAtk() {
+    let a = this.atk;
+    if (this.perks.BERSERKER && this.hp / this.maxHp <= 0.25) a = Math.round(a * 1.4);
+    return a;
+  }
 
   gainXP(amount) {
     this.xp+=Math.round(amount * getMetaXPMultiplier());
@@ -4034,7 +4105,14 @@ class Player {
       this.levelFlash=1.5;
       audio.levelUp();
       game.msg('LEVEL UP! Now level '+this.level,'#00f5ff');
-      checkPerkUnlocks(this, this.level);
+      if (PERK_LEVELS.includes(this.level)) {
+        game.pendingPerkChoices.push(this.level);
+      }
+      if (this.level === 10) grantCapstone(this);
+    }
+    // Trigger perk choice UI after the loop (deferred so XP chips etc. resolve first)
+    if (game.pendingPerkChoices.length && game.state === 'PLAYING') {
+      game.openNextPerkChoice();
     }
   }
 
@@ -4064,7 +4142,20 @@ class Player {
     triggerShake(Math.min(actual * 0.4, 8), 0.2);
     audio.hit(true);
     spawnParticles(this.x,this.y,'BLOOD','#ff4444',5);
-    if (this.hp<=0) { this.killedBy=src; audio.gameOver(); game.endRun(false); }
+    if (this.hp<=0) {
+      // SECOND_WIND perk: revive once per floor
+      if (this.perks.SECOND_WIND && !this.secondWindUsed) {
+        this.secondWindUsed = true;
+        this.hp = Math.round(this.maxHp * 0.3);
+        this.invincibleTimer = 1.5;
+        audio.secondWind();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#00ddff', 20);
+        triggerShake(8, 0.3);
+        game.msg('💀 SECOND WIND!', '#00ddff');
+        return;
+      }
+      this.killedBy=src; audio.gameOver(); game.endRun(false);
+    }
   }
 
   shoot(aimX,aimY,map) {
@@ -4075,11 +4166,14 @@ class Player {
 
     if (w.melee) {
       // plasma sword arc
+      const meleeCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
+      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? 2 : 1);
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
         if (e.dead) continue;
         if (dist(this.x,this.y,e.x,e.y)<w.range) {
-          e.takeDamage(w.dmg+this.atk, hitCtx);
+          e.takeDamage(meleeDmg, hitCtx);
+          if (meleeCrit) spawnDmgText(e.x, e.y, 'CRIT!', '#ffdd00');
         }
       }
     } else {
@@ -4087,10 +4181,12 @@ class Player {
         const spread=(Math.random()-0.5)*(w.spread + (game.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
+        const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
         const proj=new Projectile(
-          this.x,this.y,pdx,pdy,12,w.dmg+this.atk,w.range,
+          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?2:1),w.range,
           w.colour,!!w.piercing,true,w.name
         );
+        proj.isCrit = isCrit;
         proj._effects = w._effects || [];
         proj._affixes = w._affixes || [];
         if (this.perks.PIERCING_ROUNDS) proj.maxPierces+=1;
@@ -4098,10 +4194,26 @@ class Player {
         if (proj.bouncesLeft) proj._hasRicochet=true;
         projectiles.push(proj);
       }
+      // MULTI_SHOT perk: fire a bonus 60%-damage projectile (ranged only)
+      if (this.perks.MULTI_SHOT) {
+        const offAngle = (Math.random() < 0.5 ? -1 : 1) * 0.14; // ~8°
+        const a = Math.atan2(dy, dx) + offAngle;
+        const pdx = Math.cos(a), pdy = Math.sin(a);
+        const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
+        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? 2 : 1));
+        const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
+        proj.isCrit = isCrit;
+        proj._effects = w._effects || [];
+        proj._affixes = w._affixes || [];
+        if (this.perks.PIERCING_ROUNDS) proj.maxPierces += 1;
+        proj.bouncesLeft = this.upgrades.RICOCHET || 0;
+        if (proj.bouncesLeft) proj._hasRicochet = true;
+        projectiles.push(proj);
+      }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
     }
     audio.shoot(true, w);
-    this.shootCooldown=1/w.rate;
+    this.shootCooldown = (1/w.rate) * (this.perks.RAPID_FIRE ? 0.85 : 1);
   }
 
   useVoidShard() {
@@ -4178,7 +4290,18 @@ class Player {
       if (this.lowHpTimer <= 0) { audio.lowHealth(); this.lowHpTimer = 2; }
     } else { this.lowHpTimer = 0; }
 
-    const spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
+    // HP_REGEN perk: heal 1 HP every 3s
+    if (this.perks.HP_REGEN && this.hp > 0 && this.hp < this.maxHp) {
+      this.regenTimer += dt;
+      if (this.regenTimer >= 3) {
+        this.regenTimer -= 3;
+        this.hp = Math.min(this.maxHp, this.hp + 1);
+        spawnDmgText(this.x, this.y, '+1', '#00ff88');
+      }
+    }
+
+    let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
+    if (this.perks.ADRENALINE) spd *= 1.2;
     let mx=0,my=0;
     if (keys.has('KeyW')||keys.has('ArrowUp'))    my=-1;
     if (keys.has('KeyS')||keys.has('ArrowDown'))  my= 1;
@@ -4216,7 +4339,7 @@ class Player {
       }
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
-      this.dashCooldown=1.5;
+      this.dashCooldown = this.perks.DASH_MASTER ? 0.75 : 1.5;
       this.dashTrail.push({x:this.x,y:this.y,alpha:0.8});
       audio.dash();
       spawnParticles(this.x,this.y,'EXPLOSION','#ffb700',6);
@@ -5104,6 +5227,9 @@ const game = {
   challengeEntrances: [],
   challengeWaveDelay: 0,
   challengeComplete: false,
+  // Perk choice state
+  pendingPerkChoices: [], // queued level milestones awaiting perk selection
+  perkChoice: null,       // {options: [id, id, id], selected: 0}
 
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
@@ -5165,6 +5291,8 @@ const game = {
     this.challengeMaxWaves=0;
     this.challengeWaveDelay=0;
     this.challengeComplete=false;
+    // Reset SECOND_WIND perk for this floor
+    if (this.player) this.player.secondWindUsed = false;
     populateFloor(this.dungeon,n);
     this.player.x=this.dungeon.playerPos.x;
     this.player.y=this.dungeon.playerPos.y;
@@ -5217,13 +5345,14 @@ const game = {
 
   startGame() {
     audio.resume();
-    // Persist selected difficulty for future sessions
     const meta = loadMeta();
     meta.lastDifficulty = this.difficulty;
     saveMeta(meta);
     this.bossesCleared=0;
     this.runTime=0;
     combo.best=0;
+    this.pendingPerkChoices=[];
+    this.perkChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
     this.loadFloor(1);
@@ -5370,7 +5499,8 @@ const game = {
         hitsBlocked:p.hitsBlocked,
         roomsCleared:p.roomsCleared,
         hackware:p.hackware,
-        hackwareCooldown:p.hackwareCooldown
+        hackwareCooldown:p.hackwareCooldown,
+        secondWindUsed:p.secondWindUsed
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -5382,6 +5512,8 @@ const game = {
 
   continueGame() {
     combo.best=0;
+    this.pendingPerkChoices=[];
+    this.perkChoice=null;
     let save;
     try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ save = null; }
     if (!save || !save.player || save.v !== SAVE_VERSION) {
@@ -5420,8 +5552,8 @@ const game = {
     p.roomsCleared=s.roomsCleared||0;
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
+    p.secondWindUsed=!!s.secondWindUsed;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
-    for (let lv = 1; lv <= p.level; lv++) checkPerkUnlocks(p, lv);
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
     this.player=p;
@@ -5437,6 +5569,7 @@ const game = {
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
+      case 'PERK_CHOICE':    this.updatePerkChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
@@ -5555,13 +5688,17 @@ const game = {
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<0.7) {
-        audio.pickup();
-        items.splice(i,1);
         if (it.isKey) {
+          audio.pickup();
+          items.splice(i,1);
           player.keys[it.colour]++;
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
           continue;
         }
+        // Defer upgrade pickup if a perk choice is pending (don't override PERK_CHOICE)
+        if (this.pendingPerkChoices.length || this.perkChoice) continue;
+        audio.pickup();
+        items.splice(i,1);
         // Generate 2 upgrade options
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
@@ -6095,6 +6232,59 @@ const game = {
       this.msg('Skipped upgrade', '#666688');
     }
     this.powerupChoice = null;
+    // Check for queued perk choices before returning to PLAYING
+    if (this.pendingPerkChoices.length) { this.openNextPerkChoice(); return; }
+    this.setState('PLAYING');
+  },
+
+  // ─── Perk Choice (choose-one-of-three on level up) ─────────────────────
+  openNextPerkChoice() {
+    if (!this.pendingPerkChoices.length) { this.setState('PLAYING'); return; }
+    this.pendingPerkChoices.shift(); // consume the milestone
+    const opts = rollPerkChoices(this.player, 3);
+    if (!opts.length) { this.setState('PLAYING'); return; } // all perks owned
+    this.perkChoice = { options: opts, selected: 0 };
+    this.setState('PERK_CHOICE');
+    audio.perkChoice();
+  },
+
+  updatePerkChoice() {
+    const pc = this.perkChoice;
+    if (!pc) { this.setState('PLAYING'); return; }
+    if (jp('Digit1')) { this.applyPerkChoice(0); return; }
+    if (jp('Digit2')) { this.applyPerkChoice(1); return; }
+    if (jp('Digit3') && pc.options.length > 2) { this.applyPerkChoice(2); return; }
+    if (jp('ArrowLeft') || jp('KeyA'))  pc.selected = Math.max(0, pc.selected - 1);
+    if (jp('ArrowRight')|| jp('KeyD'))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
+    if (jp('Enter') || jp('Space'))     { this.applyPerkChoice(pc.selected); return; }
+    // Mouse/touch
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const count = pc.options.length;
+      const cw = narrow ? Math.min(160, (W - 20) / count - 8) : Math.min(220, (W - 40) / count - 12);
+      const gap = narrow ? 8 : 14;
+      const totalW = cw * count + gap * (count - 1);
+      const startX = (W - totalW) / 2;
+      const cardY = H * 0.22;
+      const cardH = narrow ? Math.min(240, H * 0.52) : Math.min(280, H * 0.48);
+      for (let i = 0; i < count; i++) {
+        const cx = startX + i * (cw + gap);
+        if (mouse.x >= cx && mouse.x <= cx + cw && mouse.y >= cardY && mouse.y <= cardY + cardH) {
+          this.applyPerkChoice(i); return;
+        }
+      }
+    }
+  },
+
+  applyPerkChoice(idx) {
+    const pc = this.perkChoice;
+    if (idx >= 0 && idx < pc.options.length) {
+      const id = pc.options[idx];
+      applyPerk(this.player, id);
+      audio.menuSelect();
+    }
+    this.perkChoice = null;
+    if (this.pendingPerkChoices.length) { this.openNextPerkChoice(); return; }
     this.setState('PLAYING');
   },
 
@@ -6418,6 +6608,7 @@ const game = {
       case 'PLAYING':   this.renderPlaying();  break;
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
+      case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
       case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
       case 'READING':        this.renderPlaying(); this.renderReading(); break;
       case 'ARCHIVES':  this.renderArchives(); break;
@@ -6867,6 +7058,109 @@ const game = {
       ctx.fillText('Tap a card or Skip', W/2, skipY + skipH + 22);
     } else {
       ctx.fillText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', W/2, skipY + skipH + 22);
+    }
+
+    ctx.restore();
+  },
+
+  renderPerkChoice() {
+    const pc = this.perkChoice;
+    if (!pc) return;
+    const narrow = layout.compact;
+    const count = pc.options.length;
+    ctx.save();
+
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 25; ctx.shadowColor = '#00f5ff';
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
+    ctx.fillText('CHOOSE A PERK', W / 2, H * 0.1);
+    ctx.shadowBlur = 0;
+
+    // Subtitle
+    ctx.fillStyle = '#668899';
+    ctx.font = `${narrow ? 11 : 14}px monospace`;
+    ctx.fillText(`Level ${this.player.level} — pick one ability`, W / 2, H * 0.1 + (narrow ? 22 : 30));
+
+    // Cards
+    const cw = narrow ? Math.min(160, (W - 20) / count - 8) : Math.min(220, (W - 40) / count - 12);
+    const gap = narrow ? 8 : 14;
+    const totalW = cw * count + gap * (count - 1);
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.22;
+    const cardH = narrow ? Math.min(240, H * 0.52) : Math.min(280, H * 0.48);
+
+    for (let i = 0; i < count; i++) {
+      const id = pc.options[i];
+      const perk = PERK_POOL[id];
+      const cx = startX + i * (cw + gap);
+      const sel = pc.selected === i;
+
+      // Card bg
+      ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = sel ? perk.colour : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.beginPath();
+      ctx.roundRect(cx, cardY, cw, cardH, 8);
+      ctx.fill(); ctx.stroke();
+
+      // Glow on selected
+      if (sel) {
+        ctx.save();
+        ctx.shadowBlur = 20; ctx.shadowColor = perk.colour;
+        ctx.strokeStyle = perk.colour; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(cx, cardY, cw, cardH, 8);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Number badge
+      ctx.fillStyle = sel ? perk.colour : '#555566';
+      ctx.font = `bold ${narrow ? 12 : 16}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(String(i + 1), cx + cw / 2, cardY + (narrow ? 18 : 24));
+
+      // Icon
+      ctx.fillStyle = perk.colour;
+      ctx.font = `${narrow ? 28 : 40}px monospace`;
+      ctx.fillText(perk.icon, cx + cw / 2, cardY + cardH * 0.32);
+
+      // Name
+      ctx.fillStyle = sel ? '#ffffff' : '#cccccc';
+      ctx.font = `bold ${narrow ? 12 : 15}px monospace`;
+      ctx.fillText(perk.name, cx + cw / 2, cardY + cardH * 0.52);
+
+      // Description — word-wrap
+      ctx.fillStyle = sel ? '#aabbcc' : '#667788';
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      const words = perk.desc.split(' ');
+      const maxW = cw - 16;
+      let line = '', ly = cardY + cardH * 0.62;
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > maxW) {
+          ctx.fillText(line, cx + cw / 2, ly);
+          ly += narrow ? 13 : 15;
+          line = w;
+        } else { line = test; }
+      }
+      if (line) ctx.fillText(line, cx + cw / 2, ly);
+    }
+
+    // Instructions
+    ctx.fillStyle = '#445566';
+    ctx.font = `${narrow ? 10 : 13}px monospace`;
+    ctx.textAlign = 'center';
+    if (isTouchDevice()) {
+      ctx.fillText('Tap a card to choose', W / 2, cardY + cardH + (narrow ? 18 : 28));
+    } else {
+      ctx.fillText('1/2/3 pick  ·  ←/→ + Enter', W / 2, cardY + cardH + (narrow ? 18 : 28));
     }
 
     ctx.restore();
@@ -7453,6 +7747,14 @@ const game = {
       ctx.fillStyle=d.colour;
       ctx.fillText(`Difficulty: ${d.label}`,W/2, y);
       ctx.fillStyle='#aaaacc'; y += narrow ? 22 : 26;
+    }
+    // Perks chosen this run
+    const ownedPerks = Object.keys(this.player.perks).filter(id => PERK_POOL[id]);
+    if (ownedPerks.length) {
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      ctx.fillStyle = '#668899';
+      const perkNames = ownedPerks.map(id => PERK_POOL[id].icon + ' ' + PERK_POOL[id].name).join('  ');
+      ctx.fillText(perkNames, W/2, y); y += narrow ? 16 : 20;
     }
     // Run stats
     y += narrow ? 2 : 4;

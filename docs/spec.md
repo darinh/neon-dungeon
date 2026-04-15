@@ -773,23 +773,67 @@ path through walls.
 - **WEAPON CRATE** — replaced by pre-rolled weapon upgrades showing exact stats
 - **OVERCLOCK (timed)** — replaced by persistent OVERCLOCK (permanent speed)
 
-### Level-Up Perks
+### Level-Up Perks (Choose-One-of-Three)
 
-Passive abilities unlocked automatically when the player reaches a specific
-level. Unlike the powerup choice system, perks require no player input — they
-activate instantly with a "⚡ PERK: {name}" message.
+At levels 2, 4, 6, and 8, the game pauses and presents three randomly-chosen
+perks from the pool. The player must pick one — no skipping. At level 10,
+the **Auto-Laser** capstone is granted automatically.
 
-Perk unlock checks run **inside** the level-up loop so multi-level jumps
-(e.g., gaining enough XP to go from level 1 to 3) trigger all intermediate
-perks.
+Multi-level jumps (e.g., gaining enough XP to go from level 1 to 5) queue
+multiple perk choices, presented one at a time via
+`game.pendingPerkChoices[]`. Options are rolled fresh when each choice opens,
+so earlier picks are excluded from later rolls.
 
-| Level | Perk | Effect |
-|-------|------|--------|
-| 2 | Laser Sight | Dashed neon line from player in facing direction, stops at impassable tiles. Colour matches current weapon. Hidden for melee weapons. Range matches weapon range. |
-| 4 | Threat Sense | Directional chevrons on screen edges pointing toward off-screen enemies within 18 tiles. Closer enemies produce larger, brighter indicators. Boss indicators are red; normal enemies are orange-red. Invisible phantoms are excluded. |
-| 6 | Piercing Rounds | All player projectiles (weapon shots and Plasma Orb) pass through one additional enemy before stopping. Stacks with weapon-native piercing (Railgun already pierces infinitely, so no visible change). Implemented via `maxPierces` counter on `Projectile`. |
-| 8 | Energy Shield | A protective shield that absorbs one hit completely (no HP loss). After breaking, recharges over 30 s of gameplay time (pauses during menus/transitions). Visual: pulsing blue ring around the player while active. HUD shows `🛡 Ns` countdown while recharging. Does **not** block environmental hazards (plasma vents, arc grids) that bypass `takeDamage()`. |
-| 10 | Auto-Laser | Every 2.5 s, fires an instant hitscan beam at the nearest visible enemy within 12 tiles. Deals 20 flat damage (unscaled by player ATK). Requires line-of-sight; invisible phantoms excluded. Visual: bright crimson beam with white core, fades over 0.15 s. `audio.autoLaser()` zap SFX. |
+**Perk Pool (15 perks):**
+
+| Perk | Icon | Effect |
+|------|------|--------|
+| Laser Sight | ◎ | Dashed neon aim line, weapon-coloured, stops at walls. Hidden for melee. |
+| Threat Sense | ⚠ | Directional chevrons for off-screen enemies within 18 tiles. |
+| Piercing Rounds | ⟫ | Shots pierce one extra enemy (`maxPierces += 1`). |
+| Energy Shield | 🛡 | Absorbs one hit completely, 30 s recharge. |
+| Vampiric | ♥ | Heal 2 HP per kill (non-shard). |
+| Adrenaline | ⚡ | +20% move speed (multiplied after all other speed modifiers). |
+| Rapid Fire | » | −15% fire cooldown (`shootCooldown *= 0.85`). |
+| Critical Hit | ✦ | 15% chance per projectile/swing for 2× damage. Rolled on creation, stored as `proj.isCrit`. |
+| Thick Armor | █ | +3 DEF (applied once on pick, persisted via perks save). |
+| Berserker | 🔥 | +40% ATK when below 25% HP. `player.effectiveAtk()` accessor. Status badge: "🔥 RAGE". |
+| Dash Master | ⇒ | Dash cooldown halved (1.5 s → 0.75 s). |
+| Nano Repair | ✚ | Regen 1 HP every 3 s (`player.regenTimer`). |
+| Explosive Kills | 💥 | Enemies explode on death — 2-tile AoE, damages enemies only (player safe). Merges with VOLATILE modifier: `+0.5 tile radius, +5 base damage` when both active, single explosion. |
+| Multi-Shot | ⫸ | Fires one extra projectile at ±8° with 60% damage. Spawned directly, no recursive `shoot()`. Melee excluded. |
+| Second Wind | ↺ | On lethal damage, revive at 30% HP with 1.5 s invincibility. Once per floor (`player.secondWindUsed`). Status badge: "↺ LIFE" when available. `audio.secondWind()` SFX. |
+
+**Capstone (level 10, auto-granted):**
+
+| Perk | Effect |
+|------|--------|
+| Auto-Laser | Every 2.5 s, hitscan beam at nearest visible enemy within 12 tiles. 20 flat damage. |
+
+**Perk Choice UI (`PERK_CHOICE` state):**
+- Dark overlay (75% black), "CHOOSE A PERK" title in cyan neon glow.
+- 3 cards side-by-side: icon, name, word-wrapped description.
+- Selected card has coloured border glow. Number badge (1/2/3) at top.
+- Input: keys 1/2/3 for direct pick, ←/→ + Enter, mouse/touch click.
+- Touch: routed via `mouse.x/y` + `MouseLeft` (same pattern as `POWERUP_CHOICE`).
+- No skip — player must choose one perk.
+- `audio.perkChoice()` ascending chime on screen open.
+
+**State flow:**
+1. `gainXP()` detects perk-eligible level → pushes to `game.pendingPerkChoices[]`.
+2. If `game.state === 'PLAYING'`, calls `game.openNextPerkChoice()`.
+3. If XP came from inside `POWERUP_CHOICE` (XP Chip), perk choice triggers
+   after `applyPowerupChoice()` resolves.
+4. `openNextPerkChoice()` shifts the queue, calls `rollPerkChoices(player, 3)`,
+   sets `PERK_CHOICE` state.
+5. `applyPerkChoice()` calls `applyPerk(player, id)` and checks queue for more.
+
+**Save/Load:**
+- `player.perks` saved as `{PERK_ID: true}` — same format, but now contains
+  player-chosen perks instead of deterministic ones.
+- `player.secondWindUsed` saved/loaded.
+- On load, `THICK_ARMOR` re-applies `+3 DEF` (stat-granting perks).
+- SAVE_VERSION `'9.0'`. Old v8 saves are invalidated (fresh start).
 
 **Laser Sight details:**
 - Ray uses `isPassable()` collision (same as projectiles) so the line
@@ -831,7 +875,7 @@ perks.
 - On recharge complete: shield restores, "🛡 SHIELD RESTORED" message,
   `audio.shieldRestore()` ascending chime SFX.
 - Timer ticks in `player.update()` — only advances during `PLAYING` state, so it
-  pauses during menus, fade transitions, and powerup choice screens.
+  pauses during menus, fade transitions, and perk choice screens.
 - Shield does **not** block: plasma vent burns, arc grid zaps, or any damage
   applied via direct `player.hp` reduction. Only `takeDamage()` calls are intercepted.
 - Spike traps (which use `takeDamage()`) **are** blocked by the shield.
@@ -855,9 +899,6 @@ perks.
   at the impact point.
 - Audio: `audio.autoLaser()` — high-pitched sine zap (3000→800 Hz) + square
   harmonic (1500→400 Hz) + noise burst through reverb bus.
-- Save compatibility: existing saves load perks from JSON, then `checkPerkUnlocks()`
-  re-runs for all levels up to `player.level`. Saves from before Auto-Laser was
-  added will retroactively unlock it on load if the player is level 10.
 
 ### Challenge Rooms (floor 2+, non-boss)
 
@@ -1595,3 +1636,4 @@ when key indicators are present to avoid collision.
 | v29.0   | Elite enemy affixes: each elite enemy (floor 3+) now spawns with one random affix that grants a special ability. 4 affixes: SHIELDED (energy shield absorbs damage, 40% max HP, regenerates 8/s after 2s), BERSERKER (speed + attack rate scale up to +50% as HP drops), REGENERATING (heals 2.5% maxHp/s), PHASING (1s invulnerable every 4s cycle). `ELITE_AFFIXES` table, `rollEliteAffix()` with eligibility filter (PHASING excluded from PHANTOM). `tickEliteAffix()` per-frame behaviour. `berserkerMul()` method on Enemy. Shield absorption in `takeDamage()` before HP. Phase immunity check at top of `takeDamage()`. Visual: affix-coloured diamond marker, affix-coloured glow, SHIELDED blue ring + separate shield bar, BERSERKER red aura intensifies, PHASING ghost flicker, REGENERATING green particles. Minimap: 3px affix-coloured dots for elites. SW cache v36 |
 | v30.0   | Hackware system: collectible active abilities with cooldowns. 4 modules: EMP Burst (AoE stun 2s in 4-tile radius, LOS-gated, bosses 1s, 10s CD), Phase Cloak (2.5s invisibility + full damage immunity, enemies lose targeting, 14s CD), Nano Swarm (6 homing particles × 8 dmg each, 4s lifetime, 10s CD), Gravity Well (pull enemies within 5 tiles toward aim point for 3s, bosses immune, collision-aware, 16s CD). `HACKWARE` table, `activateHackware()`, `updateHackwareEffects()`, `drawHackwareEffects()`. Central `canTargetPlayer()` helper gates all enemy AI when player is cloaked. `isPlayerDamageImmune()` gates `player.takeDamage()`, plasma burn, arc zap, and projectile-player collisions for both dash and cloak. `Enemy.stunTimer` freezes AI + cooldown timers. F key + touch button (shown only when equipped). `makeHackwareOption()` for powerup choice (~12% on floor 3+). Vendor offers hackware (~40% on floor 3+). Status bar badges: hackware cooldown/ready + cloak active. HUD indicators in both compact and landscape layouts. Save/load: `player.hackware` + `player.hackwareCooldown` (no save version bump — defaults on old saves). `hackwareEffects[]` cleared in `populateFloor()`. 5 new audio SFX (EMP/Cloak/CloakEnd/Swarm/Gravity). SW cache v37 |
 | v31.0   | Challenge rooms: optional wave-based arena encounters. One per non-boss floor (2–9). `T.CHALLENGE_GATE` tile (17) — passable red/amber archway. Room sealed on entry (same pattern as boss seal), 2–3 waves of enemies (floor-scaled, one level harder), inter-wave pause with HUD counter, guaranteed rewards on completion (2 items + credits + XP + score). Wave enemies tagged `_challengeWave` for independent tracking. Drone phase check respects challenge seal. EXTERMINATE quest accounts for pending waves. Room-clear rewards excluded during active encounter. Sealed walls get red tint + minimap pulse + ambient WISP particles. Proximity hint on approach. `audio.challengeWave()` two-tone alarm SFX. No save format change (challenge state resets on floor load). SW cache v38 |
+| v32.0   | Perk choice system: deterministic perks replaced with choose-one-of-three at levels 2/4/6/8. 15-perk pool (`PERK_POOL`): 4 existing (Laser Sight, Threat Sense, Piercing Rounds, Energy Shield) + 11 new (Vampiric, Adrenaline, Rapid Fire, Critical Hit, Thick Armor, Berserker, Dash Master, Nano Repair, Explosive Kills, Multi-Shot, Second Wind). Auto-Laser capstone at level 10 unchanged. `PERK_CHOICE` game state with 3-card UI (keyboard 1/2/3, arrows+Enter, mouse/touch). `game.pendingPerkChoices[]` queue for multi-level jumps, rolled fresh per choice. `rollPerkChoices()` Fisher-Yates shuffle excluding owned. `applyPerk()` + `grantCapstone()` replace `checkPerkUnlocks()`. `player.effectiveAtk()` for Berserker scaling. Explosive Kills merges with VOLATILE modifier (shared AoE, perk-only doesn't hurt player). Multi-Shot spawns bonus 60%-damage projectile directly (no recursive shoot). Critical Hit rolled per projectile (`proj.isCrit`). Second Wind revives at 30% HP once per floor. Status badges for Berserker and Second Wind. Death recap shows chosen perks. `audio.perkChoice()` + `audio.secondWind()` SFX. SAVE_VERSION 9.0. SW cache v39 |
