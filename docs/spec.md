@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.4
+# NEON DUNGEON — Game Specification v3.5
 
 ## Vision
 
@@ -581,7 +581,7 @@ the save's difficulty.
 
 ### Floor Modifiers (floor 2+, non-boss)
 
-Each qualifying floor randomly receives one gameplay modifier from a pool of six.
+Each qualifying floor randomly receives one gameplay modifier from a pool of eight.
 Floor 1 (settle-in) and boss floors (3, 6, 10) never have modifiers. Modifier is
 rolled on floor entry, saved in the checkpoint, and restored on continue. No
 SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
@@ -594,6 +594,8 @@ SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 | VOLATILE   | 💥   | Unstable power cells           | `#ff4422` | Enemies explode on death: 15 + floor×2 AoE damage in 2-tile radius (LOS-gated); no chain reactions; player rewards normal but AoE-killed enemies don't chain |
 | SCRAMBLED  | ⌁    | Targeting interference         | `#cc44ff` | +0.15 added to weapon spread on all player shots |
 | OVERCLOCK  | ⚡   | System overclock detected      | `#ffcc00` | ×1.2 all movement speed (player + enemies) and ×1.2 enemy fire rates (÷1.2 attack/shoot cooldowns) |
+| CORROSIVE  | ☣    | Toxic atmosphere               | `#44ff22` | All player damage taken +2 flat (applied after DEF and min-1 clamp; effective minimum damage = 3; skipped when `ignoreDefense`). Kill credits ×1.5 (stacks multiplicatively with CREDIT_SIPHON) |
+| CHARGED    | ⊕    | Supercharged projectiles       | `#aaccff` | All projectile speeds ×1.4 (player + enemy). Player projectile damage ×1.2 (applies to sentry drone and plasma orb) |
 
 **Implementation hooks:**
 - BLACKOUT: `updateLighting()` torch radius conditional on `game.modifier`.
@@ -607,6 +609,11 @@ SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 - OVERCLOCK: `modSpeed(base)` helper used in `moveToward()` (all enemies) and
   player movement; cooldown divisor in `aiTurret`, `aiDrone`, `aiGrenadier`,
   `aiSniper` (reposition + cooldown only — charge time is fixed), `meleeAttack`.
+- CORROSIVE: `Player.takeDamage()` adds +2 after DEF reduction (gated by
+  `!options.ignoreDefense`). `Enemy.die()` kill credit multiplier ×1.5
+  (`corrosiveMul`), applied to both normal and bounty credits.
+- CHARGED: `Projectile` constructor multiplies `this.spd` ×1.4 (all
+  projectiles). Player projectiles (`fromPlayer`) also get `this.dmg` ×1.2.
 
 **Display:**
 - On floor entry: message via `game.msg()` (300 ms delay) showing icon + name
@@ -2216,3 +2223,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v50.0   | Status effects: player debuffs + VOLTAIC weapon affix. (1) CRAWLER melee inflicts burn (2 s, floor-scaling DPS, orange underglow + fire particles, routed through `takeDamage` — respects SECOND_WIND). (2) SNIPER projectile inflicts shock (0.4 s movement suppress, yellow flash + sparks, aiming/shooting/dash still work). (3) Both debuffs gated on successful damage — blocked/evaded hits don't apply. (4) New weapon suffix "of Storms" (VOLTAIC): stuns enemies 0.6 s (0.3 s bosses) with 2 s per-enemy ICD preventing perma-stun. (5) `Player.takeDamage()` now returns actual damage dealt (0 if blocked) for conditional status application. (6) Status bar badges: 🔥 BURN, ⚡ SHOCK. (7) Player visual indicators: burn orange glow, shock yellow flash. (8) `audio.playerBurn()`, `audio.playerShock()`, `audio.voltaicHit()` SFX. (9) Debuffs clear on floor transition. SW cache v62. |
 | v51.0   | Teleport pads: linked inter-room fast travel. 1–2 pairs of warp pads per non-boss floor (floor 3+), placed in distant rooms (Manhattan ≥ 15). Press E to warp to paired pad. 3 s cooldown, 0.3 s arrival invincibility. Blocked when source/destination is in sealed boss/challenge room. `T.TELEPORT_PAD` (20) tile. Violet pulsing `⬡` glyph, spark particles on use. Minimap: violet 3 px POI + expanded "WARP" label. `audio.teleportPad()` ascending warp SFX. `dungeon.teleportPads` in floor gen return. No save format change. SW cache v63. |
 | v52.0   | Bounty targets: one enemy per non-boss floor (2+) designated as high-value bounty with 2× HP, 1.5× ATK, gold aura + crown marker, always-visible HP bar with "BOUNTY" label. Reveal SFX + "BOUNTY TARGET SPOTTED" message on first LOS contact. Kill rewards: `30 + floor × 8` credits (Credit Siphon applies), `150 × floor` score, guaranteed bonus item drop, gold explosion particles + camera shake. New BOUNTY quest type ("Eliminate the bounty target", reward: XP + 40 CR). Minimap: gold 4 px pulsing dot (regular), gold boss-sized dot (expanded). HUD: `⊕ BOUNTY` pulsing indicator while alive. `player.bountiesCollected` stat in save/load + Game Over/Victory screens. Bounty targets exclude elite + boss + shard enemies. `audio.bountyReveal()` (ominous brass stab), `audio.bountyKill()` (triumphant C major arpeggio). SW cache v64. |
+| v53.0   | Two new floor modifiers (pool of 6→8): CORROSIVE ☣ (toxic atmosphere — all player damage taken +2 flat after DEF; kill credits ×1.5 stacking with Credit Siphon) and CHARGED ⊕ (supercharged projectiles — all projectile speeds ×1.4, player projectile damage ×1.2 including sentry drone and plasma orb). CORROSIVE creates an economic risk/reward tradeoff: more fragile but richer. CHARGED creates a faster, twitchier combat feel where accuracy matters more. No new game states, audio, tiles, or save format changes. SW cache v65. |

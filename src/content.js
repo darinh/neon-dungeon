@@ -943,6 +943,8 @@ const FLOOR_MODIFIERS = {
   VOLATILE:  { label:'VOLATILE',  desc:'Unstable power cells',      colour:'#ff4422', icon:'💥' },
   SCRAMBLED: { label:'SCRAMBLED', desc:'Targeting interference',     colour:'#cc44ff', icon:'⌁' },
   OVERCLOCK: { label:'OVERCLOCK', desc:'System overclock detected',  colour:'#ffcc00', icon:'⚡' },
+  CORROSIVE: { label:'CORROSIVE', desc:'Toxic atmosphere',            colour:'#44ff22', icon:'☣' },
+  CHARGED:   { label:'CHARGED',   desc:'Supercharged projectiles',    colour:'#aaccff', icon:'⊕' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return game.modifier && FLOOR_MODIFIERS[game.modifier] || null; }
@@ -2180,7 +2182,9 @@ class Projectile {
     this.x=x; this.y=y;
     [this.dx,this.dy]=norm(dx,dy);
     this.spd= fromPlayer && hasAugment('KINETIC_AMPLIFIER') ? spd * 1.2 : spd;
+    if (game.modifier === 'CHARGED') this.spd *= 1.4;
     this.dmg=dmg;
+    if (fromPlayer && game.modifier === 'CHARGED') this.dmg = Math.round(this.dmg * 1.2);
     this.maxRange=range; this.travelled=0;
     this.colour=colour; this.piercing=piercing;
     this.maxPierces=piercing?Infinity:0;
