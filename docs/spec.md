@@ -306,6 +306,58 @@ floor 1 with no unlock requirement.
 During a dash, normal movement and shooting are suppressed. The player cannot
 dash while dead or while the cooldown is active.
 
+### Hackware — Active Abilities
+
+Hackware modules are collectible active abilities the player can equip during
+a run. Only one can be equipped at a time; finding a new one replaces the
+current one (cooldown resets on equip). Available from floor 3.
+
+| Property       | Value                                              |
+|----------------|----------------------------------------------------|
+| Keybind        | F (keyboard), F button (touch — shown only when equipped) |
+| Slot           | Single slot — one hackware at a time               |
+| Source         | Level-up powerup choice (~12%), vendor shop (~40% per vendor on floor 3+) |
+
+#### Modules
+
+| Module         | Cooldown | Effect                                             | Colour  | Icon |
+|----------------|----------|----------------------------------------------------|---------|------|
+| EMP Burst      | 10 s     | Stun enemies within 4 tiles (LOS required) for 2s. Bosses: 1s. Visual: expanding cyan ring. | `#00ddff` | ⚡ |
+| Phase Cloak    | 14 s     | 2.5s invisibility + damage immunity. Enemies lose targeting. Projectiles pass through. Player can still shoot. | `#cc44ff` | ◇ |
+| Nano Swarm     | 10 s     | Release 6 homing nanite particles. Each deals 8 damage on contact (0.5s hit cooldown per nanite). Homes toward nearest visible enemy. 4s lifetime. | `#44ff88` | ☢ |
+| Gravity Well   | 16 s     | Place a pull point at aim position. Pulls enemies within 5 tiles toward center for 3s. Bosses immune to pull. LOS required. Collision-aware movement. | `#ff8800` | ◎ |
+
+#### Enemy Stun Mechanic
+
+Stunned enemies (`stunTimer > 0`):
+- Skip all AI (no movement, no attacks, no shooting)
+- Attack/shoot cooldown timers are frozen (prevent charge-up during stun)
+- Still take damage normally
+- Visual: cyan spark particles during stun
+
+#### Phase Cloak Mechanic
+
+When cloaked (`player.cloakTimer > 0`):
+- `isPlayerDamageImmune()` returns true — blocks all damage paths including:
+  - `player.takeDamage()` (melee, projectile, boss specials)
+  - Plasma burn (direct HP reduction)
+  - Arc grid zap (direct HP reduction)
+- `canTargetPlayer()` returns false — enemies lose targeting:
+  - LOS calculations return false
+  - Proximity-based detection gated
+  - Melee attacks blocked
+  - Drones, phantoms, teleporters lose tracking
+- Player rendered as ghostly purple with shimmer effect
+- Bosses still use area attacks (radial patterns) but damage is blocked
+- Audio: shimmer on activation, shimmer-out on expiry
+
+#### Persistence
+
+- `player.hackware` (string key or null) and `player.hackwareCooldown` (number) stored in save data
+- Cloak timer is NOT saved (transient effect — expires on floor transition)
+- `hackwareEffects[]` array cleared on floor load (gravity wells, swarm particles)
+- No save version bump — new fields default to `null`/`0` on old saves
+
 ---
 
 ## Enemies
@@ -1046,6 +1098,11 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 | Grenade explode  | Muffled boom: sine 100→30 Hz + square 60→20 Hz + noise (LP 2000 Hz) |
 | Lore access      | Data retrieval chirp: ascending sine tones (500→700, 700→900, 900→1100 Hz) + noise texture (4 kHz) |
 | Combo tick       | Ascending chirp: base pitch rises with combo count (400 + count×80 Hz, capped 1800 Hz); sine + triangle |
+| Hackware EMP     | Electric discharge: sawtooth 200→60 Hz + square 1200→200 Hz + noise burst (5 kHz) + sub thud 80→40 Hz, reverb (0.4) |
+| Hackware Cloak   | Shimmering phase-out: sine 800→1600 Hz + triangle 1200→2000 Hz + sine 400→200 Hz, reverb (0.8) |
+| Hackware Cloak end | Shimmer-in: sine 1600→600 Hz + triangle 1200→400 Hz, reverb (0.4) |
+| Hackware Swarm   | Buzzing release: detuned sawtooth pair 300→600 + 320→640 Hz + noise (3 kHz) + sine 200→400 Hz, reverb (0.3) |
+| Hackware Gravity  | Deep implosion: sine 300→40 Hz + triangle 600→100 Hz + sub 50→30 Hz + noise (1 kHz), reverb (0.6) |
 
 All envelopes use exponential ramps (floor 0.001) for natural decay. Frequencies are guarded with `Math.max(freq, 1)` for exponential ramp safety.
 
@@ -1122,8 +1179,8 @@ scumming (reloading to re-roll dungeon layout while keeping stats).
 
 **Save payload:** `{ v, floor, difficulty, modifier, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
-energyShieldTimer, credits, loreRead } }` — `shieldBonus` is always 0 at floor entry so is
-excluded. `modifier` is the floor modifier key (string) or `null`.
+energyShieldTimer, credits, loreRead, hackware, hackwareCooldown } }` — `shieldBonus` is always 0 at floor entry so is
+excluded. `modifier` is the floor modifier key (string) or `null`. `hackware` is a `HACKWARE` key string or `null`. Old saves without hackware fields default to `null`/`0`.
 
 **Menu behaviour:**
 - If a save exists: two options — `CONTINUE (FLOOR N)` and `NEW GAME`.
@@ -1379,6 +1436,9 @@ Row of compact badge indicators displayed just above the HUD bar (`layout.hudTop
 | Nano Regen | `upgrades.NANO_REGEN > 0 && hp < maxHp` | ♻ | `#00ff88` |
 | Dash cooldown | `dashCooldown > 0` | ⇧ | `#7a6a33` |
 | Dash ready | `dashCooldown ≤ 0` | ⇧ | `#ffb700` |
+| Hackware cooldown | `hackware && hackwareCooldown > 0` | Module icon | `#665533` |
+| Hackware ready | `hackware && hackwareCooldown ≤ 0` | Module icon | Module colour |
+| Phase cloak active | `cloakTimer > 0` | ◇ | `#cc44ff` |
 
 Each badge: dark pill background + icon + label text, `shadowBlur` colour glow.
 Smooth alpha fade-in/out (0.08 per frame) tracked per effect ID via `statusFx` object;
@@ -1441,3 +1501,4 @@ when key indicators are present to avoid collision.
 | v27.0   | Room-clear rewards: killing all enemies in a room grants bonus credits (`10 + floor × 5`, scaled by difficulty and meta credit multiplier), +50 × floor score, green particle burst at room center, floating "+N◆" text, and `audio.roomClear()` ascending triple chime. Detection runs only when an enemy dies (`game.enemyDiedThisFrame` flag set in `Enemy.die()`), placed after dead-enemy removal and pending-spawn flush in `updatePlaying()` so SPLITTER → SHARD sequences are handled correctly. `room._hadEnemies` flag set during `populateFloor()` (only when count > 0) and `revealSecretRoom()`. `game.clearedRooms` Set tracks rewarded rooms per floor (reset in `loadFloor()`). Multi-room clears in a single frame (e.g. VOLATILE chain) batched into one audio/message. `player.roomsCleared` stat tracked in save/load and shown on Game Over / Victory screens ("N cleared"). Boss room excluded (has own death sequence). Spawn room excluded (no enemies). SW cache v34 |
 | v28.0   | Weapon affixes: random modifiers on weapons for loot variety and replayability. 5 prefixes (stat modifiers: Rapid, Heavy, Extended, Twin, Precise) and 5 suffixes (effects: Flame/burn, Frost/slow, Vampirism/leech, Thunder/chain, Detonation/explode). Floor-gated rarity: common (no affix, floor 1), uncommon (1 affix, floor 2+), rare (2 affixes, floor 4+). Affix eligibility filters prevent dead rolls (Precise on zero-spread, Twin/Extended on melee). Affixed weapons are unique cloned objects with `buildWeapon()`/`rollWeapon()` pattern. `applyHitEffects()` + `applyOnKill()` centralize proc logic with `isProc` guard against recursion. `tickEnemyStatusEffects()` handles burn DOT and slow decay per enemy per frame. Enemy class gains `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`. Visual: burn underglow, frost tint, chain lightning bolts (jagged yellow), rarity-coloured HUD weapon name + upgrade card borders. Save format: weapon stored as `{_base, _affixes}` object. SAVE_VERSION 8.0. SW cache v35 |
 | v29.0   | Elite enemy affixes: each elite enemy (floor 3+) now spawns with one random affix that grants a special ability. 4 affixes: SHIELDED (energy shield absorbs damage, 40% max HP, regenerates 8/s after 2s), BERSERKER (speed + attack rate scale up to +50% as HP drops), REGENERATING (heals 2.5% maxHp/s), PHASING (1s invulnerable every 4s cycle). `ELITE_AFFIXES` table, `rollEliteAffix()` with eligibility filter (PHASING excluded from PHANTOM). `tickEliteAffix()` per-frame behaviour. `berserkerMul()` method on Enemy. Shield absorption in `takeDamage()` before HP. Phase immunity check at top of `takeDamage()`. Visual: affix-coloured diamond marker, affix-coloured glow, SHIELDED blue ring + separate shield bar, BERSERKER red aura intensifies, PHASING ghost flicker, REGENERATING green particles. Minimap: 3px affix-coloured dots for elites. SW cache v36 |
+| v30.0   | Hackware system: collectible active abilities with cooldowns. 4 modules: EMP Burst (AoE stun 2s in 4-tile radius, LOS-gated, bosses 1s, 10s CD), Phase Cloak (2.5s invisibility + full damage immunity, enemies lose targeting, 14s CD), Nano Swarm (6 homing particles × 8 dmg each, 4s lifetime, 10s CD), Gravity Well (pull enemies within 5 tiles toward aim point for 3s, bosses immune, collision-aware, 16s CD). `HACKWARE` table, `activateHackware()`, `updateHackwareEffects()`, `drawHackwareEffects()`. Central `canTargetPlayer()` helper gates all enemy AI when player is cloaked. `isPlayerDamageImmune()` gates `player.takeDamage()`, plasma burn, arc zap, and projectile-player collisions for both dash and cloak. `Enemy.stunTimer` freezes AI + cooldown timers. F key + touch button (shown only when equipped). `makeHackwareOption()` for powerup choice (~12% on floor 3+). Vendor offers hackware (~40% on floor 3+). Status bar badges: hackware cooldown/ready + cloak active. HUD indicators in both compact and landscape layouts. Save/load: `player.hackware` + `player.hackwareCooldown` (no save version bump — defaults on old saves). `hackwareEffects[]` cleared in `populateFloor()`. 5 new audio SFX (EMP/Cloak/CloakEnd/Swarm/Gravity). SW cache v37 |
