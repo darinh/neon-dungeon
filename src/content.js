@@ -2030,6 +2030,29 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Toxic Pools (floor 3+): corrosive pools that damage player AND enemies ──
+  if (floorNum >= 3) {
+    for (const r of rooms) {
+      if (r === spawnRoom || r === bossRoom || r.roomType) continue;
+      if (Math.random() > 0.30) continue; // ~30% of eligible rooms
+      const sx = r.x + rndInt(2, r.w-3);
+      const sy = r.y + rndInt(2, r.h-3);
+      if (map[sy][sx] !== T.FLOOR) continue;
+      map[sy][sx] = T.TOXIC;
+      const poolSize = rndInt(2, 4);
+      let cx = sx, cy = sy;
+      for (let p = 1; p < poolSize; p++) {
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+        const [ddx, ddy] = dirs[rndInt(0, 3)];
+        const nx = cx + ddx, ny = cy + ddy;
+        if (nx > r.x && nx < r.x+r.w-1 && ny > r.y && ny < r.y+r.h-1 && map[ny][nx] === T.FLOOR) {
+          map[ny][nx] = T.TOXIC;
+          cx = nx; cy = ny;
+        }
+      }
+    }
+  }
+
   // ── Plasma Vents (floor 4+): clustered pools in normal rooms ─────────
   if (floorNum >= 4) {
     for (const r of rooms) {

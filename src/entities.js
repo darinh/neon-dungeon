@@ -28,6 +28,7 @@ const SOURCE_LABELS = {
   'Leaper Shockwave':'Leaper Shockwave',
   'Burn':'Burn', 'Shock':'Shock',
   'laser':'Laser Tripwire',
+  'Toxic Pool':'Toxic Pool',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
@@ -44,6 +45,7 @@ const SOURCE_COLOURS = {
   'Leaper Shockwave':'#22ff88',
   'Burn':'#ff6600', 'Shock':'#ffee44',
   'laser':'#ff6644',
+  'Toxic Pool':'#33ff00',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -3790,6 +3792,8 @@ class Player {
     this.trapCooldown=0;
     this.plasmaBurnTimer=0;  // cosmetic throttle for plasma damage messages
     this.arcCooldown=0;      // separate cooldown for arc grid zaps
+    this.toxicBurnTimer=0;   // cosmetic throttle for toxic pool damage messages
+    this.toxicSlowActive=false; // true while standing on toxic tile
     // Player status effect debuffs (applied by enemy attacks)
     this.burnTimer=0; this.burnDps=0;  // burn DoT from enemy melee/attacks
     this.shockTimer=0;                 // shock: brief movement suppress
@@ -4100,6 +4104,7 @@ class Player {
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
+    if (this.toxicSlowActive && this.dashTimer <= 0) spd *= 0.7; // 30% slow while in toxic pool
     let mx=0,my=0;
     if (keys.has(km('up'))||keys.has(ALT_KEYS.up))       my=-1;
     if (keys.has(km('down'))||keys.has(ALT_KEYS.down))   my= 1;
