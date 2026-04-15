@@ -551,6 +551,7 @@ const WEAPON_AFFIXES = {
   VAMPIRIC: { slot:'suffix', label:'of Vampirism', colour:'#ff0066', desc:'Steals life on hit',    effect:'leech' },
   THUNDER:  { slot:'suffix', label:'of Thunder',   colour:'#ffff44', desc:'Chain lightning chance', effect:'chain' },
   DETONATE: { slot:'suffix', label:'of Detonation',colour:'#ff4400', desc:'Enemies explode on kill',effect:'explode' },
+  VOLTAIC:  { slot:'suffix', label:'of Storms',    colour:'#ffee44', desc:'Shocks enemies on hit',  effect:'shock' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');
@@ -1370,6 +1371,14 @@ function getStatusEffects(player) {
   // Slow trap debuff
   if (player.speedTimer > 0 && player.speedBoost < 0) {
     fx.push({ id: 'slow', icon: '❄', label: 'SLOW', colour: '#6688cc', timer: player.speedTimer });
+  }
+  // Burn debuff (from enemy attacks)
+  if (player.burnTimer > 0) {
+    fx.push({ id: 'burn', icon: '🔥', label: player.burnTimer.toFixed(1)+'s', colour: '#ff6600' });
+  }
+  // Shock debuff (from enemy attacks)
+  if (player.shockTimer > 0) {
+    fx.push({ id: 'shocked', icon: '⚡', label: 'SHOCK', colour: '#ffee44' });
   }
   // Energy shield recharging
   if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -2255,7 +2264,13 @@ class Projectile {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
       // Cloaked player: projectiles pass through
       if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
-        player.takeDamage(this.dmg, this.ownerType || 'Projectile');
+        const dealt = player.takeDamage(this.dmg, this.ownerType || 'Projectile');
+        // SNIPER shots shock the player on hit
+        if (dealt > 0 && this.ownerType === 'SNIPER') {
+          const wasShocked = player.shockTimer > 0;
+          player.shockTimer = Math.max(player.shockTimer, 0.4);
+          if (!wasShocked) audio.playerShock();
+        }
         this.dead=true;
       }
     }

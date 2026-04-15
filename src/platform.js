@@ -1296,6 +1296,27 @@ const audio = (() => {
       // Shimmer back in
       osc('sine', 1600, 600, 0.06, t, 0.2, bus);
       osc('triangle', 1200, 400, 0.04, t + 0.05, 0.15, bus);
+    },
+    playerBurn() {
+      const c = getCtx(); const t = c.currentTime;
+      // Fire crackle — short burst of noise + warm sub tone
+      noise(0.06, t, 0.12, 3000, null, { filterType: 'bandpass', q: 1.2 });
+      osc('sine', 180, 100, 0.05, t, 0.15);
+      osc('triangle', 400, 200, 0.03, t + 0.03, 0.08);
+    },
+    playerShock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Electric zap — sharp ascending chirp + crackle
+      osc('sawtooth', 800, 2400, 0.07, t, 0.06);
+      osc('square', 1200, 600, 0.04, t + 0.02, 0.05);
+      noise(0.05, t, 0.04, 6000, null, { filterType: 'highpass' });
+    },
+    voltaicHit() {
+      const c = getCtx(); const t = c.currentTime;
+      // Stun zap — similar to playerShock but lighter
+      osc('sine', 1400, 2000, 0.05, t, 0.05);
+      osc('square', 800, 400, 0.03, t + 0.01, 0.04);
+      noise(0.03, t, 0.03, 5000);
     }
   };
 })();

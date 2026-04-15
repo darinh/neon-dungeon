@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.1
+# NEON DUNGEON — Game Specification v3.2
 
 ## Vision
 
@@ -276,25 +276,28 @@ Weapons found on floor 2+ may roll random affixes that modify their stats and gr
 | of Vampirism | Heals player for 8% of actual damage dealt            |
 | of Thunder   | 20% chance chain lightning to nearest enemy within 3 tiles for 50% damage |
 | of Detonation| Enemies explode on kill: 25 AoE damage in 2-tile radius (LOS-gated, also damages player at 50%) |
+| of Storms    | Shocks: 0.6 s stun (0.3 s on bosses) with 2 s per-enemy internal cooldown (prevents perma-stun) |
 
 **Naming convention:** `"[Prefix] Base Name [Suffix]"` (e.g., "Rapid Pulse Pistol of Flame").
 
 **Proc rules:**
-- On-hit effects (burn, slow, leech, chain) trigger from both projectile hits and melee hits.
+- On-hit effects (burn, slow, leech, chain, shock) trigger from both projectile hits and melee hits.
 - Chain lightning and detonation AoE are "proc" damage — they do not trigger further on-hit effects (prevents recursion).
 - Burn damage-over-time ticks can trigger on-kill effects (detonation).
 - Detonation AoE damages the player at 50% if in range (LOS-gated), similar to VOLATILE modifier.
+- Shock uses `enemy.stunTimer` (shared with EMP hackware) but has a per-enemy 2 s internal cooldown (`_shockICD`) to prevent stunlock from fast weapons.
 
 **Visual indicators:**
 - Burning enemies: flickering orange underglow.
 - Slowed enemies: cyan tint overlay.
+- Shocked enemies: yellow spark particles (from VOLTAIC or EMP stun).
 - Chain lightning: jagged yellow bolt between targets (0.15 s fade).
 - Weapon name in HUD uses rarity colour (green for uncommon, purple for rare).
 - Upgrade/vendor cards show rarity border glow and affix descriptions.
 
 **Save format:** weapon saved as `{ _base: 'PULSE_PISTOL', _affixes: ['RAPID', 'FLAME'] }` instead of plain key string. `buildWeapon()` deterministically reconstructs from base + affixes on load (no re-rolling).
 
-**Implementation:** `buildWeapon(baseKey, affixIds)` for deterministic construction; `rollWeapon(baseKey, floor)` for random generation. `applyHitEffects(enemy, actualDmg, hitCtx)` centralizes on-hit logic. `applyOnKill(enemy)` handles detonation. `tickEnemyStatusEffects(enemy, dt)` processes burn/slow per frame. Enemy class stores `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`.
+**Implementation:** `buildWeapon(baseKey, affixIds)` for deterministic construction; `rollWeapon(baseKey, floor)` for random generation. `applyHitEffects(enemy, actualDmg, hitCtx)` centralizes on-hit logic. `applyOnKill(enemy)` handles detonation. `tickEnemyStatusEffects(enemy, dt)` processes burn/slow/shock-ICD per frame. Enemy class stores `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`, `_shockICD`.
 
 ### Level-Up Effects (automatic on XP threshold)
 
@@ -398,14 +401,14 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 |--------------|---------|-----|----------------------------------------------|-----|
 | GUARD        | 40      | 8   | Patrol → chase on sight, melee               | 20  |
 | TURRET       | 25      | 12  | Stationary, fires projectiles at player      | 15  |
-| CRAWLER      | 20      | 6   | Fast zigzag charge, melee                    | 10  |
+| CRAWLER      | 20      | 6   | Fast zigzag charge, melee; **inflicts burn** | 10  |
 | PHANTOM      | 35      | 10  | Invisible until within 3 tiles, teleports   | 30  |
 | DRONE        | 15      | 8   | Flies over walls (no collision), ranged     | 12  |
 | SHIELDER     | 50      | 10  | Frontal shield blocks projectiles, melee    | 25  |
 | SPLITTER     | 40      | 8   | Splits into 2 SHARDs on death               | 25  |
 | GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
 | TELEPORTER   | 25      | 12  | Blinks around room, fires ranged bursts      | 22  |
-| SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot     | 25  |
+| SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot; **inflicts shock** | 25  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
@@ -1928,6 +1931,8 @@ Row of compact badge indicators displayed just above the HUD bar (`layout.hudTop
 | Hackware cooldown | `hackware && hackwareCooldown > 0` | Module icon | `#665533` |
 | Hackware ready | `hackware && hackwareCooldown ≤ 0` | Module icon | Module colour |
 | Phase cloak active | `cloakTimer > 0` | ◇ | `#cc44ff` |
+| Burn debuff | `burnTimer > 0` | 🔥 | `#ff6600` |
+| Shock debuff | `shockTimer > 0` | ⚡ | `#ffee44` |
 
 Each badge: dark pill background + icon + label text, `shadowBlur` colour glow.
 Smooth alpha fade-in/out (0.08 per frame) tracked per effect ID via `statusFx` object;
@@ -1935,6 +1940,30 @@ inactive effects continue rendering during fade-out, cleaned up at alpha 0.
 Badges flow left-to-right from the safe-area left edge; overflow stops before
 minimap region (`W - 130 - safeRight`). Y position shifts up (`hudTop - 32`)
 when key indicators are present to avoid collision.
+
+### Player Debuffs (enemy-inflicted status effects)
+
+Certain enemy types inflict status effects on successful hits. Effects only apply when the hit actually deals damage — blocked (Energy Shield), evaded (dash i-frames), or immune (Phase Cloak) hits do not apply debuffs.
+
+| Debuff | Source | Duration | Effect | Visual |
+|--------|--------|----------|--------|--------|
+| Burn | CRAWLER melee | 2 s | DoT: 2 + floor × 0.3 DPS (ignores defence, bypasses shield) | Orange underglow on player, fire particles |
+| Shock | SNIPER projectile | 0.4 s | Movement suppressed (can still aim and shoot) | Yellow flash on player, spark particles |
+
+**Burn details:**
+- Ticks every frame, routed through `player.takeDamage('Burn', opts)` with `ignoreDefense`, `skipHitInvincible`, `skipHitEffects`, `skipReactiveArmor` — ensures SECOND_WIND triggers properly, but burn bypasses defence and doesn't cause screen shake per tick.
+- Can kill the player (death recap shows "Burn" as killing blow).
+- Dash/cloak immunity pause burn damage but not the timer countdown.
+- `audio.playerBurn()` plays on application.
+
+**Shock details:**
+- Brief movement lockout — player is rooted but can still aim, shoot, and use abilities.
+- Dash is not blocked by shock (dash activation ignores shock state, giving an escape option).
+- `audio.playerShock()` plays on application.
+
+**Clearing:** all player debuffs (`burnTimer`, `burnDps`, `shockTimer`) reset to 0 on floor transition and are not saved to localStorage (transient per-floor state).
+
+**Death recap integration:** 'Burn' and 'Shock' entries in `SOURCE_LABELS`/`SOURCE_COLOURS`.
 
 ### Floor Events — Risk/Reward Encounters
 
@@ -2097,3 +2126,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v47.6   | Quest wording clarity: EXPLORE quest label changed from "Visit every room" to "Visit all visible rooms" to match actual completion logic (normal rooms + revealed secret rooms required, unrevealed secrets do not block completion). Service worker cache bumped to v59. |
 | v48.0   | Volatile Cores: explosive power cells in normal rooms (floor 3+, 0–2 per room). Projectile impact primes a 0.55 s fuse; detonation deals `30 + floor × 3` AoE damage (2.2-tile radius, LOS-gated) to enemies AND player (risk/reward tactical element). Chain-react to nearby cores for cascading explosions. Grenade, VOLATILE, and EXPLOSIVE_KILLS explosions also prime cores in radius. `vcores[]` global, `createVCore()`, `primeVCoresInRadius()`, `detonateVCore()`, `updateVCores()`, `drawVCores()`. Minimap orange dots. Death recap source: 'Volatile Core'. `audio.corePrime()` + `audio.coreDetonate()` SFX. SW cache v60. |
 | v49.0   | Sentry Drone: persistent upgrade (max level 3) — autonomous orbiting drones that auto-fire homing shots at nearby enemies. 2.0-tile orbit radius, 1.8 rad/s rotation. Each drone independently targets nearest visible enemy within 8 tiles (LOS-required, Phantom-aware) and fires homing projectile (8 dmg, speed 8, range 8, #00e5ff). Fire cooldown shared: 2.0 / 1.6 / 1.2 s. Visual: cyan diamond with bright core and outer glow. `audio.sentryFire()` SFX (soft ascending chirp). Added to UPGRADES pool (rarity 7). Death recap: 'Sentry Drone' source with #00e5ff colour. SW cache v61. |
+| v50.0   | Status effects: player debuffs + VOLTAIC weapon affix. (1) CRAWLER melee inflicts burn (2 s, floor-scaling DPS, orange underglow + fire particles, routed through `takeDamage` — respects SECOND_WIND). (2) SNIPER projectile inflicts shock (0.4 s movement suppress, yellow flash + sparks, aiming/shooting/dash still work). (3) Both debuffs gated on successful damage — blocked/evaded hits don't apply. (4) New weapon suffix "of Storms" (VOLTAIC): stuns enemies 0.6 s (0.3 s bosses) with 2 s per-enemy ICD preventing perma-stun. (5) `Player.takeDamage()` now returns actual damage dealt (0 if blocked) for conditional status application. (6) Status bar badges: 🔥 BURN, ⚡ SHOCK. (7) Player visual indicators: burn orange glow, shock yellow flash. (8) `audio.playerBurn()`, `audio.playerShock()`, `audio.voltaicHit()` SFX. (9) Debuffs clear on floor transition. SW cache v62. |

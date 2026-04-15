@@ -19,6 +19,7 @@ const SOURCE_LABELS = {
   'Nano Swarm':'Nano Swarm', 'Static Field':'Static Field',
   'Volatile Core':'Volatile Core',
   'Sentry Drone':'Sentry Drone',
+  'Burn':'Burn', 'Shock':'Shock',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
@@ -32,6 +33,7 @@ const SOURCE_COLOURS = {
   'Nano Swarm':'#44ff88', 'Static Field':'#44ccff',
   'Volatile Core':'#ff6622',
   'Sentry Drone':'#00e5ff',
+  'Burn':'#ff6600', 'Shock':'#ffee44',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -89,6 +91,17 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
           game._chainBolts.push({ x1:enemy.x, y1:enemy.y, x2:best.x, y2:best.y, timer:0.15, colour:'#ffff44' });
           audio.hit(false, 'Railgun'); // zap sound
         }
+      }
+    }
+    else if (eff === 'shock') {
+      // Voltaic: brief stun with per-enemy ICD to prevent perma-stun
+      const icd = enemy._shockICD || 0;
+      if (icd <= 0) {
+        const dur = enemy.isBoss ? 0.3 : 0.6;
+        enemy.stunTimer = Math.max(enemy.stunTimer || 0, dur);
+        enemy._shockICD = 2.0; // can't re-shock same enemy for 2s
+        spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffee44', 6);
+        audio.voltaicHit();
       }
     }
     // 'explode' is handled in applyOnKill
@@ -149,6 +162,8 @@ function tickEnemyStatusEffects(enemy, dt) {
     enemy.slowTimer -= dt;
     if (enemy.slowTimer <= 0) { enemy.slowTimer = 0; enemy.slowFactor = 1; }
   }
+  // Voltaic shock ICD decay
+  if (enemy._shockICD > 0) enemy._shockICD -= dt;
 }
 
 // Tick elite affix behaviours (called per enemy per frame)
@@ -413,10 +428,17 @@ class Enemy {
 
   meleeAttack(player) {
     if (this.attackTimer<=0 && canTargetPlayer()) {
-      player.takeDamage(this.atk, this.type);
+      const dealt = player.takeDamage(this.atk, this.type);
       const baseCd = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       this.attackTimer = baseCd / this.berserkerMul();
       spawnParticles(player.x,player.y,'SPARK','#ff4444',5);
+      // CRAWLER inflicts burn on successful hit
+      if (dealt > 0 && this.type === 'CRAWLER') {
+        const wasBurning = player.burnTimer > 0;
+        player.burnTimer = Math.max(player.burnTimer, 2);
+        player.burnDps = Math.max(player.burnDps, 2 + game.floor * 0.3);
+        if (!wasBurning) audio.playerBurn();
+      }
     }
   }
 
@@ -1782,6 +1804,9 @@ class Player {
     this.trapCooldown=0;
     this.plasmaBurnTimer=0;  // cosmetic throttle for plasma damage messages
     this.arcCooldown=0;      // separate cooldown for arc grid zaps
+    // Player status effect debuffs (applied by enemy attacks)
+    this.burnTimer=0; this.burnDps=0;  // burn DoT from enemy melee/attacks
+    this.shockTimer=0;                 // shock: brief movement suppress
     this.upgrades={};       // persistent upgrade levels: {SAW_BLADE:2, ...}
     this.permSpeedBonus=0;  // from OVERCLOCK
     this.orbitalAngle=0;    // shared rotation for saw blades
@@ -1855,8 +1880,8 @@ class Player {
 
   takeDamage(dmg, source, opts) {
     const options = opts || {};
-    if (!options.ignoreInvincible && this.invincibleTimer>0) return;
-    if (!options.ignoreImmunity && isPlayerDamageImmune()) return; // dash i-frames + phase cloak
+    if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
+    if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
     // Energy shield absorbs the hit
     if (!options.ignoreShield && this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
@@ -1868,7 +1893,7 @@ class Player {
       spawnDmgText(this.x, this.y, 'BLOCK', '#4488ff');
       game.msg('🛡 SHIELD BROKEN','#4488ff');
       triggerShake(4, 0.15);
-      return;
+      return 0;
     }
     let actual;
     if (options.ignoreDefense) {
@@ -1877,7 +1902,7 @@ class Player {
       const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
       actual = Math.max(1, dmg - this.def - titaniumReduction);
     }
-    if (actual <= 0) return;
+    if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
     const src = source || 'Unknown';
     this.logDamage(src, actual);
@@ -1913,10 +1938,11 @@ class Player {
         spawnParticles(this.x, this.y, 'EXPLOSION', '#00ddff', 20);
         triggerShake(8, 0.3);
         game.msg('💀 SECOND WIND!', '#00ddff');
-        return;
+        return actual;
       }
       this.killedBy=src; audio.gameOver(); game.endRun(false);
     }
+    return actual;
   }
 
   shoot(aimX,aimY,map) {
@@ -2007,6 +2033,24 @@ class Player {
       }
     }
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
+    // Player burn DoT
+    if (this.burnTimer > 0) {
+      const tick = Math.min(dt, this.burnTimer);
+      this.burnTimer -= dt;
+      if (!isPlayerDamageImmune() && this.invincibleTimer <= 0) {
+        const bdmg = this.burnDps * tick;
+        this.takeDamage(bdmg, 'Burn', { ignoreInvincible:true, ignoreImmunity:true, ignoreShield:true,
+          ignoreDefense:true, skipHitInvincible:true, skipHitEffects:true, skipReactiveArmor:true });
+        if (Math.random() < tick * 5) spawnParticles(this.x, this.y, 'MUZZLE', '#ff6600', 1);
+      }
+      if (this.burnTimer <= 0) { this.burnTimer = 0; this.burnDps = 0; }
+    }
+    // Player shock decay
+    if (this.shockTimer > 0) {
+      this.shockTimer -= dt;
+      if (Math.random() < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#ffee44', 1);
+      if (this.shockTimer <= 0) this.shockTimer = 0;
+    }
     // Augment timers
     if (this.adrenalineTimer > 0) this.adrenalineTimer = Math.max(0, this.adrenalineTimer - dt);
     if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
@@ -2074,6 +2118,9 @@ class Player {
     if (keys.has(km('right'))||keys.has(ALT_KEYS.right)) mx= 1;
     // touch joystick
     if (touch.joystick.active) { mx+=touch.joystick.dx; my+=touch.joystick.dy; }
+
+    // Shocked: suppress movement (can still aim and shoot)
+    if (this.shockTimer > 0) { mx = 0; my = 0; }
 
     if (mx||my) {
       const [ndx,ndy]=norm(mx,my);
@@ -2220,6 +2267,28 @@ class Player {
       ctx.beginPath();
       ctx.arc(sx,sy,12,0,TWO_PI);
       ctx.stroke();
+      ctx.restore();
+    }
+    // Burn indicator — flickering orange underglow
+    if (this.burnTimer > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + Math.sin(performance.now() * 0.012) * 0.15;
+      ctx.shadowBlur = 16; ctx.shadowColor = '#ff6600';
+      ctx.fillStyle = '#ff6600';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 10, 0, TWO_PI);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Shock indicator — rapid yellow flash
+    if (this.shockTimer > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.5 + Math.sin(performance.now() * 0.04) * 0.3;
+      ctx.shadowBlur = 18; ctx.shadowColor = '#ffee44';
+      ctx.fillStyle = '#ffee44';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 9, 0, TWO_PI);
+      ctx.fill();
       ctx.restore();
     }
   }
