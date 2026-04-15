@@ -10,6 +10,7 @@ let beacons = [];
 let mines   = [];
 let shieldGens = [];
 let cameras = [];
+let lasers  = [];
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
@@ -25,6 +26,7 @@ const SOURCE_LABELS = {
   'Volatile Core':'Volatile Core',
   'Sentry Drone':'Sentry Drone',
   'Burn':'Burn', 'Shock':'Shock',
+  'laser':'Laser Tripwire',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
@@ -39,6 +41,7 @@ const SOURCE_COLOURS = {
   'Volatile Core':'#ff6622',
   'Sentry Drone':'#00e5ff',
   'Burn':'#ff6600', 'Shock':'#ffee44',
+  'laser':'#ff6644',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -142,6 +145,8 @@ function applyOnKill(enemy) {
   damageShieldGensInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Damage nearby cameras
   damageCamerasInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  // Damage nearby laser tripwire emitters
+  damageLasersInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
   // Trigger nearby mines
   triggerMinesInRadius(enemy.x, enemy.y, aoeR, game.dungeon.map);
 }
@@ -400,6 +405,8 @@ class Enemy {
       damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Damage nearby cameras
       damageCamerasInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      // Damage nearby laser tripwire emitters
+      damageLasersInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
       // Trigger nearby mines
       triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
     }
@@ -2421,6 +2428,8 @@ function detonateVCore(c) {
   damageShieldGensInRadius(c.x, c.y, r, dmg, map);
   // Damage nearby cameras
   damageCamerasInRadius(c.x, c.y, r, dmg, map);
+  // Damage nearby laser tripwire emitters
+  damageLasersInRadius(c.x, c.y, r, dmg, map);
   // Trigger nearby mines
   triggerMinesInRadius(c.x, c.y, r, map);
 }
@@ -2735,6 +2744,8 @@ function detonateMine(m) {
   damageShieldGensInRadius(m.x, m.y, r, m.dmg, map);
   // Damage nearby cameras
   damageCamerasInRadius(m.x, m.y, r, m.dmg, map);
+  // Damage nearby laser tripwire emitters
+  damageLasersInRadius(m.x, m.y, r, m.dmg, map);
   // Remove from array
   const idx = mines.indexOf(m);
   if (idx >= 0) mines.splice(idx, 1);
@@ -3237,6 +3248,322 @@ function drawCameras(camX, camY) {
   }
 }
 
+// ─── Laser Tripwires ──────────────────────────────────────────────────────────
+const LASER_HIT_CD = 2.0;      // seconds between re-triggering on same laser
+const LASER_DISABLE_DUR = 3.0; // EMP disable duration
+const LASER_CYCLE_ON = 1.5;    // seconds beam stays on (cycling lasers)
+const LASER_CYCLE_OFF = 1.5;   // seconds beam stays off (cycling lasers)
+const LASER_REARM_GRACE = 0.2; // grace period after cycle-on before beam can hit
+
+function createLaser(x1, y1, x2, y2, floor, room, axis, cycling) {
+  const emitterHp = 10 + floor * 3;
+  return {
+    x1, y1, x2, y2,
+    hpA: emitterHp, hpB: emitterHp, maxHp: emitterHp,
+    deadA: false, deadB: false,
+    dead: false,
+    room, floor, axis,
+    cycling,
+    active: true,
+    cycleTimer: cycling ? LASER_CYCLE_ON : 0,
+    hitCd: 0,
+    disabled: false,
+    disableTimer: 0,
+    rearmGrace: 0,
+    _emitB: {},  // unique Map key for Static Field hitMap on emitter B
+    bob: Math.random() * TWO_PI,
+  };
+}
+
+function destroyLaserEmitter(l, which) {
+  if (which === 'A') l.deadA = true;
+  else l.deadB = true;
+  const ex = which === 'A' ? l.x1 : l.x2;
+  const ey = which === 'A' ? l.y1 : l.y2;
+  spawnParticles(ex, ey, 'EXPLOSION', '#ff6644', 12);
+  spawnParticles(ex, ey, 'SPARK', '#ffaa44', 6);
+  audio.laserDestroy();
+  // Beam is gone — mark entire laser dead
+  l.dead = true;
+  l.active = false;
+  const d = getDiff();
+  const amt = Math.round(game.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  game.player.credits += amt;
+  const mx = (l.x1 + l.x2) / 2, my = (l.y1 + l.y2) / 2;
+  spawnDmgText(mx, my - 0.3, '+' + amt + '◈', '#ff6644');
+  const idx = lasers.indexOf(l);
+  if (idx >= 0) lasers.splice(idx, 1);
+}
+
+function damageLaserEmitter(l, which, dmg) {
+  if (l.dead) return;
+  if (which === 'A') {
+    if (l.deadA) return;
+    l.hpA -= dmg;
+    if (l.hpA <= 0) { destroyLaserEmitter(l, 'A'); return; }
+    spawnParticles(l.x1, l.y1, 'SPARK', '#ff6644', 4);
+  } else {
+    if (l.deadB) return;
+    l.hpB -= dmg;
+    if (l.hpB <= 0) { destroyLaserEmitter(l, 'B'); return; }
+    spawnParticles(l.x2, l.y2, 'SPARK', '#ff6644', 4);
+  }
+}
+
+function damageLasersInRadius(wx, wy, radius, dmg, map) {
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const l = lasers[i];
+    if (l.dead) continue;
+    // Check both emitters
+    if (!l.deadA && dist(wx, wy, l.x1, l.y1) < radius && hasLOS(wx, wy, l.x1, l.y1, map)) {
+      damageLaserEmitter(l, 'A', dmg);
+    }
+    if (l.dead) continue; // might have been destroyed above
+    if (!l.deadB && dist(wx, wy, l.x2, l.y2) < radius && hasLOS(wx, wy, l.x2, l.y2, map)) {
+      damageLaserEmitter(l, 'B', dmg);
+    }
+  }
+}
+
+// Segment intersection: does segment (px,py)→(px2,py2) cross laser beam?
+function crossesLaserBeam(l, px, py, px2, py2) {
+  // Beam from (l.x1,l.y1) to (l.x2,l.y2), player from (px,py) to (px2,py2)
+  const d1x = l.x2 - l.x1, d1y = l.y2 - l.y1;
+  const d2x = px2 - px, d2y = py2 - py;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-10) return false; // parallel
+  const t = ((px - l.x1) * d2y - (py - l.y1) * d2x) / denom;
+  const u = ((px - l.x1) * d1y - (py - l.y1) * d1x) / denom;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+// Check if beam path is clear of opaque tiles
+function isBeamClear(l, map) {
+  const steps = Math.ceil(dist(l.x1, l.y1, l.x2, l.y2) * 2);
+  for (let s = 1; s < steps; s++) {
+    const frac = s / steps;
+    const bx = l.x1 + (l.x2 - l.x1) * frac;
+    const by = l.y1 + (l.y2 - l.y1) * frac;
+    const tx = Math.floor(bx), ty = Math.floor(by);
+    if (tx < 0 || ty < 0 || tx >= 80 || ty >= 50) return false;
+    const tile = map[ty]?.[tx];
+    if (tile !== undefined && !isSeeThrough(tile)) return false;
+  }
+  return true;
+}
+
+function updateLasers(dt) {
+  const p = game.player;
+  const map = game.dungeon?.map;
+  if (!map) return;
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const l = lasers[i];
+    if (l.dead) continue;
+    l.bob += dt * 2;
+
+    // EMP disable timer
+    if (l.disabled) {
+      l.disableTimer -= dt;
+      if (l.disableTimer <= 0) {
+        l.disabled = false;
+        l.rearmGrace = LASER_REARM_GRACE;
+      }
+      continue;
+    }
+
+    // Tick rearm grace
+    if (l.rearmGrace > 0) l.rearmGrace -= dt;
+
+    // Cycling logic
+    if (l.cycling) {
+      l.cycleTimer -= dt;
+      if (l.active && l.cycleTimer <= 0) {
+        l.active = false;
+        l.cycleTimer = LASER_CYCLE_OFF;
+      } else if (!l.active && l.cycleTimer <= 0) {
+        l.active = true;
+        l.cycleTimer = LASER_CYCLE_ON;
+        l.rearmGrace = LASER_REARM_GRACE;
+      }
+    }
+
+    // Hit cooldown
+    if (l.hitCd > 0) l.hitCd -= dt;
+
+    // Beam active? Check path clear (crates can block)
+    if (!l.active) continue;
+    if (!isBeamClear(l, map)) continue;
+
+    // Player crossing detection (segment intersection with player prev→current pos)
+    if (l.hitCd <= 0 && l.rearmGrace <= 0 && canTargetPlayer()) {
+      const prevX = p._prevX !== undefined ? p._prevX : p.x;
+      const prevY = p._prevY !== undefined ? p._prevY : p.y;
+      // Also check if player is currently overlapping the beam (standing on it)
+      const onBeam = crossesLaserBeam(l, prevX, prevY, p.x, p.y);
+      // Proximity check for standing near beam line
+      let nearBeam = false;
+      if (!onBeam) {
+        // Point-to-segment distance check for player radius
+        const ax = l.x1, ay = l.y1, bx = l.x2, by = l.y2;
+        const abx = bx - ax, aby = by - ay;
+        const apx = p.x - ax, apy = p.y - ay;
+        const ab2 = abx * abx + aby * aby;
+        const t = ab2 > 0 ? Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2)) : 0;
+        const closestX = ax + t * abx, closestY = ay + t * aby;
+        nearBeam = dist(p.x, p.y, closestX, closestY) < 0.25;
+      }
+      if (onBeam || nearBeam) {
+        // Dash bypasses laser tripwires
+        if (p.dashTimer > 0) continue;
+        const dmg = 8 + l.floor * 2;
+        const actual = p.takeDamage(dmg, 'laser');
+        if (actual > 0) {
+          l.hitCd = LASER_HIT_CD;
+          // Apply brief shock (movement suppress)
+          p.shockTimer = Math.max(p.shockTimer || 0, 0.3);
+          audio.laserHit();
+          spawnParticles(p.x, p.y, 'SPARK', '#ff8844', 8);
+          const mx = (l.x1 + l.x2) / 2, my = (l.y1 + l.y2) / 2;
+          game.msg('⚡ LASER TRIP', '#ff8844');
+        }
+      }
+    }
+  }
+}
+
+function drawLasers(camX, camY) {
+  const map = game.dungeon?.map;
+  if (!map) return;
+  for (const l of lasers) {
+    if (l.dead) continue;
+    // Visibility: either emitter visible
+    const t1x = Math.floor(l.x1), t1y = Math.floor(l.y1);
+    const t2x = Math.floor(l.x2), t2y = Math.floor(l.y2);
+    const vis1 = game.dungeon?.visible?.[t1y]?.[t1x];
+    const vis2 = game.dungeon?.visible?.[t2y]?.[t2x];
+    if (!vis1 && !vis2) continue;
+
+    const s1x = l.x1 * TILE - camX, s1y = l.y1 * TILE - camY;
+    const s2x = l.x2 * TILE - camX, s2y = l.y2 * TILE - camY;
+
+    // Draw beam line
+    if (!l.disabled) {
+      const beamClear = isBeamClear(l, map);
+      if (l.active && beamClear) {
+        // Active beam — bright red/orange line with glow
+        const pulse = 0.6 + 0.2 * Math.sin(l.bob * 4);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = '#ff4422';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff4422';
+        ctx.beginPath();
+        ctx.moveTo(s1x, s1y);
+        ctx.lineTo(s2x, s2y);
+        ctx.stroke();
+        // Inner bright core
+        ctx.globalAlpha = pulse * 0.8;
+        ctx.strokeStyle = '#ff8866';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.moveTo(s1x, s1y);
+        ctx.lineTo(s2x, s2y);
+        ctx.stroke();
+        ctx.restore();
+      } else if (l.cycling && !l.active) {
+        // Cycling off — dim dotted line
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = '#ff4422';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
+        ctx.beginPath();
+        ctx.moveTo(s1x, s1y);
+        ctx.lineTo(s2x, s2y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
+    // Draw emitter A
+    if (!l.deadA) {
+      ctx.save();
+      const col = l.disabled ? '#666' : '#ff6644';
+      const glow = l.disabled ? '#444' : '#ff8844';
+      ctx.shadowBlur = l.disabled ? 2 : 6;
+      ctx.shadowColor = glow;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(s1x - 3, s1y - 3, 6, 6);
+      ctx.fillStyle = col;
+      ctx.fillRect(s1x - 2, s1y - 2, 4, 4);
+      // Lens pulse
+      if (!l.disabled) {
+        const lp = l.active ? 0.8 + 0.2 * Math.sin(l.bob * 3) : 0.3;
+        ctx.globalAlpha = lp;
+        ctx.fillStyle = '#ffaa66';
+        ctx.beginPath();
+        ctx.arc(s1x, s1y, 1.5, 0, TWO_PI);
+        ctx.fill();
+      }
+      ctx.restore();
+      // HP bar when damaged
+      if (l.hpA < l.maxHp) {
+        const bw = 14, bh = 2, bx = s1x - bw / 2, by = s1y - 8;
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#113';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(bx, by, bw * (l.hpA / l.maxHp), bh);
+        ctx.restore();
+      }
+    }
+
+    // Draw emitter B
+    if (!l.deadB) {
+      ctx.save();
+      const col = l.disabled ? '#666' : '#ff6644';
+      const glow = l.disabled ? '#444' : '#ff8844';
+      ctx.shadowBlur = l.disabled ? 2 : 6;
+      ctx.shadowColor = glow;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(s2x - 3, s2y - 3, 6, 6);
+      ctx.fillStyle = col;
+      ctx.fillRect(s2x - 2, s2y - 2, 4, 4);
+      if (!l.disabled) {
+        const lp = l.active ? 0.8 + 0.2 * Math.sin(l.bob * 3) : 0.3;
+        ctx.globalAlpha = lp;
+        ctx.fillStyle = '#ffaa66';
+        ctx.beginPath();
+        ctx.arc(s2x, s2y, 1.5, 0, TWO_PI);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (l.hpB < l.maxHp) {
+        const bw = 14, bh = 2, bx = s2x - bw / 2, by = s2y - 8;
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#113';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(bx, by, bw * (l.hpB / l.maxHp), bh);
+        ctx.restore();
+      }
+    }
+
+    // Disabled sparking effect
+    if (l.disabled) {
+      if (Math.random() < 0.1) {
+        spawnParticles(l.x1, l.y1, 'SPARK', '#00ddff', 1);
+        spawnParticles(l.x2, l.y2, 'SPARK', '#00ddff', 1);
+      }
+    }
+  }
+}
+
 // ─── Player ───────────────────────────────────────────────────────────────────
 class Player {
   constructor() { this.reset(); }
@@ -3473,6 +3800,7 @@ class Player {
   }
 
   update(dt,map) {
+    this._prevX = this.x; this._prevY = this.y;
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
     this.shootCooldown=Math.max(0,this.shootCooldown-dt);
     this.flashTimer=Math.max(0,this.flashTimer-dt);

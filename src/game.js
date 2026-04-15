@@ -582,6 +582,9 @@ const game = {
     // update security cameras
     updateCameras(dt);
 
+    // update laser tripwires
+    updateLasers(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -2432,6 +2435,9 @@ const game = {
 
     // security cameras (draw cone before enemies for layering)
     drawCameras(cam.x, cam.y);
+
+    // laser tripwires (draw beam before enemies for layering)
+    drawLasers(cam.x, cam.y);
 
     // proximity mines (below items/enemies, above ground effects)
     drawMines(cam.x, cam.y);

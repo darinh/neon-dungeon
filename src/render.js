@@ -807,6 +807,28 @@ function drawMinimap(dungeon, player) {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
 
+  // Laser tripwires — thin orange/red lines
+  for (const l of lasers) {
+    if (l.dead) continue;
+    const t1x = Math.floor(l.x1), t1y = Math.floor(l.y1);
+    const t2x = Math.floor(l.x2), t2y = Math.floor(l.y2);
+    if (!dungeon.visible[t1y]?.[t1x] && !dungeon.visible[t2y]?.[t2x]) continue;
+    const lAlpha = l.active && !l.disabled ? 0.6 : 0.2;
+    ctx.globalAlpha = lAlpha;
+    ctx.strokeStyle = '#ff6644';
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 2; ctx.shadowColor = '#ff4422';
+    ctx.beginPath();
+    ctx.moveTo(MX + l.x1 * sx, MY + l.y1 * sy);
+    ctx.lineTo(MX + l.x2 * sx, MY + l.y2 * sy);
+    ctx.stroke();
+    // Emitter dots
+    ctx.fillStyle = '#ff6644';
+    if (!l.deadA) { ctx.fillRect(MX + l.x1 * sx - 1, MY + l.y1 * sy - 1, 2, 2); }
+    if (!l.deadB) { ctx.fillRect(MX + l.x2 * sx - 1, MY + l.y2 * sy - 1, 2, 2); }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
   // player dot
@@ -1124,7 +1146,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1334,6 +1356,101 @@ function populateFloor(dungeon, floorNum) {
           if (!tooClose) for (const mn of mines) { if (dist(cx, cy, mn.x, mn.y) < 1.5) { tooClose = true; break; } }
           if (!tooClose) for (const g of shieldGens) { if (dist(cx, cy, g.x, g.y) < 1.5) { tooClose = true; break; } }
           if (!tooClose) cameras.push(createCamera(cx, cy, floorNum, room, pick.side));
+        }
+      }
+    }
+
+    // Laser tripwires (floor 3+, normal rooms, ~25% chance, not in beacon/camera rooms, room ≥ 5 wide or tall)
+    if (floorNum >= 3 && !rt && (room.w >= 5 || room.h >= 5) && Math.random() < 0.25) {
+      const hasBeacon = beacons.some(b => b.room === room);
+      const hasCamera = cameras.some(c => c.room === room);
+      if (!hasBeacon && !hasCamera) {
+        // Find valid beam paths: pairs of wall-adjacent floor tiles with clear path between
+        const beamCandidates = [];
+        const m = dungeon.map;
+        // Horizontal beams: scan rows for wall-floor...floor-wall spans
+        for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
+          let left = -1;
+          for (let tx = room.x; tx < room.x + room.w; tx++) {
+            if (m[ty]?.[tx] === T.FLOOR && m[ty]?.[tx - 1] === T.WALL && left < 0) {
+              left = tx;
+            }
+          }
+          if (left >= 0) {
+            // Find rightmost floor tile in same row with wall to the right
+            for (let tx = room.x + room.w - 1; tx > left + 2; tx--) {
+              if (m[ty]?.[tx] === T.FLOOR && m[ty]?.[tx + 1] === T.WALL) {
+                // Check all tiles between are floor
+                let clear = true;
+                for (let bx = left; bx <= tx; bx++) {
+                  if (m[ty]?.[bx] !== T.FLOOR) { clear = false; break; }
+                }
+                if (clear) {
+                  // Not near doors
+                  let nearDoor = false;
+                  for (let ddx = -1; ddx <= 1 && !nearDoor; ddx++) {
+                    if (isDoor(m[ty]?.[left + ddx]) || isDoor(m[ty]?.[tx + ddx])) nearDoor = true;
+                    if (m[ty]?.[left + ddx] === T.DOOR_OPEN || m[ty]?.[tx + ddx] === T.DOOR_OPEN) nearDoor = true;
+                  }
+                  for (let ddy = -1; ddy <= 1 && !nearDoor; ddy++) {
+                    if (isDoor(m[ty + ddy]?.[left]) || isDoor(m[ty + ddy]?.[tx])) nearDoor = true;
+                    if (m[ty + ddy]?.[left] === T.DOOR_OPEN || m[ty + ddy]?.[tx] === T.DOOR_OPEN) nearDoor = true;
+                  }
+                  if (!nearDoor && tx - left >= 3) {
+                    beamCandidates.push({ x1: left + 0.5, y1: ty + 0.5, x2: tx + 0.5, y2: ty + 0.5, axis: 'H' });
+                  }
+                }
+                break;
+              }
+            }
+          }
+        }
+        // Vertical beams: scan columns for wall-floor...floor-wall spans
+        for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
+          let top = -1;
+          for (let ty = room.y; ty < room.y + room.h; ty++) {
+            if (m[ty]?.[tx] === T.FLOOR && m[ty - 1]?.[tx] === T.WALL && top < 0) {
+              top = ty;
+            }
+          }
+          if (top >= 0) {
+            for (let ty = room.y + room.h - 1; ty > top + 2; ty--) {
+              if (m[ty]?.[tx] === T.FLOOR && m[ty + 1]?.[tx] === T.WALL) {
+                let clear = true;
+                for (let by = top; by <= ty; by++) {
+                  if (m[by]?.[tx] !== T.FLOOR) { clear = false; break; }
+                }
+                if (clear) {
+                  let nearDoor = false;
+                  for (let ddy = -1; ddy <= 1 && !nearDoor; ddy++) {
+                    if (isDoor(m[top + ddy]?.[tx]) || isDoor(m[ty + ddy]?.[tx])) nearDoor = true;
+                    if (m[top + ddy]?.[tx] === T.DOOR_OPEN || m[ty + ddy]?.[tx] === T.DOOR_OPEN) nearDoor = true;
+                  }
+                  for (let ddx = -1; ddx <= 1 && !nearDoor; ddx++) {
+                    if (isDoor(m[top]?.[tx + ddx]) || isDoor(m[ty]?.[tx + ddx])) nearDoor = true;
+                    if (m[top]?.[tx + ddx] === T.DOOR_OPEN || m[ty]?.[tx + ddx] === T.DOOR_OPEN) nearDoor = true;
+                  }
+                  if (!nearDoor && ty - top >= 3) {
+                    beamCandidates.push({ x1: tx + 0.5, y1: top + 0.5, x2: tx + 0.5, y2: ty + 0.5, axis: 'V' });
+                  }
+                }
+                break;
+              }
+            }
+          }
+        }
+        if (beamCandidates.length > 0) {
+          const pick = beamCandidates[rndInt(0, beamCandidates.length - 1)];
+          // Not too close to other environmental objects
+          let tooClose = false;
+          for (const b of beacons) { if (dist(pick.x1, pick.y1, b.x, b.y) < 1.5 || dist(pick.x2, pick.y2, b.x, b.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const v of vcores) { if (dist(pick.x1, pick.y1, v.x, v.y) < 1.5 || dist(pick.x2, pick.y2, v.x, v.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const mn of mines) { if (dist(pick.x1, pick.y1, mn.x, mn.y) < 1.5 || dist(pick.x2, pick.y2, mn.x, mn.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) for (const g of shieldGens) { if (dist(pick.x1, pick.y1, g.x, g.y) < 1.5 || dist(pick.x2, pick.y2, g.x, g.y) < 1.5) { tooClose = true; break; } }
+          if (!tooClose) {
+            const cycling = Math.random() < 0.2;
+            lasers.push(createLaser(pick.x1, pick.y1, pick.x2, pick.y2, floorNum, room, pick.axis, cycling));
+          }
         }
       }
     }

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.2
+# NEON DUNGEON — Game Specification v4.3
 
 ## Vision
 
@@ -470,6 +470,74 @@ reinforcements).
   square 1000→400 + noise crackle + sub-bass sine 200→80.
 - `audio.cameraDestroy()` — electronic crunch: noise burst + descending
   sawtooth 600→200 + sine tail 300→100.
+
+### Laser Tripwires (floor 3+)
+
+Wall-mounted laser emitter pairs that project visible beams across rooms.
+Breaking the beam deals damage and applies a brief shock. Each emitter can
+be destroyed independently — destroying either one disables the beam.
+
+**Entity:** `lasers[]` global array. Each laser has two emitter positions
+(`x1,y1` and `x2,y2`) with independent HP pools (`hpA`, `hpB`). Emitter HP:
+`10 + floor × 3`. Axis: `'H'` (horizontal) or `'V'` (vertical).
+
+**Placement:** 0–1 per qualifying normal room on floor 3+ (not spawn, boss,
+secret, or special rooms). ~25% chance per eligible room. Room must be ≥ 5
+tiles wide or tall. Not placed in rooms that already contain alarm beacons
+or security cameras (prevents frustrating hazard stacking). Emitters are
+placed on wall-adjacent floor tiles with a clear beam path between them
+(minimum 3-tile span). Not near doors (manhattan ≤ 1).
+
+**Cycling beams:** ~20% of lasers cycle on/off (1.5 s on, 1.5 s off). During
+the off phase, beam is inactive and shown as a dim dotted line. A 0.2 s
+rearm grace period after cycle-on prevents cheap hits.
+
+**Player interaction:**
+- **Beam crossing:** Segment intersection between player's previous and
+  current position (handles fast movement). Also a 0.25-tile proximity check
+  for standing near the beam line. Deals `8 + floor × 2` damage and applies
+  0.3 s shock (movement suppress via `shockTimer`, same as existing system).
+  2 s hit cooldown per laser.
+- **Dash:** Bypasses laser tripwires (player `dashTimer > 0` skips hit).
+- **Phase Cloak:** Player passes through without triggering (uses
+  `canTargetPlayer()` check, same as cameras).
+- **Crate blocking:** Beam dynamically checks LOS along its path each frame.
+  If an opaque tile (crate, wall) is placed in the beam path, the beam is
+  suspended until the path clears.
+
+**Destructible emitters:**
+- Player projectiles hitting within 0.5 tiles of either emitter deal weapon
+  damage to that emitter's HP pool.
+- Destroying either emitter disables the beam entirely and awards credits
+  (`floor × 3 × multipliers`).
+- EMP: Disables all lasers in radius for 3 s (beam deactivates, no damage,
+  emitters spark). `audio.laserDisable()`.
+- Static Field: Damages both emitters on 1 s interval (same pattern as
+  cameras/shield generators, uses object-reference Map keys).
+
+**Room-clear:** Lasers do NOT block room-clear (they are passive hazards,
+not security devices).
+
+**Visual:**
+- Emitter nodes: small teal/orange rectangles (6×6 px housing, 4×4 inner)
+  with pulsing lens dot.
+- Active beam: bright red/orange line (`#ff4422`) with glow, pulsing opacity.
+- Cycling off: dim dotted line.
+- Disabled (EMP): emitters spark cyan, no beam.
+- HP bar shown on damaged emitters.
+
+**Minimap:** Thin red/orange line between emitter dots. Dimmed when inactive
+or disabled.
+
+**Death recap source:** `'laser'` → "Laser Tripwire" (#ff6644).
+
+**Audio:**
+- `audio.laserHit()` — sharp electric zap: high sawtooth 1800→600 + square
+  900→300 + noise burst.
+- `audio.laserDisable()` — power-down whine: descending sine 800→100 +
+  triangle 400→50.
+- `audio.laserDestroy()` — sparking collapse: noise burst + descending
+  sawtooth 700→150 + sine tail 400→80.
 
 **Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
 BSP room is walled off completely and one narrow entrance cluster (1–2 tiles)
@@ -2795,3 +2863,5 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v60.0   | PHANTOM enemy rework (floor 5+): stealth assassin with 4-state machine (cloaked→telegraph→attacking→cooldown). Cloaked: alpha 0.08, 1.3× speed, subtle shimmer, repositions in room on re-cloak. Telegraph: 0.4 s warning with expanding purple ring + aim indicator, alpha pulsing 0.3–0.5. Attacking: 2-shot purple burst (0.15 s gap, speed 8, range 14). Cooldown: 1.5 s visible retreat window. Damage interrupt: hit while cloaked/telegraph → forced to cooldown (1.5 s reveal). Close-range escape: repositions if player < 2.5 tiles while cloaked. Thermal Optics augment: dim purple pulsing minimap dot when cloaked. Sentry/Auto-Laser skip cloaked, can target telegraph+. Mines trigger normally on cloaked phantoms. Stats: HP 35, ATK 10, SPD 2.5, XP 30, credits 12. Spawn weight: base 2, perFloor 2, minFloor 5. TYPE_CAPS: 2. Elite eligible (PHASING excluded). `audio.phantomCloak()` (descending fade), `audio.phantomUncloak()` (ascending reveal), `audio.phantomStrike()` (energy bolt). Spec v4.0. SW cache v72. |
 | v61.0   | MIMIC enemy (floor 7+): ambush predator disguised as data pickup. 50% per non-boss floor. Disguised: renders as random-colour item with bob + glow, subtle white shimmer tell every ~2.5 s. Hidden from minimap, sentry/auto-laser, room-clear. Revealed by: player proximity (1.5 tiles) or any damage source (projectiles, AoE, mines, VCores, Static Field, Reactive Armor). 0.3 s reveal telegraph (purple burst ring + particles + `audio.mimicReveal()`). Combat: fast melee zigzag chase (SPD 3.0 burst for 3 s → 2.2 base, CRAWLER pattern). Guaranteed single item drop on death (suppresses normal drop roll). Excluded from bounty, ENEMY_WEIGHTS, elite rolls, challenge waves. EMP/Gravity skip disguised; Nano Swarm skips homing but proximity hits reveal. Stats: HP 30 + floor×3 (scaled), ATK 14, SPD 2.2, XP 25, credits 10. Colour: `#cc33ff` (violet). Separate spawn pass in `populateFloor` (normal rooms, area ≥ 16). Spec v4.1. SW cache v73. |
 | v62.0   | Shield Generators: destructible environmental devices (floor 5+, ~30% chance per normal room with ≥ 3 enemies, area ≥ 5×5). `shieldGens[]` entity array with HP (`15 + floor × 4`). Projects 35% damage reduction to all non-boss, non-disguised enemies in the same room while active (`SHIELD_GEN_DR`, spatial bounds check). Damaged by player projectiles, AoE explosions (VCore/grenade/mine/VOLATILE/EXPLOSIVE_KILLS/Detonation), hackware EMP (15 dmg), and Static Field (per-tick). Never in beacon rooms (prevents mitigation stacking). On destruction: 3-tile EMP burst stuns enemies 0.8 s (LOS-gated), credit reward (`floor × 5` with multipliers), cyan explosion particles. Protected enemies get subtle cyan underglow. Visual: rotating cyan hexagonal frame with bright core, dashed energy beams to protected enemies. Minimap: cyan 2 px pulsing dot. Room-clear NOT blocked by generators. `audio.generatorDestroy()` electric overload burst SFX. Spec v4.2. SW cache v74. |
+| v63.0   | Security Cameras: wall-mounted surveillance devices (floor 4+, ~30% chance per normal room ≥ 6×6, not in beacon rooms). `cameras[]` entity array. 60° vision cone, ±60° sweep at 45°/s, 5-tile range. States: scanning→alerted(1.5s)→triggered. Detection: room bounds + cone sector + LOS + `canTargetPlayer()`. Destroy: credits + room-clear re-eval. Alerted blocks room-clear. 0.5 s rearm debounce. Cone raycast-clipped in draw. Damaged by projectiles, EMP (15 dmg), Static Field (per-tick). `audio.cameraDetect()`, `audio.cameraAlert()`, `audio.cameraDestroy()` SFX. Spec v4.2. SW cache v75. |
+| v64.0   | Laser Tripwires: wall-mounted emitter pairs projecting destructible laser beams across rooms (floor 3+, ~25% chance per normal room ≥ 5 tiles wide/tall, mutually exclusive with cameras/beacons). `lasers[]` entity array. Independent emitter HP (`10 + floor × 3`) — destroying either disables beam. ~20% cycle on/off (1.5 s each, 0.2 s rearm grace). Beam crossing: segment intersection + 0.25-tile proximity, deals `8 + floor × 2` damage + 0.3 s shock (shockTimer). 2 s hit cooldown. Dash bypasses, Phase Cloak bypasses (canTargetPlayer). Crates dynamically block beam (per-frame LOS). EMP disables 3 s. Static Field damages emitters (1 s interval, object-ref Map keys). Does NOT block room-clear. Minimap: thin red/orange line. `audio.laserHit()`, `audio.laserDisable()`, `audio.laserDestroy()` SFX. Spec v4.3. SW cache v76. |
