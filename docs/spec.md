@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.7
+# NEON DUNGEON — Game Specification v4.0
 
 ## Vision
 
@@ -863,6 +863,60 @@ can see it winding up, but you need to move fast.
   - SWARM (0.6× HP): Glass cannon — hits hard but drops fast
   - FORTIFIED (1.4× HP): Tanky charger, very dangerous in packs
   - CHARGED (1.4× projectile speed): No effect (melee-only enemy)
+
+#### PHANTOM (floor 5+)
+
+Stealth assassin that cloaks, stalks, and ambushes with ranged burst attacks.
+Creates tension from the unknown — players hear the uncloak sound and have a
+brief window to dodge. Rewards awareness, AoE usage, and the Thermal Optics
+augment. Unlike SNIPER (stationary, long charge) or TELEPORTER (blink melee),
+the PHANTOM is a mobile, invisible ranged threat with a predictable attack
+cadence.
+
+- **State machine** (`_phState`):
+  1. `cloaked` — Nearly invisible (alpha 0.08). Moves toward player at 1.3×
+     speed. Duration 2–4 s (random). Subtle purple shimmer outline.
+     OVERCLOCK modifier shortens cloak duration.
+  2. `telegraph` — 0.4 s warning. Alpha rises to 0.3–0.5 (pulsing).
+     Expanding purple ring + dashed aim indicator. Stops moving, locks aim
+     direction. Sentry drone and Auto-Laser CAN target during this phase.
+  3. `attacking` — Fully visible (alpha 1.0). Fires 2 purple projectiles in
+     quick succession (0.15 s gap, speed 8, damage = ATK, range 14).
+  4. `cooldown` — Visible for 1.5 s (÷ berserker). Retreats from player.
+     Then re-cloaks. Repositions in room if LOS lost or > 8 tiles away.
+- **Close-range escape:** If player walks within 2.5 tiles while cloaked,
+  PHANTOM repositions to a far passable tile in the room (teleport, no
+  movement) and resets cloak timer. Does NOT attack at close range.
+- **Damage interrupt:** Any damage while `cloaked` or `telegraph` forces
+  immediate transition to `cooldown` (1.5 s visible). Counter: AoE damage
+  (mines, VCores, grenades) reveals hidden PHANTOMs.
+- **Augment synergies:**
+  - Thermal Optics: Cloaked PHANTOMs visible on minimap as dim pulsing
+    purple dots.
+  - Temporal Dilation: 15% slower movement in all states.
+- **Mine interaction:** Cloaked PHANTOMs trigger proximity mines normally
+  (physical presence is independent of visibility).
+- **Sentry / Auto-Laser:** Skip cloaked PHANTOMs (require `visible` = true).
+  Can target during telegraph, attacking, and cooldown phases.
+- **Stats:** HP 35, ATK 10, SPD 2.5, XP 30.
+- **Visual:** Purple (`#cc00ff`). Cloaked: dashed purple circle shimmer.
+  Telegraph: expanding purple ring with pulsing glow + dashed aim line.
+- **Audio:** `phantomCloak()` — descending digital fade-out (sine 1200→300,
+  triangle 800→200, noise). `phantomUncloak()` — sharp ascending reveal
+  (sine 400→1400, square 600→1800, noise). `phantomStrike()` — quick energy
+  bolt (square 900→400, sine 1200→600, noise snap).
+- **Credits:** 12
+- **Cap:** 2 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite eligible:** Yes — all affixes except PHASING (redundant with innate
+  cloaking). BERSERKER shortens cooldown. ARMORED cloaked PHANTOMs are
+  especially dangerous.
+- **Spawn weight:** base 2, perFloor 2, minFloor 5. Uncommon on floor 5,
+  increasing presence through later floors.
+- **Modifier interactions:**
+  - OVERCLOCK (÷ cloak duration): Attacks more frequently
+  - SWARM (0.6× HP): Fragile but more numerous
+  - FORTIFIED (1.4× HP): Hard to burst during cooldown window
+  - CHARGED (1.4× projectile speed): Projectiles faster + 1.2× damage
 
 ### Difficulty Modes
 
@@ -2552,3 +2606,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v57.0   | Destructible crates: environmental cover objects (floor 2+, 0–2 per normal room ≥ 6×6). `T.CRATE` (21) tile — not passable, not see-through (full cover). `crates[]` entity array with HP (`15 + floor × 5`). Damaged by projectile impact, VCore/grenade/VOLATILE/EXPLOSIVE_KILLS explosions, weapon affix AoE, and CHARGER charge collisions. On destruction: tile reverts to `T.FLOOR`, 25% credit drop (`floor × 4`). Enemy/item spawn passability guard. Minimap: `#2a3a4e`. `audio.crateBreak()` metallic crunch SFX. Spec v3.7. SW cache v69. |
 | v58.0   | Alarm beacons: environmental alarm devices (floor 4+, ~40% chance per normal room ≥ 5×5). `beacons[]` entity array with HP (`10 + floor × 3`). When player enters room, 4 s countdown starts. Destroy beacon → credit reward (`floor × 3` with multipliers). Countdown expires → 2–3 reinforcement enemies spawn. Damaged by player projectiles and AoE explosions (VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation affix). Enemy projectiles cannot damage beacons. Room-clear blocked until beacon resolved. Visual: pulsing red diamond + antenna (idle), flashing diamond + expanding rings + countdown (active). Minimap: pulsing red dot. `audio.beaconAlarm()`, `audio.beaconDestroy()`, `audio.beaconTrigger()` SFX. Spec v3.8. SW cache v70. |
 | v59.0   | Proximity mines: hidden explosive traps (floor 3+, ~40% chance per normal room ≥ 5×5, 0–1 per room). `mines[]` entity array. Dormant: subtle shimmer, revealed permanently when player within 3 tiles. Armed when player/enemy within 0.9 tiles (0.8 s fuse) or shot by player projectile (0.3 s fuse). Detonation: 2-tile AoE (12 + floor × 3 dmg, bypasses defense, LOS-gated). Damages player and enemies. Chain-detonates nearby mines (staggered 0.1–0.15 s). Also triggered by VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation AoE. Mine explosions prime VCores, damage crates/beacons. Enemy projectiles don't trigger mines. Minimap: hidden when dormant, orange dot when revealed/armed. `audio.mineArm()` (click + ascending tone), `audio.mineExplode()` (concussive blast). Spec v3.9. SW cache v71. |
+| v60.0   | PHANTOM enemy rework (floor 5+): stealth assassin with 4-state machine (cloaked→telegraph→attacking→cooldown). Cloaked: alpha 0.08, 1.3× speed, subtle shimmer, repositions in room on re-cloak. Telegraph: 0.4 s warning with expanding purple ring + aim indicator, alpha pulsing 0.3–0.5. Attacking: 2-shot purple burst (0.15 s gap, speed 8, range 14). Cooldown: 1.5 s visible retreat window. Damage interrupt: hit while cloaked/telegraph → forced to cooldown (1.5 s reveal). Close-range escape: repositions if player < 2.5 tiles while cloaked. Thermal Optics augment: dim purple pulsing minimap dot when cloaked. Sentry/Auto-Laser skip cloaked, can target telegraph+. Mines trigger normally on cloaked phantoms. Stats: HP 35, ATK 10, SPD 2.5, XP 30, credits 12. Spawn weight: base 2, perFloor 2, minFloor 5. TYPE_CAPS: 2. Elite eligible (PHASING excluded). `audio.phantomCloak()` (descending fade), `audio.phantomUncloak()` (ascending reveal), `audio.phantomStrike()` (energy bolt). Spec v4.0. SW cache v72. |
