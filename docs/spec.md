@@ -1555,6 +1555,63 @@ Starting a new game overwrites the save when the first floor loads.
 
 ---
 
+## Settings
+
+Player preferences are persisted in `localStorage` key `neonDungeonSettings`, separate from the game save. Settings survive save deletion and apply globally across all runs.
+
+### Settings Payload
+
+```json
+{ "sfxVol": 1.0, "musicVol": 1.0, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
+```
+
+### Volume Controls
+
+- **SFX Volume** (0–100%): multiplied by base master gain (0.7). Applied via `audio.setSfxVolume(v)` using short linear ramp (0.02 s) to avoid zipper noise.
+- **Music Volume** (0–100%): multiplied by base music bus gain (0.12). Applied via `audio.setMusicVolume(v)`.
+- Both are applied at node creation time (lazy init) AND when the setter is called, ensuring correct volume regardless of when AudioContext initialises.
+
+### Key Rebinding
+
+9 rebindable actions: `up`, `down`, `left`, `right`, `interact`, `hackware`, `voidshard`, `dash`, `shoot`. Each maps to a `KeyboardEvent.code`.
+
+**Alternate keys** (always active alongside the mapped key):
+- Arrow keys work for movement in all contexts (↑↓←→ for up/down/left/right)
+- `ShiftRight` works as alternate dash
+
+**Reserved keys** (cannot be bound): `Escape`, `Enter`, `KeyQ`, `Digit1`, `Digit2`, `Digit3`.
+
+**Conflict resolution**: binding a key already used by another action **swaps** the two bindings rather than leaving an orphaned action.
+
+**Key capture flow**: selecting a rebind row enters capture mode → "PRESS A KEY..." blinks → next `keydown` binds (Escape cancels, reserved keys ignored, MouseLeft ignored).
+
+**Touch buttons** (`BTNS.E`, `BTNS.F`, `BTNS.V`, `BTNS.DASH`) emit the currently mapped key code via `km(action)`, ensuring touch controls respect rebinding.
+
+**Display hints** (in-game prompts like "Press E to interact") use `KEY_DISPLAY(km('interact'))` to reflect the current binding.
+
+### Settings UI
+
+`SETTINGS` game state, accessible from:
+- **Main menu**: "SETTINGS" option in menu list
+- **Pause screen**: `S` key / middle-third touch zone
+
+Layout (canvas-rendered, no HTML overlays):
+1. SFX Volume slider (horizontal bar, click/drag or ◀▶ keys, 5% step)
+2. Music Volume slider
+3. Rebind rows (one per action, showing action label + current key)
+4. "RESET TO DEFAULTS" button
+5. "BACK" button (returns to previous state)
+
+Navigation: ↑↓ select row, ◀▶ adjust sliders, Enter/click to rebind, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
+
+`_settingsFrom` tracks whether settings was opened from `'MENU'` or `'PAUSED'`, used by the back action to return to the correct state.
+
+### Validation
+
+On load, settings are merged with defaults: volumes clamped to [0, 1], missing keyMap entries filled from `DEFAULT_KEY_MAP`, invalid/corrupt JSON silently falls back to defaults.
+
+---
+
 ## HUD Layout
 
 ### Landscape (W ≥ 600 or W ≥ H) — single row
@@ -1948,3 +2005,5 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v36.0   | SNIPER enemy (floor 7+): glass-cannon marksman with laser-sight charging mechanic. 1.5s visible red laser line locks on player position (does NOT track), then fires speed-14 high-damage projectile. Room-gated aggro (only activates when player is inside sniper's room). Cancel conditions: cloak, LOS break, stun, player flees room, player closes to <3 tiles (triggers flee). Fixed charge time (unaffected by OVERCLOCK/berserker — telegraph stays fair). Post-fire reposition to far tile in room. Post-cancel cooldown prevents stutter re-lock. Stun clears charge state (handled in Enemy.update stun early-return). Elite excluded (ATK 15 too high for elite multiplier). Stats: HP 20, ATK 15, SPD 2.5, XP 25, credits 10, cap 1/room. Visual: hot pink-red `#ff2266`, idle scope glint, pulsing laser line + target dot during charge. 2 new audio SFX (`audio.sniperCharge()`, `audio.sniperFire()`). No SAVE_VERSION bump. SW cache v43 |
 | v37.0   | WARDEN boss (floor 3 alternate): melee-focused armored enforcer with telegraphed charge + ground slam. Boss pool system — floor 3 randomly selects SENTINEL MK-I or WARDEN. Boss death message now keyed by `game.bossType` (stored at spawn) instead of floor number, fixing a latent bug where the `e` variable leaked from entrance-tile restoration loop. Stats: HP 330, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber). Phase 1 (>40% HP): 0.6s wind-up charge at 3× speed with amber dashed-line telegraph, contact damage + knockback on hit, 4-way spark burst on miss, 3.5s CD. Phase 2 (≤40%): faster charge (0.45s wind-up, 2.5s CD) + ground slam AoE (knockback + 22×diff damage + 6 radial sparks, 5s CD, `audio.wardenSlam()`). Charge direction locked at wind-up start (does NOT track). Cancel: cloak/LOS break cancels wind-up; stun cancels any charge state (in `Enemy.update()` stun block). Active charge continues through cloak (committed). Pursues player aggressively when LOS (vs SENTINEL's random patrol). `BOSS_POOLS` replaces `bossTypes` dict. 2 new audio SFX (`audio.wardenCharge()`, `audio.wardenSlam()`). No SAVE_VERSION bump. SW cache v44 |
 | v38.0   | CONDUCTOR boss (floor 6 alternate): area-denial pattern boss with electromagnetic projectile patterns and hazard zones. Floor 6 randomly selects NEURAL HIVE or CONDUCTOR. No add spawning (direct contrast to HIVE's summoner archetype). Stats: HP 520, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan). Phase 1 (>55%): 8-way radial arc burst (3.5s CD, rotation offset per volley) + 1 electric hazard zone (6s CD). Phase 2 (55%–25%): 12-way burst (3s) + 2 hazard zones (5s) + conduit beam (fast single shot, 4s). Phase 3 (≤25%): 12-way burst (2.5s) + 2 zones (4s) + discharge AoE (1.5s magnetic pull channel → 25×diff damage + knockback + 6 radial sparks, 5s CD). Hazard zones: 0.8s arming delay with pulsing dashed warning ring, 3-tile minimum distance from player, radius 1.5, 4s duration, `Conductor Field` damage source. Magnetic pull: 1.0 tiles/sec toward boss, passability-checked, room-clamped. Visual: rotating segmented arc ring, pulsing cyan glow during discharge channel. `hazardZones` system extended with `armTimer` (arming delay) and `source` (custom damage source) — backwards compatible. 2 new audio SFX (`audio.conductorArc()`, `audio.conductorPulse()`). No SAVE_VERSION bump. SW cache v45 |
+| v39.0   | GENESIS PROTOCOL boss (floor 10 alternate): geometric precision pattern boss — spiral salvos, targeting lances, hazard grid zones, purge ring. Floor 10 randomly selects OMEGA CORE or GENESIS PROTOCOL. Stats: HP 1000, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold). Phase 1 (>55%): 6-arm spiral salvo (3s, rotating offset) + targeting lance (4s, 0.5s telegraph, aim-locks at start, cancels on LOS/cloak/stun). Phase 2 (55%–25%): 8-arm spiral (2.5s) + 3-spread lance (3.5s) + 2 hazard zones (5s). Phase 3 (≤25%): 10-arm spiral (2s) + 5-spread lance (3s) + 3 zones (4s) + purge ring (8s, 6 zones in circle with 1 gap). Timer seeding on phase transition + spawn prevents first-frame spam. Dynamic terminal lock text replaces hardcoded OMEGA reference. `audio.genesisLance()` / `audio.genesisPurge()` SFX. No SAVE_VERSION bump. SW cache v46 |
+| v40.0   | Settings menu: `SETTINGS` game state accessible from main menu and pause screen. SFX and music volume sliders (0–100%, `localStorage` key `neonDungeonSettings`). Key rebinding for 9 actions (up/down/left/right/interact/hackware/voidshard/dash/shoot) with swap-on-conflict, reserved key protection (Escape/Enter/Q/digits), and Escape-to-cancel capture. Arrow keys always work as movement alternates. `ShiftRight` always works as dash alternate. Touch buttons emit mapped key codes via `km(action)`. In-game hints reflect current bindings via `KEY_DISPLAY()`. Pause screen updated to 3 options (Resume/Settings/Quit). Volume applied at AudioContext init AND on change (handles lazy init). Short linear ramp (0.02s) on volume changes prevents zipper noise. Settings validated and merged with defaults on load. No SAVE_VERSION bump. SW cache v47 |
