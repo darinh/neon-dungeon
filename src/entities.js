@@ -14,11 +14,11 @@ let lasers  = [];
 let wallTurrets = [];
 let disruptionFields = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -39,7 +39,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -509,6 +509,8 @@ class Enemy {
           this.stunTimer = 0;
         }
       }
+      // SIPHON: drain beam visual continues fading during stun
+      if (this._spDrainBeam) { this._spDrainBeam.t -= dt; if (this._spDrainBeam.t <= 0) this._spDrainBeam = null; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       // LEAPER airborne/recovery must complete even while stunned (can't freeze mid-air)
       if (this._lpState === 'airborne' || this._lpState === 'recovery') {
@@ -546,6 +548,7 @@ class Enemy {
       case 'DISRUPTOR':this.aiDisruptor(dt,player,map,d,los);break;
       case 'WRAITH':  this.aiWraith(dt,player,map,d,los);  break;
       case 'NEXUS':   this.aiNexus(dt,player,map,d,los);  break;
+      case 'SIPHON':  this.aiSiphon(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -606,6 +609,7 @@ class Enemy {
     const [dx,dy]=norm(px-this.x,py-this.y);
     const p=new Projectile(this.x,this.y,dx,dy,spd,dmg,range,colour,false,false);
     p.ownerType=this.type;
+    p._owner=this;
     projectiles.push(p);
     audio.shoot(false);
   }
@@ -1689,6 +1693,38 @@ class Enemy {
     return best;
   }
 
+  aiSiphon(dt, player, map, d, los) {
+    const bm = this.berserkerMul();
+    // Frenzy latch: once below 40% HP, permanently activated
+    if (!this._spFrenzy && this.hp < this.maxHp * 0.4) {
+      this._spFrenzy = true;
+      audio.siphonFrenzy();
+      spawnParticles(this.x, this.y, 'SPARK', '#dd2244', 12);
+    }
+    const fireInterval = (this._spFrenzy ? 1.0 : 2.0) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+    this._spFireTimer = Math.max(0, (this._spFireTimer || 0) - dt);
+    // Drain beam fade
+    if (this._spDrainBeam) {
+      this._spDrainBeam.t -= dt;
+      if (this._spDrainBeam.t <= 0) this._spDrainBeam = null;
+    }
+
+    if (los && d < 4) {
+      // Too close — retreat
+      this.moveToward(this.x + (this.x - player.x), this.y + (this.y - player.y), this.spd, dt, map);
+    } else if (los && d <= 9) {
+      // In range — fire drain projectile
+      if (this._spFireTimer <= 0) {
+        this.fireAt(player.x, player.y, 7, this.atk, 12, '#dd2244');
+        this._spFireTimer = fireInterval;
+      }
+    } else if (los && d > 9) {
+      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
   aiBossSentinel(dt,player,map,d,los) {
     if (this.hp<100) this.phase=2; else this.phase=1;
     if (this.phase!==this.prevPhase) {
@@ -2592,6 +2628,58 @@ class Enemy {
         }
         ctx.restore();
       }
+      // SIPHON: crimson aura + frenzy glow + drain beam
+      if (this.type === 'SIPHON') {
+        ctx.save();
+        const frenzy = this._spFrenzy;
+        const pulseRate = frenzy ? 5.0 : 2.0;
+        const baseAlpha = frenzy ? 0.3 : 0.15;
+        const auraAlpha = baseAlpha + 0.1 * Math.sin(this.bobAngle * pulseRate);
+        // Crimson aura circle
+        ctx.globalAlpha = auraAlpha;
+        ctx.fillStyle = '#dd2244';
+        ctx.shadowBlur = frenzy ? 18 : 10;
+        ctx.shadowColor = '#dd2244';
+        const auraR = sz * (frenzy ? 1.6 : 1.3) + Math.sin(this.bobAngle * pulseRate) * 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, auraR, 0, TWO_PI);
+        ctx.fill();
+        // Frenzy: inner heartbeat pulse
+        if (frenzy) {
+          const hb = Math.abs(Math.sin(this.bobAngle * 3.5));
+          ctx.globalAlpha = hb * 0.3;
+          ctx.fillStyle = '#ff4466';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 0.8 * (0.8 + hb * 0.4), 0, TWO_PI);
+          ctx.fill();
+        }
+        // Drain beam (set on successful life steal in content.js)
+        if (this._spDrainBeam && this._spDrainBeam.t > 0) {
+          const db = this._spDrainBeam;
+          const beamAlpha = (db.t / 0.3) * 0.5;
+          ctx.globalAlpha = beamAlpha;
+          ctx.strokeStyle = '#dd2244';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ff4466';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(db.px * TILE - camX, db.py * TILE - camY);
+          ctx.lineTo(sx, sy);
+          ctx.stroke();
+          // Heal particles moving toward SIPHON
+          const progress = 1 - db.t / 0.3;
+          const mx = db.px + (this.x - db.px) * progress;
+          const my = db.py + (this.y - db.py) * progress;
+          ctx.globalAlpha = beamAlpha * 1.5;
+          ctx.fillStyle = '#44ff88';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = '#44ff88';
+          ctx.beginPath();
+          ctx.arc(mx * TILE - camX, my * TILE - camY, 3, 0, TWO_PI);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
       // Teleporter: afterimage at previous warp origin
       if (this.type === 'TELEPORTER' && this._warpFade > 0) {
         ctx.save();
@@ -3040,6 +3128,7 @@ const ENEMY_WEIGHTS = {
   DISRUPTOR:  { base: 1,  perFloor: 2, minFloor: 6 },  // area-denial field deployer
   WRAITH:     { base: 1,  perFloor: 2, minFloor: 8 },  // wall-phasing ethereal predator
   NEXUS:      { base: 1,  perFloor: 2, minFloor: 9 },  // neural command node, buffs linked allies
+  SIPHON:     { base: 1,  perFloor: 2, minFloor: 8 },  // life-draining predator
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -3081,6 +3170,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'DISRUPTOR':hp=30;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
     case 'WRAITH':  hp=35;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
     case 'NEXUS':   hp=40;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
+    case 'SIPHON':  hp=30;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -3121,6 +3211,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
   if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+Math.random(); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
   if (type==='NEXUS')    { e._nxLinks=[]; e._nxLinkTimer=0; e._nxFireTimer=1.0; }
+  if (type==='SIPHON')   { e._spFireTimer=1.0; e._spFrenzy=false; e._spDrainBeam=null; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
@@ -3134,7 +3225,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

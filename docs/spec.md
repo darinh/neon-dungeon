@@ -933,6 +933,7 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | DISRUPTOR    | 30      | 9   | Deploys persistent area-denial fields          | 25  |
 | WRAITH       | 35      | 13  | Phases through walls, emerges to attack         | 30  |
 | NEXUS        | 40      | 8   | Links to allies granting DR, death stuns linked | 35  |
+| SIPHON       | 30      | 10  | Life-draining ranged attacker, self-heals on hit | 28  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
@@ -943,6 +944,7 @@ TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 
 SNIPER appears floor 7+,
 REFLECTOR appears floor 7+,
 WRAITH appears floor 8+,
+SIPHON appears floor 8+,
 NEXUS appears floor 9+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
@@ -1558,6 +1560,81 @@ stealth). Death: teal particle explosion.
 **Audio:** `audio.nexusLink()` — subtle electronic connection buzz when new link
 forms. `audio.nexusDeath()` — descending electromagnetic feedback pulse +
 crackling.
+
+#### SIPHON (floor 8+)
+
+Life-draining predator that sustains itself through combat. Unlike HEALER (heals
+others) or NEXUS (buffs others), the SIPHON sustains itself by leeching health
+from the player on every successful hit. Creates a DPS-check dynamic: players
+must out-damage the healing rate or face an enemy that never dies.
+
+| Stat | Value |
+|------|-------|
+| HP   | 30 (base) |
+| ATK  | 10 |
+| SPD  | 2.2 |
+| XP   | 28 |
+| Credits | 10 |
+| Colour | `#dd2244` (crimson) |
+| TYPE_CAPS | 1 per room |
+
+**AI:** Mid-range kiter (HEALER/NEXUS pattern). Preferred range 4–9 tiles.
+Retreats if player within 4 tiles, approaches at 0.6× speed beyond 9 tiles.
+Fires crimson drain projectiles (speed 7, range 12). Fire interval: 2.0 s
+(reduced by OVERCLOCK modifier and berserker affix).
+
+**Life Steal:**
+- When a SIPHON projectile deals damage to the player, the SIPHON heals for
+  **50%** of actual damage dealt (after player defense and damage reduction).
+- If `dealt === 0` (fully blocked): no heal.
+- If the SIPHON is dead when the projectile lands (e.g. killed by Reactive
+  Armor): no heal.
+- Tracked via `_owner` reference on the projectile (set in `fireAt()`).
+- **Visual**: 0.3 s fading crimson beam from player to SIPHON + green heal
+  particles flying toward SIPHON.
+- **Audio**: `audio.siphonDrain()` — vampiric draining tone.
+
+**Frenzy Mode (< 40% HP):**
+- Triggered once when HP drops below 40% of maxHp. **Permanently latched** —
+  does not deactivate if healed above 40%.
+- Attack cooldown halved: 2.0 s → 1.0 s.
+- Life steal increased: 50% → **75%**.
+- **Visual**: Intensified crimson aura (faster pulse, brighter glow) with inner
+  heartbeat pulse.
+- **Audio**: `audio.siphonFrenzy()` — dual bass thuds + rising tension (one-shot
+  on activation, does not replay).
+
+**Interactions:**
+- **Shield Gen DR / NEXUS DR**: SIPHON benefits from both — multiplicative DR
+  means it takes even less damage, extending its life-steal window.
+- **HEALER**: Can heal SIPHON — creates priority targeting puzzle (kill SIPHON
+  or HEALER first?).
+- **EMP**: Standard stun, prevents firing (and therefore drain) during stun.
+- **Reactive Armor**: Player's reactive armor triggers on SIPHON hit. If the
+  pulse kills the SIPHON before life-steal logic runs, no heal occurs (natural
+  counterplay).
+- **Auto-targeting**: Fully targetable by sentry drones, plasma orbs, hacked
+  turrets, etc.
+- **Projectile collision**: Standard — no reflection or blocking.
+
+**Elite eligible:** No. Life steal + REGENERATING/SHIELDED affixes would create
+runaway sustain. Excluded from elite rolls alongside SNIPER, SUMMONER, HEALER,
+and MIMIC.
+
+**Modifier interactions:**
+- OVERCLOCK (÷1.2 cooldowns): Fire rate increased — more drain opportunities.
+- SWARM (0.6× HP): Fragile; enters frenzy earlier.
+- FORTIFIED (1.4× HP): Tankier; more time to drain before frenzy threshold.
+- CORROSIVE (+2 flat dmg): Slightly more drain per hit.
+
+**Visual:** Crimson (`#dd2244`) with pulsing dark aura. Frenzy: brighter,
+faster-pulsing aura with inner heartbeat glow. Drain beam: crimson line from
+player to SIPHON (0.3 s fade). Heal particles: green sparkles moving toward
+SIPHON. Standard minimap dot (no stealth).
+
+**Audio:** `audio.siphonDrain()` — descending hollow tone with wet siphon.
+`audio.siphonFrenzy()` — heart-beating bass activation (dual low thuds + rising
+tension).
 
 #### MIMIC (floor 7+)
 
@@ -3308,3 +3385,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v69.0   | DISRUPTOR enemy (floor 6+): area-denial specialist deploying persistent electromagnetic interference fields. AI maintains 5–9 tile range, retreats < 4, deploys 2-tile radius fields every 4 s near player (validated passable tile, ±0.75 offset), secondary ranged attack every 2.5 s. Fields: 5 s duration, `(3 + floor × 0.5) × envDmg` DPS at 0.5 s interval (ignoreDefense, ignoreInvincible), hackware cooldown frozen, 20% movement slow. Non-stacking debuffs (binary flag). Dash/Phase Cloak immune. Max 2 fields per disruptor; oldest replaced at cap. Fields persist after disruptor death. EMP destroys fields in radius. `disruptionFields[]` global array, `updateDisruptionFields()`, `drawDisruptionFields()`. Stats: HP 30, ATK 9, SPD 2.0, XP 25, credits 10. Colour: `#ff44aa`. Status badge: `⊘ DISRUPTED`. Minimap: magenta pulsing dot. `audio.disruptorDeploy()` (descending warble), `audio.disruptorField()` (static crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 6. Spec v4.8. SW cache v81. |
 | v70.0   | WRAITH enemy (floor 8+): ethereal wall-phasing predator with 4-state machine (`_wrState`). `phased` (2–3 s): moves through walls ignoring `isPassable()`, speed ×1.2, untargetable, immune to all damage (`_wrPhased` flag → `takeDamage()` early return, projectile/AoE/targeting skips). `emerging` (0.5 s): telegraph at passable tile near player (1.2–3.5 range, `_wrFindEmergeTile()` 20-attempt search + fallbacks). `corporeal` (2–3 s): normal combat, ranged attack every 1.5 s, damage extends timer (+0.3 s/hit, 0.5 s ICD, cap 3 s). `fading` (0.4 s): phase-out telegraph, still damageable. EMP hard counter: bypasses LOS, forces materialization + 2 s stun. Stun forces corporeal. Burn ticks suppressed while phased. Chain lightning/saw blade/nano swarm/gravity/static field skip phased. Room clear blocked by phased WRAITHs. Minimap: hidden unless Thermal Optics (dim spectral dot). Visual: alpha 0.1 (phased)→0.85 (corporeal), emerging glow ring, fading dashed ring. Emerging bypasses FOV gating. Stats: HP 35, ATK 13, SPD 2.8, XP 30, credits 12. Colour: `#66ffcc`. `audio.wraithPhaseOut()` (descending whoosh), `audio.wraithPhaseIn()` (ascending whoosh + crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 8. Spec v4.9. SW cache v82. |
 | v71.0   | NEXUS enemy (floor 9+): neural command node that links to nearby allies granting 25% DR. AI: HEALER-like retreat pattern (4–10 tile range), fires teal projectiles (speed 6, range 12), fire rate scales with link count (2.0 s → 1.0 s with 3 links). Neural links: up to 3 allies within 5 tiles (same room, break at 7), 0.5 s update interval. Cannot link: bosses, other NEXi, phased WRAITHs, disguised MIMICs, invisible PHANTOMs. DR applied in `takeDamage()` after Shield Gen DR (multiplicative). Stun breaks all links; re-form after stun ends. Retreat targets nearest ally cluster to maintain links. Death neural feedback: stun all linked enemies 1.5 s + deal `10 + floor × 2` damage (via `takeDamage('Neural Feedback')`), teal explosion + screen shake. `_nxLinks[]` array, `_nxBoosted` flag on linked enemies, `_nxUpdateLinks()` + `_nxFindAllyCluster()` helpers. Stats: HP 40, ATK 8, SPD 1.8, XP 35, credits 12. Colour: `#00eedd` (teal). Visual: dashed orbital ring + inner diamond, animated teal dashed beam links with glow on linked enemies. `audio.nexusLink()` electronic buzz, `audio.nexusDeath()` electromagnetic feedback pulse. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 9. Spec v5.0. SW cache v83. |
+| v72.0   | SIPHON enemy (floor 8+): life-draining predator that heals from damage dealt to the player. AI: mid-range kiter (4–9 tile range), retreats < 4, fires crimson drain projectiles (speed 7, range 12, 2.0 s interval). Life steal: 50% of actual damage dealt heals SIPHON (tracked via `_owner` ref on projectile, added to `fireAt()`). Frenzy mode: permanently latched at < 40% HP — cooldown halved (1.0 s), life steal 75%. `dealt === 0` or dead owner → no heal. Visual: crimson aura (pulsing, frenzy intensifies + heartbeat inner glow), 0.3 s drain beam from player to SIPHON + green heal particles on successful drain. Elite ineligible (life steal + REGENERATING = runaway sustain). Stats: HP 30, ATK 10, SPD 2.2, XP 28, credits 10. Colour: `#dd2244` (crimson). `audio.siphonDrain()` vampiric tone, `audio.siphonFrenzy()` bass activation. TYPE_CAPS: 1. Spawn weight: base 1, perFloor 2, minFloor 8. Spec v5.1. SW cache v84. |
