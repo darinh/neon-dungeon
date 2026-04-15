@@ -617,6 +617,7 @@ function activateHackware(player) {
       const radius = 4;
       for (const e of enemies) {
         if (e.dead) continue;
+        if (e._disguised) continue; // don't reveal mimics via stun text
         const d = dist(player.x, player.y, e.x, e.y);
         if (d < radius && map && hasLOS(player.x, player.y, e.x, e.y, map)) {
           const dur = e.isBoss ? 1 : 2; // bosses get reduced stun
@@ -696,6 +697,7 @@ function updateHackwareEffects(dt) {
       let best = null, bestD = 8;
       for (const e of enemies) {
         if (e.dead) continue;
+        if (e._disguised) continue; // don't home toward disguised mimics
         const d = dist(fx.x, fx.y, e.x, e.y);
         if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) { best = e; bestD = d; }
       }
@@ -731,6 +733,7 @@ function updateHackwareEffects(dt) {
       const pullStr = 4;
       for (const e of enemies) {
         if (e.dead || e.isBoss) continue; // bosses immune to pull
+        if (e._disguised) continue; // don't pull disguised mimics
         const d = dist(e.x, e.y, fx.x, fx.y);
         if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
           e.moveToward(fx.x, fx.y, pullStr, dt, map);

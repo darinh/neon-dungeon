@@ -9,11 +9,11 @@ let crates  = [];
 let beacons = [];
 let mines   = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -27,7 +27,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -254,6 +254,8 @@ class Enemy {
       this._phState='cooldown'; this._phTimer=1.5; this.visible=true;
       audio.phantomUncloak();
     }
+    // MIMIC: damage forces reveal
+    if (this._disguised) this.revealMimic(game.player);
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first
@@ -307,7 +309,12 @@ class Enemy {
     applyOnKill(this);
     const d=getDiff();
     const dropRate = game.modifier === 'FORTIFIED' ? d.itemDrop * 1.3 : d.itemDrop;
-    if (!this.isShard && !isSummon && Math.random()<dropRate) items.push(new Item(this.x,this.y));
+    // MIMIC: guaranteed single drop (suppress normal roll)
+    if (this.type === 'MIMIC') {
+      items.push(new Item(this.x, this.y));
+    } else if (!this.isShard && !isSummon && Math.random()<dropRate) {
+      items.push(new Item(this.x,this.y));
+    }
     game.player.gainXP(Math.round(this.xpValue*d.xpMul));
     // Combo: SHARDs, summons, and VOLATILE chain kills don't build streak
     const comboEligible = !this.isShard && !isSummon && !this._volatileKill;
@@ -437,6 +444,7 @@ class Enemy {
       case 'SUMMONER': this.aiSummoner(dt,player,map,d,los); break;
       case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
       case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
+      case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'WARDEN':   this.aiBossWarden(dt,player,map,d,los);   break;
@@ -1063,6 +1071,60 @@ class Enemy {
     }
   }
 
+  // ─── MIMIC AI ──────────────────────────────────────────────────────────────
+  revealMimic(player) {
+    if (!this._disguised) return;
+    this._disguised = false;
+    this._revealTimer = 0.3;
+    audio.mimicReveal();
+    spawnParticles(this.x, this.y, 'EXPLOSION', '#cc33ff', 18);
+    triggerShake(4, 0.15);
+    game.msg('⚠ MIMIC!', '#cc33ff');
+    // Lock lunge direction toward player
+    const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+    this._mimicLungeDx = dx;
+    this._mimicLungeDy = dy;
+  }
+
+  aiMimic(dt, player, map, d, los) {
+    // Reveal telegraph: expanding ring, no AI yet
+    if (this._revealTimer > 0) {
+      this._revealTimer -= dt;
+      if (this._revealTimer <= 0) {
+        // Lunge attack toward player position at reveal
+        this._mimicBurstTimer = 3.0;
+        if (d < 2.5 && canTargetPlayer()) {
+          this.meleeAttack(player);
+        }
+      }
+      return;
+    }
+
+    // Disguised: bob like an item, check proximity
+    if (this._disguised) {
+      this._mimicBob += dt * 2;
+      if (d < 1.5) this.revealMimic(player);
+      return;
+    }
+
+    // Combat: fast melee chase (burst speed decays over 3s)
+    this._mimicBurstTimer = Math.max(0, (this._mimicBurstTimer || 0) - dt);
+    const burstMul = this._mimicBurstTimer > 0 ? 1.0 + 0.36 * (this._mimicBurstTimer / 3.0) : 1.0;
+    const spd = this.spd * burstMul;
+
+    if (los || (d < 8 && canTargetPlayer())) {
+      this.zigzag += dt * 5;
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const perp = { x: -dy, y: dx };
+      const tx = player.x + perp.x * Math.sin(this.zigzag) * 1.2;
+      const ty = player.y + perp.y * Math.sin(this.zigzag) * 1.2;
+      this.moveToward(tx, ty, spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
   aiBossSentinel(dt,player,map,d,los) {
     if (this.hp<100) this.phase=2; else this.phase=1;
     if (this.phase!==this.prevPhase) {
@@ -1636,6 +1698,38 @@ class Enemy {
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     if (sx<-40||sx>W+40||sy<-40||sy>H+40) return;
 
+    // MIMIC disguise: render as item
+    if (this._disguised) {
+      const bobY = Math.sin(this._mimicBob) * 2;
+      ctx.save();
+      ctx.shadowBlur = 12; ctx.shadowColor = this._mimicColour;
+      ctx.fillStyle = this._mimicColour;
+      ctx.fillRect(sx - 5, sy - 5 + bobY, 10, 10);
+      // Subtle shimmer tell every ~2.5s (0.15s flash)
+      const shimCycle = ((game.floorTime || 0) * 0.4) % 1;
+      if (shimCycle > 0.92) {
+        ctx.globalAlpha = 0.3 + 0.4 * Math.sin(shimCycle * 80);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx - 6, sy - 6 + bobY, 12, 12);
+      }
+      ctx.restore();
+      return;
+    }
+
+    // MIMIC reveal burst: expanding ring
+    if (this.type === 'MIMIC' && this._revealTimer > 0) {
+      const progress = 1 - this._revealTimer / 0.3;
+      ctx.save();
+      ctx.globalAlpha = 0.7 * (1 - progress);
+      ctx.strokeStyle = '#cc33ff';
+      ctx.shadowBlur = 15; ctx.shadowColor = '#cc33ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, progress * TILE * 2, 0, TWO_PI);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     let alpha=1;
     if (this.type==='PHANTOM') {
       if (this._phState==='cloaked') alpha=0.08;
@@ -2185,6 +2279,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SUMMONER': hp=35;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
     case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
     case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
+    case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=330; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -2219,13 +2314,20 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
+  if (type==='MIMIC')    {
+    e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
+    e._mimicBob=Math.random()*TWO_PI;
+    // Random item colour for disguise
+    const itemColours=['#ff3366','#3399ff','#33ff99','#ffcc33','#cc66ff','#ff8844'];
+    e._mimicColour=itemColours[Math.floor(Math.random()*itemColours.length)];
+  }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
-  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, or summoners
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

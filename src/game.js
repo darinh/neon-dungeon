@@ -636,7 +636,7 @@ const game = {
         if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
         if (room.roomType === 'challenge' && !room.challengeComplete) continue;
-        if (enemies.some(e => !e.dead && e.room === room)) continue;
+        if (enemies.some(e => !e.dead && !e._disguised && e.room === room)) continue;
         // Block room-clear until alarm beacons are resolved
         if (beacons.some(b => !b.dead && b.room === room)) continue;
         this.clearedRooms.add(room);
@@ -709,6 +709,7 @@ const game = {
         let nearest = null, nearD = 64;
         for (const e of enemies) {
           if (e.dead) continue;
+          if (e._disguised) continue;
           const d = dist(player.x, player.y, e.x, e.y);
           if (d < nearD) { nearD = d; nearest = e; }
         }
@@ -740,6 +741,7 @@ const game = {
           for (const e of enemies) {
             if (e.dead) continue;
             if (e.type === 'PHANTOM' && !e.visible) continue;
+            if (e._disguised) continue;
             const d = dist(droneX, droneY, e.x, e.y);
             if (d < nearD && hasLOS(droneX, droneY, e.x, e.y, dungeon.map)) {
               nearD = d; nearest = e;
@@ -769,6 +771,7 @@ const game = {
         for (const e of enemies) {
           if (e.dead) continue;
           if (e.type === 'PHANTOM' && !e.visible) continue;
+          if (e._disguised) continue;
           const d = dist(player.x, player.y, e.x, e.y);
           if (d <= minD && hasLOS(player.x, player.y, e.x, e.y, dungeon.map)) {
             minD = d; target = e;

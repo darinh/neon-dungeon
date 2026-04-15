@@ -1329,6 +1329,14 @@ const audio = (() => {
       osc('sine', 1200, 600, 0.04, t + 0.01, 0.06);
       noise(0.04, t, 0.04, 6000);
     },
+    mimicReveal() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp dissonant alarm chirp — trap springing + digital distortion
+      osc('square', 200, 1600, 0.10, t, 0.12);
+      osc('sawtooth', 600, 2200, 0.06, t + 0.02, 0.10);
+      osc('sine', 1400, 400, 0.05, t + 0.08, 0.10);
+      noise(0.07, t, 0.08, 7000);
+    },
     teleport() {
       const c = getCtx(); const t = c.currentTime;
       // Quick zwip — descending sine + high noise pop
