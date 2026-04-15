@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v3.0
+# NEON DUNGEON — Game Specification v3.1
 
 ## Vision
 
@@ -375,11 +375,12 @@ When cloaked (`player.cloakTimer > 0`):
 | SPLITTER     | 40      | 8   | Splits into 2 SHARDs on death               | 25  |
 | GRENADIER    | 30      | 10  | Lobs grenades creating AoE damage zones     | 20  |
 | TELEPORTER   | 25      | 12  | Blinks around room, fires ranged bursts      | 22  |
+| SNIPER       | 20      | 15  | Laser-sight charge, fast high-damage shot     | 25  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
-GRENADIER appears floor 5+, TELEPORTER appears floor 6+.
+GRENADIER appears floor 5+, TELEPORTER appears floor 6+, SNIPER appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
 
@@ -472,6 +473,44 @@ players who camp in one spot and rewards target tracking.
   - SWARM (0.6× HP): Even more fragile — reward for fast target acquisition
   - BLACKOUT: Harder to spot the flicker in reduced torch radius
 
+#### SNIPER (floor 7+)
+
+Glass-cannon marksman that locks a visible laser sight on the player's
+position, then fires a fast, high-damage projectile. The 1.5 s charge window
+gives the player time to dodge sideways — the laser target is locked at the
+moment of acquisition, **not** tracking. Rewards awareness and lateral
+movement; punishes standing still.
+
+- **Lock-on:** When the player is in the sniper's room, within LOS, and within
+  15 tiles, the sniper stops moving and locks a laser sight on the player's
+  current position. A rising chirp (`sniperCharge()`) plays.
+- **Charge phase (1.5 s fixed):** A pulsing red dotted line from sniper to
+  target with increasing opacity (0.15 → 0.65) and a red target dot. Charge
+  duration is **never** reduced by OVERCLOCK or BERSERKER affix — the
+  telegraph must stay fair.
+- **Fire:** At charge end, fires a speed-14 projectile along the locked
+  direction (range 20). A sharp crack (`sniperFire()`) plays. After firing,
+  enters reposition phase.
+- **Reposition (1.0 s):** Moves at 1.5× speed to a far passable tile in its
+  room (sampling 15 candidates, picking the farthest from the player). OVERCLOCK
+  and berserkerMul scale this timer and the post-fire cooldown, but not the
+  charge.
+- **Cancel conditions:** Charge aborts if the player cloaks, breaks LOS, leaves
+  the room, or gets within 3 tiles. On cancel, a 0.8 s cooldown prevents
+  stutter re-lock. If cancelled because the player is too close, the sniper
+  flees at 1.3× speed.
+- **Room-gated aggro:** The sniper only aggros when `player.x/y` is within the
+  sniper's assigned room bounds. This prevents unfair cross-room sniping.
+- **Stats:** HP 20, ATK 15, SPD 2.5, XP 25.
+- **Visual:** Hot pink-red (`#ff2266`). Idle: faint scope glint above head
+  (pulsing 1.5 px dot). Charging: red dotted laser line + target circle.
+- **Credits:** 10
+- **Cap:** 1 per room.
+- **Elite exclusion:** SNIPERs never roll elite — the high ATK + elite HP/ATK
+  multiplier would produce unfair damage spikes.
+- **Cooldown between shots:** `max(2.5, 3.5 − floor × 0.1)` seconds,
+  scaled by berserkerMul and OVERCLOCK.
+
 ### Difficulty Modes
 
 Three selectable difficulty levels, chosen from the main menu on the NEW GAME
@@ -534,7 +573,7 @@ SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 - SCRAMBLED: `Player.shoot()` spread addend.
 - OVERCLOCK: `modSpeed(base)` helper used in `moveToward()` (all enemies) and
   player movement; cooldown divisor in `aiTurret`, `aiDrone`, `aiGrenadier`,
-  `meleeAttack`.
+  `aiSniper` (reposition + cooldown only — charge time is fixed), `meleeAttack`.
 
 **Display:**
 - On floor entry: message via `game.msg()` (300 ms delay) showing icon + name
@@ -565,6 +604,7 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | SPLITTER  | 2           | +2        | 4         |
 | GRENADIER | 1           | +2        | 5         |
 | TELEPORTER| 1           | +2        | 6         |
+| SNIPER    | 1           | +2        | 7         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
@@ -572,14 +612,16 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 floor 10 averages 5–8 (capped by room area).
 
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
-max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter per room.
-Excess rolls reroll among uncapped, floor-eligible types; final fallback is
-GUARD.
+max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper
+per room. Excess rolls reroll among uncapped, floor-eligible types; final
+fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
 
 Base 8% chance per spawn on floor 3 and above (scaled by difficulty: 4% EASY,
-12% HARD). Maximum 1 elite per room. Never applied to bosses or boss-summoned adds.
+12% HARD). Maximum 1 elite per room. Never applied to bosses, boss-summoned
+adds, or SNIPERs (elite ATK multiplier on a glass cannon would produce unfair
+damage spikes).
 
 | Stat     | Multiplier |
 |----------|------------|
@@ -1770,3 +1812,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v33.0   | Procedural ambient music system: 4-layer synthesised soundtrack via Web Audio. Drone (2 detuned sawtooths → lowpass → LFO), Pulse (sub kick + hi-hat), Arp (minor pentatonic square wave sequences, 70% probability), Bass (triangle root pulses). 5 music states: idle/explore/combat/boss/tension — crossfade transitions (1.5s). Floor-dependent tuning: C2→B♭1→A♭1→F1 root descent, 100→130 BPM acceleration. Combat/boss tempo boost. Separate music bus (gain 0.12 → dedicated compressor → destination) isolates from SFX dynamics. `music.tick()` in main loop with 250ms Web Audio lookahead scheduling. Cached noise buffer for hi-hats. Pause mutes + stops scheduling (no `AudioContext.suspend()`). Music state resolved per frame in `updatePlaying()`: boss > tension > combat > explore. `music.setFloor(n)` retunes drone via exponential ramp. `music.stop()` on endRun/menu. No save format change. SW cache v40 |
 | v34.0   | Augment system: cybernetic implants with permanent passive effects. 12 augments (Neural Link, Titanium Plating, Magnetic Field, Thermal Optics, Adrenaline Injector, Overclocker, Echo Mapper, Credit Siphon, Scavenger Nanites, Kinetic Amplifier, Temporal Dilation, Reactive Armor). Max 3 per run. New `implant` room type (floors 2–9, ~50% spawn rate) with `T.IMPLANT_SHRINE` tile (18). `AUGMENT_CHOICE` game state with 2-card UI. Vendor sells augments (~20% on floor 3+). Capped players get credits at shrines. `AUGMENTS` table, `rollAugmentChoices()`, `makeAugmentShopOption()`, `hasAugment()` helper. Effect hooks: `gainXP()` (Neural Link ×1.25), `takeDamage()` (Titanium Plating −1, Reactive Armor pulse), item pickup (Magnetic Field ×2 radius), `drawMinimap()` (Thermal Optics + Echo Mapper), `Enemy.die()` (Adrenaline Injector speed buff, Scavenger Nanites heal, Credit Siphon ×1.5), `activateHackware()` (Overclocker ×0.7 CD), `Projectile` constructor (Kinetic Amplifier ×1.2 speed), `Enemy.moveToward()` (Temporal Dilation ×0.85). `player.augments` saved (no SAVE_VERSION bump — defaults to {} on old saves). Status badges for augment count, Adrenaline buff, Reactive cooldown. Death recap lists augments. 3 new audio SFX. SW cache v41 |
 | v35.0   | Floor events: risk/reward encounter terminals offering binary choices. 8 event types: Stasis Pod (heal+XP / item), Corrupted Terminal (60% hackware 40% alarm / credits), Arms Cache (weapon reroll −HP / item), Radiation Leak (augment −HP / credits+score), Rogue AI (reveal minimap / trade credits for XP), Power Junction (stun+damage room enemies / heal 60%), Ghost Signal (credits+XP+score / combo boost), Emergency Drop (heal+item / hackware CD reset+credits). New `event` room type (floors 2–9, every non-boss floor). `T.EVENT_TERMINAL` tile (19) — pulsing teal terminal. `EVENT_CHOICE` game state with 2-card UI (keyboard 1/2, arrows+Enter, mouse/touch). `EVENTS` table, `rollEvent()` filters by player state (skips augment event at cap, bargain event if broke), `applyEventEffect()` executes outcomes. Choices include safe options (credits, items, score) and risky options (weapon reroll with trap damage, augment with HP cost, hackware with 40% enemy spawn). Event rooms excluded from lore placement. `player.eventsResolved` stat tracked in save/load and shown on Game Over/Victory screens. Credit Siphon augment synergy applies to credit rewards. Pending perk choices checked after event resolution (XP grants may trigger level-ups). 2 new audio SFX (`audio.eventTerminal()`, `audio.eventResolve()`). Minimap: teal 3px POI marker. No SAVE_VERSION bump — defaults on old saves. SW cache v42 |
+| v36.0   | SNIPER enemy (floor 7+): glass-cannon marksman with laser-sight charging mechanic. 1.5s visible red laser line locks on player position (does NOT track), then fires speed-14 high-damage projectile. Room-gated aggro (only activates when player is inside sniper's room). Cancel conditions: cloak, LOS break, stun, player flees room, player closes to <3 tiles (triggers flee). Fixed charge time (unaffected by OVERCLOCK/berserker — telegraph stays fair). Post-fire reposition to far tile in room. Post-cancel cooldown prevents stutter re-lock. Stun clears charge state (handled in Enemy.update stun early-return). Elite excluded (ATK 15 too high for elite multiplier). Stats: HP 20, ATK 15, SPD 2.5, XP 25, credits 10, cap 1/room. Visual: hot pink-red `#ff2266`, idle scope glint, pulsing laser line + target dot during charge. 2 new audio SFX (`audio.sniperCharge()`, `audio.sniperFire()`). No SAVE_VERSION bump. SW cache v43 |
