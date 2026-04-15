@@ -604,6 +604,9 @@ const game = {
     // update laser tripwires
     updateLasers(dt);
 
+    // update wall turrets
+    updateWallTurrets(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -669,6 +672,8 @@ const game = {
         if (beacons.some(b => !b.dead && b.room === room)) continue;
         // Block room-clear while a camera is actively alerted
         if (cameras.some(c => !c.dead && c.state === 'alerted' && c.room === room)) continue;
+        // Block room-clear until hostile wall turrets are destroyed or hacked
+        if (wallTurrets.some(wt => !wt.dead && !wt.hacked && wt.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
         lastCx = room.cx; lastCy = room.cy;
@@ -2481,6 +2486,9 @@ const game = {
 
     // laser tripwires (draw beam before enemies for layering)
     drawLasers(cam.x, cam.y);
+
+    // wall turrets
+    drawWallTurrets(cam.x, cam.y);
 
     // proximity mines (below items/enemies, above ground effects)
     drawMines(cam.x, cam.y);

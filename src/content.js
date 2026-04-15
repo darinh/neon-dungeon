@@ -645,6 +645,13 @@ function activateHackware(player) {
         const beamDist = dist(player.x, player.y, closestX, closestY);
         if (beamDist < radius) { l.disabled = true; l.disableTimer = LASER_DISABLE_DUR; audio.laserDisable(); }
       }
+      // EMP hacks wall turrets in radius (converts hostile → allied)
+      for (const wt of wallTurrets) {
+        if (wt.dead || wt.hacked) continue;
+        if (dist(player.x, player.y, wt.x, wt.y) < radius && hasLOS(player.x, player.y, wt.x, wt.y, map)) {
+          hackWallTurret(wt);
+        }
+      }
       break;
     }
     case 'PHASE_CLOAK': {
@@ -827,6 +834,17 @@ function updateHackwareEffects(dt) {
           if (now - lastHit >= 1.0) {
             fx.hitMap.set(l._emitB, now);
             damageLaserEmitter(l, 'B', fx.dmg);
+          }
+        }
+      }
+      // Static field damages hostile wall turrets (1s interval)
+      for (const wt of wallTurrets) {
+        if (wt.dead || wt.hacked) continue;
+        if (dist(wt.x, wt.y, fx.x, fx.y) < fx.radius && map && hasLOS(wt.x, wt.y, fx.x, fx.y, map)) {
+          const lastHit = fx.hitMap.get(wt) || -1;
+          if (now - lastHit >= 1.0) {
+            fx.hitMap.set(wt, now);
+            damageWallTurret(wt, fx.dmg);
           }
         }
       }
@@ -2386,7 +2404,7 @@ class Projectile {
           if (this.hitEnemies.size > this.maxPierces) { this.dead=true; return; }
         }
       }
-    } else if (!this.isGrenade) {
+    } else if (!this.isGrenade && !this.isAllyTurret) {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
       // Cloaked player: projectiles pass through
       if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
@@ -2474,6 +2492,43 @@ class Projectile {
         }
       }
     }
+    // Player projectiles can damage hostile wall turrets
+    if (!this.dead && this.fromPlayer) {
+      for (const wt of wallTurrets) {
+        if (wt.dead || wt.hacked) continue;
+        if (dist(this.x, this.y, wt.x, wt.y) < 0.6) {
+          damageWallTurret(wt, this.dmg);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
+    // Ally turret projectiles can hit enemies
+    if (!this.dead && this.isAllyTurret) {
+      for (const e of enemies) {
+        if (e.dead || this.hitEnemies.has(e)) continue;
+        if (dist(this.x, this.y, e.x, e.y) < 0.6) {
+          if (e.blocksProjectile(this) && !this.piercing) {
+            spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+            this.dead = true; return;
+          }
+          e.takeDamage(this.dmg, { name:'Wall Turret', effects:[], affixes:[] });
+          spawnParticles(this.x, this.y, 'BLOOD', '#ff3333', 4);
+          this.hitEnemies.add(e);
+          this.dead = true; return;
+        }
+      }
+    }
+    // Enemy projectiles can damage hacked wall turrets
+    if (!this.dead && !this.fromPlayer && !this.isAllyTurret && !this.isGrenade) {
+      for (const wt of wallTurrets) {
+        if (wt.dead || !wt.hacked) continue;
+        if (dist(this.x, this.y, wt.x, wt.y) < 0.6) {
+          damageWallTurret(wt, this.dmg);
+          this.dead = true; return;
+        }
+      }
+    }
   }
   draw(camX,camY) {
     // Ricochet trail — fading cyan line behind bouncing projectiles
@@ -2535,6 +2590,7 @@ function detonateGrenade(x, y, dmg) {
   damageShieldGensInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageCamerasInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageLasersInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  damageWallTurretsInRadius(x, y, 1.5, dmg, game.dungeon.map);
   triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
 }
 
