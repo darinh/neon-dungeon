@@ -2340,6 +2340,17 @@ class Projectile {
         }
       }
     }
+    // Player projectiles trigger proximity mines (pre-detonate from range)
+    if (!this.dead && this.fromPlayer) {
+      for (const m of mines) {
+        if (m.dead || m.state !== 'dormant') continue;
+        if (dist(this.x, this.y, m.x, m.y) < 0.6) {
+          armMine(m, MINE_FUSE_SHOT);
+          if (!this.piercing) { this.dead = true; return; }
+          break;
+        }
+      }
+    }
   }
   draw(camX,camY) {
     // Ricochet trail — fading cyan line behind bouncing projectiles
@@ -2398,6 +2409,7 @@ function detonateGrenade(x, y, dmg) {
   primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
   damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
   damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
+  triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
 }
 
 function updateHazardZones(dt, player) {

@@ -573,6 +573,9 @@ const game = {
     // update alarm beacons
     updateBeacons(dt);
 
+    // update proximity mines
+    updateMines(dt);
+
     // update items
     for (const it of items) it.update(dt);
 
@@ -2412,6 +2415,9 @@ const game = {
 
     // alarm beacons
     drawBeacons(cam.x, cam.y);
+
+    // proximity mines (below items/enemies, above ground effects)
+    drawMines(cam.x, cam.y);
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
