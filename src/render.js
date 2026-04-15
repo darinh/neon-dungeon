@@ -672,6 +672,7 @@ function drawMinimap(dungeon, player) {
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   for (const e of enemies) {
     if (e.dead) continue;
+    if (e._disguised) continue; // disguised mimics hidden from minimap
     const tx = Math.floor(e.x), ty = Math.floor(e.y);
     const inSight = !!dungeon.visible[ty]?.[tx];
     // Cloaked PHANTOMs: only show via Thermal Optics (dim purple)
@@ -910,6 +911,7 @@ function drawExpandedMinimap(dungeon, player) {
   const dotSz = Math.max(3, Math.round(sx * 0.5));
   for (const e of enemies) {
     if (e.dead) continue;
+    if (e._disguised) continue; // disguised mimics hidden from expanded minimap
     const tx = Math.floor(e.x), ty = Math.floor(e.y);
     const inSight = !!dungeon.visible[ty]?.[tx];
     if (!thermalOptics && !inSight) continue;
@@ -1057,6 +1059,7 @@ function drawThreatIndicators(camX, camY) {
   for (const e of enemies) {
     if (e.dead) continue;
     if (e.type === 'PHANTOM' && !e.visible) continue;
+    if (e._disguised) continue;
     const dx = e.x - px, dy = e.y - py;
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d < 1 || d > range) continue;
@@ -1250,10 +1253,28 @@ function populateFloor(dungeon, floorNum) {
     }
   }
 
-  // Bounty target designation (floor 2+, non-boss floors)
+  // Boss-floor flag (used by mimic spawn and bounty designation)
   const isBossFloor = floorNum === 3 || floorNum === 6 || floorNum === 10;
+
+  // Mimic spawn (floor 7+, non-boss, 50% chance, max 1 per floor)
+  if (floorNum >= 7 && !isBossFloor && Math.random() < 0.5) {
+    const mimicRooms = dungeon.rooms.filter(r =>
+      r !== dungeon.spawnRoom && r !== dungeon.bossRoom &&
+      !r.roomType && r.w * r.h >= 16
+    );
+    if (mimicRooms.length > 0) {
+      const mr = mimicRooms[rndInt(0, mimicRooms.length - 1)];
+      const mx = mr.x + rnd(1, mr.w - 1), my = mr.y + rnd(1, mr.h - 1);
+      if (isPassable(dungeon.map[Math.floor(my)]?.[Math.floor(mx)])) {
+        const m = spawnEnemy('MIMIC', mx, my, floorNum, mr, false);
+        enemies.push(m);
+      }
+    }
+  }
+
+  // Bounty target designation (floor 2+, non-boss floors)
   if (floorNum >= 2 && !isBossFloor) {
-    const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite && !e._summoned);
+    const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite && !e._summoned && !e._disguised);
     if (candidates.length > 0) {
       const bounty = candidates[rndInt(0, candidates.length - 1)];
       bounty._isBounty = true;

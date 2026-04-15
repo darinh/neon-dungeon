@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.0
+# NEON DUNGEON — Game Specification v4.1
 
 ## Vision
 
@@ -917,6 +917,51 @@ cadence.
   - SWARM (0.6× HP): Fragile but more numerous
   - FORTIFIED (1.4× HP): Hard to burst during cooldown window
   - CHARGED (1.4× projectile speed): Projectiles faster + 1.2× damage
+
+#### MIMIC (floor 7+)
+
+Ambush predator disguised as a data pickup. Creates late-game tension when
+approaching items — observant players can spot the subtle shimmer tell and
+prepare for the reveal. Rewards awareness and punishes careless item rushing.
+Guaranteed item drop on death compensates for the ambush risk.
+
+- **State machine** (`_disguised`, `_revealTimer`):
+  1. `disguised` — Renders as a coloured item pickup (random colour from
+     upgrade pool palette) with standard bob animation and glow. Subtle white
+     shimmer flash every ~2.5 s (a "tell" for attentive players). No AI, no
+     minimap dot, doesn't block room-clear, not targetable by Sentry Drone or
+     Auto-Laser.
+  2. `revealing` — 0.3 s telegraph burst. Expanding purple ring + explosion
+     particles. `audio.mimicReveal()`. No damage dealt during this window
+     (player gets a reaction frame).
+  3. `combat` — Fast melee attacker. Zigzag chase (like CRAWLER). Initial 3 s
+     speed burst (SPD 3.0 decaying to base 2.2). Standard melee attack range.
+- **Reveal triggers:**
+  - Player within 1.5 tiles (proximity).
+  - Any damage source (projectiles, AoE, VCore/mine explosions, Static Field,
+    Reactive Armor pulse). Damage-triggered reveal follows the PHANTOM pattern
+    (reveal + take the hit).
+- **Room-clear:** Disguised mimics do NOT count for `_hadEnemies` and never
+  block room-clear rewards. After reveal, they function as normal enemies.
+- **On death:** Guaranteed single item drop (suppresses normal drop roll).
+- **Bounty:** Excluded from bounty target designation.
+- **Hackware interactions:**
+  - EMP Burst: Skips disguised mimics (no stun text reveal).
+  - Nano Swarm: Does not home toward disguised mimics but can accidentally hit
+    one in proximity (damage → reveal).
+  - Gravity Well: Does not pull disguised mimics.
+  - Static Field: Damages enemies in radius — will reveal disguised mimics
+    caught in the field.
+- **Stats:** HP 30 + floor×3 (scaled), ATK 14, SPD 2.2 (base), XP 25.
+- **Visual:** Violet (`#cc33ff`). Disguised: random item colour. Reveal:
+  purple expanding ring. Combat: standard enemy rendering.
+- **Audio:** `mimicReveal()` — sharp dissonant alarm chirp (square 200→1600,
+  sawtooth 600→2200, sine 1400→400, noise burst).
+- **Credits:** 10
+- **Spawn:** 0–1 per floor (50% chance), floor 7+, non-boss floors only.
+  Placed in normal rooms (area ≥ 16, not spawn/boss/special). Separate spawn
+  pass (NOT in `ENEMY_WEIGHTS` / `pickEnemyType()`).
+- **Elite:** NOT eligible (ambush nature makes elite buffs unfair).
 
 ### Difficulty Modes
 
@@ -2607,3 +2652,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v58.0   | Alarm beacons: environmental alarm devices (floor 4+, ~40% chance per normal room ≥ 5×5). `beacons[]` entity array with HP (`10 + floor × 3`). When player enters room, 4 s countdown starts. Destroy beacon → credit reward (`floor × 3` with multipliers). Countdown expires → 2–3 reinforcement enemies spawn. Damaged by player projectiles and AoE explosions (VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation affix). Enemy projectiles cannot damage beacons. Room-clear blocked until beacon resolved. Visual: pulsing red diamond + antenna (idle), flashing diamond + expanding rings + countdown (active). Minimap: pulsing red dot. `audio.beaconAlarm()`, `audio.beaconDestroy()`, `audio.beaconTrigger()` SFX. Spec v3.8. SW cache v70. |
 | v59.0   | Proximity mines: hidden explosive traps (floor 3+, ~40% chance per normal room ≥ 5×5, 0–1 per room). `mines[]` entity array. Dormant: subtle shimmer, revealed permanently when player within 3 tiles. Armed when player/enemy within 0.9 tiles (0.8 s fuse) or shot by player projectile (0.3 s fuse). Detonation: 2-tile AoE (12 + floor × 3 dmg, bypasses defense, LOS-gated). Damages player and enemies. Chain-detonates nearby mines (staggered 0.1–0.15 s). Also triggered by VCore/grenade/VOLATILE/EXPLOSIVE_KILLS/Detonation AoE. Mine explosions prime VCores, damage crates/beacons. Enemy projectiles don't trigger mines. Minimap: hidden when dormant, orange dot when revealed/armed. `audio.mineArm()` (click + ascending tone), `audio.mineExplode()` (concussive blast). Spec v3.9. SW cache v71. |
 | v60.0   | PHANTOM enemy rework (floor 5+): stealth assassin with 4-state machine (cloaked→telegraph→attacking→cooldown). Cloaked: alpha 0.08, 1.3× speed, subtle shimmer, repositions in room on re-cloak. Telegraph: 0.4 s warning with expanding purple ring + aim indicator, alpha pulsing 0.3–0.5. Attacking: 2-shot purple burst (0.15 s gap, speed 8, range 14). Cooldown: 1.5 s visible retreat window. Damage interrupt: hit while cloaked/telegraph → forced to cooldown (1.5 s reveal). Close-range escape: repositions if player < 2.5 tiles while cloaked. Thermal Optics augment: dim purple pulsing minimap dot when cloaked. Sentry/Auto-Laser skip cloaked, can target telegraph+. Mines trigger normally on cloaked phantoms. Stats: HP 35, ATK 10, SPD 2.5, XP 30, credits 12. Spawn weight: base 2, perFloor 2, minFloor 5. TYPE_CAPS: 2. Elite eligible (PHASING excluded). `audio.phantomCloak()` (descending fade), `audio.phantomUncloak()` (ascending reveal), `audio.phantomStrike()` (energy bolt). Spec v4.0. SW cache v72. |
+| v61.0   | MIMIC enemy (floor 7+): ambush predator disguised as data pickup. 50% per non-boss floor. Disguised: renders as random-colour item with bob + glow, subtle white shimmer tell every ~2.5 s. Hidden from minimap, sentry/auto-laser, room-clear. Revealed by: player proximity (1.5 tiles) or any damage source (projectiles, AoE, mines, VCores, Static Field, Reactive Armor). 0.3 s reveal telegraph (purple burst ring + particles + `audio.mimicReveal()`). Combat: fast melee zigzag chase (SPD 3.0 burst for 3 s → 2.2 base, CRAWLER pattern). Guaranteed single item drop on death (suppresses normal drop roll). Excluded from bounty, ENEMY_WEIGHTS, elite rolls, challenge waves. EMP/Gravity skip disguised; Nano Swarm skips homing but proximity hits reveal. Stats: HP 30 + floor×3 (scaled), ATK 14, SPD 2.2, XP 25, credits 10. Colour: `#cc33ff` (violet). Separate spawn pass in `populateFloor` (normal rooms, area ≥ 16). Spec v4.1. SW cache v73. |
