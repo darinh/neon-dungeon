@@ -35,6 +35,7 @@ const game = {
   shopSelected: 0,    // keyboard selection index in shop
   shopClosing: false,  // true during auto-close delay after last purchase
   currentLore: null,   // lore text being displayed in READING state
+  readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
   // Challenge room state
@@ -720,6 +721,7 @@ const game = {
         dungeon.map[ty][tx] = T.FLOOR;
         audio.loreAccess();
         spawnParticles(player.x, player.y, 'SPARK', '#ffb700', 8);
+        this.readingInteractArmed = false;
         this.setState('READING');
         return;
       }
@@ -1566,7 +1568,11 @@ const game = {
   },
 
   updateReading() {
-    if (jp(km('interact')) || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
+    if (!this.readingInteractArmed && !keys.has(km('interact'))) {
+      this.readingInteractArmed = true;
+    }
+    const closeByInteract = this.readingInteractArmed && jp(km('interact'));
+    if (closeByInteract || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
       audio.menuSelect();
       this.setState('PLAYING');
     }
@@ -2891,7 +2897,9 @@ const game = {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#887744';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    const closeText = isTouch ? 'TAP TO CLOSE' : 'PRESS E TO CLOSE';
+    const closeText = isTouch
+      ? 'TAP TO CLOSE'
+      : 'PRESS ' + KEY_DISPLAY(km('interact')) + ' / ENTER / ESC TO CLOSE';
     const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
     ctx.globalAlpha = pulseAlpha;
     ctx.fillText(closeText, W / 2, fy + fh - (narrow ? 10 : 14));
