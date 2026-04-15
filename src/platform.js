@@ -1266,6 +1266,22 @@ const audio = (() => {
       osc('square', 120, 40, 0.06, t, 0.08);
       noise(0.08, t, 0.06, 3000);
     },
+    leaperWindup() {
+      const c = getCtx(); const t = c.currentTime;
+      // Spring tension — rising whine + mechanical coil
+      osc('sawtooth', 120, 400, 0.06, t, 0.2);
+      osc('sine', 200, 800, 0.04, t + 0.05, 0.18);
+      noise(0.03, t + 0.1, 0.1, 2000);
+    },
+    leaperLand() {
+      const c = getCtx(); const t = c.currentTime;
+      // Heavy impact — deep thud + shockwave whoosh
+      osc('sine', 60, 25, 0.12, t, 0.15);
+      osc('triangle', 100, 50, 0.07, t, 0.1);
+      noise(0.07, t + 0.02, 0.08, 2500);
+      // Shockwave ring swoosh
+      osc('sine', 300, 80, 0.04, t + 0.05, 0.2);
+    },
     beaconAlarm() {
       const c = getCtx(); const t = c.currentTime;
       // Escalating electronic alarm — pulsing siren

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v4.3
+# NEON DUNGEON — Game Specification v4.4
 
 ## Vision
 
@@ -824,11 +824,13 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | SUMMONER     | 35      | 8   | Stays at range, periodically summons minion drones | 30  |
 | HEALER       | 25      | 6   | Stays at range, periodically heals wounded allies | 22  |
 | CHARGER      | 45      | 14  | Slow patrol, telegraphed charge rush, melee   | 22  |
+| LEAPER       | 30      | 11  | Fast, jumps to player position, shockwave on landing | 22  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
 CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
+LEAPER appears floor 5+,
 TELEPORTER appears floor 6+, SUMMONER appears floor 6+, SNIPER appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
@@ -1072,6 +1074,72 @@ can see it winding up, but you need to move fast.
   - SWARM (0.6× HP): Glass cannon — hits hard but drops fast
   - FORTIFIED (1.4× HP): Tanky charger, very dangerous in packs
   - CHARGED (1.4× projectile speed): No effect (melee-only enemy)
+
+#### LEAPER (floor 5+)
+
+Fast, agile enemy that attacks by jumping to the player's position and
+creating an AoE shockwave on landing. Creates "dodge the reticle!" moments
+that reward repositioning during the windup telegraph. Unlike CHARGER (linear
+rush) or PHANTOM (ranged ambush), the LEAPER covers distance instantly by
+arc-jumping to a locked target position, demanding spatial awareness.
+
+- **State machine** (`_lpState`):
+  1. `idle` — Patrols or chases player (SPD 3.0, fast). Standard melee at
+     close range. When player is in LOS at 3–10 tiles and cooldown expired,
+     transitions to `windup`. Only one LEAPER may be in `windup` or `airborne`
+     at a time per room (prevents unavoidable overlap).
+  2. `windup` (0.5 s) — Telegraph phase. Target position locked to player's
+     position at the start of windup (does NOT track). Pulsing green glow
+     around leaper + dashed green targeting reticle at locked position.
+     Green spark particles build. At windup end, validates landing tile:
+     must be passable, in-bounds, and have LOS from launch position. If
+     invalid, cancels back to `idle` with 1.0 s cooldown.
+     - **Cancellation:** If LOS breaks or player cloaks during windup,
+       transitions to `idle` with 1.0 s cooldown.
+     - **Stun interrupt:** External stun (EMP, etc.) resets to `idle` with
+       1.5 s cooldown.
+  3. `airborne` (0.35 s) — Leaper arcs to the locked target position via
+     linear interpolation. Rendered with a parabolic height offset (peak
+     1.5 tiles up). No tile collision during flight — path is pre-validated.
+     Shadow circle on ground grows as leaper approaches landing point.
+     Hittable by projectiles during flight (no immunity). Ignores floor
+     hazards (plasma, arc, mines) while airborne.
+  4. `recovery` (1.0 s) — Vulnerable after landing. Cannot move or attack.
+     Uses explicit `_lpRecovery` timer (NOT `stunTimer`). Spinning green
+     star daze particles. External stun queues normally for after recovery.
+- **Shockwave** (on landing): 2-tile radius AoE centered on landing position.
+  - Damage: ATK × 1.2 (rounded). LOS-gated from landing point.
+  - Player: Respects dash i-frames and Phase Cloak.
+  - Crates: Damaged via `damageCratesInRadius`.
+  - VCores: Primed via `primeVCoresInRadius`.
+  - Beacons: Damaged (shockwave damage, LOS-gated).
+  - Shield generators: Damaged (shockwave damage, LOS-gated).
+  - Cameras: Damaged (shockwave damage, LOS-gated).
+  - Laser emitters: Damaged (shockwave damage, LOS-gated).
+  - Mines: Triggered in radius (armed with short fuse).
+  - Enemies: NOT damaged (no friendly fire — prevents exploitation).
+- **Stats:** HP 30, ATK 11, SPD 3.0, XP 22.
+- **Visual:** Bright green (`#22ff88`). Windup: pulsing green glow + dashed
+  targeting reticle circle at target. Airborne: shadow ellipse on ground,
+  dashed shockwave radius indicator, enemy rendered elevated on parabolic
+  arc. Recovery: spinning green star particles (dazed). Shockwave: green
+  explosion particles + camera shake.
+- **Audio:** `leaperWindup()` — spring tension (sawtooth 120→400, sine
+  200→800, noise burst). `leaperLand()` — heavy impact + shockwave whoosh
+  (sine 60→25, triangle 100→50, noise, sine 300→80 swoosh).
+- **Credits:** 8
+- **Cap:** 2 per room (both normal and challenge-wave TYPE_CAPS).
+- **Elite eligible:** Yes — all standard affixes apply. BERSERKER makes
+  melee harder to survive. ARMORED leapers are tough to burst during
+  recovery.
+- **Spawn weight:** base 2, perFloor 2, minFloor 5. Appears alongside
+  other floor 5+ types.
+- **Modifier interactions:**
+  - OVERCLOCK: No direct effect (cooldown not modified by OVERCLOCK).
+  - SWARM (0.6× HP): Fragile but numerous — multiple leapers stagger
+    automatically due to the one-airborne-at-a-time rule.
+  - FORTIFIED (1.4× HP): Harder to kill during recovery window.
+  - CHARGED (1.4× projectile speed): No effect (melee/AoE only).
 
 #### PHANTOM (floor 5+)
 
