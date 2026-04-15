@@ -930,13 +930,15 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | CHARGER      | 45      | 14  | Slow patrol, telegraphed charge rush, melee   | 22  |
 | LEAPER       | 30      | 11  | Fast, jumps to player position, shockwave on landing | 22  |
 | REFLECTOR    | 40      | 10  | Reflective shield bounces projectiles back     | 28  |
+| DISRUPTOR    | 30      | 9   | Deploys persistent area-denial fields          | 25  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
 **Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
 CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
 LEAPER appears floor 5+,
-TELEPORTER appears floor 6+, SUMMONER appears floor 6+, SNIPER appears floor 7+,
+TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 6+,
+SNIPER appears floor 7+,
 REFLECTOR appears floor 7+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
@@ -1354,6 +1356,64 @@ at a REFLECTOR head-on. Forces flanking, melee, or AoE strategies.
   - SWARM (0.6× HP): Fragile but multiple per floor.
   - FORTIFIED (1.4× HP): Very tanky — demands flanking.
   - CHARGED (1.4× projectile speed): Own shots + reflected shots travel faster.
+
+#### DISRUPTOR (floor 6+)
+
+Area-denial specialist that deploys persistent electromagnetic interference
+fields. Forces the player to constantly reposition, adding tactical movement
+decisions to mid-to-late-game combat encounters.
+
+- **Stats:** HP 30, ATK 9, SPD 2.0, XP 25, credits 10. Colour: `#ff44aa` (hot pink/magenta).
+- **Spawn weight:** base 1, perFloor 2, minFloor 6.
+- **TYPE_CAPS:** 1 (max one per room).
+- **AI (aiDisruptor):**
+  - Maintain 5–9 tile range from player.
+  - Retreat if player closes within 4 tiles.
+  - Deploy disruption field every 4 s (÷ berserkerMul) when LOS + `canTargetPlayer()` + range 2–10.
+    Field placed at player position + random ±0.75-tile offset, validated to passable tile.
+  - Secondary ranged attack every 2.5 s (speed 7, range 12) when not deploying.
+  - `_dDeployTimer` (init 2.0 s), `_dFireTimer` (init 1.0 s), `_dFields[]` (active field refs, max 2).
+  - At cap: oldest field removed before deploying new one.
+
+- **Disruption Fields** (`disruptionFields[]` global array):
+  - Each: `{x, y, age, maxAge:5, radius:2, tickCd:0, dead:false}`.
+  - Duration: 5 s then removed.
+  - **Player effects while inside** (gated by `!isPlayerDamageImmune()`):
+    - DPS: `(3 + floor × 0.5) × envDmg` per second, tick every 0.5 s.
+      Routed through `takeDamage('Disruption Field', {ignoreInvincible, ignoreDefense, skipHitInvincible, skipHitEffects, skipReactiveArmor})`.
+    - Hackware cooldown frozen (`hackwareCooldown` does not tick while `disruptionFieldActive` is true).
+    - 20% movement slow (via `disruptionFieldActive` flag, `spd *= 0.8`, gated by `dashTimer <= 0`).
+  - **Non-stacking:** binary flag — multiple overlapping fields do not compound slow or freeze.
+    Damage ticks are per-field (multiple fields can deal damage independently).
+  - Dash and Phase Cloak grant full immunity (`isPlayerDamageImmune()`).
+  - Enemies unaffected (friendly fire exempt).
+  - Fields persist after disruptor dies (not channeled).
+  - EMP Burst destroys all fields within its radius.
+
+- **Interactions:**
+  - Does not block projectiles.
+  - Does not block room-clear.
+  - Not affected by Static Field or other AoE (they are electromagnetic, not physical objects).
+  - Sentry drones, auto-laser, plasma orbs fire through fields normally.
+
+- **Visual:**
+  - Deploy telegraph: pulsing magenta glow on disruptor body 0.8 s before deploy.
+  - Active field: radial gradient (magenta center → transparent edge), dashed ring, rotating interference lines.
+  - Minimap: magenta pulsing 2 px dot (compact), proportional dot (expanded).
+  - Status bar: `⊘ DISRUPTED` magenta badge while inside field.
+  - Death recap source: `Disruption Field` (#ff44aa).
+
+- **Audio:**
+  - `audio.disruptorDeploy()` — descending electronic warble.
+  - `audio.disruptorField()` — soft static crackle on each damage tick.
+
+- **Elite eligible:** Yes — all standard affixes apply.
+  - SHIELDED DISRUPTOR: tanky field deployer, demands rapid focus fire.
+  - PHASING: intermittent untargetability while fields persist — very threatening.
+  - Floor modifier interactions:
+    - SWARM (0.6× HP): Fragile but paired with other enemies' pressure.
+    - FORTIFIED (1.4× HP): Harder to burst down before fields stack.
+    - CORROSIVE (+2 flat dmg): Field damage + corrosive extra hurts.
 
 #### MIMIC (floor 7+)
 
@@ -3101,3 +3161,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v66.0   | Toxic Pools: corrosive environmental hazard tiles (floor 3+, `T.TOXIC:22`). Clusters of 2–4 green tiles placed in ~30% of normal rooms. Deal `(2 + floor × 0.5) HP/s` to both player AND enemies (bosses immune). 30% movement slow on player and enemies while in pool (bosses immune to slow). Dash/Phase Cloak grants immunity. Disguised mimics excluded from damage. Enemy damage uses 0.5 s interval with `isProc: true` to prevent weapon affix procs. Death recap source: `Toxic Pool` (#33ff00). `audio.toxicBurn()` low gurgling SFX. Spec v4.5. SW cache v78. |
 | v67.0   | Wall Turrets: hackable wall-mounted auto-turrets (floor 5+). `wallTurrets[]` entity array. 1–2 per ~25% of qualifying rooms (≥6×6, mutually exclusive with cameras). Hostile: fire at player every 1.8s (6-tile range, `5 + floor × 1.5` dmg). EMP Burst **hacks** turrets (converts hostile→allied, permanent). Hacked: target nearest enemy in room (7-tile range, 1.5s cooldown), fire `isAllyTurret` projectiles (no player augments/perks). Hostile turrets block room-clear; hacked do not. HP: `12 + floor × 3`. Damaged by player projectiles, all AoE, Static Field. Enemy projectiles damage hacked turrets. Death recap source: `Wall Turret`. `audio.turretFire/turretHack/turretDestroy()`. Spec v4.6. SW cache v79. |
 | v68.0   | REFLECTOR enemy (floor 7+): tactical mid-range enemy with 90° reflective energy shield that bounces player projectiles back at them. Shield tracks player with 0.33 s lag (3 rad/s smooth lerp). Reflected projectiles: velocity reversed, `fromPlayer=false`, 60% damage, ricochet/homing cleared, `travelled` reset. Piercing projectiles reflected (unlike SHIELDER which piercing bypasses). Ally turret shots blocked (not reflected). Shield persists during stun (stops tracking). AI: holds position 4–10 tiles, retreats < 4, fires every 2.5 s. Stats: HP 40, ATK 10, SPD 1.8, XP 28, credits 12. Colour: `#88ddff`. `reflectsProjectile()` + extended `blocksProjectile()`. Visual: cyan arc + white mirror highlight + segmented edge ticks. `audio.reflect()` crystalline ping. TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 7. Spec v4.7. SW cache v80. |
+| v69.0   | DISRUPTOR enemy (floor 6+): area-denial specialist deploying persistent electromagnetic interference fields. AI maintains 5–9 tile range, retreats < 4, deploys 2-tile radius fields every 4 s near player (validated passable tile, ±0.75 offset), secondary ranged attack every 2.5 s. Fields: 5 s duration, `(3 + floor × 0.5) × envDmg` DPS at 0.5 s interval (ignoreDefense, ignoreInvincible), hackware cooldown frozen, 20% movement slow. Non-stacking debuffs (binary flag). Dash/Phase Cloak immune. Max 2 fields per disruptor; oldest replaced at cap. Fields persist after disruptor death. EMP destroys fields in radius. `disruptionFields[]` global array, `updateDisruptionFields()`, `drawDisruptionFields()`. Stats: HP 30, ATK 9, SPD 2.0, XP 25, credits 10. Colour: `#ff44aa`. Status badge: `⊘ DISRUPTED`. Minimap: magenta pulsing dot. `audio.disruptorDeploy()` (descending warble), `audio.disruptorField()` (static crackle). TYPE_CAPS: 1. Elite eligible. Spawn weight: base 1, perFloor 2, minFloor 6. Spec v4.8. SW cache v81. |

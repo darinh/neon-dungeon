@@ -863,6 +863,17 @@ function drawMinimap(dungeon, player) {
     ctx.fillRect(MX + wt.x * sx - 1, MY + wt.y * sy - 1, 2, 2);
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
+  // Disruption fields — magenta pulsing dots
+  for (const f of disruptionFields) {
+    if (f.dead) continue;
+    const tx = Math.floor(f.x), ty = Math.floor(f.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    ctx.globalAlpha = 0.4 + 0.3 * Math.sin((game.floorTime||0) * 4);
+    ctx.shadowBlur = 3; ctx.shadowColor = '#ff44aa';
+    ctx.fillStyle = '#ff44aa';
+    ctx.fillRect(MX+f.x*sx-1, MY+f.y*sy-1, 2, 2);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
 
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
@@ -1027,6 +1038,20 @@ function drawExpandedMinimap(dungeon, player) {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
 
+  // Disruption fields — magenta dots
+  for (const f of disruptionFields) {
+    if (f.dead) continue;
+    const tx = Math.floor(f.x), ty = Math.floor(f.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    const fPulse = 0.4 + 0.3 * Math.sin((game.floorTime||0) * 4);
+    ctx.globalAlpha = fPulse;
+    ctx.shadowBlur = 4; ctx.shadowColor = '#ff44aa';
+    ctx.fillStyle = '#ff44aa';
+    const fDot = Math.max(2, Math.round(sx * 0.4));
+    ctx.fillRect(mx + f.x * sx - fDot / 2, my + f.y * sy - fDot / 2, fDot, fDot);
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
   // POI markers with labels
   const pulse = 0.65 + 0.35 * Math.sin((game.floorTime || 0) * 2.5);
   const poiFs = Math.max(7, Math.min(10, Math.round(sx * 1.4)));
@@ -1182,7 +1207,7 @@ function drawThreatIndicators(camX, camY) {
 
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
-  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[]; wallTurrets=[];
+  enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[]; wallTurrets=[]; disruptionFields=[];
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
@@ -1282,7 +1307,7 @@ function populateFloor(dungeon, floorNum) {
     let roomElite = false;  // max 1 elite per room
     let spawnedCount = 0;
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, LEAPER: 2, REFLECTOR: 1 };
+    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit

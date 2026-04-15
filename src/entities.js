@@ -12,12 +12,13 @@ let shieldGens = [];
 let cameras = [];
 let lasers  = [];
 let wallTurrets = [];
+let disruptionFields = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -32,11 +33,12 @@ const SOURCE_LABELS = {
   'Toxic Pool':'Toxic Pool',
   'Wall Turret':'Wall Turret',
   'Reflected':'Reflected',
+  'Disruption Field':'Disruption Field',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -51,6 +53,7 @@ const SOURCE_COLOURS = {
   'Toxic Pool':'#33ff00',
   'Wall Turret':'#ff4400',
   'Reflected':'#88ddff',
+  'Disruption Field':'#ff44aa',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -487,6 +490,7 @@ class Enemy {
       case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
       case 'LEAPER':  this.aiLeaper(dt,player,map,d,los);  break;
       case 'REFLECTOR':this.aiReflector(dt,player,map,d,los);break;
+      case 'DISRUPTOR':this.aiDisruptor(dt,player,map,d,los);break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -746,6 +750,61 @@ class Enemy {
       if (this.shootTimer <= 0) {
         this.fireAt(player.x, player.y, 7, this.atk, 14, this.colour);
         this.shootTimer = 2.5 / bm;
+      }
+    } else if (los && d > 10) {
+      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+    } else {
+      this.state = 'PATROL';
+      this.patrol(dt, map);
+    }
+  }
+
+  aiDisruptor(dt, player, map, d, los) {
+    // Prune dead field refs
+    this._dFields = this._dFields.filter(f => f && !f.dead);
+    this._dDeployTimer = Math.max(0, this._dDeployTimer - dt);
+    this._dFireTimer = Math.max(0, this._dFireTimer - dt);
+    const bm = this.berserkerMul();
+    const spd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+
+    if (los && d < 4) {
+      // Too close — retreat
+      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const nx = this.x + dx * spd * dt;
+      const ny = this.y + dy * spd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      let moved = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
+      if (!moved) this.patrol(dt, map);
+    } else if (los && d <= 10) {
+      this.state = 'ATTACK';
+      // Deploy disruption field (priority over shooting)
+      if (this._dDeployTimer <= 0 && canTargetPlayer() && d > 2) {
+        // Place field near player with small offset, validated to passable tile
+        const ox = (Math.random() - 0.5) * 1.5;
+        const oy = (Math.random() - 0.5) * 1.5;
+        const fx = player.x + ox, fy = player.y + oy;
+        const tx = Math.floor(fx), ty = Math.floor(fy);
+        if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
+          // If at cap, remove oldest
+          if (this._dFields.length >= 2) {
+            this._dFields[0].dead = true;
+            this._dFields.shift();
+          }
+          const field = { x: fx, y: fy, age: 0, maxAge: 5, radius: 2, tickCd: 0, dead: false };
+          disruptionFields.push(field);
+          this._dFields.push(field);
+          audio.disruptorDeploy();
+          spawnParticles(fx, fy, 'EXPLOSION', '#ff44aa', 8);
+          this._dDeployTimer = 4.0 / bm;
+        }
+      }
+      // Secondary ranged attack
+      else if (this._dFireTimer <= 0 && canTargetPlayer()) {
+        this.fireAt(player.x, player.y, 7, this.atk, 12, this.colour);
+        this._dFireTimer = 2.5 / bm;
       }
     } else if (los && d > 10) {
       this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
@@ -2135,6 +2194,19 @@ class Enemy {
         }
         ctx.restore();
       }
+      // Disruptor: pulsing deploy glow when field about to deploy
+      if (this.type === 'DISRUPTOR' && this._dDeployTimer < 0.8 && this._dDeployTimer > 0) {
+        ctx.save();
+        const pulse = 0.3 + 0.4 * Math.sin(this._dDeployTimer * 25);
+        ctx.globalAlpha = pulse;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = '#ff44aa';
+        ctx.fillStyle = '#ff44aa';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.5, 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+      }
       // Teleporter: afterimage at previous warp origin
       if (this.type === 'TELEPORTER' && this._warpFade > 0) {
         ctx.save();
@@ -2580,6 +2652,7 @@ const ENEMY_WEIGHTS = {
   CHARGER:    { base: 2,  perFloor: 2, minFloor: 4 },  // charge-attack melee rusher
   LEAPER:     { base: 2,  perFloor: 2, minFloor: 5 },  // jumping shockwave attacker
   REFLECTOR:  { base: 1,  perFloor: 2, minFloor: 7 },  // projectile-reflecting shield
+  DISRUPTOR:  { base: 1,  perFloor: 2, minFloor: 6 },  // area-denial field deployer
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -2618,6 +2691,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
     case 'LEAPER':  hp=30;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
     case 'REFLECTOR':hp=40;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
+    case 'DISRUPTOR':hp=30;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -2655,6 +2729,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
   if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
   if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
+  if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
@@ -4083,6 +4158,84 @@ function drawWallTurrets(camX, camY) {
   }
 }
 
+// ─── Disruption Fields (DISRUPTOR area-denial zones) ──────────────────────────
+function updateDisruptionFields(dt, player) {
+  player.disruptionFieldActive = false;
+  for (let i = disruptionFields.length - 1; i >= 0; i--) {
+    const f = disruptionFields[i];
+    f.age += dt;
+    if (f.dead || f.age >= f.maxAge) { f.dead = true; disruptionFields.splice(i, 1); continue; }
+    f.tickCd = Math.max(0, f.tickCd - dt);
+    // Player damage + debuff
+    if (dist(player.x, player.y, f.x, f.y) < f.radius && !isPlayerDamageImmune()) {
+      player.disruptionFieldActive = true;
+      if (f.tickCd <= 0) {
+        const dps = (3 + (game.floor || 1) * 0.5) * getDiff().envDmg;
+        const tickDmg = Math.round(dps * 0.5); // 0.5s interval
+        player.takeDamage(tickDmg, 'Disruption Field', {
+          ignoreInvincible: true,
+          ignoreDefense: true,
+          skipHitInvincible: true,
+          skipHitEffects: true,
+          skipReactiveArmor: true,
+        });
+        f.tickCd = 0.5;
+        spawnParticles(player.x, player.y, 'SPARK', '#ff44aa', 3);
+        audio.disruptorField();
+      }
+    }
+  }
+}
+
+function drawDisruptionFields(camX, camY) {
+  for (const f of disruptionFields) {
+    const sx = f.x * TILE - camX, sy = f.y * TILE - camY;
+    const r = f.radius * TILE;
+    const fade = 1 - (f.age / f.maxAge);
+    const pulse = 0.5 + 0.3 * Math.sin(f.age * 5);
+
+    ctx.save();
+    // Outer pulsing circle
+    ctx.globalAlpha = fade * pulse * 0.25;
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    grad.addColorStop(0, 'rgba(255,68,170,0.4)');
+    grad.addColorStop(0.7, 'rgba(255,68,170,0.15)');
+    grad.addColorStop(1, 'rgba(255,68,170,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, TWO_PI);
+    ctx.fill();
+
+    // Edge ring
+    ctx.globalAlpha = fade * pulse * 0.5;
+    ctx.strokeStyle = '#ff44aa';
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ff44aa';
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -f.age * 30;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, TWO_PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Inner interference lines (visual noise)
+    ctx.globalAlpha = fade * 0.15;
+    ctx.strokeStyle = '#ff88cc';
+    ctx.lineWidth = 1;
+    for (let j = 0; j < 4; j++) {
+      const a = f.age * 3 + j * 1.57;
+      const lr = r * (0.3 + 0.4 * Math.sin(a * 2));
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(a) * lr * 0.3, sy + Math.sin(a) * lr * 0.3);
+      ctx.lineTo(sx + Math.cos(a) * lr, sy + Math.sin(a) * lr);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+}
+
 // ─── Player ───────────────────────────────────────────────────────────────────
 class Player {
   constructor() { this.reset(); }
@@ -4108,6 +4261,7 @@ class Player {
     this.arcCooldown=0;      // separate cooldown for arc grid zaps
     this.toxicBurnTimer=0;   // cosmetic throttle for toxic pool damage messages
     this.toxicSlowActive=false; // true while standing on toxic tile
+    this.disruptionFieldActive=false; // true while inside a disruption field
     // Player status effect debuffs (applied by enemy attacks)
     this.burnTimer=0; this.burnDps=0;  // burn DoT from enemy melee/attacks
     this.shockTimer=0;                 // shock: brief movement suppress
@@ -4327,8 +4481,8 @@ class Player {
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     this.dashCooldown=Math.max(0,this.dashCooldown-dt);
-    // Hackware cooldown + cloak timer
-    this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
+    // Hackware cooldown + cloak timer (frozen by disruption fields)
+    if (!this.disruptionFieldActive) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
     if (this.cloakTimer > 0) {
       this.cloakTimer -= dt;
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#cc44ff', 1);
@@ -4419,6 +4573,7 @@ class Player {
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
     if (this.toxicSlowActive && this.dashTimer <= 0) spd *= 0.7; // 30% slow while in toxic pool
+    if (this.disruptionFieldActive && this.dashTimer <= 0) spd *= 0.8; // 20% slow in disruption field
     let mx=0,my=0;
     if (keys.has(km('up'))||keys.has(ALT_KEYS.up))       my=-1;
     if (keys.has(km('down'))||keys.has(ALT_KEYS.down))   my= 1;

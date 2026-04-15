@@ -1571,6 +1571,22 @@ const audio = (() => {
       osc('square', 120, 40, 0.06, t + 0.02, 0.1, bus);
       noise(0.08, t, 0.15, 3000, bus);
       noise(0.04, t + 0.08, 0.1, 8000, bus);
+    },
+    disruptorDeploy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.2, 0.15);
+      // Electronic warble — descending distortion
+      osc('sawtooth', 600, 200, 0.06, t, 0.2, bus);
+      osc('square', 450, 150, 0.04, t + 0.03, 0.18, bus);
+      osc('sine', 300, 100, 0.03, t + 0.06, 0.15, bus);
+      noise(0.04, t + 0.05, 0.12, 5000, bus);
+    },
+    disruptorField() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.5, 0.1, 0.1);
+      // Soft static crackle — interference hit
+      noise(0.03, t, 0.08, 4000, bus);
+      osc('square', 120, 80, 0.02, t, 0.06, bus);
     }
   };
 })();

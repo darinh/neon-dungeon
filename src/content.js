@@ -652,6 +652,14 @@ function activateHackware(player) {
           hackWallTurret(wt);
         }
       }
+      // EMP destroys disruption fields in radius
+      for (const f of disruptionFields) {
+        if (f.dead) continue;
+        if (dist(player.x, player.y, f.x, f.y) < radius) {
+          f.dead = true;
+          spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
+        }
+      }
       break;
     }
     case 'PHASE_CLOAK': {
@@ -1512,6 +1520,10 @@ function getStatusEffects(player) {
   // Reactive Armor cooldown
   if (hasAugment('REACTIVE_ARMOR') && player.reactiveArmorCD > 0) {
     fx.push({ id: 'reactive-cd', icon: '💥', label: Math.ceil(player.reactiveArmorCD)+'s', colour: '#993322' });
+  }
+  // Disruption field debuff
+  if (player.disruptionFieldActive) {
+    fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
   }
   return fx;
 }
