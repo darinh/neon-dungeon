@@ -671,16 +671,17 @@ AI parameters tighten with floor progression:
 ### Bosses (appear on floors 3, 6, 10)
 
 **Boss Pool System:** Each boss floor randomly selects from a pool of bosses.
-Floor 3 has two variants (SENTINEL MK-I or WARDEN); floors 6 and 10 currently
-have one each. The selection is made during `populateFloor()` each time the floor
-is generated (including continue from save). `game.bossType` tracks the active
-boss type for death messaging.
+Floor 3 has two variants (SENTINEL MK-I or WARDEN); floor 6 has two variants
+(NEURAL HIVE or CONDUCTOR); floor 10 currently has one. The selection is made
+during `populateFloor()` each time the floor is generated (including continue
+from save). `game.bossType` tracks the active boss type for death messaging.
 
 | Boss           | Floor | HP    | Phases | Special                                           |
 |----------------|-------|-------|--------|---------------------------------------------------|
 | SENTINEL MK-I  | 3     | 300   | 2      | Laser sweep + shield burst                        |
 | WARDEN         | 3     | 330   | 2      | Telegraphed charge + ground slam                  |
 | NEURAL HIVE    | 6     | 500   | 3      | Spawns crawlers, psionic shockwave                |
+| CONDUCTOR      | 6     | 520   | 3      | Radial arc bursts, electric hazard zones, EM pull |
 | OMEGA CORE     | 10    | 1000  | 4      | All previous attacks, room-filling void orbs      |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
@@ -757,6 +758,48 @@ idle (not charging): radial knockback (3 tiles) + 22 × difficulty damage +
 Patrols room center when no LOS.
 
 **Audio:** `audio.wardenCharge()` (low rumble), `audio.wardenSlam()` (bass impact).
+
+#### CONDUCTOR — Phase Breakdown
+
+Floor 6 alternate boss. Area-denial pattern boss that controls the battlefield
+through electromagnetic projectile patterns and hazard zones. No add spawning
+(direct contrast to NEURAL HIVE's summoner archetype).
+
+**Stats:** HP 520, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan).
+
+| Phase | HP Range     | Attacks                                                    |
+|-------|-------------|------------------------------------------------------------|
+| 1     | 100 %–55 %  | 8-way radial arc burst (3.5 s) + 1 electric hazard zone (6 s) |
+| 2     | 55 %–25 %   | 12-way burst (3 s) + 2 hazard zones (5 s) + conduit beam (4 s) |
+| 3     | 25 %–0 %    | 12-way burst (2.5 s) + 2 hazard zones (4 s) + discharge AoE with magnetic pull |
+
+**Radial arc burst:** Fires projectiles evenly spaced in a circle. Each volley
+rotates 0.3 rad from the last, creating sweeping patterns. Projectiles: speed 5,
+dmg ATK × 0.8, range 10, colour `#00ccff`. `audio.conductorArc()`.
+
+**Electric hazard zones:** Placed at random room positions (minimum 3 tiles from
+player for readability). 0.8 s arming delay with pulsing dashed warning ring
+before activation. Active: radius 1.5 tiles, lasts 4 s, dmg 15 × difficulty,
+0.8 s tick cooldown. Damage source: `Conductor Field`. Uses the shared
+`hazardZones` system (extended to support custom source and arming delay).
+
+**Conduit beam (phase 2+):** Fast single projectile at player position. Speed 8,
+dmg ATK + 5, range 20.
+
+**Discharge AoE (phase 3, 5 s cooldown):** 1.5 s magnetic pull channel
+(1.0 tiles/sec toward boss, passability-checked). Then: pulse dealing
+25 × difficulty damage + 2.5-tile knockback if within 6 tiles, plus 6 radial
+spark projectiles. Channel telegraph: pulsing cyan glow around boss body.
+`audio.conductorPulse()`.
+
+**Movement:** Phase 1 drifts toward room center (0.6 × SPD). Phase 2+ slowly
+pursues player (full SPD). Random patrol when no LOS.
+
+**Visual:** Rotating segmented arc ring around boss body (always visible).
+Pulsing glow aura during discharge channel.
+
+**Audio:** `audio.conductorArc()` (electric crackle), `audio.conductorPulse()`
+(deep EM discharge).
 
 ---
 
@@ -1854,3 +1897,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v35.0   | Floor events: risk/reward encounter terminals offering binary choices. 8 event types: Stasis Pod (heal+XP / item), Corrupted Terminal (60% hackware 40% alarm / credits), Arms Cache (weapon reroll −HP / item), Radiation Leak (augment −HP / credits+score), Rogue AI (reveal minimap / trade credits for XP), Power Junction (stun+damage room enemies / heal 60%), Ghost Signal (credits+XP+score / combo boost), Emergency Drop (heal+item / hackware CD reset+credits). New `event` room type (floors 2–9, every non-boss floor). `T.EVENT_TERMINAL` tile (19) — pulsing teal terminal. `EVENT_CHOICE` game state with 2-card UI (keyboard 1/2, arrows+Enter, mouse/touch). `EVENTS` table, `rollEvent()` filters by player state (skips augment event at cap, bargain event if broke), `applyEventEffect()` executes outcomes. Choices include safe options (credits, items, score) and risky options (weapon reroll with trap damage, augment with HP cost, hackware with 40% enemy spawn). Event rooms excluded from lore placement. `player.eventsResolved` stat tracked in save/load and shown on Game Over/Victory screens. Credit Siphon augment synergy applies to credit rewards. Pending perk choices checked after event resolution (XP grants may trigger level-ups). 2 new audio SFX (`audio.eventTerminal()`, `audio.eventResolve()`). Minimap: teal 3px POI marker. No SAVE_VERSION bump — defaults on old saves. SW cache v42 |
 | v36.0   | SNIPER enemy (floor 7+): glass-cannon marksman with laser-sight charging mechanic. 1.5s visible red laser line locks on player position (does NOT track), then fires speed-14 high-damage projectile. Room-gated aggro (only activates when player is inside sniper's room). Cancel conditions: cloak, LOS break, stun, player flees room, player closes to <3 tiles (triggers flee). Fixed charge time (unaffected by OVERCLOCK/berserker — telegraph stays fair). Post-fire reposition to far tile in room. Post-cancel cooldown prevents stutter re-lock. Stun clears charge state (handled in Enemy.update stun early-return). Elite excluded (ATK 15 too high for elite multiplier). Stats: HP 20, ATK 15, SPD 2.5, XP 25, credits 10, cap 1/room. Visual: hot pink-red `#ff2266`, idle scope glint, pulsing laser line + target dot during charge. 2 new audio SFX (`audio.sniperCharge()`, `audio.sniperFire()`). No SAVE_VERSION bump. SW cache v43 |
 | v37.0   | WARDEN boss (floor 3 alternate): melee-focused armored enforcer with telegraphed charge + ground slam. Boss pool system — floor 3 randomly selects SENTINEL MK-I or WARDEN. Boss death message now keyed by `game.bossType` (stored at spawn) instead of floor number, fixing a latent bug where the `e` variable leaked from entrance-tile restoration loop. Stats: HP 330, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber). Phase 1 (>40% HP): 0.6s wind-up charge at 3× speed with amber dashed-line telegraph, contact damage + knockback on hit, 4-way spark burst on miss, 3.5s CD. Phase 2 (≤40%): faster charge (0.45s wind-up, 2.5s CD) + ground slam AoE (knockback + 22×diff damage + 6 radial sparks, 5s CD, `audio.wardenSlam()`). Charge direction locked at wind-up start (does NOT track). Cancel: cloak/LOS break cancels wind-up; stun cancels any charge state (in `Enemy.update()` stun block). Active charge continues through cloak (committed). Pursues player aggressively when LOS (vs SENTINEL's random patrol). `BOSS_POOLS` replaces `bossTypes` dict. 2 new audio SFX (`audio.wardenCharge()`, `audio.wardenSlam()`). No SAVE_VERSION bump. SW cache v44 |
+| v38.0   | CONDUCTOR boss (floor 6 alternate): area-denial pattern boss with electromagnetic projectile patterns and hazard zones. Floor 6 randomly selects NEURAL HIVE or CONDUCTOR. No add spawning (direct contrast to HIVE's summoner archetype). Stats: HP 520, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan). Phase 1 (>55%): 8-way radial arc burst (3.5s CD, rotation offset per volley) + 1 electric hazard zone (6s CD). Phase 2 (55%–25%): 12-way burst (3s) + 2 hazard zones (5s) + conduit beam (fast single shot, 4s). Phase 3 (≤25%): 12-way burst (2.5s) + 2 zones (4s) + discharge AoE (1.5s magnetic pull channel → 25×diff damage + knockback + 6 radial sparks, 5s CD). Hazard zones: 0.8s arming delay with pulsing dashed warning ring, 3-tile minimum distance from player, radius 1.5, 4s duration, `Conductor Field` damage source. Magnetic pull: 1.0 tiles/sec toward boss, passability-checked, room-clamped. Visual: rotating segmented arc ring, pulsing cyan glow during discharge channel. `hazardZones` system extended with `armTimer` (arming delay) and `source` (custom damage source) — backwards compatible. 2 new audio SFX (`audio.conductorArc()`, `audio.conductorPulse()`). No SAVE_VERSION bump. SW cache v45 |
