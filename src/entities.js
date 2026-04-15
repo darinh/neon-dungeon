@@ -18,6 +18,7 @@ const SOURCE_LABELS = {
   'Genesis Lance':'Genesis Lance', 'Genesis Field':'Genesis Field', 'Genesis Purge':'Genesis Purge',
   'Nano Swarm':'Nano Swarm', 'Static Field':'Static Field',
   'Volatile Core':'Volatile Core',
+  'Sentry Drone':'Sentry Drone',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
@@ -30,6 +31,7 @@ const SOURCE_COLOURS = {
   'Genesis Lance':'#ffcc00', 'Genesis Field':'#ffcc00', 'Genesis Purge':'#ffcc00',
   'Nano Swarm':'#44ff88', 'Static Field':'#44ccff',
   'Volatile Core':'#ff6622',
+  'Sentry Drone':'#00e5ff',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -1784,7 +1786,8 @@ class Player {
     this.permSpeedBonus=0;  // from OVERCLOCK
     this.orbitalAngle=0;    // shared rotation for saw blades
     this.orbitalHits=new Map(); // enemy→cooldown for orbital damage
-    this.spellTimers={plasmaOrb:2}; // cooldown timers for auto-spells
+    this.spellTimers={plasmaOrb:2, sentryDrone:1}; // cooldown timers for auto-spells
+    this.droneAngle=0;          // orbital rotation for sentry drones
     this.perks={};              // level-unlocked passive abilities
     this.energyShield=false;    // active energy shield bubble
     this.energyShieldTimer=0;   // recharge countdown (30s)

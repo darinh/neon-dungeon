@@ -680,6 +680,40 @@ const game = {
       }
     }
 
+    // Sentry Drone — orbiting auto-fire drones
+    const droneLvl = player.upgrades.SENTRY_DRONE||0;
+    if (droneLvl > 0) {
+      player.droneAngle += 1.8 * dt;
+      const droneCd = 2.0 - (droneLvl - 1) * 0.4;
+      player.spellTimers.sentryDrone -= dt;
+      if (player.spellTimers.sentryDrone <= 0) {
+        player.spellTimers.sentryDrone = droneCd;
+        // Each drone picks the nearest visible enemy and fires
+        for (let i = 0; i < droneLvl; i++) {
+          const a = player.droneAngle + (TWO_PI / droneLvl) * i;
+          const droneX = player.x + Math.cos(a) * 2.0;
+          const droneY = player.y + Math.sin(a) * 2.0;
+          let nearest = null, nearD = 8;
+          for (const e of enemies) {
+            if (e.dead) continue;
+            if (e.type === 'PHANTOM' && !e.visible) continue;
+            const d = dist(droneX, droneY, e.x, e.y);
+            if (d < nearD && hasLOS(droneX, droneY, e.x, e.y, dungeon.map)) {
+              nearD = d; nearest = e;
+            }
+          }
+          if (nearest) {
+            const [sdx, sdy] = norm(nearest.x - droneX, nearest.y - droneY);
+            const sp = new Projectile(droneX, droneY, sdx, sdy, 8, 8, 8, '#00e5ff', false, true, 'Sentry Drone');
+            sp.homing = nearest;
+            projectiles.push(sp);
+            spawnParticles(droneX, droneY, 'MUZZLE', '#00e5ff', 2);
+            audio.sentryFire();
+          }
+        }
+      }
+    }
+
     // Auto-Laser perk — hitscan beam at nearest visible enemy
     if (player.perks.AUTO_LASER && player.hp > 0) {
       if (player.autoLaserBeam) {
@@ -2347,6 +2381,34 @@ const game = {
         ctx.fillRect(-5, -2, 10, 4);
         ctx.fillStyle='#ff8866';
         ctx.fillRect(-3, -3, 6, 6);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // Sentry Drone orbitals
+    const droneLvl = player.upgrades.SENTRY_DRONE||0;
+    if (droneLvl > 0) {
+      ctx.save();
+      for (let i = 0; i < droneLvl; i++) {
+        const a = player.droneAngle + (TWO_PI / droneLvl) * i;
+        const dx = player.x * TILE - cam.x + Math.cos(a) * 2.0 * TILE;
+        const dy = player.y * TILE - cam.y + Math.sin(a) * 2.0 * TILE;
+        ctx.save();
+        ctx.translate(dx, dy);
+        // Outer glow
+        ctx.shadowBlur = 12; ctx.shadowColor = '#00e5ff';
+        // Diamond shape
+        ctx.fillStyle = '#00e5ff';
+        ctx.beginPath();
+        ctx.moveTo(0, -5); ctx.lineTo(4, 0); ctx.lineTo(0, 5); ctx.lineTo(-4, 0);
+        ctx.closePath(); ctx.fill();
+        // Inner bright core
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#aaffff';
+        ctx.beginPath();
+        ctx.moveTo(0, -2.5); ctx.lineTo(2, 0); ctx.lineTo(0, 2.5); ctx.lineTo(-2, 0);
+        ctx.closePath(); ctx.fill();
         ctx.restore();
       }
       ctx.restore();

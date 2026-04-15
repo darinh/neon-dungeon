@@ -2412,6 +2412,9 @@ const UPGRADES = [
   {id:'RICOCHET',   name:'Ricochet Module',  desc:'Bullets bounce off walls', colour:'#00ffff', rarity:8,  persistent:true, maxLevel:3,
    levelDesc: l=>(l+1)+' bounce'+(l>0?'s':''),
    fn: p=>{ p.upgrades.RICOCHET=(p.upgrades.RICOCHET||0)+1; }},
+  {id:'SENTRY_DRONE', name:'Sentry Drone', desc:'Orbiting drone auto-fires at enemies', colour:'#00e5ff', rarity:7, persistent:true, maxLevel:3,
+   levelDesc: l=>(l+1)+' drone'+(l>0?'s':'')+', 8 dmg, '+(2.0-l*0.4).toFixed(1)+'s cd',
+   fn: p=>{ p.upgrades.SENTRY_DRONE=(p.upgrades.SENTRY_DRONE||0)+1; }},
 ];
 
 // Generate a weapon upgrade option (pre-rolled so player sees exact weapon)
