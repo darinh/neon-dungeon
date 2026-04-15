@@ -672,17 +672,19 @@ AI parameters tighten with floor progression:
 
 **Boss Pool System:** Each boss floor randomly selects from a pool of bosses.
 Floor 3 has two variants (SENTINEL MK-I or WARDEN); floor 6 has two variants
-(NEURAL HIVE or CONDUCTOR); floor 10 currently has one. The selection is made
-during `populateFloor()` each time the floor is generated (including continue
-from save). `game.bossType` tracks the active boss type for death messaging.
+(NEURAL HIVE or CONDUCTOR); floor 10 has two variants (OMEGA CORE or GENESIS
+PROTOCOL). The selection is made during `populateFloor()` each time the floor
+is generated (including continue from save). `game.bossType` tracks the active
+boss type for death messaging and dynamic terminal lock text.
 
-| Boss           | Floor | HP    | Phases | Special                                           |
-|----------------|-------|-------|--------|---------------------------------------------------|
-| SENTINEL MK-I  | 3     | 300   | 2      | Laser sweep + shield burst                        |
-| WARDEN         | 3     | 330   | 2      | Telegraphed charge + ground slam                  |
-| NEURAL HIVE    | 6     | 500   | 3      | Spawns crawlers, psionic shockwave                |
-| CONDUCTOR      | 6     | 520   | 3      | Radial arc bursts, electric hazard zones, EM pull |
-| OMEGA CORE     | 10    | 1000  | 4      | All previous attacks, room-filling void orbs      |
+| Boss              | Floor | HP    | Phases | Special                                           |
+|-------------------|-------|-------|--------|---------------------------------------------------|
+| SENTINEL MK-I     | 3     | 300   | 2      | Laser sweep + shield burst                        |
+| WARDEN            | 3     | 330   | 2      | Telegraphed charge + ground slam                  |
+| NEURAL HIVE       | 6     | 500   | 3      | Spawns crawlers, psionic shockwave                |
+| CONDUCTOR         | 6     | 520   | 3      | Radial arc bursts, electric hazard zones, EM pull |
+| OMEGA CORE        | 10    | 1000  | 4      | All previous attacks, room-filling void orbs      |
+| GENESIS PROTOCOL  | 10    | 1000  | 3      | Geometric precision: spiral salvos, lances, purge ring |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
@@ -696,8 +698,8 @@ All boss HP values are scaled by the floor modifier (`1 + 0.15 × (floor − 1)`
 Phase thresholds use `maxHp` percentages, so scaling does not break phases.
 
 On boss death, the arena unseals (entrance tiles restored) and the game displays
-"{BOSS NAME} DESTROYED". On floor 10, the CORE terminal is locked until OMEGA CORE
-is defeated.
+"{BOSS NAME} DESTROYED". On floor 10, the CORE terminal is locked until the boss
+is defeated; the lock text dynamically shows the active boss name.
 
 #### OMEGA CORE — Phase Breakdown
 
@@ -800,6 +802,54 @@ Pulsing glow aura during discharge channel.
 
 **Audio:** `audio.conductorArc()` (electric crackle), `audio.conductorPulse()`
 (deep EM discharge).
+
+#### GENESIS PROTOCOL — Phase Breakdown
+
+Floor 10 alternate boss. Geometric precision boss that fights through predictable
+but punishing patterns. No add spawning — direct contrast to OMEGA's chaotic
+everything-at-once approach. The Progenitor: the original AI prototype that
+survived decommissioning.
+
+**Stats:** HP 1000, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold).
+
+| Phase | HP Range     | Attacks                                                    |
+|-------|-------------|------------------------------------------------------------|
+| 1     | 100 %–70 %  | 6-arm spiral salvo (3 s) + targeting lance (4 s, 0.5 s telegraph) |
+| 2     | 70 %–35 %   | 8-arm spiral (2.5 s) + 3-spread lance fan (3.5 s) + 2 hazard zones (5 s) |
+| 3     | 35 %–0 %    | 10-arm spiral (2 s) + 5-spread lance (3 s) + 3 hazard zones (4 s) + purge ring (8 s) |
+
+**Spiral salvo:** Fires projectiles evenly spaced in a circle. Each volley
+rotates 0.4 rad from the last, creating rotating galaxy patterns. Projectiles:
+speed 5, dmg ATK × 0.7, range 12, colour `#ffcc00`. Uses `audio.shoot(false)`.
+
+**Targeting lance:** Telegraphed aimed shot. Aim locks at telegraph start (does
+NOT track player). 0.5 s telegraph in P1/P2, 0.4 s in P3. Lance projectiles:
+speed 12, dmg ATK × 1.4, range 20, colour `#ffe066`. Phase 2+ fires a fan
+(3-spread P2, 5-spread P3, 0.12 rad between). Telegraph cancelled by stun,
+LOS break, or cloak (same pattern as SNIPER laser). `audio.genesisLance()`.
+
+**Hazard grid (phase 2+):** Zones placed near player's recent position (min
+1.5 tiles from player, min 2.5 tiles from other Genesis hazards). arming
+delay 1.2 s (P2) / 0.8 s (P3). Radius 1.5 tiles, lasts 4 s, dmg 15 ×
+difficulty. Source: `Genesis Field`. Colour: `#ffcc00`.
+
+**Purge ring (phase 3 signature):** Every 8 s, creates 6 hazard zones in a
+circle (radius 4.5 tiles) around room center. One slot is randomly skipped
+to guarantee a safe gap. arming delay 0.6 s, radius 1.8 tiles, lasts 3.5 s,
+dmg 18 × difficulty. Source: `Genesis Purge`. Colour: `#ffe066`.
+`audio.genesisPurge()` + screen shake.
+
+**Movement:** Slow center patrol at 0.6 × SPD. Deliberate, not erratic.
+
+**Phase transitions:** Timer seeding on phase change (spiral 1 s, lance 1.5 s,
+hazard 2 s, purge 4 s) prevents all attacks from firing simultaneously at the
+transition moment.
+
+**Visual:** Rotating hexagonal ring around boss body (always visible). Pulsing
+dashed aim line during lance telegraph. 22 px body (same size as OMEGA).
+
+**Audio:** `audio.genesisLance()` (sharp focused beam ping),
+`audio.genesisPurge()` (deep resonant purge pulse).
 
 ---
 

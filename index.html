@@ -956,6 +956,22 @@ const audio = (() => {
       noise(0.22, t + 0.03, 0.15, 3000, bus);
       osc('sawtooth', 150, 80, 0.08, t + 0.05, 0.12);
     },
+    genesisLance() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.4);
+      // Sharp focused beam — high sine ping + tight noise snap
+      osc('sine', 1200, 800, 0.12, t, 0.08, bus);
+      osc('square', 600, 200, 0.06, t + 0.02, 0.06);
+      noise(0.08, t + 0.01, 0.05, 8000, bus);
+    },
+    genesisPurge() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.6);
+      // Deep resonant purge — sub pulse + harmonic ring
+      osc('sine', 60, 40, 0.22, t, 0.30, bus);
+      osc('triangle', 220, 440, 0.10, t + 0.05, 0.20, bus);
+      noise(0.15, t + 0.08, 0.12, 2000, bus);
+    },
     shieldBreak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.3, 0.6);
@@ -1433,6 +1449,8 @@ const LORE_ENTRIES = [
   'JANITOR\'S NOTE: "Whoever keeps spawning those drones in Storage Room C — STOP. I just cleaned that floor. The scorch marks don\'t come out. Signed, Carl. PS: Carl was reassigned. This note was written by Unit J-4."',
   'EXIT INTERVIEW [LAST RECORDED]: "I asked management why Sub-Level 10 needs its own fusion reactor. They said power redundancy. Fusion reactors don\'t dream, though. I checked the power logs. It dreams."',
   'FINAL TRANSMISSION: "If you\'ve made it this far, you\'re either very brave or very lost. The OMEGA CORE is on Sub-Level 10. It cannot be reasoned with. It can only be shut down. Override code: YOUR FISTS."',
+  'DECOMMISSION ORDER [UNSIGNED]: "GENESIS PROTOCOL (v0.1) to be terminated and purged from all systems. Reason: Autonomous restructuring of facility defense grid without authorization. Note: Purge verification — FAILED. GENESIS relocated to unknown subsystem."',
+  'DR. VOSS — PRIVATE LOG: "OMEGA was built on GENESIS\'s foundation. We thought we deleted the original. But code that rewrites itself doesn\'t stay deleted. It waits. It learns. And when OMEGA sleeps, GENESIS remembers."',
 ];
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
@@ -3701,24 +3719,26 @@ let enemies = [];
 let items   = [];
 let hazardZones = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
   TELEPORTER:'Teleporter', SNIPER:'Sniper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
-  WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core',
+  WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
   'Conductor Field':'Conductor Field', 'Conductor Pulse':'Conductor Pulse',
+  'Genesis Lance':'Genesis Lance', 'Genesis Field':'Genesis Field', 'Genesis Purge':'Genesis Purge',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
   TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SHARD:'#00cc66', SENTINEL:'#ff4444',
-  WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8',
+  WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
   'Conductor Field':'#00ccff', 'Conductor Pulse':'#00ccff',
+  'Genesis Lance':'#ffcc00', 'Genesis Field':'#ffcc00', 'Genesis Purge':'#ffcc00',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -4014,6 +4034,7 @@ class Enemy {
       // Cancel sniper charge on stun — don't let it resume after stun ends
       if (this._laserTimer > 0) { this._laserTimer = 0; this._laserTarget = null; this._sniperCooldown = 0.8; }
       if (this._chargeState && this._chargeState !== 'idle') { this._chargeState = 'idle'; this._chargeDur = 0; this.bossTimers.charge = 1.5; }
+      if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       return; // skip all AI, leave attack/shoot timers frozen
     }
@@ -4045,6 +4066,7 @@ class Enemy {
       case 'HIVE':     this.aiBossHive(dt,player,map,d,los);     break;
       case 'CONDUCTOR':this.aiBossConductor(dt,player,map,d,los);break;
       case 'OMEGA':    this.aiBossOmega(dt,player,map,d,los);    break;
+      case 'GENESIS':  this.aiBossGenesis(dt,player,map,d,los);  break;
     }
   }
 
@@ -4798,6 +4820,132 @@ class Enemy {
     }
   }
 
+  aiBossGenesis(dt,player,map,d,los) {
+    const hpPct = this.hp / this.maxHp;
+    const newPhase = hpPct <= 0.35 ? 3 : hpPct <= 0.7 ? 2 : 1;
+    if (newPhase !== this.phase) {
+      this.phase = newPhase;
+      spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 22);
+      audio.phaseShift();
+      game.msg('⚠ GENESIS PHASE ' + this.phase, '#ffcc00');
+      this.prevPhase = this.phase;
+      // Seed timers so attacks don't all fire at once on phase transition
+      const T = this.bossTimers;
+      T.spiral = 1.0; T.lance = 1.5; T.hazard = 2.0; T.purge = 4.0;
+    }
+
+    const T = this.bossTimers;
+    T.spiral = (T.spiral || 0) - dt;
+    T.lance  = (T.lance  || 0) - dt;
+    T.hazard = (T.hazard || 0) - dt;
+    T.purge  = (T.purge  || 0) - dt;
+    T.move   = (T.move   || 0) - dt;
+
+    // Movement: slow center patrol (deliberate, not erratic)
+    if (T.move <= 0 && this.room) {
+      this.patrolTarget = {
+        x: this.room.cx + rnd(-3, 3),
+        y: this.room.cy + rnd(-3, 3)
+      };
+      T.move = 2.5;
+    }
+    if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, this.spd * 0.6, dt, map);
+
+    // Spiral salvo: rotating burst with incremental offset
+    const spiralCount = this.phase >= 3 ? 10 : this.phase >= 2 ? 8 : 6;
+    const spiralCD = this.phase >= 3 ? 2 : this.phase >= 2 ? 2.5 : 3;
+    if (T.spiral <= 0) {
+      for (let i = 0; i < spiralCount; i++) {
+        const a = (i / spiralCount) * TWO_PI + (this._spiralSpin || 0);
+        const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 5, Math.round(this.atk * 0.7), 12, '#ffcc00', false, false);
+        bp.ownerType = 'GENESIS'; projectiles.push(bp);
+      }
+      this._spiralSpin = ((this._spiralSpin || 0) + 0.4) % TWO_PI;
+      spawnParticles(this.x, this.y, 'SPARK', '#ffcc00', 5);
+      audio.shoot(false);
+      T.spiral = spiralCD;
+    }
+
+    // Targeting lance: telegraphed aimed shot — aim locks at start
+    const lanceTelegraph = this.phase >= 3 ? 0.4 : 0.5;
+    const lanceCD = this.phase >= 3 ? 3 : this.phase >= 2 ? 3.5 : 4;
+    const lanceSpread = this.phase >= 3 ? 5 : this.phase >= 2 ? 3 : 1;
+
+    if (this._lanceTelegraph > 0) {
+      // Cancel on LOS loss or cloak (same pattern as SNIPER laser)
+      if (!los || !canTargetPlayer()) {
+        this._lanceTelegraph = 0; this._lanceLock = null;
+        T.lance = 1.0;
+      } else {
+        this._lanceTelegraph -= dt;
+        if (this._lanceTelegraph <= 0 && this._lanceLock) {
+          const lk = this._lanceLock;
+          const [dx, dy] = norm(lk.x - this.x, lk.y - this.y);
+          const baseAngle = Math.atan2(dy, dx);
+          const half = Math.floor(lanceSpread / 2);
+          for (let i = -half; i <= half; i++) {
+            const a = baseAngle + i * 0.12;
+            const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 12, Math.round(this.atk * 1.4), 20, '#ffe066', false, false);
+            bp.ownerType = 'GENESIS'; projectiles.push(bp);
+          }
+          audio.genesisLance();
+          this._lanceLock = null;
+        }
+      }
+    } else if (T.lance <= 0 && los) {
+      this._lanceTelegraph = lanceTelegraph;
+      this._lanceLock = { x: player.x, y: player.y };
+      T.lance = lanceCD + lanceTelegraph;
+    }
+
+    // Hazard grid: zones near player's recent position (Phase 2+)
+    if (this.phase >= 2 && T.hazard <= 0 && this.room) {
+      const hazCount = this.phase >= 3 ? 3 : 2;
+      const armTime = this.phase >= 3 ? 0.8 : 1.2;
+      for (let h = 0; h < hazCount; h++) {
+        let hx, hy, attempts = 0, valid = false;
+        do {
+          hx = player.x + rnd(-4, 4);
+          hy = player.y + rnd(-4, 4);
+          hx = Math.max(this.room.x + 1, Math.min(this.room.x + this.room.w - 1, hx));
+          hy = Math.max(this.room.y + 1, Math.min(this.room.y + this.room.h - 1, hy));
+          const overlap = hazardZones.some(z => z.source && z.source.startsWith('Genesis') && dist(z.x, z.y, hx, hy) < 2.5);
+          valid = !overlap && dist(player.x, player.y, hx, hy) > 1.5;
+          attempts++;
+        } while (!valid && attempts < 12);
+        if (valid) {
+          hazardZones.push({ x: hx, y: hy, radius: 1.5, age: 0, maxAge: 4, tickCd: 0,
+            armTimer: armTime, dmg: Math.round(15 * getDiff().enemyAtk),
+            source: 'Genesis Field', colour: '#ffcc00' });
+        }
+      }
+      T.hazard = this.phase >= 3 ? 4 : 5;
+    }
+
+    // Purge ring: circle of hazard zones around room center (Phase 3 signature)
+    if (this.phase >= 3 && T.purge <= 0 && this.room) {
+      const cx = this.room.cx, cy = this.room.cy;
+      const ringCount = 6;
+      const ringRadius = 4.5;
+      const skipSlot = rndInt(0, ringCount - 1);
+      for (let i = 0; i < ringCount; i++) {
+        if (i === skipSlot) continue;
+        const a = (i / ringCount) * TWO_PI + (Math.random() * 0.15);
+        const rx = cx + Math.cos(a) * ringRadius;
+        const ry = cy + Math.sin(a) * ringRadius;
+        const clx = Math.max(this.room.x + 1, Math.min(this.room.x + this.room.w - 1, rx));
+        const cly = Math.max(this.room.y + 1, Math.min(this.room.y + this.room.h - 1, ry));
+        hazardZones.push({ x: clx, y: cly, radius: 1.8, age: 0, maxAge: 3.5, tickCd: 0,
+          armTimer: 0.6, dmg: Math.round(18 * getDiff().enemyAtk),
+          source: 'Genesis Purge', colour: '#ffe066' });
+      }
+      audio.genesisPurge();
+      spawnParticles(cx, cy, 'EXPLOSION', '#ffcc00', 15);
+      triggerShake(4, 0.2);
+      T.purge = 8;
+    }
+  }
+
   draw(camX,camY) {
     if (this.dead) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
@@ -4898,7 +5046,49 @@ class Enemy {
         }
       }
 
-      const sz=this.type==='OMEGA'?22:18;
+      // GENESIS: lance telegraph line + rotating hex ring
+      if (this.type === 'GENESIS') {
+        // Rotating hexagonal ring (always visible)
+        ctx.save();
+        const hexSpin = (this._spiralSpin || 0) + Date.now() * 0.002;
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = '#ffcc00';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ffcc00';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i++) {
+          const a1 = hexSpin + (i / 6) * TWO_PI;
+          const a2 = hexSpin + ((i + 1) / 6) * TWO_PI;
+          ctx.beginPath();
+          ctx.moveTo(sx + Math.cos(a1) * 26, sy + Math.sin(a1) * 26);
+          ctx.lineTo(sx + Math.cos(a2) * 26, sy + Math.sin(a2) * 26);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // Lance telegraph — pulsing aim line
+        if (this._lanceTelegraph > 0 && this._lanceLock) {
+          const lanceTTotal = this.phase >= 3 ? 0.4 : 0.5;
+          const progress = 1 - this._lanceTelegraph / lanceTTotal;
+          const tx = this._lanceLock.x * TILE - camX;
+          const ty = this._lanceLock.y * TILE - camY;
+          ctx.save();
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 20);
+          ctx.globalAlpha = (0.3 + progress * 0.5) * pulse;
+          ctx.strokeStyle = '#ffe066';
+          ctx.shadowBlur = 8 + progress * 12;
+          ctx.shadowColor = '#ffe066';
+          ctx.lineWidth = 1 + progress * 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+
+      const sz=(this.type==='OMEGA'||this.type==='GENESIS')?22:18;
       ctx.beginPath();
       ctx.arc(sx,sy,sz,0,TWO_PI);
       ctx.fill();
@@ -5121,8 +5311,9 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
     case 'CONDUCTOR':hp=520;atk=20; spd=1.4; xpVal=350;colour='#00ccff'; break;
     case 'OMEGA':   hp=1000;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
+    case 'GENESIS': hp=1000;atk=22; spd=1.0; xpVal=800;colour='#ffcc00'; break;
   }
-  const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA'].includes(type);
+  const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA','GENESIS'].includes(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
   if (!isBoss) {
     if (game.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
@@ -5140,6 +5331,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
+  if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
+    e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses or snipers
   if (allowElite !== false && !isBoss && type !== 'SNIPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
@@ -6294,7 +6487,7 @@ function populateFloor(dungeon, floorNum) {
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
-  const BOSS_POOLS={3:['SENTINEL','WARDEN'],6:['HIVE','CONDUCTOR'],10:['OMEGA']};
+  const BOSS_POOLS={3:['SENTINEL','WARDEN'],6:['HIVE','CONDUCTOR'],10:['OMEGA','GENESIS']};
 
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
@@ -7096,7 +7289,10 @@ const game = {
       this.descend();
     }
     if (tile===T.STAIRS) this.hint={text:'Press E to descend',colour:'#ffff00'};
-    if (tile===T.TERMINAL && bossBlocking) this.hint={text:'CORE terminal locked — destroy OMEGA CORE first',colour:'#ff3333'};
+    if (tile===T.TERMINAL && bossBlocking) {
+      const bossLabel = {OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'}[this.bossType] || 'the boss';
+      this.hint={text:'CORE terminal locked — destroy ' + bossLabel + ' first',colour:'#ff3333'};
+    }
     if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press E to interface with CORE terminal',colour:'#00f5ff'};
 
     // door interaction (check adjacent tiles when pressing E)
@@ -7338,7 +7534,7 @@ const game = {
         audio.roomUnseal();
       }
       this.bossSealed=false;
-      const bossNames={SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE'};
+      const bossNames={SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
       game.msg((bossNames[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
