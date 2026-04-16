@@ -31,7 +31,7 @@ function drawWorld(dungeon, camX, camY) {
       const vis=dungeon.visited[ty][tx];
       if (!vis) continue;
       const lv=dungeon.light[ty][tx];
-      const brightness=lv>0 ? Math.max(0.2,lv) : 0.12;
+      const brightness=lv>0 ? Math.max(0.32,lv) : 0.20;
       const sx=tx*TILE-camX, sy=ty*TILE-camY;
 
       ctx.save();
@@ -40,9 +40,9 @@ function drawWorld(dungeon, camX, camY) {
         case T.WALL: {
           const isSealed = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
                            (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty));
-          ctx.fillStyle = isSealed ? '#2e1a1a' : '#1a1a2e';
+          ctx.fillStyle = isSealed ? '#3d2828' : '#262648';
           ctx.fillRect(sx,sy,TILE,TILE);
-          ctx.fillStyle = isSealed ? '#5e2d2d' : '#2d2d5e';
+          ctx.fillStyle = isSealed ? '#724040' : '#3a3a72';
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
           if (isSealed) {
@@ -55,13 +55,13 @@ function drawWorld(dungeon, camX, camY) {
         }
         case T.FLOOR: {
           const rc = dungeon.roomColour[ty]?.[tx];
-          ctx.fillStyle = rc || '#0f0f1f';
+          ctx.fillStyle = rc || '#181832';
           ctx.fillRect(sx,sy,TILE,TILE);
-          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0a0a0a' : '#13132a'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
+          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : '#1e1e3a'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
           break;
         }
         case T.STAIRS:
-          ctx.fillStyle='#0f0f1f';
+          ctx.fillStyle='#181832';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           ctx.shadowBlur=8; ctx.shadowColor='#ffff00';
@@ -70,7 +70,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('▼',sx+3,sy+14);
           break;
         case T.TERMINAL:
-          ctx.fillStyle='#0f0f1f';
+          ctx.fillStyle='#181832';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.shadowBlur=12; ctx.shadowColor='#00f5ff';
           ctx.fillStyle='#00f5ff';
@@ -78,7 +78,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('⬡',sx+2,sy+14);
           break;
         case T.VENDOR:
-          ctx.fillStyle='#0a1a0f';
+          ctx.fillStyle='#142a1c';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           ctx.shadowBlur=10; ctx.shadowColor='#39ff14';
@@ -87,7 +87,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('◈',sx+2,sy+14);
           break;
         case T.IMPLANT_SHRINE: {
-          ctx.fillStyle='#0f0a1a';
+          ctx.fillStyle='#1c1430';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const impPulse = 0.6 + 0.4 * Math.sin(lastTime / 700 + tx * 0.9 + ty * 0.6);
@@ -98,7 +98,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.EVENT_TERMINAL: {
-          ctx.fillStyle='#0a1a1a';
+          ctx.fillStyle='#142a2a';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const evPulse = 0.5 + 0.5 * Math.sin(lastTime / 500 + tx * 1.3 + ty * 0.8);
@@ -109,7 +109,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.TELEPORT_PAD: {
-          ctx.fillStyle='#0f0a1a';
+          ctx.fillStyle='#1c1430';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const tpPulse = 0.5 + 0.5 * Math.sin(lastTime / 400 + tx * 1.5 + ty * 1.1);
@@ -120,7 +120,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.LORE: {
-          ctx.fillStyle='#1a1208';
+          ctx.fillStyle='#2a2010';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const lorePulse = 0.7 + 0.3 * Math.sin(lastTime / 600 + tx * 1.1 + ty * 0.7);
@@ -131,38 +131,38 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.DOOR:
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.fillStyle='#886633'; ctx.fillRect(sx+3,sy+2,TILE-6,TILE-4);
           ctx.fillStyle='#aa8844'; ctx.fillRect(sx+TILE-7,sy+TILE/2-2,3,3); // handle
           break;
         case T.DOOR_OPEN:
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx,sy,3,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx+TILE-3,sy,3,TILE);
           break;
         case T.LOCKED_R: case T.LOCKED_B: case T.LOCKED_G: {
           const lc=tile===T.LOCKED_R?'#ff3333':tile===T.LOCKED_B?'#3388ff':'#ffcc00';
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#443322'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.shadowBlur=8; ctx.shadowColor=lc;
           ctx.fillStyle=lc; ctx.fillRect(sx+TILE/2-3,sy+TILE/2-3,6,6); // lock glow
           break;
         }
         case T.TRAP_SPIKE:
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.35;
           ctx.fillStyle='#ff6644';
           for (let s=0;s<3;s++) ctx.fillRect(sx+3+s*6,sy+TILE-6,2,5); // subtle spikes
           break;
         case T.TRAP_SLOW:
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.25;
           ctx.fillStyle='#8866ff';
           ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
         case T.PLASMA: {
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           // Animated orange glow with pulsing brightness
           const pPulse = 0.3 + 0.15 * Math.sin(lastTime / 400 + tx * 0.7 + ty * 1.3);
           ctx.globalAlpha = brightness * pPulse;
@@ -182,7 +182,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.ARC: {
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           // Phase-based rendering: bright when active, dim when off
           const arcActive = Math.sin((game.floorTime||0) * Math.PI) > 0;
           const aAlpha = arcActive ? 0.5 + 0.2 * Math.sin(lastTime/80) : 0.1;
@@ -211,7 +211,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.TOXIC: {
-          ctx.fillStyle='#0f0f1f'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
           // Pulsing green/chartreuse corrosive pool
           const tPulse = 0.25 + 0.12 * Math.sin(lastTime / 500 + tx * 0.9 + ty * 1.1);
           ctx.globalAlpha = brightness * tPulse;
