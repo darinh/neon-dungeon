@@ -196,6 +196,79 @@
         player.weapon = bw(pool[Math.floor(Math.random() * pool.length)], []);
       }
     }
+    // ─── UNCHAINED Phase 2 (#36) — apply persistent upgrade-tree nodes ──────
+    // Stat effects mutate the player directly. Behavioural effects (on-kill,
+    // every-Nth-hit, on-revive, on-dash) set flags on player.metaFlags so the
+    // game-loop systems can opt-in without breaking when the flag is absent.
+    // Hooking those listeners is intentionally deferred to a follow-up.
+    const nodes = m.upgradeNodes || {};
+    if (Object.keys(nodes).length) {
+      player.metaFlags = player.metaFlags || {};
+      _applyUpgradeNodes(player, nodes);
+    }
+  }
+
+  // _applyUpgradeNodes — encapsulates per-node stat application. Defensive:
+  // unknown ids and non-positive levels are ignored. Idempotent on a fresh
+  // player snapshot (callers rebuild the player at run-start).
+  function _applyUpgradeNodes(player, nodes) {
+    for (const id in nodes) {
+      const lv = nodes[id] | 0;
+      if (lv > 0) _applyNode(player, id, lv);
+    }
+  }
+
+  function _applyNode(player, id, level) {
+    const f = player.metaFlags;
+    switch (id) {
+      // Vitality
+      case 'hull_plating':
+        player.maxHp += 10 * level;
+        player.hp = player.maxHp;
+        break;
+      case 'regenerator':
+        // 0.5 HP/s out of combat per level. Game loop reads this; safe default 0.
+        player.regenPerSec = (player.regenPerSec || 0) + 0.5 * level;
+        f.regenerator = level;
+        break;
+      case 'trauma_kit':
+        // Start each run with `level` nano-medic consumables.
+        player.startingNanoMedics = (player.startingNanoMedics || 0) + level;
+        f.trauma_kit = level;
+        break;
+      case 'second_wind':
+        f.second_wind = level;  // game loop honours flag on lethal damage
+        break;
+      // Damage
+      case 'overclock':
+        player.damageMult = (player.damageMult || 1) * (1 + 0.05 * level);
+        break;
+      case 'critical_bias':
+        player.critChance = (player.critChance || 0) + 0.04 * level;
+        break;
+      case 'momentum':
+        f.momentum = level;     // +15% damage for 3s after a kill (per level stacks)
+        break;
+      case 'surge':
+        f.surge = level;        // every 8th hit deals +100%
+        break;
+      // Utility
+      case 'recon':
+        player.sensorRadiusMult = (player.sensorRadiusMult || 1) * (1 + 0.20 * level);
+        break;
+      case 'scavenger':
+        player.bonusCreditPerPickup = (player.bonusCreditPerPickup || 0) + level;
+        break;
+      case 'ghostwalk':
+        player.dashIFrameBonus = (player.dashIFrameBonus || 0) + 0.2 * level;
+        f.ghostwalk = level;
+        break;
+      case 'hacktool':
+        player.hackwareSlots = (player.hackwareSlots || 3) + level;
+        f.hacktool = level;
+        break;
+      default: /* unknown id — ignore */ break;
+    }
   }
 
   function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }

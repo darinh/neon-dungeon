@@ -1757,6 +1757,17 @@ const audio = (() => {
       osc('triangle', 1200, 300, 0.08, t, 0.2, bus);
       osc('square', 800, 200, 0.05, t + 0.03, 0.15, bus);
       noise(0.08, t, 0.12, 5000, bus);
+    },
+    upgradePurchased() {
+      // UNCHAINED #36 — UPGRADE MATRIX node purchase confirmation
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.35, 0.4);
+      // Bright ascending arpeggio + warm sub thump
+      osc('triangle', 520, 780, 0.07, t, 0.10, bus, { attack:0.002 });
+      osc('triangle', 780, 1170, 0.06, t + 0.06, 0.12, bus, { attack:0.002 });
+      osc('sine',     1170, 1560, 0.05, t + 0.13, 0.14, bus, { attack:0.002 });
+      osc('sine',     90, 60, 0.07, t, 0.18, bus);
+      noise(0.025, t, 0.05, 6000, bus, { filterType:'highpass' });
     }
   };
 })();
