@@ -1637,6 +1637,29 @@ const audio = (() => {
       osc('sine', 60, 40, 0.06, t + 0.2, 0.12, bus);
       osc('sawtooth', 200, 600, 0.04, t + 0.1, 0.3, bus);
       noise(0.03, t + 0.15, 0.2, 2000, bus);
+    },
+    gravitonDeploy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.6, 0.3, 0.2);
+      // Deep bass whomp — gravity well materialises
+      osc('sine', 50, 30, 0.1, t, 0.25, bus);
+      osc('sine', 80, 40, 0.06, t + 0.05, 0.2, bus);
+      noise(0.03, t + 0.1, 0.15, 1500, bus);
+    },
+    gravitonPull() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.3, 0.2, 0.15);
+      // Low gravitational hum
+      osc('sine', 65, 55, 0.04, t, 0.2, bus);
+      osc('triangle', 130, 110, 0.02, t + 0.05, 0.15, bus);
+    },
+    gravitonCollapse() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.5, 0.3, 0.2);
+      // Reverse whomp — well collapses inward
+      osc('sine', 30, 60, 0.08, t, 0.2, bus);
+      osc('triangle', 60, 120, 0.04, t + 0.05, 0.15, bus);
+      noise(0.02, t, 0.12, 2000, bus);
     }
   };
 })();
