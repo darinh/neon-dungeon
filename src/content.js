@@ -2087,6 +2087,78 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Prune dead-end corridor tiles ─────────────────────────────────────
+  // After secret rooms, locked doors, and challenge rooms wall off entrances,
+  // some corridor segments become dead ends (floor tile with only 1 passable
+  // neighbour that isn't inside any room). Iteratively fill them so players
+  // never walk down a tunnel to nowhere.
+  {
+    // Build room membership lookup
+    const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    for (const r of rooms) {
+      for (let ty = r.y; ty < r.y + r.h; ty++)
+        for (let tx = r.x; tx < r.x + r.w; tx++)
+          if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
+    }
+    let pruned = true;
+    const connects = t => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
+    while (pruned) {
+      pruned = false;
+      for (let y = 1; y < MAP_H - 1; y++) {
+        for (let x = 1; x < MAP_W - 1; x++) {
+          if (map[y][x] !== T.FLOOR || inRoom[y][x]) continue;
+          let adj = 0;
+          if (connects(map[y-1][x])) adj++;
+          if (connects(map[y+1][x])) adj++;
+          if (connects(map[y][x-1])) adj++;
+          if (connects(map[y][x+1])) adj++;
+          if (adj <= 1) { map[y][x] = T.WALL; pruned = true; }
+        }
+      }
+    }
+  }
+
+  // ── Reachability guarantee: spawn → stairs must always be connected ────
+  // BFS from spawn across all non-wall/void tiles (doors + locked doors
+  // count as passable since the player will acquire keys). If stairs are
+  // unreachable, carve a rescue corridor. Structured as a reusable helper
+  // so it can later double as a player power-up (path visualisation).
+  {
+    const sx = spawnRoom.cx, sy = spawnRoom.cy;
+    const stairTile = floorNum >= 10 ? T.TERMINAL : T.STAIRS;
+    const vis = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    const prev = Array.from({length: MAP_H}, () => new Int16Array(MAP_W).fill(-1));
+    const q = [{x: sx, y: sy}];
+    vis[sy][sx] = 1;
+    let stairX = -1, stairY = -1;
+    // Find stairs position
+    for (let y = 0; y < MAP_H; y++)
+      for (let x = 0; x < MAP_W; x++)
+        if (map[y][x] === stairTile) { stairX = x; stairY = y; }
+
+    while (q.length) {
+      const {x, y} = q.shift();
+      if (x === stairX && y === stairY) break;
+      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+        if (vis[ny][nx]) continue;
+        const t = map[ny][nx];
+        if (t === T.WALL || t === T.VOID) continue;
+        vis[ny][nx] = 1;
+        prev[ny][nx] = y * MAP_W + x;
+        q.push({x: nx, y: ny});
+      }
+    }
+
+    if (!vis[stairY][stairX]) {
+      // Stairs unreachable — carve rescue corridor, only overwriting WALL/VOID
+      let cx = sx, cy = sy;
+      while (cx !== stairX) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cx += cx < stairX ? 1 : -1; }
+      while (cy !== stairY) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cy += cy < stairY ? 1 : -1; }
+    }
+  }
+
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
