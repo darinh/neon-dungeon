@@ -1076,12 +1076,14 @@ const META_UPGRADES = [
 ];
 
 function loadMeta() {
+  const defaults = { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL', clearedDifficulties:[] };
   try {
     const raw = localStorage.getItem('neonDungeonMeta');
-    if (!raw) return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL' };
+    if (!raw) return defaults;
     const m = JSON.parse(raw);
     if (!m.stats) m.stats = { totalRuns:0, totalShards:0, bestFloor:0, victories:0 };
     if (!m.upgrades) m.upgrades = {};
+    if (!Array.isArray(m.clearedDifficulties)) m.clearedDifficulties = [];
     m.shards = Math.max(0, Math.floor(Number(m.shards) || 0));
     // Clamp upgrade levels to valid ranges
     for (const u of META_UPGRADES) {
@@ -1091,7 +1093,16 @@ function loadMeta() {
     }
     if (!DIFFICULTIES[m.lastDifficulty]) m.lastDifficulty = 'NORMAL';
     return m;
-  } catch(e) { return { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL' }; }
+  } catch(e) { return defaults; }
+}
+
+// Difficulty unlock gates: each key lists prerequisite cleared difficulties
+const DIFF_UNLOCK_REQS = { NIGHTMARE: ['HARD'] };
+function isDiffUnlocked(diffId) {
+  const reqs = DIFF_UNLOCK_REQS[diffId];
+  if (!reqs) return true;
+  const cleared = loadMeta().clearedDifficulties;
+  return reqs.every(r => cleared.includes(r));
 }
 
 function saveMeta(meta) {

@@ -306,7 +306,19 @@ const game = {
     meta.stats.totalRuns++;
     meta.stats.totalShards += earned;
     meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
-    if (victory) meta.stats.victories++;
+    if (victory) {
+      meta.stats.victories++;
+      if (!meta.clearedDifficulties.includes(this.difficulty)) {
+        meta.clearedDifficulties.push(this.difficulty);
+        // Check if this clear unlocks a new difficulty
+        for (const d of DIFF_ORDER) {
+          const reqs = DIFF_UNLOCK_REQS[d];
+          if (reqs && reqs.includes(this.difficulty) && reqs.every(r => meta.clearedDifficulties.includes(r))) {
+            this._newlyUnlocked = d;
+          }
+        }
+      }
+    }
     saveMeta(meta);
     this.lastRunShards = earned;
     const scores=this.getScores();
@@ -456,7 +468,13 @@ const game = {
       opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
     }
     const d = getDiff();
-    opts.push({ label:`NEW GAME — ${d.label}  ◀▶`, action:()=>this.startGame(), colour:d.colour, isDiffRow:true });
+    const locked = !isDiffUnlocked(this.difficulty);
+    const diffLabel = locked ? `NEW GAME — ${d.label} [LOCKED]  ◀▶` : `NEW GAME — ${d.label}  ◀▶`;
+    const diffColour = locked ? '#444466' : d.colour;
+    const diffAction = locked
+      ? () => { this._menuMsg = { text: 'CLEAR HARD TO UNLOCK NIGHTMARE', colour: '#9400ff', life: 2.5 }; }
+      : () => this.startGame();
+    opts.push({ label: diffLabel, action: diffAction, colour: diffColour, isDiffRow: true });
     const meta = loadMeta();
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
@@ -493,6 +511,8 @@ const game = {
       audio.menuSelect();
       opts[this.menuSel].action();
     }
+    // Tick menu message timer (time-based, not frame-based)
+    if (this._menuMsg && this._menuMsg.life > 0) this._menuMsg.life -= dt;
   },
 
   updatePlaying(dt) {
@@ -1983,7 +2003,7 @@ const game = {
   },
 
   updateVictory() {
-    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.setState('MENU'); }
+    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this._newlyUnlocked = null; this.setState('MENU'); }
   },
 
   updateArchives() {
@@ -2408,10 +2428,20 @@ const game = {
     // Navigation hint (context-sensitive for difficulty row)
     ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
     const diffHint = opts[sel]?.isDiffRow;
+    const diffLocked = diffHint && !isDiffUnlocked(this.difficulty);
     if (isTouch) {
       ctx.fillText(diffHint ? 'Tap edges ◀▶ to change difficulty · center to start' : 'Tap to select', W/2, startY + opts.length * gap + 8);
     } else {
       ctx.fillText(diffHint ? '◀▶ change difficulty · Enter to start' : '↑↓ to select, Enter to confirm', W/2, startY + opts.length * gap + 8);
+    }
+    // Locked difficulty message (shown when trying to start a locked difficulty)
+    if (this._menuMsg && this._menuMsg.life > 0) {
+      const mm = this._menuMsg;
+      ctx.globalAlpha = Math.min(1, mm.life);
+      ctx.shadowBlur = 12; ctx.shadowColor = mm.colour;
+      ctx.fillStyle = mm.colour; ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+      ctx.fillText(mm.text, W/2, startY - (narrow ? 14 : 18));
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
     }
     ctx.restore();
 
@@ -3568,6 +3598,16 @@ const game = {
     if (this.lastRunShards) {
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 16}px monospace`;
       ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, y); y += narrow ? 22 : 26;
+    }
+    // Newly unlocked difficulty celebration
+    if (this._newlyUnlocked) {
+      const unlockCol = DIFFICULTIES[this._newlyUnlocked]?.colour || '#ff00c8';
+      const pulse = 0.7 + 0.3 * Math.sin(t * 4);
+      ctx.globalAlpha = pulse;
+      ctx.shadowBlur = 20; ctx.shadowColor = unlockCol;
+      ctx.fillStyle = unlockCol; ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
+      ctx.fillText(`★ ${this._newlyUnlocked} UNLOCKED ★`, W/2, y);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1; y += narrow ? 22 : 26;
     }
     ctx.restore();
     // leaderboard
