@@ -3657,20 +3657,158 @@ const game = {
   }
 };
 
+// ─── Performance HUD ──────────────────────────────────────────────────────────
+// Toggle with F3. Measures frame/update/render time + runtime counters.
+// Ring buffer of last PERF_SAMPLES frames. Zero cost when hidden.
+const PERF_SAMPLES = 60;
+const perf = {
+  visible: false,
+  frames: new Float32Array(PERF_SAMPLES),
+  updates: new Float32Array(PERF_SAMPLES),
+  renders: new Float32Array(PERF_SAMPLES),
+  idx: 0,
+  filled: 0,
+  lastUpdate: 0,
+  lastRender: 0,
+  lastFrame: 0,
+  // Rolling capture (time-based). Start with game.capturePerf(label, durationMs).
+  capturing: false,
+  captureLabel: '',
+  captureFrames: null,
+  captureIdx: 0,
+  captureMaxFrames: 1200, // hard cap to avoid unbounded allocation
+  captureDurationMs: 5000,
+  captureStart: 0,
+  push(frameMs, updateMs, renderMs) {
+    this.frames[this.idx] = frameMs;
+    this.updates[this.idx] = updateMs;
+    this.renders[this.idx] = renderMs;
+    this.lastFrame = frameMs; this.lastUpdate = updateMs; this.lastRender = renderMs;
+    this.idx = (this.idx + 1) % PERF_SAMPLES;
+    if (this.filled < PERF_SAMPLES) this.filled++;
+    if (this.capturing) {
+      if (this.captureIdx < this.captureMaxFrames) {
+        this.captureFrames[this.captureIdx++] = frameMs;
+      }
+      if (performance.now() - this.captureStart >= this.captureDurationMs) this.finishCapture();
+    }
+  },
+  stats() {
+    const n = this.filled || 1;
+    let fs = 0, us = 0, rs = 0, fmax = 0;
+    for (let i = 0; i < n; i++) {
+      fs += this.frames[i]; us += this.updates[i]; rs += this.renders[i];
+      if (this.frames[i] > fmax) fmax = this.frames[i];
+    }
+    const avgFrame = fs / n;
+    return {
+      fps: avgFrame > 0 ? 1000 / avgFrame : 0,
+      avgFrame, avgUpdate: us / n, avgRender: rs / n, maxFrame: fmax,
+    };
+  },
+  startCapture(label, durationMs) {
+    this.captureLabel = label || 'capture';
+    this.captureDurationMs = (typeof durationMs === 'number' && durationMs > 0) ? durationMs : 5000;
+    this.captureFrames = new Float32Array(this.captureMaxFrames);
+    this.captureIdx = 0;
+    this.captureStart = performance.now();
+    this.capturing = true;
+    console.log(`[perf] capture start: ${this.captureLabel} (${this.captureDurationMs}ms)`);
+  },
+  finishCapture() {
+    this.capturing = false;
+    const n = this.captureIdx;
+    if (n === 0) { console.log('[perf] capture empty'); return; }
+    const data = this.captureFrames.subarray(0, n);
+    let sum = 0, max = 0, min = Infinity, over33 = 0, over20 = 0;
+    for (let i = 0; i < n; i++) {
+      const v = data[i]; sum += v;
+      if (v > max) max = v;
+      if (v < min) min = v;
+      if (v > 33) over33++;
+      if (v > 20) over20++;
+    }
+    const avg = sum / n;
+    const sorted = Array.from(data).sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(n * 0.5)];
+    const p95 = sorted[Math.floor(n * 0.95)];
+    const p99 = sorted[Math.floor(n * 0.99)];
+    console.log(`[perf] ${this.captureLabel} — n=${n} avg=${avg.toFixed(2)}ms p50=${p50.toFixed(2)} p95=${p95.toFixed(2)} p99=${p99.toFixed(2)} max=${max.toFixed(2)} min=${min.toFixed(2)} fps=${(1000/avg).toFixed(1)} drops>20ms=${over20} drops>33ms=${over33}`);
+    this.captureFrames = null;
+  },
+};
+
+function renderPerfHUD() {
+  const s = perf.stats();
+  const pad = 6;
+  const lineH = 12;
+  const lines = [
+    `FPS ${s.fps.toFixed(0)}  frame ${s.avgFrame.toFixed(1)}ms max ${s.maxFrame.toFixed(1)}`,
+    `  upd ${s.avgUpdate.toFixed(2)}  render ${s.avgRender.toFixed(2)}`,
+    `enemies ${enemies.length}  proj ${projectiles.length}  part ${particles.length}`,
+    `ft ${floatingTexts.length}  vcore ${vcores.length}  beacon ${beacons.length}`,
+    `mine ${mines.length}  cam ${cameras.length}  laser ${lasers.length}`,
+    `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,
+    `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
+  ];
+  if (perf.capturing) {
+    lines.push(`● CAPTURING ${perf.captureLabel} ${perf.captureIdx}f ${((performance.now()-perf.captureStart)/1000).toFixed(1)}s/${(perf.captureDurationMs/1000).toFixed(1)}s`);
+  }
+  const w = 260;
+  const h = pad * 2 + lineH * lines.length;
+  const x = 4 + (safeLeft || 0);
+  const y = 4 + (safeTop || 0);
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = s.avgFrame > 20 ? '#ff4444' : (s.avgFrame > 17.5 ? '#ffaa00' : '#33ff66');
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.font = '11px monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = s.avgFrame > 20 ? '#ff8888' : (s.avgFrame > 17.5 ? '#ffcc66' : '#88ffaa');
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x + pad, y + pad + i * lineH);
+  }
+  ctx.restore();
+}
+
 // ─── Main Loop ────────────────────────────────────────────────────────────────
 let lastTime=0;
 function loop(ts) {
   const dt=Math.min((ts-lastTime)/1000,0.05);
+  // F3 toggles perf HUD (check before anything else so it's always responsive)
+  if (justPressed.has('F3')) perf.visible = !perf.visible;
+  const profiling = perf.visible || perf.capturing;
+  const frameStart = profiling ? performance.now() : 0;
+  const frameDelta = (profiling && lastTime) ? frameStart - (game._lastFrameStart || frameStart) : 16;
+  if (profiling) game._lastFrameStart = frameStart;
   lastTime=ts;
   try {
-    game.update(dt);
-    try { music.tick(); } catch (_) {} // isolate audio errors from gameplay
-    game.render();
+    if (profiling) {
+      const uStart = performance.now();
+      game.update(dt);
+      try { music.tick(); } catch (_) {}
+      const uEnd = performance.now();
+      game.render();
+      const rEnd = performance.now();
+      if (perf.visible) renderPerfHUD();
+      perf.push(frameDelta, uEnd - uStart, rEnd - uEnd);
+    } else {
+      game.update(dt);
+      try { music.tick(); } catch (_) {} // isolate audio errors from gameplay
+      game.render();
+    }
   } finally {
     clearJust();
     requestAnimationFrame(loop);
   }
 }
+
+// Expose capture helper for manual profiling in devtools.
+// Usage: game.capturePerf('boss-fight')  or  game.capturePerf('label', 10000) for 10s.
+game.capturePerf = function(label, durationMs) { perf.startCapture(label, durationMs); };
+game.perf = perf;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 resize();

@@ -21,7 +21,7 @@ const ACTION_LABELS = {
   interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
   dash:'Dash', shoot:'Shoot'
 };
-const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab']);
+const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab','F3']);
 const KEY_DISPLAY = k => {
   if (!k) return '???';
   if (k.startsWith('Key')) return k.slice(3);
