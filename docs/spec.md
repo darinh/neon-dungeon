@@ -57,6 +57,14 @@ Each floor is generated fresh using Binary Space Partitioning:
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
 6. Floor 10 stairs replaced with CORE terminal (victory trigger).
+7. **Dead-end pruning**: after secret rooms, locked doors, and challenge
+   rooms wall off entrances, corridor tiles that become dead ends
+   (≤ 1 passable neighbour, outside any room) are iteratively filled with
+   WALL so players never walk down a tunnel to nowhere.
+8. **Reachability guarantee**: BFS from spawn to stairs across all
+   non-WALL/VOID tiles (locked doors count as passable since keys are
+   placed in reachable areas). If stairs are unreachable, a rescue
+   corridor is carved from spawn to stairs as a safety net.
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
 LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | TOXIC | VOID
