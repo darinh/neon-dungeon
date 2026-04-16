@@ -1672,6 +1672,15 @@ const audio = (() => {
       osc('sine', 30, 60, 0.08, t, 0.2, bus);
       osc('triangle', 60, 120, 0.04, t + 0.05, 0.15, bus);
       noise(0.02, t, 0.12, 2000, bus);
+    },
+    seekerDetonate() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.4, 0.25);
+      // Sharp crack + bass thump — kamikaze explosion
+      noise(0.12, t, 0.15, 6000, bus);
+      osc('sine', 80, 30, 0.1, t, 0.2, bus);
+      osc('sawtooth', 400, 100, 0.06, t + 0.02, 0.12, bus);
+      osc('sine', 50, 25, 0.06, t + 0.1, 0.15, bus);
     }
   };
 })();

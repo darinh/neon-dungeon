@@ -1251,7 +1251,7 @@ const game = {
           if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.3));
           const effectiveFloor = Math.min(this.floor + 1, 9);
           const typeCounts = {};
-          const TYPE_CAPS = { PHANTOM:2, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1, SUMMONER:1, HEALER:1, CHARGER:2, LEAPER:2, REFLECTOR:1, DISRUPTOR:1, WRAITH:1, NEXUS:1, SIPHON:1, GRAVITON:1 };
+          const TYPE_CAPS = { PHANTOM:2, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1, SUMMONER:1, HEALER:1, CHARGER:2, LEAPER:2, REFLECTOR:1, DISRUPTOR:1, WRAITH:1, NEXUS:1, SIPHON:1, GRAVITON:1, SEEKER:3 };
           for (let j = 0; j < count; j++) {
             let type = pickEnemyType(effectiveFloor);
             if ((typeCounts[type]||0) >= (TYPE_CAPS[type]||99)) {
