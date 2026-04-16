@@ -3,7 +3,7 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 let W = 900, H = 600;
 let gameScale = 1;
-const TILE = 20;
+const TILE = 26;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
@@ -714,7 +714,7 @@ const audio = (() => {
     },
     setMusicVolume(v) {
       settings.musicVol = v;
-      if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.12 * v, t + 0.02); }
+      if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.20 * v, t + 0.02); }
     },
     getMusicBus() {
       const c = getCtx();
@@ -723,7 +723,7 @@ const audio = (() => {
         mc.threshold.value = -18; mc.ratio.value = 2; mc.attack.value = 0.05;
         mc.connect(c.destination);
         musicBus = c.createGain();
-        musicBus.gain.value = 0.12 * settings.musicVol;
+        musicBus.gain.value = 0.20 * settings.musicVol;
         musicBus.connect(mc);
       }
       return { bus: musicBus, ctx: c };

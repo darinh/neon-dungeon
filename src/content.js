@@ -20,22 +20,22 @@ const music = (() => {
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   const TIERS = [
-    { root: 36, bpm: 92,  scale: [0, 2, 3, 5, 7, 8, 10] }, // C minor
-    { root: 34, bpm: 102, scale: [0, 2, 3, 5, 7, 8, 10] }, // Bb minor
-    { root: 32, bpm: 112, scale: [0, 2, 3, 5, 7, 8, 10] }, // Ab minor
-    { root: 29, bpm: 122, scale: [0, 1, 3, 5, 7, 8, 10] }, // F phrygian tint
+    { root: 36, bpm: 112, scale: [0, 2, 3, 5, 7, 8, 10] }, // C minor
+    { root: 34, bpm: 120, scale: [0, 2, 3, 5, 7, 8, 10] }, // Bb minor
+    { root: 32, bpm: 128, scale: [0, 2, 3, 5, 7, 8, 10] }, // Ab minor
+    { root: 29, bpm: 136, scale: [0, 1, 3, 5, 7, 8, 10] }, // F phrygian tint
   ];
 
-  const STATE_SPEED = { idle: 0.85, explore: 1.0, tension: 1.08, combat: 1.18, boss: 1.26 };
+  const STATE_SPEED = { idle: 0.85, explore: 1.0, tension: 1.10, combat: 1.22, boss: 1.32 };
   const SWING = { idle: 0, explore: 0.02, tension: 0.04, combat: 0.06, boss: 0.08 };
 
   // Target gains per music state [drone, pulse, arp, bass]
   const TARGETS = {
     idle:    [0, 0, 0, 0],
-    explore: [0.95, 0.3, 0.62, 0.3],
-    tension: [0.85, 0.55, 0.42, 0.48],
-    combat:  [0.72, 1.0, 0.5, 0.9],
-    boss:    [1.0, 1.0, 0.38, 1.0],
+    explore: [0.50, 0.50, 0.88, 0.55],
+    tension: [0.45, 0.68, 0.75, 0.72],
+    combat:  [0.38, 1.0, 0.82, 1.0],
+    boss:    [0.55, 1.0, 0.72, 1.0],
   };
 
   const PROGRESSIONS = {
@@ -55,37 +55,37 @@ const music = (() => {
 
   const MOTIFS = {
     explore: [
-      [0, 2, 4, null, 2, 1, 2, 4, 5, null, 4, 2, 1, null, 0, null],
-      [0, 1, 3, 4, null, 3, 1, null, 2, 3, 5, null, 4, 3, 1, null],
-      [0, null, 2, 4, 5, 4, 2, null, 1, 2, 4, null, 3, 2, 1, null],
+      [0, 2, 4, 5, 4, 2, 0, 2, 4, 5, 7, 5, 4, 2, 0, null],
+      [0, 4, 2, 5, 4, 2, 0, null, 2, 4, 5, 7, 5, 4, 2, 0],
+      [0, 2, 4, 7, 5, 4, 2, 0, 2, 4, 5, 4, 2, 0, null, null],
     ],
     tension: [
-      [0, 1, 3, null, 4, 3, 1, null, 2, 1, 0, null, 5, 4, 2, null],
-      [0, null, 1, 3, 4, null, 3, 1, 2, null, 1, 0, 5, null, 3, 1],
+      [0, 1, 3, 5, 4, 3, 1, 0, 2, 1, 0, 5, 4, 3, 1, null],
+      [0, 3, 1, 4, 3, 1, 0, 2, 1, 3, 5, 4, 3, 1, 0, null],
     ],
     combat: [
-      [0, 4, 2, 5, 4, 2, 1, null, 0, 2, 4, 5, 4, 2, 1, null],
-      [0, 2, 4, 6, 5, 4, 2, 1, 0, 2, 3, 5, 4, 3, 1, null],
+      [0, 4, 2, 5, 4, 2, 0, 4, 5, 7, 5, 4, 2, 0, 4, 2],
+      [0, 2, 4, 6, 5, 4, 2, 0, 2, 4, 5, 7, 5, 4, 2, 0],
     ],
     boss: [
-      [0, 5, 4, 2, 1, 2, 4, 5, 6, 5, 4, 2, 1, null, 0, null],
-      [0, 4, 5, 6, 5, 4, 2, 1, 0, 2, 4, 5, 6, 5, 3, null],
+      [0, 5, 4, 2, 0, 2, 4, 5, 6, 5, 4, 2, 0, 5, 4, 2],
+      [0, 4, 5, 6, 5, 4, 2, 0, 2, 4, 5, 6, 7, 5, 4, 2],
     ],
   };
 
   const BASS_PATTERNS = {
-    explore: [0, null, null, null, 2, null, null, null, 4, null, null, null, 2, null, null, null],
-    tension: [0, null, 1, null, 2, null, 1, null, 4, null, 2, null, 1, null, null, null],
-    combat:  [0, null, 4, null, 2, null, 1, null, 0, null, 4, null, 2, null, 1, null],
-    boss:    [0, null, 0, null, 5, null, 4, null, 0, null, 0, null, 6, null, 4, null],
+    explore: [0, null, 0, null, 2, null, 2, null, 4, null, 4, null, 2, null, null, 0],
+    tension: [0, null, 0, 1, 2, null, 1, null, 4, null, 2, 1, 0, null, null, null],
+    combat:  [0, null, 0, 4, 2, null, 2, 1, 0, null, 0, 4, 2, null, 1, null],
+    boss:    [0, null, 0, null, 5, null, 5, 4, 0, null, 0, null, 6, null, 6, 4],
   };
 
   const DRONE_TONE = {
-    idle:    { cutoff: 120, q: 1.2, lfoRate: 0.08, lfoDepth: 40 },
-    explore: { cutoff: 210, q: 1.8, lfoRate: 0.11, lfoDepth: 72 },
-    tension: { cutoff: 250, q: 2.2, lfoRate: 0.14, lfoDepth: 90 },
-    combat:  { cutoff: 310, q: 2.6, lfoRate: 0.17, lfoDepth: 110 },
-    boss:    { cutoff: 420, q: 3.0, lfoRate: 0.2, lfoDepth: 130 },
+    idle:    { cutoff: 150, q: 1.2, lfoRate: 0.08, lfoDepth: 40 },
+    explore: { cutoff: 320, q: 2.0, lfoRate: 0.13, lfoDepth: 85 },
+    tension: { cutoff: 380, q: 2.4, lfoRate: 0.16, lfoDepth: 100 },
+    combat:  { cutoff: 480, q: 2.8, lfoRate: 0.20, lfoDepth: 120 },
+    boss:    { cutoff: 600, q: 3.2, lfoRate: 0.24, lfoDepth: 140 },
   };
 
   function tier() { return floor <= 3 ? 0 : floor <= 6 ? 1 : floor <= 9 ? 2 : 3; }
@@ -345,10 +345,10 @@ const music = (() => {
     osc2.type = 'triangle';
     osc2.frequency.value = f * 1.002;
     filt.type = 'lowpass';
-    filt.frequency.value = state === 'combat' || state === 'boss' ? 2600 : 2000;
+    filt.frequency.value = state === 'combat' || state === 'boss' ? 4200 : 3400;
     g.gain.setValueAtTime(0.001, t);
-    g.gain.linearRampToValueAtTime(0.34 * accent, t + 0.01);
-    g.gain.setValueAtTime(0.34 * accent, t + dur * 0.52);
+    g.gain.linearRampToValueAtTime(0.40 * accent, t + 0.006);
+    g.gain.setValueAtTime(0.40 * accent, t + dur * 0.48);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.connect(filt); osc2.connect(filt); filt.connect(g); g.connect(target);
     osc.start(t); osc2.start(t);
@@ -375,8 +375,8 @@ const music = (() => {
     sub.frequency.setValueAtTime(freq * 0.5, t);
     sub.frequency.exponentialRampToValueAtTime(freq * 0.48, t + dur);
     filt.type = 'lowpass';
-    filt.frequency.value = state === 'boss' ? 220 : 190;
-    g.gain.setValueAtTime(0.42, t);
+    filt.frequency.value = state === 'boss' ? 360 : 280;
+    g.gain.setValueAtTime(0.48, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     body.connect(filt); sub.connect(filt); filt.connect(g); g.connect(bassG);
     body.start(t); sub.start(t);
