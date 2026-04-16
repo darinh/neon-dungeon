@@ -64,7 +64,7 @@ const game = {
     this.state=s;
     this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; music.stop(); }
-    else if (s === 'PAUSED') music.pause();
+    else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
     else if (s === 'PLAYING') music.resume();
     else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
     if (callback) callback();
@@ -1351,6 +1351,28 @@ const game = {
     if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
     else if (jp('KeyS')) { audio.menuSelect(); this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
     else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
+    // Keyboard up/down selection + Enter
+    const pauseActions = ['PLAYING', 'SETTINGS', 'MENU'];
+    if (this._pauseSel == null) this._pauseSel = -1;
+    if (jp(ALT_KEYS.up) || jp(km('up')))   { this._pauseSel = this._pauseSel <= 0 ? 2 : this._pauseSel - 1; audio.menuSelect(); }
+    if (jp(ALT_KEYS.down) || jp(km('down'))) { this._pauseSel = this._pauseSel >= 2 ? 0 : this._pauseSel + 1; audio.menuSelect(); }
+    if (this._pauseSel >= 0 && (jp('Enter') || jp('MouseLeft'))) {
+      audio.menuSelect();
+      if (this._pauseSel === 1) { this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
+      else this.setState(pauseActions[this._pauseSel]);
+      return;
+    }
+    // Mouse hover detection (highlight nearest option)
+    if (!isTouchDevice()) {
+      const narrow = layout.compact;
+      const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
+      let best = -1, bestD = 15;
+      for (let i = 0; i < 3; i++) {
+        const d = Math.abs(mouse.y - optY[i]);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      this._pauseSel = best;
+    }
   },
 
   updatePowerupChoice() {
@@ -2706,6 +2728,7 @@ const game = {
   renderPaused() {
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
+    const sel = this._pauseSel ?? -1;
     ctx.save();
     ctx.fillStyle='rgba(0,0,0,0.55)';
     ctx.fillRect(0,0,W,H);
@@ -2713,15 +2736,26 @@ const game = {
     ctx.shadowBlur=20; ctx.shadowColor='#ff00c8';
     ctx.fillStyle='#ff00c8'; ctx.font=`bold ${narrow ? 36 : 48}px monospace`;
     ctx.fillText('PAUSED',W/2, narrow ? 200 : 240);
-    ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 18}px monospace`;
+    ctx.shadowBlur=0;
+    const fs = narrow ? 14 : 18;
+    const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
     if (isTouch) {
-      ctx.fillText('TAP TOP — Resume',W/2, narrow ? 255 : 295);
-      ctx.fillText('TAP MIDDLE — Settings',W/2, narrow ? 280 : 320);
-      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, narrow ? 305 : 345);
+      ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
+      ctx.fillText('TAP TOP — Resume',W/2, optY[0]);
+      ctx.fillText('TAP MIDDLE — Settings',W/2, optY[1]);
+      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, optY[2]);
     } else {
-      ctx.fillText('ESC — Resume',W/2, narrow ? 255 : 295);
-      ctx.fillText('S   — Settings',W/2, narrow ? 280 : 320);
-      ctx.fillText('Q   — Quit to Menu',W/2, narrow ? 305 : 345);
+      const labels = ['ESC — Resume', 'S   — Settings', 'Q   — Quit to Menu'];
+      const colours = ['#00f5ff', '#ffb700', '#ff4466'];
+      for (let i = 0; i < 3; i++) {
+        const hovered = sel === i;
+        ctx.fillStyle = hovered ? colours[i] : '#aaaacc';
+        ctx.shadowBlur = hovered ? 10 : 0;
+        ctx.shadowColor = colours[i];
+        ctx.font = `${hovered ? 'bold ' : ''}${fs}px monospace`;
+        ctx.fillText(labels[i], W/2, optY[i]);
+      }
+      ctx.shadowBlur = 0;
     }
     ctx.restore();
   },
