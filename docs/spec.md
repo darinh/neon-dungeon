@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v5.4
+# NEON DUNGEON — Game Specification v5.7
 
 ## Vision
 
@@ -1847,17 +1847,25 @@ player strategies.
 | BERSERKER    | `#ff2222` | Speed and attack rate increase as HP drops (up to +50% at 0 HP). Red aura intensifies with missing HP. Affects movement, melee cooldown, and ranged shoot cooldown. |
 | REGENERATING | `#22ff44` | Heals 2.5% of max HP per second. Green particles when healing. Forces sustained aggression — letting a Regenerating elite disengage means fighting full HP again. |
 | PHASING      | `#cc88ff` | Cycles on a 4 s timer: 3 s vulnerable, 1 s invulnerable. Ghost flicker and semi-transparency during immune window. `audio.phaseShift()` plays on phase-in. Not rolled on PHANTOMs (redundant with invisibility). |
+| VOLATILE     | `#ff6600` | Explodes on death: 2-tile AoE dealing ATK×1.5 damage (LOS-gated). Damages player (unless dashing), enemies, and environmental entities (vcores, crates, beacons, shield gens, cameras, lasers, wall turrets, mines). Pulsing orange ring warning visual + intermittent orange particles. `audio.eliteVolatile()` on detonation. Not rolled on SEEKERs (redundant with kamikaze). Forces spacing awareness — melee-range kills become risky. |
+| FRENZY       | `#ff4466` | Gains a frenzy stack when any enemy dies within 4 tiles (max 2 stacks). Each stack grants +40% speed and attack rate (same multiplier path as BERSERKER via `berserkerMul()`). At 2 stacks the enemy is 80% faster. Red-orange aura intensifies per stack. `audio.eliteFrenzy()` on stack gain. Creates kill-order tactical decisions — kill the frenzy elite first, or isolate it before clearing trash. |
 
 **Minimap:** Elite enemies render as 3 px dots in their affix colour (vs 2 px
 red for normal enemies).
 
 **Implementation:** `ELITE_AFFIXES` table + `rollEliteAffix(enemyType)` for
-random selection with eligibility filtering. `tickEliteAffix(enemy, dt)` handles
-per-frame logic (shield regen, HP regen, phase cycling). `berserkerMul()` method
-on Enemy returns speed/cooldown multiplier. Shield absorption handled in
-`takeDamage()` before HP damage. Phasing immunity checked at top of
-`takeDamage()`. Enemy class stores `eliteAffix`, `shieldHp`, `shieldMax`,
-`shieldRegenDelay`, `phaseTimer`, `phaseImmune`.
+random selection with eligibility filtering (PHASING excluded from PHANTOM,
+VOLATILE excluded from SEEKER). `tickEliteAffix(enemy, dt)` handles per-frame
+logic (shield regen, HP regen, phase cycling, volatile particles).
+`berserkerMul()` method on Enemy returns speed/cooldown multiplier for both
+BERSERKER (HP-scaled) and FRENZY (stack-scaled). `notifyFrenzyElites(x, y)`
+called on every enemy death — grants stacks to nearby FRENZY elites within
+4 tiles. VOLATILE explosion in `die()` follows the same AoE pattern as
+SEEKER/VOLATILE-modifier explosions (LOS-gated, env damage helpers, dash
+immunity). Shield absorption handled in `takeDamage()` before HP damage.
+Phasing immunity checked at top of `takeDamage()`. Enemy class stores
+`eliteAffix`, `shieldHp`, `shieldMax`, `shieldRegenDelay`, `phaseTimer`,
+`phaseImmune`, `frenzyStacks`.
 
 ### Aggression Scaling
 
@@ -3481,3 +3489,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v90.0   | SEEKER enemy (floor 3+): kamikaze explosive drone that rushes toward the player and detonates on contact. AI: direct pursuit at full speed (SPD 3.5), detonates when within 1.2 tiles of player. Detonation: 2-tile AoE, ATK × 1.5 damage, LOS-gated. Damages player (unless dashing via `dashTimer > 0`) AND other enemies (skips phased WRAITHs). Chains to env entities: primes volatile cores, damages crates/beacons/shield gens/cameras/lasers/wall turrets, triggers mines. Clean kill (shot before reaching player): no explosion — normal death path only. Self-destruct: `_seekerDetonate()` applies AoE then calls `die()` for standard death rewards (XP/credits/drops/VOLATILE chain). Interaction with VOLATILE modifier: detonation AoE + VOLATILE explosion = double danger (intentional). Trail particles ramp with proximity (6 + proximity × 12 per-sec). Visual: pulsing yellow glow that intensifies within 6 tiles, pulse rate increases with proximity. `_skProximity` tracks 0→1 scalar for draw. `audio.seekerDetonate()` sharp crack + bass thump. Elite ineligible (too fragile/fast to benefit from affixes). Stats: HP 18, ATK 12, SPD 3.5, XP 12, credits 5. Colour: `#ffdd00` (bright yellow). TYPE_CAPS: 3. Spawn weight: base 2, perFloor 3, minFloor 3. Spec v5.5. SW cache v90. |
 | v91.0   | NIGHTMARE difficulty tier: endgame challenge mode. enemyHp ×2.0, enemyAtk ×1.6, enemySpd ×1.2, itemDrop 8%, creditMul ×0.85, xpMul ×1.35, eliteRate 28%, shardMul ×1.8, envDmg ×1.5, roomLoot 0. Colour `#9400ff` (violet). Added to `DIFF_ORDER` and `DIFFICULTIES` object. Spec v5.5. SW cache v91. |
 | v92.0   | NIGHTMARE unlock gate: NIGHTMARE difficulty locked until player achieves victory on HARD. Tracked via `neonDungeonMeta.clearedDifficulties[]` array (persisted in localStorage). `isDiffUnlocked()` checks `DIFF_UNLOCK_REQS` map — extensible for future gated difficulties. Menu: locked difficulty shows `[LOCKED]` suffix with dimmed colour (`#444466`); attempting to start displays "CLEAR HARD TO UNLOCK NIGHTMARE" message (2.5 s fade). Victory screen: pulsing `★ NIGHTMARE UNLOCKED ★` celebration when HARD cleared for first time (`_newlyUnlocked` flag set in `endRun()`). EASY/NORMAL/HARD always available. Backward-compatible: existing saves without `clearedDifficulties` default to empty array. Spec v5.6. SW cache v92. |
+| v93.0   | Two new elite affixes expanding the pool from 4 to 6: **VOLATILE** (`#ff6600`, 💥) — explodes on death with 2-tile AoE dealing ATK×1.5 damage (LOS-gated). Damages player (dash immune), enemies (skip phased WRAITHs), and all environmental entities (vcores, crates, beacons, shield gens, cameras, lasers, wall turrets, mines). Pulsing orange ring + intermittent particles as visual warning. Not rolled on SEEKERs. `audio.eliteVolatile()`. **FRENZY** (`#ff4466`, 🔥) — gains frenzy stack when any enemy dies within 4 tiles (max 2 stacks). Each stack grants +40% speed/attack rate via `berserkerMul()` (0 stacks = normal, 1 = ×1.4, 2 = ×1.8). `notifyFrenzyElites(x, y)` called in `die()`. Red-orange aura intensifies per stack. `audio.eliteFrenzy()`. Creates kill-order tactical decisions — especially impactful on NIGHTMARE (28% elite rate). `rollEliteAffix()` updated with eligibility filters. `frenzyStacks` added to Enemy class. Spec v5.7. SW cache v93. |

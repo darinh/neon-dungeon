@@ -228,6 +228,26 @@ function tickEliteAffix(enemy, dt) {
     enemy.phaseImmune = enemy.phaseTimer >= 3;
     if (enemy.phaseImmune && !wasImmune) audio.phaseShift();
   }
+  // VOLATILE: pulsing orange particles (visual warning)
+  if (aff === 'VOLATILE' && Math.random() < dt * 1.5) {
+    spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
+  }
+  // FRENZY: speed/attack boost from stacks (applied dynamically via frenzyMul())
+  // Stacks granted by notifyFrenzyElites() on nearby ally death
+}
+
+// Notify FRENZY-affix elites within 4 tiles of a death — grant a frenzy stack
+function notifyFrenzyElites(deathX, deathY) {
+  for (const e of enemies) {
+    if (e.dead || e.eliteAffix !== 'FRENZY') continue;
+    if (e.frenzyStacks >= 2) continue; // max 2 stacks
+    if (dist(e.x, e.y, deathX, deathY) <= 4) {
+      e.frenzyStacks++;
+      spawnParticles(e.x, e.y, 'EXPLOSION', '#ff4466', 8);
+      audio.eliteFrenzy();
+      game.msg('⚡ FRENZY!', '#ff4466');
+    }
+  }
 }
 
 
@@ -262,6 +282,7 @@ class Enemy {
     this.eliteAffix=null;
     this.shieldHp=0; this.shieldMax=0; this.shieldRegenDelay=0;
     this.phaseTimer=0; this.phaseImmune=false;
+    this.frenzyStacks=0; // FRENZY affix: stacks gained from nearby ally deaths (max 2)
     // Weapon affix status effects
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
@@ -484,6 +505,36 @@ class Enemy {
         pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: game.floor, room: this.room, _challengeWave: !!this._challengeWave });
       }
     }
+    // VOLATILE elite affix: death explosion (2-tile AoE, ATK×1.5, LOS-gated)
+    if (this.eliteAffix === 'VOLATILE') {
+      const vr = 2;
+      const vdmg = Math.round(this.atk * 1.5);
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#ff6600', 22);
+      triggerShake(7, 0.25);
+      audio.eliteVolatile();
+      const p = game.player;
+      if (dist(p.x, p.y, this.x, this.y) < vr && p.dashTimer <= 0 && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
+        p.takeDamage(vdmg, 'Volatile Elite');
+      }
+      for (const e of enemies) {
+        if (e === this || e.dead || e._wrPhased) continue;
+        if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, game.dungeon.map)) {
+          e._volatileKill = true;
+          e.takeDamage(vdmg, 'Volatile Elite');
+          if (!e.dead) e._volatileKill = false;
+        }
+      }
+      primeVCoresInRadius(this.x, this.y, vr, game.dungeon.map);
+      damageCratesInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageBeaconsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageCamerasInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageLasersInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageWallTurretsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
+    }
+    // FRENZY elite affix: notify nearby frenzy elites of this death
+    notifyFrenzyElites(this.x, this.y);
   }
 
   update(dt, player, map) {
@@ -571,10 +622,13 @@ class Enemy {
     }
   }
 
-  // BERSERKER elite affix: multiplier scales with missing HP (1.0 → 1.5)
+  // Elite affix combat tempo multiplier — scales speed and cooldowns
+  // BERSERKER: scales with missing HP (1.0 → 1.5)
+  // FRENZY: +40% per stack from nearby ally deaths (max 2 stacks = 1.8)
   berserkerMul() {
-    if (this.eliteAffix !== 'BERSERKER') return 1;
-    return 1 + 0.5 * (1 - this.hp / this.maxHp);
+    if (this.eliteAffix === 'BERSERKER') return 1 + 0.5 * (1 - this.hp / this.maxHp);
+    if (this.eliteAffix === 'FRENZY' && this.frenzyStacks > 0) return 1 + 0.4 * this.frenzyStacks;
+    return 1;
   }
 
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
@@ -3251,6 +3305,33 @@ class Enemy {
       // PHASING affix: ghost flicker during immune window
       if (this.eliteAffix === 'PHASING' && this.phaseImmune) {
         ctx.globalAlpha = 0.15 + Math.sin(this.bobAngle * 12) * 0.1;
+      }
+      // VOLATILE affix: pulsing orange warning ring
+      if (this.eliteAffix === 'VOLATILE') {
+        ctx.save();
+        const vPulse = 0.3 + 0.15 * Math.sin(this.bobAngle * 4);
+        ctx.globalAlpha = vPulse;
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 6 + Math.sin(this.bobAngle * 4) * 3;
+        ctx.shadowColor = '#ff6600';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
+        ctx.stroke();
+        ctx.restore();
+      }
+      // FRENZY affix: intensifying red-orange aura per stack
+      if (this.eliteAffix === 'FRENZY' && this.frenzyStacks > 0) {
+        ctx.save();
+        const fInt = this.frenzyStacks * 0.25;
+        ctx.globalAlpha = fInt;
+        ctx.shadowBlur = 8 + this.frenzyStacks * 6;
+        ctx.shadowColor = '#ff4466';
+        ctx.fillStyle = '#ff4466';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * (1.1 + this.frenzyStacks * 0.15), 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
       }
       // Shield Generator protection: subtle cyan glow
       if (isEnemyShieldGenProtected(this)) {
