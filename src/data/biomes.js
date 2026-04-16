@@ -59,9 +59,16 @@
     },
   ];
 
+  // areaForFloor clamps out-of-range floors to the first/last biome so
+  // consumers never hit a nullish result. f < 1 → first biome, f > lastFloor
+  // → last biome.
   function areaForFloor(f) {
-    for (const a of AREAS) if (a.floors.includes(f)) return a;
-    return AREAS[0];
+    const n = Math.floor(Number(f));
+    if (!Number.isFinite(n)) return AREAS[0];
+    if (n < AREAS[0].floors[0]) return AREAS[0];
+    for (const a of AREAS) if (a.floors.includes(n)) return a;
+    // n is above the last defined floor — clamp to last biome.
+    return AREAS[AREAS.length - 1];
   }
 
   function isBiomeBossFloor(f) {
@@ -73,5 +80,29 @@
     return areaForFloor(f).floors[0];
   }
 
-  return { AREAS, areaForFloor, isBiomeBossFloor, firstFloorOfBiomeContaining };
+  // biomeIndex returns the AREAS index for the biome containing f, with the
+  // same clamping behavior as areaForFloor.
+  function biomeIndex(f) {
+    const a = areaForFloor(f);
+    return AREAS.indexOf(a);
+  }
+
+  // areaForIndex returns the biome at AREAS[i], clamping to valid range.
+  // Used by death-respawn to look up the start floor of the deepest biome
+  // reached.
+  function areaForIndex(i) {
+    const n = Math.floor(Number(i));
+    if (!Number.isFinite(n) || n < 0) return AREAS[0];
+    if (n >= AREAS.length) return AREAS[AREAS.length - 1];
+    return AREAS[n];
+  }
+
+  return {
+    AREAS,
+    areaForFloor,
+    isBiomeBossFloor,
+    firstFloorOfBiomeContaining,
+    biomeIndex,
+    areaForIndex,
+  };
 }));

@@ -47,6 +47,42 @@ score does not qualify, the game skips directly to GAME_OVER or VICTORY.
 
 ## World Generation — BSP Dungeon
 
+### Biomes (UNCHAINED)
+
+The 15-floor arc is partitioned into five biomes (areas) defined in
+`src/data/biomes.js` as the `AREAS` table. One source of truth for
+floor → biome mapping, palette hints, and boss pool.
+
+| Index | ID        | Floors  | Boss Pool   | Display Name       |
+|-------|-----------|---------|-------------|--------------------|
+| 0     | sandbox   | 1–3     | SENTINEL    | SENTINEL-PRIME     |
+| 1     | cache     | 4–6     | HIVE        | VIRAL COLLECTIVE   |
+| 2     | firewall  | 7–9     | CONDUCTOR   | THE COMPILER       |
+| 3     | uplink    | 10–12   | OMEGA       | OVERSEER           |
+| 4     | opennet   | 13–15   | GENESIS     | THE ARCHITECT      |
+
+Helpers: `areaForFloor(f)`, `biomeIndex(f)`, `areaForIndex(i)`,
+`firstFloorOfBiomeContaining(f)`, `isBiomeBossFloor(f)`. All clamp
+out-of-range input (f < 1 → first biome; f > lastFloor → last biome;
+NaN/non-finite → first biome); never throw.
+
+**Consumers** (wired via `NEON.biomes`):
+
+- `src/render.js` — boss selection in `populateFloor` uses
+  `areaForFloor(floor).bossPool` instead of the legacy hard-coded map.
+- `src/game.js` — `loadFloor(n)` records `game.currentBiomeIndex` and
+  bumps `meta.deepestBiome = max(meta.deepestBiome, biomeIndex(n))` on
+  every floor entry (meta write is best-effort; failures are swallowed).
+
+**Death-respawn rule (UNCHAINED):** `startGame()` now begins a run at
+`areaForIndex(meta.deepestBiome).floors[0]` rather than always floor 1.
+Current-run resources (credits, weapons, hackware, XP, shields) still
+reset via `new Player()`; meta state is read but untouched. Fresh
+installs (`deepestBiome = 0`) still start at floor 1 — the behaviour is
+additive until the player progresses into a later biome.
+
+### BSP generation
+
 Each floor is generated fresh using Binary Space Partitioning:
 
 1. Recursively split the map (80 × 50 tiles) into leaf partitions.
@@ -56,7 +92,9 @@ Each floor is generated fresh using Binary Space Partitioning:
 5. Place stairs-down in the farthest room from spawn (approximate BFS
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
-6. Floor 10 stairs replaced with CORE terminal (victory trigger).
+6. Floor 10 stairs replaced with CORE terminal (victory trigger —
+   victory ends the run regardless of biome index; post-10 biomes are
+   data-ready but not yet reachable in-run).
 7. **Dead-end pruning**: after secret rooms, locked doors, and challenge
    rooms wall off entrances, corridor tiles that become dead ends
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
