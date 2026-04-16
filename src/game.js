@@ -299,12 +299,20 @@ const game = {
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
       this.endRun(true);
     } else {
-      audio.descend();
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
-      const next=this.floor+1;
-      this.fadeTo('DESCENDING TO FLOOR '+next, ()=>{
-        this.loadFloor(next);
-      }, 'PLAYING');
+      // UNCHAINED #35: interpose THE GAP hub between floors. First-floor rule
+      // is satisfied naturally — a fresh run starts inside floor 1 (not hub),
+      // so hub only ever appears AFTER floor 1+ has been cleared.
+      if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.enterHub) {
+        NEON.hub.enterHub(this);
+      } else {
+        // Fallback: original direct-descent path (shouldn't happen in prod).
+        audio.descend();
+        const next=this.floor+1;
+        this.fadeTo('DESCENDING TO FLOOR '+next, ()=>{
+          this.loadFloor(next);
+        }, 'PLAYING');
+      }
     }
   },
 
@@ -534,6 +542,7 @@ const game = {
       case 'ARCHIVES':       this.updateArchives(); break;
       case 'SETTINGS':       this.updateSettings(); break;
       case 'FADE':        this.updateFade(dt);    break;
+      case 'HUB':         if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.updateHub(this, dt); break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
       case 'NAME_ENTRY':  this.updateNameEntry(dt); break;
@@ -2493,6 +2502,7 @@ const game = {
       case 'ARCHIVES':  this.renderArchives(); break;
       case 'SETTINGS':  this.renderSettings(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
+      case 'HUB':       if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.drawHub(ctx, this); break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
       case 'NAME_ENTRY': this.renderNameEntry(); break;

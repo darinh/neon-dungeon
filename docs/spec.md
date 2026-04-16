@@ -29,6 +29,7 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
+     PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
 
@@ -2673,6 +2674,77 @@ on save state. Touch hit-testing uses closest-option matching.
 ### End-of-Run Display
 
 GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summary.
+
+---
+
+## Hub / The Gap
+
+> **Status:** scaffold shipped in UNCHAINED Phase 2 (#35). Harness + 4 terminal
+> slots present; terminal bodies are placeholder stubs that sibling issues
+> fill in (#36 upgrades, #37 modules, ARMORY weapon-swap, #41 archive).
+
+**THE GAP** is a liminal between-floor state. After the player interacts with
+the stairs/terminal on floor 1+, the game transitions to `HUB` instead of
+loading the next floor directly. A fresh run still boots straight into floor 1
+gameplay (the hub only appears *after* clearing a floor).
+
+### State
+
+- New `game.state` value: `HUB`.
+- `game.hub` holds the ephemeral state object:
+  `{ terminals, selected, activePanel, fromFloor, nextFloor, biomeName, biomeId, t }`.
+- `enterHub(game)` captures `game.floor` and `areaForFloor(floor).name`, then
+  flips `game.state = 'HUB'` and plays `audio.hubAmbient()`.
+- `exitHub(game)` clears `game.hub`, plays `audio.descend()`, and uses the
+  existing `fadeTo(…, loadFloor(nextFloor), 'PLAYING')` transition so descent
+  feels continuous.
+
+### Terminals
+
+Four terminal cards render in a horizontal row. Each card conforms to the
+**terminal-panel API** (documented as the parallel-safety contract between
+#35/#36/#37/#41):
+
+```
+{
+  id:     string,                 // stable identifier ('upgrade', 'modules', 'armory', 'archive')
+  label:  string,                 // UPPERCASE label painted on the card
+  update(dt, input),              // input = { jp, km } — invoked only when the panel is active
+  draw(ctx, x, y, w, h),          // panel body; called when active, not for the card
+  onOpen(game),                   // fired when the player activates the terminal
+  onClose(game),                  // fired when the panel is dismissed
+}
+```
+
+The four terminal slots, in order:
+
+1. **UPGRADE MATRIX** (`id: upgrade`) — placeholder stub. Filled by #36.
+2. **MODULE SLOTS**   (`id: modules`) — placeholder stub. Filled by #37.
+3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
+   name; full weapon-swap UI is a follow-up.
+4. **ARCHIVE**        (`id: archive`) — placeholder stub. Filled by #41.
+
+### Input
+
+- `←` / `→` (or rebound `left`/`right`) — move the selector.
+- `1`–`4` — direct-select a terminal.
+- `ENTER` (or rebound `interact`) — activate the selected terminal (opens its panel).
+- `SPACE` (or rebound `shoot`) — descend to the next floor (calls `exitHub`).
+- `ESC` / `KeyQ` — close the active panel, returning to the selector.
+
+### HUD (while in HUB)
+
+- Top-left: `◈ N  CORES` (reads `NEON.save.loadMeta().cores`).
+- Top-right: biome name (e.g. `THE SANDBOX`) from `NEON.biomes.areaForFloor`,
+  then `FLOOR X → FLOOR X+1` below.
+- Centre title: `THE GAP — liminal interlink`.
+- Bottom prompt: `◀▶ / 1-4 SELECT   [ENTER] ACTIVATE   [SPACE] DESCEND`
+  (or `[ESC] BACK` while a panel is active).
+
+### Audio
+
+- `audio.hubAmbient()` — low drone pair + airy shimmer bed. Stubbed for now;
+  a full ambient track lands in a later audio pass.
 
 ---
 
