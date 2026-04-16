@@ -586,6 +586,7 @@ const game = {
     }
 
     // update enemies
+    const _ptEnemies = perfEnabled() ? performance.now() : 0;
     for (const e of enemies) {
       tickEnemyStatusEffects(e, dt);
       tickEliteAffix(e, dt);
@@ -602,6 +603,7 @@ const game = {
     }
 
     // ── Toxic Pool enemy damage ──
+    if (_ptEnemies) perfRecord('enemies', performance.now() - _ptEnemies);
     for (const e of enemies) {
       if (e.dead || e._disguised) continue; // skip dead and disguised mimics
       if (e._wrPhased) continue; // phased WRAITHs are intangible
@@ -630,6 +632,7 @@ const game = {
     }
 
     // update projectiles (compact-in-place + recycle to pool)
+    const _ptProj = perfEnabled() ? performance.now() : 0;
     {
       let w = 0;
       const n = projectiles.length;
@@ -645,8 +648,10 @@ const game = {
       }
       projectiles.length = w;
     }
+    if (_ptProj) perfRecord('projectiles', performance.now() - _ptProj);
 
     // update hazard zones (grenade AoE)
+    const _ptEnv = perfEnabled() ? performance.now() : 0;
     updateHazardZones(dt, player);
 
     // update volatile cores
@@ -678,6 +683,7 @@ const game = {
 
     // update items
     for (const it of items) it.update(dt);
+    if (_ptEnv) perfRecord('env', performance.now() - _ptEnv);
 
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
@@ -767,12 +773,16 @@ const game = {
     }
 
     // update lighting
+    const _ptLight = perfEnabled() ? performance.now() : 0;
     updateLighting(dungeon,player.x,player.y);
+    if (_ptLight) perfRecord('lighting', performance.now() - _ptLight);
+    const _ptPart = perfEnabled() ? performance.now() : 0;
     updateParticles(dt);
     updateFloatingTexts(dt);
+    updateAmbient(dt);
+    if (_ptPart) perfRecord('particles', performance.now() - _ptPart);
     updateShake(dt);
     updateCombo(dt);
-    updateAmbient(dt);
     updateHackwareEffects(dt);
     if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
@@ -3811,6 +3821,18 @@ function renderPerfHUD() {
     `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,
     `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
   ];
+  // Subsystem timing — show each tracked label with avg/max ms over the last
+  // PERF_SAMPLES frames. Sorted descending so the hottest shows first, making
+  // the next optimisation target obvious. Labels with zero time this frame
+  // are hidden (keeps the HUD short when a subsystem is idle).
+  const subs = perfSubsystemStats();
+  if (subs.length) {
+    lines.push('─ subsystems (avg/max ms) ─');
+    for (let i = 0; i < subs.length; i++) {
+      const sub = subs[i];
+      lines.push(`  ${sub.label.padEnd(10)} ${sub.avg.toFixed(2).padStart(5)} / ${sub.max.toFixed(2).padStart(5)}`);
+    }
+  }
   if (perf.capturing) {
     lines.push(`● CAPTURING ${perf.captureLabel} ${perf.captureIdx}f ${((performance.now()-perf.captureStart)/1000).toFixed(1)}s/${(perf.captureDurationMs/1000).toFixed(1)}s`);
   }
@@ -3869,6 +3891,46 @@ function loop(ts) {
 // Usage: game.capturePerf('boss-fight')  or  game.capturePerf('label', 10000) for 10s.
 game.capturePerf = function(label, durationMs) { perf.startCapture(label, durationMs); };
 game.perf = perf;
+
+// ─── Per-subsystem timing ─────────────────────────────────────────────────────
+// Lightweight block timers used to attribute update-time cost to each hot loop
+// (enemy update, projectile update, particle update, env entities, etc.).
+// Enabled only when the HUD is visible or a capture is running, so zero cost
+// in normal play. Surface pattern at callsites:
+//   const _pt = perfEnabled() ? performance.now() : 0;
+//   ...work...
+//   if (_pt) perfRecord('label', performance.now() - _pt);
+// Labels are free-form; the HUD renders all of them sorted by average time.
+const PERF_SUB_SAMPLES = 60;
+const perfSubsystems = new Map();
+function perfEnabled() { return perf.visible || perf.capturing; }
+function perfRecord(label, ms) {
+  let s = perfSubsystems.get(label);
+  if (!s) {
+    s = { samples: new Float32Array(PERF_SUB_SAMPLES), idx: 0, filled: 0 };
+    perfSubsystems.set(label, s);
+  }
+  s.samples[s.idx] = ms;
+  s.idx = (s.idx + 1) % PERF_SUB_SAMPLES;
+  if (s.filled < PERF_SUB_SAMPLES) s.filled++;
+}
+function perfSubsystemStats() {
+  const out = [];
+  for (const [label, s] of perfSubsystems) {
+    if (!s.filled) continue;
+    let sum = 0, max = 0;
+    for (let i = 0; i < s.filled; i++) {
+      const v = s.samples[i];
+      sum += v;
+      if (v > max) max = v;
+    }
+    out.push({ label, avg: sum / s.filled, max });
+  }
+  out.sort((a, b) => b.avg - a.avg);
+  return out;
+}
+game.perfRecord = perfRecord;
+game.perfSubsystemStats = perfSubsystemStats;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 resize();
