@@ -33,6 +33,13 @@ function unregisterEnemyFromRoom(e) {
 }
 function clearEnemiesByRoom() { enemiesByRoom.clear(); }
 function getEnemiesInRoom(room) { return enemiesByRoom.get(room) || null; }
+// Phase 4 — convenience iterator. Safe when `room` is null/undefined or empty.
+// Callers still must guard for e.dead / e._disguised / e._wrPhased etc.
+const _EMPTY_ENEMY_SET = new Set();
+function enemiesInRoomIter(room) {
+  if (!room) return _EMPTY_ENEMY_SET;
+  return enemiesByRoom.get(room) || _EMPTY_ENEMY_SET;
+}
 
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
@@ -1620,10 +1627,12 @@ class Enemy {
     // ── Idle: patrol, approach, or initiate leap ──
     if (this.stunTimer > 0) return; // stun prevents leap initiation
     if (los && d >= 3 && d <= 10 && this._lpCooldown <= 0) {
-      // Check no other leaper is already airborne/winding up
-      const anotherLeaping = enemies.some(e =>
-        e !== this && e.type === 'LEAPER' && !e.dead && e.room === this.room &&
-        (e._lpState === 'windup' || e._lpState === 'airborne'));
+      // Check no other leaper is already airborne/winding up (scoped to room)
+      let anotherLeaping = false;
+      for (const e of enemiesInRoomIter(this.room)) {
+        if (e === this || e.dead || e.type !== 'LEAPER') continue;
+        if (e._lpState === 'windup' || e._lpState === 'airborne') { anotherLeaping = true; break; }
+      }
       if (!anotherLeaping) {
         this._lpState = 'windup';
         this._lpWindup = 0.5;
@@ -1875,15 +1884,14 @@ class Enemy {
       this._nxLinks = [];
       return;
     }
-    // Find up to 3 closest valid allies within 5 tiles
+    // Find up to 3 closest valid allies within 5 tiles (scoped to room)
     const candidates = [];
-    for (const e of enemies) {
+    for (const e of enemiesInRoomIter(this.room)) {
       if (e === this || e.dead || e.isBoss) continue;
       if (e.type === 'NEXUS') continue;
       if (e._wrPhased) continue;
       if (e._disguised) continue;
       if (e.type === 'PHANTOM' && !e.visible) continue;
-      if (e.room !== this.room) continue;
       const ed = dist(this.x, this.y, e.x, e.y);
       if (ed > 5) continue;
       candidates.push({ e, d: ed });
@@ -1918,12 +1926,13 @@ class Enemy {
 
   _nxFindAllyCluster() {
     let best = null, bestCount = 0;
-    for (const e of enemies) {
-      if (e === this || e.dead || e.room !== this.room) continue;
+    const roomEnemies = enemiesInRoomIter(this.room);
+    for (const e of roomEnemies) {
+      if (e === this || e.dead) continue;
       if (e.isBoss || e._wrPhased || e._disguised) continue;
       let nearby = 0;
-      for (const o of enemies) {
-        if (o === e || o === this || o.dead || o.room !== this.room) continue;
+      for (const o of roomEnemies) {
+        if (o === e || o === this || o.dead) continue;
         if (dist(e.x, e.y, o.x, o.y) < 4) nearby++;
       }
       if (nearby > bestCount) { bestCount = nearby; best = e; }
@@ -2414,7 +2423,10 @@ class Enemy {
 
     // Phase 2+: Spawn crawlers (inherited from HIVE) and drones — capped at 8 active adds
     if (this.phase >= 2 && T.spawn <= 0 && this.spawnCooldown <= 0) {
-      const activeAdds = enemies.filter(e => !e.dead && !e.isBoss && e.room === this.room).length;
+      let activeAdds = 0;
+      for (const e of enemiesInRoomIter(this.room)) {
+        if (!e.dead && !e.isBoss) activeAdds++;
+      }
       if (activeAdds < 8) {
         const addType = Math.random() < 0.6 ? 'CRAWLER' : 'DRONE';
         const count = Math.min(this.phase >= 4 ? 3 : 2, 8 - activeAdds);
@@ -4266,8 +4278,8 @@ function drawShieldGens(camX, camY) {
 
     // Draw energy beams to shielded enemies in room
     const r = g.room;
-    for (const e of enemies) {
-      if (e.dead || e._disguised || e.room !== r) continue;
+    for (const e of enemiesInRoomIter(r)) {
+      if (e.dead || e._disguised) continue;
       if (e.x < r.x || e.x >= r.x + r.w || e.y < r.y || e.y >= r.y + r.h) continue;
       const ex = e.x * TILE - camX, ey = e.y * TILE - camY;
       ctx.save();
@@ -4985,10 +4997,9 @@ function updateWallTurrets(dt) {
       // ── Allied: target nearest visible enemy in room ──
       const r = t.room;
       let best = null, bestD = Infinity;
-      for (const e of enemies) {
+      for (const e of enemiesInRoomIter(r)) {
         if (e.dead || e.isBoss || e._disguised) continue;
         if (e._wrPhased) continue;
-        if (e.room !== r) continue;
         const d = dist(t.x, t.y, e.x, e.y);
         if (d < WTURRET_RANGE_HACKED && d < bestD && hasLOS(t.x, t.y, e.x, e.y, map)) {
           best = e; bestD = d;
