@@ -1173,6 +1173,14 @@ function calcRunShards(floor, score, bc, vic)   { return NEON.save.calcRunShards
 function applyMetaToPlayer(player)              { return NEON.save.applyMetaToPlayer(player, buildWeapon); }
 function getMetaXPMultiplier()                  { return NEON.save.getMetaXPMultiplier(); }
 function getMetaCreditMultiplier()              { return NEON.save.getMetaCreditMultiplier(); }
+// UNCHAINED helpers — thin wrappers so game.js can call them without NEON.save.
+function resetMeta()                            { return NEON.save.resetMeta(); }
+function addCores(n)                            { return NEON.save.addCores(n); }
+function spendCores(n)                          { return NEON.save.spendCores(n); }
+function addLogFound(id)                        { return NEON.save.addLogFound(id); }
+function markLogRead(id)                        { return NEON.save.markLogRead(id); }
+function installModule(slot, moduleId)          { return NEON.save.installModule(slot, moduleId); }
+function sellModule(moduleId, refund)           { return NEON.save.sellModule(moduleId, refund); }
 
 // ─── Particles (pooled) ──────────────────────────────────────────────────────
 // particles[] holds ONLY alive slots. _particlePool is the free list of dead

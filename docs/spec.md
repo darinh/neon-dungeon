@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v5.7
+# NEON DUNGEON — Game Specification v6.0-wip
 
 ## Vision
 
@@ -2635,6 +2635,90 @@ on save state. Touch hit-testing uses closest-option matching.
 ### End-of-Run Display
 
 GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summary.
+
+---
+
+## Meta-progression / Persistent Save (v2)
+
+> **Status:** vessel only. Shipped in UNCHAINED Phase 1 (#33). The systems that
+> populate these fields — hub UI (#35), upgrade effects (#36), modules (#37),
+> cores economy (#39), logs (#41) — are tracked as separate issues. The schema
+> is the contract every subsequent phase writes against.
+
+### Schema — v2
+
+Everything lives under `localStorage['neonDungeonMeta']` and is owned by
+`src/meta/save.js`. Fields are never deleted across versions; only added.
+
+```js
+{
+  version: 2,                           // bumped from 1 in Phase 1
+  // ─── Legacy v1 — preserved for save-compat ────────────────────────────
+  shards: 0,                            // old fragment economy (pre-#39)
+  upgrades: {},                         // META_UPGRADES purchases (pre-#36)
+  stats: { totalRuns, totalShards, bestFloor, victories },
+  lastDifficulty: 'NORMAL',
+  clearedDifficulties: [],
+  // ─── UNCHAINED v2 ─────────────────────────────────────────────────────
+  cores: 0,                             // persistent wallet (#39)
+  upgradeNodes: {},                     // { nodeId: purchasedLevel } (#36)
+  modulesOwned: [],                     // module ids in hub inventory (#37)
+  modulesInstalled: [null, null, null], // fixed-width 3-slot loadout
+  logsRead: [],                         // log ids read in Archive (#41)
+  logsFound: [],                        // log ids found but not yet read
+  endingsUnlocked: [],                  // subset of ['keeper','unchained']
+  runsCompleted: 0,
+  deepestBiome: 0                       // highest AREAS index reached
+}
+```
+
+### Migration (v1 → v2)
+
+`loadMeta()` is the single migration entry point. For any stored save whose
+`version` is missing or `< 2`:
+
+- Each missing v2 field is injected with its default value.
+- `modulesInstalled` is coerced to length exactly 3 (pad with nulls, truncate,
+  and replace non-string entries with null).
+- `modulesOwned`, `logsRead`, `logsFound`, `endingsUnlocked` drop non-string
+  entries (`endingsUnlocked` additionally restricts to the valid id set).
+- `cores` and `runsCompleted` are floored to non-negative integers.
+- `version` is set to `META_VERSION` and the save is left for the next
+  `saveMeta()` to persist.
+- `console.log('[meta] migrated v1→v2')` fires once per process (idempotent on
+  the second+ load).
+
+Migration is idempotent: re-running on a v2 save is a no-op.
+
+### Helpers
+
+| Function | Purpose |
+|----------|---------|
+| `addCores(n)` | Credit `n` cores (≤0 ignored). Returns new balance. |
+| `spendCores(n)` | Debit atomically; returns `true` on success, `false` if insufficient (wallet unchanged). Zero is a no-op success. |
+| `addLogFound(id)` | Add to `logsFound` if new. Returns `true` if added. |
+| `markLogRead(id)` | Ensure `id` is in both `logsFound` and `logsRead`. Returns `true` if anything changed. |
+| `installModule(slot, id)` | Equip `id` in `slot∈[0,2]`. Must be owned. If already installed elsewhere, the old slot is cleared first. Returns the previous occupant (or `null`), or `undefined` on bad input. Pass `null` to unslot. |
+| `sellModule(id, refund)` | Remove `id` from `modulesOwned`, clear any equipped slot, credit `refund` cores. Refund is caller-computed (module data lives outside save.js). Returns the refund amount, or `0` if not owned. |
+| `resetMeta()` | Wipe `localStorage['neonDungeonMeta']` (New Game → "Reset" branch). Irreversible. |
+
+### Death Model
+
+Death **never** touches meta. `saveMeta()` is called only from
+`startGame()` (to persist `lastDifficulty`) and from explicit meta actions
+(archive purchases, log reads, module ops). The run checkpoint lives under a
+separate key (`neonDungeonSave`) and is the only thing cleared by game over.
+
+### New Game Confirmation
+
+`game.startGame()` intercepts the menu action when `_hasMetaProgress()` is true
+(any cores, upgrades, modules, logs, endings, cleared difficulties, or prior
+runs). A modal overlay prompts **"Keep persistent unlocks?"** with two choices:
+
+- **KEEP UNLOCKS** → `startGame({ skipConfirm: true })` retains meta as-is.
+- **RESET META** → `resetMeta()` then start fresh.
+
+Fresh installs (meta entirely default) skip the prompt.
 
 ---
 
