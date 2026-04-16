@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v5.0
+# NEON DUNGEON — Game Specification v5.4
 
 ## Vision
 
@@ -550,7 +550,7 @@ or disabled.
 - `audio.laserDestroy()` — sparking collapse: noise burst + descending
   sawtooth 700→150 + sine tail 400→80.
 
-**Floor 3+, non-boss floors.** One secret room per qualifying floor. A normal
+**All non-boss floors.** One secret room per qualifying floor. A normal
 BSP room is walled off completely and one narrow entrance cluster (1–2 tiles)
 is replaced with `T.CRACKED` tiles. The room is invisible to the player until
 discovered.
@@ -581,14 +581,16 @@ generation. On reveal (`revealSecretRoom`):
 2. All remaining `T.CRACKED` tiles adjacent to the room become `T.FLOOR`.
 3. Enemies spawned: reduced count (`1 + floor÷4` to `min(4, 2 + floor÷3)`,
    area-capped at `room.w × room.h ÷ 10`).
-4. Premium loot: 2–3 `Item` drops + bonus credits
-   (`round(20 × (1 + floor × 0.15))`).
+4. Premium loot: floor-scaled items (1 item floors 1–3, 2 items floors 4–6,
+   2–3 items floors 7+; large rooms ≥ 40 tiles² get +1 at floor 7+) + bonus
+   credits (`round(20 × (1 + floor × 0.15))`).
 
 **Quest interactions:**
 - **EXPLORE:** Unrevealed secret rooms are excluded from the "visit every room"
   check. Revealed secret rooms count normally.
 - **EXTERMINATE:** Unaffected — no enemies exist in secret rooms until reveal.
-  Boss floors (3, 6, 10) never have secret rooms.
+  Secret rooms can appear on boss floors (the boss room itself is excluded from
+  candidates, but other rooms on the floor are eligible).
 - **SPEEDRUN / PACIFIST:** Unaffected — secret rooms are optional.
 
 **Visual style:** Room floor tiles use tint `#1a1005` (warm amber-dark).
@@ -730,6 +732,7 @@ On touch devices, the game uses a dual-joystick layout with virtual buttons:
 | Left-half touch & drag            | Move joystick (base radius 55 px) |
 | Right-half touch & drag           | Aim joystick — holding fires automatically |
 | E button (bottom-right, cyan)     | Interact (door/stairs)      |
+| F button (bottom-right, amber)    | Activate hackware (always visible; dimmed when unequipped) |
 | ⇧ button (bottom-right, amber)   | Dash (dodge)                |
 | V button (bottom-right, purple)   | Use void shard              |
 | ‖ button (top-right, magenta)     | Pause                       |
@@ -850,7 +853,7 @@ current one (cooldown resets on equip). Available from floor 3.
 
 | Property       | Value                                              |
 |----------------|----------------------------------------------------|
-| Keybind        | F (keyboard), F button (touch — shown only when equipped) |
+| Keybind        | F (keyboard), F button (touch — always visible, dimmed when unequipped) |
 | Slot           | Single slot — one hackware at a time               |
 | Source         | Level-up powerup choice (~12%), vendor shop (~40% per vendor on floor 3+) |
 
@@ -1690,21 +1693,24 @@ the difficulty from the save file.
 
 | Parameter     | EASY        | NORMAL      | HARD        |
 |---------------|-------------|-------------|-------------|
-| Enemy HP      | ×0.75       | ×1.0        | ×1.25       |
-| Enemy ATK     | ×0.75       | ×1.0        | ×1.15       |
-| Enemy SPD     | ×1.0        | ×1.0        | ×1.05       |
-| Item drop     | 28%         | 20%         | 18%         |
+| Enemy HP      | ×0.75       | ×1.0        | ×1.5        |
+| Enemy ATK     | ×0.75       | ×1.0        | ×1.3        |
+| Enemy SPD     | ×1.0        | ×1.0        | ×1.1        |
+| Item drop     | 25%         | 15%         | 12%         |
 | Credit mult   | ×1.2        | ×1.0        | ×1.0        |
 | XP mult       | ×1.0        | ×1.0        | ×1.15       |
-| Elite rate    | 4%          | 8%          | 12%         |
+| Elite rate    | 4%          | 10%         | 18%         |
 | Shard mult    | ×0.85       | ×1.0        | ×1.3        |
-| Env damage    | ×0.75       | ×1.0        | ×1.15       |
+| Env damage    | ×0.75       | ×1.0        | ×1.25       |
+| Room loot cap | 2           | 1           | 1           |
 
 **Multipliers apply to:** `spawnEnemy()` stats (HP/ATK/SPD stacked with floor
 scaling), elite roll chance, item drop rate in `Enemy.die()`, credit drops
 (stacked with meta Scavenger), XP from kills (stacked with meta Quick Learner),
 shard payout (run-earned portion only — meta PERSISTENCE flat bonus is unscaled),
 environmental damage (traps, plasma, arc), and boss special attack damage.
+`roomLoot` caps the random item count per room in `populateFloor()` — EASY
+rooms can spawn 0–2 items, while NORMAL and HARD cap at 0–1.
 
 **Design intent:**
 - EASY reduces incoming threats and increases economy — accessible entry.
@@ -1862,12 +1868,12 @@ boss type for death messaging and dynamic terminal lock text.
 
 | Boss              | Floor | HP    | Phases | Special                                           |
 |-------------------|-------|-------|--------|---------------------------------------------------|
-| SENTINEL MK-I     | 3     | 300   | 2      | Laser sweep + shield burst                        |
-| WARDEN            | 3     | 330   | 2      | Telegraphed charge + ground slam                  |
-| NEURAL HIVE       | 6     | 500   | 3      | Spawns crawlers, psionic shockwave                |
-| CONDUCTOR         | 6     | 520   | 3      | Radial arc bursts, electric hazard zones, EM pull |
-| OMEGA CORE        | 10    | 1000  | 4      | All previous attacks, room-filling void orbs      |
-| GENESIS PROTOCOL  | 10    | 1000  | 3      | Geometric precision: spiral salvos, lances, purge ring |
+| SENTINEL MK-I     | 3     | 400   | 2      | Laser sweep + tracking shot + shield burst         |
+| WARDEN            | 3     | 450   | 2      | Telegraphed charge + radial stomp + ground slam    |
+| NEURAL HIVE       | 6     | 650   | 3      | Spawns crawlers, swarm cloud, psionic shockwave    |
+| CONDUCTOR         | 6     | 700   | 3      | Radial arc bursts, electric hazard zones, EM pull  |
+| OMEGA CORE        | 10    | 1300  | 4      | All previous attacks, room-filling void orbs       |
+| GENESIS PROTOCOL  | 10    | 1300  | 3      | Geometric precision: spiral salvos, lances, purge ring |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
@@ -1883,6 +1889,33 @@ Phase thresholds use `maxHp` percentages, so scaling does not break phases.
 On boss death, the arena unseals (entrance tiles restored) and the game displays
 "{BOSS NAME} DESTROYED". On floor 10, the CORE terminal is locked until the boss
 is defeated; the lock text dynamically shows the active boss name.
+
+#### SENTINEL MK-I — Phase Breakdown
+
+Floor 3 default boss. Ranged turret platform that floods the arena with radial
+volleys while picking the player off with aimed tracking shots.
+
+**Stats:** HP 400, ATK 15, SPD 1.5, XP 200, credits 80, colour `#ff4444` (red).
+
+| Phase | HP Range    | Attacks                                                    |
+|-------|-------------|------------------------------------------------------------|
+| 1     | 100 %–33 %  | 5-way radial volley (3 s) + tracking shot (4 s)            |
+| 2     | 33 %–0 %    | 8-way radial volley (2 s) + tracking shot (2.5 s) + shield burst (5 s) |
+
+**Radial volley:** Fires projectiles evenly spaced in a circle. Phase 1: 5
+projectiles every 3 s. Phase 2: 8 projectiles every 2 s. Speed 7, dmg ATK,
+range 14, colour `#ff4444`.
+
+**Tracking shot (v89):** Aimed projectile at player position (requires LOS).
+Both phases. Speed 8, dmg ATK + 3, range 16, colour `#ff6666`. Cooldown:
+4 s (phase 1) / 2.5 s (phase 2).
+
+**Shield burst (phase 2, 5 s cooldown):** Knockback push: player pushed 3
+tiles away from boss + 20 × difficulty damage. `clampToBossRoom()` prevents
+wall escape.
+
+**Movement:** Random patrol around room center (drift ±5 tiles, 2 s interval).
+Does NOT pursue player.
 
 #### OMEGA CORE — Phase Breakdown
 
@@ -1911,17 +1944,46 @@ sting, and a HUD warning (`⚠ OMEGA PHASE N` / `⚠ HIVE PHASE N`).
 - HIVE crawler spawns → 60 % crawler / 40 % drone mix (phase 2+)
 - HIVE psionic shockwave → AoE pulse (phase 4, ≤7 tile range, 25 dmg)
 
+#### NEURAL HIVE — Phase Breakdown
+
+Floor 6 default boss. Summoner archetype that floods the arena with crawlers
+while firing homing missiles and (from v89) swarm cloud bursts.
+
+**Stats:** HP 650, ATK 18, SPD 1.2, XP 350, credits 120, colour `#aa00ff` (violet).
+
+| Phase | HP Range     | Attacks                                                    |
+|-------|-------------|------------------------------------------------------------|
+| 1     | 100 %–70 %  | Homing missile (2 s)                                       |
+| 2     | 70 %–30 %   | + Crawler spawns (2 per wave, 5 s) + swarm cloud (3 projectiles, 5 s) |
+| 3     | 30 %–0 %    | + Psionic shockwave (4 s) + swarm cloud (5 projectiles, 3.5 s) |
+
+**Homing missile:** Aimed projectile at player. Speed 6, dmg ATK, range 18,
+colour `#aa00ff`. 2 s cooldown.
+
+**Crawler spawns (phase 2+):** 2 crawlers per wave, spawned ±2 tiles from boss
+position. 5 s cooldown. Non-elite. Cannot be spawned while `spawnCooldown > 0`.
+
+**Swarm cloud (v89, phase 2+):** Burst of slow aimed projectiles in a spread
+pattern toward the player (requires LOS). Phase 2: 3 projectiles, 5 s cooldown.
+Phase 3: 5 projectiles, 3.5 s cooldown. Spread: 0.25 rad between each.
+Speed 3.5, dmg ATK × 0.7, range 12, colour `#cc66ff`. Spark particles on fire.
+
+**Psionic shockwave (phase 3, 4 s cooldown):** AoE pulse hitting player if
+within 10 tiles. 25 × difficulty damage. Explosion particles.
+
+**Movement:** Random patrol within boss room (±room extents, 3 s interval).
+
 #### WARDEN — Phase Breakdown
 
 Floor 3 alternate boss. Melee-focused armored enforcer that pressures the
 player's positioning through telegraphed charges and ground slams.
 
-**Stats:** HP 330, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber).
+**Stats:** HP 450, ATK 16, SPD 1.8, XP 200, credits 80, colour `#ff8800` (amber).
 
 | Phase | HP Range    | Attacks                                                    |
 |-------|-------------|------------------------------------------------------------|
-| 1     | 100 %–40 %  | Telegraphed charge (0.6 s wind-up) + 4-way spark burst     |
-| 2     | 40 %–0 %    | Faster charge (0.45 s wind-up) + ground slam AoE           |
+| 1     | 100 %–40 %  | Telegraphed charge (0.6 s wind-up) + radial stomp (6 s) + 4-way spark burst |
+| 2     | 40 %–0 %    | Faster charge (0.45 s wind-up) + radial stomp (4 s) + ground slam AoE |
 
 **Charge mechanic:**
 1. Wind-up: 0.6 s (phase 1) / 0.45 s (phase 2). Pulsing amber dashed line
@@ -1934,6 +1996,11 @@ player's positioning through telegraphed charges and ground slams.
 
 **Cancel conditions:** LOS break or player cloak cancels wind-up (not active
 charge). Stun cancels any charge state (handled in `Enemy.update()` stun block).
+
+**Radial stomp (v89, both phases):** When player within 3 tiles and boss idle
+(not charging): 4 radial spark projectiles (phase 1) or 6 (phase 2), 50 % ATK
+damage, range 6, speed 4. Spark particles + small screen shake (3 px).
+Cooldown: 6 s (phase 1) / 4 s (phase 2).
 
 **Ground slam (phase 2, 5 s cooldown):** When player within 4 tiles and boss is
 idle (not charging): radial knockback (3 tiles) + 22 × difficulty damage +
@@ -1950,7 +2017,7 @@ Floor 6 alternate boss. Area-denial pattern boss that controls the battlefield
 through electromagnetic projectile patterns and hazard zones. No add spawning
 (direct contrast to NEURAL HIVE's summoner archetype).
 
-**Stats:** HP 520, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan).
+**Stats:** HP 700, ATK 20, SPD 1.4, XP 350, credits 120, colour `#00ccff` (electric cyan).
 
 | Phase | HP Range     | Attacks                                                    |
 |-------|-------------|------------------------------------------------------------|
@@ -1993,7 +2060,7 @@ but punishing patterns. No add spawning — direct contrast to OMEGA's chaotic
 everything-at-once approach. The Progenitor: the original AI prototype that
 survived decommissioning.
 
-**Stats:** HP 1000, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold).
+**Stats:** HP 1300, ATK 22, SPD 1.0, XP 800, credits 200, colour `#ffcc00` (gold).
 
 | Phase | HP Range     | Attacks                                                    |
 |-------|-------------|------------------------------------------------------------|
@@ -3398,3 +3465,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v73.1   | Mobile viewport & iOS freeze fix: CSS `100dvh` with `100vh` fallback prevents canvas rendering under mobile browser chrome (address bar, navigation buttons). JS `resize()` uses `canvas.getBoundingClientRect()` for accurate viewport measurement. `visualViewport` resize listener catches dynamic toolbar changes. Game loop wrapped in `try/finally` so `requestAnimationFrame` chain never breaks. `music.tick()` isolated in `try/catch` — audio errors don't kill gameplay. `music.tick()` early-returns when `AudioContext.state !== 'running'` (iOS `interrupted` guard). `audio.resume()` widened from `=== 'suspended'` to `!== 'running'` with promise rejection handling. `visibilitychange` auto-pauses from `PLAYING` state and resumes AudioContext. `pageshow` (bfcache) backup. `audio.isRunning()` helper. Spec v5.2. SW cache v86. |
 | v74.0   | Visual brightness, zoom, and chiptune music retuning: TILE 20→26 (30% zoom-in), floor base colour `#181832`→`#252545`, wall base colour `#262648`→`#3a3a68`, wall highlight `#3a3a72`→`#5555a0`, min lit brightness 20%→32%, fog brightness 12%→20%. Music: BPM 112–136, brighter high-pass filters, denser arp/bass motifs, music bus 0.12→0.20, drone layer gains reduced. Spec v5.3. SW cache v87. |
 | v74.1   | Further brightness/zoom/readability overhaul: TILE 26→32 (60% total zoom from original), min lit brightness 32%→55%, fog brightness 20%→35%, floor `#252545`, walls `#3a3a6a`/`#5858a0`, floor detail `#303058`. Event messages: 13→16 px bold with dark background pill for contrast. HUD landscape fonts: 11→13 px. Tile icon fonts scaled to 16–18 px. Floating damage text: 12→15 px. Entity labels (BOUNTY, hazards): +2 px each. Hint text: 13→15 px. Spec v5.3. SW cache v88. |
+| v89.0   | Gameplay balance overhaul: **Boss HP +33–40%**: SENTINEL 300→400, WARDEN 330→450, HIVE 500→650, CONDUCTOR 520→700, OMEGA/GENESIS 1000→1300. **New boss attacks**: SENTINEL tracking shot (aimed projectile at player, both phases, 4s/2.5s CD), WARDEN radial stomp (close-range burst, 4–6 projectiles, 6s/4s CD), HIVE swarm cloud (slow aimed spread, 3–5 projectiles, 5s/3.5s CD). All boss phase thresholds confirmed percentage-based (`hpPct = hp/maxHp`). **Difficulty rebalance**: HARD enemyHp ×1.25→×1.5, enemyAtk ×1.15→×1.3, enemySpd ×1.05→×1.1, envDmg ×1.15→×1.25, eliteRate 12%→18%; NORMAL itemDrop 20%→15%, eliteRate 8%→10%; EASY itemDrop 28%→25%. New `roomLoot` property caps per-room item spawns (EASY:2, NORMAL/HARD:1). **Secret rooms**: floor restriction removed (was floor 3+, now all non-boss floors). Secret loot scales: 1 item floors 1–3, 2 items floors 4–6, 2–3 items floors 7+. **Mobile F button**: always visible (dimmed when no hackware equipped), eliminates dead touch zone. Spec v5.4. SW cache v89. |
