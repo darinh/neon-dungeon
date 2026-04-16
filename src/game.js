@@ -3588,11 +3588,14 @@ let lastTime=0;
 function loop(ts) {
   const dt=Math.min((ts-lastTime)/1000,0.05);
   lastTime=ts;
-  game.update(dt);
-  music.tick();
-  game.render();
-  clearJust();
-  requestAnimationFrame(loop);
+  try {
+    game.update(dt);
+    try { music.tick(); } catch (_) {} // isolate audio errors from gameplay
+    game.render();
+  } finally {
+    clearJust();
+    requestAnimationFrame(loop);
+  }
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

@@ -88,8 +88,11 @@ let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
 
 let scale = 1, offX = 0, offY = 0;
 function resize() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  // Use the canvas's actual rendered rect — works correctly with dvh/vh CSS
+  // and respects whatever the browser decides is the visible area.
+  const rect = canvas.getBoundingClientRect();
+  const vw = rect.width  || window.innerWidth;
+  const vh = rect.height || window.innerHeight;
   // Scale: smaller viewport dimension maps to ~600 logical px
   // Tiles (20 logical px) appear as 20 × gameScale CSS px on screen
   // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
@@ -108,7 +111,7 @@ function resize() {
   safeBottom = (parseFloat(cs.getPropertyValue('--sab')) || 0) / gameScale;
   safeLeft   = (parseFloat(cs.getPropertyValue('--sal')) || 0) / gameScale;
   updateLayout();
-  console.log(`[NEON DUNGEON] ${vw}×${vh} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
+  console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
 // resize() + event listener registered in Boot section (after all defs are ready)
 
@@ -610,7 +613,12 @@ const audio = (() => {
     return actx;
   }
 
-  function resume() { const c = getCtx(); if (c.state === 'suspended') c.resume(); }
+  function resume() {
+    const c = getCtx();
+    if (c.state !== 'running') {
+      try { c.resume().catch(() => {}); } catch (_) {}
+    }
+  }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -699,6 +707,7 @@ const audio = (() => {
 
   return {
     resume,
+    isRunning() { return actx && actx.state === 'running'; },
     setSfxVolume(v) {
       settings.sfxVol = v;
       if (master) { const t = actx.currentTime; master.gain.cancelScheduledValues(t); master.gain.linearRampToValueAtTime(0.7 * v, t + 0.02); }
@@ -1663,3 +1672,57 @@ const audio = (() => {
     }
   };
 })();
+
+// ─── Page Lifecycle & Mobile Resilience ──────────────────────────────────────
+// Auto-pause when the browser hides the tab (iOS lock, tab switch, phone call)
+// and resume audio context when returning. Prevents the iOS freeze where an
+// interrupted AudioContext kills the rAF chain and the drone oscillator drones.
+let _autoPaused = false;
+let _preVisibilityState = null;
+
+// States that represent active gameplay and should auto-pause
+const _PAUSABLE_STATES = new Set(['PLAYING']);
+
+function _onVisibilityHidden() {
+  // Suspend AudioContext so iOS doesn't leave it in 'interrupted' limbo
+  if (audio.isRunning()) {
+    try { audio.resume(); } catch (_) {} // no-op in 'running', but this accesses getCtx()
+  }
+  // Only auto-pause gameplay states — menus/game-over/etc. are fine
+  if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(game.state)) {
+    _preVisibilityState = game.state;
+    _autoPaused = true;
+    game.setState('PAUSED');
+  }
+}
+
+function _onVisibilityVisible() {
+  // Attempt to resume AudioContext (may fail without gesture on iOS — that's OK,
+  // the next touchstart/mousedown will retry via audio.resume())
+  audio.resume();
+  // Restore game state if we auto-paused it
+  if (_autoPaused && typeof game !== 'undefined') {
+    _autoPaused = false;
+    // Don't force-resume — leave player in PAUSED so they can orient themselves.
+    // The audio context is ready; they just press Escape to unpause.
+    _preVisibilityState = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) _onVisibilityHidden();
+  else _onVisibilityVisible();
+});
+// Safari backup: pageshow fires on bfcache restore where visibilitychange may not
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) _onVisibilityVisible();
+});
+
+// visualViewport resize — catches mobile address bar show/hide that window.resize misses
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    resize();
+    if (typeof updateBtns === 'function') updateBtns();
+    if (typeof resetTouch === 'function') resetTouch();
+  });
+}

@@ -468,6 +468,8 @@ const music = (() => {
 
     tick() {
       if (!ctx || state === 'idle' || paused) return;
+      // Don't schedule audio while context is suspended/interrupted (iOS)
+      if (ctx.state !== 'running') return;
       const now = ctx.currentTime;
       const sd = stepDur();
       const lookahead = 0.32;
