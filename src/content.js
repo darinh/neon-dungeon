@@ -1364,7 +1364,7 @@ function drawFloatingTexts(camX, camY) {
     ctx.globalAlpha = Math.max(0, f.life);
     ctx.shadowBlur = 6; ctx.shadowColor = f.colour;
     ctx.fillStyle = f.colour;
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold 15px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(f.text, sx, sy);
     ctx.restore();

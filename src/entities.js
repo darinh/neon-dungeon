@@ -3170,9 +3170,9 @@ class Enemy {
         // "BOUNTY" label above HP bar
         if (this._isBounty) {
           ctx.save();
-          ctx.font='bold 5px monospace'; ctx.textAlign='center';
+          ctx.font='bold 7px monospace'; ctx.textAlign='center';
           ctx.fillStyle='#ffd700'; ctx.shadowBlur=3; ctx.shadowColor='#ffd700';
-          ctx.fillText('BOUNTY', sx, barY - 2);
+          ctx.fillText('BOUNTY', sx, barY - 3);
           ctx.restore();
         }
         // Shield portion (stacked above HP bar)
@@ -3453,7 +3453,7 @@ function drawVCores(camX, camY) {
     // Hazard symbol
     ctx.save();
     ctx.globalAlpha = c.primed ? 0.9 : 0.5;
-    ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 7px monospace';
+    ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', sx, sy - 9);
     ctx.restore();
@@ -3629,7 +3629,7 @@ function drawBeacons(camX, camY) {
       // Countdown text
       ctx.save();
       ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#ff4444'; ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = '#ff4444'; ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.shadowBlur = 6; ctx.shadowColor = '#ff0000';
       ctx.fillText(Math.ceil(b.timer), sx, sy - 10);
@@ -3655,7 +3655,7 @@ function drawBeacons(camX, camY) {
       // Warning symbol
       ctx.save();
       ctx.globalAlpha = 0.4 + 0.2 * Math.sin(b.bob);
-      ctx.fillStyle = '#ff6644'; ctx.font = 'bold 7px monospace';
+      ctx.fillStyle = '#ff6644'; ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('⚠', sx, sy + 10);
       ctx.restore();

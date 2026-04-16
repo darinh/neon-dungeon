@@ -31,7 +31,7 @@ function drawWorld(dungeon, camX, camY) {
       const vis=dungeon.visited[ty][tx];
       if (!vis) continue;
       const lv=dungeon.light[ty][tx];
-      const brightness=lv>0 ? Math.max(0.32,lv) : 0.20;
+      const brightness=lv>0 ? Math.max(0.55,lv) : 0.35;
       const sx=tx*TILE-camX, sy=ty*TILE-camY;
 
       ctx.save();
@@ -40,9 +40,9 @@ function drawWorld(dungeon, camX, camY) {
         case T.WALL: {
           const isSealed = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
                            (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty));
-          ctx.fillStyle = isSealed ? '#3d2828' : '#262648';
+          ctx.fillStyle = isSealed ? '#3d2828' : '#3a3a6a';
           ctx.fillRect(sx,sy,TILE,TILE);
-          ctx.fillStyle = isSealed ? '#724040' : '#3a3a72';
+          ctx.fillStyle = isSealed ? '#724040' : '#5858a0';
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
           if (isSealed) {
@@ -55,27 +55,27 @@ function drawWorld(dungeon, camX, camY) {
         }
         case T.FLOOR: {
           const rc = dungeon.roomColour[ty]?.[tx];
-          ctx.fillStyle = rc || '#181832';
+          ctx.fillStyle = rc || '#252545';
           ctx.fillRect(sx,sy,TILE,TILE);
-          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : '#1e1e3a'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
+          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : '#303058'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
           break;
         }
         case T.STAIRS:
-          ctx.fillStyle='#181832';
+          ctx.fillStyle='#252545';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           ctx.shadowBlur=8; ctx.shadowColor='#ffff00';
           ctx.fillStyle='#ffff00';
-          ctx.font='14px monospace';
-          ctx.fillText('▼',sx+3,sy+14);
+          ctx.font='18px monospace';
+          ctx.fillText('▼',sx+5,sy+20);
           break;
         case T.TERMINAL:
-          ctx.fillStyle='#181832';
+          ctx.fillStyle='#252545';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.shadowBlur=12; ctx.shadowColor='#00f5ff';
           ctx.fillStyle='#00f5ff';
-          ctx.font='13px monospace';
-          ctx.fillText('⬡',sx+2,sy+14);
+          ctx.font='16px monospace';
+          ctx.fillText('⬡',sx+4,sy+20);
           break;
         case T.VENDOR:
           ctx.fillStyle='#142a1c';
@@ -83,8 +83,8 @@ function drawWorld(dungeon, camX, camY) {
           ctx.globalAlpha=brightness;
           ctx.shadowBlur=10; ctx.shadowColor='#39ff14';
           ctx.fillStyle='#39ff14';
-          ctx.font='13px monospace';
-          ctx.fillText('◈',sx+2,sy+14);
+          ctx.font='16px monospace';
+          ctx.fillText('◈',sx+4,sy+20);
           break;
         case T.IMPLANT_SHRINE: {
           ctx.fillStyle='#1c1430';
@@ -93,8 +93,8 @@ function drawWorld(dungeon, camX, camY) {
           const impPulse = 0.6 + 0.4 * Math.sin(lastTime / 700 + tx * 0.9 + ty * 0.6);
           ctx.shadowBlur=12; ctx.shadowColor='#cc44ff';
           ctx.fillStyle=`rgba(204,68,255,${impPulse})`;
-          ctx.font='14px monospace';
-          ctx.fillText('◆',sx+3,sy+14);
+          ctx.font='18px monospace';
+          ctx.fillText('◆',sx+5,sy+20);
           break;
         }
         case T.EVENT_TERMINAL: {
@@ -104,8 +104,8 @@ function drawWorld(dungeon, camX, camY) {
           const evPulse = 0.5 + 0.5 * Math.sin(lastTime / 500 + tx * 1.3 + ty * 0.8);
           ctx.shadowBlur=14; ctx.shadowColor='#44ffcc';
           ctx.fillStyle=`rgba(68,255,204,${evPulse})`;
-          ctx.font='14px monospace';
-          ctx.fillText('◈',sx+3,sy+14);
+          ctx.font='18px monospace';
+          ctx.fillText('◈',sx+5,sy+20);
           break;
         }
         case T.TELEPORT_PAD: {
@@ -115,8 +115,8 @@ function drawWorld(dungeon, camX, camY) {
           const tpPulse = 0.5 + 0.5 * Math.sin(lastTime / 400 + tx * 1.5 + ty * 1.1);
           ctx.shadowBlur=14; ctx.shadowColor='#bb44ff';
           ctx.fillStyle=`rgba(187,68,255,${tpPulse})`;
-          ctx.font='14px monospace';
-          ctx.fillText('⬡',sx+2,sy+14);
+          ctx.font='18px monospace';
+          ctx.fillText('⬡',sx+4,sy+20);
           break;
         }
         case T.LORE: {
@@ -126,43 +126,43 @@ function drawWorld(dungeon, camX, camY) {
           const lorePulse = 0.7 + 0.3 * Math.sin(lastTime / 600 + tx * 1.1 + ty * 0.7);
           ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
           ctx.fillStyle=`rgba(255,183,0,${lorePulse})`;
-          ctx.font='13px monospace';
-          ctx.fillText('◫',sx+2,sy+14);
+          ctx.font='16px monospace';
+          ctx.fillText('◫',sx+4,sy+20);
           break;
         }
         case T.DOOR:
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.fillStyle='#886633'; ctx.fillRect(sx+3,sy+2,TILE-6,TILE-4);
           ctx.fillStyle='#aa8844'; ctx.fillRect(sx+TILE-7,sy+TILE/2-2,3,3); // handle
           break;
         case T.DOOR_OPEN:
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx,sy,3,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx+TILE-3,sy,3,TILE);
           break;
         case T.LOCKED_R: case T.LOCKED_B: case T.LOCKED_G: {
           const lc=tile===T.LOCKED_R?'#ff3333':tile===T.LOCKED_B?'#3388ff':'#ffcc00';
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#443322'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.shadowBlur=8; ctx.shadowColor=lc;
           ctx.fillStyle=lc; ctx.fillRect(sx+TILE/2-3,sy+TILE/2-3,6,6); // lock glow
           break;
         }
         case T.TRAP_SPIKE:
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.35;
           ctx.fillStyle='#ff6644';
           for (let s=0;s<3;s++) ctx.fillRect(sx+3+s*6,sy+TILE-6,2,5); // subtle spikes
           break;
         case T.TRAP_SLOW:
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.25;
           ctx.fillStyle='#8866ff';
           ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
         case T.PLASMA: {
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           // Animated orange glow with pulsing brightness
           const pPulse = 0.3 + 0.15 * Math.sin(lastTime / 400 + tx * 0.7 + ty * 1.3);
           ctx.globalAlpha = brightness * pPulse;
@@ -182,7 +182,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.ARC: {
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           // Phase-based rendering: bright when active, dim when off
           const arcActive = Math.sin((game.floorTime||0) * Math.PI) > 0;
           const aAlpha = arcActive ? 0.5 + 0.2 * Math.sin(lastTime/80) : 0.1;
@@ -211,7 +211,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.TOXIC: {
-          ctx.fillStyle='#181832'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
           // Pulsing green/chartreuse corrosive pool
           const tPulse = 0.25 + 0.12 * Math.sin(lastTime / 500 + tx * 0.9 + ty * 1.1);
           ctx.globalAlpha = brightness * tPulse;
@@ -436,11 +436,11 @@ function drawHUD(player) {
     ctx.fillStyle=hpCol; ctx.fillRect(lx, y + 4, 130 * hpFrac, 14);
     ctx.shadowBlur=0;
 
-    ctx.fillStyle='#e0e0ff'; ctx.font='11px monospace';
+    ctx.fillStyle='#e0e0ff'; ctx.font='13px monospace';
     ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 4, y + 15);
 
     const colBase = lx + 141;
-    ctx.fillStyle='#aaaacc'; ctx.font='11px monospace';
+    ctx.fillStyle='#aaaacc'; ctx.font='13px monospace';
     ctx.fillText(`LVL:${player.level}`, colBase, y + 10);
     const xpFrac = player.xp / player.xpNeeded();
     ctx.fillStyle='#333'; ctx.fillRect(colBase, y + 12, 50, 4);
@@ -499,7 +499,7 @@ function drawHUD(player) {
 
     ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700';
-    ctx.font='12px monospace';
+    ctx.font='14px monospace';
     ctx.fillText(`SCORE: ${player.score}`, W - 160 - safeRight, y + 12);
     ctx.shadowBlur=0;
     // Combo counter (landscape)
@@ -508,16 +508,16 @@ function drawHUD(player) {
       const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
       ctx.globalAlpha = a;
       ctx.shadowBlur=6; ctx.shadowColor=cc;
-      ctx.fillStyle=cc; ctx.font='bold 13px monospace';
+      ctx.fillStyle=cc; ctx.font='bold 15px monospace';
       ctx.textAlign='right';
       ctx.fillText(`×${comboMultiplier().toFixed(1)} COMBO ×${combo.count}`, W - 10 - safeRight, y + 12);
       ctx.textAlign='left'; ctx.globalAlpha = 1;
     }
     ctx.shadowBlur=0;
-    ctx.fillStyle='#39ff14'; ctx.font='11px monospace';
+    ctx.fillStyle='#39ff14'; ctx.font='13px monospace';
     ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
     if (player.loreRead.size > 0) {
-      ctx.fillStyle='#ffb700'; ctx.font='11px monospace';
+      ctx.fillStyle='#ffb700'; ctx.font='13px monospace';
       ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
     }
   }
@@ -1156,15 +1156,22 @@ function drawExpandedMinimap(dungeon, player) {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 let messages=[];
 function drawMessages() {
+  const msgFs = 16, msgLh = 22;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
     if (m.life<=0){messages.splice(i,1);continue;}
+    const mx = 14+safeLeft;
+    const my = layout.msgBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
-    ctx.shadowBlur=6; ctx.shadowColor=m.colour;
-    ctx.fillStyle=m.colour; ctx.font='13px monospace';
-    ctx.fillText(m.text, 14+safeLeft, layout.msgBase-(messages.length-1-i)*16);
+    ctx.font=`bold ${msgFs}px monospace`;
+    const tw = ctx.measureText(m.text).width;
+    ctx.fillStyle='rgba(10,10,18,0.7)';
+    ctx.fillRect(mx-4, my-msgFs+1, tw+8, msgFs+4);
+    ctx.shadowBlur=8; ctx.shadowColor=m.colour;
+    ctx.fillStyle=m.colour;
+    ctx.fillText(m.text, mx, my);
     ctx.restore();
   }
 }
@@ -1177,7 +1184,7 @@ function drawHint() {
   ctx.globalAlpha = pulse;
   ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
   ctx.fillStyle = h.colour;
-  ctx.font = '13px monospace'; ctx.textAlign = 'center';
+  ctx.font = '15px monospace'; ctx.textAlign = 'center';
   ctx.fillText(h.text, W / 2, layout.hudTop - 14);
   ctx.restore();
 }

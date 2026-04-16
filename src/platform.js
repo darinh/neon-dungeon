@@ -3,7 +3,7 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 let W = 900, H = 600;
 let gameScale = 1;
-const TILE = 26;
+const TILE = 32;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
