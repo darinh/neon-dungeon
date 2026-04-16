@@ -1158,79 +1158,21 @@ function getMod() { return game.modifier && FLOOR_MODIFIERS[game.modifier] || nu
 function modSpeed(base) { return game.modifier === 'OVERCLOCK' ? base * 1.2 : base; }
 
 // ─── Meta-Progression (persistent across runs) ──────────────────────────────
-const META_UPGRADES = [
-  { id:'VITAL_BOOST',   name:'Vital Systems',    desc:'+10 max HP',          maxLv:3, costs:[5,12,22],  icon:'♥' },
-  { id:'SCAVENGER',     name:'Scavenger Protocol',desc:'+15% credit gain',   maxLv:3, costs:[5,12,22],  icon:'◈' },
-  { id:'QUICK_LEARNER', name:'Quick Learner',     desc:'+15% XP gain',       maxLv:3, costs:[5,12,22],  icon:'★' },
-  { id:'ARMOR_PLATING', name:'Armor Plating',     desc:'+1 starting DEF',    maxLv:3, costs:[8,18,30],  icon:'▣' },
-  { id:'STARTING_GEAR', name:'Weapon Cache',      desc:'Start with upgraded weapon', maxLv:1, costs:[25], icon:'⚔' },
-  { id:'PERSISTENCE',   name:'Data Persistence',  desc:'+3 fragments per run',maxLv:2, costs:[12,25],   icon:'◆' },
-];
+// Implementation extracted to src/meta/save.js. These wrappers preserve call
+// sites across the codebase and inject browser-side globals (DIFFICULTIES for
+// difficulty validation, buildWeapon for STARTING_GEAR) that the extracted
+// module cannot assume exist in Node tests.
+const META_UPGRADES     = NEON.save.META_UPGRADES;
+const DIFF_UNLOCK_REQS  = NEON.save.DIFF_UNLOCK_REQS;
 
-function loadMeta() {
-  const defaults = { shards:0, upgrades:{}, stats:{ totalRuns:0, totalShards:0, bestFloor:0, victories:0 }, lastDifficulty:'NORMAL', clearedDifficulties:[] };
-  try {
-    const raw = localStorage.getItem('neonDungeonMeta');
-    if (!raw) return defaults;
-    const m = JSON.parse(raw);
-    if (!m.stats) m.stats = { totalRuns:0, totalShards:0, bestFloor:0, victories:0 };
-    if (!m.upgrades) m.upgrades = {};
-    if (!Array.isArray(m.clearedDifficulties)) m.clearedDifficulties = [];
-    m.shards = Math.max(0, Math.floor(Number(m.shards) || 0));
-    // Clamp upgrade levels to valid ranges
-    for (const u of META_UPGRADES) {
-      if (u.id in m.upgrades) {
-        m.upgrades[u.id] = Math.max(0, Math.min(u.maxLv, Math.floor(Number(m.upgrades[u.id]) || 0)));
-      }
-    }
-    if (!DIFFICULTIES[m.lastDifficulty]) m.lastDifficulty = 'NORMAL';
-    return m;
-  } catch(e) { return defaults; }
-}
-
-// Difficulty unlock gates: each key lists prerequisite cleared difficulties
-const DIFF_UNLOCK_REQS = { NIGHTMARE: ['HARD'] };
-function isDiffUnlocked(diffId) {
-  const reqs = DIFF_UNLOCK_REQS[diffId];
-  if (!reqs) return true;
-  const cleared = loadMeta().clearedDifficulties;
-  return reqs.every(r => cleared.includes(r));
-}
-
-function saveMeta(meta) {
-  try { localStorage.setItem('neonDungeonMeta', JSON.stringify(meta)); } catch(e){}
-}
-
-function getMetaLevel(id) {
-  const m = loadMeta();
-  return m.upgrades[id] || 0;
-}
-
-function calcRunShards(floor, score, bossesCleared, victory) {
-  let runShards = floor;                                    // 1 per floor reached
-  runShards += bossesCleared * 2;                           // 2 per boss cleared
-  if (victory) runShards += 5;                              // 5 for victory
-  runShards += Math.min(5, Math.floor(score / 2000));       // 1 per 2000 score, cap 5
-  // Difficulty scales only the run-earned portion
-  runShards = Math.round(runShards * getDiff().shardMul);
-  const persistLv = getMetaLevel('PERSISTENCE');
-  runShards += persistLv * 3;                               // flat bonus from PERSISTENCE (unscaled)
-  return runShards;
-}
-
-function applyMetaToPlayer(player) {
-  const m = loadMeta();
-  const u = m.upgrades;
-  if (u.VITAL_BOOST)   { player.maxHp += u.VITAL_BOOST * 10; player.hp = player.maxHp; }
-  if (u.ARMOR_PLATING) { player.def += u.ARMOR_PLATING; }
-  if (u.STARTING_GEAR) {
-    const pool = ['SCATTER_GUN','RAILGUN','PLASMA_SWORD','VOID_CANNON'];
-    player.weapon = buildWeapon(pool[Math.floor(Math.random() * pool.length)], []);
-  }
-}
-
-function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }
-function getMetaCreditMultiplier() { return 1 + getMetaLevel('SCAVENGER') * 0.15; }
+function loadMeta()                             { return NEON.save.loadMeta(DIFFICULTIES); }
+function saveMeta(meta)                         { return NEON.save.saveMeta(meta); }
+function getMetaLevel(id)                       { return NEON.save.getMetaLevel(id, DIFFICULTIES); }
+function isDiffUnlocked(diffId)                 { return NEON.save.isDiffUnlocked(diffId, DIFFICULTIES); }
+function calcRunShards(floor, score, bc, vic)   { return NEON.save.calcRunShards(floor, score, bc, vic, getDiff().shardMul); }
+function applyMetaToPlayer(player)              { return NEON.save.applyMetaToPlayer(player, buildWeapon); }
+function getMetaXPMultiplier()                  { return NEON.save.getMetaXPMultiplier(); }
+function getMetaCreditMultiplier()              { return NEON.save.getMetaCreditMultiplier(); }
 
 // ─── Particles (pooled) ──────────────────────────────────────────────────────
 // particles[] holds ONLY alive slots. _particlePool is the free list of dead
