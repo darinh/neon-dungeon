@@ -545,7 +545,17 @@ function clampToBossRoom(entity) {
   entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
 }
 
-function hasLOS(x1, y1, x2, y2, map) {
+// ─── LOS memoisation (Phase 2) ────────────────────────────────────────────────
+// Per-frame cache. Key = (fromTile << 16) | toTile where tile = ty*MAP_W+tx.
+// MAP_W*MAP_H = 4000 fits comfortably in 16 bits. Cleared at the top of every
+// game.update() and on any dungeon.map mutation (door open, crate break, etc).
+// Cache stats exposed for debugging via game._losCacheStats.
+const _losCache = new Map();
+let _losHits = 0, _losMisses = 0;
+function clearLosCache() { _losCache.clear(); _losHits = 0; _losMisses = 0; }
+function _losCacheStats() { return { size: _losCache.size, hits: _losHits, misses: _losMisses }; }
+
+function _hasLOSRaw(x1, y1, x2, y2, map) {
   let cx = Math.floor(x1), cy = Math.floor(y1);
   const ex = Math.floor(x2), ey = Math.floor(y2);
   let dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
@@ -566,6 +576,24 @@ function hasLOS(x1, y1, x2, y2, map) {
     cx = nx; cy = ny;
   }
   return true;
+}
+
+function hasLOS(x1, y1, x2, y2, map) {
+  const fx = Math.floor(x1), fy = Math.floor(y1);
+  const tx = Math.floor(x2), ty = Math.floor(y2);
+  // Bail on out-of-range tile coords (cache key would collide); raw handles OOB.
+  if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H ||
+      tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) {
+    return _hasLOSRaw(x1, y1, x2, y2, map);
+  }
+  const from = fy * MAP_W + fx, to = ty * MAP_W + tx;
+  const key = (from << 16) | to;
+  const cached = _losCache.get(key);
+  if (cached !== undefined) { _losHits++; return cached; }
+  _losMisses++;
+  const result = _hasLOSRaw(x1, y1, x2, y2, map);
+  _losCache.set(key, result);
+  return result;
 }
 
 // Tile helpers

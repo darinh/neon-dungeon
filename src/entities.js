@@ -15,6 +15,25 @@ let wallTurrets = [];
 let disruptionFields = [];
 let gravityWells = [];
 
+// Phase 2c — room-scoped enemy index. Support structure for Phase 4 broadphase
+// (wall turret acquisition, NEXUS link candidates, room-clear detection, frenzy
+// notify). Maintained by registerEnemyInRoom() from spawnEnemy() and
+// unregisterEnemyFromRoom() from Enemy.die(). Reset in populateFloor().
+const enemiesByRoom = new Map();
+function registerEnemyInRoom(e) {
+  if (!e || !e.room) return;
+  let set = enemiesByRoom.get(e.room);
+  if (!set) { set = new Set(); enemiesByRoom.set(e.room, set); }
+  set.add(e);
+}
+function unregisterEnemyFromRoom(e) {
+  if (!e || !e.room) return;
+  const set = enemiesByRoom.get(e.room);
+  if (set) set.delete(e);
+}
+function clearEnemiesByRoom() { enemiesByRoom.clear(); }
+function getEnemiesInRoom(room) { return enemiesByRoom.get(room) || null; }
+
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
@@ -362,6 +381,7 @@ class Enemy {
   die() {
     if (this.dead) return;
     this.dead=true;
+    unregisterEnemyFromRoom(this);
     // SUMMONER cascade: despawn all active summons silently
     if (this._summons) {
       for (const s of this._summons) {
@@ -3680,6 +3700,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
       e.phaseTimer = rnd(0, 3); // stagger start so not all phase together
     }
   }
+  registerEnemyInRoom(e);
   return e;
 }
 
@@ -3812,7 +3833,7 @@ function damageCrate(c, dmg) {
 function destroyCrate(c) {
   const map = game.dungeon.map;
   map[c.ty][c.tx] = T.FLOOR;
-  game._minimapDirty = true;
+  game.markMapMutated();
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'EXPLOSION', '#667788', 10);
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
   audio.crateBreak();
