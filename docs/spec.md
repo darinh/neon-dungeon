@@ -937,20 +937,48 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 | WRAITH       | 35      | 13  | Phases through walls, emerges to attack         | 30  |
 | NEXUS        | 40      | 8   | Links to allies granting DR, death stuns linked | 35  |
 | SIPHON       | 30      | 10  | Life-draining ranged attacker, self-heals on hit | 28  |
+| GRAVITON     | 45      | 8   | Deploys gravity wells that pull the player     | 30  |
+| SEEKER       | 18      | 12  | Kamikaze drone, rushes and detonates on contact | 12  |
+| PULSER       | 20      | 12  | Telegraphed charge-up bolt, retreats on cooldown | 15  |
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
-**Floor-gated types:** SHIELDER appears floor 3+, SPLITTER appears floor 4+,
+**Floor-gated types:** PULSER appears floor 2+, SHIELDER appears floor 3+,
+SEEKER appears floor 3+, SPLITTER appears floor 4+,
 CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
 LEAPER appears floor 5+,
 TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 6+,
 SNIPER appears floor 7+,
 REFLECTOR appears floor 7+,
+GRAVITON appears floor 7+,
 WRAITH appears floor 8+,
 SIPHON appears floor 8+,
 NEXUS appears floor 9+.
 Floor-gated types are excluded from both weighted selection and cap-reroll pools
 on floors below their minimum.
+
+#### PULSER (floor 2+)
+
+Electromagnetic charge-up attacker that teaches players to read telegraphs and
+exploit cooldown windows. Slow approach, visible charge-up with concentric rings
+and directional aim line, fires a single heavy bolt, then retreats during cooldown.
+
+- **AI states:** `idle` → `charging` (1 s) → fire → `cooldown` (2.5 s) → `idle`
+- **Charge range:** 6 tiles (LOS required). Tracks player during charge.
+- **Cancel:** charge aborts if LOS lost, player cloaks, or exits range (+2 buffer).
+  Enters 0.8 s post-cancel cooldown to prevent stutter.
+- **Projectile:** speed 10, range 14, full ATK damage. Created manually (not via
+  `fireAt()`) to avoid double audio. `ownerType = 'Pulser Bolt'`.
+- **Cooldown retreat:** half speed, axis-by-axis wall-safe movement away from player.
+- **Telegraph visual:** 2 concentric pulsing rings grow from body + dashed aim line
+  toward player (3 tiles at full charge). Idle: subtle core glow.
+- **Audio:** `audio.pulserCharge()` rising electrical whine; `audio.pulserFire()`
+  sharp crack.
+- **Colour:** `#44ddff` (electric blue)
+- **Credits:** 7
+- **Elite ineligible** (early-game teaching enemy; high ATK + elite scaling = unfair)
+- **TYPE_CAPS:** 2 per room
+- **Spawn weight:** base 5, perFloor 1, minFloor 2
 
 #### SHIELDER (floor 3+)
 
@@ -1804,6 +1832,13 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | CHARGER   | 2           | +2        | 4         |
 | LEAPER    | 2           | +2        | 5         |
 | REFLECTOR | 1           | +2        | 7         |
+| DISRUPTOR | 1           | +2        | 6         |
+| WRAITH    | 1           | +2        | 8         |
+| NEXUS     | 1           | +2        | 9         |
+| SIPHON    | 1           | +2        | 8         |
+| GRAVITON  | 1           | +2        | 7         |
+| SEEKER    | 2           | +3        | 3         |
+| PULSER    | 5           | +1        | 2         |
 
 **Scaling enemy count per room:**
 `count = min(areaCap, rndInt(2 + floor÷3, min(8, 4 + floor÷2)))` where
@@ -1813,7 +1848,8 @@ floor 10 averages 5–8 (capped by room area).
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
 max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper,
 max 1 summoner, max 1 healer, max 2 chargers, max 2 leapers, max 1 reflector,
-max 1 wraith per room. Excess rolls reroll among uncapped,
+max 1 disruptor, max 1 wraith, max 1 nexus, max 1 siphon, max 1 graviton,
+max 3 seekers, max 2 pulsers per room. Excess rolls reroll among uncapped,
 floor-eligible types; final fallback is GUARD.
 
 ### Elite Enemies (floor 3+)
@@ -1821,8 +1857,10 @@ floor-eligible types; final fallback is GUARD.
 Base 8% chance per spawn on floor 3 and above (scaled by difficulty: 4% EASY,
 12% HARD). Maximum 1 elite per room. Never applied to bosses, boss-summoned
 adds, SNIPERs (elite ATK multiplier on a glass cannon would produce unfair
-damage spikes), SUMMONERs (elite durability + continuous spawning), or HEALERs
-(elite durability would make the healer frustratingly hard to prioritise).
+damage spikes), SUMMONERs (elite durability + continuous spawning), HEALERs
+(elite durability would make the healer frustratingly hard to prioritise),
+MIMICs, SIPHONs, SEEKERs (too fragile/fast), or PULSERs (early-game teaching
+enemy; high ATK + elite scaling = unfair on floor 2–3).
 
 | Stat     | Multiplier |
 |----------|------------|
@@ -2462,7 +2500,7 @@ is regenerated fresh and the challenge room is unvisited.
 
 **Credits:** A spendable currency earned by killing enemies. Each enemy type
 has a base credit value: GUARD 8, TURRET 6, CRAWLER 4, PHANTOM 12, DRONE 5,
-SHIELDER 10, GRENADIER 7, REFLECTOR 12, SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
+SHIELDER 10, GRENADIER 7, PULSER 7, REFLECTOR 12, SEEKER 5, SENTINEL 80, HIVE 120, OMEGA 200. Credits scale with floor:
 `Math.round(base × (1 + floor × 0.15))`. Credits are displayed on the HUD
 (green `◈` symbol) and saved/restored with the checkpoint system.
 
@@ -3490,3 +3528,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v91.0   | NIGHTMARE difficulty tier: endgame challenge mode. enemyHp ×2.0, enemyAtk ×1.6, enemySpd ×1.2, itemDrop 8%, creditMul ×0.85, xpMul ×1.35, eliteRate 28%, shardMul ×1.8, envDmg ×1.5, roomLoot 0. Colour `#9400ff` (violet). Added to `DIFF_ORDER` and `DIFFICULTIES` object. Spec v5.5. SW cache v91. |
 | v92.0   | NIGHTMARE unlock gate: NIGHTMARE difficulty locked until player achieves victory on HARD. Tracked via `neonDungeonMeta.clearedDifficulties[]` array (persisted in localStorage). `isDiffUnlocked()` checks `DIFF_UNLOCK_REQS` map — extensible for future gated difficulties. Menu: locked difficulty shows `[LOCKED]` suffix with dimmed colour (`#444466`); attempting to start displays "CLEAR HARD TO UNLOCK NIGHTMARE" message (2.5 s fade). Victory screen: pulsing `★ NIGHTMARE UNLOCKED ★` celebration when HARD cleared for first time (`_newlyUnlocked` flag set in `endRun()`). EASY/NORMAL/HARD always available. Backward-compatible: existing saves without `clearedDifficulties` default to empty array. Spec v5.6. SW cache v92. |
 | v93.0   | Two new elite affixes expanding the pool from 4 to 6: **VOLATILE** (`#ff6600`, 💥) — explodes on death with 2-tile AoE dealing ATK×1.5 damage (LOS-gated). Damages player (dash immune), enemies (skip phased WRAITHs), and all environmental entities (vcores, crates, beacons, shield gens, cameras, lasers, wall turrets, mines). Pulsing orange ring + intermittent particles as visual warning. Not rolled on SEEKERs. `audio.eliteVolatile()`. **FRENZY** (`#ff4466`, 🔥) — gains frenzy stack when any enemy dies within 4 tiles (max 2 stacks). Each stack grants +40% speed/attack rate via `berserkerMul()` (0 stacks = normal, 1 = ×1.4, 2 = ×1.8). `notifyFrenzyElites(x, y)` called in `die()`. Red-orange aura intensifies per stack. `audio.eliteFrenzy()`. Creates kill-order tactical decisions — especially impactful on NIGHTMARE (28% elite rate). `rollEliteAffix()` updated with eligibility filters. `frenzyStacks` added to Enemy class. Spec v5.7. SW cache v93. |
+| v94.0   | PULSER enemy (floor 2+): electromagnetic charge-up attacker that teaches early-game players to read telegraphs and exploit cooldown windows. 3-state AI: `idle` (patrol/approach at SPD 1.5) → `charging` (1 s visible charge-up with concentric rings + directional aim line, tracks player, cancels if LOS lost or range exceeded with 0.8 s cooldown) → fire heavy bolt (speed 10, range 14, full ATK) → `cooldown` (2.5 s retreat at half speed, axis-by-axis wall-safe). Projectile created manually (not `fireAt()`) to avoid double audio. `ownerType = 'Pulser Bolt'`. Visual: 2 concentric pulsing rings grow during charge + dashed aim line (3 tiles); idle subtle core glow. `audio.pulserCharge()` rising electrical whine, `audio.pulserFire()` sharp crack. Elite ineligible (early-game teaching enemy). Stats: HP 20, ATK 12, SPD 1.5, XP 15, credits 7. Colour: `#44ddff` (electric blue). TYPE_CAPS: 2. Spawn weight: base 5, perFloor 1, minFloor 2. Spec v5.8. SW cache v94. |

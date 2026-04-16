@@ -15,11 +15,11 @@ let wallTurrets = [];
 let disruptionFields = [];
 let gravityWells = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam', 'Seeker Blast':'Seeker Blast',
@@ -36,11 +36,12 @@ const SOURCE_LABELS = {
   'Reflected':'Reflected',
   'Disruption Field':'Disruption Field',
   'Neural Feedback':'Neural Feedback',
+  'Pulser Bolt':'Pulser Bolt',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800', 'Seeker Blast':'#ffdd00',
@@ -58,6 +59,7 @@ const SOURCE_COLOURS = {
   'Disruption Field':'#ff44aa',
   'Wraith':'#66ffcc',
   'Neural Feedback':'#00eedd',
+  'Pulser Bolt':'#44ddff',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -550,6 +552,8 @@ class Enemy {
       if (this._chargeState && this._chargeState !== 'idle') { this._chargeState = 'idle'; this._chargeDur = 0; this.bossTimers.charge = 1.5; }
       if (this._chgState && this._chgState !== 'idle') { this._chgState = 'idle'; this._chgCooldown = 2.0; }
       if (this._lpState === 'windup') { this._lpState = 'idle'; this._lpCooldown = 1.5; this._lpHeight = 0; }
+      // Cancel pulser charge on stun — don't let it resume after stun ends
+      if (this._plState === 'charging') { this._plState = 'idle'; this._plCooldown = 0.8; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -611,6 +615,7 @@ class Enemy {
       case 'SIPHON':  this.aiSiphon(dt,player,map,d,los); break;
       case 'GRAVITON':this.aiGraviton(dt,player,map,d,los);break;
       case 'SEEKER':  this.aiSeeker(dt,player,map,d,los);  break;
+      case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -1651,6 +1656,78 @@ class Enemy {
     // Kill self (normal death path for XP/credits/drops/VOLATILE)
     this.hp = 0;
     this.die();
+  }
+
+  // ─── PULSER AI ────────────────────────────────────────────────────────────
+  aiPulser(dt, player, map, d, los) {
+    const ocMul = game.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    const chargeRange = 6;
+
+    // ── Idle: patrol or approach ──
+    if (this._plState === 'idle') {
+      this._plCooldown = Math.max(0, (this._plCooldown || 0) - dt);
+      if (los && canTargetPlayer() && d < chargeRange && this._plCooldown <= 0) {
+        this._plState = 'charging';
+        this._plTimer = 1.0;
+        const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+        this._plAimDx = dx; this._plAimDy = dy;
+        audio.pulserCharge();
+        return;
+      }
+      if (los && canTargetPlayer() && d < chargeRange + 4) {
+        this.moveToward(player.x, player.y, this.spd, dt, map);
+      } else {
+        this.patrol(dt, map);
+      }
+      return;
+    }
+
+    // ── Charging: face player, count down, fire on completion ──
+    if (this._plState === 'charging') {
+      // Cancel if LOS lost, player fled range, or cloaked
+      if (!los || !canTargetPlayer() || d > chargeRange + 2) {
+        this._plState = 'idle';
+        this._plCooldown = 0.8;
+        return;
+      }
+      // Track player during charge
+      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      this._plAimDx = dx; this._plAimDy = dy;
+      this._plTimer -= dt * ocMul;
+      if (this._plTimer <= 0) {
+        // Fire heavy bolt
+        const p = new Projectile(this.x, this.y, this._plAimDx, this._plAimDy,
+          10, this.atk, 14, this.colour, false, false);
+        p.ownerType = 'Pulser Bolt';
+        projectiles.push(p);
+        audio.pulserFire();
+        spawnParticles(this.x, this.y, 'MUZZLE', this.colour, 4);
+        this._plState = 'cooldown';
+        this._plTimer = 2.5 / ocMul;
+      }
+      return;
+    }
+
+    // ── Cooldown: retreat slowly, then return to idle ──
+    if (this._plState === 'cooldown') {
+      this._plTimer -= dt;
+      // Retreat from player at half speed (axis-by-axis wall-safe)
+      if (d < chargeRange && canTargetPlayer()) {
+        const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+        const rSpd = modSpeed(this.spd * 0.5) * this.slowFactor * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+        const nx = this.x + fx * rSpd * dt;
+        const ny = this.y + fy * rSpd * dt;
+        const fxI = Math.floor(nx), fyI = Math.floor(this.y);
+        const xfI = Math.floor(this.x), yfI = Math.floor(ny);
+        if (fxI >= 0 && fyI >= 0 && fxI < MAP_W && fyI < MAP_H && isPassable(map[fyI][fxI])) this.x = nx;
+        if (xfI >= 0 && xfI < MAP_W && yfI >= 0 && yfI < MAP_H && isPassable(map[yfI][xfI])) this.y = ny;
+      }
+      if (this._plTimer <= 0) {
+        this._plState = 'idle';
+        this._plCooldown = 0;
+      }
+      return;
+    }
   }
 
   // ─── MIMIC AI ──────────────────────────────────────────────────────────────
@@ -2995,6 +3072,48 @@ class Enemy {
           ctx.restore();
         }
       }
+      // PULSER: charge-up rings + directional aim line
+      if (this.type === 'PULSER') {
+        if (this._plState === 'charging') {
+          const progress = 1 - this._plTimer / 1.0;
+          ctx.save();
+          // Pulsing concentric charge rings
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 16);
+          ctx.strokeStyle = '#44ddff';
+          ctx.shadowBlur = 6 + progress * 12;
+          ctx.shadowColor = '#44ddff';
+          ctx.lineWidth = 1 + progress;
+          for (let i = 0; i < 2; i++) {
+            const ringR = sz * (0.8 + progress * 1.2) * (0.5 + i * 0.5);
+            ctx.globalAlpha = (0.15 + progress * 0.4) * pulse * (1 - i * 0.3);
+            ctx.beginPath();
+            ctx.arc(sx, sy, ringR, 0, TWO_PI);
+            ctx.stroke();
+          }
+          // Directional aim line (like SNIPER but shorter)
+          const aimLen = 3 * TILE * progress;
+          ctx.globalAlpha = (0.2 + progress * 0.5) * pulse;
+          ctx.lineWidth = 1 + progress;
+          ctx.setLineDash([3, 5 - progress * 3]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + this._plAimDx * aimLen, sy + this._plAimDy * aimLen);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        } else {
+          // Idle: subtle core glow
+          ctx.save();
+          ctx.globalAlpha = 0.15 + Math.sin(this.bobAngle * 3) * 0.08;
+          ctx.fillStyle = '#44ddff';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = '#44ddff';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sz * 0.4, 0, TWO_PI);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
       // SUMMONER: pulsing violet summon ring
       if (this.type === 'SUMMONER') {
         ctx.save();
@@ -3422,6 +3541,7 @@ const ENEMY_WEIGHTS = {
   SIPHON:     { base: 1,  perFloor: 2, minFloor: 8 },  // life-draining predator
   GRAVITON:   { base: 1,  perFloor: 2, minFloor: 7 },  // gravity well deployer
   SEEKER:     { base: 2,  perFloor: 3, minFloor: 3 },  // kamikaze explosive drone
+  PULSER:     { base: 5,  perFloor: 1, minFloor: 2 },  // telegraphed charge-up attacker
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -3466,6 +3586,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SIPHON':  hp=30;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
     case 'GRAVITON':hp=45;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
     case 'SEEKER':  hp=18;atk=12; spd=3.5; xpVal=12; colour='#ffdd00'; break;
+    case 'PULSER':  hp=20;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -3509,6 +3630,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SIPHON')   { e._spFireTimer=1.0; e._spFrenzy=false; e._spDrainBeam=null; }
   if (type==='GRAVITON') { e._gvDeployTimer=2.0; e._gvFireTimer=1.5; e._gvWells=[]; }
   if (type==='SEEKER')   { e._skProximity=0; }
+  if (type==='PULSER')   { e._plState='idle'; e._plTimer=0; e._plCooldown=0; e._plAimDx=0; e._plAimDy=0; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
@@ -3522,7 +3644,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
