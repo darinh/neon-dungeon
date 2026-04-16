@@ -13,12 +13,13 @@ let cameras = [];
 let lasers  = [];
 let wallTurrets = [];
 let disruptionFields = [];
+let gravityWells = [];
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam',
@@ -39,7 +40,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800',
@@ -461,6 +462,18 @@ class Enemy {
       triggerShake(5, 0.2);
       audio.nexusDeath();
     }
+    // GRAVITON death: collapse all owned gravity wells
+    if (this.type === 'GRAVITON' && this._gvWells) {
+      for (const w of this._gvWells) {
+        if (!w.dead) {
+          w.dead = true;
+          spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
+          audio.gravitonCollapse();
+        }
+      }
+      this._gvWells = [];
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#8833ff', 15);
+    }
     // SPLITTER: queue 2 SHARDs (deferred to avoid same-frame hits)
     if (this.type === 'SPLITTER') {
       audio.enemySplit();
@@ -549,6 +562,7 @@ class Enemy {
       case 'WRAITH':  this.aiWraith(dt,player,map,d,los);  break;
       case 'NEXUS':   this.aiNexus(dt,player,map,d,los);  break;
       case 'SIPHON':  this.aiSiphon(dt,player,map,d,los); break;
+      case 'GRAVITON':this.aiGraviton(dt,player,map,d,los);break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
@@ -1725,6 +1739,63 @@ class Enemy {
     }
   }
 
+  // ── GRAVITON: Gravity Manipulation — deploys wells that pull the player ──
+  aiGraviton(dt, player, map, d, los) {
+    // Prune dead well refs
+    this._gvWells = this._gvWells.filter(w => w && !w.dead);
+    this._gvDeployTimer = Math.max(0, this._gvDeployTimer - dt);
+    this._gvFireTimer = Math.max(0, this._gvFireTimer - dt);
+    const bm = this.berserkerMul();
+    const spd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+
+    if (los && d < 5) {
+      // Too close — retreat
+      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const nx = this.x + dx * spd * dt;
+      const ny = this.y + dy * spd * dt;
+      const fx = Math.floor(nx), fy = Math.floor(this.y);
+      const xf = Math.floor(this.x), yf = Math.floor(ny);
+      let moved = false;
+      if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) { this.x = nx; moved = true; }
+      if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
+      if (!moved) this.patrol(dt, map);
+    } else if (los && d <= 10) {
+      this.state = 'ATTACK';
+      // Deploy gravity well near player (priority — gravitational, ignores cloak)
+      if (this._gvDeployTimer <= 0 && d > 3) {
+        const ox = (Math.random() - 0.5) * 2;
+        const oy = (Math.random() - 0.5) * 2;
+        const wx = player.x + ox, wy = player.y + oy;
+        const tx = Math.floor(wx), ty = Math.floor(wy);
+        if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
+          // If at cap, remove oldest
+          if (this._gvWells.length >= 2) {
+            this._gvWells[0].dead = true;
+            this._gvWells.shift();
+          }
+          // Derive room from well position (not owner) to handle cross-room LOS
+          const wellRoom = game.dungeon?.rooms?.find(r =>
+            wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) || null;
+          const well = { x: wx, y: wy, owner: this, timer: 0, maxTimer: 4, radius: 2.5, dead: false, room: wellRoom };
+          gravityWells.push(well);
+          this._gvWells.push(well);
+          audio.gravitonDeploy();
+          spawnParticles(wx, wy, 'EXPLOSION', '#8833ff', 10);
+          this._gvDeployTimer = 5.0 / bm;
+        }
+      }
+      // Secondary ranged attack
+      else if (this._gvFireTimer <= 0 && canTargetPlayer()) {
+        this.fireAt(player.x, player.y, 6, this.atk, 10, this.colour);
+        this._gvFireTimer = 3.0 / bm;
+      }
+    } else if (los && d > 10) {
+      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
   aiBossSentinel(dt,player,map,d,los) {
     if (this.hp<100) this.phase=2; else this.phase=1;
     if (this.phase!==this.prevPhase) {
@@ -2680,6 +2751,39 @@ class Enemy {
         }
         ctx.restore();
       }
+      // GRAVITON: orbiting particle ring + violet aura
+      if (this.type === 'GRAVITON') {
+        ctx.save();
+        const gvPulse = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
+        // Violet aura
+        ctx.globalAlpha = gvPulse;
+        ctx.fillStyle = '#8833ff';
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = '#8833ff';
+        const auraR = sz * 1.4 + Math.sin(this.bobAngle * 3) * 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, auraR, 0, TWO_PI);
+        ctx.fill();
+        // Orbiting particles (3 dots)
+        ctx.globalAlpha = 0.5 + 0.2 * Math.sin(this.bobAngle * 4);
+        ctx.fillStyle = '#cc88ff';
+        for (let p = 0; p < 3; p++) {
+          const a = this.bobAngle * 2 + p * (TWO_PI / 3);
+          const orbR = sz * 1.1;
+          ctx.beginPath();
+          ctx.arc(sx + Math.cos(a) * orbR, sy + Math.sin(a) * orbR, 2, 0, TWO_PI);
+          ctx.fill();
+        }
+        // Inner gravity symbol (concentric circles)
+        ctx.globalAlpha = gvPulse * 1.5;
+        ctx.strokeStyle = '#cc88ff';
+        ctx.lineWidth = 1;
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3, 0, TWO_PI);
+        ctx.stroke();
+        ctx.restore();
+      }
       // Teleporter: afterimage at previous warp origin
       if (this.type === 'TELEPORTER' && this._warpFade > 0) {
         ctx.save();
@@ -3129,6 +3233,7 @@ const ENEMY_WEIGHTS = {
   WRAITH:     { base: 1,  perFloor: 2, minFloor: 8 },  // wall-phasing ethereal predator
   NEXUS:      { base: 1,  perFloor: 2, minFloor: 9 },  // neural command node, buffs linked allies
   SIPHON:     { base: 1,  perFloor: 2, minFloor: 8 },  // life-draining predator
+  GRAVITON:   { base: 1,  perFloor: 2, minFloor: 7 },  // gravity well deployer
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -3171,6 +3276,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'WRAITH':  hp=35;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
     case 'NEXUS':   hp=40;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
     case 'SIPHON':  hp=30;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
+    case 'GRAVITON':hp=45;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
@@ -3212,6 +3318,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+Math.random(); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
   if (type==='NEXUS')    { e._nxLinks=[]; e._nxLinkTimer=0; e._nxFireTimer=1.0; }
   if (type==='SIPHON')   { e._spFireTimer=1.0; e._spFrenzy=false; e._spDrainBeam=null; }
+  if (type==='GRAVITON') { e._gvDeployTimer=2.0; e._gvFireTimer=1.5; e._gvWells=[]; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
     e._mimicBob=Math.random()*TWO_PI;
@@ -4720,6 +4827,70 @@ function drawDisruptionFields(camX, camY) {
   }
 }
 
+// ─── Gravity Wells ────────────────────────────────────────────────────────────
+function updateGravityWells(dt) {
+  for (let i = gravityWells.length - 1; i >= 0; i--) {
+    const w = gravityWells[i];
+    w.timer += dt;
+    if (w.dead || w.timer >= w.maxTimer) {
+      w.dead = true;
+      gravityWells.splice(i, 1);
+      continue;
+    }
+  }
+}
+
+function drawGravityWells(camX, camY) {
+  for (const w of gravityWells) {
+    if (w.dead) continue;
+    const tx = Math.floor(w.x), ty = Math.floor(w.y);
+    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    const sx = w.x * TILE - camX, sy = w.y * TILE - camY;
+    const r = w.radius * TILE;
+    const life = 1 - (w.timer / w.maxTimer);
+    const pulse = 0.5 + 0.3 * Math.sin(w.timer * 6);
+
+    ctx.save();
+
+    // Inward-pulling gradient
+    ctx.globalAlpha = life * pulse * 0.2;
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    grad.addColorStop(0, 'rgba(136,51,255,0.5)');
+    grad.addColorStop(0.6, 'rgba(136,51,255,0.2)');
+    grad.addColorStop(1, 'rgba(136,51,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, TWO_PI);
+    ctx.fill();
+
+    // Concentric rings pulsing inward
+    ctx.globalAlpha = life * pulse * 0.4;
+    ctx.strokeStyle = '#aa55ff';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#8833ff';
+    ctx.lineWidth = 1.5;
+    for (let ring = 0; ring < 3; ring++) {
+      const phase = (w.timer * 2 + ring * 0.33) % 1;
+      const ringR = r * (1 - phase);
+      ctx.globalAlpha = life * (1 - phase) * 0.35;
+      ctx.beginPath();
+      ctx.arc(sx, sy, ringR, 0, TWO_PI);
+      ctx.stroke();
+    }
+
+    // Centre core glow
+    ctx.globalAlpha = life * 0.4;
+    ctx.fillStyle = '#cc88ff';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#8833ff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3 + Math.sin(w.timer * 4) * 1.5, 0, TWO_PI);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
 // ─── Player ───────────────────────────────────────────────────────────────────
 class Player {
   constructor() { this.reset(); }
@@ -4746,6 +4917,7 @@ class Player {
     this.toxicBurnTimer=0;   // cosmetic throttle for toxic pool damage messages
     this.toxicSlowActive=false; // true while standing on toxic tile
     this.disruptionFieldActive=false; // true while inside a disruption field
+    this.gravityPullActive=false;     // true while being pulled by gravity well
     // Player status effect debuffs (applied by enemy attacks)
     this.burnTimer=0; this.burnDps=0;  // burn DoT from enemy melee/attacks
     this.shockTimer=0;                 // shock: brief movement suppress
@@ -5080,6 +5252,43 @@ class Player {
       if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && isPassable(map[ty][tx])) this.x=nx;
       if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && isPassable(map[oy][ox])) this.y=ny;
       this.facing={x:ndx,y:ndy};
+    }
+
+    // Gravity well pull (skip during dash and shock)
+    if (this.dashTimer <= 0 && this.shockTimer <= 0) {
+      let pullX = 0, pullY = 0;
+      for (const w of gravityWells) {
+        if (w.dead) continue;
+        // Same room check — player must be inside the well's room
+        const r = w.room;
+        if (r && !(this.x >= r.x && this.x < r.x + r.w && this.y >= r.y && this.y < r.y + r.h)) continue;
+        const d = dist(this.x, this.y, w.x, w.y);
+        if (d < w.radius && d > 0.1) {
+          const [dx, dy] = norm(w.x - this.x, w.y - this.y);
+          pullX += dx * 2.0;
+          pullY += dy * 2.0;
+        }
+      }
+      // Cap total pull magnitude at 2.5 tiles/sec
+      const pullMag = Math.sqrt(pullX * pullX + pullY * pullY);
+      if (pullMag > 2.5) {
+        pullX = pullX / pullMag * 2.5;
+        pullY = pullY / pullMag * 2.5;
+      }
+      if (pullX || pullY) {
+        if (!this.gravityPullActive) audio.gravitonPull(); // sound on entering pull
+        this.gravityPullActive = true;
+        const pnx = this.x + pullX * dt;
+        const pny = this.y + pullY * dt;
+        const ptx = Math.floor(pnx), pty = Math.floor(this.y);
+        const pox = Math.floor(this.x), poy = Math.floor(pny);
+        if (ptx >= 0 && pty >= 0 && ptx < MAP_W && pty < MAP_H && isPassable(map[pty][ptx])) this.x = pnx;
+        if (pox >= 0 && poy >= 0 && pox < MAP_W && poy < MAP_H && isPassable(map[poy][pox])) this.y = pny;
+      } else {
+        this.gravityPullActive = false;
+      }
+    } else {
+      this.gravityPullActive = false;
     }
 
     // void shard

@@ -672,6 +672,15 @@ function activateHackware(player) {
           spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
         }
       }
+      // EMP collapses gravity wells in radius
+      for (const w of gravityWells) {
+        if (w.dead) continue;
+        if (dist(player.x, player.y, w.x, w.y) < radius) {
+          w.dead = true;
+          spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
+          audio.gravitonCollapse();
+        }
+      }
       break;
     }
     case 'PHASE_CLOAK': {
