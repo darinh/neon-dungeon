@@ -1768,6 +1768,16 @@ const audio = (() => {
       osc('sine',     1170, 1560, 0.05, t + 0.13, 0.14, bus, { attack:0.002 });
       osc('sine',     90, 60, 0.07, t, 0.18, bus);
       noise(0.025, t, 0.05, 6000, bus, { filterType:'highpass' });
+    },
+    // UNCHAINED #35 — ambient bed for THE GAP hub. Stub: a slow low drone
+    // pair + airy shimmer. Real layered track lands in a later audio pass.
+    hubAmbient() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(3.0, 0.5, 0.7);
+      osc('sine', 55, 55, 0.04, t, 2.8, bus, { attack:0.4 });
+      osc('sine', 82, 82, 0.03, t, 2.8, bus, { attack:0.5 });
+      osc('triangle', 440, 660, 0.015, t + 0.6, 1.4, bus, { attack:0.6 });
+      noise(0.008, t, 2.5, 1200, bus, { filterType:'bandpass', filterFreq2:800, q:0.6 });
     }
   };
 })();
