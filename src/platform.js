@@ -1682,6 +1682,20 @@ const audio = (() => {
       osc('sawtooth', 400, 100, 0.06, t + 0.02, 0.12, bus);
       osc('sine', 50, 25, 0.06, t + 0.1, 0.15, bus);
     },
+    pulserCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising electrical whine — charge-up telegraph
+      osc('sawtooth', 200, 600, 0.05, t, 0.5);
+      osc('sine', 300, 900, 0.03, t + 0.1, 0.4);
+      osc('square', 150, 400, 0.02, t + 0.2, 0.3);
+    },
+    pulserFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp electrical crack — bolt release
+      noise(0.08, t, 0.08, 5000);
+      osc('sawtooth', 500, 150, 0.07, t, 0.1);
+      osc('sine', 200, 80, 0.05, t + 0.02, 0.12);
+    },
     eliteVolatile() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(0.8, 0.4, 0.3);
