@@ -2760,6 +2760,94 @@ Fresh installs (meta entirely default) skip the prompt.
 
 ---
 
+## Upgrade Matrix (UNCHAINED Phase 2)
+
+> **Status:** shipped in #36. Pure data + logic in `src/meta/upgrades.js`;
+> stat application lives in `save.applyMetaToPlayer` (extended in #36); the
+> hub terminal panel is exported as `createUpgradeMatrixPanel` / the bare
+> `drawUpgradeMatrix` + `handleUpgradeInput` helpers for the hub UI (#35) to
+> wire after merge.
+
+The UPGRADE MATRIX is a 12-node persistent tree (3 branches × 4 tiers) spent
+with **cores** at the hub terminal. Purchases persist across runs and deaths
+under `meta.upgradeNodes`.
+
+### Node Table
+
+| id | Branch | Tier | baseCost | maxLevel | Effect per level |
+|---|---|---|---|---|---|
+| `hull_plating` | Vitality | 1 | 3 | 3 | +10 max HP |
+| `regenerator` | Vitality | 2 | 6 | 2 | Regen 0.5 HP/s out of combat |
+| `trauma_kit` | Vitality | 3 | 10 | 2 | Start each run with 1 nano-medic consumable |
+| `second_wind` | Vitality | 4 | 18 | 1 | Revive once per floor at 1 HP when lethally hit |
+| `overclock` | Damage | 1 | 3 | 3 | +5% weapon damage |
+| `critical_bias` | Damage | 2 | 6 | 3 | +4% crit chance |
+| `momentum` | Damage | 3 | 10 | 2 | +15% damage for 3s after a kill |
+| `surge` | Damage | 4 | 18 | 1 | Every 8th hit deals +100% |
+| `recon` | Utility | 1 | 3 | 3 | +20% sensor radius (minimap reveal) |
+| `scavenger` | Utility | 2 | 6 | 3 | +1 credit per pickup |
+| `ghostwalk` | Utility | 3 | 10 | 2 | Dash has 0.2s extra i-frames |
+| `hacktool` | Utility | 4 | 18 | 1 | Start with 1 extra hackware slot (3→4) |
+
+### Cost Curve
+
+Linear: cost of level L (1-indexed) = `baseCost × L`. The cost of the **next**
+purchase when currently at level `cur` is `baseCost × (cur + 1)`. Triangular
+total to fully max a node: `baseCost × maxLevel × (maxLevel + 1) / 2`.
+
+### Prereqs
+
+Tier N (N > 1) requires the **same-branch** tier (N − 1) to be at level ≥ 1.
+Cross-branch upgrades never satisfy prereqs.
+
+### Public API (`src/meta/upgrades.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `UPGRADE_NODES` | The 12-node table above (frozen-data-style array). |
+| `getNode(id)` | Lookup by id; returns the node object or `null`. |
+| `nodeCost(id, level)` | Cost of purchasing the next level given current `level`. `undefined` if maxed or unknown. |
+| `prereqMet(meta, id)` | Tier-1 always true; otherwise requires same-branch (tier − 1) at lv ≥ 1. |
+| `purchase(meta, id)` | Atomic: validates → debits cores → bumps level → saves. Returns `{ ok, reason?, cost?, level? }`. Reasons: `'unknown' \| 'maxed' \| 'prereq' \| 'cores'`. Mutates the passed `meta` snapshot in-place when successful. |
+| `totalSpent(meta)` | Sum of every cost paid across all owned levels. |
+| `defaultSelectorState()` | `{ col: 0, row: 0 }` — the hub-panel selector seed. |
+| `handleUpgradeInput(key, game, sel)` | Arrow keys move selector (with wrap); Enter purchases the focused node. Plays `game.audio.upgradePurchased()` on success. |
+| `drawUpgradeMatrix(ctx, x, y, w, h, game, sel)` | Renders the 3×4 grid + tooltip strip. No-op when `ctx` is null (Node tests). |
+| `createUpgradeMatrixPanel(game)` | Convenience factory returning the terminal-panel shape `{ id, label, update, draw, onOpen, onClose }` expected by the hub (#35). |
+
+### Stat Application
+
+`save.applyMetaToPlayer(player)` is called once at run-start. Stat nodes mutate
+the player directly; behavioural nodes (on-kill, every-Nth-hit, on-revive,
+on-dash) set flags on `player.metaFlags` so the game-loop systems can opt-in
+without breaking when the flag is absent. The mapping:
+
+| Node | Player mutation |
+|------|----------------|
+| `hull_plating` | `maxHp += 10 × lv`; `hp = maxHp` |
+| `regenerator` | `regenPerSec += 0.5 × lv`; `metaFlags.regenerator = lv` |
+| `trauma_kit` | `startingNanoMedics += lv`; `metaFlags.trauma_kit = lv` |
+| `second_wind` | `metaFlags.second_wind = 1` |
+| `overclock` | `damageMult *= 1 + 0.05 × lv` |
+| `critical_bias` | `critChance += 0.04 × lv` |
+| `momentum` | `metaFlags.momentum = lv` |
+| `surge` | `metaFlags.surge = 1` |
+| `recon` | `sensorRadiusMult *= 1 + 0.20 × lv` |
+| `scavenger` | `bonusCreditPerPickup += lv` |
+| `ghostwalk` | `dashIFrameBonus += 0.2 × lv`; `metaFlags.ghostwalk = lv` |
+| `hacktool` | `hackwareSlots = 3 + lv`; `metaFlags.hacktool = lv` |
+
+The behavioural-flag listeners (on-kill momentum window, every-8th-hit surge,
+on-lethal second_wind revive) are intentionally deferred — the flags are the
+contract; the run-loop hookups land in a follow-up.
+
+### Audio
+
+Purchase confirmation plays `audio.upgradePurchased()` (added to
+`src/platform.js`): bright ascending arpeggio + warm sub thump.
+
+---
+
 ## Visual Style
 
 - **Palette:** Near-black backgrounds (#0a0a12), neon cyan (#00f5ff),
