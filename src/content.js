@@ -3340,6 +3340,10 @@ function applyEventEffect(event, choice, player, gm) {
         player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         gm.msg('+' + cr + ' CR (purged)', '#ff4488');
         spawnParticles(player.x, player.y, 'SPARK', '#ff4488', 8);
+        // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
+        // TODO(#39 or follow-up): wire the equivalent boss hook
+        //   (rollModuleDrop({source:'boss-non-final'/'boss-genesis'})).
+        tryRareTerminalModuleDrop(gm, player);
         break;
       }
       case 'ARMS_CACHE': {
@@ -3526,4 +3530,23 @@ class KeyItem {
     ctx.fillRect(sx, sy+6, 3, 2);
     ctx.restore();
   }
+}
+
+// ─── UNCHAINED #37: Upgrade Module drop hook ────────────────────────────────
+// Called from the CORRUPTED_TERMINAL PURGE branch. Rolls against the rare-
+// terminal drop table (25% chance, floor 2+), pushes the module onto the
+// transient run array, plays the pickup jingle, and toasts the HUD.
+// NOTE: The boss-drop equivalent is intentionally not wired in this PR —
+// see issue #37 body ("#39 can do the boss hook; may be split").
+function tryRareTerminalModuleDrop(gm, player) {
+  if (!gm || (gm.floor|0) < 2) return;
+  if (typeof NEON === 'undefined' || !NEON.modules) return;
+  const id = NEON.modules.rollModuleDrop({ source: 'rare-terminal' });
+  if (!id) return;
+  NEON.modules.addRunPickup(gm, id);
+  const mod = NEON.modules.getModule(id);
+  const name = mod ? mod.name : id;
+  gm.msg('+ MODULE: ' + name, '#66ffcc');
+  try { if (typeof audio !== 'undefined' && audio.moduleFound) audio.moduleFound(); } catch (_) {}
+  if (player) spawnParticles(player.x, player.y, 'EXPLOSION', '#66ffcc', 14);
 }

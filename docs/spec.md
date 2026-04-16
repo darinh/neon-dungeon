@@ -2917,6 +2917,92 @@ contract; the run-loop hookups land in a follow-up.
 
 Purchase confirmation plays `audio.upgradePurchased()` (added to
 `src/platform.js`): bright ascending arpeggio + warm sub thump.
+## Upgrade Modules (UNCHAINED #37)
+
+Upgrade modules are persistent items held in hub inventory across runs.
+Up to **three** slots on the player apply their effects at run start.
+Sellable back to the vendor for a fixed **4 cores** refund.
+
+Catalog and drop logic live in `src/meta/modules.js`; storage (inventory +
+equipped slots) lives in `src/meta/save.js`. modules.js registers its
+effect-application function with save.js via `registerModuleEffects` so
+`applyMetaToPlayer()` can iterate the loadout without a hard catalog
+dependency.
+
+### Catalog (v1 — 10 modules)
+
+| id | name | effect |
+|----|------|--------|
+| `armor_link`         | ARMOR LINK         | +15 max HP |
+| `kinetic_amp`        | KINETIC AMP        | +8% damage |
+| `stim_injector`      | STIM INJECTOR      | +10% movement speed |
+| `neural_coprocessor` | NEURAL COPROCESSOR | +1 hackware slot (stacks with hacktool) |
+| `shield_capacitor`   | SHIELD CAPACITOR   | Start each floor with 1 shield charge |
+| `ammo_reclaimer`     | AMMO RECLAIMER     | 10% chance pickups give double credits |
+| `targeting_array`    | TARGETING ARRAY    | +3% crit chance, +15% crit damage |
+| `kinetic_buffer`     | KINETIC BUFFER     | −10% knockback taken |
+| `dash_cooler`        | DASH COOLER        | −15% dash cooldown |
+| `reactive_core`      | REACTIVE CORE      | Reflect 10% of incoming damage to attacker |
+
+Stat effects mutate the player directly (e.g. `armor_link → +15 maxHp`).
+Behavioural effects are recorded on `player.metaFlags` for consumers to
+read (e.g. `doubleCreditChance`, `reflectDamagePct`, `dashCooldownMul`).
+
+### Drop Rules
+
+| Source | Rule |
+|--------|------|
+| **Rare terminals** (CORRUPTED_TERMINAL → PURGE, floor 2+) | 25% chance of a uniformly-weighted module, else nothing |
+| **Non-final bosses** (SENTINEL, HIVE, CONDUCTOR, OMEGA)   | Guaranteed 1 module — *wiring deferred to #39 or follow-up* |
+| **GENESIS** (final boss)                                  | Guaranteed 1 module + 10 cores — *wiring deferred* |
+
+`modules.rollModuleDrop({source})` is the single roll entry point.
+`source = 'rare-terminal' | 'boss-non-final' | 'boss-genesis'` — returns a
+module id, or `null` for the rare-terminal's 75% miss branch.
+
+### Run / Death Model
+
+Picked-up modules are **not** committed to `modulesOwned` immediately —
+they accumulate on a transient `game.runModules = []` array. The commit
+fires on:
+
+- **Floor clear** (`game.descend()`)
+- **Victory** (`game.endRun(true)`)
+
+On **death** (`game.endRun(false)`), `clearRunModules()` discards the
+array — modules picked up on the dead run are lost. Modules already in
+hub inventory are safe (meta is never touched by death; see "Death
+Model" above).
+
+### Hub Terminal Panel
+
+`modules.drawModuleSlotsPanel(ctx, x, y, w, h, game, state)` +
+`modules.handleModuleSlotsKey(game, state, key)` expose a self-contained
+slot/inventory UI for the hub terminal. Integration into the hub screen
+is tracked in #35; the panel state shape is
+`{ focus:'slot'|'inv', slotIdx, invIdx, confirmSell }`.
+
+Key bindings inside the panel:
+- **TAB** — toggle focus between slots and inventory.
+- **↑/↓** — navigate the focused column.
+- **ENTER** — from *slot*: uninstall. From *inv*: install into first empty slot (or slot 0).
+- **S** — when focused on inventory, open the one-shot `SELL for 4 cores? [Y/N]` prompt.
+- **ESC** — close panel.
+
+### Public API Surface (`src/meta/modules.js`)
+
+| Symbol | Purpose |
+|--------|---------|
+| `MODULES` | Ordered array of `{id, name, effect}` — the v1 catalog. |
+| `SELL_PRICE` | `4` — v1 fixed refund. |
+| `getModule(id)` | Lookup helper → module or `null`. |
+| `canInstall(meta, slot, id)` | Preview check — owned ∧ valid slot ∧ not already in that slot. |
+| `install(meta, slot, id)` / `uninstall(meta, slot)` | Thin wrappers over `save.installModule`. |
+| `sell(meta, id)` | Thin wrapper over `save.sellModule(id, 4)`. |
+| `rollModuleDrop({source})` | Drop roll per source rules. |
+| `addRunPickup(game, id)` / `commitRunModules(game)` / `clearRunModules(game)` | Transient-pickup lifecycle. |
+| `applyModulesToPlayer(player, installedIds)` | Registered with save.js on load. |
+| `drawModuleSlotsPanel(...)` / `handleModuleSlotsKey(...)` / `defaultPanelState()` | Hub terminal UI for #35 integration. |
 
 ---
 

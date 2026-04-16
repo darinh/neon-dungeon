@@ -1065,6 +1065,16 @@ const audio = (() => {
       osc('sine',   150, 150,  0.12, t, 0.2);
       noise(0.12, t + 0.02, 0.06, 3000, bus);
     },
+    moduleFound() {
+      // UNCHAINED #37 — upgrade module pickup jingle. Distinct from
+      // augmentInstall: ascending arpeggio with a short metallic ping.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.7);
+      osc('triangle', 440, 880,  0.10, t,        0.14, bus);
+      osc('sine',     660, 1320, 0.09, t + 0.07, 0.14, bus);
+      osc('square',   880, 1760, 0.07, t + 0.14, 0.12, bus);
+      noise(0.04, t, 0.05, 4200, bus);
+    },
     reactiveArmor() {
       const c = getCtx(); const t = c.currentTime;
       osc('sawtooth', 200, 80, 0.15, t, 0.12);
