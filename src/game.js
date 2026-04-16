@@ -629,10 +629,21 @@ const game = {
       }
     }
 
-    // update projectiles
-    for (let i=projectiles.length-1;i>=0;i--) {
-      projectiles[i].update(dt,dungeon.map,player,enemies);
-      if (projectiles[i].dead) projectiles.splice(i,1);
+    // update projectiles (compact-in-place + recycle to pool)
+    {
+      let w = 0;
+      const n = projectiles.length;
+      for (let r = 0; r < n; r++) {
+        const p = projectiles[r];
+        p.update(dt, dungeon.map, player, enemies);
+        if (p.dead) {
+          releaseProjectile(p);
+        } else {
+          if (w !== r) projectiles[w] = p;
+          w++;
+        }
+      }
+      projectiles.length = w;
     }
 
     // update hazard zones (grenade AoE)

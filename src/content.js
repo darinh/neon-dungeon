@@ -1232,34 +1232,80 @@ function applyMetaToPlayer(player) {
 function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }
 function getMetaCreditMultiplier() { return 1 + getMetaLevel('SCAVENGER') * 0.15; }
 
-// ─── Particles ───────────────────────────────────────────────────────────────
+// ─── Particles (pooled) ──────────────────────────────────────────────────────
+// particles[] holds ONLY alive slots. _particlePool is the free list of dead
+// slots ready for reuse. spawnParticles() pulls from the pool (or allocates
+// if empty, up to PARTICLE_CAP). updateParticles() uses compact-in-place so
+// splice() never runs in the hot path. Every reused slot has ALL fields
+// re-written in spawnParticles() — stale-field bleed-through is prevented by
+// exhaustive reset, not by the act of reuse.
+const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
+const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
 let particles = [];
+let _particlePool = [];
+
+function _newParticleSlot() {
+  return { x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, colour:'#fff', type:'', grav:0, alive:false };
+}
+
+function _acquireParticle() {
+  // Prefer reused slots from the pool
+  if (_particlePool.length) return _particlePool.pop();
+  // Cap reached? Drop the spawn request.
+  if (particles.length >= PARTICLE_CAP) return null;
+  return _newParticleSlot();
+}
+
 function spawnParticles(wx, wy, type, colour, count) {
+  // Burst cap — under extreme stacking, halve new burst sizes to protect the
+  // frame budget. Gameplay-visible only in pathological scenarios.
+  if (particles.length > PARTICLE_BURST_SCALE_THRESHOLD) {
+    count = Math.max(1, (count * 0.5) | 0);
+  }
   for (let i=0; i<count; i++) {
+    const p = _acquireParticle();
+    if (!p) return; // cap reached mid-burst
     const a = Math.random()*TWO_PI;
     const spd = type==='EXPLOSION' ? rnd(1,4) : rnd(0.5,3);
-    particles.push({
-      x: wx*TILE, y: wy*TILE,
-      vx: Math.cos(a)*spd*(TILE/2), vy: Math.sin(a)*spd*(TILE/2),
-      life: 1, maxLife: type==='MUZZLE'?0.08:type==='EXPLOSION'?0.5:rnd(0.3,0.6),
-      size: type==='EXPLOSION' ? rnd(3,8) : rnd(1,3),
-      colour, type,
-      grav: type==='BLOOD' ? 40 : 0,
-    });
+    // EXHAUSTIVE reset — every field rewritten, no bleed-through
+    p.x = wx*TILE;
+    p.y = wy*TILE;
+    p.vx = Math.cos(a)*spd*(TILE/2);
+    p.vy = Math.sin(a)*spd*(TILE/2);
+    p.life = 1;
+    p.maxLife = type==='MUZZLE' ? 0.08 : type==='EXPLOSION' ? 0.5 : rnd(0.3,0.6);
+    p.size = type==='EXPLOSION' ? rnd(3,8) : rnd(1,3);
+    p.colour = colour;
+    p.type = type;
+    p.grav = type==='BLOOD' ? 40 : 0;
+    p.alive = true;
+    particles.push(p);
   }
 }
+
 function updateParticles(dt) {
-  for (let i=particles.length-1; i>=0; i--) {
-    const p = particles[i];
+  // Compact-in-place: alive slots shift left, dead slots return to pool.
+  let w = 0;
+  for (let r = 0, n = particles.length; r < n; r++) {
+    const p = particles[r];
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.vy += p.grav * dt;
     p.life -= dt / p.maxLife;
-    if (p.life <= 0) particles.splice(i,1);
+    if (p.life <= 0) {
+      p.alive = false;
+      _particlePool.push(p);
+    } else {
+      if (w !== r) particles[w] = p;
+      w++;
+    }
   }
+  particles.length = w;
 }
+
 function drawParticles(camX, camY) {
-  for (const p of particles) {
+  for (let i = 0, n = particles.length; i < n; i++) {
+    const p = particles[i];
     const sx = p.x - camX, sy = p.y - camY;
     if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
     ctx.save();
@@ -1276,6 +1322,15 @@ function drawParticles(camX, camY) {
     }
     ctx.restore();
   }
+}
+
+// Release every live particle back to the pool (on floor change / game reset).
+function clearParticles() {
+  for (let i = 0, n = particles.length; i < n; i++) {
+    particles[i].alive = false;
+    _particlePool.push(particles[i]);
+  }
+  particles.length = 0;
 }
 
 // ─── Ambient Particles ───────────────────────────────────────────────────────
@@ -2507,10 +2562,45 @@ function tileHasLOS(x1, y1, tx, ty, map) {
   return true;
 }
 
-// ─── Projectiles ─────────────────────────────────────────────────────────────
+// ─── Projectiles (pooled) ────────────────────────────────────────────────────
+// projectiles[] holds live projectiles only. _projPool is the free list of
+// dead Projectile instances. `new Projectile(...)` returns a pooled instance
+// if one is free (constructors may return an object), else allocates a fresh
+// one. Every field — required AND optional — is explicitly (re)assigned in
+// _init() so there is zero stale bleed-through between reuses. Release
+// happens in the main update loop when p.dead becomes true.
+const PROJECTILE_CAP = 200;
 let projectiles = [];
+const _projPool = [];
+
+function releaseProjectile(p) {
+  if (_projPool.length >= PROJECTILE_CAP) return; // hard cap
+  // Best-effort cleanup of references that could hold onto dead enemies/
+  // weapons longer than needed. _init() rewrites these on reuse anyway, but
+  // nulling here keeps the free-list from pinning garbage.
+  p.homing = null;
+  p._owner = null;
+  if (p.hitEnemies) p.hitEnemies.clear();
+  if (p.trail) p.trail.length = 0;
+  if (p._effects) p._effects = null;
+  if (p._affixes) p._affixes = null;
+  _projPool.push(p);
+}
+
 class Projectile {
   constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
+    // Reuse a dead slot from the pool when possible. Returning an object from
+    // a constructor makes `new Projectile(...)` yield that object instead of
+    // `this`, so every existing callsite keeps working without change.
+    if (_projPool.length) {
+      const p = _projPool.pop();
+      p._init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName);
+      return p;
+    }
+    this._init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName);
+  }
+  _init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
+    // ── Core motion/state (mirrors original constructor) ──
     this.x=x; this.y=y;
     [this.dx,this.dy]=norm(dx,dy);
     this.spd= fromPlayer && hasAugment('KINETIC_AMPLIFIER') ? spd * 1.2 : spd;
@@ -2522,11 +2612,30 @@ class Projectile {
     this.maxPierces=piercing?Infinity:0;
     this.fromPlayer=fromPlayer; this.dead=false;
     this.weaponName=weaponName||null;
-    this._effects=[];  // affix effects carried from weapon
-    this.hitEnemies=new Set();
+    // Reuse containers in place to avoid alloc; fall back to fresh if null.
+    if (this._effects && this._effects.length) this._effects.length = 0;
+    else if (!this._effects) this._effects = [];
+    if (this.hitEnemies) this.hitEnemies.clear();
+    else this.hitEnemies = new Set();
     this.bouncesLeft=0;
     this._hasRicochet=false;
-    this.trail=[];
+    if (this.trail) this.trail.length = 0;
+    else this.trail = [];
+    // ── Optional fields — EXPLICITLY reset so stale values from a prior
+    // occupant of this slot cannot leak into new behaviour. Every property
+    // that any callsite ever assigns must be zeroed here. ──
+    this.homing = null;
+    this.isGrenade = false;
+    this.grenadeDmg = 0;
+    this.grenadeColour = null;
+    this.targetX = 0;
+    this.targetY = 0;
+    this.ownerType = null;
+    this.isAllyTurret = false;
+    this._owner = null;
+    this.isCrit = false;
+    if (this._affixes && this._affixes.length) this._affixes.length = 0;
+    else if (!this._affixes) this._affixes = [];
   }
   update(dt, map, player, enemies) {
     // Homing: steer toward target
