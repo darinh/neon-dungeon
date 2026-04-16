@@ -255,9 +255,9 @@ const game = {
       enemies.push(e);
     }
     if (count > 0) sr._hadEnemies = true;
-    // Spawn premium loot: guaranteed upgrade item + bonus credits
-    const itemCount = 2 + (sr.w * sr.h >= 40 ? 1 : 0);
-    for (let j=0; j<itemCount; j++) {
+    // Spawn loot: scaled by floor — early floors get less, later floors get premium
+    const baseItems = floorNum <= 3 ? 1 : floorNum <= 6 ? 2 : 2 + (sr.w * sr.h >= 40 ? 1 : 0);
+    for (let j=0; j<baseItems; j++) {
       const ix = sr.x + rnd(1, sr.w - 1), iy = sr.y + rnd(1, sr.h - 1);
       items.push(new Item(ix, iy));
     }
