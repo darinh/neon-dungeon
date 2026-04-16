@@ -116,6 +116,18 @@ const game = {
 
   loadFloor(n, savedModifier) {
     this.floor=n;
+    // UNCHAINED #34: track current biome index and bump meta.deepestBiome on
+    // floor entry so death respawn returns to the deepest biome start.
+    if (typeof NEON !== 'undefined' && NEON.biomes) {
+      this.currentBiomeIndex = NEON.biomes.biomeIndex(n);
+      try {
+        const m = loadMeta();
+        if ((m.deepestBiome|0) < this.currentBiomeIndex) {
+          m.deepestBiome = this.currentBiomeIndex;
+          saveMeta(m);
+        }
+      } catch(_) { /* ignore — meta bookkeeping must never break a floor load */ }
+    }
     music.setFloor(n);
     this.floorTime=0; // arc grid phase timer
     // Roll or restore floor modifier
@@ -226,7 +238,17 @@ const game = {
     setTimeout(()=>this.msg('⚡ '+this.quest.label,'#39ff14'), 800);
   },
 
-  startGame() {
+  startGame(opts) {
+    opts = opts || {};
+    // UNCHAINED: prompt before wiping nothing but *also* before carrying
+    // forward saved meta. The prompt is skipped on fresh installs (no meta
+    // progress to speak of) and when called recursively after the user answers.
+    if (!opts.skipConfirm && this._hasMetaProgress()) {
+      this._newGameConfirm = { selected: 0 }; // 0 = KEEP, 1 = RESET
+      audio.menuSelect();
+      return;
+    }
+    this._newGameConfirm = null;
     audio.resume();
     const meta = loadMeta();
     meta.lastDifficulty = this.difficulty;
@@ -239,8 +261,38 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
-    this.loadFloor(1);
+    // UNCHAINED #37: transient pickup array. Modules dropped this run live
+    // here until commit on floor clear / victory; discarded on death.
+    this.runModules = [];
+    // UNCHAINED #34: respawn at the start of the deepest biome reached,
+    // not floor 1. Current-run resources (credits, weapons, hackware) still
+    // reset via new Player(); meta is untouched by this read.
+    let startFloor = 1;
+    if (typeof NEON !== 'undefined' && NEON.biomes) {
+      const deepest = (meta.deepestBiome|0);
+      startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
+    }
+    this.loadFloor(startFloor);
     this.setState('PLAYING');
+  },
+
+  // True iff the stored meta contains any progress worth confirming before
+  // a wipe. Fresh installs answer false → no prompt shown.
+  _hasMetaProgress() {
+    const m = loadMeta();
+    if (!m) return false;
+    if ((m.shards|0) > 0) return true;
+    if ((m.cores|0)  > 0) return true;
+    if ((m.runsCompleted|0) > 0) return true;
+    if (m.upgrades && Object.keys(m.upgrades).length > 0) return true;
+    if (m.upgradeNodes && Object.keys(m.upgradeNodes).length > 0) return true;
+    if (Array.isArray(m.modulesOwned)    && m.modulesOwned.length)    return true;
+    if (Array.isArray(m.logsRead)        && m.logsRead.length)        return true;
+    if (Array.isArray(m.logsFound)       && m.logsFound.length)       return true;
+    if (Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.length) return true;
+    if (Array.isArray(m.clearedDifficulties) && m.clearedDifficulties.length) return true;
+    if (m.stats && (m.stats.totalRuns|0) > 0) return true;
+    return false;
   },
 
   descend() {
@@ -250,12 +302,25 @@ const game = {
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
       this.endRun(true);
     } else {
-      audio.descend();
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
-      const next=this.floor+1;
-      this.fadeTo('DESCENDING TO FLOOR '+next, ()=>{
-        this.loadFloor(next);
-      }, 'PLAYING');
+      // UNCHAINED #37: commit this floor's picked-up modules to meta
+      // before the run-transition (hub OR direct next-floor load).
+      if (typeof NEON !== 'undefined' && NEON.modules && NEON.modules.commitRunModules) {
+        NEON.modules.commitRunModules(this);
+      }
+      // UNCHAINED #35: interpose THE GAP hub between floors. First-floor rule
+      // is satisfied naturally — a fresh run starts inside floor 1 (not hub),
+      // so hub only ever appears AFTER floor 1+ has been cleared.
+      if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.enterHub) {
+        NEON.hub.enterHub(this);
+      } else {
+        // Fallback: original direct-descent path (shouldn't happen in prod).
+        audio.descend();
+        const next=this.floor+1;
+        this.fadeTo('DESCENDING TO FLOOR '+next, ()=>{
+          this.loadFloor(next);
+        }, 'PLAYING');
+      }
     }
   },
 
@@ -310,6 +375,12 @@ const game = {
 
   endRun(victory) {
     music.stop();
+    // UNCHAINED #37: commit run-picked modules on victory; drop them on death.
+    if (victory && typeof NEON !== 'undefined' && NEON.modules) {
+      NEON.modules.commitRunModules(this);
+    } else if (typeof NEON !== 'undefined' && NEON.modules) {
+      NEON.modules.clearRunModules(this);
+    }
     this.deleteSave(); // run is over — clear save file
     // Snapshot recap data before anything else
     const p = this.player;
@@ -485,6 +556,7 @@ const game = {
       case 'ARCHIVES':       this.updateArchives(); break;
       case 'SETTINGS':       this.updateSettings(); break;
       case 'FADE':        this.updateFade(dt);    break;
+      case 'HUB':         if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.updateHub(this, dt); break;
       case 'GAME_OVER':   this.updateGameOver();  break;
       case 'VICTORY':     this.updateVictory();   break;
       case 'NAME_ENTRY':  this.updateNameEntry(dt); break;
@@ -525,6 +597,21 @@ const game = {
       const p=this.menuParticles[i];
       p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*0.4;
       if (p.life<=0||p.y<-10) this.menuParticles.splice(i,1);
+    }
+    // UNCHAINED: "Keep persistent unlocks?" confirm modal intercepts input
+    // whenever it's active. Blocks main-menu navigation until the user answers.
+    if (this._newGameConfirm) {
+      const c = this._newGameConfirm;
+      if (jp(ALT_KEYS.left)||jp(km('left'))||jp(ALT_KEYS.up)||jp(km('up')))    { c.selected = 0; audio.menuSelect(); }
+      if (jp(ALT_KEYS.right)||jp(km('right'))||jp(ALT_KEYS.down)||jp(km('down'))) { c.selected = 1; audio.menuSelect(); }
+      if (jp('Escape')) { this._newGameConfirm = null; audio.menuSelect(); }
+      else if (jp('Enter')||jp('MouseLeft')) {
+        const keep = c.selected === 0;
+        if (!keep) resetMeta();
+        this.startGame({ skipConfirm: true });
+      }
+      if (this._menuMsg && this._menuMsg.life > 0) this._menuMsg.life -= dt;
+      return;
     }
     const opts = this.getMenuOptions();
     const n = opts.length;
@@ -2429,6 +2516,7 @@ const game = {
       case 'ARCHIVES':  this.renderArchives(); break;
       case 'SETTINGS':  this.renderSettings(); break;
       case 'FADE':      this.renderPlaying(); this.renderFade();   break;
+      case 'HUB':       if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.drawHub(ctx, this); break;
       case 'GAME_OVER': this.renderGameOver(); break;
       case 'VICTORY':   this.renderVictory();  break;
       case 'NAME_ENTRY': this.renderNameEntry(); break;
@@ -2553,6 +2641,45 @@ const game = {
     // high scores
     const scoresY = hintY + 50;
     this.renderLeaderboard(scoresY, narrow ? 3 : 5, -1);
+
+    // UNCHAINED: "Keep persistent unlocks?" confirm overlay.
+    // Drawn last so it sits on top of every other menu layer.
+    if (this._newGameConfirm) {
+      const c = this._newGameConfirm;
+      ctx.save();
+      ctx.fillStyle = 'rgba(5,5,15,0.78)';
+      ctx.fillRect(0, 0, W, H);
+      const boxW = Math.min(520, W - 40);
+      const boxH = narrow ? 180 : 200;
+      const bx = (W - boxW) / 2, by = (H - boxH) / 2;
+      ctx.strokeStyle = '#00f5ff'; ctx.lineWidth = 2;
+      ctx.shadowBlur = 18; ctx.shadowColor = '#00f5ff';
+      ctx.strokeRect(bx, by, boxW, boxH);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${narrow?16:20}px monospace`;
+      ctx.fillText('START NEW RUN', W/2, by + (narrow?32:38));
+      ctx.fillStyle = '#e0e0ff'; ctx.font = `${narrow?11:13}px monospace`;
+      ctx.fillText('Keep persistent unlocks (cores, upgrades, modules, logs)?', W/2, by + (narrow?60:72));
+      ctx.fillStyle = '#888899'; ctx.font = `${narrow?10:11}px monospace`;
+      ctx.fillText('"RESET" wipes all meta progress. This cannot be undone.', W/2, by + (narrow?80:94));
+      const btnY = by + (narrow?120:138);
+      const btnLbls = ['KEEP UNLOCKS', 'RESET META'];
+      const btnCols = ['#39ff14', '#ff4466'];
+      const spacing = boxW / 2;
+      for (let i = 0; i < 2; i++) {
+        const selected = c.selected === i;
+        const col = selected ? btnCols[i] : '#555577';
+        ctx.fillStyle = col;
+        ctx.font = `${selected?'bold ':''}${narrow?13:16}px monospace`;
+        ctx.shadowBlur = selected ? 12 : 0; ctx.shadowColor = col;
+        ctx.fillText(`${selected?'▶ ':'  '}${btnLbls[i]}`, bx + spacing * (i + 0.5), btnY);
+      }
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#444466'; ctx.font = `${narrow?9:11}px monospace`;
+      ctx.fillText('◀▶ choose · Enter to confirm · Esc to cancel', W/2, by + boxH - (narrow?14:18));
+      ctx.restore();
+    }
   },
 
   renderPlaying() {

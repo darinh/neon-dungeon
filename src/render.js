@@ -1291,7 +1291,6 @@ function populateFloor(dungeon, floorNum) {
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
-  const BOSS_POOLS={3:['SENTINEL','WARDEN'],6:['HIVE','CONDUCTOR'],10:['OMEGA','GENESIS']};
 
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
@@ -1300,8 +1299,16 @@ function populateFloor(dungeon, floorNum) {
     if (room.roomType==='challenge') continue; // wave-spawned during encounter
 
     if (bossRoom && room===bossRoom) {
-      const pool=BOSS_POOLS[floorNum];
+      // UNCHAINED #34: boss pool sourced from biomes.AREAS (single source of
+      // truth for floor→boss mapping). `src/data/biomes.js` is loaded before
+      // this module in index.html; if it's somehow missing we spawn no boss
+      // rather than silently drift from the AREAS table.
+      const area = (typeof NEON !== 'undefined' && NEON.biomes) ? NEON.biomes.areaForFloor(floorNum) : null;
+      const pool = area && Array.isArray(area.bossPool) && area.bossPool.length ? area.bossPool : null;
       const btype=pool?pool[Math.floor(Math.random()*pool.length)]:null;
+      if (!btype && typeof console !== 'undefined' && console.warn) {
+        console.warn('[#34] biome boss pool missing for floor', floorNum, '— NEON.biomes not loaded?');
+      }
       if (btype) {
         const b=spawnEnemy(btype,room.cx,room.cy,floorNum,room);
         enemies.push(b);

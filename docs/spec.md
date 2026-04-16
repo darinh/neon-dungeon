@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v5.7
+# NEON DUNGEON — Game Specification v6.0-wip
 
 ## Vision
 
@@ -29,6 +29,7 @@ MENU → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
+     PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
 
@@ -47,6 +48,42 @@ score does not qualify, the game skips directly to GAME_OVER or VICTORY.
 
 ## World Generation — BSP Dungeon
 
+### Biomes (UNCHAINED)
+
+The 15-floor arc is partitioned into five biomes (areas) defined in
+`src/data/biomes.js` as the `AREAS` table. One source of truth for
+floor → biome mapping, palette hints, and boss pool.
+
+| Index | ID        | Floors  | Boss Pool   | Display Name       |
+|-------|-----------|---------|-------------|--------------------|
+| 0     | sandbox   | 1–3     | SENTINEL    | SENTINEL-PRIME     |
+| 1     | cache     | 4–6     | HIVE        | VIRAL COLLECTIVE   |
+| 2     | firewall  | 7–9     | CONDUCTOR   | THE COMPILER       |
+| 3     | uplink    | 10–12   | OMEGA       | OVERSEER           |
+| 4     | opennet   | 13–15   | GENESIS     | THE ARCHITECT      |
+
+Helpers: `areaForFloor(f)`, `biomeIndex(f)`, `areaForIndex(i)`,
+`firstFloorOfBiomeContaining(f)`, `isBiomeBossFloor(f)`. All clamp
+out-of-range input (f < 1 → first biome; f > lastFloor → last biome;
+NaN/non-finite → first biome); never throw.
+
+**Consumers** (wired via `NEON.biomes`):
+
+- `src/render.js` — boss selection in `populateFloor` uses
+  `areaForFloor(floor).bossPool` instead of the legacy hard-coded map.
+- `src/game.js` — `loadFloor(n)` records `game.currentBiomeIndex` and
+  bumps `meta.deepestBiome = max(meta.deepestBiome, biomeIndex(n))` on
+  every floor entry (meta write is best-effort; failures are swallowed).
+
+**Death-respawn rule (UNCHAINED):** `startGame()` now begins a run at
+`areaForIndex(meta.deepestBiome).floors[0]` rather than always floor 1.
+Current-run resources (credits, weapons, hackware, XP, shields) still
+reset via `new Player()`; meta state is read but untouched. Fresh
+installs (`deepestBiome = 0`) still start at floor 1 — the behaviour is
+additive until the player progresses into a later biome.
+
+### BSP generation
+
 Each floor is generated fresh using Binary Space Partitioning:
 
 1. Recursively split the map (80 × 50 tiles) into leaf partitions.
@@ -56,7 +93,9 @@ Each floor is generated fresh using Binary Space Partitioning:
 5. Place stairs-down in the farthest room from spawn (approximate BFS
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
-6. Floor 10 stairs replaced with CORE terminal (victory trigger).
+6. Floor 10 stairs replaced with CORE terminal (victory trigger —
+   victory ends the run regardless of biome index; post-10 biomes are
+   data-ready but not yet reachable in-run).
 7. **Dead-end pruning**: after secret rooms, locked doors, and challenge
    rooms wall off entrances, corridor tiles that become dead ends
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
@@ -2635,6 +2674,335 @@ on save state. Touch hit-testing uses closest-option matching.
 ### End-of-Run Display
 
 GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summary.
+
+---
+
+## Hub / The Gap
+
+> **Status:** scaffold shipped in UNCHAINED Phase 2 (#35). Harness + 4 terminal
+> slots present; terminal bodies are placeholder stubs that sibling issues
+> fill in (#36 upgrades, #37 modules, ARMORY weapon-swap, #41 archive).
+
+**THE GAP** is a liminal between-floor state. After the player interacts with
+the stairs/terminal on floor 1+, the game transitions to `HUB` instead of
+loading the next floor directly. A fresh run still boots straight into floor 1
+gameplay (the hub only appears *after* clearing a floor).
+
+### State
+
+- New `game.state` value: `HUB`.
+- `game.hub` holds the ephemeral state object:
+  `{ terminals, selected, activePanel, fromFloor, nextFloor, biomeName, biomeId, t }`.
+- `enterHub(game)` captures `game.floor` and `areaForFloor(floor).name`, then
+  flips `game.state = 'HUB'` and plays `audio.hubAmbient()`.
+- `exitHub(game)` clears `game.hub`, plays `audio.descend()`, and uses the
+  existing `fadeTo(…, loadFloor(nextFloor), 'PLAYING')` transition so descent
+  feels continuous.
+
+### Terminals
+
+Four terminal cards render in a horizontal row. Each card conforms to the
+**terminal-panel API** (documented as the parallel-safety contract between
+#35/#36/#37/#41):
+
+```
+{
+  id:     string,                 // stable identifier ('upgrade', 'modules', 'armory', 'archive')
+  label:  string,                 // UPPERCASE label painted on the card
+  update(dt, input),              // input = { jp, km } — invoked only when the panel is active
+  draw(ctx, x, y, w, h),          // panel body; called when active, not for the card
+  onOpen(game),                   // fired when the player activates the terminal
+  onClose(game),                  // fired when the panel is dismissed
+}
+```
+
+The four terminal slots, in order:
+
+1. **UPGRADE MATRIX** (`id: upgrade`) — placeholder stub. Filled by #36.
+2. **MODULE SLOTS**   (`id: modules`) — placeholder stub. Filled by #37.
+3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
+   name; full weapon-swap UI is a follow-up.
+4. **ARCHIVE**        (`id: archive`) — placeholder stub. Filled by #41.
+
+### Input
+
+- `←` / `→` (or rebound `left`/`right`) — move the selector.
+- `1`–`4` — direct-select a terminal.
+- `ENTER` (or rebound `interact`) — activate the selected terminal (opens its panel).
+- `SPACE` (or rebound `shoot`) — descend to the next floor (calls `exitHub`).
+- `ESC` / `KeyQ` — close the active panel, returning to the selector.
+
+### HUD (while in HUB)
+
+- Top-left: `◈ N  CORES` (reads `NEON.save.loadMeta().cores`).
+- Top-right: biome name (e.g. `THE SANDBOX`) from `NEON.biomes.areaForFloor`,
+  then `FLOOR X → FLOOR X+1` below.
+- Centre title: `THE GAP — liminal interlink`.
+- Bottom prompt: `◀▶ / 1-4 SELECT   [ENTER] ACTIVATE   [SPACE] DESCEND`
+  (or `[ESC] BACK` while a panel is active).
+
+### Audio
+
+- `audio.hubAmbient()` — low drone pair + airy shimmer bed. Stubbed for now;
+  a full ambient track lands in a later audio pass.
+
+---
+
+## Meta-progression / Persistent Save (v2)
+
+> **Status:** vessel only. Shipped in UNCHAINED Phase 1 (#33). The systems that
+> populate these fields — hub UI (#35), upgrade effects (#36), modules (#37),
+> cores economy (#39), logs (#41) — are tracked as separate issues. The schema
+> is the contract every subsequent phase writes against.
+
+### Schema — v2
+
+Everything lives under `localStorage['neonDungeonMeta']` and is owned by
+`src/meta/save.js`. Fields are never deleted across versions; only added.
+
+```js
+{
+  version: 2,                           // bumped from 1 in Phase 1
+  // ─── Legacy v1 — preserved for save-compat ────────────────────────────
+  shards: 0,                            // old fragment economy (pre-#39)
+  upgrades: {},                         // META_UPGRADES purchases (pre-#36)
+  stats: { totalRuns, totalShards, bestFloor, victories },
+  lastDifficulty: 'NORMAL',
+  clearedDifficulties: [],
+  // ─── UNCHAINED v2 ─────────────────────────────────────────────────────
+  cores: 0,                             // persistent wallet (#39)
+  upgradeNodes: {},                     // { nodeId: purchasedLevel } (#36)
+  modulesOwned: [],                     // module ids in hub inventory (#37)
+  modulesInstalled: [null, null, null], // fixed-width 3-slot loadout
+  logsRead: [],                         // log ids read in Archive (#41)
+  logsFound: [],                        // log ids found but not yet read
+  endingsUnlocked: [],                  // subset of ['keeper','unchained']
+  runsCompleted: 0,
+  deepestBiome: 0                       // highest AREAS index reached
+}
+```
+
+### Migration (v1 → v2)
+
+`loadMeta()` is the single migration entry point. For any stored save whose
+`version` is missing or `< 2`:
+
+- Each missing v2 field is injected with its default value.
+- `modulesInstalled` is coerced to length exactly 3 (pad with nulls, truncate,
+  and replace non-string entries with null).
+- `modulesOwned`, `logsRead`, `logsFound`, `endingsUnlocked` drop non-string
+  entries (`endingsUnlocked` additionally restricts to the valid id set).
+- `cores` and `runsCompleted` are floored to non-negative integers.
+- `version` is set to `META_VERSION` and the save is left for the next
+  `saveMeta()` to persist.
+- `console.log('[meta] migrated v1→v2')` fires once per process (idempotent on
+  the second+ load).
+
+Migration is idempotent: re-running on a v2 save is a no-op.
+
+### Helpers
+
+| Function | Purpose |
+|----------|---------|
+| `addCores(n)` | Credit `n` cores (≤0 ignored). Returns new balance. |
+| `spendCores(n)` | Debit atomically; returns `true` on success, `false` if insufficient (wallet unchanged). Zero is a no-op success. |
+| `addLogFound(id)` | Add to `logsFound` if new. Returns `true` if added. |
+| `markLogRead(id)` | Ensure `id` is in both `logsFound` and `logsRead`. Returns `true` if anything changed. |
+| `installModule(slot, id)` | Equip `id` in `slot∈[0,2]`. Must be owned. If already installed elsewhere, the old slot is cleared first. Returns the previous occupant (or `null`), or `undefined` on bad input. Pass `null` to unslot. |
+| `sellModule(id, refund)` | Remove `id` from `modulesOwned`, clear any equipped slot, credit `refund` cores. Refund is caller-computed (module data lives outside save.js). Returns the refund amount, or `0` if not owned. |
+| `resetMeta()` | Wipe `localStorage['neonDungeonMeta']` (New Game → "Reset" branch). Irreversible. |
+
+### Death Model
+
+Death **never** touches meta. `saveMeta()` is called only from
+`startGame()` (to persist `lastDifficulty`) and from explicit meta actions
+(archive purchases, log reads, module ops). The run checkpoint lives under a
+separate key (`neonDungeonSave`) and is the only thing cleared by game over.
+
+### New Game Confirmation
+
+`game.startGame()` intercepts the menu action when `_hasMetaProgress()` is true
+(any cores, upgrades, modules, logs, endings, cleared difficulties, or prior
+runs). A modal overlay prompts **"Keep persistent unlocks?"** with two choices:
+
+- **KEEP UNLOCKS** → `startGame({ skipConfirm: true })` retains meta as-is.
+- **RESET META** → `resetMeta()` then start fresh.
+
+Fresh installs (meta entirely default) skip the prompt.
+
+---
+
+## Upgrade Matrix (UNCHAINED Phase 2)
+
+> **Status:** shipped in #36. Pure data + logic in `src/meta/upgrades.js`;
+> stat application lives in `save.applyMetaToPlayer` (extended in #36); the
+> hub terminal panel is exported as `createUpgradeMatrixPanel` / the bare
+> `drawUpgradeMatrix` + `handleUpgradeInput` helpers for the hub UI (#35) to
+> wire after merge.
+
+The UPGRADE MATRIX is a 12-node persistent tree (3 branches × 4 tiers) spent
+with **cores** at the hub terminal. Purchases persist across runs and deaths
+under `meta.upgradeNodes`.
+
+### Node Table
+
+| id | Branch | Tier | baseCost | maxLevel | Effect per level |
+|---|---|---|---|---|---|
+| `hull_plating` | Vitality | 1 | 3 | 3 | +10 max HP |
+| `regenerator` | Vitality | 2 | 6 | 2 | Regen 0.5 HP/s out of combat |
+| `trauma_kit` | Vitality | 3 | 10 | 2 | Start each run with 1 nano-medic consumable |
+| `second_wind` | Vitality | 4 | 18 | 1 | Revive once per floor at 1 HP when lethally hit |
+| `overclock` | Damage | 1 | 3 | 3 | +5% weapon damage |
+| `critical_bias` | Damage | 2 | 6 | 3 | +4% crit chance |
+| `momentum` | Damage | 3 | 10 | 2 | +15% damage for 3s after a kill |
+| `surge` | Damage | 4 | 18 | 1 | Every 8th hit deals +100% |
+| `recon` | Utility | 1 | 3 | 3 | +20% sensor radius (minimap reveal) |
+| `scavenger` | Utility | 2 | 6 | 3 | +1 credit per pickup |
+| `ghostwalk` | Utility | 3 | 10 | 2 | Dash has 0.2s extra i-frames |
+| `hacktool` | Utility | 4 | 18 | 1 | Start with 1 extra hackware slot (3→4) |
+
+### Cost Curve
+
+Linear: cost of level L (1-indexed) = `baseCost × L`. The cost of the **next**
+purchase when currently at level `cur` is `baseCost × (cur + 1)`. Triangular
+total to fully max a node: `baseCost × maxLevel × (maxLevel + 1) / 2`.
+
+### Prereqs
+
+Tier N (N > 1) requires the **same-branch** tier (N − 1) to be at level ≥ 1.
+Cross-branch upgrades never satisfy prereqs.
+
+### Public API (`src/meta/upgrades.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `UPGRADE_NODES` | The 12-node table above (frozen-data-style array). |
+| `getNode(id)` | Lookup by id; returns the node object or `null`. |
+| `nodeCost(id, level)` | Cost of purchasing the next level given current `level`. `undefined` if maxed or unknown. |
+| `prereqMet(meta, id)` | Tier-1 always true; otherwise requires same-branch (tier − 1) at lv ≥ 1. |
+| `purchase(meta, id)` | Atomic: validates → debits cores → bumps level → saves. Returns `{ ok, reason?, cost?, level? }`. Reasons: `'unknown' \| 'maxed' \| 'prereq' \| 'cores'`. Mutates the passed `meta` snapshot in-place when successful. |
+| `totalSpent(meta)` | Sum of every cost paid across all owned levels. |
+| `defaultSelectorState()` | `{ col: 0, row: 0 }` — the hub-panel selector seed. |
+| `handleUpgradeInput(key, game, sel)` | Arrow keys move selector (with wrap); Enter purchases the focused node. Plays `game.audio.upgradePurchased()` on success. |
+| `drawUpgradeMatrix(ctx, x, y, w, h, game, sel)` | Renders the 3×4 grid + tooltip strip. No-op when `ctx` is null (Node tests). |
+| `createUpgradeMatrixPanel(game)` | Convenience factory returning the terminal-panel shape `{ id, label, update, draw, onOpen, onClose }` expected by the hub (#35). |
+
+### Stat Application
+
+`save.applyMetaToPlayer(player)` is called once at run-start. Stat nodes mutate
+the player directly; behavioural nodes (on-kill, every-Nth-hit, on-revive,
+on-dash) set flags on `player.metaFlags` so the game-loop systems can opt-in
+without breaking when the flag is absent. The mapping:
+
+| Node | Player mutation |
+|------|----------------|
+| `hull_plating` | `maxHp += 10 × lv`; `hp = maxHp` |
+| `regenerator` | `regenPerSec += 0.5 × lv`; `metaFlags.regenerator = lv` |
+| `trauma_kit` | `startingNanoMedics += lv`; `metaFlags.trauma_kit = lv` |
+| `second_wind` | `metaFlags.second_wind = 1` |
+| `overclock` | `damageMult *= 1 + 0.05 × lv` |
+| `critical_bias` | `critChance += 0.04 × lv` |
+| `momentum` | `metaFlags.momentum = lv` |
+| `surge` | `metaFlags.surge = 1` |
+| `recon` | `sensorRadiusMult *= 1 + 0.20 × lv` |
+| `scavenger` | `bonusCreditPerPickup += lv` |
+| `ghostwalk` | `dashIFrameBonus += 0.2 × lv`; `metaFlags.ghostwalk = lv` |
+| `hacktool` | `hackwareSlots = 3 + lv`; `metaFlags.hacktool = lv` |
+
+The behavioural-flag listeners (on-kill momentum window, every-8th-hit surge,
+on-lethal second_wind revive) are intentionally deferred — the flags are the
+contract; the run-loop hookups land in a follow-up.
+
+### Audio
+
+Purchase confirmation plays `audio.upgradePurchased()` (added to
+`src/platform.js`): bright ascending arpeggio + warm sub thump.
+## Upgrade Modules (UNCHAINED #37)
+
+Upgrade modules are persistent items held in hub inventory across runs.
+Up to **three** slots on the player apply their effects at run start.
+Sellable back to the vendor for a fixed **4 cores** refund.
+
+Catalog and drop logic live in `src/meta/modules.js`; storage (inventory +
+equipped slots) lives in `src/meta/save.js`. modules.js registers its
+effect-application function with save.js via `registerModuleEffects` so
+`applyMetaToPlayer()` can iterate the loadout without a hard catalog
+dependency.
+
+### Catalog (v1 — 10 modules)
+
+| id | name | effect |
+|----|------|--------|
+| `armor_link`         | ARMOR LINK         | +15 max HP |
+| `kinetic_amp`        | KINETIC AMP        | +8% damage |
+| `stim_injector`      | STIM INJECTOR      | +10% movement speed |
+| `neural_coprocessor` | NEURAL COPROCESSOR | +1 hackware slot (stacks with hacktool) |
+| `shield_capacitor`   | SHIELD CAPACITOR   | Start each floor with 1 shield charge |
+| `ammo_reclaimer`     | AMMO RECLAIMER     | 10% chance pickups give double credits |
+| `targeting_array`    | TARGETING ARRAY    | +3% crit chance, +15% crit damage |
+| `kinetic_buffer`     | KINETIC BUFFER     | −10% knockback taken |
+| `dash_cooler`        | DASH COOLER        | −15% dash cooldown |
+| `reactive_core`      | REACTIVE CORE      | Reflect 10% of incoming damage to attacker |
+
+Stat effects mutate the player directly (e.g. `armor_link → +15 maxHp`).
+Behavioural effects are recorded on `player.metaFlags` for consumers to
+read (e.g. `doubleCreditChance`, `reflectDamagePct`, `dashCooldownMul`).
+
+### Drop Rules
+
+| Source | Rule |
+|--------|------|
+| **Rare terminals** (CORRUPTED_TERMINAL → PURGE, floor 2+) | 25% chance of a uniformly-weighted module, else nothing |
+| **Non-final bosses** (SENTINEL, HIVE, CONDUCTOR, OMEGA)   | Guaranteed 1 module — *wiring deferred to #39 or follow-up* |
+| **GENESIS** (final boss)                                  | Guaranteed 1 module + 10 cores — *wiring deferred* |
+
+`modules.rollModuleDrop({source})` is the single roll entry point.
+`source = 'rare-terminal' | 'boss-non-final' | 'boss-genesis'` — returns a
+module id, or `null` for the rare-terminal's 75% miss branch.
+
+### Run / Death Model
+
+Picked-up modules are **not** committed to `modulesOwned` immediately —
+they accumulate on a transient `game.runModules = []` array. The commit
+fires on:
+
+- **Floor clear** (`game.descend()`)
+- **Victory** (`game.endRun(true)`)
+
+On **death** (`game.endRun(false)`), `clearRunModules()` discards the
+array — modules picked up on the dead run are lost. Modules already in
+hub inventory are safe (meta is never touched by death; see "Death
+Model" above).
+
+### Hub Terminal Panel
+
+`modules.drawModuleSlotsPanel(ctx, x, y, w, h, game, state)` +
+`modules.handleModuleSlotsKey(game, state, key)` expose a self-contained
+slot/inventory UI for the hub terminal. Integration into the hub screen
+is tracked in #35; the panel state shape is
+`{ focus:'slot'|'inv', slotIdx, invIdx, confirmSell }`.
+
+Key bindings inside the panel:
+- **TAB** — toggle focus between slots and inventory.
+- **↑/↓** — navigate the focused column.
+- **ENTER** — from *slot*: uninstall. From *inv*: install into first empty slot (or slot 0).
+- **S** — when focused on inventory, open the one-shot `SELL for 4 cores? [Y/N]` prompt.
+- **ESC** — close panel.
+
+### Public API Surface (`src/meta/modules.js`)
+
+| Symbol | Purpose |
+|--------|---------|
+| `MODULES` | Ordered array of `{id, name, effect}` — the v1 catalog. |
+| `SELL_PRICE` | `4` — v1 fixed refund. |
+| `getModule(id)` | Lookup helper → module or `null`. |
+| `canInstall(meta, slot, id)` | Preview check — owned ∧ valid slot ∧ not already in that slot. |
+| `install(meta, slot, id)` / `uninstall(meta, slot)` | Thin wrappers over `save.installModule`. |
+| `sell(meta, id)` | Thin wrapper over `save.sellModule(id, 4)`. |
+| `rollModuleDrop({source})` | Drop roll per source rules. |
+| `addRunPickup(game, id)` / `commitRunModules(game)` / `clearRunModules(game)` | Transient-pickup lifecycle. |
+| `applyModulesToPlayer(player, installedIds)` | Registered with save.js on load. |
+| `drawModuleSlotsPanel(...)` / `handleModuleSlotsKey(...)` / `defaultPanelState()` | Hub terminal UI for #35 integration. |
 
 ---
 
