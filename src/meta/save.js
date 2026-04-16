@@ -181,6 +181,12 @@
     return runShards;
   }
 
+  // Module-effects hook — populated by src/meta/modules.js on load. Kept as
+  // a registration rather than a direct dependency so save.js has no hard
+  // reference to the module catalog (which lives in modules.js).
+  let _moduleEffectsFn = null;
+  function registerModuleEffects(fn) { _moduleEffectsFn = (typeof fn === 'function') ? fn : null; }
+
   // applyMetaToPlayer mutates the passed player object. buildWeaponFn is
   // optional — browser falls through to the global `buildWeapon`. This avoids
   // a hard import dependency between the meta layer and the weapon data layer.
@@ -205,6 +211,10 @@
     if (Object.keys(nodes).length) {
       player.metaFlags = player.metaFlags || {};
       _applyUpgradeNodes(player, nodes);
+    }
+    // UNCHAINED #37: apply effects of installed upgrade modules.
+    if (_moduleEffectsFn) {
+      try { _moduleEffectsFn(player, m.modulesInstalled); } catch (_) { /* never break a run */ }
     }
   }
 
@@ -378,6 +388,7 @@
     getMetaXPMultiplier, getMetaCreditMultiplier,
     addCores, spendCores, addLogFound, markLogRead,
     installModule, sellModule, resetMeta,
+    registerModuleEffects,
     _setStorageForTests
   };
 }));

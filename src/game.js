@@ -261,6 +261,9 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
+    // UNCHAINED #37: transient pickup array. Modules dropped this run live
+    // here until commit on floor clear / victory; discarded on death.
+    this.runModules = [];
     // UNCHAINED #34: respawn at the start of the deepest biome reached,
     // not floor 1. Current-run resources (credits, weapons, hackware) still
     // reset via new Player(); meta is untouched by this read.
@@ -300,6 +303,11 @@ const game = {
       this.endRun(true);
     } else {
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
+      // UNCHAINED #37: commit this floor's picked-up modules to meta
+      // before the run-transition (hub OR direct next-floor load).
+      if (typeof NEON !== 'undefined' && NEON.modules && NEON.modules.commitRunModules) {
+        NEON.modules.commitRunModules(this);
+      }
       // UNCHAINED #35: interpose THE GAP hub between floors. First-floor rule
       // is satisfied naturally — a fresh run starts inside floor 1 (not hub),
       // so hub only ever appears AFTER floor 1+ has been cleared.
@@ -367,6 +375,12 @@ const game = {
 
   endRun(victory) {
     music.stop();
+    // UNCHAINED #37: commit run-picked modules on victory; drop them on death.
+    if (victory && typeof NEON !== 'undefined' && NEON.modules) {
+      NEON.modules.commitRunModules(this);
+    } else if (typeof NEON !== 'undefined' && NEON.modules) {
+      NEON.modules.clearRunModules(this);
+    }
     this.deleteSave(); // run is over — clear save file
     // Snapshot recap data before anything else
     const p = this.player;
