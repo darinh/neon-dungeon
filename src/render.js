@@ -38,8 +38,7 @@ function drawWorld(dungeon, camX, camY) {
       ctx.globalAlpha=brightness;
       switch(tile) {
         case T.WALL: {
-          const isSealed = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
-                           (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty));
+          const isSealed = game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx);
           ctx.fillStyle = isSealed ? '#3d2828' : '#3a3a6a';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle = isSealed ? '#724040' : '#5858a0';
@@ -642,6 +641,60 @@ function drawBossBar() {
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
 // ─── Minimap ──────────────────────────────────────────────────────────────────
+// Base-layer cache: a 120×80 offscreen canvas with every visited/echo tile
+// pre-baked. Rebuilt only when game._minimapDirty flips — typically on floor
+// load, newly visited tiles, door/unlock/mine events, seal toggles, and
+// map-reveal events. Dynamic pixels (enemies, POIs, player, ARC pulse) are
+// overlaid live after drawImage.
+function rebuildMinimapBase(dungeon, echoMap) {
+  const MW = 120, MH = 80;
+  let off = game._minimapCanvas;
+  if (!off) {
+    off = document.createElement('canvas');
+    off.width = MW; off.height = MH;
+    game._minimapCanvas = off;
+  }
+  const o = off.getContext('2d');
+  o.clearRect(0, 0, MW, MH);
+  const sx = MW / MAP_W, sy = MH / MAP_H;
+  const arcTiles = [];
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      const visited = dungeon.visited[ty][tx];
+      if (!visited && !echoMap) continue;
+      const tile = dungeon.map[ty][tx];
+      const px2 = tx * sx, py2 = ty * sy;
+      let col = null;
+      if (!visited && echoMap) {
+        if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
+        else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
+        if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
+        continue;
+      }
+      if (tile === T.WALL || tile === T.CRACKED) {
+        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : '#1a1a2e';
+      }
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#202040';
+      else if (tile === T.PLASMA) col = '#ff6600';
+      else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
+      else if (tile === T.TOXIC) col = '#33ff00';
+      else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
+      else if (tile === T.VENDOR) col = '#39ff14';
+      else if (tile === T.LORE) col = '#ffb700';
+      else if (tile === T.DOOR) col = '#664422';
+      else if (tile === T.LOCKED_R) col = '#ff3333';
+      else if (tile === T.LOCKED_B) col = '#3388ff';
+      else if (tile === T.LOCKED_G) col = '#ffcc00';
+      else if (tile === T.CHALLENGE_GATE) col = '#ff6633';
+      else if (tile === T.CRATE) col = '#2a3a4e';
+      if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
+    }
+  }
+  game._minimapArcTiles = arcTiles;
+  game._minimapEchoMap = echoMap;
+}
+
 function drawMinimap(dungeon, player) {
   const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
   ctx.save();
@@ -650,44 +703,35 @@ function drawMinimap(dungeon, player) {
   ctx.strokeStyle='#2d2d5e'; ctx.lineWidth=1; ctx.strokeRect(MX-2,MY-2,MW+4,MH+4);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
-  const pois = [];
   const echoMap = game.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
+
+  // Rebuild cache on demand. echoMap flip also forces rebuild.
+  if (game._minimapDirty || !game._minimapCanvas || game._minimapEchoMap !== echoMap) {
+    rebuildMinimapBase(dungeon, echoMap);
+    game._minimapDirty = false;
+  }
+  ctx.drawImage(game._minimapCanvas, MX, MY);
+
+  // Live ARC pulse overlay (bright state; dim state is baked into cache)
+  const arcActive = Math.sin((game.floorTime || 0) * Math.PI) > 0;
+  if (arcActive && game._minimapArcTiles && game._minimapArcTiles.length) {
+    ctx.fillStyle = '#44ccff';
+    const cellW = Math.max(1, sx), cellH = Math.max(1, sy);
+    for (const k of game._minimapArcTiles) {
+      const ty = (k / MAP_W) | 0, tx = k % MAP_W;
+      ctx.fillRect(MX + tx * sx, MY + ty * sy, cellW, cellH);
+    }
+  }
+
+  // Collect POI tiles for marker overlay (cheap scan — could be cached too but
+  // POIs are few and the scan touches only visited tiles).
+  const pois = [];
   for (let ty=0;ty<MAP_H;ty++) {
     for (let tx=0;tx<MAP_W;tx++) {
-      const visited = dungeon.visited[ty][tx];
-      if (!visited && !echoMap) continue;
-      const tile=dungeon.map[ty][tx];
-      const px2=MX+tx*sx, py2=MY+ty*sy;
-      let col=null;
-      if (!visited && echoMap) {
-        // Echo mapper: dimmed layout, no POIs, no details, skip secret rooms
-        if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile===T.WALL||tile===T.CRACKED||tile===T.CRATE) col='#0d0d1a';
-        else if (isPassable(tile)||tile===T.DOOR) col='#141428';
-        if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
-        continue;
-      }
-      if (tile===T.WALL||tile===T.CRACKED) {
-        col = (game.bossSealed && game.bossEntrances.some(e=>e.x===tx&&e.y===ty)) ||
-              (game.challengeSealed && game.challengeEntrances.some(e=>e.x===tx&&e.y===ty)) ? '#5e2d2d' : '#1a1a2e';
-      }
-      else if (tile===T.FLOOR||tile===T.DOOR_OPEN||tile===T.TRAP_SPIKE||tile===T.TRAP_SLOW||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) col='#202040';
-      else if (tile===T.PLASMA) col='#ff6600';
-      else if (tile===T.ARC) col= Math.sin((game.floorTime||0)*Math.PI)>0 ? '#44ccff' : '#1a3344';
-      else if (tile===T.TOXIC) col='#33ff00';
-      else if (tile===T.STAIRS||tile===T.TERMINAL) col='#ffff00';
-      else if (tile===T.VENDOR) col='#39ff14';
-      else if (tile===T.LORE) col='#ffb700';
-      else if (tile===T.DOOR) col='#664422';
-      else if (tile===T.LOCKED_R) col='#ff3333';
-      else if (tile===T.LOCKED_B) col='#3388ff';
-      else if (tile===T.LOCKED_G) col='#ffcc00';
-      else if (tile===T.CHALLENGE_GATE) col='#ff6633';
-      else if (tile===T.CRATE) col='#2a3a4e';
-      if (col) { ctx.fillStyle=col; ctx.fillRect(px2,py2,Math.max(1,sx),Math.max(1,sy)); }
-      // Collect POI tiles for marker overlay
+      if (!dungeon.visited[ty][tx]) continue;
+      const tile = dungeon.map[ty][tx];
       if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) {
-        pois.push({tile, px:px2+sx/2, py:py2+sy/2});
+        pois.push({tile, px:MX+tx*sx+sx/2, py:MY+ty*sy+sy/2});
       }
     }
   }
@@ -954,8 +998,7 @@ function drawExpandedMinimap(dungeon, player) {
       }
 
       if (tile === T.WALL || tile === T.CRACKED) {
-        col = (game.bossSealed && game.bossEntrances.some(e => e.x === tx && e.y === ty)) ||
-              (game.challengeSealed && game.challengeEntrances.some(e => e.x === tx && e.y === ty))
+        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : '#1a1a2e';
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#252545';

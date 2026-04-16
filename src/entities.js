@@ -3812,6 +3812,7 @@ function damageCrate(c, dmg) {
 function destroyCrate(c) {
   const map = game.dungeon.map;
   map[c.ty][c.tx] = T.FLOOR;
+  game._minimapDirty = true;
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'EXPLOSION', '#667788', 10);
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
   audio.crateBreak();

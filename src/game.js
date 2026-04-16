@@ -60,6 +60,25 @@ const game = {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
   },
 
+  // Rebuild the packed-index Set of sealed entrance tiles. Called whenever
+  // bossSealed/challengeSealed flips so tile-loop hot paths can use O(1)
+  // Set.has() instead of bossEntrances.some() per tile.
+  refreshSealedEntrances() {
+    const s = this.sealedEntranceSet || (this.sealedEntranceSet = new Set());
+    s.clear();
+    if (this.bossSealed && this.bossEntrances) {
+      for (const e of this.bossEntrances) s.add(e.y * MAP_W + e.x);
+    }
+    if (this.challengeSealed && this.challengeEntrances) {
+      for (const e of this.challengeEntrances) s.add(e.y * MAP_W + e.x);
+    }
+    this._minimapDirty = true;
+  },
+
+  // Flag the cached minimap base layer as stale. Call from any code that
+  // mutates dungeon.map, dungeon.visited, or game.mapRevealed.
+  markMinimapDirty() { this._minimapDirty = true; },
+
   setState(s, callback) {
     this.state=s;
     this.mapExpanded = false;
@@ -118,6 +137,10 @@ const game = {
     this.bossHpGhost=0;
     this.clearedRooms=new Set();
     this._chainBolts=[];
+    this.sealedEntranceSet=new Set();
+    this._minimapCanvas=null; // offscreen base-layer cache (rebuilt on dirty)
+    this._minimapArcTiles=null; // list of ARC tile positions for live overlay
+    this._minimapDirty=true;
     // Reset challenge room state
     this.challengeRoom=this.dungeon.challengeRoom||null;
     this.challengeEntrances=this.dungeon.challengeEntrances||[];
@@ -241,6 +264,7 @@ const game = {
     for (let ty=Math.max(0,sr.y-1); ty<Math.min(MAP_H,sr.y+sr.h+1); ty++)
       for (let tx=Math.max(0,sr.x-1); tx<Math.min(MAP_W,sr.x+sr.w+1); tx++)
         if (dungeon.map[ty][tx]===T.CRACKED) dungeon.map[ty][tx]=T.FLOOR;
+    this._minimapDirty = true;
     // Spawn enemies (reduced count — it's a bonus room)
     const floorNum = this.floor;
     const minE = 1 + Math.floor(floorNum / 4);
@@ -868,6 +892,7 @@ const game = {
         this.msg('+50 DATA RECOVERED', '#ffb700');
         // Consume the terminal — single use
         dungeon.map[ty][tx] = T.FLOOR;
+        this._minimapDirty = true;
         audio.loreAccess();
         spawnParticles(player.x, player.y, 'SPARK', '#ffb700', 8);
         this.readingInteractArmed = false;
@@ -941,6 +966,7 @@ const game = {
         const dt=dungeon.map[dy][dx];
         if (dt===T.CRACKED) {
           dungeon.map[dy][dx]=T.FLOOR;
+          this._minimapDirty = true;
           audio.wallBreak();
           spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', '#ffb700', 12);
           this.msg('SECRET AREA DISCOVERED','#ffb700');
@@ -957,6 +983,7 @@ const game = {
         }
         if (dt===T.DOOR) {
           dungeon.map[dy][dx]=T.DOOR_OPEN;
+          this._minimapDirty = true;
           this.msg('Door opened','#aa8844');
           spawnParticles(dx+0.5, dy+0.5, 'SPARK', '#aa8844', 4);
           break;
@@ -965,6 +992,7 @@ const game = {
           const kc=doorKeyColour(dt);
           if (player.keys[kc] > 0) {
             dungeon.map[dy][dx]=T.DOOR_OPEN;
+            this._minimapDirty = true;
             this.msg('Unlocked '+kc+' door!', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
             spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00', 8);
             break;
@@ -1189,6 +1217,7 @@ const game = {
           e.origTile = dungeon.map[e.y][e.x];
           dungeon.map[e.y][e.x] = T.WALL;
         }
+        this.refreshSealedEntrances();
         // Safety: nudge player off any sealed tile
         const ptx = Math.floor(player.x), pty = Math.floor(player.y);
         if (!isPassable(dungeon.map[pty]?.[ptx])) {
@@ -1211,6 +1240,7 @@ const game = {
         audio.roomUnseal();
       }
       this.bossSealed=false;
+      this.refreshSealedEntrances();
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
@@ -1249,6 +1279,7 @@ const game = {
             e.origTile = dungeon.map[e.y][e.x];
             dungeon.map[e.y][e.x] = T.WALL;
           }
+          this.refreshSealedEntrances();
           // Nudge player off sealed tiles
           const ptx = Math.floor(player.x), pty = Math.floor(player.y);
           if (!isPassable(dungeon.map[pty]?.[ptx])) {
@@ -1310,6 +1341,7 @@ const game = {
             for (const e of this.challengeEntrances) {
               if (e.origTile !== undefined) { dungeon.map[e.y][e.x] = e.origTile; delete e.origTile; }
             }
+            this.refreshSealedEntrances();
             audio.roomUnseal();
             audio.roomClear();
             // Rewards

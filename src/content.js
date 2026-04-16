@@ -1343,8 +1343,7 @@ function updateAmbient(dt) {
           if (Math.random() < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
         }
       } else if (tile === T.WALL) {
-        if ((game.bossSealed && game.bossEntrances && game.bossEntrances.some(e => e.x === tx && e.y === ty)) ||
-            (game.challengeSealed && game.challengeEntrances && game.challengeEntrances.some(e => e.x === tx && e.y === ty))) {
+        if (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) {
           if (Math.random() < 0.18) emitters.push({ kind: 'WISP', tx, ty });
         }
       }
@@ -2455,7 +2454,7 @@ function updateLighting(dungeon, px, py) {
       const l = Math.max(0, 1 - d / r);
       dungeon.light[y][x] = l;
       dungeon.visible[y][x] = 1;
-      dungeon.visited[y][x] = 1;
+      if (!dungeon.visited[y][x]) { dungeon.visited[y][x] = 1; game._minimapDirty = true; }
     }
   // Sconce ambient — only brightens already-visited tiles, no visibility grant
   for (const sc of dungeon.lights) {
@@ -3219,6 +3218,7 @@ function applyEventEffect(event, choice, player, gm) {
           for (let tx = 0; tx < MAP_W; tx++)
             if (!dungeon.secretMask[ty][tx] && dungeon.map[ty][tx] !== T.VOID)
               dungeon.visited[ty][tx] = 1;
+        gm.markMinimapDirty();
         gm.msg('MAP DATA DOWNLOADED', '#aa88ff');
         spawnParticles(player.x, player.y, 'EXPLOSION', '#aa88ff', 15);
         break;
