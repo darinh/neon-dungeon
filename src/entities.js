@@ -290,6 +290,9 @@ class Enemy {
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
     this.stunTimer=0;                     // hackware EMP stun duration
     this._lastHitCtx=null;                // weapon context of last hit (for on-kill effects)
+    // Holo Decoy taunt redirection
+    this._tauntTarget=null;               // active hologram effect (or null)
+    this._tx=x; this._ty=y;              // perceived target position (hologram or player)
   }
 
   takeDamage(dmg, hitCtx) {
@@ -544,6 +547,12 @@ class Enemy {
     this.bobAngle+=dt*3;
     this.flashTimer=Math.max(0,this.flashTimer-dt);
 
+    // Set perceived target position (hologram taunt redirection)
+    this._tx = player.x; this._ty = player.y;
+    const _t = this._tauntTarget;
+    if (_t && _t.age < _t.maxAge) { this._tx = _t.x; this._ty = _t.y; }
+    else if (_t) { this._tauntTarget = null; }
+
     // Stun: freeze AI + cooldown timers while stunned
     if (this.stunTimer > 0) {
       this.stunTimer -= dt;
@@ -587,10 +596,9 @@ class Enemy {
     this.shootTimer =Math.max(0,this.shootTimer-dt);
     this.spawnCooldown=Math.max(0,this.spawnCooldown-dt);
 
-    const d = dist(this.x,this.y,player.x,player.y);
-    // Cloak: enemies lose LOS when player is cloaked
-    const targetable = canTargetPlayer();
-    const los = targetable && d<15 && hasLOS(this.x,this.y,player.x,player.y,map);
+    const d = dist(this.x,this.y,this._tx,this._ty);
+    const targetable = (this._tauntTarget && this._tauntTarget.age < this._tauntTarget.maxAge) || canTargetPlayer();
+    const los = targetable && d<15 && hasLOS(this.x,this.y,this._tx,this._ty,map);
 
     // type-specific AI
     switch(this.type) {
@@ -636,6 +644,12 @@ class Enemy {
     return 1;
   }
 
+  // Taunt-aware targeting check: taunted enemies can "target" the hologram
+  _canTarget() {
+    const t = this._tauntTarget;
+    return (t && t.age < t.maxAge) || canTargetPlayer();
+  }
+
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
     spd = modSpeed(spd) * this.slowFactor * this.berserkerMul() * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     let [dx,dy]=norm(tx-this.x,ty-this.y);
@@ -660,7 +674,8 @@ class Enemy {
   }
 
   meleeAttack(player) {
-    if (this.attackTimer<=0 && canTargetPlayer()) {
+    if (this.attackTimer<=0 && this._canTarget()) {
+      if (dist(this.x, this.y, player.x, player.y) > 1.2) return; // hologram whiff
       const dealt = player.takeDamage(this.atk, this.type);
       const baseCd = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       this.attackTimer = baseCd / this.berserkerMul();
@@ -690,7 +705,7 @@ class Enemy {
     else if (d>detectRange+2) { this.state='PATROL'; }
     if (this.state==='PATROL') this.patrol(dt,map);
     else {
-      this.moveToward(player.x,player.y,this.spd,dt,map);
+      this.moveToward(this._tx,this._ty,this.spd,dt,map);
       if (d<1.2) this.meleeAttack(player);
     }
   }
@@ -698,18 +713,18 @@ class Enemy {
   aiTurret(dt,player,map,d,los) {
     const cooldown = Math.max(1.0, 2.0 - (game.floor || 1) * 0.11) / (game.modifier==='OVERCLOCK'?1.2:1);
     if (los && d<12 && this.shootTimer<=0) {
-      this.fireAt(player.x,player.y,8,this.atk,13,'#ffb700');
+      this.fireAt(this._tx,this._ty,8,this.atk,13,'#ffb700');
       this.shootTimer=cooldown / this.berserkerMul();
     }
   }
 
   aiCrawler(dt,player,map,d,los) {
-    if (los||(d<8 && canTargetPlayer())) {
+    if (los||(d<8 && this._canTarget())) {
       this.zigzag+=dt*5;
-      const [dx,dy]=norm(player.x-this.x,player.y-this.y);
+      const [dx,dy]=norm(this._tx-this.x,this._ty-this.y);
       const perp={x:-dy,y:dx};
-      const tx=player.x+perp.x*Math.sin(this.zigzag)*1.5;
-      const ty=player.y+perp.y*Math.sin(this.zigzag)*1.5;
+      const tx=this._tx+perp.x*Math.sin(this.zigzag)*1.5;
+      const ty=this._ty+perp.y*Math.sin(this.zigzag)*1.5;
       this.moveToward(tx,ty,this.spd,dt,map);
       if (d<1.2) this.meleeAttack(player);
     } else this.patrol(dt,map);
@@ -722,24 +737,24 @@ class Enemy {
     // ── Cloaked: stalk toward player, transition to telegraph ──
     if (this._phState === 'cloaked') {
       this._phTimer -= dt * ocMul;
-      if (los && canTargetPlayer() && d < 10) {
+      if (los && this._canTarget() && d < 10) {
         const spd = modSpeed(this.spd * 1.3) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
-        this.moveToward(player.x, player.y, spd, dt, map);
+        this.moveToward(this._tx, this._ty, spd, dt, map);
       } else {
         this.patrol(dt, map);
       }
       // Close-range escape: reposition if player walks into us
-      if (d < 2.5 && canTargetPlayer()) {
+      if (d < 2.5 && this._canTarget()) {
         this._phReposition(map, player);
         this._phTimer = 1.5 + Math.random();
         return;
       }
       // Ready to attack: need LOS, target, and be in sweet range
-      if (this._phTimer <= 0 && los && canTargetPlayer() && d >= 2.5 && d <= 8) {
+      if (this._phTimer <= 0 && los && this._canTarget() && d >= 2.5 && d <= 8) {
         this._phState = 'telegraph';
         this._phTimer = 0.4;
         this.visible = true;
-        const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+        const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
         this._phAimDx = dx; this._phAimDy = dy;
         return;
       }
@@ -750,7 +765,7 @@ class Enemy {
 
     // ── Telegraph: warning shimmer before attack ──
     if (this._phState === 'telegraph') {
-      if (!los || !canTargetPlayer()) {
+      if (!los || !this._canTarget()) {
         this._phState = 'cloaked';
         this._phTimer = 1.5 + Math.random();
         this.visible = false;
@@ -789,8 +804,8 @@ class Enemy {
     // ── Cooldown: visible and retreating, then re-cloak ──
     if (this._phState === 'cooldown') {
       this._phTimer -= dt;
-      if (d < 5 && canTargetPlayer()) {
-        const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+      if (d < 5 && this._canTarget()) {
+        const [fx, fy] = norm(this.x - this._tx, this.y - this._ty);
         const rSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
         const nx = this.x + fx * rSpd * dt;
         const ny = this.y + fy * rSpd * dt;
@@ -818,7 +833,7 @@ class Enemy {
       const ny = this.room.y + rnd(1, this.room.h - 1);
       const fx = Math.floor(nx), fy = Math.floor(ny);
       if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) {
-        const dd = dist(nx, ny, player.x, player.y);
+        const dd = dist(nx, ny, this._tx, this._ty);
         if (dd > bestD && dd > 3) { bestX = nx; bestY = ny; bestD = dd; }
       }
     }
@@ -827,12 +842,12 @@ class Enemy {
 
   aiDrone(dt,player,map,d,los) {
     const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07) / (game.modifier==='OVERCLOCK'?1.2:1);
-    if (d<15 && canTargetPlayer()) {
+    if (d<15 && this._canTarget()) {
       // Drones respect walls when boss room is sealed
       const canPhase = !game.bossSealed && !game.challengeSealed;
-      this.moveToward(player.x,player.y,this.spd,dt,map,canPhase);
+      this.moveToward(this._tx,this._ty,this.spd,dt,map,canPhase);
       if (this.shootTimer<=0) {
-        this.fireAt(player.x,player.y,7,this.atk,16,'#00aaff');
+        this.fireAt(this._tx,this._ty,7,this.atk,16,'#00aaff');
         this.shootTimer=cooldown / this.berserkerMul();
       }
     }
@@ -840,10 +855,10 @@ class Enemy {
 
   aiShielder(dt,player,map,d,los) {
     // Only update facing when player is visible (prevents wall-hack orientation)
-    if (los) this.shieldAngle = Math.atan2(player.y - this.y, player.x - this.x);
+    if (los) this.shieldAngle = Math.atan2(this._ty - this.y, this._tx - this.x);
     if (los && d < 12) {
       this.state = 'CHASE';
-      this.moveToward(player.x, player.y, this.spd, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.state = 'PATROL';
@@ -854,7 +869,7 @@ class Enemy {
   aiReflector(dt,player,map,d,los) {
     // Smooth-lerp shield facing toward player (with tracking lag)
     if (los) {
-      const target = Math.atan2(player.y - this.y, player.x - this.x);
+      const target = Math.atan2(this._ty - this.y, this._tx - this.x);
       let diff = target - this._rfAngle;
       while (diff > Math.PI) diff -= TWO_PI;
       while (diff < -Math.PI) diff += TWO_PI;
@@ -863,7 +878,7 @@ class Enemy {
     const bm = this.berserkerMul();
     if (los && d < 4) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
       const nx = this.x + dx * retreatSpd * dt;
       const ny = this.y + dy * retreatSpd * dt;
@@ -877,11 +892,11 @@ class Enemy {
       // Hold position and fire
       this.state = 'ATTACK';
       if (this.shootTimer <= 0) {
-        this.fireAt(player.x, player.y, 7, this.atk, 14, this.colour);
+        this.fireAt(this._tx, this._ty, 7, this.atk, 14, this.colour);
         this.shootTimer = 2.5 / bm;
       }
     } else if (los && d > 10) {
-      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.7, dt, map);
     } else {
       this.state = 'PATROL';
       this.patrol(dt, map);
@@ -898,7 +913,7 @@ class Enemy {
 
     if (los && d < 4) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const nx = this.x + dx * spd * dt;
       const ny = this.y + dy * spd * dt;
       const fx = Math.floor(nx), fy = Math.floor(this.y);
@@ -910,11 +925,11 @@ class Enemy {
     } else if (los && d <= 10) {
       this.state = 'ATTACK';
       // Deploy disruption field (priority over shooting)
-      if (this._dDeployTimer <= 0 && canTargetPlayer() && d > 2) {
+      if (this._dDeployTimer <= 0 && this._canTarget() && d > 2) {
         // Place field near player with small offset, validated to passable tile
         const ox = (Math.random() - 0.5) * 1.5;
         const oy = (Math.random() - 0.5) * 1.5;
-        const fx = player.x + ox, fy = player.y + oy;
+        const fx = this._tx + ox, fy = this._ty + oy;
         const tx = Math.floor(fx), ty = Math.floor(fy);
         if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
           // If at cap, remove oldest
@@ -931,12 +946,12 @@ class Enemy {
         }
       }
       // Secondary ranged attack
-      else if (this._dFireTimer <= 0 && canTargetPlayer()) {
-        this.fireAt(player.x, player.y, 7, this.atk, 12, this.colour);
+      else if (this._dFireTimer <= 0 && this._canTarget()) {
+        this.fireAt(this._tx, this._ty, 7, this.atk, 12, this.colour);
         this._dFireTimer = 2.5 / bm;
       }
     } else if (los && d > 10) {
-      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.7, dt, map);
     } else {
       this.state = 'PATROL';
       this.patrol(dt, map);
@@ -954,7 +969,7 @@ class Enemy {
       this._wrTimer -= dt * ocMul;
       // Move toward player ignoring walls, respecting map bounds and room bounds
       const spd = modSpeed(this.spd * 1.2) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
-      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       const nx = this.x + dx * spd * dt;
       const ny = this.y + dy * spd * dt;
       // Clamp to map bounds
@@ -963,7 +978,7 @@ class Enemy {
       // Ghost trail particle
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#66ffcc', 1);
       // Ready to emerge: close enough or timer expired
-      if (this._wrTimer <= 0 || (d < 3 && canTargetPlayer())) {
+      if (this._wrTimer <= 0 || (d < 3 && this._canTarget())) {
         // Find nearest passable tile to emerge on — stay phased if none found
         const ex = this._wrFindEmergeTile(map, player);
         if (ex) {
@@ -996,10 +1011,10 @@ class Enemy {
       this._wrFireTimer = Math.max(0, (this._wrFireTimer || 0) - dt);
       // Approach or retreat based on distance
       if (los && d > 6) {
-        this.moveToward(player.x, player.y, this.spd, dt, map);
+        this.moveToward(this._tx, this._ty, this.spd, dt, map);
       } else if (d < 3) {
         // Retreat
-        const [rx, ry] = norm(this.x - player.x, this.y - player.y);
+        const [rx, ry] = norm(this.x - this._tx, this.y - this._ty);
         const rSpd = modSpeed(this.spd * 0.8) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
         const nx = this.x + rx * rSpd * dt;
         const ny = this.y + ry * rSpd * dt;
@@ -1008,13 +1023,13 @@ class Enemy {
         if (fxI >= 0 && fyI >= 0 && fxI < MAP_W && fyI < MAP_H && isPassable(map[fyI][fxI])) this.x = nx;
         if (xfI >= 0 && xfI < MAP_W && yfI >= 0 && yfI < MAP_H && isPassable(map[yfI][xfI])) this.y = ny;
       } else if (los) {
-        this.moveToward(player.x, player.y, this.spd * 0.5, dt, map);
+        this.moveToward(this._tx, this._ty, this.spd * 0.5, dt, map);
       } else {
         this.patrol(dt, map);
       }
       // Ranged attack
-      if (this._wrFireTimer <= 0 && los && canTargetPlayer() && d < 10) {
-        this.fireAt(player.x, player.y, 6, this.atk, 12, this.colour);
+      if (this._wrFireTimer <= 0 && los && this._canTarget() && d < 10) {
+        this.fireAt(this._tx, this._ty, 6, this.atk, 12, this.colour);
         this._wrFireTimer = 1.5 / bm;
       }
       // Ready to phase out
@@ -1039,17 +1054,18 @@ class Enemy {
   }
 
   _wrFindEmergeTile(map, player) {
-    // Try to emerge near player on a passable tile
+    // Try to emerge near perceived target on a passable tile
+    const tx = this._tx ?? player.x, ty = this._ty ?? player.y;
     let bestX = null, bestY = null, bestD = Infinity;
     for (let a = 0; a < 20; a++) {
       const angle = Math.random() * TWO_PI;
       const r = 1.5 + Math.random() * 2;
-      const nx = player.x + Math.cos(angle) * r;
-      const ny = player.y + Math.sin(angle) * r;
-      const tx = Math.floor(nx), ty = Math.floor(ny);
-      if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) continue;
-      if (!isPassable(map[ty][tx])) continue;
-      const dd = dist(nx, ny, player.x, player.y);
+      const nx = tx + Math.cos(angle) * r;
+      const ny = ty + Math.sin(angle) * r;
+      const txx = Math.floor(nx), tyy = Math.floor(ny);
+      if (txx < 0 || tyy < 0 || txx >= MAP_W || tyy >= MAP_H) continue;
+      if (!isPassable(map[tyy][txx])) continue;
+      const dd = dist(nx, ny, tx, ty);
       if (dd < bestD && dd > 1.2) { bestX = nx; bestY = ny; bestD = dd; }
     }
     if (bestX !== null) return { x: bestX, y: bestY };
@@ -1107,7 +1123,7 @@ class Enemy {
     const bm = this.berserkerMul();
     if (los && d < 5) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
       const nx = this.x + dx * retreatSpd * dt;
       const ny = this.y + dy * retreatSpd * dt;
@@ -1119,11 +1135,11 @@ class Enemy {
       if (!moved) this.patrol(dt, map);
     } else if (los && d <= 12) {
       if (this.grenadeTimer <= 0) {
-        this.lobGrenade(player.x, player.y, map);
+        this.lobGrenade(this._tx, this._ty, map);
         this.grenadeTimer = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier==='OVERCLOCK'?1.2:1) / bm;
       }
     } else if (d > 12 && los) {
-      this.moveToward(player.x, player.y, this.spd * 0.7, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.7, dt, map);
     } else {
       this.patrol(dt, map);
     }
@@ -1145,7 +1161,7 @@ class Enemy {
     const speedMul = this.hp < this.maxHp * 0.3 ? 1.3 : 1;
     if (los && d < 10) {
       this.state = 'CHASE';
-      this.moveToward(player.x, player.y, this.spd * speedMul, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * speedMul, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.state = 'PATROL';
@@ -1154,12 +1170,12 @@ class Enemy {
   }
 
   aiShard(dt,player,map,d,los) {
-    if (los || (d < 8 && canTargetPlayer())) {
+    if (los || (d < 8 && this._canTarget())) {
       this.zigzag += dt * 6;
-      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       const perp = { x: -dy, y: dx };
-      const tx = player.x + perp.x * Math.sin(this.zigzag) * 1.2;
-      const ty = player.y + perp.y * Math.sin(this.zigzag) * 1.2;
+      const tx = this._tx + perp.x * Math.sin(this.zigzag) * 1.2;
+      const ty = this._ty + perp.y * Math.sin(this.zigzag) * 1.2;
       this.moveToward(tx, ty, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else this.patrol(dt, map);
@@ -1171,7 +1187,7 @@ class Enemy {
     if (this._warpFade > 0) this._warpFade -= dt * 1.5;
 
     // Emergency blink if player gets close (skip if just teleported or player cloaked)
-    if (d < 2 && canTargetPlayer() && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
+    if (d < 2 && this._canTarget() && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
 
     // Teleport cycle
     if (this.teleportTimer <= 0 && this.room) {
@@ -1202,7 +1218,7 @@ class Enemy {
 
     // Fire burst at player
     if (this._burstLeft > 0 && los && this.shootTimer <= 0) {
-      this.fireAt(player.x, player.y, 8, this.atk, 14, this.colour);
+      this.fireAt(this._tx, this._ty, 8, this.atk, 14, this.colour);
       this._burstLeft--;
       this.shootTimer = 0.25 / this.berserkerMul();
     }
@@ -1212,19 +1228,22 @@ class Enemy {
     this._sniperCooldown = Math.max(0, (this._sniperCooldown || 0) - dt);
     this._repositionTimer = Math.max(0, (this._repositionTimer || 0) - dt);
 
-    // Room-gated: only aggro when player is inside this sniper's room
-    const inRoom = this.room && player.x >= this.room.x && player.x < this.room.x + this.room.w &&
-                   player.y >= this.room.y && player.y < this.room.y + this.room.h;
+    // Room-gated: only aggro when target or player is inside this sniper's room
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
 
     // Cancel charge conditions: lost LOS, player cloaked, stunned, or player fled room
     if (this._laserTimer > 0) {
-      if (!los || !canTargetPlayer() || !inRoom || this.stunTimer > 0 || d < 3) {
+      if (!los || !this._canTarget() || !inRoom || this.stunTimer > 0 || d < 3) {
         this._laserTimer = 0;
         this._laserTarget = null;
         this._sniperCooldown = 0.8; // post-cancel cooldown
-        if (d < 3 && canTargetPlayer()) {
+        if (d < 3 && this._canTarget()) {
           // Flee if too close
-          const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+          const [fx, fy] = norm(this.x - this._tx, this.y - this._ty);
           this.moveToward(this.x + fx * 5, this.y + fy * 5, this.spd * 1.3, dt, map);
         }
         return;
@@ -1256,7 +1275,7 @@ class Enemy {
           const ny = this.room.y + rnd(1, this.room.h - 1);
           const fx = Math.floor(nx), fy = Math.floor(ny);
           if (fx >= 0 && fy >= 0 && fx < MAP_W && fy < MAP_H && isPassable(map[fy][fx])) {
-            const dd = dist(nx, ny, player.x, player.y);
+            const dd = dist(nx, ny, this._tx, this._ty);
             if (dd > bestDist) { bestX = nx; bestY = ny; bestDist = dd; }
           }
         }
@@ -1272,9 +1291,9 @@ class Enemy {
     this._repositionTarget = null;
 
     // Idle / patrol / lock-on
-    if (inRoom && los && d < 15 && canTargetPlayer() && this._sniperCooldown <= 0) {
+    if (inRoom && los && d < 15 && this._canTarget() && this._sniperCooldown <= 0) {
       // Lock on
-      this._laserTarget = { x: player.x, y: player.y };
+      this._laserTarget = { x: this._tx, y: this._ty };
       this._laserTimer = 1.5;
       audio.sniperCharge();
     } else if (!inRoom || !los) {
@@ -1290,7 +1309,7 @@ class Enemy {
     const bm = this.berserkerMul();
     if (los && d < 5) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
       const nx = this.x + dx * retreatSpd * dt;
       const ny = this.y + dy * retreatSpd * dt;
@@ -1307,7 +1326,7 @@ class Enemy {
         this._summonTimer = Math.max(3.5, 5 - (game.floor || 1) * 0.15) / (game.modifier==='OVERCLOCK'?1.2:1) / bm;
       }
     } else if (d > 14 && los) {
-      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.6, dt, map);
     } else {
       this.patrol(dt, map);
     }
@@ -1343,7 +1362,7 @@ class Enemy {
     const bm = this.berserkerMul();
     if (los && d < 4) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
       const nx = this.x + dx * retreatSpd * dt;
       const ny = this.y + dy * retreatSpd * dt;
@@ -1368,7 +1387,7 @@ class Enemy {
         }
       }
     } else if (d > 12 && los) {
-      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.6, dt, map);
     } else {
       this.patrol(dt, map);
     }
@@ -1407,7 +1426,7 @@ class Enemy {
       else hitWall = true;
 
       // Hit check: damage player within 1.2 tiles during charge
-      if (dist(this.x, this.y, player.x, player.y) < 1.2 && canTargetPlayer()) {
+      if (dist(this.x, this.y, player.x, player.y) < 1.2 && this._canTarget()) {
         const dealt = player.takeDamage(Math.round(this.atk * 1.5), this.type);
         if (dealt > 0) {
           const [kx, ky] = norm(player.x - this.x, player.y - this.y);
@@ -1450,7 +1469,7 @@ class Enemy {
 
     // ── Windup state: telegraph before charging ──
     if (this._chgState === 'windup') {
-      if (!los || !canTargetPlayer()) {
+      if (!los || !this._canTarget()) {
         this._chgState = 'idle';
         this._chgCooldown = 1.0;
         return;
@@ -1468,20 +1487,20 @@ class Enemy {
     // ── Idle state: patrol, approach, or initiate charge ──
     if (los && d < 2) {
       // Point-blank: melee attack, don't charge
-      this.moveToward(player.x, player.y, this.spd, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
       if (d < 1.2) {
         this.meleeAttack(player);
         this._chgCooldown = Math.max(this._chgCooldown, 1.5);
       }
     } else if (los && d >= 3 && d <= 10 && this._chgCooldown <= 0) {
       // In charge range — begin windup
-      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       this._chgDx = dx; this._chgDy = dy;
       this._chgState = 'windup';
       this._chgWindup = 0.6;
     } else if (los && d < 8) {
       // Too close for charge or on cooldown — approach
-      this.moveToward(player.x, player.y, this.spd, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.patrol(dt, map);
@@ -1525,7 +1544,7 @@ class Enemy {
         // Shockwave: 2-tile radius, LOS-gated, damages player + env
         const shockR = 2;
         const shockDmg = Math.round(this.atk * 1.2);
-        if (dist(this.x, this.y, player.x, player.y) < shockR && canTargetPlayer() &&
+        if (dist(this.x, this.y, player.x, player.y) < shockR && this._canTarget() &&
             hasLOS(this.x, this.y, player.x, player.y, map)) {
           player.takeDamage(shockDmg, 'Leaper Shockwave');
         }
@@ -1551,7 +1570,7 @@ class Enemy {
 
     // ── Windup: telegraph before jump ──
     if (this._lpState === 'windup') {
-      if (!los || !canTargetPlayer()) {
+      if (!los || !this._canTarget()) {
         this._lpState = 'idle';
         this._lpCooldown = 1.0;
         return;
@@ -1588,13 +1607,13 @@ class Enemy {
       if (!anotherLeaping) {
         this._lpState = 'windup';
         this._lpWindup = 0.5;
-        this._lpTargetX = player.x;
-        this._lpTargetY = player.y;
+        this._lpTargetX = this._tx;
+        this._lpTargetY = this._ty;
         return;
       }
     }
     if (los && d < 6) {
-      this.moveToward(player.x, player.y, this.spd, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.patrol(dt, map);
@@ -1606,15 +1625,15 @@ class Enemy {
     // Proximity glow ramp (used by draw)
     this._skProximity = los ? Math.max(0, 1 - d / 6) : 0;
 
-    if (los && canTargetPlayer() && d <= 1.2 && player.dashTimer <= 0) {
+    if (los && this._canTarget() && d <= 1.2 && player.dashTimer <= 0) {
       // Detonate on contact
       this._seekerDetonate(player, map);
       return;
     }
 
-    if (los && canTargetPlayer()) {
+    if (los && this._canTarget()) {
       // Rush directly toward player at full speed
-      this.moveToward(player.x, player.y, this.spd, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
       // Trail particles — intensity ramps with proximity
       if (Math.random() < dt * (6 + this._skProximity * 12))
         spawnParticles(this.x, this.y, 'SPARK', '#ffdd00', 1);
@@ -1666,16 +1685,16 @@ class Enemy {
     // ── Idle: patrol or approach ──
     if (this._plState === 'idle') {
       this._plCooldown = Math.max(0, (this._plCooldown || 0) - dt);
-      if (los && canTargetPlayer() && d < chargeRange && this._plCooldown <= 0) {
+      if (los && this._canTarget() && d < chargeRange && this._plCooldown <= 0) {
         this._plState = 'charging';
         this._plTimer = 1.0;
-        const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+        const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
         this._plAimDx = dx; this._plAimDy = dy;
         audio.pulserCharge();
         return;
       }
-      if (los && canTargetPlayer() && d < chargeRange + 4) {
-        this.moveToward(player.x, player.y, this.spd, dt, map);
+      if (los && this._canTarget() && d < chargeRange + 4) {
+        this.moveToward(this._tx, this._ty, this.spd, dt, map);
       } else {
         this.patrol(dt, map);
       }
@@ -1685,13 +1704,13 @@ class Enemy {
     // ── Charging: face player, count down, fire on completion ──
     if (this._plState === 'charging') {
       // Cancel if LOS lost, player fled range, or cloaked
-      if (!los || !canTargetPlayer() || d > chargeRange + 2) {
+      if (!los || !this._canTarget() || d > chargeRange + 2) {
         this._plState = 'idle';
         this._plCooldown = 0.8;
         return;
       }
       // Track player during charge
-      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       this._plAimDx = dx; this._plAimDy = dy;
       this._plTimer -= dt * ocMul;
       if (this._plTimer <= 0) {
@@ -1712,8 +1731,8 @@ class Enemy {
     if (this._plState === 'cooldown') {
       this._plTimer -= dt;
       // Retreat from player at half speed (axis-by-axis wall-safe)
-      if (d < chargeRange && canTargetPlayer()) {
-        const [fx, fy] = norm(this.x - player.x, this.y - player.y);
+      if (d < chargeRange && this._canTarget()) {
+        const [fx, fy] = norm(this.x - this._tx, this.y - this._ty);
         const rSpd = modSpeed(this.spd * 0.5) * this.slowFactor * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
         const nx = this.x + fx * rSpd * dt;
         const ny = this.y + fy * rSpd * dt;
@@ -1739,8 +1758,8 @@ class Enemy {
     spawnParticles(this.x, this.y, 'EXPLOSION', '#cc33ff', 18);
     triggerShake(4, 0.15);
     game.msg('⚠ MIMIC!', '#cc33ff');
-    // Lock lunge direction toward player
-    const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+    // Lock lunge direction toward perceived target
+    const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
     this._mimicLungeDx = dx;
     this._mimicLungeDy = dy;
   }
@@ -1752,7 +1771,7 @@ class Enemy {
       if (this._revealTimer <= 0) {
         // Lunge attack toward player position at reveal
         this._mimicBurstTimer = 3.0;
-        if (d < 2.5 && canTargetPlayer()) {
+        if (d < 2.5 && this._canTarget()) {
           this.meleeAttack(player);
         }
       }
@@ -1771,12 +1790,12 @@ class Enemy {
     const burstMul = this._mimicBurstTimer > 0 ? 1.0 + 0.36 * (this._mimicBurstTimer / 3.0) : 1.0;
     const spd = this.spd * burstMul;
 
-    if (los || (d < 8 && canTargetPlayer())) {
+    if (los || (d < 8 && this._canTarget())) {
       this.zigzag += dt * 5;
-      const [dx, dy] = norm(player.x - this.x, player.y - this.y);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       const perp = { x: -dy, y: dx };
-      const tx = player.x + perp.x * Math.sin(this.zigzag) * 1.2;
-      const ty = player.y + perp.y * Math.sin(this.zigzag) * 1.2;
+      const tx = this._tx + perp.x * Math.sin(this.zigzag) * 1.2;
+      const ty = this._ty + perp.y * Math.sin(this.zigzag) * 1.2;
       this.moveToward(tx, ty, spd, dt, map);
       if (d < 1.2) this.meleeAttack(player);
     } else {
@@ -1805,14 +1824,14 @@ class Enemy {
       if (ally) {
         tx = ally.x; ty = ally.y;
       } else {
-        tx = this.x + (this.x - player.x);
-        ty = this.y + (this.y - player.y);
+        tx = this.x + (this.x - this._tx);
+        ty = this.y + (this.y - this._ty);
       }
       this.moveToward(tx, ty, this.spd, dt, map);
     } else if (los && d <= 10) {
       // In range — fire at player
       if (this._nxFireTimer <= 0) {
-        this.fireAt(player.x, player.y, 6, this.atk, 12, '#00eedd');
+        this.fireAt(this._tx, this._ty, 6, this.atk, 12, '#00eedd');
         this._nxFireTimer = fireInterval;
       }
       // Drift toward ally cluster to maintain links
@@ -1821,7 +1840,7 @@ class Enemy {
         this.moveToward(ally.x, ally.y, this.spd * 0.4, dt, map);
       }
     } else if (d > 10 && los) {
-      this.moveToward(player.x, player.y, this.spd * 0.5, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.5, dt, map);
     } else {
       this.patrol(dt, map);
     }
@@ -1910,15 +1929,15 @@ class Enemy {
 
     if (los && d < 4) {
       // Too close — retreat
-      this.moveToward(this.x + (this.x - player.x), this.y + (this.y - player.y), this.spd, dt, map);
+      this.moveToward(this.x + (this.x - this._tx), this.y + (this.y - this._ty), this.spd, dt, map);
     } else if (los && d <= 9) {
       // In range — fire drain projectile
       if (this._spFireTimer <= 0) {
-        this.fireAt(player.x, player.y, 7, this.atk, 12, '#dd2244');
+        this.fireAt(this._tx, this._ty, 7, this.atk, 12, '#dd2244');
         this._spFireTimer = fireInterval;
       }
     } else if (los && d > 9) {
-      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.6, dt, map);
     } else {
       this.patrol(dt, map);
     }
@@ -1935,7 +1954,7 @@ class Enemy {
 
     if (los && d < 5) {
       // Too close — retreat
-      const [dx, dy] = norm(this.x - player.x, this.y - player.y);
+      const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
       const nx = this.x + dx * spd * dt;
       const ny = this.y + dy * spd * dt;
       const fx = Math.floor(nx), fy = Math.floor(this.y);
@@ -1950,7 +1969,7 @@ class Enemy {
       if (this._gvDeployTimer <= 0 && d > 3) {
         const ox = (Math.random() - 0.5) * 2;
         const oy = (Math.random() - 0.5) * 2;
-        const wx = player.x + ox, wy = player.y + oy;
+        const wx = this._tx + ox, wy = this._ty + oy;
         const tx = Math.floor(wx), ty = Math.floor(wy);
         if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
           // If at cap, remove oldest
@@ -1970,12 +1989,12 @@ class Enemy {
         }
       }
       // Secondary ranged attack
-      else if (this._gvFireTimer <= 0 && canTargetPlayer()) {
-        this.fireAt(player.x, player.y, 6, this.atk, 10, this.colour);
+      else if (this._gvFireTimer <= 0 && this._canTarget()) {
+        this.fireAt(this._tx, this._ty, 6, this.atk, 10, this.colour);
         this._gvFireTimer = 3.0 / bm;
       }
     } else if (los && d > 10) {
-      this.moveToward(player.x, player.y, this.spd * 0.6, dt, map);
+      this.moveToward(this._tx, this._ty, this.spd * 0.6, dt, map);
     } else {
       this.patrol(dt, map);
     }

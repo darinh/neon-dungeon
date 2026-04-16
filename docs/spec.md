@@ -874,6 +874,7 @@ current one (cooldown resets on equip). Available from floor 3.
 | Nano Swarm     | 10 s     | Release 6 homing nanite particles. Each deals 8 damage on contact (0.5s hit cooldown per nanite). Homes toward nearest visible enemy. 4s lifetime. | `#44ff88` | ☢ |
 | Gravity Well   | 16 s     | Place a pull point at aim position. Pulls enemies within 5 tiles toward center for 3s. Bosses immune to pull. LOS required. Collision-aware movement. | `#ff8800` | ◎ |
 | Static Field   | 12 s     | Place an electric zone at aim position. 3-tile radius, 5s duration. Enemies inside take 10 dmg/s (1s hit interval, LOS required) and are slowed 40% (bosses: 15%). Max 1 field active; recasting replaces the existing field. | `#44ccff` | ⌁ |
+| Holo Decoy     | 12 s     | Place a holographic decoy at aim position. 4s duration. Taunts non-boss enemies within 5 tiles (LOS required to acquire, 7-tile break range). Taunted enemies move toward and attack the hologram instead of the player. Melee attacks whiff on the hologram; projectiles aimed at it miss the player. On expiry: 0.5s mini-stun on enemies within 2 tiles. Max 1 active; recasting replaces the existing hologram. Disguised mimics and phased wraiths cannot be taunted. | `#ff44ff` | ⬡ |
 
 #### Enemy Stun Mechanic
 
@@ -910,6 +911,26 @@ When deployed (`hackwareEffects` entry with `type:'static_field'`):
 - Visual: pulsing cyan ring with 3 rotating arc segments, white core spark, ambient spark particles
 - Audio: electric crackle on deployment (one-shot)
 - Damage source: `Static Field` (for death recap)
+
+#### Holo Decoy Mechanic
+
+When deployed (`hackwareEffects` entry with `type:'hologram'`):
+- Placed at aim position (same targeting as Gravity Well / Static Field)
+- 4-second duration, max 1 active — recasting removes previous hologram + clears taunt refs
+- **Taunt system** (`_tauntTarget` + `_tx/_ty` on `Enemy`):
+  - Enemies within 5 tiles with LOS to hologram acquire taunt (set `_tauntTarget = fx`)
+  - Taunted enemies break taunt at 7 tiles (no LOS required to retain)
+  - Taunted enemies perceive the hologram as the player: `_tx/_ty` set to hologram position
+  - `d`, `los`, and `targetable` in `Enemy.update()` are computed from perceived target
+  - All non-boss AI functions use `_tx/_ty` for movement, firing, aiming, retreat direction
+  - `_canTarget()` returns true for taunted enemies (overrides Phase Cloak)
+  - Damage delivery paths (CHARGER charge hit, LEAPER shockwave, SEEKER detonation) use real `player.x/player.y` — enemies are fooled about position but can't hurt what isn't there
+  - `meleeAttack()` includes real-distance guard: `dist(this, player) > 1.2` → whiff
+- **Exclusions**: bosses immune, disguised mimics and phased wraiths cannot acquire taunt (but wraiths taunted while corporeal keep taunt through phasing)
+- **Expiry**: 0.5s mini-stun on enemies within 2 tiles of hologram, all taunt refs cleared
+- Visual: flickering magenta hexagon with scanline effect, ambient particles
+- Audio: `audio.holoDecoyDeploy()` shimmer on deploy, `audio.holoDecoyExpire()` shatter on expiry
+- Status badge: `⬡` with countdown timer while active
 
 #### Persistence
 
@@ -2954,7 +2975,7 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 
 `SETTINGS` game state, accessible from:
 - **Main menu**: "SETTINGS" option in menu list
-- **Pause screen**: `S` key / middle-third touch zone
+- **Pause screen**: `S` key / click "Settings" / middle-third touch zone
 
 Layout (canvas-rendered, no HTML overlays):
 1. SFX Volume slider (horizontal bar, click/drag or ◀▶ keys, 5% step)
@@ -3537,3 +3558,6 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v92.0   | NIGHTMARE unlock gate: NIGHTMARE difficulty locked until player achieves victory on HARD. Tracked via `neonDungeonMeta.clearedDifficulties[]` array (persisted in localStorage). `isDiffUnlocked()` checks `DIFF_UNLOCK_REQS` map — extensible for future gated difficulties. Menu: locked difficulty shows `[LOCKED]` suffix with dimmed colour (`#444466`); attempting to start displays "CLEAR HARD TO UNLOCK NIGHTMARE" message (2.5 s fade). Victory screen: pulsing `★ NIGHTMARE UNLOCKED ★` celebration when HARD cleared for first time (`_newlyUnlocked` flag set in `endRun()`). EASY/NORMAL/HARD always available. Backward-compatible: existing saves without `clearedDifficulties` default to empty array. Spec v5.6. SW cache v92. |
 | v93.0   | Two new elite affixes expanding the pool from 4 to 6: **VOLATILE** (`#ff6600`, 💥) — explodes on death with 2-tile AoE dealing ATK×1.5 damage (LOS-gated). Damages player (dash immune), enemies (skip phased WRAITHs), and all environmental entities (vcores, crates, beacons, shield gens, cameras, lasers, wall turrets, mines). Pulsing orange ring + intermittent particles as visual warning. Not rolled on SEEKERs. `audio.eliteVolatile()`. **FRENZY** (`#ff4466`, 🔥) — gains frenzy stack when any enemy dies within 4 tiles (max 2 stacks). Each stack grants +40% speed/attack rate via `berserkerMul()` (0 stacks = normal, 1 = ×1.4, 2 = ×1.8). `notifyFrenzyElites(x, y)` called in `die()`. Red-orange aura intensifies per stack. `audio.eliteFrenzy()`. Creates kill-order tactical decisions — especially impactful on NIGHTMARE (28% elite rate). `rollEliteAffix()` updated with eligibility filters. `frenzyStacks` added to Enemy class. Spec v5.7. SW cache v93. |
 | v94.0   | PULSER enemy (floor 2+): electromagnetic charge-up attacker that teaches early-game players to read telegraphs and exploit cooldown windows. 3-state AI: `idle` (patrol/approach at SPD 1.5) → `charging` (1 s visible charge-up with concentric rings + directional aim line, tracks player, cancels if LOS lost or range exceeded with 0.8 s cooldown) → fire heavy bolt (speed 10, range 14, full ATK) → `cooldown` (2.5 s retreat at half speed, axis-by-axis wall-safe). Projectile created manually (not `fireAt()`) to avoid double audio. `ownerType = 'Pulser Bolt'`. Visual: 2 concentric pulsing rings grow during charge + dashed aim line (3 tiles); idle subtle core glow. `audio.pulserCharge()` rising electrical whine, `audio.pulserFire()` sharp crack. Elite ineligible (early-game teaching enemy). Stats: HP 20, ATK 12, SPD 1.5, XP 15, credits 7. Colour: `#44ddff` (electric blue). TYPE_CAPS: 2. Spawn weight: base 5, perFloor 1, minFloor 2. Spec v5.8. SW cache v94. |
+| v95.0   | Dead-end corridor pruning + spawn→stairs reachability guarantee. Iterative dead-end pruning uses `connects()` predicate (`t !== WALL && t !== VOID`) so doors/locked doors count as connectivity. Rescue corridor only overwrites WALL/VOID tiles (preserves secret rooms, locked doors, challenge room entrances). BFS from spawn tile to stairs tile validates reachability; if unreachable, carves a minimal L-shaped rescue corridor. Both run after secret rooms, locked doors, and challenge rooms modify entrances. Spec v5.8. SW cache v95. |
+| v96.0   | Pause screen mouse + keyboard navigation: desktop users can now hover and click the 3 pause menu options (Resume/Settings/Quit) instead of relying on keyboard shortcuts alone. Arrow up/down + Enter also work. Hovered option highlights with colour-matched glow (cyan/amber/red). `_pauseSel` tracks selection, reset on entering `PAUSED` state. Touch input unchanged (zone-based taps). No SAVE_VERSION bump. SW cache v96. |
+| v97.0   | HOLO DECOY hackware (6th module): holographic taunt decoy deployed at aim position. 12s cooldown, 4s duration. Taunts non-boss enemies within 5 tiles (LOS to acquire, 7-tile break range) via per-enemy `_tauntTarget`+`_tx/_ty` target redirection in `Enemy.update()`. All 24 non-boss AI functions patched to use `this._tx/this._ty` for movement, firing, aiming, and retreat; `canTargetPlayer()` → `this._canTarget()` (taunt-aware). Damage delivery paths (CHARGER charge hit, LEAPER shockwave, SEEKER detonation) use real `player.x/player.y` — enemies are fooled about position but can't damage what isn't there. `meleeAttack()` adds real-distance guard (> 1.2 tiles → whiff). Exclusions: bosses immune, disguised mimics and phased wraiths can't acquire taunt. Wraiths taunted while corporeal keep taunt through phasing. On expiry: 0.5s mini-stun within 2 tiles, all taunt refs cleared. Max 1 active hologram; recast removes previous + clears refs. Visual: flickering magenta hexagon with scanline + ambient particles. Status badge `⬡` with countdown. `audio.holoDecoyDeploy()` holographic shimmer, `audio.holoDecoyExpire()` shatter. `_wrFindEmergeTile()` and `_phReposition()` updated to use perceived target. Colour `#ff44ff`. Icon ⬡. Spec v5.9. SW cache v97. |
