@@ -3346,8 +3346,8 @@ function applyEventEffect(event, choice, player, gm) {
       case 'POWER_JUNCTION': {
         const room = gm.eventChoice.room;
         let stunned = 0;
-        for (const e of enemies) {
-          if (e.dead || e.room !== room) continue;
+        for (const e of enemiesInRoomIter(room)) {
+          if (e.dead) continue;
           if (e._wrPhased) continue; // can't stun phased WRAITHs
           e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 1 : 3);
           const dmg = Math.min(e.hp - 1, 25);

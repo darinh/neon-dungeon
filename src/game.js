@@ -736,7 +736,11 @@ const game = {
         if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
         if (room.roomType === 'challenge' && !room.challengeComplete) continue;
-        if (enemies.some(e => !e.dead && !e._disguised && e.room === room)) continue;
+        let hasLiveEnemy = false;
+        for (const e of enemiesInRoomIter(room)) {
+          if (!e.dead && !e._disguised) { hasLiveEnemy = true; break; }
+        }
+        if (hasLiveEnemy) continue;
         // Block room-clear until alarm beacons are resolved
         if (beacons.some(b => !b.dead && b.room === room)) continue;
         // Block room-clear while a camera is actively alerted
@@ -1349,8 +1353,11 @@ const game = {
       }
       // Wave cleared — next wave or victory
       if (this.challengeSealed && this.challengeWaveDelay <= 0 && this.challengeWave > 0) {
-        const alive = enemies.filter(e => !e.dead && e._challengeWave);
-        if (alive.length === 0) {
+        let aliveCount = 0;
+        for (const e of enemiesInRoomIter(this.challengeRoom)) {
+          if (!e.dead && e._challengeWave) aliveCount++;
+        }
+        if (aliveCount === 0) {
           if (this.challengeWave >= this.challengeMaxWaves) {
             // Challenge complete — unseal and reward
             this.challengeComplete = true;
@@ -1392,7 +1399,10 @@ const game = {
       const px = Math.floor(player.x), py = Math.floor(player.y);
       const pRoom = this.dungeon.rooms.find(r =>
         px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h);
-      const inCombat = pRoom && enemies.some(e => !e.dead && e.room === pRoom);
+      let inCombat = false;
+      if (pRoom) {
+        for (const e of enemiesInRoomIter(pRoom)) { if (!e.dead) { inCombat = true; break; } }
+      }
       music.setState(inCombat ? 'combat' : 'explore');
     }
   },
