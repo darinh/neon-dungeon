@@ -1712,6 +1712,23 @@ const audio = (() => {
       osc('sawtooth', 120, 280, 0.1, t, 0.2, bus);
       osc('square', 200, 500, 0.06, t + 0.05, 0.15, bus);
       noise(0.06, t + 0.02, 0.08, 4000, bus);
+    },
+    holoDecoyDeploy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.4, 0.3);
+      // Holographic shimmer — ascending tri-tone + static crackle
+      osc('triangle', 600, 1200, 0.08, t, 0.15, bus);
+      osc('sine', 900, 1600, 0.05, t + 0.05, 0.12, bus);
+      noise(0.04, t + 0.02, 0.1, 6000, bus);
+      osc('sine', 400, 800, 0.06, t + 0.08, 0.15, bus);
+    },
+    holoDecoyExpire() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.6, 0.3, 0.2);
+      // Hologram shatter — descending tone + burst
+      osc('triangle', 1200, 300, 0.08, t, 0.2, bus);
+      osc('square', 800, 200, 0.05, t + 0.03, 0.15, bus);
+      noise(0.08, t, 0.12, 5000, bus);
     }
   };
 })();

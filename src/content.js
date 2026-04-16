@@ -587,6 +587,7 @@ const HACKWARE = {
   NANO_SWARM:   { name:'Nano Swarm',   desc:'Homing nanites deal 48 damage',   colour:'#44ff88', icon:'☢', cooldown:10 },
   GRAVITY_WELL: { name:'Gravity Well', desc:'Pull enemies to target for 3s',   colour:'#ff8800', icon:'◎', cooldown:16 },
   STATIC_FIELD: { name:'Static Field', desc:'Electric zone: 10 dps + slow',    colour:'#44ccff', icon:'⌁', cooldown:12 },
+  HOLO_DECOY:   { name:'Holo Decoy',   desc:'Hologram taunts enemies for 4s',  colour:'#ff44ff', icon:'⬡', cooldown:12 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -740,6 +741,23 @@ function activateHackware(player) {
       game.msg('⌁ STATIC FIELD DEPLOYED', '#44ccff');
       break;
     }
+    case 'HOLO_DECOY': {
+      audio.holoDecoyDeploy();
+      const cam5 = getCamera(player);
+      const hx = (mouse.x + cam5.x) / TILE;
+      const hy = (mouse.y + cam5.y) / TILE;
+      // Remove existing hologram + clear taunt refs
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'hologram') {
+          for (const e of enemies) { if (e._tauntTarget === hackwareEffects[j]) e._tauntTarget = null; }
+          hackwareEffects.splice(j, 1);
+        }
+      }
+      hackwareEffects.push({ type:'hologram', x:hx, y:hy, age:0, maxAge:4 });
+      spawnParticles(hx, hy, 'EXPLOSION', '#ff44ff', 12);
+      game.msg('⬡ HOLO DECOY DEPLOYED', '#ff44ff');
+      break;
+    }
   }
 }
 
@@ -748,7 +766,22 @@ function updateHackwareEffects(dt) {
   for (let i = hackwareEffects.length - 1; i >= 0; i--) {
     const fx = hackwareEffects[i];
     fx.age += dt;
-    if (fx.age >= fx.maxAge) { hackwareEffects.splice(i, 1); continue; }
+    if (fx.age >= fx.maxAge) {
+      // Hologram expiry: mini-stun nearby enemies + clear taunt refs
+      if (fx.type === 'hologram') {
+        for (const e of enemies) {
+          if (!e.dead && !e.isBoss && dist(e.x, e.y, fx.x, fx.y) < 2) {
+            e.stunTimer = Math.max(e.stunTimer || 0, 0.5);
+            spawnParticles(e.x, e.y, 'SPARK', '#ff44ff', 3);
+            spawnDmgText(e.x, e.y, 'STUN', '#ff44ff');
+          }
+          if (e._tauntTarget === fx) e._tauntTarget = null;
+        }
+        audio.holoDecoyExpire();
+        spawnParticles(fx.x, fx.y, 'EXPLOSION', '#ff44ff', 15);
+      }
+      hackwareEffects.splice(i, 1); continue;
+    }
 
     if (fx.type === 'swarm') {
       // Home toward nearest visible enemy
@@ -888,6 +921,29 @@ function updateHackwareEffects(dt) {
       }
     }
     // emp_ring is visual only, handled in draw
+
+    if (fx.type === 'hologram') {
+      // Taunt nearby enemies toward the hologram
+      for (const e of enemies) {
+        if (e.dead || e.isBoss) continue;
+        const ed = dist(e.x, e.y, fx.x, fx.y);
+        // Already taunted: check break range (even if phased)
+        if (e._tauntTarget === fx) {
+          if (ed > 7) e._tauntTarget = null;
+          continue;
+        }
+        // New taunt: skip disguised mimics and phased wraiths
+        if (e._disguised || e._wrPhased) continue;
+        if (ed < 5 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+          e._tauntTarget = fx;
+        }
+      }
+      // Ambient holographic particles
+      if (Math.random() < dt * 4) {
+        const a = Math.random() * TWO_PI;
+        spawnParticles(fx.x + Math.cos(a) * 0.3, fx.y + Math.sin(a) * 0.3, 'MUZZLE', '#ff44ff', 1);
+      }
+    }
   }
 }
 
@@ -968,6 +1024,39 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.8;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.arc(sx, sy, 3 + Math.sin(fx.age * 15) * 1.5, 0, TWO_PI); ctx.fill();
+      ctx.restore();
+    }
+    if (fx.type === 'hologram') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const fade = 1 - (fx.age / fx.maxAge) * 0.3;
+      const flicker = Math.random() > 0.05 ? 1 : 0.3;
+      const pulse = 0.6 + Math.sin(fx.age * 8) * 0.15;
+      ctx.save();
+      // Hexagon body
+      const hs = TILE * 0.4;
+      ctx.globalAlpha = fade * pulse * flicker;
+      ctx.strokeStyle = '#ff44ff';
+      ctx.shadowBlur = 15; ctx.shadowColor = '#ff44ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let v = 0; v < 6; v++) {
+        const a = (TWO_PI / 6) * v - Math.PI / 6;
+        const px = sx + Math.cos(a) * hs, py = sy + Math.sin(a) * hs;
+        if (v === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.stroke();
+      // Inner glow
+      ctx.globalAlpha = fade * 0.15 * flicker;
+      ctx.fillStyle = '#ff44ff';
+      ctx.fill();
+      // Scanline
+      ctx.globalAlpha = fade * 0.25 * flicker;
+      ctx.strokeStyle = '#ff88ff'; ctx.lineWidth = 1;
+      const scan = (fx.age * 30) % (hs * 2);
+      ctx.beginPath();
+      ctx.moveTo(sx - hs, sy - hs + scan);
+      ctx.lineTo(sx + hs, sy - hs + scan);
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -1566,6 +1655,11 @@ function getStatusEffects(player) {
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
+  }
+  // Holo Decoy active
+  if (hackwareEffects.some(f => f.type === 'hologram')) {
+    const holo = hackwareEffects.find(f => f.type === 'hologram');
+    fx.push({ id: 'holo-active', icon: '⬡', label: (holo.maxAge - holo.age).toFixed(1)+'s', colour: '#ff44ff' });
   }
   return fx;
 }
