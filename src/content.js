@@ -565,6 +565,8 @@ const ELITE_AFFIXES = {
   BERSERKER:    { label:'Berserker',    colour:'#ff2222', desc:'Faster at low HP',             icon:'⚡' },
   REGENERATING: { label:'Regenerating', colour:'#22ff44', desc:'Slowly heals over time',       icon:'♻' },
   PHASING:      { label:'Phasing',      colour:'#cc88ff', desc:'Periodically invulnerable',    icon:'◇' },
+  VOLATILE:     { label:'Volatile',     colour:'#ff6600', desc:'Explodes on death',            icon:'💥' },
+  FRENZY:       { label:'Frenzy',       colour:'#ff4466', desc:'Enrages when allies die',      icon:'🔥' },
 };
 const ELITE_AFFIX_KEYS = Object.keys(ELITE_AFFIXES);
 
@@ -572,6 +574,7 @@ function rollEliteAffix(enemyType) {
   // Filter out redundant combos
   const eligible = ELITE_AFFIX_KEYS.filter(k => {
     if (k === 'PHASING' && enemyType === 'PHANTOM') return false; // already phases
+    if (k === 'VOLATILE' && enemyType === 'SEEKER') return false; // seeker already explodes
     return true;
   });
   return eligible[rndInt(0, eligible.length - 1)];

@@ -1681,6 +1681,23 @@ const audio = (() => {
       osc('sine', 80, 30, 0.1, t, 0.2, bus);
       osc('sawtooth', 400, 100, 0.06, t + 0.02, 0.12, bus);
       osc('sine', 50, 25, 0.06, t + 0.1, 0.15, bus);
+    },
+    eliteVolatile() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.4, 0.3);
+      // Deep detonation + ascending whistle — elite death explosion
+      osc('sine', 60, 25, 0.15, t, 0.3, bus);
+      noise(0.15, t, 0.18, 5000, bus);
+      osc('sawtooth', 300, 800, 0.08, t + 0.03, 0.15, bus);
+      osc('sine', 45, 20, 0.08, t + 0.12, 0.2, bus);
+    },
+    eliteFrenzy() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.6, 0.3, 0.2);
+      // Aggressive snarl + rising pitch — rage activation
+      osc('sawtooth', 120, 280, 0.1, t, 0.2, bus);
+      osc('square', 200, 500, 0.06, t + 0.05, 0.15, bus);
+      noise(0.06, t + 0.02, 0.08, 4000, bus);
     }
   };
 })();
