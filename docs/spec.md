@@ -11,7 +11,7 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 ## Technical Constraints
 
 - **Delivery:** Modular JavaScript source files loaded by `index.html`, zero external dependencies
-- **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 14–30 CSS px). Viewport sizing uses CSS `100dvh` with `100vh` fallback and `canvas.getBoundingClientRect()` in JS to avoid rendering under mobile browser chrome. `visualViewport` resize listener catches address bar show/hide.
+- **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 18–39 CSS px). Viewport sizing uses CSS `100dvh` with `100vh` fallback and `canvas.getBoundingClientRect()` in JS to avoid rendering under mobile browser chrome. `visualViewport` resize listener catches address bar show/hide.
 - **Audio:** Web Audio API (synthesised — no audio files)
 - **Persistence:** `localStorage` for high-score table (top 10 entries) and save game (checkpoint at floor entry; deleted on game over/victory)
 - **Browser target:** Modern Chromium / Firefox (ES2020+)
@@ -133,7 +133,7 @@ corner peeking is blocked. Light decays linearly to zero at the torch edge.
 Static wall sconces (radius 4, 0.4× brightness) add ambient light to already
 visited tiles near the player but do not reveal new tiles.
 **Fog of war:** tiles seen once remain visited; currently lit tiles render at
-minimum 20% brightness, visited-but-unlit tiles render at 12% brightness (dim
+minimum 32% brightness, visited-but-unlit tiles render at 20% brightness (dim
 memory effect). Unvisited tiles are not drawn.
 
 ### Destructible Crates (floor 2+)
@@ -2591,7 +2591,7 @@ All audio routes through a master gain bus (0.7) → DynamicsCompressor (thresho
 
 A single 2-second white-noise AudioBuffer is generated once at init and reused for all noise-burst voices.
 
-**Music bus** (separate from SFX): `audio.getMusicBus()` returns a dedicated gain node (0.12) → lightweight DynamicsCompressor (threshold −18 dB, ratio 2:1) → destination. This isolates music dynamics from the SFX compressor so continuous music layers don't steal headroom from transient sound effects.
+**Music bus** (separate from SFX): `audio.getMusicBus()` returns a dedicated gain node (0.20) → lightweight DynamicsCompressor (threshold −18 dB, ratio 2:1) → destination. This isolates music dynamics from the SFX compressor so continuous music layers don't steal headroom from transient sound effects.
 
 ### Procedural Music System
 
@@ -2611,10 +2611,10 @@ The `music` module generates a continuous, layered soundtrack using Web Audio os
 | State | Drone | Pulse | Arp | Bass | Trigger |
 |-------|-------|-------|-----|------|---------|
 | `idle` | 0 | 0 | 0 | 0 | MENU, GAME_OVER, VICTORY |
-| `explore` | 1.0 | 0 | 0.6 | 0 | PLAYING with no enemies in player's room |
-| `combat` | 0.8 | 1.0 | 0.25 | 0.7 | PLAYING with live enemies in player's room |
-| `boss` | 1.1 | 1.0 | 0 | 1.0 | Boss room sealed (`bossSealed`) |
-| `tension` | 0.7 | 0.4 | 0.35 | 0 | Challenge room sealed (`challengeSealed`) |
+| `explore` | 0.50 | 0.50 | 0.88 | 0.55 | PLAYING with no enemies in player's room |
+| `combat` | 0.38 | 1.0 | 0.82 | 1.0 | PLAYING with live enemies in player's room |
+| `boss` | 0.55 | 1.0 | 0.72 | 1.0 | Boss room sealed (`bossSealed`) |
+| `tension` | 0.45 | 0.68 | 0.75 | 0.72 | Challenge room sealed (`challengeSealed`) |
 
 State transitions crossfade layer gains over 1.5 s (0.8 s for boss). State priority: boss > tension > combat > explore.
 
@@ -2622,10 +2622,10 @@ State transitions crossfade layer gains over 1.5 s (0.8 s for boss). State prior
 
 | Floors | Root | Base BPM | Character |
 |--------|------|----------|-----------|
-| 1–3 | C2 (MIDI 36) | 100 | Brighter, slower — introductory |
-| 4–6 | B♭1 (MIDI 34) | 110 | Darker, moderate pace |
-| 7–9 | A♭1 (MIDI 32) | 120 | Deep, driving |
-| 10 | F1 (MIDI 29) | 130 | Lowest, fastest — final boss |
+| 1–3 | C2 (MIDI 36) | 112 | Bright chiptune energy — introductory |
+| 4–6 | B♭1 (MIDI 34) | 120 | Driving, moderate intensity |
+| 7–9 | A♭1 (MIDI 32) | 128 | Deep, fast |
+| 10 | F1 (MIDI 29) | 136 | Lowest, fastest — final boss |
 
 BPM is further multiplied by state: combat ×0.85 beat duration, boss ×0.75. Drone pitch transitions smoothly via `exponentialRampToValueAtTime` on floor change.
 
@@ -2791,7 +2791,7 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 ### Volume Controls
 
 - **SFX Volume** (0–100%): multiplied by base master gain (0.7). Applied via `audio.setSfxVolume(v)` using short linear ramp (0.02 s) to avoid zipper noise.
-- **Music Volume** (0–100%): multiplied by base music bus gain (0.12). Applied via `audio.setMusicVolume(v)`.
+- **Music Volume** (0–100%): multiplied by base music bus gain (0.20). Applied via `audio.setMusicVolume(v)`.
 - Both are applied at node creation time (lazy init) AND when the setter is called, ensuring correct volume regardless of when AudioContext initialises.
 
 ### Display Toggles
