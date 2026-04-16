@@ -116,6 +116,18 @@ const game = {
 
   loadFloor(n, savedModifier) {
     this.floor=n;
+    // UNCHAINED #34: track current biome index and bump meta.deepestBiome on
+    // floor entry so death respawn returns to the deepest biome start.
+    if (typeof NEON !== 'undefined' && NEON.biomes) {
+      this.currentBiomeIndex = NEON.biomes.biomeIndex(n);
+      try {
+        const m = loadMeta();
+        if ((m.deepestBiome|0) < this.currentBiomeIndex) {
+          m.deepestBiome = this.currentBiomeIndex;
+          saveMeta(m);
+        }
+      } catch(_) { /* ignore — meta bookkeeping must never break a floor load */ }
+    }
     music.setFloor(n);
     this.floorTime=0; // arc grid phase timer
     // Roll or restore floor modifier
@@ -249,7 +261,15 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
-    this.loadFloor(1);
+    // UNCHAINED #34: respawn at the start of the deepest biome reached,
+    // not floor 1. Current-run resources (credits, weapons, hackware) still
+    // reset via new Player(); meta is untouched by this read.
+    let startFloor = 1;
+    if (typeof NEON !== 'undefined' && NEON.biomes) {
+      const deepest = (meta.deepestBiome|0);
+      startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
+    }
+    this.loadFloor(startFloor);
     this.setState('PLAYING');
   },
 
