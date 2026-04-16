@@ -1044,9 +1044,10 @@ const RARITY_LABELS  = ['COMMON', 'UNCOMMON', 'RARE'];
 const DIFFICULTIES = {
   EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.25, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75, roomLoot:2 },
   NORMAL: { id:'NORMAL', label:'NORMAL', colour:'#00f5ff', enemyHp:1.0,  enemyAtk:1.0,  enemySpd:1.0,  itemDrop:0.15, creditMul:1.0, xpMul:1.0,  eliteRate:0.10, shardMul:1.0,  envDmg:1.0,  roomLoot:1 },
-  HARD:   { id:'HARD',   label:'HARD',   colour:'#ff3333', enemyHp:1.5,  enemyAtk:1.3,  enemySpd:1.1,  itemDrop:0.12, creditMul:1.0, xpMul:1.15, eliteRate:0.18, shardMul:1.3,  envDmg:1.25, roomLoot:1 },
+  HARD:      { id:'HARD',      label:'HARD',      colour:'#ff3333', enemyHp:1.5,  enemyAtk:1.3,  enemySpd:1.1,  itemDrop:0.12, creditMul:1.0,  xpMul:1.15, eliteRate:0.18, shardMul:1.3,  envDmg:1.25, roomLoot:1 },
+  NIGHTMARE: { id:'NIGHTMARE', label:'NIGHTMARE', colour:'#9400ff', enemyHp:2.0,  enemyAtk:1.6,  enemySpd:1.2,  itemDrop:0.08, creditMul:0.85, xpMul:1.35, eliteRate:0.28, shardMul:1.8,  envDmg:1.5,  roomLoot:0 },
 };
-const DIFF_ORDER = ['EASY','NORMAL','HARD'];
+const DIFF_ORDER = ['EASY','NORMAL','HARD','NIGHTMARE'];
 function getDiff() { return DIFFICULTIES[game.difficulty] || DIFFICULTIES.NORMAL; }
 
 // ─── Floor Modifiers ─────────────────────────────────────────────────────────

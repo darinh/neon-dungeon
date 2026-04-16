@@ -1686,23 +1686,23 @@ Guaranteed item drop on death compensates for the ambush risk.
 
 ### Difficulty Modes
 
-Three selectable difficulty levels, chosen from the main menu on the NEW GAME
+Four selectable difficulty levels, chosen from the main menu on the NEW GAME
 row using ◀▶ (keyboard: arrow keys; touch: tap left/right edges). The last
 selection persists in `neonDungeonMeta.lastDifficulty`. Continued runs restore
 the difficulty from the save file.
 
-| Parameter     | EASY        | NORMAL      | HARD        |
-|---------------|-------------|-------------|-------------|
-| Enemy HP      | ×0.75       | ×1.0        | ×1.5        |
-| Enemy ATK     | ×0.75       | ×1.0        | ×1.3        |
-| Enemy SPD     | ×1.0        | ×1.0        | ×1.1        |
-| Item drop     | 25%         | 15%         | 12%         |
-| Credit mult   | ×1.2        | ×1.0        | ×1.0        |
-| XP mult       | ×1.0        | ×1.0        | ×1.15       |
-| Elite rate    | 4%          | 10%         | 18%         |
-| Shard mult    | ×0.85       | ×1.0        | ×1.3        |
-| Env damage    | ×0.75       | ×1.0        | ×1.25       |
-| Room loot cap | 2           | 1           | 1           |
+| Parameter     | EASY        | NORMAL      | HARD        | NIGHTMARE     |
+|---------------|-------------|-------------|-------------|---------------|
+| Enemy HP      | ×0.75       | ×1.0        | ×1.5        | ×2.0          |
+| Enemy ATK     | ×0.75       | ×1.0        | ×1.3        | ×1.6          |
+| Enemy SPD     | ×1.0        | ×1.0        | ×1.1        | ×1.2          |
+| Item drop     | 25%         | 15%         | 12%         | 8%            |
+| Credit mult   | ×1.2        | ×1.0        | ×1.0        | ×0.85         |
+| XP mult       | ×1.0        | ×1.0        | ×1.15       | ×1.35         |
+| Elite rate    | 4%          | 10%         | 18%         | 28%           |
+| Shard mult    | ×0.85       | ×1.0        | ×1.3        | ×1.8          |
+| Env damage    | ×0.75       | ×1.0        | ×1.25       | ×1.5          |
+| Room loot cap | 2           | 1           | 1           | 0             |
 
 **Multipliers apply to:** `spawnEnemy()` stats (HP/ATK/SPD stacked with floor
 scaling), elite roll chance, item drop rate in `Enemy.die()`, credit drops
@@ -1710,17 +1710,22 @@ scaling), elite roll chance, item drop rate in `Enemy.die()`, credit drops
 shard payout (run-earned portion only — meta PERSISTENCE flat bonus is unscaled),
 environmental damage (traps, plasma, arc), and boss special attack damage.
 `roomLoot` caps the random item count per room in `populateFloor()` — EASY
-rooms can spawn 0–2 items, while NORMAL and HARD cap at 0–1.
+rooms can spawn 0–2 items, NORMAL and HARD cap at 0–1, NIGHTMARE rooms spawn
+no random items (only locked room bonus and enemy drops).
 
 **Design intent:**
 - EASY reduces incoming threats and increases economy — accessible entry.
 - HARD increases enemy durability and elite pressure; rewards with more XP and
   shards per run — risk/reward, not punishment. Credits stay at ×1.0 so the
   in-run economy isn't double-nerfed.
+- NIGHTMARE is the endgame challenge: doubled enemy HP, very high elite rate
+  (28%), no room loot, and reduced credits. Rewards: ×1.8 shard multiplier and
+  ×1.35 XP — the best meta-progression for players who can survive it.
+  Colour: violet (`#9400ff`).
 
-**HUD:** Non-NORMAL difficulty shows a coloured `[EASY]` or `[HARD]` badge below
-the minimap. Shown on GAME_OVER and VICTORY screens. CONTINUE menu item shows
-the save's difficulty.
+**HUD:** Non-NORMAL difficulty shows a coloured badge below the minimap:
+`[EASY]`, `[HARD]`, or `[NIGHTMARE]`. Shown on GAME_OVER and VICTORY screens.
+CONTINUE menu item shows the save's difficulty.
 
 ### Floor Modifiers (floor 2+, non-boss)
 
