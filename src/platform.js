@@ -225,7 +225,7 @@ const touch = {
 // Button definitions — positions updated dynamically by updateBtns()
 const BTNS = {
   E:     { x:0, y:0, r:30, label:'E',  colour:'#00f5ff' },
-  F:     { x:0, y:0, r:28, label:'F',  colour:'#ff8800', hidden:true },
+  F:     { x:0, y:0, r:28, label:'F',  colour:'#ff8800' },
   V:     { x:0, y:0, r:28, label:'V',  colour:'#aa00ff' },
   DASH:  { x:0, y:0, r:28, label:'⇧',  colour:'#ffb700' },
   PAUSE: { x:0, y:0, r:20, label:'II', colour:'#ff00c8' },
@@ -238,8 +238,8 @@ function updateBtns() {
   BTNS.V.r     = Math.max(28, minR);
   BTNS.DASH.r  = Math.max(28, minR);
   BTNS.PAUSE.r = Math.max(20, Math.ceil(minR * 0.7));
-  // Show F button only when player has hackware equipped
-  BTNS.F.hidden = !(game.player && game.player.hackware);
+  // F button: always visible, but dimmed when no hackware
+  BTNS.F.hidden = false;
   // Position from edges, respecting safe-area insets
   const pr = Math.max(10, safeRight);
   const pb = Math.max(10, safeBottom);
@@ -360,7 +360,7 @@ canvas.addEventListener('touchstart', e => {
     // Expanded map: any tap closes (modal — takes priority)
     if (game.mapExpanded) { justPressed.add('Tab'); continue; }
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
-    if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
+    if (hitBtn(cx,cy,BTNS.F) && game.player && game.player.hackware) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }
     if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
@@ -429,8 +429,8 @@ function resetTouch() {
 }
 
 function drawTouchUI() {
-  // Update F button visibility per-frame (player may equip hackware mid-run)
-  BTNS.F.hidden = !(game.player && game.player.hackware);
+  // F button: always visible, dimmed when no hackware
+  BTNS.F.hidden = false;
   // Left joystick (move)
   if (touch.joystick.active) {
     const {baseX:bx,baseY:by,dx,dy}=touch.joystick;
@@ -475,10 +475,13 @@ function drawTouchUI() {
   for (const [key,btn] of Object.entries(BTNS)) {
     if (btn.hidden) continue;
     const active = (key==='E'&&touch.btnE!==null)||(key==='F'&&touch.btnF!==null)||(key==='V'&&touch.btnV!==null)||(key==='DASH'&&touch.btnDash!==null)||(key==='PAUSE'&&touch.btnPause!==null);
+    const noHackware = key==='F' && !(game.player && game.player.hackware);
     ctx.save();
     // Show cooldown overlay on dash button
     if (key==='DASH' && game.player && game.player.dashCooldown > 0) {
       ctx.globalAlpha = 0.25;
+    } else if (key==='F' && noHackware) {
+      ctx.globalAlpha = 0.15;
     } else if (key==='F' && game.player && game.player.hackwareCooldown > 0) {
       ctx.globalAlpha = 0.25;
     } else {

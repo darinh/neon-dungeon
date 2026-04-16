@@ -1358,7 +1358,7 @@ function populateFloor(dungeon, floorNum) {
     }
     if (spawnedCount > 0) room._hadEnemies = true;
 
-    const itemCount=rndInt(0,2) + (room.hasLoot ? 2 : 0); // locked rooms get bonus loot
+    const itemCount=rndInt(0, getDiff().roomLoot) + (room.hasLoot ? 2 : 0); // locked rooms get bonus loot
     for (let j=0;j<itemCount;j++) {
       const ix=room.x+rnd(1,room.w-1), iy=room.y+rnd(1,room.h-1);
       if (!isPassable(dungeon.map[Math.floor(iy)]?.[Math.floor(ix)])) continue;

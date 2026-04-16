@@ -1042,9 +1042,9 @@ const RARITY_LABELS  = ['COMMON', 'UNCOMMON', 'RARE'];
 
 // ─── Difficulty ──────────────────────────────────────────────────────────────
 const DIFFICULTIES = {
-  EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.28, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75 },
-  NORMAL: { id:'NORMAL', label:'NORMAL', colour:'#00f5ff', enemyHp:1.0,  enemyAtk:1.0,  enemySpd:1.0,  itemDrop:0.20, creditMul:1.0, xpMul:1.0,  eliteRate:0.08, shardMul:1.0,  envDmg:1.0 },
-  HARD:   { id:'HARD',   label:'HARD',   colour:'#ff3333', enemyHp:1.25, enemyAtk:1.15, enemySpd:1.05, itemDrop:0.18, creditMul:1.0, xpMul:1.15, eliteRate:0.12, shardMul:1.3,  envDmg:1.15 },
+  EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.25, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75, roomLoot:2 },
+  NORMAL: { id:'NORMAL', label:'NORMAL', colour:'#00f5ff', enemyHp:1.0,  enemyAtk:1.0,  enemySpd:1.0,  itemDrop:0.15, creditMul:1.0, xpMul:1.0,  eliteRate:0.10, shardMul:1.0,  envDmg:1.0,  roomLoot:1 },
+  HARD:   { id:'HARD',   label:'HARD',   colour:'#ff3333', enemyHp:1.5,  enemyAtk:1.3,  enemySpd:1.1,  itemDrop:0.12, creditMul:1.0, xpMul:1.15, eliteRate:0.18, shardMul:1.3,  envDmg:1.25, roomLoot:1 },
 };
 const DIFF_ORDER = ['EASY','NORMAL','HARD'];
 function getDiff() { return DIFFICULTIES[game.difficulty] || DIFFICULTIES.NORMAL; }
@@ -1983,12 +1983,12 @@ function generateFloor(floorNum) {
     }
   }
 
-  // ── Secret room (floor 3+, one per floor, not boss floors) ──────────────
+  // ── Secret room (every floor, one per floor) ─────────────────────────────
   const secretRooms = [];
-  if (floorNum >= 3 && !bossRoom) {
-    // Candidates: not spawn, not stair, not special, not vendor, decent size
+  {
+    // Candidates: not spawn, not stair, not boss, not already special, decent size
     const secretEligible = rooms.filter(r =>
-      r !== spawnRoom && r !== farthest && !r.roomType && r.w * r.h >= 20
+      r !== spawnRoom && r !== farthest && r !== bossRoom && !r.roomType && r.w * r.h >= 20
     );
     // Shuffle and try to find one with a narrow entrance cluster
     const shuffled = secretEligible.sort(() => Math.random() - 0.5);

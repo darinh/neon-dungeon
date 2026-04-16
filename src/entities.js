@@ -64,19 +64,15 @@ function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
 const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
 // Phase transition thresholds as hpPct values (descending); absolute-HP bosses computed at draw time
 const BOSS_PHASE_MARKS = {
-  SENTINEL: null, // absolute: [100/maxHp]
+  SENTINEL: [0.33],
   WARDEN:   [0.4],
-  HIVE:     null, // absolute: [350/maxHp, 150/maxHp]
+  HIVE:     [0.70, 0.30],
   CONDUCTOR:[0.55, 0.25],
   OMEGA:    [0.7, 0.4, 0.2],
   GENESIS:  [0.7, 0.35],
 };
 function getBossPhaseMarks(boss) {
-  const fixed = BOSS_PHASE_MARKS[boss.type];
-  if (fixed) return fixed;
-  if (boss.type === 'SENTINEL') return [100 / boss.maxHp];
-  if (boss.type === 'HIVE') return [350 / boss.maxHp, 150 / boss.maxHp];
-  return [];
+  return BOSS_PHASE_MARKS[boss.type] || [];
 }
 let pendingEnemySpawns = [];
 
@@ -1797,16 +1793,19 @@ class Enemy {
   }
 
   aiBossSentinel(dt,player,map,d,los) {
-    if (this.hp<100) this.phase=2; else this.phase=1;
+    const hpPct = this.hp / this.maxHp;
+    this.phase = hpPct <= 0.33 ? 2 : 1;
     if (this.phase!==this.prevPhase) {
       spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
       audio.phaseShift();
+      game.msg('⚠ SENTINEL PHASE 2','#ff4444');
       this.prevPhase=this.phase;
     }
 
     this.bossTimers.laser=(this.bossTimers.laser||0)-dt;
     this.bossTimers.move=(this.bossTimers.move||0)-dt;
     this.bossTimers.shield=(this.bossTimers.shield||0)-dt;
+    this.bossTimers.track=(this.bossTimers.track||0)-dt;
 
     if (this.bossTimers.move<=0) {
       if (this.room) {
@@ -1825,6 +1824,12 @@ class Enemy {
       }
       audio.shoot(false);
       this.bossTimers.laser=rate;
+    }
+
+    // Tracking shot: aimed projectile at player (both phases)
+    if (this.bossTimers.track<=0 && los) {
+      this.fireAt(player.x,player.y,8,this.atk+3,16,'#ff6666');
+      this.bossTimers.track=this.phase===2?2.5:4;
     }
 
     if (this.phase===2 && this.bossTimers.shield<=0) {
@@ -1851,6 +1856,7 @@ class Enemy {
     const T = this.bossTimers;
     T.charge = (T.charge || 0) - dt;
     T.slam   = (T.slam   || 0) - dt;
+    T.stomp  = (T.stomp  || 0) - dt;
     T.move   = (T.move   || 0) - dt;
 
     // Charge wind-up → charge → recovery
@@ -1889,8 +1895,9 @@ class Enemy {
         T.charge = this.phase === 2 ? 2.5 : 3.5;
       } else if (this._chargeDur <= 0) {
         // Charge ended without hitting — spark burst at endpoint
-        for (let i = 0; i < 4; i++) {
-          const a = (i / 4) * TWO_PI;
+        const missCount = this.phase === 2 ? 6 : 4;
+        for (let i = 0; i < missCount; i++) {
+          const a = (i / missCount) * TWO_PI;
           const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 5, Math.round(this.atk * 0.6), 8, '#ff8800', false, false);
           bp.ownerType = 'WARDEN'; projectiles.push(bp);
         }
@@ -1919,6 +1926,19 @@ class Enemy {
       }
     }
 
+    // Radial stomp: close-range burst when player is nearby (both phases)
+    if (T.stomp <= 0 && d < 3 && this._chargeState === 'idle') {
+      const stompCount = this.phase === 2 ? 6 : 4;
+      for (let i = 0; i < stompCount; i++) {
+        const a = (i / stompCount) * TWO_PI;
+        const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 4, Math.round(this.atk * 0.5), 6, '#ff8800', false, false);
+        bp.ownerType = 'WARDEN'; projectiles.push(bp);
+      }
+      spawnParticles(this.x, this.y, 'SPARK', '#ff8800', 6);
+      triggerShake(3, 0.1);
+      T.stomp = this.phase === 2 ? 4 : 6;
+    }
+
     // Phase 2: Ground slam when player is close
     if (this.phase === 2 && T.slam <= 0 && d < 4 && this._chargeState === 'idle') {
       audio.wardenSlam();
@@ -1939,9 +1959,8 @@ class Enemy {
   }
 
   aiBossHive(dt,player,map,d,los) {
-    if (this.hp<150) this.phase=3;
-    else if (this.hp<350) this.phase=2;
-    else this.phase=1;
+    const hpPct = this.hp / this.maxHp;
+    this.phase = hpPct <= 0.30 ? 3 : hpPct <= 0.70 ? 2 : 1;
 
     if (this.phase!==this.prevPhase) {
       spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
@@ -1953,6 +1972,7 @@ class Enemy {
     this.bossTimers.homing=(this.bossTimers.homing||0)-dt;
     this.bossTimers.spawn=(this.bossTimers.spawn||0)-dt;
     this.bossTimers.shock=(this.bossTimers.shock||0)-dt;
+    this.bossTimers.swarm=(this.bossTimers.swarm||0)-dt;
     this.bossTimers.move=(this.bossTimers.move||0)-dt;
 
     if (this.bossTimers.move<=0) {
@@ -1962,8 +1982,6 @@ class Enemy {
     if (this.patrolTarget) this.moveToward(this.patrolTarget.x,this.patrolTarget.y,1.5,dt,map);
 
     if (this.bossTimers.homing<=0) {
-      const [dx,dy]=norm(player.x-this.x,player.y-this.y);
-      // homing: just fires at player
       this.fireAt(player.x,player.y,6,this.atk,18,'#aa00ff');
       this.bossTimers.homing=2;
     }
@@ -1977,8 +1995,22 @@ class Enemy {
       this.spawnCooldown=1;
     }
 
+    // Swarm cloud: burst of slow aimed projectiles (Phase 2+)
+    if (this.phase>=2 && this.bossTimers.swarm<=0 && los) {
+      const count = this.phase === 3 ? 5 : 3;
+      for (let i=0; i<count; i++) {
+        const spread = (i - Math.floor(count/2)) * 0.25;
+        const [dx,dy]=norm(player.x-this.x,player.y-this.y);
+        const a = Math.atan2(dy,dx) + spread;
+        const bp=new Projectile(this.x,this.y,Math.cos(a),Math.sin(a),3.5,Math.round(this.atk*0.7),12,'#cc66ff',false,false);
+        bp.ownerType='HIVE'; projectiles.push(bp);
+      }
+      spawnParticles(this.x,this.y,'SPARK','#cc66ff',6);
+      this.bossTimers.swarm=this.phase===3?3.5:5;
+    }
+
     if (this.phase===3 && this.bossTimers.shock<=0) {
-      if (dist(game.player.x,game.player.y,this.x,this.y)<8) {
+      if (dist(game.player.x,game.player.y,this.x,this.y)<10) {
         game.player.takeDamage(Math.round(25*getDiff().enemyAtk), 'HIVE');
         spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',15);
       }
@@ -3279,12 +3311,12 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'GRAVITON':hp=45;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
     case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
-    case 'SENTINEL':hp=300; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
-    case 'WARDEN':  hp=330; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
-    case 'HIVE':    hp=500; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
-    case 'CONDUCTOR':hp=520;atk=20; spd=1.4; xpVal=350;colour='#00ccff'; break;
-    case 'OMEGA':   hp=1000;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
-    case 'GENESIS': hp=1000;atk=22; spd=1.0; xpVal=800;colour='#ffcc00'; break;
+    case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
+    case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
+    case 'HIVE':    hp=650; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
+    case 'CONDUCTOR':hp=700;atk=20; spd=1.4; xpVal=350;colour='#00ccff'; break;
+    case 'OMEGA':   hp=1300;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
+    case 'GENESIS': hp=1300;atk=22; spd=1.0; xpVal=800;colour='#ffcc00'; break;
   }
   const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA','GENESIS'].includes(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
