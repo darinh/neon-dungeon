@@ -73,11 +73,17 @@ const game = {
       for (const e of this.challengeEntrances) s.add(e.y * MAP_W + e.x);
     }
     this._minimapDirty = true;
+    clearLosCache();
+    if (this.dungeon) this.dungeon._fovDirty = true;
   },
-
-  // Flag the cached minimap base layer as stale. Call from any code that
-  // mutates dungeon.map, dungeon.visited, or game.mapRevealed.
+  // Flag the cached minimap base layer as stale (visited tile flips, etc.).
   markMinimapDirty() { this._minimapDirty = true; },
+
+  // Call from any code that mutates dungeon.map tiles (door open/unlock,
+  // crack-wall break, crate destroyed, room seal/unseal, terminal consume).
+  // Also invalidates the per-frame LOS cache so subsequent LOS queries in
+  // the same tick reflect the new map state.
+  markMapMutated() { this._minimapDirty = true; clearLosCache(); if (this.dungeon) this.dungeon._fovDirty = true; },
 
   setState(s, callback) {
     this.state=s;
@@ -264,7 +270,7 @@ const game = {
     for (let ty=Math.max(0,sr.y-1); ty<Math.min(MAP_H,sr.y+sr.h+1); ty++)
       for (let tx=Math.max(0,sr.x-1); tx<Math.min(MAP_W,sr.x+sr.w+1); tx++)
         if (dungeon.map[ty][tx]===T.CRACKED) dungeon.map[ty][tx]=T.FLOOR;
-    this._minimapDirty = true;
+    this.markMapMutated();
     // Spawn enemies (reduced count — it's a bonus room)
     const floorNum = this.floor;
     const minE = 1 + Math.floor(floorNum / 4);
@@ -465,6 +471,7 @@ const game = {
   },
 
   update(dt) {
+    clearLosCache();
     switch(this.state) {
       case 'MENU':        this.updateMenu(dt);    break;
       case 'PLAYING':     this.updatePlaying(dt); break;
@@ -892,7 +899,7 @@ const game = {
         this.msg('+50 DATA RECOVERED', '#ffb700');
         // Consume the terminal — single use
         dungeon.map[ty][tx] = T.FLOOR;
-        this._minimapDirty = true;
+        this.markMapMutated();
         audio.loreAccess();
         spawnParticles(player.x, player.y, 'SPARK', '#ffb700', 8);
         this.readingInteractArmed = false;
@@ -966,7 +973,7 @@ const game = {
         const dt=dungeon.map[dy][dx];
         if (dt===T.CRACKED) {
           dungeon.map[dy][dx]=T.FLOOR;
-          this._minimapDirty = true;
+          this.markMapMutated();
           audio.wallBreak();
           spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', '#ffb700', 12);
           this.msg('SECRET AREA DISCOVERED','#ffb700');
@@ -983,7 +990,7 @@ const game = {
         }
         if (dt===T.DOOR) {
           dungeon.map[dy][dx]=T.DOOR_OPEN;
-          this._minimapDirty = true;
+          this.markMapMutated();
           this.msg('Door opened','#aa8844');
           spawnParticles(dx+0.5, dy+0.5, 'SPARK', '#aa8844', 4);
           break;
@@ -992,7 +999,7 @@ const game = {
           const kc=doorKeyColour(dt);
           if (player.keys[kc] > 0) {
             dungeon.map[dy][dx]=T.DOOR_OPEN;
-            this._minimapDirty = true;
+            this.markMapMutated();
             this.msg('Unlocked '+kc+' door!', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
             spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00', 8);
             break;

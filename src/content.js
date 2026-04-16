@@ -2435,8 +2435,19 @@ function generateFloor(floorNum) {
 // ─── Lighting ────────────────────────────────────────────────────────────────
 function updateLighting(dungeon, px, py) {
   const map = dungeon.map;
-  const r = game.modifier === 'BLACKOUT' ? 5 : 9;
+  const mod = game.modifier;
+  const r = mod === 'BLACKOUT' ? 5 : 9;
   const tx = Math.floor(px), ty = Math.floor(py);
+  // Incremental FOV (Phase 2b): if the player is still on the same floor tile
+  // and the modifier hasn't changed and no map mutation flagged dirty, the
+  // previous frame's light/visible grids are still correct. Skip recompute.
+  if (!dungeon._fovDirty &&
+      dungeon._fovTx === tx && dungeon._fovTy === ty &&
+      dungeon._fovMod === mod) {
+    return;
+  }
+  dungeon._fovDirty = false;
+  dungeon._fovTx = tx; dungeon._fovTy = ty; dungeon._fovMod = mod;
   // Clear light and visible each frame (per-row typed-array fill)
   for (let y = 0; y < MAP_H; y++) {
     dungeon.light[y].fill(0);

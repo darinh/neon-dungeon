@@ -1280,6 +1280,7 @@ function drawThreatIndicators(camX, camY) {
 // ─── Floor population ─────────────────────────────────────────────────────────
 function populateFloor(dungeon, floorNum) {
   enemies=[]; items=[]; projectiles=[]; particles=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[]; wallTurrets=[]; disruptionFields=[]; gravityWells=[];
+  clearEnemiesByRoom();
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;
 
