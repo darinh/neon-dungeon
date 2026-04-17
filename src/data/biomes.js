@@ -17,8 +17,12 @@
       name: 'THE SANDBOX',
       floors: [1, 2, 3],
       palette: 'cyan',
-      bossPool: ['SENTINEL'],
+      bossPool: ['SENTINEL', 'WARDEN'],
       displayName: 'SENTINEL-PRIME',
+      // Per-boss display override — used when a biome's bossPool holds
+      // multiple mechanically-distinct bosses that should not share the
+      // biome's narrative name. Unlisted entries fall back to displayName.
+      bossDisplayNames: { WARDEN: 'WARDEN' },
       intro: 'The neon datacenter. Clean. Watching. You were never supposed to wake up here — but here you are.',
     },
     {
@@ -97,6 +101,14 @@
     return AREAS[n];
   }
 
+  // finalFloor returns the last floor of the last biome — the CORE/victory
+  // floor. Derived from AREAS so changing biome counts doesn't require
+  // chasing down magic numbers across the codebase.
+  function finalFloor() {
+    const last = AREAS[AREAS.length - 1];
+    return last.floors[last.floors.length - 1];
+  }
+
   return {
     AREAS,
     areaForFloor,
@@ -104,5 +116,6 @@
     firstFloorOfBiomeContaining,
     biomeIndex,
     areaForIndex,
+    finalFloor,
   };
 }));
