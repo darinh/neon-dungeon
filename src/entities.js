@@ -99,7 +99,10 @@ const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.AREAS) {
       for (const a of NEON.biomes.AREAS) {
         if (!a || !a.displayName || !Array.isArray(a.bossPool)) continue;
-        for (const b of a.bossPool) BOSS_NAMES[b] = a.displayName;
+        const overrides = (a.bossDisplayNames && typeof a.bossDisplayNames === 'object') ? a.bossDisplayNames : null;
+        for (const b of a.bossPool) {
+          BOSS_NAMES[b] = (overrides && overrides[b]) ? overrides[b] : a.displayName;
+        }
       }
     }
   } catch(_) { /* biomes optional — keep built-in defaults */ }
