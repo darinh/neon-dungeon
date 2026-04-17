@@ -182,6 +182,10 @@ const game = {
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
     // Reset teleport pad cooldown
     this.teleportCooldown = 0;
+    // UNCHAINED #39: clear leftover core drops from previous floor.
+    if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.clearCoreDrops) {
+      NEON.cores.clearCoreDrops(this);
+    }
     populateFloor(this.dungeon,n);
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
@@ -294,6 +298,10 @@ const game = {
     // UNCHAINED #37: transient pickup array. Modules dropped this run live
     // here until commit on floor clear / victory; discarded on death.
     this.runModules = [];
+    // UNCHAINED #39: seed cached cores from persistent wallet so HUD renders
+    // without re-reading localStorage every frame. Updated in-place by
+    // NEON.cores pickup/vacuum paths.
+    this._cachedCores = (meta && typeof meta.cores === 'number') ? (meta.cores|0) : 0;
     // UNCHAINED #34: respawn at the start of the deepest biome reached,
     // not floor 1. Current-run resources (credits, weapons, hackware) still
     // reset via new Player(); meta is untouched by this read.
@@ -511,6 +519,15 @@ const game = {
   },
 
   descend() {
+    // UNCHAINED #39: vacuum any leftover core drops into the wallet before
+    // the floor transitions. Player can't pick them up after the fade, so
+    // forceCollectAll is safer than relying on magnet-pull during the fade.
+    const _coresDeps = (typeof NEON !== 'undefined' && NEON.cores) ? {
+      save: (typeof NEON !== 'undefined' && NEON.save) ? NEON.save : null
+    } : null;
+    if (_coresDeps && NEON.cores.forceCollectAll) {
+      NEON.cores.forceCollectAll(this, _coresDeps);
+    }
     if (this.floor>=10) {
       // victory
       audio.victory();
@@ -576,6 +593,10 @@ const game = {
     this.player.credits += secretCr;
     this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
+    // UNCHAINED #39: guaranteed core from the room-end chest.
+    if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+      NEON.cores.spawnCoreDrop(this, sr.cx, sr.cy, 1);
+    }
   },
 
   saveScore(name) {
@@ -591,6 +612,13 @@ const game = {
   endRun(victory) {
     if (this._runEnded) return;
     this._runEnded = true;
+    // UNCHAINED #39: credit any outstanding core drops before the run ends.
+    // Every victory/defeat path funnels through here, so this covers ACCEPT
+    // (KEEPER ending bypasses descend), REFUSE (UNCHAINED ending), normal
+    // floor-10 victory, and death. Safe no-op if coreDrops is empty.
+    if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.forceCollectAll) {
+      NEON.cores.forceCollectAll(this, { save: NEON.save || null });
+    }
     music.stop();
     // UNCHAINED #37: commit run-picked modules on victory; drop them on death.
     if (victory && typeof NEON !== 'undefined' && NEON.modules) {
@@ -735,6 +763,11 @@ const game = {
     this.pendingPerkChoices=[];
     this.perkChoice=null;
     this.augmentChoice=null;
+    // UNCHAINED #39: seed cached cores from persistent wallet on resume.
+    if (typeof NEON !== 'undefined' && NEON.save) {
+      const _m = NEON.save.loadMeta();
+      this._cachedCores = (_m && typeof _m.cores === 'number') ? (_m.cores|0) : 0;
+    }
     let save;
     try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ save = null; }
     if (!save || !save.player || save.v !== SAVE_VERSION) {
@@ -1033,6 +1066,20 @@ const game = {
     // update items
     for (const it of items) it.update(dt);
     if (_ptEnv) perfRecord('env', performance.now() - _ptEnv);
+
+    // UNCHAINED #39: CORE drops (elite/boss/secret/challenge/rare-terminal).
+    // Timed separately so the F3 perf HUD shows the cost.
+    if (typeof NEON !== 'undefined' && NEON.cores) {
+      const _ptCores = perfEnabled() ? performance.now() : 0;
+      NEON.cores.updateCoreDrops(this, dt, {
+        save: NEON.save || null,
+        audio: (typeof audio !== 'undefined') ? audio : null,
+        spawnParticles: (typeof spawnParticles === 'function') ? spawnParticles : null,
+        spawnDmgText: (typeof spawnDmgText === 'function') ? spawnDmgText : null,
+      });
+      NEON.cores.tickHudPulse(this, dt);
+      if (_ptCores) perfRecord('cores-update', performance.now() - _ptCores);
+    }
 
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
@@ -1753,6 +1800,10 @@ const game = {
             }
             spawnParticles(cr.cx, cr.cy, 'EXPLOSION', '#ff9933', 25);
             spawnDmgText(cr.cx, cr.cy, '+' + cr2 + '◈', '#ff9933');
+            // UNCHAINED #39: guaranteed 2 cores on challenge survival.
+            if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+              NEON.cores.spawnCoreDrop(this, cr.cx, cr.cy, 2);
+            }
             this.msg('⚡ CHALLENGE COMPLETE!', '#ff9933');
           } else {
             // Inter-wave pause
@@ -3068,6 +3119,13 @@ const game = {
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
+
+    // UNCHAINED #39: core drops — draw above items, below enemies.
+    if (typeof NEON !== 'undefined' && NEON.cores && this.coreDrops && this.coreDrops.length) {
+      const _ptCoresDraw = perfEnabled() ? performance.now() : 0;
+      NEON.cores.drawCoreDrops(ctx, this.coreDrops, cam, TS);
+      if (_ptCoresDraw) perfRecord('cores-draw', performance.now() - _ptCoresDraw);
+    }
 
     // enemies
     for (const e of enemies) e.draw(cam.x,cam.y);

@@ -3356,8 +3356,17 @@ function applyEventEffect(event, choice, player, gm) {
         // exclusive per spec ("logs never collide with module drops").
         const gotLog = tryRareTerminalLogDrop(gm, player);
         if (!gotLog) {
-          // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
-          tryRareTerminalModuleDrop(gm, player);
+          // UNCHAINED #39: 50% chance the rare-terminal reward is a core
+          // instead of a module. Same slot as the module roll — cores and
+          // modules are mutually exclusive per the #39 spec.
+          if (Math.random() < 0.50 && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+            NEON.cores.spawnCoreDrop(gm, player.x, player.y, 1);
+            gm.msg('CORE FRAGMENT SALVAGED', '#a866ff');
+            spawnParticles(player.x, player.y, 'SPARK', '#a866ff', 10);
+          } else {
+            // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
+            tryRareTerminalModuleDrop(gm, player);
+          }
         }
         break;
       }

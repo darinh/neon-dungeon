@@ -464,6 +464,18 @@ class Enemy {
     const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // UNCHAINED #38: -15% credit drops (credits are now consumable-only)
     game.player.credits += cr;
     if (this.isBoss) game.bossesCleared++;
+    // UNCHAINED #39: CORES drops on elite/boss kills. Summons / shard-split
+    // enemies don't drop cores (same rule as items/credits). isBoss takes
+    // precedence over elite so the boss amount is final.
+    if (!isSummon && !this.isShard && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+      let coreVal = 0;
+      if (this.isBoss) {
+        coreVal = (this.type === 'GENESIS') ? 10 : 5;
+      } else if (this.elite) {
+        coreVal = 1 + Math.floor(Math.random() * 2); // 1–2 uniform
+      }
+      if (coreVal > 0) NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal);
+    }
     // Vampiric perk: heal on kill
     if (game.player.perks.VAMPIRIC && !this.isShard) {
       const heal = 2;

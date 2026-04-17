@@ -391,9 +391,22 @@ function drawHUD(player) {
     // Credits + Lore
     ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`◈${player.credits}`, mid + 50, r1 + 10);
+    // UNCHAINED #39: cores readout (pulses briefly on pickup). Reads
+    // `game._cachedCores` (updated on every pickup/vacuum) to avoid a
+    // per-frame localStorage hit.
+    {
+      const _cores = game._cachedCores | 0;
+      const pulse = (game._coreHudPulse || 0);
+      const pulseCol = pulse > 0 ? '#44e5ff' : '#a866ff';
+      ctx.save();
+      if (pulse > 0) { ctx.shadowBlur = 8; ctx.shadowColor = '#44e5ff'; }
+      ctx.fillStyle = pulseCol;
+      ctx.fillText(`◆${_cores}`, mid + 90, r1 + 10);
+      ctx.restore();
+    }
     if (player.loreRead.size > 0) {
       ctx.fillStyle='#ffb700';
-      ctx.fillText(`◫${player.loreRead.size}`, mid + 90, r1 + 10);
+      ctx.fillText(`◫${player.loreRead.size}`, mid + 130, r1 + 10);
     }
 
     // Row 2: LVL + XP bar + ATK + DEF + weapon
@@ -533,6 +546,18 @@ function drawHUD(player) {
     ctx.shadowBlur=0;
     ctx.fillStyle='#39ff14'; ctx.font='13px monospace';
     ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
+    // UNCHAINED #39: cores readout, just left of credits (pulses on pickup).
+    // Reads cached counter on game — no per-frame localStorage hit.
+    {
+      const _cores = game._cachedCores | 0;
+      const pulse = (game._coreHudPulse || 0);
+      ctx.save();
+      if (pulse > 0) { ctx.shadowBlur = 10; ctx.shadowColor = '#44e5ff'; }
+      ctx.fillStyle = pulse > 0 ? '#44e5ff' : '#a866ff';
+      ctx.font='13px monospace';
+      ctx.fillText(`◆ ${_cores}`, W - 240 - safeRight, y + 26);
+      ctx.restore();
+    }
     if (player.loreRead.size > 0) {
       ctx.fillStyle='#ffb700'; ctx.font='13px monospace';
       ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
