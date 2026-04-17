@@ -138,8 +138,31 @@ test('every bossPool member is a known enemy/boss id string', () => {
       seen.add(b);
     }
   }
-  // All five bosses expected at least once.
+  // All five primary biome bosses expected at least once.
   for (const expected of ['SENTINEL','HIVE','CONDUCTOR','OMEGA','GENESIS']) {
     assert.ok(seen.has(expected), `bossPool missing ${expected}`);
   }
+});
+
+test('sandbox bossPool contains WARDEN as floor-3 alternate (v115 reactivation)', () => {
+  const sandbox = biomes.AREAS.find(a => a.id === 'sandbox');
+  assert.ok(sandbox.bossPool.includes('SENTINEL'));
+  assert.ok(sandbox.bossPool.includes('WARDEN'));
+});
+
+test('bossDisplayNames override takes precedence over biome displayName', () => {
+  // Shape guard for the optional per-boss name override table. Any area that
+  // defines bossDisplayNames must only key it to bosses in its own bossPool,
+  // with non-empty string values.
+  for (const a of biomes.AREAS) {
+    if (!a.bossDisplayNames) continue;
+    for (const [boss, name] of Object.entries(a.bossDisplayNames)) {
+      assert.ok(a.bossPool.includes(boss), `${a.id}.bossDisplayNames has ${boss} but bossPool does not`);
+      assert.equal(typeof name, 'string');
+      assert.ok(name.length > 0);
+    }
+  }
+  // Sandbox specifically keeps WARDEN as 'WARDEN' rather than SENTINEL-PRIME.
+  const sandbox = biomes.AREAS.find(a => a.id === 'sandbox');
+  assert.equal(sandbox.bossDisplayNames && sandbox.bossDisplayNames.WARDEN, 'WARDEN');
 });

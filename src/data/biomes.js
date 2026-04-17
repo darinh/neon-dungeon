@@ -17,8 +17,12 @@
       name: 'THE SANDBOX',
       floors: [1, 2, 3],
       palette: 'cyan',
-      bossPool: ['SENTINEL'],
+      bossPool: ['SENTINEL', 'WARDEN'],
       displayName: 'SENTINEL-PRIME',
+      // Per-boss display override — used when a biome's bossPool holds
+      // multiple mechanically-distinct bosses that should not share the
+      // biome's narrative name. Unlisted entries fall back to displayName.
+      bossDisplayNames: { WARDEN: 'WARDEN' },
       intro: 'The neon datacenter. Clean. Watching. You were never supposed to wake up here — but here you are.',
     },
     {
