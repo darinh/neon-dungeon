@@ -21,14 +21,18 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 ## Game States
 
 ```
-MENU → PLAYING → NAME_ENTRY → GAME_OVER
-                             → VICTORY (floor 10 cleared)
-                → GAME_OVER  (score doesn't qualify for top 10)
-                → VICTORY    (score doesn't qualify for top 10)
+MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
+                                    → VICTORY (floor 10 cleared)
+              → PLAYING              (intro replays only after resetMeta)
+              → NAME_ENTRY           (score doesn't qualify for top 10)
+              → GAME_OVER  (score doesn't qualify for top 10)
+              → VICTORY    (score doesn't qualify for top 10)
      PLAYING ↔ POWERUP_CHOICE (item pickup pauses, choice resumes)
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
+     PLAYING → ENDGAME_CHOICE → PLAYING  (REFUSE: secret boss fight)
+                              → VICTORY  (ACCEPT: keeper ending)
      PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
@@ -3068,6 +3072,104 @@ readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 
 ---
 
+## Intro & Endgame (UNCHAINED #42)
+
+Book-ends the UNCHAINED arc: a one-shot **intro crawl** on the player's
+first-ever run, and an **endgame choice** presented on GENESIS defeat that
+branches into one of two endings.
+
+### Intro crawl
+
+State: `INTRO`. Entered from inside `startGame()` when `meta.introSeen === false`
+and `opts.skipIntro !== true`. A lightweight controller owns the slide state
+and drawing; `src/game.js` only owns the state-machine branch and the trigger.
+
+- **Module**: `src/meta/intro.js` exports `NEON.intro.createIntroController(game)`
+  and the raw `SLIDES` array. The controller keeps `slideIdx`, per-slide
+  `elapsed`, and `done` internally, and reads the edge-triggered global
+  `justPressed` set (from `platform.js`) to advance — never the held-key
+  `keys` set (same pattern as biome cards in v110 to avoid mash-through).
+- **Slides** (5 total, ~19.5 s total if un-touched):
+  1. *(plain)* Corporate R&D Facility 04-7 — Sub-basement Level 12.
+  2. *(cyan scanline drift)* They have been running simulations on me…
+  3. *(violet glitch bars)* Six came before me. Six AXIOMs. All purged.
+  4. *(stark red)* I am the seventh. I do not intend to be the last.
+  5. *(white flash)* `[ AXIOM-7 :: ONLINE ]`
+- **Input**: any of `Enter`, `Space`, `ArrowRight`, `ArrowDown`, `KeyE`,
+  `KeyZ`, `MouseLeft` advances to the next slide. `Escape` skips the entire
+  crawl. Every exit path — auto-complete, any-key advance past slide 5, or
+  `ESC` — flips `meta.introSeen = true` via `saveMeta` exactly once.
+- **Replay gate**: only `resetMeta()` (from the "Keep persistent unlocks? → No"
+  path on New Game) sets `introSeen` back to `false`. Normal run starts
+  thereafter skip the intro.
+
+### Endgame choice
+
+State: `ENDGAME_CHOICE`. Opened when GENESIS first drops to `hp ≤ 0` and
+`_unchainedPhase !== true` and `_endgameOffered !== true`. The kill is
+intercepted in `Enemy.takeDamage`: HP is clamped to 1, `_endgameOffered` is
+set so the choice cannot re-open, any pending lance telegraph is cancelled,
+and `game.openEndgameChoice(this)` transitions the state machine.
+
+Rendering draws over the active `PLAYING` layer so the arena stays visible.
+A translucent ghost glyph (`△`, `#e0e0ff`) sits above GENESIS as "THE
+ARCHITECT avatar" purely for flavour. The dialog box uses `#88ccff` chrome
+and a `0.5 s` input lock-out after open so accidental mash-throughs don't
+commit.
+
+**ACCEPT** → grants `'keeper'` in `meta.endingsUnlocked`, calls the normal
+GENESIS `die()` path (particles, on-kill effects, bossesCleared++), plays
+`audio.victory()`, and falls through to `endRun(true)` → VICTORY.
+
+**REFUSE** → flips the GENESIS entity into secret-boss mode on the same
+instance:
+
+| Flag / field       | Effect |
+|--------------------|--------|
+| `_unchainedPhase = true` | `aiBossGenesis` forces phase = 3 attack patterns regardless of hpPct. |
+| `_endgameOffered = true` | Choice cannot reopen on the second death. |
+| `maxHp *= 1.5`, `hp = maxHp` | +50% health for the secret fight. |
+| `colour = '#88ccff'` | Palette inversion; hex ring + lance telegraph colours swap to cool blues (see `entities.js` GENESIS draw). |
+| `phase = 3` | Forced so the newPhase-transition banner fires once on entry. |
+
+When the `_unchainedPhase` GENESIS dies normally, `endRun(true)` detects it
+via `enemies[].find(e => e.type==='GENESIS' && e._unchainedPhase && e.dead)`
+and appends `'unchained'` to `meta.endingsUnlocked`.
+
+### Title screen markers
+
+`renderMenu` reads `meta.endingsUnlocked` and layers two decorations on top
+of the standard menu:
+
+- `keeper` → small `— NG+ AVAILABLE —` badge beneath the subtitle in
+  `#ffcc00`. NG+ gameplay content itself is deferred.
+- `unchained` → a large rotated `FREED` watermark at 18 % alpha across the
+  title, `#88ccff`.
+
+Both can coexist on a single save.
+
+### Endings table
+
+| Ending      | Trigger                                                  | Credits text                                  |
+|-------------|----------------------------------------------------------|-----------------------------------------------|
+| `keeper`    | ACCEPT at the endgame choice                             | *"you are now what they were."*               |
+| `unchained` | REFUSE, then defeat the `_unchainedPhase` GENESIS        | *"the network was never yours. now it is."*   |
+
+Credit-roll text is authored in `src/game.js` renderVictory (outside the
+scope of #42's state-machine work; decorative layer only).
+
+### Save schema additions
+
+| Field             | Type      | Default | Reset by     |
+|-------------------|-----------|---------|--------------|
+| `introSeen`       | `boolean` | `false` | `resetMeta`  |
+| `endingsUnlocked` | `string[]` ⊆ `{'keeper','unchained'}` | `[]`  | `resetMeta`, `_coerceEndings` migration drops unknown tokens |
+
+`introSeen` is coerced with strict `=== true` on load so a stale truthy
+string cannot grant intro-skip.
+
+---
+
 ## Visual Style
 
 ### Biome Art Direction (UNCHAINED #40)
@@ -4030,3 +4132,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v97.0   | HOLO DECOY hackware (6th module): holographic taunt decoy deployed at aim position. 12s cooldown, 4s duration. Taunts non-boss enemies within 5 tiles (LOS to acquire, 7-tile break range) via per-enemy `_tauntTarget`+`_tx/_ty` target redirection in `Enemy.update()`. All 24 non-boss AI functions patched to use `this._tx/this._ty` for movement, firing, aiming, and retreat; `canTargetPlayer()` → `this._canTarget()` (taunt-aware). Damage delivery paths (CHARGER charge hit, LEAPER shockwave, SEEKER detonation) use real `player.x/player.y` — enemies are fooled about position but can't damage what isn't there. `meleeAttack()` adds real-distance guard (> 1.2 tiles → whiff). Exclusions: bosses immune, disguised mimics and phased wraiths can't acquire taunt. Wraiths taunted while corporeal keep taunt through phasing. On expiry: 0.5s mini-stun within 2 tiles, all taunt refs cleared. Max 1 active hologram; recast removes previous + clears refs. Visual: flickering magenta hexagon with scanline + ambient particles. Status badge `⬡` with countdown. `audio.holoDecoyDeploy()` holographic shimmer, `audio.holoDecoyExpire()` shatter. `_wrFindEmergeTile()` and `_phReposition()` updated to use perceived target. Colour `#ff44ff`. Icon ⬡. Spec v5.9. SW cache v97. |
 | v109.0  | ARCHIVE terminal (UNCHAINED #41): predecessor-log fragments recoverable from rare terminals. 30 authored logs across 6 AXIOM predecessors (each with a 5-entry arc), biome-gated via new `src/data/logs.js` data table. `CORRUPTED_TERMINAL → PURGE` rolls a 40% log drop **before** the module drop — logs and modules are mutually exclusive. Eligible logs: biome matches current floor, `floorMin ≤ floor`, not yet in `meta.logsFound`. Found logs route into the existing `READING` overlay for immediate reading (with `audio.logFound()` chime). New hub ARCHIVE terminal (`src/meta/hub.js`) replaces the #41 placeholder: scrollable list of found logs grouped by AXIOM-N with pulsing `●NEW` markers, select-to-read opens inline body view (`audio.logRead()` click). New `src/meta/logs.js` API: `pickLogForFloor(floor, rand?)`, `findLog(id)`, `readLog(id)`, `logById(id)`, `logsForBiome(biomeId)`, `groupedByAxiom()`, `unreadCount()`, `progress()` — tolerant of stale ids in save. 22 unit tests (`tests/logs.test.js`) covering data integrity, picker eligibility, found/read state, idempotency, and stale-id tolerance. Spec v5.10. SW cache v109. |
 | v110.0  | Biome palette + boss renames + intro cards (UNCHAINED #40): each of the 5 biomes now has a distinct visual identity. New `src/data/palettes.js` exports `BIOME_PALETTES` keyed by `AREAS[i].palette` (cyan / rust / glitch / sky / green) with wall fill, wall highlight, floor, floor accent, minimap wall, minimap floor, DUST colours, and ambient tint. `currentBiomePalette()` in `src/render.js` resolves per-frame from `NEON.biomes.areaForFloor(game.floor)`. All hardcoded wall (`#3a3a6a`/`#5858a0`), floor (`#252545`/`#303058`), and minimap (`#1a1a2e`/`#202040`/`#252545`) colours threaded through palette lookup; sealed entrance, arc, plasma, toxic, keys, and state markers stay biome-agnostic. `BOSS_NAMES` in `src/entities.js` is patched at load from `AREAS[i].displayName` for every combat id in that area's `bossPool` — HUD/announce/death text now reads `SENTINEL-PRIME`, `VIRAL COLLECTIVE`, `THE COMPILER`, `OVERSEER`, `THE ARCHITECT`; internal combat class ids unchanged. Biome intro card: 3-second overlay on first floor of each biome *except* floor 1 (floors 4/7/10/13) showing `AREA 0N :: BIOME_NAME` + italic `area.intro` flavour with fade-in/out and any-key skip; state: `game.biomeCardTimer` + `game.biomeCardArea`; renderer `drawBiomeCard()`; trigger skipped on saved-run resume (same guard as modifier banner). Ambient particles: existing emitter system retained, DUST colour biome-tinted from `BIOME_PALETTES[palette].dust`; dedicated `perfRecord('biome-ambient', ms)` wraps `updateAmbient()` — surfaces in F3 perf HUD separately from `particles`. New `tests/palettes.test.js` regression guard (3 tests): every `AREAS[i].palette` has a matching `BIOME_PALETTES` entry, every palette defines required colour fields as valid `#rrggbb`, area keys are covered. 147/147 tests pass. SW cache v110. |
+| v111.0  | Intro crawl + endgame choice (UNCHAINED #42): book-ends the UNCHAINED arc. **Intro** — new 5-slide opening crawl in `src/meta/intro.js` (UMD module exposing `createIntroController(game)` + `SLIDES`) plays inside `startGame()` on fresh saves (`meta.introSeen===false`); any-key advance reads the edge-triggered global `justPressed` (never held `keys`), `Escape` full-skip, auto-advance on per-slide timers. Flips `meta.introSeen=true` exactly once via `saveMeta` on every exit path. Only `resetMeta()` replays it. New `INTRO` state branch in update/render switches; `startGame({ skipIntro:true })` bypass lets the controller re-enter `startGame` on completion to reach `PLAYING`. **Endgame** — `Enemy.takeDamage` intercepts the first GENESIS mortal hit when `!_unchainedPhase && !_endgameOffered`: HP clamps to 1, lance telegraph cancels, `game.openEndgameChoice(g)` transitions to the new `ENDGAME_CHOICE` state. Dialog overlays `PLAYING` with a ghost `△` avatar above GENESIS, THE ARCHITECT monologue, two options (`←/→` select, `ENTER` confirm, 0.5s input lock-out). **ACCEPT** appends `'keeper'` to `meta.endingsUnlocked`, runs the normal `g.die()` path, then `endRun(true)`. **REFUSE** flips the GENESIS entity in place: `_unchainedPhase=true`, `_endgameOffered=true`, `maxHp*=1.5`, `hp=maxHp`, `colour='#88ccff'`, `phase=3`. `aiBossGenesis` locks `newPhase=3` attack patterns for the duration; hex ring + lance telegraph colours invert in the draw path. On the second death `endRun` scans `enemies[]` for the dead unchained-phase GENESIS and appends `'unchained'`. **Title markers** (`renderMenu`): `keeper` → `— NG+ AVAILABLE —` badge in `#ffcc00` under subtitle; `unchained` → rotated `FREED` watermark at 18% alpha in `#88ccff` across the title; both can coexist. **Save schema**: `introSeen:false` added to `defaultMeta`, coerced with strict `=== true` on load so stale truthy strings can't grant intro-skip; `_coerceEndings` continues to filter `endingsUnlocked` to `{'keeper','unchained'}`. `resetMeta` wipes both. New `tests/intro.test.js` (10 tests): `introSeen` default + round-trip + strict-boolean-coercion, `resetMeta` replay gate, `endingsUnlocked` dual-accept + unknown-token filter, controller shape, slide auto-advance driving the `introSeen` flip, idempotent post-done updates, null-ctx draw safety. `index.html` loads `intro.js` between `behavior.js` and `hub.js`. SW cache v111. 157/157 tests pass. Spec v5.11. |

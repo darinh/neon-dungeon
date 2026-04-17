@@ -394,6 +394,21 @@ class Enemy {
     this._lastHitCtx = ctx;
     // Apply weapon affix on-hit effects (procs don't re-proc)
     if (!ctx.isProc) applyHitEffects(this, actual, ctx);
+    // UNCHAINED #42 — GENESIS endgame-choice intercept. First mortal blow
+    // halts the kill at 1 HP and opens the THE ARCHITECT dialog; the _unchainedPhase
+    // form (post-REFUSE) dies normally, granting the 'unchained' ending in endRun.
+    if (this.type === 'GENESIS' && !this._unchainedPhase && this._endgameOffered && !this.dead) {
+      if (this.hp <= 0) this.hp = 1;
+      return actual;
+    }
+    if (this.hp <= 0 && this.type === 'GENESIS' && !this._unchainedPhase && !this._endgameOffered) {
+      this.hp = 1;
+      this._endgameOffered = true;
+      this._lanceTelegraph = 0; this._lanceLock = null;
+      if (typeof game !== 'undefined' && game.openEndgameChoice) game.openEndgameChoice(this);
+      audio.hit(false, ctx.name || null);
+      return actual;
+    }
     if (this.hp<=0) { this.hp=0; this.die(); }
     else { const wn = ctx.name || null; audio.hit(false, wn); }
     return actual;
@@ -417,6 +432,9 @@ class Enemy {
     }
     game.enemyDiedThisFrame=true;
     audio.death();
+    if (this.type === 'GENESIS' && this._unchainedPhase && typeof game !== 'undefined') {
+      game._lastEnding = 'unchained';
+    }
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
     // Summoned minions: reduced rewards (like shards — no drops, no combo, no kill count)
     const isSummon = !!this._summoned;
@@ -2525,7 +2543,10 @@ class Enemy {
 
   aiBossGenesis(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
-    const newPhase = hpPct <= 0.35 ? 3 : hpPct <= 0.7 ? 2 : 1;
+    // UNCHAINED #42: _unchainedPhase locks the boss into phase-3 attack
+    // patterns regardless of remaining HP — it's the "secret boss" fight.
+    const newPhase = this._unchainedPhase ? 3
+                   : hpPct <= 0.35 ? 3 : hpPct <= 0.7 ? 2 : 1;
     if (newPhase !== this.phase) {
       this.phase = newPhase;
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 22);
@@ -2795,13 +2816,16 @@ class Enemy {
 
       // GENESIS: lance telegraph line + rotating hex ring
       if (this.type === 'GENESIS') {
+        // UNCHAINED #42 — _unchainedPhase inverts the palette.
+        const ringColour  = this._unchainedPhase ? '#88ccff' : '#ffcc00';
+        const lanceColour = this._unchainedPhase ? '#cceeff' : '#ffe066';
         // Rotating hexagonal ring (always visible)
         ctx.save();
         const hexSpin = (this._spiralSpin || 0) + Date.now() * 0.002;
         ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = '#ffcc00';
+        ctx.strokeStyle = ringColour;
         ctx.shadowBlur = 8;
-        ctx.shadowColor = '#ffcc00';
+        ctx.shadowColor = ringColour;
         ctx.lineWidth = 1.5;
         for (let i = 0; i < 6; i++) {
           const a1 = hexSpin + (i / 6) * TWO_PI;
@@ -2821,9 +2845,9 @@ class Enemy {
           ctx.save();
           const pulse = 0.5 + 0.5 * Math.sin(progress * 20);
           ctx.globalAlpha = (0.3 + progress * 0.5) * pulse;
-          ctx.strokeStyle = '#ffe066';
+          ctx.strokeStyle = lanceColour;
           ctx.shadowBlur = 8 + progress * 12;
-          ctx.shadowColor = '#ffe066';
+          ctx.shadowColor = lanceColour;
           ctx.lineWidth = 1 + progress * 2;
           ctx.setLineDash([4, 4]);
           ctx.beginPath();
