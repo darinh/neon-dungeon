@@ -90,6 +90,20 @@ const SOURCE_COLOURS = {
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
 const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
+// UNCHAINED #40: biome-narrative displayName overrides. BOSS_NAMES keys that
+// appear in AREAS[].bossPool get rewritten to AREAS[].displayName so HUD/
+// announce text reads as the narrative name (e.g. SENTINEL-PRIME) while the
+// combat class id stays the internal 'SENTINEL'.
+(function(){
+  try {
+    if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.AREAS) {
+      for (const a of NEON.biomes.AREAS) {
+        if (!a || !a.displayName || !Array.isArray(a.bossPool)) continue;
+        for (const b of a.bossPool) BOSS_NAMES[b] = a.displayName;
+      }
+    }
+  } catch(_) { /* biomes optional — keep built-in defaults */ }
+})();
 // Phase transition thresholds as hpPct values (descending); absolute-HP bosses computed at draw time
 const BOSS_PHASE_MARKS = {
   SENTINEL: [0.33],

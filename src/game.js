@@ -25,6 +25,10 @@ const game = {
   bossHpGhost: 0,
   modifier: null,
   modBannerTimer: 0,
+  // UNCHAINED #40: biome intro card — shown 3s on first floor of a biome
+  // (floors 4/7/10/13). Floor 1 skipped — handled by #42 intro crawl.
+  biomeCardTimer: 0,
+  biomeCardArea: null,
   bossesCleared: 0,
   msgList: [],
   nameEntry: null,
@@ -193,6 +197,24 @@ const game = {
       this.modBannerTimer = 3.0;
     } else {
       this.modBannerTimer = 0;
+    }
+    // UNCHAINED #40: biome intro card on first floor of each biome
+    // (floors 4/7/10/13). Skip floor 1 — #42 owns the run-start crawl.
+    // Skip on savedModifier resume (continuing a run shouldn't replay the card).
+    if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.biomes) {
+      try {
+        const area = NEON.biomes.areaForFloor(n);
+        if (area && area.floors[0] === n && n !== 1) {
+          this.biomeCardArea = area;
+          this.biomeCardTimer = 3.0;
+        } else {
+          this.biomeCardTimer = 0;
+          this.biomeCardArea = null;
+        }
+      } catch(_) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
+    } else {
+      this.biomeCardTimer = 0;
+      this.biomeCardArea = null;
     }
     // Generate floor quest
     this.generateQuest(n);
@@ -890,12 +912,24 @@ const game = {
     const _ptPart = perfEnabled() ? performance.now() : 0;
     updateParticles(dt);
     updateFloatingTexts(dt);
-    updateAmbient(dt);
     if (_ptPart) perfRecord('particles', performance.now() - _ptPart);
+    const _ptAmb = perfEnabled() ? performance.now() : 0;
+    updateAmbient(dt);
+    if (_ptAmb) perfRecord('biome-ambient', performance.now() - _ptAmb);
     updateShake(dt);
     updateCombo(dt);
     updateHackwareEffects(dt);
     if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
+    if (this.biomeCardTimer > 0) {
+      this.biomeCardTimer -= dt;
+      // Any NEW key press skips the card. Use justPressed (per-frame) instead
+      // of keys (held) so carried-over movement keys from the previous floor
+      // don't instantly dismiss the card.
+      if (typeof justPressed !== 'undefined' && justPressed && justPressed.size > 0) {
+        this.biomeCardTimer = 0;
+      }
+      if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
+    }
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
@@ -2942,6 +2976,7 @@ const game = {
 
     drawMessages();
     drawModBanner();
+    drawBiomeCard();
     drawHint();
     drawTouchUI();
   },
