@@ -1041,6 +1041,40 @@ function drawMinimap(dungeon, player) {
   ctx.restore();
 }
 
+// UNCHAINED #38: Active temp-boost HUD strip, anchored below the minimap.
+// One pill per active boost. No-op when nothing's active so it costs zero
+// pixels on a bare player.
+function drawBoostStrip(player) {
+  if (!player || typeof NEON === 'undefined' || !NEON.boosts) return;
+  const list = NEON.boosts.getActiveBoostList(player);
+  if (!list.length) return;
+  const MW=120, MH=80;
+  const MX=W-MW-8-safeRight, MY=8+safeTop;
+  const pillH = 18;
+  const startY = MY + MH + 8; // 8px gap below minimap
+  ctx.save();
+  ctx.font = 'bold 10px monospace';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i];
+    const label = b.icon + ' ' + b.name + (b.detail && b.detail !== 'FLOOR' ? ' ' + b.detail : '');
+    const w = Math.max(ctx.measureText(label).width + 12, 60);
+    const x = W - w - 8 - safeRight;
+    const y = startY + i * (pillH + 3);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(x, y, w, pillH);
+    ctx.strokeStyle = b.colour;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, pillH - 1);
+    ctx.shadowBlur = 4; ctx.shadowColor = b.colour;
+    ctx.fillStyle = b.colour;
+    ctx.fillText(label, x + 6, y + pillH / 2 + 0.5);
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+}
+
+
 // ─── Expanded Minimap ─────────────────────────────────────────────────────────
 const ROOM_ICONS = {
   armory:'⚔', medbay:'✚', shrine:'◈', vault:'◆', vendor:'$',

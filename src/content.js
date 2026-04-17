@@ -3475,16 +3475,43 @@ function generateShopItems(floor, player, dungeon) {
     const augOpt = makeAugmentShopOption(null);
     if (augOpt) pool.push(augOpt);
   }
-  // Fill remaining slots from UPGRADES pool
-  const used = new Set(pool.map(p => p.id));
-  const eligible = UPGRADES.filter(u => {
-    if (used.has(u.id)) return false;
-    if (u.persistent && player) {
-      const cur = player.upgrades[u.id] || 0;
-      if (cur >= u.maxLevel) return false;
-    }
-    return true;
-  });
+  // UNCHAINED #38: temp-boost consumables replace permanent in-run upgrades.
+  // Fill ~2 of the 3 slots with random picks from the boost pool. These are
+  // floor-scoped (or instant one-shots) and never grant permanent growth.
+  const boostKeys = (typeof NEON !== 'undefined' && NEON.boosts) ? NEON.boosts.BOOST_KEYS.slice() : [];
+  // Shuffle boost keys for variety across vendors.
+  for (let i = boostKeys.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = boostKeys[i]; boostKeys[i] = boostKeys[j]; boostKeys[j] = t;
+  }
+  const usedIds = new Set(pool.map(p => p.id));
+  for (const bk of boostKeys) {
+    if (pool.length >= 3) break;
+    const bid = 'BOOST_' + bk;
+    if (usedIds.has(bid)) continue;
+    const b = NEON.boosts.BOOSTS[bk];
+    pool.push({
+      id: bid, name: b.name, desc: b.desc, colour: b.colour,
+      price: b.price + Math.floor(floor * 2), // mild floor scaling keeps late-game meaningful
+      isBoost: true, boostId: bk, icon: b.icon,
+      fn: p => {
+        NEON.boosts.applyBoost(p, bk);
+        // UNCHAINED #38: RECON PING flips the runtime minimap reveal
+        // immediately (loadFloor already honours the flag on floor entry).
+        if (bk === 'RECON_PING') { game.mapRevealed = true; game._minimapDirty = true; }
+        game.msg(b.icon + ' ' + b.name, b.colour);
+      }
+    });
+    usedIds.add(bid);
+  }
+  // Backfill from the non-persistent UPGRADES pool (consumables only — heals,
+  // XP chips, void shards). Permanent stat growth is no longer sold for
+  // credits (UNCHAINED #38).
+  const nonPersistentPool = (typeof NEON !== 'undefined' && NEON.boosts)
+    ? NEON.boosts.filterVendorPool(UPGRADES)
+    : UPGRADES.filter(u => !u.persistent);
+  const used = usedIds;
+  const eligible = nonPersistentPool.filter(u => !used.has(u.id));
   // Shuffle eligible and pick enough to fill 3 total slots
   const shuffled = eligible.sort(() => Math.random() - 0.5);
   while (pool.length < 3 && shuffled.length > 0) {
