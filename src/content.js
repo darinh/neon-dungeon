@@ -1365,15 +1365,26 @@ function updateAmbient(dt) {
     const cy = e.ty * TILE + rnd(2, TILE - 2);
 
     switch (e.kind) {
-      case 'DUST':
+      case 'DUST': {
+        // UNCHAINED #40: biome-tinted DUST colour (fallback to cyan palette).
+        let dustPal = ['#66ddff','#aabbcc'];
+        try {
+          if (typeof NEON !== 'undefined' && NEON.biomes && typeof BIOME_PALETTES !== 'undefined') {
+            const a = NEON.biomes.areaForFloor(game.floor);
+            const bp = a && BIOME_PALETTES[a.palette];
+            if (bp && Array.isArray(bp.dust) && bp.dust.length) dustPal = bp.dust;
+          }
+        } catch(_) {}
+        const col = Math.random() < 0.5 ? dustPal[0] : dustPal[1 % dustPal.length];
         ambientParticles.push({
           kind: 'DUST', x: cx, y: cy,
           vx: rnd(-3, 3), vy: rnd(-3, 3),
           life: 1, maxLife: rnd(3, 6), size: rnd(1, 2.5),
-          alpha: rnd(0.06, 0.18), colour: Math.random() < 0.3 ? '#66ddff' : '#aabbcc',
+          alpha: rnd(0.06, 0.18), colour: col,
           seed: Math.random() * 1000,
         });
         break;
+      }
       case 'EMBER':
         ambientParticles.push({
           kind: 'EMBER', x: cx, y: cy,

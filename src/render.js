@@ -1,5 +1,21 @@
 'use strict';
 
+// UNCHAINED #40: BIOME_PALETTES comes from src/data/palettes.js (loaded first
+// in index.html). Helper resolves the palette for the current floor.
+function currentBiomePalette() {
+  try {
+    if (typeof NEON !== 'undefined' && NEON.biomes && typeof game !== 'undefined' && game.floor) {
+      const a = NEON.biomes.areaForFloor(game.floor);
+      const p = (typeof BIOME_PALETTES !== 'undefined') && BIOME_PALETTES[a && a.palette];
+      if (p) return p;
+    }
+  } catch(_) {}
+  if (typeof BIOME_PALETTES !== 'undefined' && BIOME_PALETTES.cyan) return BIOME_PALETTES.cyan;
+  // Absolute fallback if palettes.js didn't load.
+  return { wallFill:'#3a3a6a', wallHi:'#5858a0', floor:'#252545', floorAccent:'#303058',
+           minimapWall:'#1a1a2e', minimapFloor:'#252545', dust:['#66ddff','#aabbcc'], ambient:'#66ddff' };
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 function getCamera(player) {
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
@@ -20,6 +36,7 @@ function getCamera(player) {
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
 function drawWorld(dungeon, camX, camY) {
+  const pal = currentBiomePalette();
   const startX=Math.max(0,Math.floor(camX/TILE)-1);
   const startY=Math.max(0,Math.floor(camY/TILE)-1);
   const endX=Math.min(MAP_W,startX+Math.ceil(W/TILE)+2);
@@ -39,9 +56,9 @@ function drawWorld(dungeon, camX, camY) {
       switch(tile) {
         case T.WALL: {
           const isSealed = game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx);
-          ctx.fillStyle = isSealed ? '#3d2828' : '#3a3a6a';
+          ctx.fillStyle = isSealed ? '#3d2828' : pal.wallFill;
           ctx.fillRect(sx,sy,TILE,TILE);
-          ctx.fillStyle = isSealed ? '#724040' : '#5858a0';
+          ctx.fillStyle = isSealed ? '#724040' : pal.wallHi;
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
           if (isSealed) {
@@ -54,13 +71,13 @@ function drawWorld(dungeon, camX, camY) {
         }
         case T.FLOOR: {
           const rc = dungeon.roomColour[ty]?.[tx];
-          ctx.fillStyle = rc || '#252545';
+          ctx.fillStyle = rc || pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
-          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : '#303058'; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
+          if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : pal.floorAccent; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
           break;
         }
         case T.STAIRS:
-          ctx.fillStyle='#252545';
+          ctx.fillStyle=pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           ctx.shadowBlur=8; ctx.shadowColor='#ffff00';
@@ -69,7 +86,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillText('▼',sx+5,sy+20);
           break;
         case T.TERMINAL:
-          ctx.fillStyle='#252545';
+          ctx.fillStyle=pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.shadowBlur=12; ctx.shadowColor='#00f5ff';
           ctx.fillStyle='#00f5ff';
@@ -130,38 +147,38 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.DOOR:
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#664422'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.fillStyle='#886633'; ctx.fillRect(sx+3,sy+2,TILE-6,TILE-4);
           ctx.fillStyle='#aa8844'; ctx.fillRect(sx+TILE-7,sy+TILE/2-2,3,3); // handle
           break;
         case T.DOOR_OPEN:
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx,sy,3,TILE);
           ctx.fillStyle='#33261a'; ctx.fillRect(sx+TILE-3,sy,3,TILE);
           break;
         case T.LOCKED_R: case T.LOCKED_B: case T.LOCKED_G: {
           const lc=tile===T.LOCKED_R?'#ff3333':tile===T.LOCKED_B?'#3388ff':'#ffcc00';
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#443322'; ctx.fillRect(sx+2,sy+1,TILE-4,TILE-2);
           ctx.shadowBlur=8; ctx.shadowColor=lc;
           ctx.fillStyle=lc; ctx.fillRect(sx+TILE/2-3,sy+TILE/2-3,6,6); // lock glow
           break;
         }
         case T.TRAP_SPIKE:
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.35;
           ctx.fillStyle='#ff6644';
           for (let s=0;s<3;s++) ctx.fillRect(sx+3+s*6,sy+TILE-6,2,5); // subtle spikes
           break;
         case T.TRAP_SLOW:
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness*0.25;
           ctx.fillStyle='#8866ff';
           ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
         case T.PLASMA: {
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Animated orange glow with pulsing brightness
           const pPulse = 0.3 + 0.15 * Math.sin(lastTime / 400 + tx * 0.7 + ty * 1.3);
           ctx.globalAlpha = brightness * pPulse;
@@ -181,7 +198,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.ARC: {
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Phase-based rendering: bright when active, dim when off
           const arcActive = Math.sin((game.floorTime||0) * Math.PI) > 0;
           const aAlpha = arcActive ? 0.5 + 0.2 * Math.sin(lastTime/80) : 0.1;
@@ -210,7 +227,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.TOXIC: {
-          ctx.fillStyle='#252545'; ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Pulsing green/chartreuse corrosive pool
           const tPulse = 0.25 + 0.12 * Math.sin(lastTime / 500 + tx * 0.9 + ty * 1.1);
           ctx.globalAlpha = brightness * tPulse;
@@ -263,7 +280,8 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
         case T.CRACKED: {
-          // Render as wall base
+          // Render as wall base — kept biome-agnostic so secret-tile visual
+          // stays consistent (intentionally darker than all biome wall variants).
           ctx.fillStyle='#1a1a2e';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle='#2d2d5e';
@@ -640,6 +658,90 @@ function drawBossBar() {
 
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
+// ─── Biome Intro Card ────────────────────────────────────────────────────────
+// UNCHAINED #40. Shown for 3s on first floor of each biome (floors 4/7/10/13).
+// Any-key skips (game.biomeCardTimer zeroed in updatePlaying). Renders above
+// playing world, below pause/menu overlays.
+function drawBiomeCard() {
+  const t = game.biomeCardTimer;
+  const area = game.biomeCardArea;
+  if (!t || t <= 0 || !area) return;
+  const dur = 3.0;
+  const fadeIn = 0.35, fadeOut = 0.5;
+  const elapsed = dur - t;
+  let alpha = 1;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  const pal = BIOME_PALETTES[area.palette] || BIOME_PALETTES.cyan;
+  const narrow = layout.compact;
+  const cardW = Math.min(narrow ? W - 40 : 520, W - 40);
+  const cardH = narrow ? 120 : 150;
+  const cx = (W - cardW) / 2;
+  const cy = (H - cardH) / 2 - 20;
+
+  let areaIdx = 1;
+  try {
+    if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.AREAS) {
+      const i = NEON.biomes.AREAS.indexOf(area);
+      if (i >= 0) areaIdx = i + 1;
+    }
+  } catch(_) {}
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = 'rgba(10,10,18,0.92)';
+  ctx.fillRect(cx, cy, cardW, cardH);
+
+  ctx.shadowBlur = 12; ctx.shadowColor = pal.wallHi;
+  ctx.strokeStyle = pal.wallHi; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + 20, cy + 8);
+  ctx.lineTo(cx + cardW - 20, cy + 8);
+  ctx.moveTo(cx + 20, cy + cardH - 8);
+  ctx.lineTo(cx + cardW - 20, cy + cardH - 8);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = pal.wallHi;
+  ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
+  const areaTag = 'AREA ' + String(areaIdx).padStart(2, '0');
+  ctx.fillText(areaTag + ' :: ' + area.name, W / 2, cy + (narrow ? 32 : 40));
+
+  ctx.fillStyle = '#aaaacc';
+  ctx.font = `italic ${narrow ? 10 : 12}px monospace`;
+  const maxW = cardW - 40;
+  const words = (area.intro || '').split(' ');
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW) { if (line) lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  const lineH = narrow ? 15 : 18;
+  const textTop = cy + (narrow ? 56 : 70);
+  for (let i = 0; i < Math.min(lines.length, 3); i++) {
+    ctx.fillText(lines[i], W / 2, textTop + i * lineH);
+  }
+
+  if (elapsed > 0.5) {
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.fillStyle = '#666677';
+    ctx.font = `${narrow ? 8 : 9}px monospace`;
+    ctx.fillText('press any key to skip', W / 2, cy + cardH - 14);
+  }
+
+  ctx.restore();
+}
+
 // ─── Minimap ──────────────────────────────────────────────────────────────────
 // Base-layer cache: a 120×80 offscreen canvas with every visited/echo tile
 // pre-baked. Rebuilt only when game._minimapDirty flips — typically on floor
@@ -648,6 +750,7 @@ function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 // overlaid live after drawImage.
 function rebuildMinimapBase(dungeon, echoMap) {
   const MW = 120, MH = 80;
+  const pal = currentBiomePalette();
   let off = game._minimapCanvas;
   if (!off) {
     off = document.createElement('canvas');
@@ -673,9 +776,9 @@ function rebuildMinimapBase(dungeon, echoMap) {
         continue;
       }
       if (tile === T.WALL || tile === T.CRACKED) {
-        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : '#1a1a2e';
+        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#202040';
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -951,6 +1054,7 @@ const ROOM_LABEL_COLOURS = {
 
 function drawExpandedMinimap(dungeon, player) {
   const pad = 20;
+  const pal = currentBiomePalette();
   const ratio = MAP_W / MAP_H; // 80/50 = 1.6
   // Fit to ~85% of screen, respecting safe areas
   const maxW = (W - 2 * pad - safeLeft - safeRight) * 0.85;
@@ -999,9 +1103,9 @@ function drawExpandedMinimap(dungeon, player) {
 
       if (tile === T.WALL || tile === T.CRACKED) {
         col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx))
-          ? '#5e2d2d' : '#1a1a2e';
+          ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = '#252545';
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((game.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';
