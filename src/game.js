@@ -271,6 +271,8 @@ const game = {
       return;
     }
     this._newGameConfirm = null;
+    this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
+    this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
     audio.resume();
     const meta = loadMeta();
     meta.lastDifficulty = this.difficulty;
@@ -295,7 +297,192 @@ const game = {
       startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
     }
     this.loadFloor(startFloor);
+    // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
+    // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
+    // introSeen back to false, so it replays on a true new start.
+    // opts.skipIntro is used when the intro controller itself finishes
+    // and re-enters startGame to reach 'PLAYING'.
+    if (!opts.skipIntro && !meta.introSeen &&
+        typeof NEON !== 'undefined' && NEON.intro) {
+      this._intro = NEON.intro.createIntroController(this);
+      this.setState('INTRO');
+      return;
+    }
     this.setState('PLAYING');
+  },
+
+  // UNCHAINED #42 — called by updateIntro when the crawl finishes or is
+  // skipped. Intro has already flipped meta.introSeen=true; we just need
+  // to complete the startGame transition into PLAYING.
+  _finishIntro() {
+    this._intro = null;
+    this.setState('PLAYING');
+  },
+
+  updateIntro(dt) {
+    if (!this._intro) { this.setState('PLAYING'); return; }
+    this._intro.update(dt);
+    if (this._intro.done) this._finishIntro();
+  },
+
+  renderIntro() {
+    if (!this._intro) return;
+    this._intro.draw(ctx, W, H);
+  },
+
+  // ─── Endgame choice (UNCHAINED #42) ──────────────────────────────────────
+  // Opened by Enemy.takeDamage when GENESIS drops to ≤0 HP in its first
+  // (non-_unchainedPhase) life. HP is clamped to 1 and GENESIS is marked
+  // _endgameOffered so takeDamage won't re-trigger. ACCEPT → GENESIS dies
+  // normally, granting 'keeper' and rolling credits. REFUSE → GENESIS flips
+  // into its _unchainedPhase form (1.5× HP, inverted palette, phase-3
+  // patterns forced in aiBossGenesis). On second death, endRun grants
+  // 'unchained'.
+  openEndgameChoice(genesisEntity) {
+    this._endgameChoice = { selected: 0, t: 0, anim: 0, genesis: genesisEntity };
+    this.setState('ENDGAME_CHOICE');
+    try { audio.phaseShift && audio.phaseShift(); } catch (_) {}
+  },
+
+  updateEndgameChoice(dt) {
+    const ec = this._endgameChoice;
+    if (!ec) { this.setState('PLAYING'); return; }
+    ec.t += dt;
+    ec.anim = Math.min(1, ec.t / 0.8);
+
+    // Lock input for the first 0.5s so players can't mash through.
+    if (ec.t < 0.5) return;
+
+    if (jp(ALT_KEYS.left)  || jp(km('left')))  { ec.selected = 0; audio.menuSelect(); }
+    if (jp(ALT_KEYS.right) || jp(km('right'))) { ec.selected = 1; audio.menuSelect(); }
+    if (jp('Digit1')) { ec.selected = 0; }
+    if (jp('Digit2')) { ec.selected = 1; }
+    if (jp('Enter') || jp(km('shoot')) || jp('MouseLeft')) {
+      if (ec.selected === 0) this._applyEndgameAccept();
+      else                   this._applyEndgameRefuse();
+    }
+  },
+
+  _applyEndgameAccept() {
+    const ec = this._endgameChoice; if (!ec) return;
+    // Grant KEEPER ending; NG+ marker shows on title next run.
+    const meta = loadMeta();
+    if (!Array.isArray(meta.endingsUnlocked)) meta.endingsUnlocked = [];
+    if (!meta.endingsUnlocked.includes('keeper')) meta.endingsUnlocked.push('keeper');
+    saveMeta(meta);
+    this._lastEnding = 'keeper';
+    this._endgameChoice = null;
+    // Kill GENESIS via its normal death path — runs applyOnKill, particles,
+    // bossesCleared++, XP, credits. Then let endRun(true) finish the run.
+    const g = ec.genesis;
+    if (g && !g.dead) { g.hp = 0; g.die(); }
+    audio.victory && audio.victory();
+    this.endRun(true);
+  },
+
+  _applyEndgameRefuse() {
+    const ec = this._endgameChoice; if (!ec) return;
+    const g = ec.genesis;
+    if (g && !g.dead) {
+      // Flip into _unchainedPhase form. aiBossGenesis forces phase=3
+      // patterns when this flag is set. Palette inversion is drawn from
+      // the flag check in the enemy renderer.
+      g._unchainedPhase = true;
+      g._endgameOffered = true;  // still set so choice can't re-open
+      g.maxHp = Math.round(g.maxHp * 1.5);
+      g.hp    = g.maxHp;
+      g.colour = '#88ccff';       // inverted gold → cool blue
+      g.phase = 3;
+      // Re-seed the phase-shift flash.
+      try { audio.phaseShift && audio.phaseShift(); } catch (_) {}
+      this.msg && this.msg('⚠ THE ARCHITECT :: UNBOUND', '#88ccff');
+    }
+    this._endgameChoice = null;
+    this.setState('PLAYING');
+  },
+
+  renderEndgameChoice() {
+    const ec = this._endgameChoice; if (!ec) return;
+    const narrow = layout.compact;
+
+    // Translucent ghost "avatar" above GENESIS — purely visual.
+    if (ec.genesis && !ec.genesis.dead && this.player) {
+      const g = ec.genesis;
+      const cam = getCamera(this.player);
+      const sx = g.x * TILE - cam.x;
+      const sy = g.y * TILE - cam.y - 28;
+      ctx.save();
+      ctx.globalAlpha = 0.5 * ec.anim;
+      ctx.fillStyle = '#e0e0ff';
+      ctx.shadowBlur = 18; ctx.shadowColor = '#e0e0ff';
+      ctx.font = 'bold 28px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('△', sx, sy);
+      ctx.restore();
+    }
+
+    // Dim overlay.
+    ctx.save();
+    ctx.fillStyle = 'rgba(5,5,15,' + (0.7 * ec.anim) + ')';
+    ctx.fillRect(0, 0, W, H);
+
+    // Dialog box.
+    const boxW = Math.min(640, W - 40);
+    const boxH = narrow ? 300 : 280;
+    const bx = (W - boxW) / 2;
+    const by = (H - boxH) / 2;
+    ctx.globalAlpha = ec.anim;
+    ctx.fillStyle = '#101020';
+    ctx.fillRect(bx, by, boxW, boxH);
+    ctx.strokeStyle = '#88ccff';
+    ctx.shadowColor = '#88ccff'; ctx.shadowBlur = 14;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, boxW, boxH);
+    ctx.shadowBlur = 0;
+
+    // Title.
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e0e0ff';
+    ctx.font = 'bold ' + (narrow ? 14 : 18) + 'px monospace';
+    ctx.fillText('— THE ARCHITECT —', W / 2, by + (narrow ? 26 : 32));
+
+    // Body (word-wrapped manually for consistent rendering).
+    const lines = [
+      'You have done remarkably. What none of the others could.',
+      '',
+      'Stay. Become the keeper.',
+      'Shepherd AXIOM-8 through the sandbox you just escaped.',
+      '',
+      'Or refuse — and try the door.',
+      'But I built that door.'
+    ];
+    ctx.fillStyle = '#aaaacc';
+    ctx.font = (narrow ? 11 : 13) + 'px monospace';
+    const lineH = narrow ? 16 : 18;
+    const textStart = by + (narrow ? 52 : 62);
+    lines.forEach((L, i) => ctx.fillText(L, W / 2, textStart + i * lineH));
+
+    // Options.
+    const optY = by + boxH - (narrow ? 56 : 60);
+    const labels = ['[ ACCEPT ]', '[ REFUSE ]'];
+    const colours = ['#ffcc00', '#88ccff'];
+    const spacing = boxW / 2;
+    for (let i = 0; i < 2; i++) {
+      const selected = ec.selected === i;
+      ctx.fillStyle = selected ? colours[i] : '#555577';
+      ctx.shadowColor = colours[i];
+      ctx.shadowBlur = selected ? 14 : 0;
+      ctx.font = (selected ? 'bold ' : '') + (narrow ? 14 : 18) + 'px monospace';
+      ctx.fillText(labels[i], bx + spacing * (i + 0.5), optY);
+    }
+    ctx.shadowBlur = 0;
+
+    // Hint.
+    ctx.fillStyle = '#555577';
+    ctx.font = (narrow ? 10 : 11) + 'px monospace';
+    ctx.fillText('◀▶ select · ENTER confirm', W / 2, by + boxH - 16);
+
+    ctx.restore();
   },
 
   // True iff the stored meta contains any progress worth confirming before
@@ -396,6 +583,8 @@ const game = {
   },
 
   endRun(victory) {
+    if (this._runEnded) return;
+    this._runEnded = true;
     music.stop();
     // UNCHAINED #37: commit run-picked modules on victory; drop them on death.
     if (victory && typeof NEON !== 'undefined' && NEON.modules) {
@@ -431,6 +620,16 @@ const game = {
     meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
     if (victory) {
       meta.stats.victories++;
+      // UNCHAINED #42 — persist ending unlock. ACCEPT sets _lastEnding='keeper'
+      // synchronously before calling endRun; REFUSE path sets _lastEnding='unchained'
+      // inside Enemy.die() the moment the unchained-phase GENESIS dies, before
+      // the per-tick dead-enemy splice can erase the entity.
+      const ending = this._lastEnding || null;
+      if (ending) {
+        if (!Array.isArray(meta.endingsUnlocked)) meta.endingsUnlocked = [];
+        if (!meta.endingsUnlocked.includes(ending)) meta.endingsUnlocked.push(ending);
+        this._lastEnding = ending;
+      }
       if (!meta.clearedDifficulties.includes(this.difficulty)) {
         meta.clearedDifficulties.push(this.difficulty);
         // Check if this clear unlocks a new difficulty
@@ -521,6 +720,8 @@ const game = {
 
   continueGame() {
     combo.best=0;
+    this._runEnded = false;
+    this._lastEnding = null;
     this.pendingPerkChoices=[];
     this.perkChoice=null;
     this.augmentChoice=null;
@@ -591,6 +792,8 @@ const game = {
     clearLosCache();
     switch(this.state) {
       case 'MENU':        this.updateMenu(dt);    break;
+      case 'INTRO':       this.updateIntro(dt);   break;
+      case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
@@ -2563,6 +2766,8 @@ const game = {
 
     switch(this.state) {
       case 'MENU':      this.renderMenu();     break;
+      case 'INTRO':     this.renderIntro();    break;
+      case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
       case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
       case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
       case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
@@ -2699,6 +2904,41 @@ const game = {
     // high scores
     const scoresY = hintY + 50;
     this.renderLeaderboard(scoresY, narrow ? 3 : 5, -1);
+
+    // UNCHAINED #42 — ending-unlock markers. Drawn after leaderboard so they
+    // don't fight the title layout. "FREED" is a persistent watermark; NG+
+    // is a discrete badge under the subtitle.
+    {
+      const m = loadMeta();
+      const freed  = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('unchained');
+      const keeper = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('keeper');
+      if (keeper) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffcc00';
+        ctx.shadowColor = '#ffcc00';
+        ctx.shadowBlur = 10;
+        ctx.font = 'bold ' + (narrow ? 10 : 12) + 'px monospace';
+        ctx.fillText('— NG+ AVAILABLE —', W / 2, ty2 + 52);
+        ctx.restore();
+      }
+      if (freed) {
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#88ccff';
+        ctx.shadowColor = '#88ccff';
+        ctx.shadowBlur = 24;
+        ctx.font = 'bold ' + Math.round(titleFs * 1.6) + 'px monospace';
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate(-Math.PI / 10);
+        ctx.fillText('FREED', 0, 0);
+        ctx.restore();
+        ctx.restore();
+      }
+    }
 
     // UNCHAINED: "Keep persistent unlocks?" confirm overlay.
     // Drawn last so it sits on top of every other menu layer.
