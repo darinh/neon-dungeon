@@ -132,15 +132,16 @@
   }
 
   // drawCoreDrops — cyan-purple rotating hexagon glyph with a gentle vertical
-  // bob. Mirrors the drawing idioms used by items.js / render.js (`TS` tile
-  // size, camera-space translate). Browser-only: Node tests never call this.
+  // bob. Mirrors the drawing idiom used by items.js (`worldTile * TILE - camPx`).
+  // `camera` is pixel-space (matches getCamera() in src/render.js); `d.x/d.y`
+  // are tile-space. Browser-only: Node tests never call this.
   function drawCoreDrops(ctx, drops, camera, tileSize) {
     if (!ctx || !drops || drops.length === 0) return;
     const TSZ = tileSize || 32;
     for (const d of drops) {
       if (d.dead) continue;
-      const sx = (d.x - camera.x) * TSZ;
-      const sy = (d.y - camera.y) * TSZ;
+      const sx = d.x * TSZ - camera.x;
+      const sy = d.y * TSZ - camera.y;
       const bob = Math.sin(d.spawnTime * 3) * 2;
       const rot = d.spawnTime * 1.2;
       const r = 5 + (d.value >= 5 ? 2 : 0);  // bigger glyph for boss drops

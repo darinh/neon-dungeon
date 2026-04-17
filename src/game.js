@@ -3129,7 +3129,7 @@ const game = {
     // UNCHAINED #39: core drops — draw above items, below enemies.
     if (typeof NEON !== 'undefined' && NEON.cores && this.coreDrops && this.coreDrops.length) {
       const _ptCoresDraw = perfEnabled() ? performance.now() : 0;
-      NEON.cores.drawCoreDrops(ctx, this.coreDrops, cam, TS);
+      NEON.cores.drawCoreDrops(ctx, this.coreDrops, cam, TILE);
       if (_ptCoresDraw) perfRecord('cores-draw', performance.now() - _ptCoresDraw);
     }
 
@@ -3142,8 +3142,8 @@ const game = {
     // chain lightning bolts
     if (game._chainBolts) {
       for (const bolt of game._chainBolts) {
-        const sx=(bolt.x1-cam.x)*TS, sy=(bolt.y1-cam.y)*TS;
-        const ex=(bolt.x2-cam.x)*TS, ey=(bolt.y2-cam.y)*TS;
+        const sx=bolt.x1*TILE-cam.x, sy=bolt.y1*TILE-cam.y;
+        const ex=bolt.x2*TILE-cam.x, ey=bolt.y2*TILE-cam.y;
         ctx.save();
         ctx.globalAlpha=bolt.timer/0.15;
         ctx.strokeStyle=bolt.colour;

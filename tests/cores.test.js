@@ -191,3 +191,29 @@ test('forceCollectAll updates _cachedCores (endgame/descent path)', () => {
   assert.equal(g._cachedCores, 15);
   assert.equal(save.loadMeta().cores, 15);
 });
+
+// v116 regression: render-time crash from undefined `TS` + camera-space mismatch.
+// Boss kill / secret reveal both spawn cores; the FIRST drop hit a
+// `ReferenceError: TS is not defined` at the drawCoreDrops call site, aborting
+// renderPlaying mid-frame (player + HUD + enemies disappeared).
+test('drawCoreDrops projects tile->pixel using a pixel-space camera', () => {
+  const ops = [];
+  const ctx = {
+    save() {}, restore() {},
+    translate(x, y) { ops.push(['translate', x, y]); },
+    rotate() {},
+    beginPath() {}, closePath() {}, stroke() {}, fill() {},
+    moveTo() {}, lineTo() {},
+  };
+  const TILE = 32;
+  const drops = [{ x: 10, y: 8, value: 5, spawnTime: 0.2, dead: false }];
+  // Camera is pixel-space (matches getCamera in src/render.js).
+  const cam = { x: 4 * TILE, y: 3 * TILE };
+  assert.doesNotThrow(() => cores.drawCoreDrops(ctx, drops, cam, TILE));
+  const t = ops.find(o => o[0] === 'translate');
+  assert.ok(t, 'expected a translate call');
+  assert.equal(t[1], 10 * TILE - 4 * TILE, 'sx = d.x*TILE - camera.x');
+  // sy is offset by bob = sin(spawnTime*3)*2.
+  const expectedSy = 8 * TILE - 3 * TILE;
+  assert.ok(Math.abs(t[2] - expectedSy) <= 2, 'sy ~= d.y*TILE - camera.y (+/- bob)');
+});
