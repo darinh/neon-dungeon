@@ -461,7 +461,7 @@ class Enemy {
     const baseCr = isSummon ? 0 : (CREDIT_VALUES[this.type] || 5);
     const creditSiphonMul = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
     const corrosiveMul = game.modifier === 'CORROSIVE' ? 1.5 : 1;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul);
+    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // UNCHAINED #38: -15% credit drops (credits are now consumable-only)
     game.player.credits += cr;
     if (this.isBoss) game.bossesCleared++;
     // Vampiric perk: heal on kill
@@ -5337,6 +5337,10 @@ class Player {
     this.autoLaserTimer=0;      // auto-laser cooldown
     this.autoLaserBeam=null;    // {x1,y1,x2,y2,timer} for beam rendering
     this.credits=0;             // vendor currency
+    // UNCHAINED #38: temp-boost floor-scoped flags + one-shot shield charges.
+    // Cleared by game.loadFloor via NEON.boosts.clearFloorBoosts().
+    this.activeBoosts={};
+    this._shieldCharges=0;
     this.loreRead=new Set();    // indices of lore entries read this run
     this.dashCooldown=0;        // cooldown remaining (1.5s max)
     this.dashTimer=0;           // time left in active dash
@@ -5417,6 +5421,21 @@ class Player {
     const options = opts || {};
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
     if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
+    // UNCHAINED #38: SHIELD DRIVER boost — one-shot absorb. Consumed before
+    // the ENERGY_SHIELD perk so a stacked player uses the cheap boost first.
+    // Skip consumption when caller bypasses i-frames (env hazard DoT ticks
+    // pass ignoreInvincible) — a 20¢ "absorbs next hit" must not evaporate
+    // in one frame of plasma/toxic/arc contact.
+    if (!options.ignoreShield && !options.ignoreInvincible && NEON.boosts.consumeShieldCharge(this)) {
+      this.invincibleTimer = Math.max(this.invincibleTimer, 0.5); // preserve longer windows (e.g. SECOND_WIND)
+      this.hitsBlocked = (this.hitsBlocked|0) + 1;
+      audio.shieldBreak();
+      spawnParticles(this.x,this.y,'EXPLOSION','#44aaff',10);
+      spawnDmgText(this.x, this.y, 'ABSORB', '#44aaff');
+      game.msg('◈ SHIELD DRIVER ABSORB','#44aaff');
+      triggerShake(3, 0.12);
+      return 0;
+    }
     // Energy shield absorbs the hit
     if (!options.ignoreShield && this.energyShield && this.perks.ENERGY_SHIELD) {
       this.energyShield=false;
@@ -5501,11 +5520,17 @@ class Player {
     const hitCtx = { name:w.name, affixes:w._affixes||[], effects:w._effects||[] };
     // UNCHAINED #36: consume one surge shot + compute momentum/overclock mul.
     const surgeMul = this._consumeSurgeShot();
-    const metaMul = this.computeOutgoingDmgMul() * surgeMul;
+    // UNCHAINED #38: temp-boost COMBAT STIM stacks multiplicatively.
+    const boostDmgMul = NEON.boosts.getBoostDamageMul(this);
+    const metaMul = this.computeOutgoingDmgMul() * surgeMul * boostDmgMul;
+    // UNCHAINED #38: CRIT MATRIX adds flat crit chance. Also drops the
+    // CRITICAL_HIT perk gate — any player with an active matrix can crit.
+    const critBonus = NEON.boosts.getBoostCritBonus(this);
+    const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus;
 
     if (w.melee) {
       // plasma sword arc
-      const meleeCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
+      const meleeCrit = critChance > 0 && Math.random() < critChance;
       const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? 2 : 1) * metaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
@@ -5521,7 +5546,7 @@ class Player {
         const spread=(Math.random()-0.5)*(w.spread + (game.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
-        const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
+        const isCrit = critChance > 0 && Math.random() < critChance;
         const proj=new Projectile(
           this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?2:1)*metaMul,w.range,
           w.colour,!!w.piercing,true,w.name
@@ -5539,7 +5564,7 @@ class Player {
         const offAngle = (Math.random() < 0.5 ? -1 : 1) * 0.14; // ~8°
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
-        const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
+        const isCrit = critChance > 0 && Math.random() < critChance;
         const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? 2 : 1) * metaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
@@ -5670,6 +5695,7 @@ class Player {
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
+    spd *= NEON.boosts.getBoostSpeedMul(this); // UNCHAINED #38: REFLEX BOOSTER
     if (this.toxicSlowActive && this.dashTimer <= 0) spd *= 0.7; // 30% slow while in toxic pool
     if (this.disruptionFieldActive && this.dashTimer <= 0) spd *= 0.8; // 20% slow in disruption field
     let mx=0,my=0;

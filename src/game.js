@@ -147,6 +147,11 @@ const game = {
     this.player.shieldBonus=0;
     // Keys are floor-scoped: keep them for this floor, clear on fresh floor transitions
     if (savedModifier === undefined) this.player.keys = { red:0, blue:0, gold:0 };
+    // UNCHAINED #38: clear temp boosts on fresh transitions only (save-resume
+    // preserves purchased power until the floor ends).
+    if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.boosts) {
+      NEON.boosts.clearFloorBoosts(this.player);
+    }
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
     this.dungeon=generateFloor(n);
     // Reset boss state before populating (populateFloor sets them for boss floors)
@@ -179,7 +184,8 @@ const game = {
     this.teleportCooldown = 0;
     populateFloor(this.dungeon,n);
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
-    if (hasAugment('ECHO_MAPPER')) {
+    // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
+    if (hasAugment('ECHO_MAPPER') || (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.hasBoost(this.player, 'RECON_PING'))) {
       this.mapRevealed = true;
     } else {
       this.mapRevealed = false;
@@ -708,7 +714,11 @@ const game = {
         bonusCreditPerPickup: p.bonusCreditPerPickup || 0,
         dashIFrameBonus: p.dashIFrameBonus || 0,
         hackwareSlots: p.hackwareSlots || 3,
-        metaSecondWindUsed: !!p._metaSecondWindUsed
+        metaSecondWindUsed: !!p._metaSecondWindUsed,
+        // UNCHAINED #38: persist current-floor temp-boost state so a Continue
+        // preserves purchases (save-resume is not a fresh floor transition).
+        activeBoosts: p.activeBoosts ? {...p.activeBoosts} : {},
+        _shieldCharges: p._shieldCharges | 0
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -778,6 +788,9 @@ const game = {
     if (s.dashIFrameBonus !== undefined) p.dashIFrameBonus = s.dashIFrameBonus;
     if (s.hackwareSlots !== undefined) p.hackwareSlots = s.hackwareSlots;
     p._metaSecondWindUsed = !!s.metaSecondWindUsed;
+    // UNCHAINED #38: restore in-run temp boosts (defaults empty for old saves).
+    p.activeBoosts = s.activeBoosts ? {...s.activeBoosts} : {};
+    p._shieldCharges = s._shieldCharges | 0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
@@ -3146,12 +3159,19 @@ const game = {
     drawStatusBar(player);
     drawThreatIndicators(cam.x, cam.y);
     drawMinimap(dungeon,player);
+    drawBoostStrip(player);
     drawBossBar();
+
+    // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
+    // clear the active boost strip so pills don't collide with the text.
+    const _boostPills = (typeof NEON !== 'undefined' && NEON.boosts)
+      ? NEON.boosts.getActiveBoostList(player).length : 0;
+    const _boostOffset = _boostPills > 0 ? _boostPills * 21 + 4 : 0; // 18px pill + 3px gap + 4px bottom margin
 
     // Difficulty badge below minimap (non-NORMAL only)
     if (game.difficulty !== 'NORMAL') {
       const d = getDiff();
-      const bx = W - 128 - safeRight, by = 92 + safeTop;
+      const bx = W - 128 - safeRight, by = 92 + safeTop + _boostOffset;
       ctx.save(); ctx.textAlign='right';
       ctx.font='bold 9px monospace';
       ctx.shadowBlur=4; ctx.shadowColor=d.colour;
@@ -3163,7 +3183,7 @@ const game = {
     // Quest HUD (below minimap)
     if (game.quest) {
       const q = game.quest;
-      const qx = W - 128 - safeRight, qy = 96 + safeTop;
+      const qx = W - 128 - safeRight, qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
       ctx.save();
       ctx.font='10px monospace'; ctx.textAlign='right';
       if (q.done) {
@@ -3184,7 +3204,7 @@ const game = {
     // Bounty target HUD indicator (below quest)
     const bountyAlive = enemies.some(e => e._isBounty && !e.dead);
     if (bountyAlive) {
-      const by2 = 96 + safeTop + (game.quest ? 16 : 0);
+      const by2 = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0) + (game.quest ? 16 : 0);
       ctx.save();
       ctx.font='bold 9px monospace'; ctx.textAlign='right';
       const bPulse = 0.7 + 0.3 * Math.sin(Date.now() / 400);
