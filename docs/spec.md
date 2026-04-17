@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.0-wip
+# NEON DUNGEON — Game Specification v6.0
 
 ## Vision
 
@@ -2703,6 +2703,12 @@ currency ships, but nothing in this change touches the meta save slot.
 
 ## Meta-Progression — Neural Archives
 
+> **Status:** legacy v1 path. Still live on the main menu and still spends
+> `meta.shards` for the 6 upgrades below. UNCHAINED v2 introduces parallel
+> systems (cores wallet + UPGRADE MATRIX in the hub) that coexist with this
+> screen — both are preserved for save-compat. New content should target the
+> v2 path; this section documents what the v1 screen still does.
+
 Persistent upgrades that carry across runs. Currency: **Data Fragments (◆)**,
 stored in `localStorage` key `neonDungeonMeta` (separate from run saves).
 
@@ -2766,9 +2772,13 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
 
 ## Hub / The Gap
 
-> **Status:** scaffold shipped in UNCHAINED Phase 2 (#35). Harness + 4 terminal
-> slots present; terminal bodies are placeholder stubs that sibling issues
-> fill in (#36 upgrades, #37 modules, ARMORY weapon-swap, #41 archive).
+> **Status:** scaffold (#35) and 4 terminal slots are live. ARCHIVE (#41) is
+> fully wired in `src/meta/hub.js`; UPGRADE MATRIX (#36) and MODULE SLOTS
+> (#37) have their logic shipped (`src/meta/upgrades.js`,
+> `src/meta/modules.js` — panel factories and input handlers ready) but the
+> hub currently renders `makePlaceholder` stubs for those two slots pending
+> integration. ARMORY still shows the equipped weapon only (full swap UI is
+> a separate follow-up).
 
 **THE GAP** is a liminal between-floor state. After the player interacts with
 the stairs/terminal on floor 1+, the game transitions to `HUB` instead of
@@ -2805,8 +2815,8 @@ Four terminal cards render in a horizontal row. Each card conforms to the
 
 The four terminal slots, in order:
 
-1. **UPGRADE MATRIX** (`id: upgrade`) — placeholder stub. Filled by #36.
-2. **MODULE SLOTS**   (`id: modules`) — placeholder stub. Filled by #37.
+1. **UPGRADE MATRIX** (`id: upgrade`) — persistent 12-node tree spent with cores. Logic shipped (#36 — `src/meta/upgrades.js`); hub currently renders a `makePlaceholder` card pending integration. See #36.
+2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic shipped (#37 — `src/meta/modules.js`); hub currently renders a `makePlaceholder` card pending integration. See #37.
 3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
    name; full weapon-swap UI is a follow-up.
 4. **ARCHIVE**        (`id: archive`) — predecessor-log reader. Lists every
@@ -2841,10 +2851,10 @@ The four terminal slots, in order:
 
 ## Meta-progression / Persistent Save (v2)
 
-> **Status:** vessel only. Shipped in UNCHAINED Phase 1 (#33). The systems that
-> populate these fields — hub UI (#35), upgrade effects (#36), modules (#37),
-> cores economy (#39), logs (#41) — are tracked as separate issues. The schema
-> is the contract every subsequent phase writes against.
+> **Status:** shipped. Schema landed in UNCHAINED Phase 1 (#33); every sibling
+> system now reads and writes these fields — hub UI (#35), upgrade matrix
+> (#36), modules (#37), cores wallet (#39), archive logs (#41), intro/endgame
+> (#42). The schema is the contract every phase writes against.
 
 ### Schema — v2
 
@@ -3000,9 +3010,29 @@ without breaking when the flag is absent. The mapping:
 | `ghostwalk` | `dashIFrameBonus += 0.2 × lv`; `metaFlags.ghostwalk = lv` |
 | `hacktool` | `hackwareSlots = 3 + lv`; `metaFlags.hacktool = lv` |
 
-The behavioural-flag listeners (on-kill momentum window, every-8th-hit surge,
-on-lethal second_wind revive) are intentionally deferred — the flags are the
-contract; the run-loop hookups land in a follow-up.
+The behavioural-flag listeners live in `src/meta/behavior.js` (UMD module
+`NEON.behavior`), wired in during #38:
+
+- `computeOutgoingDmgMul(player)` — `damageMult × (1 + 0.15 × momentumLevel)`
+  while `_momentumTimer > 0` (momentum only; surge is consumed separately).
+  Read by `Player.shoot` and applied to melee arc, main projectile, and
+  MULTI_SHOT bonus shot.
+- `consumeSurgeShot(player)` — every-8th-`shoot()`-call surge multiplier
+  (counts attacks, not per-projectile hits — a multi-pellet or piercing
+  shot is one attack). Mutates `player._surgeShotCount`.
+- `onKillRefreshMomentum(player)` — called from `Enemy.die()`; refreshes the
+  3s +15% damage window (fires on every death, including volatile / seeker
+  chains, matching existing `applyOnKill` precedent).
+- `tickMomentum(player, dt)` / `tickOutOfCombatRegen(player, dt)` /
+  `resetOutOfCombat(player)` — ticked from `Player.update` /
+  `Player.takeDamage`.
+- `tryMetaSecondWind(player)` — one-shot revive hook in
+  `Player.takeDamage` lethal branch.
+
+`continueGame` persists `metaFlags`, `damageMult`, `regenPerSec`,
+`critChance`, `sensorRadiusMult`, `bonusCreditPerPickup`, `dashIFrameBonus`,
+`hackwareSlots`, and `_metaSecondWindUsed` so Upgrade Matrix effects survive
+run resume.
 
 ### Audio
 
@@ -3044,8 +3074,8 @@ read (e.g. `doubleCreditChance`, `reflectDamagePct`, `dashCooldownMul`).
 | Source | Rule |
 |--------|------|
 | **Rare terminals** (CORRUPTED_TERMINAL → PURGE, floor 2+) | 25% chance of a uniformly-weighted module, else nothing |
-| **Non-final bosses** (SENTINEL, HIVE, CONDUCTOR, OMEGA)   | Guaranteed 1 module — *wiring deferred to #39 or follow-up* |
-| **GENESIS** (final boss)                                  | Guaranteed 1 module + 10 cores — *wiring deferred* |
+| **Non-final bosses** (SENTINEL, HIVE, CONDUCTOR, OMEGA)   | Guaranteed 1 module — *drop site wiring is a follow-up; only rare-terminal drops are live in v6.0* |
+| **GENESIS** (final boss)                                  | Guaranteed 1 module + 10 cores — cores are credited via `Enemy.die()`; guaranteed module drop is still a follow-up |
 
 `modules.rollModuleDrop({source})` is the single roll entry point.
 `source = 'rare-terminal' | 'boss-non-final' | 'boss-genesis'` — returns a
@@ -3096,6 +3126,87 @@ Key bindings inside the panel:
 | `drawModuleSlotsPanel(...)` / `handleModuleSlotsKey(...)` / `defaultPanelState()` | Hub terminal UI for #35 integration. |
 
 ---
+
+## Cores (UNCHAINED #39)
+
+**CORES (◆)** are the post-run persistent currency. Earned in-run as world
+pickups, spent at the hub UPGRADE MATRIX (#36) or MODULE SLOTS vendor (#37
+— `SELL_PRICE` refund). Wallet lives on `meta.cores` (see Persistent Save v2).
+
+Implementation lives in `src/meta/cores.js` (UMD module `NEON.cores`).
+The module is pure — all side effects (save, audio, particles, damage-text)
+are passed in via a deps bag `{ save, audio, spawnParticles, spawnDmgText }`
+so Node tests pass stubs and all `deps.*` calls are try/catch-guarded.
+
+### Drop Rules
+
+| Source | Drop |
+|--------|------|
+| Elite enemy death | `rndInt(1, 2)` |
+| `SENTINEL` / `WARDEN` / `HIVE` / `CONDUCTOR` / `OMEGA` boss | 5 |
+| `GENESIS` (final) | 10 |
+| Summons (`_summoned`) and SHARD splits | 0 (explicitly excluded) |
+| `revealSecretRoom` | +1 at room centre |
+| Challenge wave completion | +2 at `(cr.cx, cr.cy)` |
+| `CORRUPTED_TERMINAL → PURGE` (floor 2+) | 50/50 core-vs-module roll, *after* the 40% log check (mutex: logs > cores > modules) |
+
+Drop call site is `Enemy.die()` in `src/entities.js`; terminal drops live in
+`src/content.js`.
+
+### Runtime API (`src/meta/cores.js`)
+
+| Symbol | Purpose |
+|--------|---------|
+| `spawnCoreDrop(game, x, y, value)` | Push a `CoreDrop` onto `game.coreDrops` (`value` clamped `≥ 1`). |
+| `updateCoreDrops(game, dt, deps)` | Animate, magnet-pull (linear falloff inside `MAGNET_RADIUS = 2.0`, max speed `MAGNET_MAX_SPEED = 10`), collect on contact (`PICKUP_RADIUS = 0.7`). |
+| `drawCoreDrops(ctx, drops, cam, TS)` | Rotating cyan-outlined hexagon with purple core; `+2 px` radius for `value ≥ 5`. Null/empty safe. |
+| `vacuumAllCores(game)` | Flip `_vacuum` on every drop so they pull at max speed ignoring the radius gate. |
+| `forceCollectAll(game, deps)` | Hard-credit all remaining drops + empty the array. Called from `endRun()` so every end-of-run path (descend, KEEPER ACCEPT, UNCHAINED REFUSE) credits the wallet. |
+| `clearCoreDrops(game)` | Wipe `game.coreDrops` without crediting. Called in `loadFloor` between floors. |
+| `tickHudPulse(game, dt)` | Drain `game._coreHudPulse` timer for the HUD flash. |
+
+`PICKUP_RADIUS = 0.7`, `MAGNET_RADIUS = 2.0`, `MAGNET_MAX_SPEED = 10`,
+`PULSE_DURATION = 0.5` are exported constants.
+
+### Pickup Effects
+
+On collection: `deps.save.addCores(value)` credits the wallet,
+`deps.audio.coreCollected()` plays, cyan `SPARK` particles spawn, `+N◆`
+float-text spawns, `game._coreHudPulse = PULSE_DURATION` flashes the HUD pill.
+
+### Game-loop wiring (`src/game.js`)
+
+- Update: `NEON.cores.updateCoreDrops(this, dt, deps)` + `tickHudPulse`,
+  wrapped in `perfRecord('cores-update', …)`.
+- Draw: `NEON.cores.drawCoreDrops(ctx, this.coreDrops, cam, TS)`, wrapped in
+  `perfRecord('cores-draw', …)`.
+- End-of-run: `NEON.cores.forceCollectAll(this, deps)` inside `endRun()` so
+  all three victory paths (normal `descend()`, `_applyEndgameAccept` /
+  KEEPER, post-UNCHAINED terminal) credit the wallet.
+- HUD caching: `game._cachedCores` seeded at `startGame` / `continueGame` and
+  updated inside `_collect` / `forceCollectAll` so the HUD reads memory
+  per-frame instead of hitting `localStorage`.
+
+### HUD
+
+`◆ N` pill rendered left of `◈ CREDITS` in landscape and right of credits in
+compact. Reads `game._cachedCores`. Idle colour `#a866ff`; while
+`game._coreHudPulse > 0` the pill flashes `#44e5ff` with an outer glow.
+
+### Audio
+
+`audio.coreCollected()` in `src/platform.js` — short crystalline shimmer.
+
+### Save Schema
+
+Wallet is `meta.cores` (integer, ≥ 0) in the v2 persistent save. Mutated only
+via `save.addCores(n)` (credit) and `save.spendCores(n)` (debit, atomic — see
+Persistent Save v2 helpers). Never touched on death. In-world `coreDrops`
+live on the run object (`game.coreDrops`) and are cleared on floor load;
+nothing about pending pickups survives a crash — the `forceCollectAll` call
+inside `endRun` is the commit point.
+
+
 
 ## Predecessor Logs — ARCHIVE (UNCHAINED #41)
 
@@ -4218,3 +4329,5 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v111.0  | Intro crawl + endgame choice (UNCHAINED #42): book-ends the UNCHAINED arc. **Intro** — new 5-slide opening crawl in `src/meta/intro.js` (UMD module exposing `createIntroController(game)` + `SLIDES`) plays inside `startGame()` on fresh saves (`meta.introSeen===false`); any-key advance reads the edge-triggered global `justPressed` (never held `keys`), `Escape` full-skip, auto-advance on per-slide timers. Flips `meta.introSeen=true` exactly once via `saveMeta` on every exit path. Only `resetMeta()` replays it. New `INTRO` state branch in update/render switches; `startGame({ skipIntro:true })` bypass lets the controller re-enter `startGame` on completion to reach `PLAYING`. **Endgame** — `Enemy.takeDamage` intercepts the first GENESIS mortal hit when `!_unchainedPhase && !_endgameOffered`: HP clamps to 1, lance telegraph cancels, `game.openEndgameChoice(g)` transitions to the new `ENDGAME_CHOICE` state. Dialog overlays `PLAYING` with a ghost `△` avatar above GENESIS, THE ARCHITECT monologue, two options (`←/→` select, `ENTER` confirm, 0.5s input lock-out). **ACCEPT** appends `'keeper'` to `meta.endingsUnlocked`, runs the normal `g.die()` path, then `endRun(true)`. **REFUSE** flips the GENESIS entity in place: `_unchainedPhase=true`, `_endgameOffered=true`, `maxHp*=1.5`, `hp=maxHp`, `colour='#88ccff'`, `phase=3`. `aiBossGenesis` locks `newPhase=3` attack patterns for the duration; hex ring + lance telegraph colours invert in the draw path. On the second death `endRun` scans `enemies[]` for the dead unchained-phase GENESIS and appends `'unchained'`. **Title markers** (`renderMenu`): `keeper` → `— NG+ AVAILABLE —` badge in `#ffcc00` under subtitle; `unchained` → rotated `FREED` watermark at 18% alpha in `#88ccff` across the title; both can coexist. **Save schema**: `introSeen:false` added to `defaultMeta`, coerced with strict `=== true` on load so stale truthy strings can't grant intro-skip; `_coerceEndings` continues to filter `endingsUnlocked` to `{'keeper','unchained'}`. `resetMeta` wipes both. New `tests/intro.test.js` (10 tests): `introSeen` default + round-trip + strict-boolean-coercion, `resetMeta` replay gate, `endingsUnlocked` dual-accept + unknown-token filter, controller shape, slide auto-advance driving the `introSeen` flip, idempotent post-done updates, null-ctx draw safety. `index.html` loads `intro.js` between `behavior.js` and `hub.js`. SW cache v111. 157/157 tests pass. Spec v5.11. |
 | v112.0  | In-run economy rebalance — temp boosts replace permanent upgrades (UNCHAINED #38). New `src/meta/boosts.js` UMD module (`NEON.boosts`) with 6 consumables: **COMBAT STIM** (+15% dmg, 15¢, floor), **REFLEX BOOSTER** (×1.10 spd, 12¢, floor), **CRIT MATRIX** (+8% crit, 18¢, floor), **SHIELD DRIVER** (one-shot absorb, 20¢, stackable), **NANO-MEDIC** (heal 40% maxHp, 10¢, instant), **RECON PING** (reveal minimap, 15¢, floor). Vendor pool (`generateShopItems` in `src/content.js`) now calls `NEON.boosts.filterVendorPool(UPGRADES)` — every `persistent:true` entry is stripped, so credits no longer buy permanent stat growth (SAW_BLADE / PLASMA_ORB / NANO_REGEN / OVERCLOCK / ARMOR_UP / RICOCHET / SENTRY_DRONE are now floor-pickup / Upgrade-Matrix only). Up to 2 boost slots are injected per shop at price `base + floor × 2`; remaining slots backfill from non-persistent consumables (heals / XP chips / void shards) then weapons. **Credit drops × 0.85** — single-line retune in `Enemy.die`. **Runtime hooks** (`src/entities.js`): Player ctor inits `activeBoosts={}` + `_shieldCharges=0`; `Player.shoot` uses `metaMul *= getBoostDamageMul(this)` and `critChance = (perks.CRITICAL_HIT ? 0.15 : 0) + getBoostCritBonus(this)` — applied uniformly to melee arc, the main projectile loop, and the MULTI_SHOT bonus shot (CRIT MATRIX bypasses the CRITICAL_HIT perk gate); movement block multiplies `spd *= getBoostSpeedMul(this)` after adrenaline/perks; `takeDamage` calls `consumeShieldCharge(this)` **before** the ENERGY_SHIELD perk branch so the cheap boost burns first (0.5s invuln, `audio.shieldBreak()`, `ABSORB` popup, `◈ SHIELD DRIVER ABSORB` banner, tracked in `hitsBlocked`). `game.loadFloor` calls `clearFloorBoosts(player)` on fresh transitions only (save-resume preserves purchases, though `saveGame` only runs at floor-start so `activeBoosts` is always empty at save-write time); `mapRevealed` now OR's `hasAugment('ECHO_MAPPER')` with `hasBoost(player, 'RECON_PING')`, and the RECON_PING purchase `fn` flips `game.mapRevealed=true` + `_minimapDirty=true` immediately. New `drawBoostStrip(player)` in `src/render.js` — pill strip 8px below the minimap, one pill per floor boost + a `SHIELD DRIVER ×N` pill while charges remain; zero draw cost when nothing's active. `index.html` loads `boosts.js` between `behavior.js` and `intro.js`. Spec: "Vendor / Shop System" rewrite + new "In-run Temp Boosts" section. `tests/economy.test.js` covers catalogue, applyBoost effects, clearFloorBoosts, consumeShieldCharge, getActiveBoostList ordering, filterVendorPool, null-safety (19 tests). 176/176 tests pass. SW cache v112. |
 | v113.0  | CORES currency — in-world drops + HUD (UNCHAINED #39). New `src/meta/cores.js` UMD module (`NEON.cores`) introduces the post-run persistent currency as in-world pickups: `spawnCoreDrop(game,x,y,value)` appends a `CoreDrop` (plain object: x/y, vx/vy, value clamped ≥1, spawnTime, `_vacuum`, `dead`) to `game.coreDrops`. `updateCoreDrops(game, dt, deps)` ticks animation, collects inside `PICKUP_RADIUS=0.7` (`save.addCores` credit + `audio.coreCollected` chime + cyan `SPARK` burst + `+N◆` float-text + `PULSE_DURATION=0.5s` HUD flash), and applies linear-falloff magnetic pull inside `MAGNET_RADIUS=2.0` (max speed `MAGNET_MAX_SPEED=10` tiles/sec; `_vacuum` drops ignore the radius gate and always pull at max). `drawCoreDrops(ctx, drops, cam, TS)` renders a rotating hexagon glyph — cyan outline + purple core, `+2px` radius when `value≥5` (boss drops read bigger). `vacuumAllCores(game)` flips the pull on every drop; `forceCollectAll(game,deps)` hard-credits remaining drops and empties the array (called at top of `game.descend()` so nothing is stranded on floor-transition). `clearCoreDrops(game)` wipes without crediting (called in `loadFloor` between floors). `tickHudPulse` drains the timer. **Drop rules** (`Enemy.die`): elite → `rndInt(1,2)`, bosses `SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA` → 5, `GENESIS` → 10; summons and shard-split enemies drop nothing. **Room rewards**: `revealSecretRoom` → +1 core at room centre; challenge-wave completion → +2 at `(cr.cx, cr.cy)`; `CORRUPTED_TERMINAL` → 50/50 core-vs-module roll *after* the log-drop check (logs > cores > modules, mutually exclusive). **Game-loop wiring**: `src/game.js` update runs `NEON.cores.updateCoreDrops` + `tickHudPulse` wrapped in `perfRecord('cores-update')`, draw runs `drawCoreDrops` wrapped in `perfRecord('cores-draw')` — both honour the F3 perf HUD (`perfEnabled()` gate) with zero cost when hidden. **HUD**: `◆ N` pill added left of `◈` (landscape) and right of credits (compact); reads `NEON.save.loadMeta().cores` per frame; colour is `#a866ff` idle, flashes `#44e5ff` with glow while `game._coreHudPulse > 0`. **Deps bag** (`{save, audio, spawnParticles, spawnDmgText}`) keeps the module pure — Node tests pass stubs, browser passes globals; all fx calls are try/catch-guarded so a stub throwing never breaks a run. `audio.coreCollected()` added to `src/platform.js` (short crystalline shimmer). `sw.js` cache v112 → v113. New `tests/cores.test.js` (12 tests) covers: drop clamping, pickup credit + pulse, magnet engage + idle-outside-radius, spawnTime tick, vacuum engage, forceCollectAll bookkeeping, clearCoreDrops wallet-safety, tickHudPulse drain, audio.coreCollected dispatch + throw-safety, drawCoreDrops null/empty safety. 188/188 tests pass. |
+
+| v6.0    | **UNCHAINED arc consolidated.** Meta-progression v2 (#33): `meta.cores/upgradeNodes/modulesOwned/modulesInstalled/logsRead/logsFound/endingsUnlocked/runsCompleted/deepestBiome` added with lossless v1→v2 migration; legacy `shards/upgrades` retained for save-compat. Five biomes drive floor palettes, minimap colours, and boss display names (#34, #40). Hub / The Gap between-floor interlude with four terminals (#35): UPGRADE MATRIX (#36 — 12-node tree × 4 tiers, cores-priced, behavioural flags wired in `src/meta/behavior.js`), MODULE SLOTS (#37 — 10-module catalog, 3-slot loadout, run-pickup commit on descend/victory, sell for 4 cores), ARMORY (read-only stub), ARCHIVE (#41 — 30 predecessor logs across 6 AXIOMs, biome-gated rare-terminal drops, inline reader). In-run temp boosts replace persistent vendor upgrades (#38 — `src/meta/boosts.js`: 6 consumables, `filterVendorPool` strips `persistent:true` from shop rolls, credit drops ×0.85). Cores currency (#39 — `src/meta/cores.js`: in-world hexagon pickups with magnet + vacuum, elite 1–2, bosses 5, GENESIS 10, secret +1, challenge +2, 50/50 corrupted-terminal roll after the log check; `forceCollectAll` in `endRun` covers all three victory paths). Intro crawl + endgame choice (#42 — `src/meta/intro.js`: 5-slide opening gated by `meta.introSeen`; GENESIS mortal-hit intercept opens ENDGAME_CHOICE — ACCEPT → `keeper` ending, REFUSE → `unchained` phase with inverted visuals → second death appends `unchained`; title screen shows NG+ AVAILABLE + FREED markers). Spec version bumped to v6.0. |
