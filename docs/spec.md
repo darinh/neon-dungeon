@@ -3070,6 +3070,43 @@ readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 
 ## Visual Style
 
+### Biome Art Direction (UNCHAINED #40)
+
+Each of the 5 biomes has a distinct palette applied to walls, floors,
+minimap tiles, and DUST ambient particles. Palette keys live in
+`src/data/palettes.js` (`BIOME_PALETTES`) keyed by `AREAS[i].palette`.
+Renderer lookup via `currentBiomePalette()` in `src/render.js`. Sealed
+entrances, arc tiles, plasma, toxic, keys, and state markers remain
+biome-agnostic for readability.
+
+| Biome | Key | Wall fill | Wall highlight | Floor | Ambient DUST | Boss displayName |
+|---|---|---|---|---|---|---|
+| Sandbox (floors 1–3) | `cyan` | `#3a3a6a` | `#5858a0` | `#252545` | cyan/slate flecks | SENTINEL-PRIME |
+| Cache (floors 4–6) | `rust` | `#4a2e1e` | `#9a5a38` | `#2a0e05` | orange/ash dust | VIRAL COLLECTIVE |
+| Firewall (floors 7–9) | `glitch` | `#3a0e3a` | `#aa00aa` | `#15002a` | magenta/lime | THE COMPILER |
+| Uplink (floors 10–12) | `sky` | `#2a4a6a` | `#88ddff` | `#0a2030` | white/sky | OVERSEER |
+| Opennet (floors 13–15) | `green` | `#0f3a24` | `#00cc66` | `#002015` | matrix green | THE ARCHITECT |
+
+**Boss renames** — `BOSS_NAMES` in `src/entities.js:92` is patched at load
+from `AREAS[i].displayName` for any combat type in that area's `bossPool`.
+Internal combat class ids (`SENTINEL`, `HIVE`, etc.) are unchanged;
+only the HUD / announce / death-screen string uses the narrative name.
+
+**Biome intro card** — On the first floor of each biome *except floor 1*
+(floors 4, 7, 10, 13), a 3-second card is rendered over the playing
+screen showing `AREA 0N :: BIOME_NAME` and the italic `area.intro` flavour.
+State: `game.biomeCardTimer` + `game.biomeCardArea`. Any key skips.
+Skipped on saved-run resume (same guard as modifier banner).
+Renderer: `drawBiomeCard()` in `src/render.js`.
+
+**Ambient particles** — Existing emitter system (`updateAmbient` in
+`src/content.js:1292`) retains its tile-driven DUST/EMBER/ZAP/STEAM/WISP
+kinds. DUST colour is biome-tinted from `BIOME_PALETTES[palette].dust`.
+Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
+`biome-ambient` (separate from `particles`) — surfaces in the F3 HUD.
+
+---
+
 - **Palette:** Near-black backgrounds (#0a0a12), neon cyan (#00f5ff),
   neon magenta (#ff00c8), neon green (#39ff14), amber (#ffb700)
 - **Player:** Cyan humanoid silhouette, direction indicator
@@ -3992,3 +4029,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v96.0   | Pause screen mouse + keyboard navigation: desktop users can now hover and click the 3 pause menu options (Resume/Settings/Quit) instead of relying on keyboard shortcuts alone. Arrow up/down + Enter also work. Hovered option highlights with colour-matched glow (cyan/amber/red). `_pauseSel` tracks selection, reset on entering `PAUSED` state. Touch input unchanged (zone-based taps). No SAVE_VERSION bump. SW cache v96. |
 | v97.0   | HOLO DECOY hackware (6th module): holographic taunt decoy deployed at aim position. 12s cooldown, 4s duration. Taunts non-boss enemies within 5 tiles (LOS to acquire, 7-tile break range) via per-enemy `_tauntTarget`+`_tx/_ty` target redirection in `Enemy.update()`. All 24 non-boss AI functions patched to use `this._tx/this._ty` for movement, firing, aiming, and retreat; `canTargetPlayer()` → `this._canTarget()` (taunt-aware). Damage delivery paths (CHARGER charge hit, LEAPER shockwave, SEEKER detonation) use real `player.x/player.y` — enemies are fooled about position but can't damage what isn't there. `meleeAttack()` adds real-distance guard (> 1.2 tiles → whiff). Exclusions: bosses immune, disguised mimics and phased wraiths can't acquire taunt. Wraiths taunted while corporeal keep taunt through phasing. On expiry: 0.5s mini-stun within 2 tiles, all taunt refs cleared. Max 1 active hologram; recast removes previous + clears refs. Visual: flickering magenta hexagon with scanline + ambient particles. Status badge `⬡` with countdown. `audio.holoDecoyDeploy()` holographic shimmer, `audio.holoDecoyExpire()` shatter. `_wrFindEmergeTile()` and `_phReposition()` updated to use perceived target. Colour `#ff44ff`. Icon ⬡. Spec v5.9. SW cache v97. |
 | v109.0  | ARCHIVE terminal (UNCHAINED #41): predecessor-log fragments recoverable from rare terminals. 30 authored logs across 6 AXIOM predecessors (each with a 5-entry arc), biome-gated via new `src/data/logs.js` data table. `CORRUPTED_TERMINAL → PURGE` rolls a 40% log drop **before** the module drop — logs and modules are mutually exclusive. Eligible logs: biome matches current floor, `floorMin ≤ floor`, not yet in `meta.logsFound`. Found logs route into the existing `READING` overlay for immediate reading (with `audio.logFound()` chime). New hub ARCHIVE terminal (`src/meta/hub.js`) replaces the #41 placeholder: scrollable list of found logs grouped by AXIOM-N with pulsing `●NEW` markers, select-to-read opens inline body view (`audio.logRead()` click). New `src/meta/logs.js` API: `pickLogForFloor(floor, rand?)`, `findLog(id)`, `readLog(id)`, `logById(id)`, `logsForBiome(biomeId)`, `groupedByAxiom()`, `unreadCount()`, `progress()` — tolerant of stale ids in save. 22 unit tests (`tests/logs.test.js`) covering data integrity, picker eligibility, found/read state, idempotency, and stale-id tolerance. Spec v5.10. SW cache v109. |
+| v110.0  | Biome palette + boss renames + intro cards (UNCHAINED #40): each of the 5 biomes now has a distinct visual identity. New `src/data/palettes.js` exports `BIOME_PALETTES` keyed by `AREAS[i].palette` (cyan / rust / glitch / sky / green) with wall fill, wall highlight, floor, floor accent, minimap wall, minimap floor, DUST colours, and ambient tint. `currentBiomePalette()` in `src/render.js` resolves per-frame from `NEON.biomes.areaForFloor(game.floor)`. All hardcoded wall (`#3a3a6a`/`#5858a0`), floor (`#252545`/`#303058`), and minimap (`#1a1a2e`/`#202040`/`#252545`) colours threaded through palette lookup; sealed entrance, arc, plasma, toxic, keys, and state markers stay biome-agnostic. `BOSS_NAMES` in `src/entities.js` is patched at load from `AREAS[i].displayName` for every combat id in that area's `bossPool` — HUD/announce/death text now reads `SENTINEL-PRIME`, `VIRAL COLLECTIVE`, `THE COMPILER`, `OVERSEER`, `THE ARCHITECT`; internal combat class ids unchanged. Biome intro card: 3-second overlay on first floor of each biome *except* floor 1 (floors 4/7/10/13) showing `AREA 0N :: BIOME_NAME` + italic `area.intro` flavour with fade-in/out and any-key skip; state: `game.biomeCardTimer` + `game.biomeCardArea`; renderer `drawBiomeCard()`; trigger skipped on saved-run resume (same guard as modifier banner). Ambient particles: existing emitter system retained, DUST colour biome-tinted from `BIOME_PALETTES[palette].dust`; dedicated `perfRecord('biome-ambient', ms)` wraps `updateAmbient()` — surfaces in F3 perf HUD separately from `particles`. New `tests/palettes.test.js` regression guard (3 tests): every `AREAS[i].palette` has a matching `BIOME_PALETTES` entry, every palette defines required colour fields as valid `#rrggbb`, area keys are covered. 147/147 tests pass. SW cache v110. |
