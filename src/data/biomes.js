@@ -97,6 +97,14 @@
     return AREAS[n];
   }
 
+  // finalFloor returns the last floor of the last biome — the CORE/victory
+  // floor. Derived from AREAS so changing biome counts doesn't require
+  // chasing down magic numbers across the codebase.
+  function finalFloor() {
+    const last = AREAS[AREAS.length - 1];
+    return last.floors[last.floors.length - 1];
+  }
+
   return {
     AREAS,
     areaForFloor,
@@ -104,5 +112,6 @@
     firstFloorOfBiomeContaining,
     biomeIndex,
     areaForIndex,
+    finalFloor,
   };
 }));

@@ -1285,7 +1285,10 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.font = `${poiFs}px monospace`;
   for (const p of pois) {
     let col, label, sz = Math.max(4, Math.round(sx * 0.6));
-    if (p.tile === T.STAIRS || p.tile === T.TERMINAL) { col = '#ffffff'; label = game.floor === 10 ? 'CORE' : 'EXIT'; }
+    if (p.tile === T.STAIRS || p.tile === T.TERMINAL) {
+      const _ff = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
+      col = '#ffffff'; label = game.floor >= _ff ? 'CORE' : 'EXIT';
+    }
     else if (p.tile === T.VENDOR) { col = '#39ff14'; label = 'SHOP'; }
     else if (p.tile === T.CHALLENGE_GATE) { col = '#ff6633'; label = 'CHALLENGE'; }
     else if (p.tile === T.IMPLANT_SHRINE) { col = '#cc44ff'; label = 'IMPLANT'; }
@@ -1843,7 +1846,7 @@ function populateFloor(dungeon, floorNum) {
   }
 
   // Boss-floor flag (used by mimic spawn and bounty designation)
-  const isBossFloor = floorNum === 3 || floorNum === 6 || floorNum === 10;
+  const isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum === 3 || floorNum === 6 || floorNum === 10);
 
   // Mimic spawn (floor 7+, non-boss, 50% chance, max 1 per floor)
   if (floorNum >= 7 && !isBossFloor && Math.random() < 0.5) {

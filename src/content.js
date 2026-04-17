@@ -1870,12 +1870,14 @@ function generateFloor(floorNum) {
   const dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
   for (const [r,d] of dist) { if (d>farthestD) { farthestD=d; farthest=r; } }
-  map[farthest.cy][farthest.cx] = floorNum>=10 ? T.TERMINAL : T.STAIRS;
+  const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
+  const _isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum===3||floorNum===6||floorNum===10);
+  map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
 
-  // boss room on floors 3,6,10
+  // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
   let bossRoom = null;
   let bossEntrances = [];
-  if (floorNum===3||floorNum===6||floorNum===10) {
+  if (_isBossFloor) {
     // use the room furthest from spawn that isn't the stair room
     let br = null, bd = 0;
     for (const [r,d] of dist) {
@@ -1902,7 +1904,7 @@ function generateFloor(floorNum) {
         if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
       }
       // Re-place stairs/terminal in case expansion overwrote it
-      map[farthest.cy][farthest.cx] = floorNum>=10 ? T.TERMINAL : T.STAIRS;
+      map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
     }
 
     // Record entrance tiles: floor tiles on room boundary that connect to corridors
@@ -2234,7 +2236,7 @@ function generateFloor(floorNum) {
   // so it can later double as a player power-up (path visualisation).
   {
     const sx = spawnRoom.cx, sy = spawnRoom.cy;
-    const stairTile = floorNum >= 10 ? T.TERMINAL : T.STAIRS;
+    const stairTile = floorNum >= _finalFloor ? T.TERMINAL : T.STAIRS;
     const vis = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
     const prev = Array.from({length: MAP_H}, () => new Int16Array(MAP_W).fill(-1));
     const q = [{x: sx, y: sy}];
