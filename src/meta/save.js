@@ -52,6 +52,7 @@
       logsRead: [],                                    // log ids read in Archive (#41)
       logsFound: [],                                   // found but not yet read
       endingsUnlocked: [],                             // 'keeper' | 'unchained'
+      introSeen: false,                                // UNCHAINED #42 — intro crawl flag
       runsCompleted: 0,
       deepestBiome: 0                                  // highest AREAS index reached
     };
@@ -106,6 +107,7 @@
     m.logsRead        = _coerceIntArray(m.logsRead);
     m.logsFound       = _coerceIntArray(m.logsFound);
     m.endingsUnlocked = _coerceEndings(m.endingsUnlocked);
+    m.introSeen = (m.introSeen === true);
     if (m.runsCompleted == null) m.runsCompleted = 0;
     if (m.deepestBiome == null)  m.deepestBiome = 0;
     m.cores          = Math.max(0, Math.floor(Number(m.cores) || 0));
