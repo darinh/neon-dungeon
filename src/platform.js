@@ -1720,6 +1720,19 @@ const audio = (() => {
       osc('sawtooth', 400, 100, 0.06, t + 0.02, 0.12, bus);
       osc('sine', 50, 25, 0.06, t + 0.1, 0.15, bus);
     },
+    logFound() {
+      // Data-recovery chime — rising glitch resolving to clean tone.
+      const c = getCtx(); const t = c.currentTime;
+      noise(0.04, t, 0.08, 2400);
+      osc('triangle', 440, 880, 0.05, t + 0.04, 0.18);
+      osc('sine', 1320, 1320, 0.03, t + 0.12, 0.22);
+    },
+    logRead() {
+      // Terminal-click + soft bloom.
+      const c = getCtx(); const t = c.currentTime;
+      osc('square', 660, 660, 0.02, t, 0.04);
+      osc('sine', 990, 1320, 0.03, t + 0.03, 0.18);
+    },
     pulserCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Rising electrical whine — charge-up telegraph
