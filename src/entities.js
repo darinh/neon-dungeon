@@ -408,6 +408,8 @@ class Enemy {
     const isSummon = !!this._summoned;
     // Weapon affix on-kill effects (before drops/scoring)
     applyOnKill(this);
+    // UNCHAINED #36 momentum: refresh player damage-bonus window on any kill.
+    NEON.behavior.onKillRefreshMomentum(game.player);
     const d=getDiff();
     const dropRate = game.modifier === 'FORTIFIED' ? d.itemDrop * 1.3 : d.itemDrop;
     // MIMIC: guaranteed single drop (suppress normal roll)
@@ -5321,6 +5323,22 @@ class Player {
     this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
     this.adrenalineTimer=0;     // ADRENALINE_INJECTOR speed buff timer
     this.reactiveArmorCD=0;     // REACTIVE_ARMOR cooldown
+    // UNCHAINED Phase 2 (#36) — persistent upgrade-node runtime state.
+    // Behavioural listeners read player.metaFlags set by save.applyMetaToPlayer().
+    this._momentumTimer=0;        // momentum: damage bonus countdown after kill
+    this._surgeShotCount=0;       // surge: rolling shot counter (every 8th)
+    this._metaSecondWindUsed=false; // meta second_wind: fired once per run
+    this._outOfCombatTimer=0;     // regenerator: seconds since last hit
+  }
+
+  // Outgoing damage multiplier for player weapon hits. Delegated to the
+  // testable pure module (src/meta/behavior.js).
+  computeOutgoingDmgMul() {
+    return NEON.behavior.computeOutgoingDmgMul(this);
+  }
+
+  _consumeSurgeShot() {
+    return NEON.behavior.consumeSurgeShot(this);
   }
 
   logDamage(source, amount) {
@@ -5384,6 +5402,8 @@ class Player {
     if (game.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
     if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
+    // UNCHAINED #36 regenerator: took real damage → out of combat timer resets.
+    NEON.behavior.resetOutOfCombat(this);
     const src = source || 'Unknown';
     this.logDamage(src, actual);
     if (!options.skipHitInvincible) this.invincibleTimer = 0.5;
@@ -5421,6 +5441,16 @@ class Player {
         game.msg('💀 SECOND WIND!', '#00ddff');
         return actual;
       }
+      // UNCHAINED #36 meta second_wind: persistent upgrade, one revive per run.
+      // Fires in parallel with the perk — either can trigger independently.
+      if (NEON.behavior.tryMetaSecondWind(this)) {
+        this.invincibleTimer = 1.5;
+        audio.secondWind();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#00ddff', 20);
+        triggerShake(8, 0.3);
+        game.msg('💀 SECOND WIND!', '#00ddff');
+        return actual;
+      }
       this.killedBy=src; audio.gameOver(); game.endRun(false);
     }
     return actual;
@@ -5431,11 +5461,14 @@ class Player {
     const w=this.weapon;
     const [dx,dy]=norm(aimX-this.x,aimY-this.y);
     const hitCtx = { name:w.name, affixes:w._affixes||[], effects:w._effects||[] };
+    // UNCHAINED #36: consume one surge shot + compute momentum/overclock mul.
+    const surgeMul = this._consumeSurgeShot();
+    const metaMul = this.computeOutgoingDmgMul() * surgeMul;
 
     if (w.melee) {
       // plasma sword arc
       const meleeCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
-      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? 2 : 1);
+      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? 2 : 1) * metaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
         if (e.dead) continue;
@@ -5452,7 +5485,7 @@ class Player {
         const pdx=Math.cos(a), pdy=Math.sin(a);
         const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
         const proj=new Projectile(
-          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?2:1),w.range,
+          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?2:1)*metaMul,w.range,
           w.colour,!!w.piercing,true,w.name
         );
         proj.isCrit = isCrit;
@@ -5469,7 +5502,7 @@ class Player {
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
         const isCrit = this.perks.CRITICAL_HIT && Math.random() < 0.15;
-        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? 2 : 1));
+        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? 2 : 1) * metaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
         proj._effects = w._effects || [];
@@ -5537,6 +5570,11 @@ class Player {
     // Augment timers
     if (this.adrenalineTimer > 0) this.adrenalineTimer = Math.max(0, this.adrenalineTimer - dt);
     if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
+    // UNCHAINED #36 momentum: countdown damage-bonus window.
+    NEON.behavior.tickMomentum(this, dt);
+    // UNCHAINED #36 regenerator: passive HP regen when out of combat 3s+.
+    // _outOfCombatTimer resets in takeDamage on real damage taken.
+    NEON.behavior.tickOutOfCombatRegen(this, dt);
 
     // Dash afterimage trail fade
     for (let i=this.dashTrail.length-1;i>=0;i--) {

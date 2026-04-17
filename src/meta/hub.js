@@ -112,12 +112,205 @@
     },
   };
 
+  // ARCHIVE — predecessor-log reader (#41). Lists every log the operative has
+  // found, grouped by AXIOM predecessor. Unread logs are marked with a pulsing
+  // ●. Select to read → plays audio.logRead + marks as read + displays body.
+  const ArchiveTerminal = {
+    id: 'archive',
+    label: 'ARCHIVE',
+    _accent: '#39ff14',
+    _sel: 0,
+    _scroll: 0,
+    _reading: null, // log being read (body view)
+    _t: 0,
+    onOpen() { this._sel = 0; this._scroll = 0; this._reading = null; this._t = 0; },
+    onClose() { this._reading = null; },
+    _getFoundList() {
+      // Returns [{axiom, log, read}, ...] for all FOUND logs, in (axiom asc,
+      // data order) — not all logs, so the terminal doesn't spoil unfound ones.
+      try {
+        const meta = NEON.save.loadMeta();
+        const found = new Set(meta.logsFound || []);
+        const read  = new Set(meta.logsRead  || []);
+        const all = NEON.logs.groupedByAxiom();
+        const out = [];
+        for (const grp of all) {
+          for (const log of grp.logs) {
+            if (found.has(log.id)) out.push({ axiom: grp.axiom, log, read: read.has(log.id) });
+          }
+        }
+        return out;
+      } catch (_) { return []; }
+    },
+    update(dt /* , input */) {
+      this._t += (dt || 0);
+      // Input routed via hub harness' jp/km globals (browser only; Node tests
+      // won't exercise this path).
+      if (typeof jp !== 'function') return;
+      const km_ = (typeof km === 'function') ? km : () => null;
+      if (this._reading) {
+        if (jp('Enter') || jp(km_('interact')) || jp('Backspace')) {
+          this._reading = null;
+          try { audio.menuSelect(); } catch (_) {}
+        }
+        return;
+      }
+      const list = this._getFoundList();
+      const n = list.length;
+      if (n === 0) return;
+      if (jp('ArrowUp')   || jp(km_('up')))    { this._sel = (this._sel + n - 1) % n; try { audio.menuSelect(); } catch(_){} }
+      if (jp('ArrowDown') || jp(km_('down')))  { this._sel = (this._sel + 1) % n;     try { audio.menuSelect(); } catch(_){} }
+      if (jp('Enter') || jp(km_('interact'))) {
+        const entry = list[this._sel];
+        if (entry) {
+          try { NEON.logs.readLog(entry.log.id); } catch (_) {}
+          this._reading = entry.log;
+          try { audio.logRead(); } catch (_) {}
+        }
+      }
+    },
+    draw(ctx, x, y, w, h) {
+      const accent = this._accent;
+      ctx.save();
+      ctx.fillStyle = 'rgba(8,10,20,0.95)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+      // Header.
+      ctx.fillStyle = accent;
+      ctx.font = '18px monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 10; ctx.shadowColor = accent;
+      ctx.fillText('ARCHIVE', x + w / 2, y + 26);
+      ctx.shadowBlur = 0;
+
+      // Progress.
+      let progress = { read: 0, total: 0 };
+      try { progress = NEON.logs.progress(); } catch (_) {}
+      ctx.fillStyle = '#888ab0';
+      ctx.font = '11px monospace';
+      ctx.fillText('SIGNAL FRAGMENTS: ' + progress.read + '/' + progress.total, x + w / 2, y + 44);
+
+      // Body.
+      if (this._reading) {
+        this._drawReading(ctx, x, y, w, h);
+      } else {
+        this._drawList(ctx, x, y, w, h);
+      }
+
+      // Footer.
+      ctx.fillStyle = '#555577';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      if (this._reading) {
+        ctx.fillText('[ENTER] BACK   [ESC] CLOSE', x + w / 2, y + h - 12);
+      } else {
+        ctx.fillText('▲▼ SELECT   [ENTER] READ   [ESC] CLOSE', x + w / 2, y + h - 12);
+      }
+      ctx.restore();
+    },
+    _drawList(ctx, x, y, w, h) {
+      const list = this._getFoundList();
+      const accent = this._accent;
+      if (list.length === 0) {
+        ctx.fillStyle = '#888ab0';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('NO FRAGMENTS RECOVERED', x + w / 2, y + h / 2 - 10);
+        ctx.fillStyle = '#555577';
+        ctx.font = '11px monospace';
+        ctx.fillText('Purge rare terminals in the dungeon to', x + w / 2, y + h / 2 + 10);
+        ctx.fillText('recover AXIOM predecessor logs.', x + w / 2, y + h / 2 + 26);
+        return;
+      }
+
+      // Scroll window.
+      const rowH = 18;
+      const headerH = 56;
+      const footerH = 24;
+      const listH = h - headerH - footerH;
+      const rowsVisible = Math.max(3, Math.floor(listH / rowH));
+      if (this._sel < this._scroll) this._scroll = this._sel;
+      if (this._sel >= this._scroll + rowsVisible) this._scroll = this._sel - rowsVisible + 1;
+      this._scroll = Math.max(0, Math.min(this._scroll, Math.max(0, list.length - rowsVisible)));
+
+      ctx.textAlign = 'left';
+      ctx.font = '12px monospace';
+      let ry = y + headerH;
+      let lastAxiom = -1;
+      const endIdx = Math.min(list.length, this._scroll + rowsVisible);
+      for (let i = this._scroll; i < endIdx; i++) {
+        const entry = list[i];
+        const sel = (i === this._sel);
+        if (sel) {
+          ctx.fillStyle = 'rgba(57,255,20,0.12)';
+          ctx.fillRect(x + 8, ry - 12, w - 16, rowH - 2);
+        }
+        // Axiom prefix.
+        ctx.fillStyle = sel ? accent : '#666688';
+        ctx.fillText('AXIOM-' + entry.axiom, x + 14, ry);
+        // Title.
+        ctx.fillStyle = sel ? '#ffffff' : (entry.read ? '#9999bb' : '#e0e0ff');
+        ctx.fillText(entry.log.title, x + 92, ry);
+        // Unread marker — pulsing ● on right.
+        if (!entry.read) {
+          const a = 0.55 + 0.45 * Math.sin(this._t * 4 + i);
+          ctx.fillStyle = accent;
+          ctx.globalAlpha = a;
+          ctx.fillText('●NEW', x + w - 48, ry);
+          ctx.globalAlpha = 1;
+        }
+        ry += rowH;
+      }
+
+      // Scroll hint.
+      if (list.length > rowsVisible) {
+        ctx.fillStyle = '#555577';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText((this._sel + 1) + '/' + list.length, x + w - 12, y + 44);
+      }
+    },
+    _drawReading(ctx, x, y, w, h) {
+      const log = this._reading;
+      const accent = this._accent;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#666688';
+      ctx.font = '11px monospace';
+      ctx.fillText('AXIOM-' + log.axiom, x + 14, y + 64);
+      ctx.fillStyle = accent;
+      ctx.font = '14px monospace';
+      ctx.fillText(log.title, x + 14, y + 82);
+
+      // Wrap body.
+      ctx.fillStyle = '#c0c0e0';
+      ctx.font = '12px monospace';
+      const maxW = w - 28;
+      const words = log.body.split(' ');
+      let line = '';
+      let yy = y + 108;
+      for (const word of words) {
+        const test = line ? (line + ' ' + word) : word;
+        if (ctx.measureText(test).width > maxW && line) {
+          ctx.fillText(line, x + 14, yy);
+          yy += 16;
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) ctx.fillText(line, x + 14, yy);
+    },
+  };
+
   function buildTerminals() {
     return [
       makePlaceholder('upgrade', 'UPGRADE MATRIX', 'Cortex upgrades — coming online (#36)', '#00f5ff'),
       makePlaceholder('modules', 'MODULE SLOTS',   'Module install/sell — coming online (#37)', '#bb44ff'),
       ArmoryTerminal,
-      makePlaceholder('archive', 'ARCHIVE',        'Data logs — coming online (#41)', '#39ff14'),
+      ArchiveTerminal,
     ];
   }
 

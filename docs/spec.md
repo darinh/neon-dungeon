@@ -2722,7 +2722,11 @@ The four terminal slots, in order:
 2. **MODULE SLOTS**   (`id: modules`) — placeholder stub. Filled by #37.
 3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
    name; full weapon-swap UI is a follow-up.
-4. **ARCHIVE**        (`id: archive`) — placeholder stub. Filled by #41.
+4. **ARCHIVE**        (`id: archive`) — predecessor-log reader. Lists every
+   log the operative has recovered, grouped by AXIOM predecessor number, with
+   a pulsing `●NEW` marker on unread entries. Selecting a row calls
+   `NEON.logs.readLog(id)` (marks it read + persists), plays `audio.logRead`,
+   and displays the full body inline. Implemented by #41.
 
 ### Input
 
@@ -3003,6 +3007,64 @@ Key bindings inside the panel:
 | `addRunPickup(game, id)` / `commitRunModules(game)` / `clearRunModules(game)` | Transient-pickup lifecycle. |
 | `applyModulesToPlayer(player, installedIds)` | Registered with save.js on load. |
 | `drawModuleSlotsPanel(...)` / `handleModuleSlotsKey(...)` / `defaultPanelState()` | Hub terminal UI for #35 integration. |
+
+---
+
+## Predecessor Logs — ARCHIVE (UNCHAINED #41)
+
+Lore-bearing "signal fragments" recovered from rare terminals in the dungeon.
+Authored content: 6 AXIOM predecessors (AXIOM-1..AXIOM-6), each with a 5-entry
+arc (30 logs total). Each entry is biome-gated so fragments feel like they
+belong to the floor where they're found.
+
+### Data (`src/data/logs.js`)
+
+Exports `NEON.logData.LOGS`: an array of `{ id, axiom, biomeId, floorMin, title, body }`.
+`id` is stable (persisted in save; never rename). `biomeId` references
+`NEON.biomes.AREAS[].id`. `floorMin` gates when the log becomes eligible.
+
+### Drop Mechanics (`src/content.js`)
+
+On `CORRUPTED_TERMINAL → PURGE`, after the credit payout, the game rolls:
+
+1. **Log drop** — 40% chance; calls `NEON.logs.pickLogForFloor(floor)` which
+   filters the pool to (biome matches current floor's biome) ∧ (floorMin ≤ floor)
+   ∧ (not already in `meta.logsFound`). If the pool is empty, no log.
+2. If step 1 yielded a log, it is marked found+read, routed into the existing
+   `READING` overlay (reusing `game.currentLore`), and the module roll is
+   **skipped** (logs and modules never collide on the same terminal).
+3. Otherwise, the module roll runs per `tryRareTerminalModuleDrop`.
+
+### Runtime API (`src/meta/logs.js`)
+
+| Function | Purpose |
+|----------|---------|
+| `pickLogForFloor(floor, rand?)` | Returns an unfound, biome-matched, floor-eligible log (or `null`). `rand` is an injectable `0..1` generator for deterministic tests. |
+| `findLog(id)` | Marks found (not read). Persists. Returns the log on first find, `null` otherwise. |
+| `readLog(id)` | Marks both found and read. Persists. Idempotent. |
+| `logById(id)` / `logsForBiome(biomeId)` / `groupedByAxiom()` | Lookups for UI. |
+| `unreadCount()` | Count of `logsFound \ logsRead`. |
+| `progress()` | `{ read, total }` — tolerant of stale ids in save (ignores unknown ids). |
+
+### Hub Terminal (`ArchiveTerminal` in `src/meta/hub.js`)
+
+Lists every **found** log (not all logs — avoids spoiling unfound ones),
+grouped AXIOM-N, data order. Unread rows display a pulsing `●NEW` marker.
+Selecting a row calls `readLog`, plays `audio.logRead`, and enters an inline
+body-reader view. `ENTER` / `[interact]` / `Backspace` returns to the list.
+`ESC` closes the panel.
+
+### Audio (`src/platform.js`)
+
+- `audio.logFound()` — chime when a fragment is recovered in-run.
+- `audio.logRead()` — soft terminal click when a log is opened in the ARCHIVE.
+
+### Save Schema
+
+Logs use the existing `meta.logsFound` and `meta.logsRead` string-id arrays
+(already in the v2 schema). Unknown ids in either array are ignored by
+readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
+`save.markLogRead(id)` remain the canonical mutation points.
 
 ---
 
@@ -3929,3 +3991,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v95.0   | Dead-end corridor pruning + spawn→stairs reachability guarantee. Iterative dead-end pruning uses `connects()` predicate (`t !== WALL && t !== VOID`) so doors/locked doors count as connectivity. Rescue corridor only overwrites WALL/VOID tiles (preserves secret rooms, locked doors, challenge room entrances). BFS from spawn tile to stairs tile validates reachability; if unreachable, carves a minimal L-shaped rescue corridor. Both run after secret rooms, locked doors, and challenge rooms modify entrances. Spec v5.8. SW cache v95. |
 | v96.0   | Pause screen mouse + keyboard navigation: desktop users can now hover and click the 3 pause menu options (Resume/Settings/Quit) instead of relying on keyboard shortcuts alone. Arrow up/down + Enter also work. Hovered option highlights with colour-matched glow (cyan/amber/red). `_pauseSel` tracks selection, reset on entering `PAUSED` state. Touch input unchanged (zone-based taps). No SAVE_VERSION bump. SW cache v96. |
 | v97.0   | HOLO DECOY hackware (6th module): holographic taunt decoy deployed at aim position. 12s cooldown, 4s duration. Taunts non-boss enemies within 5 tiles (LOS to acquire, 7-tile break range) via per-enemy `_tauntTarget`+`_tx/_ty` target redirection in `Enemy.update()`. All 24 non-boss AI functions patched to use `this._tx/this._ty` for movement, firing, aiming, and retreat; `canTargetPlayer()` → `this._canTarget()` (taunt-aware). Damage delivery paths (CHARGER charge hit, LEAPER shockwave, SEEKER detonation) use real `player.x/player.y` — enemies are fooled about position but can't damage what isn't there. `meleeAttack()` adds real-distance guard (> 1.2 tiles → whiff). Exclusions: bosses immune, disguised mimics and phased wraiths can't acquire taunt. Wraiths taunted while corporeal keep taunt through phasing. On expiry: 0.5s mini-stun within 2 tiles, all taunt refs cleared. Max 1 active hologram; recast removes previous + clears refs. Visual: flickering magenta hexagon with scanline + ambient particles. Status badge `⬡` with countdown. `audio.holoDecoyDeploy()` holographic shimmer, `audio.holoDecoyExpire()` shatter. `_wrFindEmergeTile()` and `_phReposition()` updated to use perceived target. Colour `#ff44ff`. Icon ⬡. Spec v5.9. SW cache v97. |
+| v109.0  | ARCHIVE terminal (UNCHAINED #41): predecessor-log fragments recoverable from rare terminals. 30 authored logs across 6 AXIOM predecessors (each with a 5-entry arc), biome-gated via new `src/data/logs.js` data table. `CORRUPTED_TERMINAL → PURGE` rolls a 40% log drop **before** the module drop — logs and modules are mutually exclusive. Eligible logs: biome matches current floor, `floorMin ≤ floor`, not yet in `meta.logsFound`. Found logs route into the existing `READING` overlay for immediate reading (with `audio.logFound()` chime). New hub ARCHIVE terminal (`src/meta/hub.js`) replaces the #41 placeholder: scrollable list of found logs grouped by AXIOM-N with pulsing `●NEW` markers, select-to-read opens inline body view (`audio.logRead()` click). New `src/meta/logs.js` API: `pickLogForFloor(floor, rand?)`, `findLog(id)`, `readLog(id)`, `logById(id)`, `logsForBiome(biomeId)`, `groupedByAxiom()`, `unreadCount()`, `progress()` — tolerant of stale ids in save. 22 unit tests (`tests/logs.test.js`) covering data integrity, picker eligibility, found/read state, idempotency, and stale-id tolerance. Spec v5.10. SW cache v109. |

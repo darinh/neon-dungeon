@@ -474,7 +474,20 @@ const game = {
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
         secondWindUsed:p.secondWindUsed,
-        augments:p.augments||{}
+        augments:p.augments||{},
+        // UNCHAINED #36: persist meta-node runtime state so Continue doesn't
+        // drop behavioural hooks and stat carriers. Additive-to-base values
+        // like maxHp/atk/def/critChance stay in their respective fields as
+        // they were already mutated by applyMetaToPlayer at startGame.
+        metaFlags: p.metaFlags ? {...p.metaFlags} : null,
+        damageMult: p.damageMult || 1,
+        regenPerSec: p.regenPerSec || 0,
+        critChance: p.critChance || 0,
+        sensorRadiusMult: p.sensorRadiusMult || 1,
+        bonusCreditPerPickup: p.bonusCreditPerPickup || 0,
+        dashIFrameBonus: p.dashIFrameBonus || 0,
+        hackwareSlots: p.hackwareSlots || 3,
+        metaSecondWindUsed: !!p._metaSecondWindUsed
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -531,6 +544,17 @@ const game = {
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
     p.augments=s.augments||{};
+    // UNCHAINED #36: restore meta runtime state (persisted since SAVE_VERSION 9.x).
+    // Old saves predating this have these fields undefined → defaults kick in.
+    if (s.metaFlags) p.metaFlags = {...s.metaFlags};
+    if (s.damageMult !== undefined) p.damageMult = s.damageMult;
+    if (s.regenPerSec !== undefined) p.regenPerSec = s.regenPerSec;
+    if (s.critChance !== undefined) p.critChance = s.critChance;
+    if (s.sensorRadiusMult !== undefined) p.sensorRadiusMult = s.sensorRadiusMult;
+    if (s.bonusCreditPerPickup !== undefined) p.bonusCreditPerPickup = s.bonusCreditPerPickup;
+    if (s.dashIFrameBonus !== undefined) p.dashIFrameBonus = s.dashIFrameBonus;
+    if (s.hackwareSlots !== undefined) p.hackwareSlots = s.hackwareSlots;
+    p._metaSecondWindUsed = !!s.metaSecondWindUsed;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;

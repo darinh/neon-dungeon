@@ -3340,10 +3340,14 @@ function applyEventEffect(event, choice, player, gm) {
         player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         gm.msg('+' + cr + ' CR (purged)', '#ff4488');
         spawnParticles(player.x, player.y, 'SPARK', '#ff4488', 8);
-        // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
-        // TODO(#39 or follow-up): wire the equivalent boss hook
-        //   (rollModuleDrop({source:'boss-non-final'/'boss-genesis'})).
-        tryRareTerminalModuleDrop(gm, player);
+        // UNCHAINED #41: rare-terminal log-fragment drop (40% if eligible).
+        // Runs BEFORE the module drop — logs and modules are mutually
+        // exclusive per spec ("logs never collide with module drops").
+        const gotLog = tryRareTerminalLogDrop(gm, player);
+        if (!gotLog) {
+          // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
+          tryRareTerminalModuleDrop(gm, player);
+        }
         break;
       }
       case 'ARMS_CACHE': {
@@ -3549,4 +3553,30 @@ function tryRareTerminalModuleDrop(gm, player) {
   gm.msg('+ MODULE: ' + name, '#66ffcc');
   try { if (typeof audio !== 'undefined' && audio.moduleFound) audio.moduleFound(); } catch (_) {}
   if (player) spawnParticles(player.x, player.y, 'EXPLOSION', '#66ffcc', 14);
+}
+
+// ─── UNCHAINED #41: ARCHIVE log-fragment drop hook ──────────────────────────
+// Rolls a 40% chance for a predecessor log on CORRUPTED_TERMINAL PURGE. If an
+// eligible log (biome-matched, unfound, floor-gated) exists, marks it found,
+// routes the body into the existing READING overlay, and plays audio.logFound.
+// Returns true if a log was awarded (caller should then SKIP the module roll —
+// logs and modules are mutually exclusive per spec).
+const _LOG_DROP_CHANCE = 0.40;
+function tryRareTerminalLogDrop(gm, player) {
+  if (!gm) return false;
+  if (typeof NEON === 'undefined' || !NEON.logs) return false;
+  if (Math.random() >= _LOG_DROP_CHANCE) return false;
+  const log = NEON.logs.pickLogForFloor(gm.floor | 0);
+  if (!log) return false;
+  try { NEON.logs.findLog(log.id); } catch (_) {}
+  try { NEON.logs.readLog(log.id); } catch (_) {}
+  gm.msg('▒ SIGNAL FRAGMENT RECOVERED — AXIOM-' + log.axiom, '#39ff14');
+  try { if (typeof audio !== 'undefined' && audio.logFound) audio.logFound(); } catch (_) {}
+  if (player) spawnParticles(player.x, player.y, 'EXPLOSION', '#39ff14', 14);
+  // Display the body via the existing READING overlay (same path as T.LORE).
+  try {
+    gm.currentLore = 'AXIOM-' + log.axiom + ' — ' + log.title + ': ' + log.body;
+    if (typeof gm.setState === 'function') gm.setState('READING');
+  } catch (_) { /* Node tests / stub game */ }
+  return true;
 }
