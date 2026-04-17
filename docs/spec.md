@@ -22,7 +22,7 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 
 ```
 MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
-                                    → VICTORY (floor 10 cleared)
+                                    → VICTORY (floor 15 cleared)
               → PLAYING              (intro replays only after resetMeta)
               → NAME_ENTRY           (score doesn't qualify for top 10)
               → GAME_OVER  (score doesn't qualify for top 10)
@@ -97,9 +97,13 @@ Each floor is generated fresh using Binary Space Partitioning:
 5. Place stairs-down in the farthest room from spawn (approximate BFS
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
-6. Floor 10 stairs replaced with CORE terminal (victory trigger —
-   victory ends the run regardless of biome index; post-10 biomes are
-   data-ready but not yet reachable in-run).
+6. Floor 15 stairs (the last floor of the last biome per
+   `NEON.biomes.finalFloor()`) are replaced with a CORE terminal (victory
+   trigger). All five biomes (SANDBOX 1–3, CACHE 4–6, FIREWALL 7–9,
+   UPLINK 10–12, OPEN NETWORK 13–15) are reachable in-run; boss-floor
+   detection (`floor===3||6||9||12||15`) is driven by
+   `NEON.biomes.isBiomeBossFloor(floor)` so AREAS is the single source of
+   truth.
 7. **Dead-end pruning**: after secret rooms, locked doors, and challenge
    rooms wall off entrances, corridor tiles that become dead ends
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
@@ -986,7 +990,7 @@ When deployed (`hackwareEffects` entry with `type:'hologram'`):
 
 ## Enemies
 
-### Common (floors 1–10, scaled by floor)
+### Common (floors 1–15, scaled by floor)
 
 | Type         | HP base | ATK | Behaviour                                    | XP  |
 |--------------|---------|-----|----------------------------------------------|-----|
@@ -1792,7 +1796,7 @@ selection persists in `neonDungeonMeta.lastDifficulty`. Continued runs restore
 the difficulty from the save file.
 
 **Unlock gates:** NIGHTMARE is locked until the player clears HARD (victory on
-floor 10). Tracked via `neonDungeonMeta.clearedDifficulties[]`. On the menu,
+floor 15). Tracked via `neonDungeonMeta.clearedDifficulties[]`. On the menu,
 locked difficulties show `[LOCKED]` with dimmed colour; attempting to start
 shows "CLEAR HARD TO UNLOCK NIGHTMARE". The victory screen displays a pulsing
 `★ NIGHTMARE UNLOCKED ★` celebration when HARD is cleared for the first time.
@@ -1837,7 +1841,7 @@ CONTINUE menu item shows the save's difficulty.
 ### Floor Modifiers (floor 2+, non-boss)
 
 Each qualifying floor randomly receives one gameplay modifier from a pool of eight.
-Floor 1 (settle-in) and boss floors (3, 6, 10) never have modifiers. Modifier is
+Floor 1 (settle-in) and biome-final boss floors (3, 6, 9, 12, 15) never have modifiers. Modifier is
 rolled on floor entry, saved in the checkpoint, and restored on continue. No
 SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 
@@ -1987,23 +1991,25 @@ AI parameters tighten with floor progression:
 | TURRET shoot cooldown| `max(1.0, 2.0 − floor × 0.11)`    | 1.89 – 1.0 s  |
 | DRONE shoot cooldown | `max(0.9, 1.5 − floor × 0.07)`    | 1.43 – 0.9 s  |
 
-### Bosses (appear on floors 3, 6, 10)
+### Bosses (appear on biome-final floors 3, 6, 9, 12, 15)
 
-**Boss Pool System:** Each boss floor randomly selects from a pool of bosses.
-Floor 3 has two variants (SENTINEL MK-I or WARDEN); floor 6 has two variants
-(NEURAL HIVE or CONDUCTOR); floor 10 has two variants (OMEGA CORE or GENESIS
-PROTOCOL). The selection is made during `populateFloor()` each time the floor
-is generated (including continue from save). `game.bossType` tracks the active
-boss type for death messaging and dynamic terminal lock text.
+**Boss Pool System:** Each biome-final floor selects from that biome's
+`bossPool` (see `src/data/biomes.js`). Current wiring: floor 3 → SENTINEL
+(SANDBOX), floor 6 → HIVE (CACHE), floor 9 → CONDUCTOR (FIREWALL),
+floor 12 → OMEGA (UPLINK), floor 15 → GENESIS (OPEN NETWORK). Each pool
+currently holds a single entry; pool variants (e.g. WARDEN) remain in the
+codebase but are not reachable until re-added to a biome's `bossPool`.
+Selection happens during `populateFloor()` each time the floor is
+generated (including continue from save). `game.bossType` tracks the
+active boss type for death messaging and dynamic terminal lock text.
 
 | Boss              | Floor | HP    | Phases | Special                                           |
 |-------------------|-------|-------|--------|---------------------------------------------------|
 | SENTINEL MK-I     | 3     | 400   | 2      | Laser sweep + tracking shot + shield burst         |
-| WARDEN            | 3     | 450   | 2      | Telegraphed charge + radial stomp + ground slam    |
 | NEURAL HIVE       | 6     | 650   | 3      | Spawns crawlers, swarm cloud, psionic shockwave    |
-| CONDUCTOR         | 6     | 700   | 3      | Radial arc bursts, electric hazard zones, EM pull  |
-| OMEGA CORE        | 10    | 1300  | 4      | All previous attacks, room-filling void orbs       |
-| GENESIS PROTOCOL  | 10    | 1300  | 3      | Geometric precision: spiral salvos, lances, purge ring |
+| CONDUCTOR         | 9     | 700   | 3      | Radial arc bursts, electric hazard zones, EM pull  |
+| OMEGA CORE        | 12    | 1300  | 4      | All previous attacks, room-filling void orbs       |
+| GENESIS PROTOCOL  | 15    | 1300  | 3      | Geometric precision: spiral salvos, lances, purge ring |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
@@ -2017,7 +2023,7 @@ All boss HP values are scaled by the floor modifier (`1 + 0.15 × (floor − 1)`
 Phase thresholds use `maxHp` percentages, so scaling does not break phases.
 
 On boss death, the arena unseals (entrance tiles restored) and the game displays
-"{BOSS NAME} DESTROYED". On floor 10, the CORE terminal is locked until the boss
+"{BOSS NAME} DESTROYED". On floor 15, the CORE terminal is locked until the boss
 is defeated; the lock text dynamically shows the active boss name.
 
 #### SENTINEL MK-I — Phase Breakdown
@@ -2185,7 +2191,7 @@ Pulsing glow aura during discharge channel.
 
 #### GENESIS PROTOCOL — Phase Breakdown
 
-Floor 10 alternate boss. Geometric precision boss that fights through predictable
+Floor 15 (OPEN NETWORK) boss — THE ARCHITECT. Geometric precision boss that fights through predictable
 but punishing patterns. No add spawning — direct contrast to OMEGA's chaotic
 everything-at-once approach. The Progenitor: the original AI prototype that
 survived decommissioning.
@@ -2718,7 +2724,7 @@ stored in `localStorage` key `neonDungeonMeta` (separate from run saves).
 |---------------------------|--------------------|
 | Floors reached            | 1 per floor        |
 | Bosses cleared            | 2 per boss killed  |
-| Victory (floor 10)       | +5 bonus           |
+| Victory (floor 15)       | +5 bonus           |
 | Score                     | 1 per 2000 pts (cap 5) |
 | Data Persistence upgrade  | +3 flat per level  |
 
@@ -3468,7 +3474,7 @@ the facility, its creators, the OMEGA CORE, and the events that led to lockdown.
 
 **Tile:** `T.LORE` (value 16). Passable, see-through. Rendered as an amber `◫`
 glyph with pulsing glow on a `#1a1208` background. Distinct from the cyan CORE
-terminal (`T.TERMINAL`) used on floor 10.
+terminal (`T.TERMINAL`) used on the final floor (15).
 
 **Placement:** 1 terminal per floor (floors 2–4), 2 per floor (floor 5+).
 Excluded from: spawn room, stair room, vendor rooms, secret rooms, boss floors.
@@ -4076,7 +4082,7 @@ enhanced stats, distinctive visuals, and bonus rewards for elimination.
 - Eligible candidates: non-boss, non-shard, non-elite enemies.
 - One candidate selected at random → `enemy._isBounty = true`.
 - Stats boosted: 2× HP (`maxHp` updated), 1.5× ATK.
-- Boss floors (3, 6, 10) never receive bounty targets.
+- Boss floors (biome-final: 3, 6, 9, 12, 15) never receive bounty targets.
 - Bounty designation is not saved — regenerated with floor on continue.
 
 **Visual:**
@@ -4329,5 +4335,6 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v111.0  | Intro crawl + endgame choice (UNCHAINED #42): book-ends the UNCHAINED arc. **Intro** — new 5-slide opening crawl in `src/meta/intro.js` (UMD module exposing `createIntroController(game)` + `SLIDES`) plays inside `startGame()` on fresh saves (`meta.introSeen===false`); any-key advance reads the edge-triggered global `justPressed` (never held `keys`), `Escape` full-skip, auto-advance on per-slide timers. Flips `meta.introSeen=true` exactly once via `saveMeta` on every exit path. Only `resetMeta()` replays it. New `INTRO` state branch in update/render switches; `startGame({ skipIntro:true })` bypass lets the controller re-enter `startGame` on completion to reach `PLAYING`. **Endgame** — `Enemy.takeDamage` intercepts the first GENESIS mortal hit when `!_unchainedPhase && !_endgameOffered`: HP clamps to 1, lance telegraph cancels, `game.openEndgameChoice(g)` transitions to the new `ENDGAME_CHOICE` state. Dialog overlays `PLAYING` with a ghost `△` avatar above GENESIS, THE ARCHITECT monologue, two options (`←/→` select, `ENTER` confirm, 0.5s input lock-out). **ACCEPT** appends `'keeper'` to `meta.endingsUnlocked`, runs the normal `g.die()` path, then `endRun(true)`. **REFUSE** flips the GENESIS entity in place: `_unchainedPhase=true`, `_endgameOffered=true`, `maxHp*=1.5`, `hp=maxHp`, `colour='#88ccff'`, `phase=3`. `aiBossGenesis` locks `newPhase=3` attack patterns for the duration; hex ring + lance telegraph colours invert in the draw path. On the second death `endRun` scans `enemies[]` for the dead unchained-phase GENESIS and appends `'unchained'`. **Title markers** (`renderMenu`): `keeper` → `— NG+ AVAILABLE —` badge in `#ffcc00` under subtitle; `unchained` → rotated `FREED` watermark at 18% alpha in `#88ccff` across the title; both can coexist. **Save schema**: `introSeen:false` added to `defaultMeta`, coerced with strict `=== true` on load so stale truthy strings can't grant intro-skip; `_coerceEndings` continues to filter `endingsUnlocked` to `{'keeper','unchained'}`. `resetMeta` wipes both. New `tests/intro.test.js` (10 tests): `introSeen` default + round-trip + strict-boolean-coercion, `resetMeta` replay gate, `endingsUnlocked` dual-accept + unknown-token filter, controller shape, slide auto-advance driving the `introSeen` flip, idempotent post-done updates, null-ctx draw safety. `index.html` loads `intro.js` between `behavior.js` and `hub.js`. SW cache v111. 157/157 tests pass. Spec v5.11. |
 | v112.0  | In-run economy rebalance — temp boosts replace permanent upgrades (UNCHAINED #38). New `src/meta/boosts.js` UMD module (`NEON.boosts`) with 6 consumables: **COMBAT STIM** (+15% dmg, 15¢, floor), **REFLEX BOOSTER** (×1.10 spd, 12¢, floor), **CRIT MATRIX** (+8% crit, 18¢, floor), **SHIELD DRIVER** (one-shot absorb, 20¢, stackable), **NANO-MEDIC** (heal 40% maxHp, 10¢, instant), **RECON PING** (reveal minimap, 15¢, floor). Vendor pool (`generateShopItems` in `src/content.js`) now calls `NEON.boosts.filterVendorPool(UPGRADES)` — every `persistent:true` entry is stripped, so credits no longer buy permanent stat growth (SAW_BLADE / PLASMA_ORB / NANO_REGEN / OVERCLOCK / ARMOR_UP / RICOCHET / SENTRY_DRONE are now floor-pickup / Upgrade-Matrix only). Up to 2 boost slots are injected per shop at price `base + floor × 2`; remaining slots backfill from non-persistent consumables (heals / XP chips / void shards) then weapons. **Credit drops × 0.85** — single-line retune in `Enemy.die`. **Runtime hooks** (`src/entities.js`): Player ctor inits `activeBoosts={}` + `_shieldCharges=0`; `Player.shoot` uses `metaMul *= getBoostDamageMul(this)` and `critChance = (perks.CRITICAL_HIT ? 0.15 : 0) + getBoostCritBonus(this)` — applied uniformly to melee arc, the main projectile loop, and the MULTI_SHOT bonus shot (CRIT MATRIX bypasses the CRITICAL_HIT perk gate); movement block multiplies `spd *= getBoostSpeedMul(this)` after adrenaline/perks; `takeDamage` calls `consumeShieldCharge(this)` **before** the ENERGY_SHIELD perk branch so the cheap boost burns first (0.5s invuln, `audio.shieldBreak()`, `ABSORB` popup, `◈ SHIELD DRIVER ABSORB` banner, tracked in `hitsBlocked`). `game.loadFloor` calls `clearFloorBoosts(player)` on fresh transitions only (save-resume preserves purchases, though `saveGame` only runs at floor-start so `activeBoosts` is always empty at save-write time); `mapRevealed` now OR's `hasAugment('ECHO_MAPPER')` with `hasBoost(player, 'RECON_PING')`, and the RECON_PING purchase `fn` flips `game.mapRevealed=true` + `_minimapDirty=true` immediately. New `drawBoostStrip(player)` in `src/render.js` — pill strip 8px below the minimap, one pill per floor boost + a `SHIELD DRIVER ×N` pill while charges remain; zero draw cost when nothing's active. `index.html` loads `boosts.js` between `behavior.js` and `intro.js`. Spec: "Vendor / Shop System" rewrite + new "In-run Temp Boosts" section. `tests/economy.test.js` covers catalogue, applyBoost effects, clearFloorBoosts, consumeShieldCharge, getActiveBoostList ordering, filterVendorPool, null-safety (19 tests). 176/176 tests pass. SW cache v112. |
 | v113.0  | CORES currency — in-world drops + HUD (UNCHAINED #39). New `src/meta/cores.js` UMD module (`NEON.cores`) introduces the post-run persistent currency as in-world pickups: `spawnCoreDrop(game,x,y,value)` appends a `CoreDrop` (plain object: x/y, vx/vy, value clamped ≥1, spawnTime, `_vacuum`, `dead`) to `game.coreDrops`. `updateCoreDrops(game, dt, deps)` ticks animation, collects inside `PICKUP_RADIUS=0.7` (`save.addCores` credit + `audio.coreCollected` chime + cyan `SPARK` burst + `+N◆` float-text + `PULSE_DURATION=0.5s` HUD flash), and applies linear-falloff magnetic pull inside `MAGNET_RADIUS=2.0` (max speed `MAGNET_MAX_SPEED=10` tiles/sec; `_vacuum` drops ignore the radius gate and always pull at max). `drawCoreDrops(ctx, drops, cam, TS)` renders a rotating hexagon glyph — cyan outline + purple core, `+2px` radius when `value≥5` (boss drops read bigger). `vacuumAllCores(game)` flips the pull on every drop; `forceCollectAll(game,deps)` hard-credits remaining drops and empties the array (called at top of `game.descend()` so nothing is stranded on floor-transition). `clearCoreDrops(game)` wipes without crediting (called in `loadFloor` between floors). `tickHudPulse` drains the timer. **Drop rules** (`Enemy.die`): elite → `rndInt(1,2)`, bosses `SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA` → 5, `GENESIS` → 10; summons and shard-split enemies drop nothing. **Room rewards**: `revealSecretRoom` → +1 core at room centre; challenge-wave completion → +2 at `(cr.cx, cr.cy)`; `CORRUPTED_TERMINAL` → 50/50 core-vs-module roll *after* the log-drop check (logs > cores > modules, mutually exclusive). **Game-loop wiring**: `src/game.js` update runs `NEON.cores.updateCoreDrops` + `tickHudPulse` wrapped in `perfRecord('cores-update')`, draw runs `drawCoreDrops` wrapped in `perfRecord('cores-draw')` — both honour the F3 perf HUD (`perfEnabled()` gate) with zero cost when hidden. **HUD**: `◆ N` pill added left of `◈` (landscape) and right of credits (compact); reads `NEON.save.loadMeta().cores` per frame; colour is `#a866ff` idle, flashes `#44e5ff` with glow while `game._coreHudPulse > 0`. **Deps bag** (`{save, audio, spawnParticles, spawnDmgText}`) keeps the module pure — Node tests pass stubs, browser passes globals; all fx calls are try/catch-guarded so a stub throwing never breaks a run. `audio.coreCollected()` added to `src/platform.js` (short crystalline shimmer). `sw.js` cache v112 → v113. New `tests/cores.test.js` (12 tests) covers: drop clamping, pickup credit + pulse, magnet engage + idle-outside-radius, spawnTime tick, vacuum engage, forceCollectAll bookkeeping, clearCoreDrops wallet-safety, tickHudPulse drain, audio.coreCollected dispatch + throw-safety, drawCoreDrops null/empty safety. 188/188 tests pass. |
+| v114.0  | Extend playable arc from 10 floors to 15 floors (UNCHAINED Phase 6) — activates biomes 4 (UPLINK, floors 10–12, boss OMEGA) and 5 (OPEN NETWORK, floors 13–15, boss GENESIS) that were previously data-only. New `NEON.biomes.finalFloor()` helper returns the last floor of the last biome (15) from `AREAS`; every previously hardcoded `floor===10`, `floor>=10`, and `floor===3\|\|6\|\|10` is now driven by `NEON.biomes.isBiomeBossFloor(floor)` / `NEON.biomes.finalFloor()`. Wiring sites: `src/game.js` modifier suppression, boss-detect audio, EXTERMINATE quest, victory trigger; `src/content.js` CORE terminal placement + boss-room selection + rescue corridor; `src/render.js` minimap CORE label + mimic/bounty exclusion flag. Every call is guarded with `typeof NEON !== undefined && NEON.biomes && …` so modules still parse/load without the biomes data (legacy fallback: 3/6/10 + 15). Boss pool unchanged (already sourced from `AREAS[i].bossPool`); OMEGA now reachable on floor 12, GENESIS on floor 15 — including the UNCHAINED #42 KEEPER/UNCHAINED endgame choice, which fires on the final biome-boss death regardless of floor number. Spec updated: boss table (floor 3 SENTINEL, 6 HIVE, 9 CONDUCTOR, 12 OMEGA, 15 GENESIS), victory references, fragment table, `T.TERMINAL` description, difficulty-unlock gates, BSP step 6 all now say floor 15. WARDEN remains in the codebase but no biome currently lists it in `bossPool`. New regression test in `tests/biomes.test.js` locks `finalFloor() === 15`. SW cache v113 → v114. 191/191 tests pass. |
 
 | v6.0    | **UNCHAINED arc consolidated.** Meta-progression v2 (#33): `meta.cores/upgradeNodes/modulesOwned/modulesInstalled/logsRead/logsFound/endingsUnlocked/runsCompleted/deepestBiome` added with lossless v1→v2 migration; legacy `shards/upgrades` retained for save-compat. Five biomes drive floor palettes, minimap colours, and boss display names (#34, #40). Hub / The Gap between-floor interlude with four terminals (#35): UPGRADE MATRIX (#36 — 12-node tree × 4 tiers, cores-priced, behavioural flags wired in `src/meta/behavior.js`), MODULE SLOTS (#37 — 10-module catalog, 3-slot loadout, run-pickup commit on descend/victory, sell for 4 cores), ARMORY (read-only stub), ARCHIVE (#41 — 30 predecessor logs across 6 AXIOMs, biome-gated rare-terminal drops, inline reader). In-run temp boosts replace persistent vendor upgrades (#38 — `src/meta/boosts.js`: 6 consumables, `filterVendorPool` strips `persistent:true` from shop rolls, credit drops ×0.85). Cores currency (#39 — `src/meta/cores.js`: in-world hexagon pickups with magnet + vacuum, elite 1–2, bosses 5, GENESIS 10, secret +1, challenge +2, 50/50 corrupted-terminal roll after the log check; `forceCollectAll` in `endRun` covers all three victory paths). Intro crawl + endgame choice (#42 — `src/meta/intro.js`: 5-slide opening gated by `meta.introSeen`; GENESIS mortal-hit intercept opens ENDGAME_CHOICE — ACCEPT → `keeper` ending, REFUSE → `unchained` phase with inverted visuals → second death appends `unchained`; title screen shows NG+ AVAILABLE + FREED markers). Spec version bumped to v6.0. |

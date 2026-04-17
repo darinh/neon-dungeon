@@ -1,7 +1,7 @@
 // NEON DUNGEON — Service Worker (cache-first offline PWA)
 'use strict';
 
-const CACHE = 'neon-dungeon-v113';
+const CACHE = 'neon-dungeon-v114';
 const ASSETS = [
   './',
   './index.html',

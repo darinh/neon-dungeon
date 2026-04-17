@@ -123,6 +123,10 @@ test('death-respawn: floor 16 clamps to opennet (respawns at 13)', () => {
   assert.equal(biomes.areaForIndex(idx).floors[0], 13);
 });
 
+test('finalFloor returns the last floor of the last biome', () => {
+  assert.equal(biomes.finalFloor(), 15);
+});
+
 test('every bossPool member is a known enemy/boss id string', () => {
   // Type-shape guard — individual enemy registration is in src/entities.js.
   // This test catches typos in biomes.js without importing the monolith.

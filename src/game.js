@@ -134,10 +134,14 @@ const game = {
     }
     music.setFloor(n);
     this.floorTime=0; // arc grid phase timer
-    // Roll or restore floor modifier
+    // Roll or restore floor modifier. Biome boss floors (and floor 1, the
+    // settle-in floor) are modifier-free. Uses NEON.biomes so the list is
+    // derived from AREAS (3/6/9/12/15 for the 5-biome UNCHAINED arc); falls
+    // back to the legacy 3/6/10 list if biomes data is unavailable.
+    const _isBossFloor_mod = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10);
     if (savedModifier !== undefined) {
       this.modifier = savedModifier;
-    } else if (n === 1 || n === 3 || n === 6 || n === 10) {
+    } else if (n === 1 || _isBossFloor_mod) {
       this.modifier = null;
     } else {
       this.modifier = MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)];
@@ -199,7 +203,7 @@ const game = {
     this.player.y=this.dungeon.playerPos.y;
     messages=[];
     this.msg('FLOOR '+n,'#ff00c8');
-    if (n===3||n===6||n===10) {
+    if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10)) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
     // Announce modifier (banner replaces msg — banner timer set only on fresh transitions)
@@ -260,8 +264,9 @@ const game = {
         reward: ()=>{ this.player.gainXP(50+floorNum*10); this.player.credits+=40; this.msg('Quest complete! +XP +40 CR','#ffd700'); }
       });
     }
-    // Boss floors always get EXTERMINATE
-    if (floorNum===3||floorNum===6||floorNum===10) {
+    // Boss floors always get EXTERMINATE (biome-final floors per AREAS)
+    const _bossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum===3||floorNum===6||floorNum===10);
+    if (_bossFloor) {
       this.quest = {...questTypes[0], done:false, failed:false};
     } else {
       const q = questTypes[rndInt(0, questTypes.length-1)];
@@ -528,7 +533,8 @@ const game = {
     if (_coresDeps && NEON.cores.forceCollectAll) {
       NEON.cores.forceCollectAll(this, _coresDeps);
     }
-    if (this.floor>=10) {
+    const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
+    if (this.floor >= _finalFloor) {
       // victory
       audio.victory();
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
@@ -4159,7 +4165,8 @@ const game = {
     ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
     let y = narrow ? 115 : 148;
     ctx.fillText(`Final Score: ${r.score||this.player.score}`,W/2, y); y += narrow ? 22 : 26;
-    ctx.fillText(`Floors Cleared: 10`,W/2, y); y += narrow ? 22 : 26;
+    const _clearedFloors = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
+    ctx.fillText(`Floors Cleared: ${_clearedFloors}`,W/2, y); y += narrow ? 22 : 26;
     ctx.fillText(`Level Achieved: ${r.level||this.player.level}`,W/2, y); y += narrow ? 22 : 26;
     if ((r.bestCombo||combo.best) >= 2) {
       ctx.fillStyle=comboColour(); ctx.fillText(`Best Combo: ×${r.bestCombo||combo.best}`,W/2, y);
