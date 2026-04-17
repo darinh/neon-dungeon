@@ -1727,6 +1727,12 @@ const audio = (() => {
       osc('triangle', 440, 880, 0.05, t + 0.04, 0.18);
       osc('sine', 1320, 1320, 0.03, t + 0.12, 0.22);
     },
+    coreCollected() {
+      // UNCHAINED #39: short crystalline shimmer — core pickup.
+      const c = getCtx(); const t = c.currentTime;
+      osc('triangle', 880, 1760, 0.05, t, 0.10);
+      osc('sine', 1760, 2640, 0.03, t + 0.03, 0.14);
+    },
     logRead() {
       // Terminal-click + soft bloom.
       const c = getCtx(); const t = c.currentTime;
