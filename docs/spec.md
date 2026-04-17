@@ -2602,19 +2602,102 @@ tiles. `audio.vendorOpen()` plays an ascending three-tone chime on entry.
   `audio.purchaseFail()` plays a low buzz on insufficient credits.
 
 **Shop inventory:** Generated at floor load time (deterministic per floor, not
-per visit). Three items per shop:
-1. A **Full Repair** option (restores all HP, costs `50 + floor × 12`).
-2. If the floor has locked doors the player cannot currently open: a matching
-   **coloured Key** (costs `80 + floor × 8`). Otherwise a random upgrade.
-3. A random upgrade from the UPGRADES pool (instant, persistent, or weapon).
-   Persistent upgrades already at max level are excluded. Prices are explicit
-   per upgrade ID (not derived from spawn rarity), increased by floor
-   (`base + floor × 5`) and by current upgrade level (`× (1 + level × 0.4)`).
+per visit). Three items per shop, drawn from a layered pool:
+1. **Always:** a **Full Repair** option (restores all HP, costs `50 + floor × 12`).
+2. **Conditional:** if the floor has locked doors the player cannot currently
+   open, a matching **coloured Key** (costs `80 + floor × 8`).
+3. **Floor 3+:** ~40% chance for a **hackware module**, ~20% chance for an
+   **augment**.
+4. **UNCHAINED #38 — temp-boost pool:** up to two of the remaining slots are
+   filled with random picks from the 6 temp-boost consumables (see the
+   **In-run Temp Boosts** section below). Price is the boost's base price +
+   `floor × 2`.
+5. **Backfill:** remaining slots are filled from the **non-persistent** portion
+   of the UPGRADES pool (Med-Pack, Nano-Repair, XP Chip, Void Shard). If no
+   non-persistent options remain, a pre-rolled weapon option fills the slot.
 
-On shop open, maxed persistent upgrades are revalidated and marked as sold.
+**⚠ UNCHAINED #38: permanent-stat upgrades are no longer sold for credits.**
+`NEON.boosts.filterVendorPool(UPGRADES)` strips every `persistent: true` entry
+before the shop pool is assembled. Permanent growth (SAW_BLADE, PLASMA_ORB,
+NANO_REGEN, OVERCLOCK, ARMOR_UP, RICOCHET, SENTRY_DRONE) now only comes from
+floor-reward pickups and the meta Upgrade Matrix. Credits are a pure
+consumable currency.
+
+**Credit drops** are multiplied by **0.85** (a flat –15% retune) to keep the
+per-run purchase cadence near ~3–5 boosts given that credits no longer buy
+permanent power.
+
+On shop open, maxed persistent upgrades are revalidated and marked as sold
+(defensive — persistent entries should no longer appear in the pool, but the
+guard is kept for save-file and old-content compatibility).
 
 **Tile:** `T.VENDOR` (value 14). Passable, see-through. Arc grids will not
 spawn adjacent to vendor terminals.
+
+---
+
+### In-run Temp Boosts (UNCHAINED #38)
+
+Implemented in `src/meta/boosts.js` (UMD module, pure functions over a duck-
+typed `player` — unit-tested in `tests/economy.test.js`). All boosts are
+either **floor-scoped** (cleared by `clearFloorBoosts(player)` on every fresh
+floor transition) or **instant** (applied once on purchase, no residue beyond
+a one-shot effect).
+
+| ID              | Name            | Price | Duration | Effect                                              |
+|-----------------|-----------------|------:|----------|-----------------------------------------------------|
+| `COMBAT_STIM`   | COMBAT STIM     |    15 | floor    | +15% outgoing damage (melee + projectile + MULTI_SHOT) |
+| `REFLEX_BOOSTER`| REFLEX BOOSTER  |    12 | floor    | ×1.10 movement speed (stacks multiplicatively after adrenaline/perks) |
+| `CRIT_MATRIX`   | CRIT MATRIX     |    18 | floor    | +8% crit chance (works even without the CRITICAL_HIT perk) |
+| `SHIELD_DRIVER` | SHIELD DRIVER   |    20 | instant  | +1 shield charge — absorbs next incoming hit (stackable) |
+| `NANO_MEDIC`    | NANO-MEDIC      |    10 | instant  | Heals `round(maxHp × 0.4)` immediately, capped at maxHp |
+| `RECON_PING`    | RECON PING      |    15 | floor    | Reveals full minimap for this floor (flips `game.mapRevealed`) |
+
+Vendor shop prices add a gentle `floor × 2` scaling on top of the base price.
+
+**Runtime state (Player fields):**
+- `player.activeBoosts` — `{COMBAT_STIM: true, …}` presence map for the 4
+  floor-scoped boosts.
+- `player._shieldCharges` — integer stack counter for SHIELD_DRIVER.
+
+**Hook points:**
+- `Player.shoot` (`src/entities.js`): `metaMul *= getBoostDamageMul(this)`;
+  `critChance = (perks.CRITICAL_HIT ? 0.15 : 0) + getBoostCritBonus(this)`.
+  Applied uniformly to melee, the main projectile loop, and the MULTI_SHOT
+  bonus shot.
+- `Player.update` movement block: `spd *= getBoostSpeedMul(this)` after
+  modSpeed/adrenaline/perk multipliers so REFLEX BOOSTER stacks cleanly on
+  everything.
+- `Player.takeDamage`: `consumeShieldCharge(this)` runs **before** the
+  ENERGY_SHIELD perk branch — the cheap boost charge is always burned first.
+  Grants `Math.max(invincibleTimer, 0.5)` (preserves longer windows such as
+  SECOND_WIND's 1.5s), plays `audio.shieldBreak()`, shows an "ABSORB" damage
+  pop and an `◈ SHIELD DRIVER ABSORB` banner. **Does not fire when the
+  caller passes `ignoreInvincible: true`** — environmental DoT (plasma vents,
+  arc grids, toxic pools) bypasses i-frames every frame, and we refuse to let
+  a single puddle evaporate a 20¢ shield in ~N frames. Fire-burn status
+  effects already pass `ignoreShield: true` and so are unaffected.
+- `Enemy.die` credit drop: `cr *= 0.85`.
+- `game.loadFloor` on fresh transitions (`savedModifier === undefined`):
+  `NEON.boosts.clearFloorBoosts(this.player)`. Save-resume is **not** a fresh
+  transition, so purchases persist across a mid-floor restore (though
+  `saveGame` only fires at floor start, so in practice `activeBoosts` is
+  always empty at save-write time).
+- `game.loadFloor` map reveal: `mapRevealed = hasAugment('ECHO_MAPPER') ||
+  hasBoost(player, 'RECON_PING')`. The boost's purchase `fn` also flips
+  `game.mapRevealed = true` + `_minimapDirty = true` immediately for same-
+  floor feedback.
+- `drawBoostStrip(player)` in `src/render.js` — HUD pill strip anchored 8 px
+  below the minimap. One pill per active floor boost, plus a `SHIELD DRIVER
+  ×N` pill when any charges remain. No-op when nothing is active.
+
+**Migration / save compatibility:** `activeBoosts` and `_shieldCharges` are
+initialised in the Player constructor. `saveGame` serialises both inside the
+player payload and `continueGame` restores them (defaulting to empty on old
+save files), so a mid-floor Continue preserves purchased power. `meta.shards`
+and `meta.upgrades` (the legacy permanent-progression paths) remain wired via
+`applyMetaToPlayer` — UNCHAINED #39 will deprecate shard drops once CORES
+currency ships, but nothing in this change touches the meta save slot.
 
 ---
 
@@ -4133,3 +4216,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v109.0  | ARCHIVE terminal (UNCHAINED #41): predecessor-log fragments recoverable from rare terminals. 30 authored logs across 6 AXIOM predecessors (each with a 5-entry arc), biome-gated via new `src/data/logs.js` data table. `CORRUPTED_TERMINAL → PURGE` rolls a 40% log drop **before** the module drop — logs and modules are mutually exclusive. Eligible logs: biome matches current floor, `floorMin ≤ floor`, not yet in `meta.logsFound`. Found logs route into the existing `READING` overlay for immediate reading (with `audio.logFound()` chime). New hub ARCHIVE terminal (`src/meta/hub.js`) replaces the #41 placeholder: scrollable list of found logs grouped by AXIOM-N with pulsing `●NEW` markers, select-to-read opens inline body view (`audio.logRead()` click). New `src/meta/logs.js` API: `pickLogForFloor(floor, rand?)`, `findLog(id)`, `readLog(id)`, `logById(id)`, `logsForBiome(biomeId)`, `groupedByAxiom()`, `unreadCount()`, `progress()` — tolerant of stale ids in save. 22 unit tests (`tests/logs.test.js`) covering data integrity, picker eligibility, found/read state, idempotency, and stale-id tolerance. Spec v5.10. SW cache v109. |
 | v110.0  | Biome palette + boss renames + intro cards (UNCHAINED #40): each of the 5 biomes now has a distinct visual identity. New `src/data/palettes.js` exports `BIOME_PALETTES` keyed by `AREAS[i].palette` (cyan / rust / glitch / sky / green) with wall fill, wall highlight, floor, floor accent, minimap wall, minimap floor, DUST colours, and ambient tint. `currentBiomePalette()` in `src/render.js` resolves per-frame from `NEON.biomes.areaForFloor(game.floor)`. All hardcoded wall (`#3a3a6a`/`#5858a0`), floor (`#252545`/`#303058`), and minimap (`#1a1a2e`/`#202040`/`#252545`) colours threaded through palette lookup; sealed entrance, arc, plasma, toxic, keys, and state markers stay biome-agnostic. `BOSS_NAMES` in `src/entities.js` is patched at load from `AREAS[i].displayName` for every combat id in that area's `bossPool` — HUD/announce/death text now reads `SENTINEL-PRIME`, `VIRAL COLLECTIVE`, `THE COMPILER`, `OVERSEER`, `THE ARCHITECT`; internal combat class ids unchanged. Biome intro card: 3-second overlay on first floor of each biome *except* floor 1 (floors 4/7/10/13) showing `AREA 0N :: BIOME_NAME` + italic `area.intro` flavour with fade-in/out and any-key skip; state: `game.biomeCardTimer` + `game.biomeCardArea`; renderer `drawBiomeCard()`; trigger skipped on saved-run resume (same guard as modifier banner). Ambient particles: existing emitter system retained, DUST colour biome-tinted from `BIOME_PALETTES[palette].dust`; dedicated `perfRecord('biome-ambient', ms)` wraps `updateAmbient()` — surfaces in F3 perf HUD separately from `particles`. New `tests/palettes.test.js` regression guard (3 tests): every `AREAS[i].palette` has a matching `BIOME_PALETTES` entry, every palette defines required colour fields as valid `#rrggbb`, area keys are covered. 147/147 tests pass. SW cache v110. |
 | v111.0  | Intro crawl + endgame choice (UNCHAINED #42): book-ends the UNCHAINED arc. **Intro** — new 5-slide opening crawl in `src/meta/intro.js` (UMD module exposing `createIntroController(game)` + `SLIDES`) plays inside `startGame()` on fresh saves (`meta.introSeen===false`); any-key advance reads the edge-triggered global `justPressed` (never held `keys`), `Escape` full-skip, auto-advance on per-slide timers. Flips `meta.introSeen=true` exactly once via `saveMeta` on every exit path. Only `resetMeta()` replays it. New `INTRO` state branch in update/render switches; `startGame({ skipIntro:true })` bypass lets the controller re-enter `startGame` on completion to reach `PLAYING`. **Endgame** — `Enemy.takeDamage` intercepts the first GENESIS mortal hit when `!_unchainedPhase && !_endgameOffered`: HP clamps to 1, lance telegraph cancels, `game.openEndgameChoice(g)` transitions to the new `ENDGAME_CHOICE` state. Dialog overlays `PLAYING` with a ghost `△` avatar above GENESIS, THE ARCHITECT monologue, two options (`←/→` select, `ENTER` confirm, 0.5s input lock-out). **ACCEPT** appends `'keeper'` to `meta.endingsUnlocked`, runs the normal `g.die()` path, then `endRun(true)`. **REFUSE** flips the GENESIS entity in place: `_unchainedPhase=true`, `_endgameOffered=true`, `maxHp*=1.5`, `hp=maxHp`, `colour='#88ccff'`, `phase=3`. `aiBossGenesis` locks `newPhase=3` attack patterns for the duration; hex ring + lance telegraph colours invert in the draw path. On the second death `endRun` scans `enemies[]` for the dead unchained-phase GENESIS and appends `'unchained'`. **Title markers** (`renderMenu`): `keeper` → `— NG+ AVAILABLE —` badge in `#ffcc00` under subtitle; `unchained` → rotated `FREED` watermark at 18% alpha in `#88ccff` across the title; both can coexist. **Save schema**: `introSeen:false` added to `defaultMeta`, coerced with strict `=== true` on load so stale truthy strings can't grant intro-skip; `_coerceEndings` continues to filter `endingsUnlocked` to `{'keeper','unchained'}`. `resetMeta` wipes both. New `tests/intro.test.js` (10 tests): `introSeen` default + round-trip + strict-boolean-coercion, `resetMeta` replay gate, `endingsUnlocked` dual-accept + unknown-token filter, controller shape, slide auto-advance driving the `introSeen` flip, idempotent post-done updates, null-ctx draw safety. `index.html` loads `intro.js` between `behavior.js` and `hub.js`. SW cache v111. 157/157 tests pass. Spec v5.11. |
+| v112.0  | In-run economy rebalance — temp boosts replace permanent upgrades (UNCHAINED #38). New `src/meta/boosts.js` UMD module (`NEON.boosts`) with 6 consumables: **COMBAT STIM** (+15% dmg, 15¢, floor), **REFLEX BOOSTER** (×1.10 spd, 12¢, floor), **CRIT MATRIX** (+8% crit, 18¢, floor), **SHIELD DRIVER** (one-shot absorb, 20¢, stackable), **NANO-MEDIC** (heal 40% maxHp, 10¢, instant), **RECON PING** (reveal minimap, 15¢, floor). Vendor pool (`generateShopItems` in `src/content.js`) now calls `NEON.boosts.filterVendorPool(UPGRADES)` — every `persistent:true` entry is stripped, so credits no longer buy permanent stat growth (SAW_BLADE / PLASMA_ORB / NANO_REGEN / OVERCLOCK / ARMOR_UP / RICOCHET / SENTRY_DRONE are now floor-pickup / Upgrade-Matrix only). Up to 2 boost slots are injected per shop at price `base + floor × 2`; remaining slots backfill from non-persistent consumables (heals / XP chips / void shards) then weapons. **Credit drops × 0.85** — single-line retune in `Enemy.die`. **Runtime hooks** (`src/entities.js`): Player ctor inits `activeBoosts={}` + `_shieldCharges=0`; `Player.shoot` uses `metaMul *= getBoostDamageMul(this)` and `critChance = (perks.CRITICAL_HIT ? 0.15 : 0) + getBoostCritBonus(this)` — applied uniformly to melee arc, the main projectile loop, and the MULTI_SHOT bonus shot (CRIT MATRIX bypasses the CRITICAL_HIT perk gate); movement block multiplies `spd *= getBoostSpeedMul(this)` after adrenaline/perks; `takeDamage` calls `consumeShieldCharge(this)` **before** the ENERGY_SHIELD perk branch so the cheap boost burns first (0.5s invuln, `audio.shieldBreak()`, `ABSORB` popup, `◈ SHIELD DRIVER ABSORB` banner, tracked in `hitsBlocked`). `game.loadFloor` calls `clearFloorBoosts(player)` on fresh transitions only (save-resume preserves purchases, though `saveGame` only runs at floor-start so `activeBoosts` is always empty at save-write time); `mapRevealed` now OR's `hasAugment('ECHO_MAPPER')` with `hasBoost(player, 'RECON_PING')`, and the RECON_PING purchase `fn` flips `game.mapRevealed=true` + `_minimapDirty=true` immediately. New `drawBoostStrip(player)` in `src/render.js` — pill strip 8px below the minimap, one pill per floor boost + a `SHIELD DRIVER ×N` pill while charges remain; zero draw cost when nothing's active. `index.html` loads `boosts.js` between `behavior.js` and `intro.js`. Spec: "Vendor / Shop System" rewrite + new "In-run Temp Boosts" section. `tests/economy.test.js` covers catalogue, applyBoost effects, clearFloorBoosts, consumeShieldCharge, getActiveBoostList ordering, filterVendorPool, null-safety (19 tests). 176/176 tests pass. SW cache v112. |
