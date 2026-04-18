@@ -4377,24 +4377,82 @@ function loop(ts) {
   const frameDelta = (profiling && lastTime) ? frameStart - (game._lastFrameStart || frameStart) : 16;
   if (profiling) game._lastFrameStart = frameStart;
   lastTime=ts;
+  let _frameHadError = false;
   try {
     if (profiling) {
       const uStart = performance.now();
-      game.update(dt);
+      try { game.update(dt); } catch (e) { _frameHadError = true; _onFrameError('update', e); }
       try { music.tick(); } catch (_) {}
       const uEnd = performance.now();
-      game.render();
+      try { game.render(); } catch (e) { _frameHadError = true; _onFrameError('render', e); }
       const rEnd = performance.now();
-      if (perf.visible) renderPerfHUD();
+      if (perf.visible) { try { renderPerfHUD(); } catch (_) {} }
       perf.push(frameDelta, uEnd - uStart, rEnd - uEnd);
     } else {
-      game.update(dt);
+      try { game.update(dt); } catch (e) { _frameHadError = true; _onFrameError('update', e); }
       try { music.tick(); } catch (_) {} // isolate audio errors from gameplay
-      game.render();
+      try { game.render(); } catch (e) { _frameHadError = true; _onFrameError('render', e); }
+    }
+    if (!_frameHadError) _onFrameOk();
+    if (game._renderError) {
+      try {
+        if (typeof NEON !== 'undefined' && NEON.renderBoundary) {
+          NEON.renderBoundary.drawErrorOverlay(ctx, W, H, game._renderError);
+        }
+      } catch (_) { /* overlay itself failed; nothing more we can do */ }
     }
   } finally {
     clearJust();
     requestAnimationFrame(loop);
+  }
+}
+
+// Render error boundary (post-v116). The loop above used to wrap update+render
+// in try/finally with no catch — a thrown exception aborted the frame mid-draw
+// but rAF kept rescheduling, so input still worked while the world silently
+// vanished. Now each phase has its own catch; failures populate
+// game._renderError and a visible overlay is drawn over whatever managed to
+// render before the throw. See src/meta/render-boundary.js.
+//
+// Auto-recovery: a transient error (one bad frame during a particle burst,
+// say) shouldn't pin the overlay forever. After RECOVERY_FRAMES consecutive
+// healthy frames the overlay clears itself. A persistent error keeps resetting
+// the counter, so it stays visible.
+const _RENDER_BOUNDARY_RECOVERY_FRAMES = 180; // ~3 s at 60fps
+game._renderError = null;
+game._renderHealthyFrames = 0;
+game.clearRenderError = function () {
+  game._renderError = null;
+  game._renderHealthyFrames = 0;
+};
+function _onFrameOk() {
+  if (!game._renderError) return;
+  game._renderHealthyFrames++;
+  if (game._renderHealthyFrames >= _RENDER_BOUNDARY_RECOVERY_FRAMES) {
+    game._renderError = null;
+    game._renderHealthyFrames = 0;
+  }
+}
+function _onFrameError(phase, err) {
+  // Defensive: if the boundary module failed to load, fall back to console
+  // logging so we never reintroduce the silent-crash class of bug.
+  try {
+    if (typeof NEON === 'undefined' || !NEON.renderBoundary) {
+      // eslint-disable-next-line no-console
+      console.error('[render-boundary:fallback] ' + phase + '() threw:', err);
+      return;
+    }
+    const next = NEON.renderBoundary.trackRenderError(game._renderError, phase, err);
+    if (NEON.renderBoundary.shouldLog(next)) {
+      // eslint-disable-next-line no-console
+      console.error('[render-boundary] ' + phase + '() threw (\u00D7' + next.count + '):', err);
+    }
+    game._renderError = next;
+    game._renderHealthyFrames = 0;
+  } catch (innerErr) {
+    // Last-resort: never let the boundary itself crash the loop.
+    // eslint-disable-next-line no-console
+    try { console.error('[render-boundary:meta-fail]', innerErr, 'original:', err); } catch (_) {}
   }
 }
 
