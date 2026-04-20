@@ -137,8 +137,9 @@
           f.moveSpeedMul = (f.moveSpeedMul || 1) * 1.10;
           break;
         case 'neural_coprocessor':
-          // +1 hackware slot. No slot concept yet — record for future wiring.
+          // +1 hackware slot — stacks with the hacktool upgrade.
           f.extraHackwareSlots = (f.extraHackwareSlots || 0) + 1;
+          player.hackwareSlots = (player.hackwareSlots || 3) + 1;
           break;
         case 'shield_capacitor':
           // Floor-start shield charge — consumer: loadFloor() grants +1 shield.

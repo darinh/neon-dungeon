@@ -191,6 +191,11 @@ const game = {
       NEON.cores.clearCoreDrops(this);
     }
     populateFloor(this.dungeon,n);
+    // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
+    // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
+    if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
+      this.player._shieldCharges = (this.player._shieldCharges | 0) + this.player.metaFlags.floorStartShieldCharges;
+    }
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
     if (hasAugment('ECHO_MAPPER') || (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.hasBoost(this.player, 'RECON_PING'))) {
@@ -1162,7 +1167,11 @@ const game = {
         clears++;
         lastCx = room.cx; lastCy = room.cy;
         const d = getDiff();
-        const cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
+        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && Math.random() < player.metaFlags.doubleCreditChance) {
+          cr *= 2;
+        }
         player.credits += cr;
         player.score += 50 * this.floor;
         player.roomsCleared++;

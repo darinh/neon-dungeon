@@ -1892,8 +1892,31 @@ function generateFloor(floorNum) {
       const nw = Math.max(bossRoom.w, MIN_BOSS);
       const nh = Math.max(bossRoom.h, MIN_BOSS);
       // centre the expansion on the current room centre, clamped to map
-      const nx = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
-      const ny = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
+      let nx = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
+      let ny = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
+      // Clamp so the expanded rect doesn't overlap neighboring rooms.
+      // Leave a 1-tile wall gap so the fence boundary stays clean.
+      // Iterate until stable — a push away from one room could re-overlap another.
+      for (let pass = 0; pass < 3; pass++) {
+        let moved = false;
+        for (const r of rooms) {
+          if (r === bossRoom) continue;
+          const ox1 = nx - 1, oy1 = ny - 1, ox2 = nx + nw + 1, oy2 = ny + nh + 1;
+          const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
+          if (!(ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1)) continue;
+          // Push boss rect away from overlapping room on the closer axis
+          const pushLeft = rx1 - nw - 1, pushRight = rx2 + 1;
+          const pushUp = ry1 - nh - 1, pushDown = ry2 + 1;
+          if (bossRoom.cx >= r.cx && pushRight <= MAP_W - nw - 1) { nx = Math.max(nx, pushRight); moved = true; }
+          else if (pushLeft >= 1) { nx = Math.min(nx, pushLeft); moved = true; }
+          if (bossRoom.cy >= r.cy && pushDown <= MAP_H - nh - 1) { ny = Math.max(ny, pushDown); moved = true; }
+          else if (pushUp >= 1) { ny = Math.min(ny, pushUp); moved = true; }
+        }
+        if (!moved) break;
+      }
+      // Final map-bounds clamp after push
+      nx = Math.max(1, Math.min(MAP_W - nw - 1, nx));
+      ny = Math.max(1, Math.min(MAP_H - nh - 1, ny));
       bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
       bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
       carveRect(map, nx, ny, nw, nh, T.FLOOR);
@@ -3136,7 +3159,7 @@ const AUGMENTS = {
   THERMAL_OPTICS:   { name:'Thermal Optics',       icon:'👁', colour:'#ffcc00', desc:'Enemies visible on minimap' },
   ADRENALINE_INJECTOR:{ name:'Adrenaline Injector',icon:'💉', colour:'#ff4444', desc:'Kill: +30% speed for 2s' },
   OVERCLOCKER:      { name:'Overclocker',          icon:'⚡', colour:'#00ddff', desc:'Hackware cooldowns −30%' },
-  ECHO_MAPPER:      { name:'Echo Mapper',          icon:'📡', colour:'#ffffff', desc:'Reveal floor layout on entry' },
+  ECHO_MAPPER:      { name:'Echo Mapper',          icon:'📡', colour:'#ffffff', desc:'Reveal minimap layout on entry' },
   CREDIT_SIPHON:    { name:'Credit Siphon',        icon:'💰', colour:'#ffaa00', desc:'+50% credits from all sources' },
   SCAVENGER_NANITES:{ name:'Scavenger Nanites',    icon:'🔧', colour:'#88ff44', desc:'10% kill chance: +5 HP' },
   KINETIC_AMPLIFIER:{ name:'Kinetic Amplifier',    icon:'🚀', colour:'#ff8800', desc:'+20% projectile speed' },
@@ -3203,7 +3226,7 @@ const EVENTS = [
     b:{ label:'SEAL',   desc:'Patch the leak. Collect the containment reward.',          summary:'+credits +score' } },
   { id:'ROGUE_AI',           name:'Rogue AI',              desc:'A fragmented AI personality flickers to life in the terminal. It watches you.',
     icon:'◉', colour:'#aa88ff',
-    a:{ label:'LISTEN',  desc:'Let it share what it knows about this floor.',  summary:'reveal map' },
+    a:{ label:'LISTEN',  desc:'Let it share what it knows about this floor.',  summary:'reveal minimap' },
     b:{ label:'BARGAIN', desc:'Trade credits for concentrated data packets.',  summary:'−50◆ +XP' } },
   { id:'POWER_JUNCTION',     name:'Power Junction',        desc:'A sparking power distribution node. The air smells of ozone.',
     icon:'⚡', colour:'#ffcc00',

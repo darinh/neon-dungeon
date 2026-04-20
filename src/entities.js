@@ -2120,7 +2120,7 @@ class Enemy {
 
     if (this.phase===2 && this.bossTimers.shield<=0) {
       const [dx,dy]=norm(player.x-this.x,player.y-this.y);
-      player.x-=dx*3; player.y-=dy*3;
+      player.x-=dx*3*playerKnockMul(); player.y-=dy*3*playerKnockMul();
       clampToBossRoom(player);
       player.takeDamage(Math.round(20*getDiff().enemyAtk), 'SENTINEL');
       spawnParticles(player.x,player.y,'EXPLOSION','#ff4444',8);
@@ -2173,7 +2173,7 @@ class Enemy {
       if (dist(this.x, this.y, player.x, player.y) < 1.5) {
         player.takeDamage(Math.round(this.atk * getDiff().enemyAtk), 'WARDEN');
         const [kx, ky] = norm(player.x - this.x, player.y - this.y);
-        player.x += kx * 2; player.y += ky * 2;
+        player.x += kx * 2 * playerKnockMul(); player.y += ky * 2 * playerKnockMul();
         clampToBossRoom(player);
         spawnParticles(player.x, player.y, 'SPARK', '#ff8800', 6);
         triggerShake(4, 0.15);
@@ -2230,7 +2230,7 @@ class Enemy {
       audio.wardenSlam();
       triggerShake(6, 0.2);
       const [kx, ky] = norm(player.x - this.x, player.y - this.y);
-      player.x += kx * 3; player.y += ky * 3;
+      player.x += kx * 3 * playerKnockMul(); player.y += ky * 3 * playerKnockMul();
       clampToBossRoom(player);
       player.takeDamage(Math.round(22 * getDiff().enemyAtk), 'Warden Slam');
       // Radial spark projectiles
@@ -2399,7 +2399,7 @@ class Enemy {
           if (pulseDist < 6) {
             player.takeDamage(Math.round(25 * getDiff().enemyAtk), 'Conductor Pulse');
             const [kx, ky] = norm(player.x - this.x, player.y - this.y);
-            player.x += kx * 2.5; player.y += ky * 2.5;
+            player.x += kx * 2.5 * playerKnockMul(); player.y += ky * 2.5 * playerKnockMul();
             clampToBossRoom(player);
           }
           for (let i = 0; i < 6; i++) {
@@ -2506,8 +2506,8 @@ class Enemy {
     if (this.phase >= 3 && T.shield <= 0) {
       if (d < 5) {
         const [kx, ky] = norm(player.x - this.x, player.y - this.y);
-        player.x += kx * 3;
-        player.y += ky * 3;
+        player.x += kx * 3 * playerKnockMul();
+        player.y += ky * 3 * playerKnockMul();
         clampToBossRoom(player);
         player.takeDamage(Math.round(20*getDiff().enemyAtk), 'OMEGA');
         spawnParticles(this.x, this.y, 'EXPLOSION', '#ff00c8', 12);
@@ -5501,6 +5501,21 @@ class Player {
         }
       }
     }
+    // UNCHAINED #37 REACTIVE_CORE module: reflect % of incoming damage to nearest melee-range enemy.
+    const _reflectPct = this.metaFlags && this.metaFlags.reflectDamagePct;
+    if (_reflectPct > 0 && actual > 0 && !options.skipReactiveArmor) {
+      const reflectDmg = Math.max(1, Math.round(actual * _reflectPct));
+      let closest = null, closestD = 1.8; // melee range
+      for (const e of enemies) {
+        if (e.dead || e._wrPhased) continue;
+        const d = dist(this.x, this.y, e.x, e.y);
+        if (d < closestD) { closestD = d; closest = e; }
+      }
+      if (closest) {
+        closest.takeDamage(reflectDmg, { name: 'Reactive Core', isProc: true });
+        spawnParticles(closest.x, closest.y, 'SPARK', '#ff8844', 4);
+      }
+    }
     if (this.hp<=0) {
       // SECOND_WIND perk: revive once per floor
       if (this.perks.SECOND_WIND && !this.secondWindUsed) {
@@ -5541,12 +5556,14 @@ class Player {
     // UNCHAINED #38: CRIT MATRIX adds flat crit chance. Also drops the
     // CRITICAL_HIT perk gate — any player with an active matrix can crit.
     const critBonus = NEON.boosts.getBoostCritBonus(this);
-    const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus;
+    const mf = this.metaFlags || {};
+    const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus + (mf.critChanceBonus || 0);
+    const critMul = 2 + (mf.critDamageBonus || 0);
 
     if (w.melee) {
       // plasma sword arc
       const meleeCrit = critChance > 0 && Math.random() < critChance;
-      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? 2 : 1) * metaMul;
+      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? critMul : 1) * metaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
         if (e.dead) continue;
@@ -5563,7 +5580,7 @@ class Player {
         const pdx=Math.cos(a), pdy=Math.sin(a);
         const isCrit = critChance > 0 && Math.random() < critChance;
         const proj=new Projectile(
-          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?2:1)*metaMul,w.range,
+          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*metaMul,w.range,
           w.colour,!!w.piercing,true,w.name
         );
         proj.isCrit = isCrit;
@@ -5580,7 +5597,7 @@ class Player {
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
         const isCrit = critChance > 0 && Math.random() < critChance;
-        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? 2 : 1) * metaMul);
+        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? critMul : 1) * metaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
         proj._effects = w._effects || [];
@@ -5790,7 +5807,8 @@ class Player {
       }
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
-      this.dashCooldown = this.perks.DASH_MASTER ? 0.75 : 1.5;
+      const baseCd = this.perks.DASH_MASTER ? 0.75 : 1.5;
+      this.dashCooldown = baseCd * ((this.metaFlags && this.metaFlags.dashCooldownMul) || 1);
       this.dashTrail.push({x:this.x,y:this.y,alpha:0.8});
       audio.dash();
       spawnParticles(this.x,this.y,'EXPLOSION','#ffb700',6);

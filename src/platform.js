@@ -586,6 +586,11 @@ function clampToBossRoom(entity) {
   entity.x = Math.max(r.x + 0.5, Math.min(r.x + r.w - 0.5, entity.x));
   entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
 }
+// UNCHAINED #37 KINETIC_BUFFER: scale boss knockback by module multiplier.
+function playerKnockMul() {
+  const p = game && game.player;
+  return (p && p.metaFlags && p.metaFlags.knockbackTakenMul) || 1;
+}
 
 // ─── LOS memoisation (Phase 2) ────────────────────────────────────────────────
 // Per-frame cache. Key = (fromTile << 16) | toTile where tile = ty*MAP_W+tx.
