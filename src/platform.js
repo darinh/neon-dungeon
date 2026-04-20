@@ -353,6 +353,17 @@ canvas.addEventListener('touchstart', e => {
           justPressed.add('Enter');
         }
       }
+      else if (game.state === 'ENDGAME_CHOICE') {
+        // Two-option dialog: left half = ACCEPT (selected=0), right half =
+        // REFUSE (selected=1). Single tap selects + confirms — keyboard users
+        // get arrow-key preview, touch users commit in one motion. The 0.5s
+        // input lock-out in updateEndgameChoice still absorbs accidental
+        // mashes during the dialog fade-in, so the synthesised Enter is safe.
+        if (game._endgameChoice) {
+          game._endgameChoice.selected = (cx < W / 2) ? 0 : 1;
+        }
+        justPressed.add('Enter');
+      }
       else { justPressed.add('Enter'); justPressed.add('MouseLeft'); }
       continue;
     }
@@ -429,6 +440,11 @@ function resetTouch() {
 }
 
 function drawTouchUI() {
+  // Skip entirely on non-touch devices so desktop users don't see ghost
+  // joysticks + action buttons overlaid on the play area. Hit-tests in the
+  // touchstart handler are already touch-only by virtue of the event source,
+  // so no input is lost — this is purely a render gate.
+  if (!isTouchDevice()) return;
   // F button: always visible, dimmed when no hackware
   BTNS.F.hidden = false;
   // Left joystick (move)

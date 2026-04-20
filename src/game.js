@@ -499,7 +499,10 @@ const game = {
     // Hint.
     ctx.fillStyle = '#555577';
     ctx.font = (narrow ? 10 : 11) + 'px monospace';
-    ctx.fillText('◀▶ select · ENTER confirm', W / 2, by + boxH - 16);
+    const _hintTxt = isTouchDevice()
+      ? 'TAP LEFT  · ACCEPT       TAP RIGHT  · REFUSE'
+      : '◀▶ select · ENTER confirm';
+    ctx.fillText(_hintTxt, W / 2, by + boxH - 16);
 
     ctx.restore();
   },
