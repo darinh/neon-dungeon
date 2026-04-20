@@ -305,13 +305,102 @@
     },
   };
 
-  function buildTerminals() {
+  function buildTerminals(game) {
     return [
-      makePlaceholder('upgrade', 'UPGRADE MATRIX', 'Cortex upgrades — coming online (#36)', '#00f5ff'),
-      makePlaceholder('modules', 'MODULE SLOTS',   'Module install/sell — coming online (#37)', '#bb44ff'),
+      _buildUpgradePanel(game),
+      _buildModulesPanel(game),
       ArmoryTerminal,
       ArchiveTerminal,
     ];
+  }
+
+  // ─── Upgrade Matrix adapter ────────────────────────────────────────────────
+  // Wraps NEON.upgrades (shipped in #36) into the terminal-panel API. Uses
+  // the global jp/km for input (same pattern as ArchiveTerminal).
+  function _buildUpgradePanel(game) {
+    let sel = null;
+    // handleUpgradeInput expects game.audio for sfx — bridge the global.
+    const gameProxy = Object.create(game || {});
+    Object.defineProperty(gameProxy, 'audio', {
+      get() { try { return (typeof audio !== 'undefined') ? audio : null; } catch (_) { return null; } }
+    });
+    return {
+      id: 'upgrade',
+      label: 'UPGRADE MATRIX',
+      _accent: '#00f5ff',
+      onOpen() { sel = NEON.upgrades.defaultSelectorState(); },
+      onClose() {},
+      update() {
+        if (typeof jp !== 'function' || !sel) return;
+        const km_ = (typeof km === 'function') ? km : () => null;
+        const arrows = [
+          ['ArrowUp', km_('up')], ['ArrowDown', km_('down')],
+          ['ArrowLeft', km_('left')], ['ArrowRight', km_('right')],
+        ];
+        for (const [key, alt] of arrows) {
+          if (jp(key) || (alt && jp(alt))) {
+            NEON.upgrades.handleUpgradeInput(key, gameProxy, sel);
+            try { audio.menuSelect(); } catch (_) {}
+            return;
+          }
+        }
+        if (jp('Enter') || jp(km_('interact'))) {
+          NEON.upgrades.handleUpgradeInput('Enter', gameProxy, sel);
+        }
+      },
+      draw(ctx, x, y, w, h) {
+        try { NEON.upgrades.drawUpgradeMatrix(ctx, x, y, w, h, gameProxy, sel); } catch (_) {}
+      },
+    };
+  }
+
+  // ─── Module Slots adapter ──────────────────────────────────────────────────
+  // Wraps NEON.modules (shipped in #37) into the terminal-panel API.
+  function _buildModulesPanel(game) {
+    let state = null;
+    return {
+      id: 'modules',
+      label: 'MODULE SLOTS',
+      _accent: '#bb44ff',
+      onOpen() { state = NEON.modules.defaultPanelState(); },
+      onClose() { state = null; },
+      update() {
+        if (typeof jp !== 'function' || !state) return;
+        const km_ = (typeof km === 'function') ? km : () => null;
+        const keyMap = [
+          ['ArrowUp', km_('up')], ['ArrowDown', km_('down')],
+          ['Enter', km_('interact')], ['Tab', null],
+        ];
+        for (const [key, alt] of keyMap) {
+          if (jp(key) || (alt && jp(alt))) {
+            NEON.modules.handleModuleSlotsKey(game, state, key);
+            try { audio.menuSelect(); } catch (_) {}
+            return;
+          }
+        }
+        // ESC during sell-confirm cancels the prompt but should NOT close the
+        // whole panel. Consume the key from justPressed so the hub harness
+        // doesn't also see it.
+        if (jp('Escape') && state.confirmSell) {
+          NEON.modules.handleModuleSlotsKey(game, state, 'Escape');
+          try { justPressed.delete('Escape'); } catch (_) {}
+          return;
+        }
+        // S key for sell
+        if (jp('KeyS')) {
+          NEON.modules.handleModuleSlotsKey(game, state, 'S');
+          return;
+        }
+        // Y/N for confirm dialog
+        if (state.confirmSell) {
+          if (jp('KeyY')) { NEON.modules.handleModuleSlotsKey(game, state, 'Y'); try { audio.menuSelect(); } catch (_) {} }
+          if (jp('KeyN')) { NEON.modules.handleModuleSlotsKey(game, state, 'N'); }
+        }
+      },
+      draw(ctx, x, y, w, h) {
+        try { NEON.modules.drawModuleSlotsPanel(ctx, x, y, w, h, game, state); } catch (_) {}
+      },
+    };
   }
 
   // ─── State helpers ────────────────────────────────────────────────────────
@@ -339,7 +428,7 @@
     const fromFloor = game.floor | 0;
     const area = _area(fromFloor);
     game.hub = {
-      terminals: buildTerminals(),
+      terminals: buildTerminals(game),
       selected: 0,
       activePanel: null,
       fromFloor,
