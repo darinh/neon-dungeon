@@ -309,23 +309,49 @@ canvas.addEventListener('touchstart', e => {
         else justPressed.add('KeyQ');
       }
       else if (game.state === 'MENU') {
-        // Hit-test against actual menu item positions
         const narrow = layout.compact;
+        // Confirm overlay intercepts touches when active
+        if (game._newGameConfirm) {
+          const c = game._newGameConfirm;
+          const boxW = Math.min(520, W - 40);
+          const boxH = narrow ? 180 : 200;
+          const bx = (W - boxW) / 2, by = (H - boxH) / 2;
+          const btnY = by + (narrow ? 120 : 138);
+          const spacing = boxW / 2;
+          // Hit-test inside the dialog box
+          if (cx >= bx && cx <= bx + boxW && cy >= by && cy <= by + boxH) {
+            // Button zone: within 20px of button Y
+            if (Math.abs(cy - btnY) < 24) {
+              const tapped = (cx < W / 2) ? 0 : 1;
+              if (c.selected === tapped) {
+                justPressed.add('Enter');
+              } else {
+                c.selected = tapped;
+                audio.menuSelect();
+              }
+            }
+          } else {
+            // Tap outside the dialog → cancel
+            justPressed.add('Escape');
+          }
+          continue;
+        }
+        // Hit-test against actual menu item positions
         const titleFs = narrow ? 48 : 72;
         const ty1 = narrow ? 120 : 160;
         const startY = ty1 + titleFs * 0.95 + 80;
-        const gap = narrow ? 24 : 28;
+        const gap = narrow ? 40 : 32;
         const opts = game.getMenuOptions();
-        // Find closest option
-        let best = 0, bestDist = Infinity;
+        // Bounding-box hit test: tap must be within gap/2 of a row center
+        let hit = -1;
         for (let i = 0; i < opts.length; i++) {
           const oy = startY + i * gap;
-          const d = Math.abs(cy - oy);
-          if (d < bestDist) { bestDist = d; best = i; }
+          if (Math.abs(cy - oy) <= gap / 2) { hit = i; break; }
         }
-        game.menuSel = best;
+        if (hit < 0) continue; // tap outside any menu item — ignore
+        game.menuSel = hit;
         // On the difficulty row, left/right edge taps cycle, center taps start
-        if (opts[best]?.isDiffRow && Math.abs(cy - (startY + best * gap)) < gap * 0.7) {
+        if (opts[hit]?.isDiffRow) {
           if (cx < W * 0.35) justPressed.add('ArrowLeft');
           else if (cx > W * 0.65) justPressed.add('ArrowRight');
           else justPressed.add('Enter');
