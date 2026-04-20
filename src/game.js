@@ -2928,8 +2928,8 @@ const game = {
 
     // Menu options — array-driven
     const startY = ty2 + 80;
-    const gap = narrow ? 24 : 28;
-    const fs = narrow ? 15 : 18;
+    const gap = isTouch ? (narrow ? 40 : 32) : (narrow ? 24 : 28);
+    const fs = isTouch ? (narrow ? 18 : 20) : (narrow ? 15 : 18);
     const opts = this.getMenuOptions();
     const sel = this.menuSel || 0;
     ctx.save(); ctx.textAlign='center';
@@ -3048,7 +3048,7 @@ const game = {
       }
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#444466'; ctx.font = `${narrow?9:11}px monospace`;
-      ctx.fillText('◀▶ choose · Enter to confirm · Esc to cancel', W/2, by + boxH - (narrow?14:18));
+      ctx.fillText(isTouch ? 'Tap to choose · tap again to confirm · outside to cancel' : '◀▶ choose · Enter to confirm · Esc to cancel', W/2, by + boxH - (narrow?14:18));
       ctx.restore();
     }
   },
