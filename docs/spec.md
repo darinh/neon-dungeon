@@ -2782,11 +2782,12 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
 
 > **Status:** scaffold (#35) and 4 terminal slots are live. ARCHIVE (#41) is
 > fully wired in `src/meta/hub.js`; UPGRADE MATRIX (#36) and MODULE SLOTS
-> (#37) have their logic shipped (`src/meta/upgrades.js`,
-> `src/meta/modules.js` — panel factories and input handlers ready) but the
-> hub currently renders `makePlaceholder` stubs for those two slots pending
-> integration. ARMORY still shows the equipped weapon only (full swap UI is
-> a separate follow-up).
+> (#37) are wired into the hub via adapter functions in `hub.js` that bridge
+> the panel APIs (`NEON.upgrades.handleUpgradeInput`/`drawUpgradeMatrix` and
+> `NEON.modules.handleModuleSlotsKey`/`drawModuleSlotsPanel`) to the
+> terminal-panel contract using global `jp`/`km` for input (same pattern as
+> ArchiveTerminal). ARMORY still shows the equipped weapon only (full swap UI
+> is a separate follow-up).
 
 **THE GAP** is a liminal between-floor state. After the player interacts with
 the stairs/terminal on floor 1+, the game transitions to `HUB` instead of
@@ -2823,8 +2824,8 @@ Four terminal cards render in a horizontal row. Each card conforms to the
 
 The four terminal slots, in order:
 
-1. **UPGRADE MATRIX** (`id: upgrade`) — persistent 12-node tree spent with cores. Logic shipped (#36 — `src/meta/upgrades.js`); hub currently renders a `makePlaceholder` card pending integration. See #36.
-2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic shipped (#37 — `src/meta/modules.js`); hub currently renders a `makePlaceholder` card pending integration. See #37.
+1. **UPGRADE MATRIX** (`id: upgrade`) — persistent 12-node tree spent with cores. Logic in `src/meta/upgrades.js`; hub adapter in `hub.js:_buildUpgradePanel(game)` bridges `handleUpgradeInput`/`drawUpgradeMatrix` to the terminal-panel API. See #36.
+2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic in `src/meta/modules.js`; hub adapter in `hub.js:_buildModulesPanel(game)` bridges `handleModuleSlotsKey`/`drawModuleSlotsPanel`. ESC during sell-confirm cancels the prompt without closing the panel (adapter consumes the key from `justPressed`). See #37.
 3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
    name; full weapon-swap UI is a follow-up.
 4. **ARCHIVE**        (`id: archive`) — predecessor-log reader. Lists every
