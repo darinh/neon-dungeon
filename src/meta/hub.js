@@ -605,8 +605,8 @@
 
     // ─── Active panel (drawn on top).
     if (hub.activePanel) {
-      const pw = Math.min(520, W_ - 80);
-      const ph = Math.min(320, H_ - 160);
+      const pw = Math.min(560, W_ - 60);
+      const ph = Math.min(380, H_ - 120);
       const px = Math.floor((W_ - pw) / 2);
       const py = Math.floor((H_ - ph) / 2);
       // Dim backdrop.

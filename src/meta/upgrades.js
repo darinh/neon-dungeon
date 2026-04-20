@@ -172,38 +172,50 @@
     const meta = (game && game.meta) || { cores: 0, upgradeNodes: {} };
     const nodes = meta.upgradeNodes || {};
 
+    // Responsive font sizes — scale down on narrow panels.
+    const narrow = w < 420;
+    const hdrFs = narrow ? 12 : 14;
+    const cellFs = narrow ? 10 : 11;
+    const ttTitleFs = narrow ? 11 : 12;
+    const ttFs = narrow ? 10 : 11;
+    const pad = narrow ? 10 : 16;
+
     // Header.
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#00f5ff';
-    ctx.font = '14px monospace';
+    ctx.font = hdrFs + 'px monospace';
     ctx.textBaseline = 'top';
-    ctx.fillText('UPGRADE MATRIX', x + 12, y + 10);
+    ctx.textAlign = 'left';
+    ctx.fillText('UPGRADE MATRIX', x + pad - 4, y + 10);
     ctx.fillStyle = '#ffe66d';
-    ctx.fillText('CORES: ' + (meta.cores | 0), x + w - 130, y + 10);
+    ctx.textAlign = 'right';
+    ctx.fillText('CORES: ' + (meta.cores | 0), x + w - pad + 4, y + 10);
+    ctx.textAlign = 'left';
 
     // Grid layout: top area for the 3×4 grid, bottom strip for the tooltip.
-    const gridTop = y + 36;
-    const gridH = Math.max(120, h - 120);
-    const cellW = Math.floor((w - 32) / 3);
-    const cellH = Math.floor((gridH - 24) / 4);
+    const gridTop = y + 34;
+    const tooltipH = narrow ? 70 : 80;
+    const gridH = Math.max(100, h - gridTop + y - tooltipH - 12);
+    const cellW = Math.floor((w - pad * 2) / 3);
+    const cellH = Math.floor((gridH - 18) / 4);
 
     // Branch headers.
     ctx.fillStyle = '#9ad';
-    ctx.font = '11px monospace';
+    ctx.font = cellFs + 'px monospace';
     for (let c = 0; c < BRANCHES.length; c++) {
-      ctx.fillText(BRANCHES[c].toUpperCase(), x + 16 + c * cellW + 6, gridTop);
+      ctx.fillText(BRANCHES[c].toUpperCase(), x + pad + c * cellW + 6, gridTop);
     }
 
-    const gridY0 = gridTop + 18;
+    const gridY0 = gridTop + 16;
     for (let c = 0; c < 3; c++) {
       for (let r = 0; r < 4; r++) {
         const node = _nodeAt(c, r);
         if (!node) continue;
-        const cx = x + 16 + c * cellW;
+        const cx = x + pad + c * cellW;
         const cy = gridY0 + r * cellH;
-        const cw = cellW - 8;
-        const ch = cellH - 8;
+        const cw = cellW - 6;
+        const ch = cellH - 6;
         const lv = nodes[node.id] || 0;
         const maxed = lv >= node.maxLevel;
         const locked = !prereqMet(meta, node.id);
@@ -221,57 +233,110 @@
         ctx.lineWidth = isSel ? 2 : 1;
         ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, ch - 1);
 
-        // Title + level.
+        // Title — measure and truncate if needed.
         ctx.fillStyle = locked ? '#445' : (maxed ? '#7f9' : '#cfe');
-        ctx.font = '11px monospace';
-        ctx.fillText(node.id.toUpperCase().replace(/_/g, ' '), cx + 6, cy + 6);
-        ctx.fillStyle = locked ? '#334' : '#9ad';
-        ctx.fillText('LV ' + lv + '/' + node.maxLevel, cx + 6, cy + 22);
-        if (!maxed && !locked) {
-          ctx.fillStyle = affordable ? '#ffe66d' : '#a55';
-          ctx.fillText(cost + 'c', cx + cw - 38, cy + 22);
-        } else if (maxed) {
-          ctx.fillStyle = '#0f8';
-          ctx.fillText('MAX', cx + cw - 32, cy + 22);
-        } else {
-          ctx.fillStyle = '#556';
-          ctx.fillText('LOCK', cx + cw - 36, cy + 22);
+        ctx.font = cellFs + 'px monospace';
+        let title = node.id.toUpperCase().replace(/_/g, ' ');
+        while (title.length > 2 && ctx.measureText(title).width > cw - 12) {
+          title = title.slice(0, -1);
+        }
+        ctx.fillText(title, cx + 5, cy + 5);
+
+        // Level + status — only if cell is tall enough for a second line.
+        if (ch >= 30) {
+          ctx.fillStyle = locked ? '#334' : '#9ad';
+          ctx.fillText('LV ' + lv + '/' + node.maxLevel, cx + 5, cy + 20);
+          if (!maxed && !locked) {
+            ctx.fillStyle = affordable ? '#ffe66d' : '#a55';
+            ctx.textAlign = 'right';
+            ctx.fillText(cost + 'c', cx + cw - 5, cy + 20);
+            ctx.textAlign = 'left';
+          } else if (maxed) {
+            ctx.fillStyle = '#0f8';
+            ctx.textAlign = 'right';
+            ctx.fillText('MAX', cx + cw - 5, cy + 20);
+            ctx.textAlign = 'left';
+          } else {
+            ctx.fillStyle = '#556';
+            ctx.textAlign = 'right';
+            ctx.fillText('LOCK', cx + cw - 5, cy + 20);
+            ctx.textAlign = 'left';
+          }
         }
       }
     }
 
     // Tooltip strip.
     const ttY = gridY0 + 4 * cellH + 4;
-    const ttH = Math.max(60, y + h - ttY - 8);
+    const ttH = Math.max(50, y + h - ttY - 6);
     ctx.fillStyle = '#06060c';
-    ctx.fillRect(x + 12, ttY, w - 24, ttH);
+    ctx.fillRect(x + pad - 4, ttY, w - (pad - 4) * 2, ttH);
     ctx.strokeStyle = '#234';
-    ctx.strokeRect(x + 12.5, ttY + 0.5, w - 25, ttH - 1);
+    ctx.strokeRect(x + pad - 3.5, ttY + 0.5, w - (pad - 4) * 2 - 1, ttH - 1);
 
+    const ttPad = pad;
+    const ttMaxW = w - ttPad * 2 - 8;
     const node = _nodeAt(sel.col, sel.row);
     if (node) {
       const lv = nodes[node.id] || 0;
       const cost = nodeCost(node.id, lv);
       const locked = !prereqMet(meta, node.id);
+
+      // Row 1: name + branch/tier.
       ctx.fillStyle = '#cfe';
-      ctx.font = '12px monospace';
-      ctx.fillText(node.id.toUpperCase().replace(/_/g, ' ') + '   [' + node.branch + ' T' + node.tier + ']', x + 20, ttY + 8);
+      ctx.font = ttTitleFs + 'px monospace';
+      let ttTitle = node.id.toUpperCase().replace(/_/g, ' ') + '  [' + node.branch + ' T' + node.tier + ']';
+      if (ctx.measureText(ttTitle).width > ttMaxW) {
+        ttTitle = node.id.toUpperCase().replace(/_/g, ' ');
+      }
+      ctx.fillText(ttTitle, x + ttPad, ttY + 8);
+
+      // Row 2: level + cost/status + lock (all relative, no absolute offsets).
+      ctx.font = ttFs + 'px monospace';
+      let infoX = x + ttPad;
       ctx.fillStyle = '#9ad';
-      ctx.font = '11px monospace';
-      ctx.fillText('Level ' + lv + ' / ' + node.maxLevel, x + 20, ttY + 26);
+      const lvText = 'Lv ' + lv + '/' + node.maxLevel;
+      ctx.fillText(lvText, infoX, ttY + 24);
+      infoX += ctx.measureText(lvText + '  ').width;
+
       if (cost != null) {
         ctx.fillStyle = (meta.cores || 0) >= cost ? '#ffe66d' : '#a55';
-        ctx.fillText('Next: ' + cost + ' cores', x + 140, ttY + 26);
+        const costText = 'Next: ' + cost + 'c';
+        ctx.fillText(costText, infoX, ttY + 24);
+        infoX += ctx.measureText(costText + '  ').width;
       } else {
         ctx.fillStyle = '#0f8';
-        ctx.fillText('MAXED', x + 140, ttY + 26);
+        ctx.fillText('MAXED', infoX, ttY + 24);
+        infoX += ctx.measureText('MAXED  ').width;
       }
       if (locked) {
         ctx.fillStyle = '#a55';
-        ctx.fillText('LOCKED — requires ' + node.branch + ' T' + (node.tier - 1) + ' Lv1+', x + 280, ttY + 26);
+        const lockText = 'REQ: ' + node.branch + ' T' + (node.tier - 1);
+        if (infoX + ctx.measureText(lockText).width <= x + w - ttPad) {
+          ctx.fillText(lockText, infoX, ttY + 24);
+        } else {
+          ctx.fillText(lockText, x + ttPad, ttY + 38);
+        }
       }
+
+      // Row 3: effect description with word-wrap.
       ctx.fillStyle = '#bdd';
-      ctx.fillText(node.effect, x + 20, ttY + 44);
+      ctx.font = ttFs + 'px monospace';
+      const effectY0 = locked && (infoX + ctx.measureText('REQ: ' + node.branch + ' T' + (node.tier - 1)).width > x + w - ttPad) ? ttY + 52 : ttY + 40;
+      const words = node.effect.split(' ');
+      let line = '';
+      let ey = effectY0;
+      for (const word of words) {
+        const test = line ? (line + ' ' + word) : word;
+        if (ctx.measureText(test).width > ttMaxW && line) {
+          ctx.fillText(line, x + ttPad, ey);
+          ey += ttFs + 3;
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) ctx.fillText(line, x + ttPad, ey);
     }
   }
 

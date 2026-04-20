@@ -251,21 +251,38 @@
       ctx.fillText('(no modules yet)', col2X + 6, topY + 5);
     }
 
-    // ── Effect descr of current focus ──
+    // ── Effect descr of current focus (word-wrapped) ──
     const focusedId = state.focus === 'slot' ? slots[state.slotIdx] : owned[state.invIdx];
     const focusedMod = getModule(focusedId);
     if (focusedMod) {
       ctx.fillStyle = '#66ccff';
-      ctx.fillText(focusedMod.name + ' — ' + focusedMod.effect, x + 12, y + h - 42);
+      const descMaxW = w - 24;
+      const descText = focusedMod.name + ' — ' + focusedMod.effect;
+      if (ctx.measureText(descText).width <= descMaxW) {
+        ctx.fillText(descText, x + 12, y + h - 42);
+      } else {
+        const dWords = descText.split(' ');
+        let dLine = '', dy = y + h - 56;
+        for (const dw of dWords) {
+          const dt = dLine ? (dLine + ' ' + dw) : dw;
+          if (ctx.measureText(dt).width > descMaxW && dLine) {
+            ctx.fillText(dLine, x + 12, dy); dy += 14; dLine = dw;
+          } else { dLine = dt; }
+        }
+        if (dLine) ctx.fillText(dLine, x + 12, dy);
+      }
     }
 
-    // ── Hints / confirm prompt ──
+    // ── Hints / confirm prompt (compact on narrow panels) ──
     ctx.fillStyle = '#557788';
     if (state.confirmSell) {
       ctx.fillStyle = '#ffcc22';
       ctx.fillText('SELL for ' + SELL_PRICE + ' cores? [Y/N]', x + 12, y + h - 20);
     } else {
-      ctx.fillText('[TAB] switch  [ENTER] install/uninstall  [S] sell  [ESC] exit', x + 12, y + h - 20);
+      const hintText = w < 420
+        ? '[TAB] switch [ENTER] act [S] sell [ESC] exit'
+        : '[TAB] switch  [ENTER] install/uninstall  [S] sell  [ESC] exit';
+      ctx.fillText(hintText, x + 12, y + h - 20);
     }
     ctx.restore();
   }
