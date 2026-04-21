@@ -341,11 +341,11 @@ canvas.addEventListener('touchstart', e => {
           }
           continue;
         }
-        // Hit-test against actual menu item positions
-        const titleFs = narrow ? 48 : 72;
+        // Hit-test against actual menu item positions (must match renderMenu)
+        const titleFs = narrow ? 56 : 72;
         const ty1 = narrow ? 120 : 160;
         const startY = ty1 + titleFs * 0.95 + 80;
-        const gap = narrow ? 40 : 32;
+        const gap = narrow ? 48 : 36;
         const opts = game.getMenuOptions();
         // Bounding-box hit test: tap must be within gap/2 of a row center
         let hit = -1;

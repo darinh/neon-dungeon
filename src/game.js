@@ -3015,7 +3015,7 @@ const game = {
     const t=Date.now()/1000;
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
-    const titleFs = narrow ? 48 : 72;
+    const titleFs = narrow ? 56 : 72;
     // grid lines
     ctx.save(); ctx.globalAlpha=0.05; ctx.strokeStyle='#00f5ff';
     for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
@@ -3037,14 +3037,14 @@ const game = {
     ctx.restore();
 
     ctx.save(); ctx.textAlign='center';
-    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 12 : 16}px monospace`;
+    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
     ctx.fillText('A CYBERPUNK DUNGEON CRAWLER',W/2,ty2 + 35);
     ctx.restore();
 
     // Menu options — array-driven
     const startY = ty2 + 80;
-    const gap = isTouch ? (narrow ? 40 : 32) : (narrow ? 24 : 28);
-    const fs = isTouch ? (narrow ? 18 : 20) : (narrow ? 15 : 18);
+    const gap = isTouch ? (narrow ? 48 : 36) : (narrow ? 24 : 28);
+    const fs = isTouch ? (narrow ? 22 : 22) : (narrow ? 15 : 18);
     const opts = this.getMenuOptions();
     const sel = this.menuSel || 0;
     ctx.save(); ctx.textAlign='center';
@@ -3079,7 +3079,7 @@ const game = {
     // controls hint
     const hintY = startY + opts.length * gap + (narrow?24:32);
     ctx.save(); ctx.textAlign='center';
-    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 12 : 12}px monospace`;
     if (isTouch) {
       ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
       ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
