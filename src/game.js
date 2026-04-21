@@ -2187,7 +2187,7 @@ const game = {
       ctx.fillStyle = aug.colour;
       ctx.fillText(aug.name, cx + cw / 2, cardY + (narrow ? 58 : 72));
       // Description — word wrap
-      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#ccbbdd';
       const words = aug.desc.split(' ');
       let line = '', lineY = cardY + (narrow ? 75 : 92);
@@ -2313,7 +2313,7 @@ const game = {
       ctx.fillStyle = sel ? ev.colour : '#88bbaa';
       ctx.fillText(ch.label, cx + cw / 2, cardY + (narrow ? 22 : 28));
       // Choice description — word wrap
-      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#99bbaa';
       const cWords = ch.desc.split(' ');
       let cLine = '', cY = cardY + (narrow ? 40 : 50);
@@ -2915,7 +2915,7 @@ const game = {
         ctx.fillText(KEY_DISPLAY(settings.keyMap[a]), W/2, ry);
         // Show default if different
         if (settings.keyMap[a] !== DEFAULT_KEY_MAP[a]) {
-          ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+          ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 11 : 11}px monospace`;
           ctx.fillText(`(default: ${KEY_DISPLAY(DEFAULT_KEY_MAP[a])})`, W/2 + (narrow ? 60 : 80), ry);
           ctx.font = `${fs}px monospace`;
         }
@@ -2939,7 +2939,7 @@ const game = {
 
     // Navigation hint
     ctx.save(); ctx.textAlign = 'center';
-    ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 11 : 11}px monospace`;
     if (isTouchDevice()) {
       ctx.fillText('Tap to adjust · ESC to go back', W/2, H - 20);
     } else {
@@ -2980,16 +2980,16 @@ const game = {
     ctx.save();
     ctx.textAlign='center';
     ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700'; ctx.font=`${narrow?12:14}px monospace`;
+    ctx.fillStyle='#ffb700'; ctx.font=`${narrow?14:14}px monospace`;
     ctx.fillText('— HIGH SCORES —',W/2,y);
     ctx.shadowBlur=0;
-    const lineH=narrow?16:18;
-    const startY=y+(narrow?18:20);
+    const lineH=narrow?20:18;
+    const startY=y+(narrow?22:20);
     scores.forEach((s,i)=>{
       const isHL=i===highlightRank;
       ctx.fillStyle=isHL?'#00f5ff':'#aaaacc';
       if (isHL) { ctx.shadowBlur=6; ctx.shadowColor='#00f5ff'; }
-      ctx.font=`${isHL?'bold ':''}${narrow?10:12}px monospace`;
+      ctx.font=`${isHL?'bold ':''}${narrow?12:12}px monospace`;
       if (narrow) {
         ctx.fillText(`${i+1}. ${s.name}  ${s.score}  FLR ${s.floor}`,W/2,startY+i*lineH);
       } else {
@@ -2998,7 +2998,7 @@ const game = {
       if (isHL) ctx.shadowBlur=0;
     });
     if (!scores.length) {
-      ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
+      ctx.fillStyle='#555577'; ctx.font=`${narrow?12:12}px monospace`;
       ctx.fillText('No scores yet.',W/2,startY);
     }
     ctx.restore();
@@ -3079,10 +3079,15 @@ const game = {
     // controls hint
     const hintY = startY + opts.length * gap + (narrow?24:32);
     ctx.save(); ctx.textAlign='center';
-    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 12 : 12}px monospace`;
+    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 13 : 12}px monospace`;
     if (isTouch) {
       ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
-      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
+      if (narrow) {
+        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash', W/2, hintY + 18);
+        ctx.fillText(KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 34);
+      } else {
+        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
+      }
     } else {
       ctx.fillText(KEY_DISPLAY(km('up'))+KEY_DISPLAY(km('left'))+KEY_DISPLAY(km('down'))+KEY_DISPLAY(km('right'))+': Move  |  Mouse: Aim  |  Click/'+KEY_DISPLAY(km('shoot'))+': Shoot', W/2, hintY);
       ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  '+KEY_DISPLAY(km('dash'))+': Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ESC: Pause', W/2, hintY + 16);
@@ -3795,13 +3800,13 @@ const game = {
 
       // Description
       ctx.fillStyle = '#aaaacc';
-      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      ctx.font = `${narrow ? 11 : 11}px monospace`;
       ctx.fillText(item.desc, cx + cw / 2, cardY + 92);
 
       // Level info for persistent upgrades
       if (item.persistent && item.levelDesc) {
         ctx.fillStyle = '#888899';
-        ctx.font = `${narrow ? 9 : 11}px monospace`;
+        ctx.font = `${narrow ? 11 : 11}px monospace`;
         ctx.fillText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), cx + cw / 2, cardY + 108);
       }
 
@@ -3839,7 +3844,7 @@ const game = {
 
     // Hint
     ctx.fillStyle = '#444466';
-    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.font = `${narrow ? 11 : 11}px monospace`;
     if (isTouch) {
       ctx.fillText('Tap to buy · Tap Leave to exit', W / 2, leaveY + leaveH + 18);
     } else {
@@ -3894,7 +3899,7 @@ const game = {
     // Lore count
     const count = this.player ? this.player.loreRead.size : 0;
     ctx.fillStyle = '#886622';
-    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.font = `${narrow ? 11 : 11}px monospace`;
     ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
 
     // Word-wrapped lore text
