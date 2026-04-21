@@ -443,6 +443,8 @@
       game.state = 'HUB';
     }
     try { if (typeof audio !== 'undefined' && audio.hubAmbient) audio.hubAmbient(); } catch (_) {}
+    // Telemetry
+    try { if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('hub_enter', { floor: fromFloor }); } catch (_) {}
   }
 
   // exitHub advances to the next floor and restores 'PLAYING'. Uses the
@@ -510,6 +512,7 @@
         hub.activePanel = term;
         try { term.onOpen(game); } catch (_) {}
         try { if (typeof audio !== 'undefined' && audio.menuSelect) audio.menuSelect(); } catch (_) {}
+        try { if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('hub_terminal', { terminal: term.id }); } catch (_) {}
       }
       return;
     }

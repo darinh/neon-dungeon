@@ -208,6 +208,10 @@ const game = {
     this.player.y=this.dungeon.playerPos.y;
     messages=[];
     this.msg('FLOOR '+n,'#ff00c8');
+    // Telemetry: floor start
+    if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('floor_start', { floor: n, modifier: this.modifier || null });
+    }
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10)) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
@@ -321,6 +325,10 @@ const game = {
       startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
     }
     this.loadFloor(startFloor);
+    // Telemetry: run start
+    if (typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty });
+    }
     // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
     // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
     // introSeen back to false, so it replays on a true new start.
@@ -659,6 +667,24 @@ const game = {
       victory: victory,
       hackware: p.hackware,
     };
+    // Telemetry: run end — the single most valuable event
+    if (typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('run_end', {
+        victory: !!victory,
+        floor: this.floor,
+        score: p.score,
+        level: p.level,
+        runTime: Math.round((this.runTime || 0) * 1000),
+        killedBy: p.killedBy || null,
+        enemiesKilled: p.enemiesKilled,
+        roomsCleared: p.roomsCleared,
+        weapon: p.weapon ? (p.weapon._base || p.weapon.name) : null,
+        weaponBeltSize: p.weapons ? p.weapons.length : 1,
+        difficulty: this.difficulty,
+        bossesCleared: this.bossesCleared,
+      });
+      NEON.telemetry.flush();
+    }
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
     const meta = loadMeta();
@@ -960,6 +986,18 @@ const game = {
     const dungeon=this.dungeon;
     this.floorTime = (this.floorTime || 0) + dt;
     this.runTime = (this.runTime || 0) + dt;
+    // Telemetry: perf sample every ~10s
+    this._perfSampleTimer = (this._perfSampleTimer || 0) + dt;
+    if (this._perfSampleTimer >= 10 && typeof NEON !== 'undefined' && NEON.telemetry) {
+      this._perfSampleTimer = 0;
+      NEON.telemetry.track('perf_sample', {
+        floor: this.floor,
+        fps: this.perf ? Math.round(this.perf.fps) : null,
+        enemies: enemies.length,
+        projectiles: projectiles.length,
+        particles: particles ? particles.length : 0,
+      });
+    }
     this.hint = null;
 
     // Expanded map modal — freeze gameplay, only handle dismiss
@@ -1138,6 +1176,7 @@ const game = {
           const pick = (needsHp && bIsHeal && !aIsHeal) ? optB : optA;
           pick.fn(player);
           this.msg(pick.name, pick.colour);
+          if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('auto_collect', { item: pick.id, floor: this.floor });
           continue;
         }
         // Auto-collect weapon if belt has space (prefer weapon option for belt, apply other)
@@ -1963,8 +2002,16 @@ const game = {
       opt.fn(this.player);
       audio.menuSelect();
       this.msg('Chose ' + opt.name, opt.colour);
+      // Telemetry: upgrade pick
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        const skipped = pc.options.filter((_, i) => i !== idx).map(o => o.id || o.name);
+        NEON.telemetry.track('upgrade_pick', { picked: opt.id || opt.name, skipped, floor: this.floor });
+      }
     } else {
       this.msg('Skipped upgrade', '#666688');
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        NEON.telemetry.track('upgrade_skip', { options: pc.options.map(o => o.id || o.name), floor: this.floor });
+      }
     }
     this.powerupChoice = null;
     // Check for queued perk choices before returning to PLAYING
@@ -4472,6 +4519,8 @@ function loop(ts) {
     }
   } finally {
     clearJust();
+    // Telemetry periodic flush
+    if (typeof NEON !== 'undefined' && NEON.telemetry) { try { NEON.telemetry.update(dt); } catch(_){} }
     requestAnimationFrame(loop);
   }
 }
@@ -4575,6 +4624,8 @@ resize();
 updateBtns();
 mouse.x = W/2; mouse.y = H/2;
 window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); mouse.x = W/2; mouse.y = H/2; });
+// Initialize telemetry (local-only until a transport is configured)
+if (typeof NEON !== 'undefined' && NEON.telemetry) { NEON.telemetry.init(); }
 game.state='MENU';
 game.menuParticles=[];
 requestAnimationFrame(loop);
