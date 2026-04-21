@@ -34,6 +34,83 @@ function getCamera(player) {
   return { x: camX, y: camY };
 }
 
+function _labDecoHash(tx, ty, floor) {
+  let h = ((tx * 73856093) ^ (ty * 19349663) ^ ((floor | 0) * 83492791)) >>> 0;
+  h ^= h >>> 13;
+  return h >>> 0;
+}
+
+function drawLabFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
+  if (!game || game.floor < 2) return;
+  const map = dungeon.map;
+  const h = _labDecoHash(tx, ty, game.floor);
+  const roll = h % 100;
+  if (roll >= 11) return; // sparse, deterministic dressing
+
+  // Keep readability around interactables and hazards.
+  for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+    const nt = map[ty + dy]?.[tx + dx];
+    if (nt == null) return;
+    if (isDoor(nt) || nt === T.DOOR_OPEN || nt === T.STAIRS || nt === T.TERMINAL ||
+        nt === T.VENDOR || nt === T.LORE || nt === T.IMPLANT_SHRINE || nt === T.EVENT_TERMINAL ||
+        nt === T.TELEPORT_PAD || nt === T.CHALLENGE_GATE || nt === T.PLASMA || nt === T.ARC || nt === T.TOXIC) {
+      return;
+    }
+  }
+
+  const solid = (t) => t===T.WALL || t===T.VOID || t===T.CRACKED || t===T.LOCKED_R || t===T.LOCKED_B || t===T.LOCKED_G || t===T.CRATE;
+  const n = solid(map[ty - 1]?.[tx]);
+  const s = solid(map[ty + 1]?.[tx]);
+  const w = solid(map[ty]?.[tx - 1]);
+  const e = solid(map[ty]?.[tx + 1]);
+  const wallSide = n ? 'N' : s ? 'S' : w ? 'W' : e ? 'E' : null;
+  const flicker = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 8 + (h % 17));
+
+  ctx.save();
+  ctx.globalAlpha = brightness * 0.45 * flicker;
+  if (roll < 4 && wallSide) {
+    // Wall console panel
+    ctx.fillStyle = '#0e2230';
+    if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
+    else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
+    else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
+    else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#44ccff';
+    ctx.fillStyle = '#44ccff';
+    if (wallSide === 'N' || wallSide === 'S') {
+      ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+      ctx.fillRect(sx + 9, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+    } else {
+      ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 5, 2, 2);
+      ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 9, 2, 2);
+    }
+  } else if (roll < 8) {
+    // Cable run
+    ctx.fillStyle = '#2a2a3a';
+    if ((h & 1) === 0) {
+      ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
+      ctx.fillStyle = '#3c3c56';
+      ctx.fillRect(sx + 2, sy + TILE / 2 + 1, TILE - 4, 1);
+    } else {
+      ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
+      ctx.fillStyle = '#3c3c56';
+      ctx.fillRect(sx + TILE / 2 + 1, sy + 2, 1, TILE - 4);
+    }
+  } else {
+    // Low profile lab canister pair
+    ctx.fillStyle = '#1c2d3f';
+    ctx.fillRect(sx + 4, sy + TILE - 8, 4, 6);
+    ctx.fillRect(sx + 10, sy + TILE - 7, 4, 5);
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#66e0ff';
+    ctx.fillStyle = '#66e0ff';
+    ctx.fillRect(sx + 5, sy + TILE - 8, 2, 1);
+    ctx.fillRect(sx + 11, sy + TILE - 7, 2, 1);
+  }
+  ctx.restore();
+}
+
 // ─── Renderer ─────────────────────────────────────────────────────────────────
 function drawWorld(dungeon, camX, camY) {
   const pal = currentBiomePalette();
@@ -74,6 +151,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle = rc || pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
           if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : pal.floorAccent; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
+          drawLabFloorDeco(dungeon, tx, ty, sx, sy, brightness);
           break;
         }
         case T.STAIRS:
@@ -1577,7 +1655,7 @@ function populateFloor(dungeon, floorNum) {
     let roomElite = false;  // max 1 elite per room
     let spawnedCount = 0;
     const typeCounts = {};  // per-type caps within room
-    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1, WRAITH: 1, NEXUS: 1, SIPHON: 1, GRAVITON: 1, SEEKER: 3, PULSER: 2 };
+    const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, SCORCHER: 2, BRUTE: 1, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1, WRAITH: 1, NEXUS: 1, SIPHON: 1, GRAVITON: 1, SEEKER: 3, PULSER: 2 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit

@@ -1007,6 +1007,8 @@ When deployed (`hackwareEffects` entry with `type:'hologram'`):
 | SUMMONER     | 35      | 8   | Stays at range, periodically summons minion drones | 30  |
 | HEALER       | 25      | 6   | Stays at range, periodically heals wounded allies | 22  |
 | CHARGER      | 45      | 14  | Slow patrol, telegraphed charge rush, melee   | 22  |
+| SCORCHER     | 28      | 9   | Strafes around player, drops short-lived fire trail hazards | 24  |
+| BRUTE        | 70      | 16  | Melee-only heavy pursuer, relentless close-range pressure | 30  |
 | LEAPER       | 30      | 11  | Fast, jumps to player position, shockwave on landing | 22  |
 | REFLECTOR    | 40      | 10  | Reflective shield bounces projectiles back     | 28  |
 | DISRUPTOR    | 30      | 9   | Deploys persistent area-denial fields          | 25  |
@@ -1019,10 +1021,10 @@ When deployed (`hackwareEffects` entry with `type:'hologram'`):
 
 HP and ATK scale: `value × (1 + 0.15 × (floor - 1))`
 
-**Floor-gated types:** PULSER appears floor 2+, SHIELDER appears floor 3+,
-SEEKER appears floor 3+, SPLITTER appears floor 4+,
-CHARGER appears floor 4+, GRENADIER appears floor 5+, HEALER appears floor 5+,
-LEAPER appears floor 5+,
+**Floor-gated types:** PULSER appears floor 2+, LEAPER appears floor 2+,
+SHIELDER appears floor 3+, SEEKER appears floor 3+, BRUTE appears floor 3+,
+SPLITTER appears floor 4+, CHARGER appears floor 4+, SCORCHER appears floor 4+,
+GRENADIER appears floor 5+, HEALER appears floor 5+,
 TELEPORTER appears floor 6+, SUMMONER appears floor 6+, DISRUPTOR appears floor 6+,
 SNIPER appears floor 7+,
 REFLECTOR appears floor 7+,
@@ -1296,7 +1298,41 @@ can see it winding up, but you need to move fast.
   - FORTIFIED (1.4× HP): Tanky charger, very dangerous in packs
   - CHARGED (1.4× projectile speed): No effect (melee-only enemy)
 
-#### LEAPER (floor 5+)
+#### SCORCHER (floor 4+)
+
+Mid-range pressure unit that circles the player and leaves burning floor pockets.
+It is tuned to force repositioning rather than burst damage.
+
+- **Behaviour:** Strafes around the player when in LOS (or close range), retreats
+  if the player gets too close, and uses normal melee on contact.
+- **Trail hazard:** Drops small short-lived hazard zones while moving:
+  radius 0.75 tiles, life 2.2 s, arm delay 0.12 s, damage
+  `round(ATK × 0.55)` on tick. Uses the shared `hazardZones[]` path with
+  source `"Scorcher Trail"` and orange visuals.
+- **Spacing guard:** Trail placement skips heavy overlap with very recent trail
+  nodes to avoid unreadable stacks.
+- **Stats:** HP 28, ATK 9, SPD 2.6, XP 24.
+- **Colour:** `#ff5522`.
+- **Credits:** 8.
+- **Cap:** 2 per room.
+- **Spawn weight:** base 2, perFloor 2, minFloor 4.
+
+#### BRUTE (floor 3+)
+
+Melee-only heavy enemy that complements ranged casters by soaking space and
+forcing close-range commitment.
+
+- **Behaviour:** Acquires chase in LOS, keeps pressure until disengaged, no
+  ranged attack mode, no teleports, no hazard deployment.
+- **Combat role:** High-HP frontliner; lower movement speed than CHARGER/LEAPER
+  but stronger baseline melee hit.
+- **Stats:** HP 70, ATK 16, SPD 1.6, XP 30.
+- **Colour:** `#cc3344`.
+- **Credits:** 12.
+- **Cap:** 1 per room.
+- **Spawn weight:** base 3, perFloor 2, minFloor 3.
+
+#### LEAPER (floor 2+)
 
 Fast, agile enemy that attacks by jumping to the player's position and
 creating an AoE shockwave on landing. Creates "dodge the reticle!" moments
@@ -1353,8 +1389,8 @@ arc-jumping to a locked target position, demanding spatial awareness.
 - **Elite eligible:** Yes — all standard affixes apply. BERSERKER makes
   melee harder to survive. ARMORED leapers are tough to burst during
   recovery.
-- **Spawn weight:** base 2, perFloor 2, minFloor 5. Appears alongside
-  other floor 5+ types.
+- **Spawn weight:** base 2, perFloor 2, minFloor 2. Appears from early floors
+  and scales into mid/late-floor mixes.
 - **Modifier interactions:**
   - OVERCLOCK: No direct effect (cooldown not modified by OVERCLOCK).
   - SWARM (0.6× HP): Fragile but numerous — multiple leapers stagger
@@ -1906,7 +1942,9 @@ toward PHANTOMs and DRONEs (~29% and ~22% on floor 10). Weights use
 | SNIPER    | 1           | +2        | 7         |
 | HEALER    | 1           | +2        | 5         |
 | CHARGER   | 2           | +2        | 4         |
-| LEAPER    | 2           | +2        | 5         |
+| SCORCHER  | 2           | +2        | 4         |
+| BRUTE     | 3           | +2        | 3         |
+| LEAPER    | 2           | +2        | 2         |
 | REFLECTOR | 1           | +2        | 7         |
 | DISRUPTOR | 1           | +2        | 6         |
 | WRAITH    | 1           | +2        | 8         |
@@ -1923,7 +1961,8 @@ floor 10 averages 5–8 (capped by room area).
 
 **Per-room composition caps:** max 2 turrets, max 2 drones, max 2 splitters,
 max 1 phantom, max 1 shielder, max 1 grenadier, max 1 teleporter, max 1 sniper,
-max 1 summoner, max 1 healer, max 2 chargers, max 2 leapers, max 1 reflector,
+max 1 summoner, max 1 healer, max 2 chargers, max 2 scorchers, max 1 brute,
+max 2 leapers, max 1 reflector,
 max 1 disruptor, max 1 wraith, max 1 nexus, max 1 siphon, max 1 graviton,
 max 3 seekers, max 2 pulsers per room. Excess rolls reroll among uncapped,
 floor-eligible types; final fallback is GUARD.
@@ -3465,6 +3504,13 @@ Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
   Spawned via timer (0.08 s interval), max 3 new per tick. Soft fade-in/out via
   combined life ramps. Drawn after `drawWorld()`, before room markers. Cleared
   in `populateFloor()`.
+- **Lab floor dressing:** `drawWorld()` applies deterministic floor decoration
+  sprites (wall consoles, cable runs, low canisters) on a sparse subset of
+  `T.FLOOR` tiles. Placement is visual-only (no collision/pathing impact) and
+  suppressed near interactables/hazards for readability.
+- **Flickering room lights:** Sconce ambient contribution in `updateLighting()`
+  includes deterministic flicker/dropout modulation, producing unstable lab
+  lighting without changing LOS rules or revealing new tiles.
 - **Proximity hints:** Interaction prompts (stairs, doors, terminals, shrines) use
   a persistent pulsing hint centred above the HUD instead of repeating chat messages.
   `game.hint` is set per-frame; `drawHint()` renders with `sin(Date.now()/300)`
@@ -4345,3 +4391,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v6.0    | **UNCHAINED arc consolidated.** Meta-progression v2 (#33): `meta.cores/upgradeNodes/modulesOwned/modulesInstalled/logsRead/logsFound/endingsUnlocked/runsCompleted/deepestBiome` added with lossless v1→v2 migration; legacy `shards/upgrades` retained for save-compat. Five biomes drive floor palettes, minimap colours, and boss display names (#34, #40). Hub / The Gap between-floor interlude with four terminals (#35): UPGRADE MATRIX (#36 — 12-node tree × 4 tiers, cores-priced, behavioural flags wired in `src/meta/behavior.js`), MODULE SLOTS (#37 — 10-module catalog, 3-slot loadout, run-pickup commit on descend/victory, sell for 4 cores), ARMORY (read-only stub), ARCHIVE (#41 — 30 predecessor logs across 6 AXIOMs, biome-gated rare-terminal drops, inline reader). In-run temp boosts replace persistent vendor upgrades (#38 — `src/meta/boosts.js`: 6 consumables, `filterVendorPool` strips `persistent:true` from shop rolls, credit drops ×0.85). Cores currency (#39 — `src/meta/cores.js`: in-world hexagon pickups with magnet + vacuum, elite 1–2, bosses 5, GENESIS 10, secret +1, challenge +2, 50/50 corrupted-terminal roll after the log check; `forceCollectAll` in `endRun` covers all three victory paths). Intro crawl + endgame choice (#42 — `src/meta/intro.js`: 5-slide opening gated by `meta.introSeen`; GENESIS mortal-hit intercept opens ENDGAME_CHOICE — ACCEPT → `keeper` ending, REFUSE → `unchained` phase with inverted visuals → second death appends `unchained`; title screen shows NG+ AVAILABLE + FREED markers). Spec version bumped to v6.0. |
 
 | v115.0  | WARDEN boss reactivated as floor-3 alternate (restores original v37.0 design). `src/data/biomes.js`: sandbox `bossPool` now `['SENTINEL','WARDEN']`; new optional per-area `bossDisplayNames: {TYPE: 'NAME'}` map lets a pool member override the biome's narrative `displayName` on a per-boss basis. `src/entities.js` BOSS_NAMES IIFE consults `bossDisplayNames[b]` before falling back to `displayName`, so HUD/death text on a WARDEN roll reads `WARDEN` while a SENTINEL roll still reads `SENTINEL-PRIME`. WARDEN stats/AI untouched (HP 450, ATK 16, charge wind-up + ground-slam phase 2, per v89 balance). `tests/biomes.test.js`: 2 new tests lock sandbox pool containing both ids and shape-guard the `bossDisplayNames` override table. SW cache v114 → v115. 193/193 tests pass. |
+| v129.0  | Batch-2 enemy and environment variety pass. Added **SCORCHER** (floor 4+, fire-trail pressure unit: HP 28 / ATK 9 / SPD 2.6 / XP 24, cap 2, weight 2+2/floor) and **BRUTE** (floor 3+, melee-only heavy: HP 70 / ATK 16 / SPD 1.6 / XP 30, cap 1, weight 3+2/floor). LEAPER floor gate moved to 2+ (already live in weights) and spec updated to match. `SOURCE_LABELS`/`SOURCE_COLOURS` include `Scorcher Trail` recap source. Added deterministic lab-floor dressing in `drawWorld()` (wall consoles, cables, canisters; visual-only, suppressed near interactables/hazards) and deterministic sconce flicker modulation in `updateLighting()` for unstable-lab ambience. |

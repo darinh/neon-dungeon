@@ -41,11 +41,12 @@ function enemiesInRoomIter(room) {
   return enemiesByRoom.get(room) || _EMPTY_ENEMY_SET;
 }
 
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
   TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
   'Grenade':'Grenade', 'Volatile':'Volatile', 'Void Orb':'Void Orb', 'Warden Slam':'Warden Slam', 'Seeker Blast':'Seeker Blast',
@@ -63,11 +64,13 @@ const SOURCE_LABELS = {
   'Disruption Field':'Disruption Field',
   'Neural Feedback':'Neural Feedback',
   'Pulser Bolt':'Pulser Bolt',
+  'Scorcher Trail':'Scorcher Trail',
 };
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
   TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
   'Grenade':'#ff6622', 'Volatile':'#ff4422', 'Void Orb':'#aa00ff', 'Warden Slam':'#ff8800', 'Seeker Blast':'#ffdd00',
@@ -86,6 +89,7 @@ const SOURCE_COLOURS = {
   'Wraith':'#66ffcc',
   'Neural Feedback':'#00eedd',
   'Pulser Bolt':'#44ddff',
+  'Scorcher Trail':'#ff5a22',
 };
 function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
 function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
@@ -691,6 +695,8 @@ class Enemy {
       case 'SUMMONER': this.aiSummoner(dt,player,map,d,los); break;
       case 'HEALER':  this.aiHealer(dt,player,map,d,los);  break;
       case 'CHARGER': this.aiCharger(dt,player,map,d,los); break;
+      case 'SCORCHER':this.aiScorcher(dt,player,map,d,los);break;
+      case 'BRUTE':   this.aiBrute(dt,player,map,d,los);   break;
       case 'LEAPER':  this.aiLeaper(dt,player,map,d,los);  break;
       case 'REFLECTOR':this.aiReflector(dt,player,map,d,los);break;
       case 'DISRUPTOR':this.aiDisruptor(dt,player,map,d,los);break;
@@ -804,6 +810,51 @@ class Enemy {
       this.moveToward(tx,ty,this.spd,dt,map);
       if (d<1.2) this.meleeAttack(player);
     } else this.patrol(dt,map);
+  }
+
+  aiScorcher(dt,player,map,d,los) {
+    this._scTrailTimer = Math.max(0, (this._scTrailTimer || 0) - dt);
+    if (los || (d < 9 && this._canTarget())) {
+      this.zigzag += dt * 4;
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
+      const perp = { x: -dy, y: dx };
+      const orbit = Math.sin((this._scStrafeSeed || 0) + this.zigzag) * 1.3;
+      let tx = this._tx + perp.x * orbit;
+      let ty = this._ty + perp.y * orbit;
+      if (d < 2.2) {
+        tx = this.x - dx * 2.2 + perp.x * orbit * 0.7;
+        ty = this.y - dy * 2.2 + perp.y * orbit * 0.7;
+      }
+      this.moveToward(tx, ty, this.spd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+      if (this._scTrailTimer <= 0) {
+        let overlap = false;
+        for (const z of hazardZones) {
+          if (z.source !== 'Scorcher Trail') continue;
+          if (z.age < 0.6 && dist(z.x, z.y, this.x, this.y) < 0.8) { overlap = true; break; }
+        }
+        if (!overlap) {
+          hazardZones.push({
+            x: this.x, y: this.y, radius: 0.75, age: 0, maxAge: 2.2, tickCd: 0,
+            armTimer: 0.12, dmg: Math.max(1, Math.round(this.atk * 0.55)),
+            colour: '#ff5a22', source: 'Scorcher Trail'
+          });
+          spawnParticles(this.x, this.y, 'SPARK', '#ff5a22', 2);
+        }
+        this._scTrailTimer = 0.35;
+      }
+    } else {
+      this.patrol(dt, map);
+    }
+  }
+
+  aiBrute(dt,player,map,d,los) {
+    if (los && this._canTarget() && d < 14) this.state = 'CHASE';
+    else if (d > 16) this.state = 'PATROL';
+    if (this.state !== 'CHASE') { this.patrol(dt, map); return; }
+    const chaseSpd = d < 2.0 ? this.spd * 0.65 : this.spd * 0.9;
+    this.moveToward(this._tx, this._ty, chaseSpd, dt, map);
+    if (d < 1.3) this.meleeAttack(player);
   }
 
   aiPhantom(dt,player,map,d,los) {
@@ -2903,6 +2954,18 @@ class Enemy {
         // Circle
         const r = TILE * 0.2;
         ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      } else if (t === 'SCORCHER') {
+        // Diamond ember core
+        const sz = TILE * 0.32;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.PI / 4 + Math.sin(this.bobAngle * 3) * 0.12);
+        ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
+        ctx.restore();
+      } else if (t === 'BRUTE') {
+        // Heavy block silhouette
+        const w = TILE * 0.52, h = TILE * 0.46;
+        ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
       } else if (t === 'SNIPER') {
         // Thin tall rectangle
         const w = TILE * 0.18, h = TILE * 0.5;
@@ -2937,6 +3000,25 @@ class Enemy {
       } else {
         // Default: square (GUARD, SPLITTER, TELEPORTER, MIMIC, SIPHON, DISRUPTOR, GRAVITON, REFLECTOR)
         ctx.fillRect(sx - baseSz / 2, sy - baseSz / 2, baseSz, baseSz);
+      }
+      if (this.type === 'SCORCHER') {
+        ctx.save();
+        const sp = 0.22 + 0.16 * Math.sin(this.bobAngle * 7);
+        ctx.globalAlpha = sp;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#ff5a22';
+        ctx.fillStyle = '#ff5a22';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz * 1.25, 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+      }
+      if (this.type === 'BRUTE') {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#551924';
+        ctx.fillRect(sx - sz * 0.45, sy - sz * 0.55, sz * 0.9, sz * 0.18);
+        ctx.restore();
       }
       // Shielder: draw 120° shield arc facing the player
       if (this.type === 'SHIELDER') {
@@ -3685,6 +3767,8 @@ const ENEMY_WEIGHTS = {
   GUARD:    { base: 40, perFloor: -3 },   // common early, fades
   TURRET:   { base: 20, perFloor: 1 },    // steady
   CRAWLER:  { base: 10, perFloor: 3 },    // ramps up mid-game
+  SCORCHER: { base: 2,  perFloor: 2, minFloor: 4 },  // fire-trail pressure unit
+  BRUTE:    { base: 3,  perFloor: 2, minFloor: 3 },  // melee-only heavy pursuer
   PHANTOM:  { base: 2,  perFloor: 2, minFloor: 5 },  // stealth assassin
   DRONE:    { base: 5,  perFloor: 3 },    // late-game ranged
   SHIELDER: { base: 3,  perFloor: 2, minFloor: 3 },  // mid-game tank
@@ -3730,6 +3814,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'GUARD':   hp=40;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
     case 'TURRET':  hp=25;  atk=12; spd=0;   xpVal=15; colour='#ffb700'; break;
     case 'CRAWLER': hp=20;  atk=6;  spd=4;   xpVal=10; colour='#39ff14'; break;
+    case 'SCORCHER':hp=28;  atk=9;  spd=2.6; xpVal=24; colour='#ff5522'; break;
+    case 'BRUTE':   hp=70;  atk=16; spd=1.6; xpVal=30; colour='#cc3344'; break;
     case 'PHANTOM': hp=35;  atk=10; spd=2.5; xpVal=30; colour='#cc00ff'; break;
     case 'DRONE':   hp=15;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
     case 'SHIELDER':hp=50;  atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
@@ -3784,6 +3870,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
+  if (type==='SCORCHER') { e._scTrailTimer=0.2; e._scStrafeSeed=rnd(0, TWO_PI); }
   if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
   if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
   if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
