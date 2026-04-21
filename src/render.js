@@ -435,6 +435,16 @@ function drawHUD(player) {
     }
     ctx.fillText(weapName, statsX + 74, r2 + 10);
     ctx.shadowBlur=0;
+    // Weapon belt pips (show only when belt has >1 weapon)
+    if (player.weapons && player.weapons.length > 1) {
+      const pipX = statsX + 74;
+      const safeIdx = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
+      for (let wi = 0; wi < player.weapons.length; wi++) {
+        const active = wi === safeIdx;
+        ctx.fillStyle = active ? wColour : '#445';
+        ctx.fillRect(pipX + wi * 10, r2 + 16, active ? 8 : 6, active ? 4 : 3);
+      }
+    }
 
     if (player.shards > 0) {
       ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
@@ -503,6 +513,15 @@ function drawHUD(player) {
     }
     ctx.fillText(wNameL, colBase + 220, y + 10);
     ctx.shadowBlur=0;
+    if (player.weapons && player.weapons.length > 1) {
+      const pipXL = colBase + 220;
+      const safeIdxL = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
+      for (let wi = 0; wi < player.weapons.length; wi++) {
+        const active = wi === safeIdxL;
+        ctx.fillStyle = active ? wColL : '#445';
+        ctx.fillRect(pipXL + wi * 10, y + 16, active ? 8 : 6, active ? 4 : 3);
+      }
+    }
 
     if (player.shards > 0) {
       ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Void Shard ×${player.shards}`, colBase + 220, y + 22);

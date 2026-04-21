@@ -212,6 +212,11 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 window.addEventListener('mouseup',   e => { mouse.down = false; });
+// Scroll wheel: weapon belt cycling
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  justPressed.add(e.deltaY > 0 ? 'WheelDown' : 'WheelUp');
+}, { passive: false });
 
 // ─── Touch Controls ──────────────────────────────────────────────────────────
 const JR = 55; // joystick base radius

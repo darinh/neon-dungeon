@@ -5319,6 +5319,8 @@ class Player {
     this.atk=10; this.def=2; this.spd=3.5;
     this.level=1; this.xp=0;
     this.weapon=buildWeapon('PULSE_PISTOL', []);
+    this.weapons=[this.weapon];   // weapon belt (max 3 slots)
+    this.weaponIdx=0;              // active weapon index into weapons[]
     this.score=0;
     this.invincibleTimer=0;
     this.shootCooldown=0;
@@ -5386,6 +5388,37 @@ class Player {
     this._surgeShotCount=0;       // surge: rolling shot counter (every 8th)
     this._metaSecondWindUsed=false; // meta second_wind: fired once per run
     this._outOfCombatTimer=0;     // regenerator: seconds since last hit
+  }
+
+  // ── Weapon Belt ──────────────────────────────────────────────────────
+  cycleWeapon(dir) {
+    if (!this.weapons || this.weapons.length <= 1) return;
+    this.weaponIdx = (this.weaponIdx + (dir || 1) + this.weapons.length) % this.weapons.length;
+    this.weapon = this.weapons[this.weaponIdx];
+    this.shootCooldown = 0;
+  }
+
+  collectWeapon(w) {
+    if (!this.weapons) { this.weapons = [this.weapon]; this.weaponIdx = 0; }
+    const MAX_BELT = 3;
+    if (this.weapons.length < MAX_BELT) {
+      this.weapons.push(w);
+      return true; // collected into belt — no choice needed
+    }
+    return false; // belt full — caller should show swap UI
+  }
+
+  swapWeapon(slotIdx, w) {
+    if (!this.weapons || slotIdx < 0 || slotIdx >= this.weapons.length) return;
+    this.weapons[slotIdx] = w;
+    if (slotIdx === this.weaponIdx) this.weapon = w;
+  }
+
+  equipWeapon(w) {
+    if (!this.weapons) { this.weapons = []; this.weaponIdx = 0; }
+    this.weapon = w;
+    this.weapons[this.weaponIdx] = w;
+    this.shootCooldown = 0;
   }
 
   // Outgoing damage multiplier for player weapon hits. Delegated to the
@@ -5792,6 +5825,14 @@ class Player {
     // void shard
     if (jp(km('voidshard'))) this.useVoidShard();
     if (jp(km('hackware'))) activateHackware(this);
+    // Weapon belt cycle: scroll wheel or number keys
+    if (jp('WheelDown')) { this.cycleWeapon(1); try { audio.menuSelect(); } catch(_){} }
+    if (jp('WheelUp'))   { this.cycleWeapon(-1); try { audio.menuSelect(); } catch(_){} }
+    if (this.weapons && this.weapons.length > 1) {
+      for (let wi = 0; wi < Math.min(this.weapons.length, 3); wi++) {
+        if (jp('Digit' + (wi + 1))) { this.weaponIdx = wi; this.weapon = this.weapons[wi]; this.shootCooldown = 0; try { audio.menuSelect(); } catch(_){} }
+      }
+    }
 
     // dash activation
     if ((jp(km('dash'))||jp(ALT_KEYS.dash))&&this.dashCooldown<=0&&this.hp>0) {

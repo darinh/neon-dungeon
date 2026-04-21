@@ -3045,10 +3045,20 @@ function makeWeaponOption() {
   const statsDesc = aw.melee ? aw.dmg+' dmg, melee, '+aw.rate+'/s' : aw.dmg+(aw.count>1?'×'+aw.count:'')+' dmg, '+aw.rate+'/s, rng '+aw.range;
   return {
     id:'WEAPON_'+k, name:aw.displayName, colour:aw.colour, rarity:10, persistent:false,
-    _rarity: aw._rarity, _rarityColour: rarityCol,
+    _rarity: aw._rarity, _rarityColour: rarityCol, _weaponObj: aw,
     desc: statsDesc,
     affixDesc: affixDesc || null,
-    fn: p=>{ p.weapon=aw; game.msg('Equipped '+aw.displayName+'!',rarityCol); }
+    fn: p=>{
+      if (p.collectWeapon) {
+        if (p.collectWeapon(aw)) {
+          game.msg('Collected '+aw.displayName+'! [Scroll] to switch',rarityCol);
+          return;
+        }
+      }
+      if (p.equipWeapon) p.equipWeapon(aw);
+      else p.weapon=aw;
+      game.msg('Equipped '+aw.displayName+'!',rarityCol);
+    }
   };
 }
 
@@ -3294,7 +3304,9 @@ function applyEventEffect(event, choice, player, gm) {
       case 'ARMS_CACHE': {
         const bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
         const baseKey = bases[rndInt(0, bases.length - 1)];
-        player.weapon = rollWeapon(baseKey, Math.min(10, floor + 1));
+        const _aw = rollWeapon(baseKey, Math.min(10, floor + 1));
+        if (player.equipWeapon) player.equipWeapon(_aw);
+        else player.weapon = _aw;
         const dmg = 15;
         player.takeDamage(dmg, 'Trap');
         gm.msg('NEW WEAPON: ' + player.weapon.name + ' (−' + dmg + ' HP)', '#ff8844');
@@ -3569,15 +3581,22 @@ class Item {
     this.x=x; this.y=y; this.type=type||pickItemType();
     this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=false;
   }
-  update(dt) { this.bob+=dt*2; }
+  update(dt) { this.bob+=dt*2.5; }
   draw(camX,camY) {
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
     if (!game.dungeon?.visible?.[ty]?.[tx]) return;
-    const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*2;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx=this.x*TILE-camX, sy=this.y*TILE-camY+bobY;
+    const pulse = 0.65 + 0.35 * Math.sin(this.bob * 1.3);
     ctx.save();
-    ctx.shadowBlur=12; ctx.shadowColor=this.type.colour;
-    ctx.fillStyle=this.type.colour;
-    ctx.fillRect(sx-5,sy-5,10,10);
+    ctx.shadowBlur = 8 + 10 * pulse;
+    ctx.shadowColor = this.type.colour;
+    ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    ctx.fillStyle = this.type.colour;
+    // Diamond shape (rotated square) — visually distinct from enemy squares.
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-4.5, -4.5, 9, 9);
     ctx.restore();
   }
 }

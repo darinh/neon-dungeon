@@ -718,6 +718,7 @@ const game = {
     if (!this.player) return;
     const p = this.player;
     const weaponSave = { _base: p.weapon._base || 'PULSE_PISTOL', _affixes: p.weapon._affixes || [] };
+    const weaponsSave = (p.weapons || [p.weapon]).map(w => ({ _base: w._base || 'PULSE_PISTOL', _affixes: w._affixes || [] }));
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
@@ -727,7 +728,7 @@ const game = {
       runTime: this.runTime,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
-        level:p.level, xp:p.xp, weapon:weaponSave,
+        level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
         upgrades:{...p.upgrades}, perks:{...p.perks},
         keys:{...p.keys}, shards:p.shards,
         permSpeedBonus:p.permSpeedBonus, score:p.score,
@@ -804,6 +805,18 @@ const game = {
     } else {
       p.weapon = buildWeapon(typeof s.weapon === 'string' ? s.weapon : 'PULSE_PISTOL', []);
     }
+    // Restore weapon belt (backwards-compatible with old saves)
+    if (Array.isArray(s.weapons) && s.weapons.length) {
+      p.weapons = s.weapons.map(ws => {
+        if (ws && typeof ws === 'object' && ws._base) return buildWeapon(ws._base, ws._affixes || []);
+        return buildWeapon(typeof ws === 'string' ? ws : 'PULSE_PISTOL', []);
+      });
+      p.weaponIdx = Math.min(s.weaponIdx || 0, p.weapons.length - 1);
+      p.weapon = p.weapons[p.weaponIdx];
+    } else {
+      p.weapons = [p.weapon];
+      p.weaponIdx = 0;
+    }
     p.upgrades=s.upgrades||{};
     p.perks=s.perks||{};
     p.keys=s.keys||{red:0,blue:0,gold:0};
@@ -856,9 +869,9 @@ const game = {
       case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
-      case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
-      case 'PERK_CHOICE':    this.updatePerkChoice(); break;
-      case 'AUGMENT_CHOICE': this.updateAugmentChoice(); break;
+      case 'POWERUP_CHOICE': this.updatePowerupChoice(dt); break;
+      case 'PERK_CHOICE':    this.updatePerkChoice(dt); break;
+      case 'AUGMENT_CHOICE': this.updateAugmentChoice(dt); break;
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
@@ -1114,9 +1127,33 @@ const game = {
         // Generate 2 upgrade options
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
-        this.powerupChoice = { options:[optA, optB], selected:0 };
+        // Auto-collect simple consumables (health/XP/shard) to reduce popup fatigue.
+        const _isSimple = o => !o.persistent && !o.id.startsWith('WEAPON_') && !o.id.startsWith('HACKWARE_');
+        // Auto-collect weapons into belt if space available.
+        const _isAutoWeapon = o => o.id.startsWith('WEAPON_') && o._weaponObj && player.weapons && player.weapons.length < 3;
+        if (_isSimple(optA) && _isSimple(optB)) {
+          const needsHp = player.hp < player.maxHp;
+          const aIsHeal = optA.id === 'MED_PACK' || optA.id === 'NANO_REPAIR';
+          const bIsHeal = optB.id === 'MED_PACK' || optB.id === 'NANO_REPAIR';
+          const pick = (needsHp && bIsHeal && !aIsHeal) ? optB : optA;
+          pick.fn(player);
+          this.msg(pick.name, pick.colour);
+          continue;
+        }
+        // Auto-collect weapon if belt has space (prefer weapon option for belt, apply other)
+        if (_isAutoWeapon(optA) && _isSimple(optB)) {
+          optA.fn(player); optB.fn(player);
+          this.msg(optA.name + ' + ' + optB.name, optA.colour);
+          continue;
+        }
+        if (_isAutoWeapon(optB) && _isSimple(optA)) {
+          optB.fn(player); optA.fn(player);
+          this.msg(optB.name + ' + ' + optA.name, optB.colour);
+          continue;
+        }
+        this.powerupChoice = { options:[optA, optB], selected:0, _arm: 0.4 };
         this.setState('POWERUP_CHOICE');
-        return; // freeze gameplay immediately
+        return;
       }
     }
 
@@ -1596,7 +1633,7 @@ const game = {
             if (opts.length === 0) {
               this.msg('ALL AUGMENTS OWNED', '#cc44ff');
             } else {
-              this.augmentChoice = { options: opts, selected: 0, room: r };
+              this.augmentChoice = { options: opts, selected: 0, room: r, _arm: 0.4 };
               this.setState('AUGMENT_CHOICE');
               audio.augmentChoice();
             }
@@ -1875,9 +1912,17 @@ const game = {
     }
   },
 
-  updatePowerupChoice() {
+  updatePowerupChoice(dt) {
     const pc = this.powerupChoice;
     if (!pc) { this.setState('PLAYING'); return; }
+    // Arming delay — block selection for a short period to prevent accidental picks.
+    if (pc._arm > 0) {
+      pc._arm -= (dt || 1/60);
+      // Allow navigation while arming, but consume selection keys.
+      if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
+      return;
+    }
     // Keyboard: left/right to select, 1/2 for direct pick, 3/Escape to skip
     if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
     if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
@@ -1933,14 +1978,20 @@ const game = {
     this.pendingPerkChoices.shift(); // consume the milestone
     const opts = rollPerkChoices(this.player, 3);
     if (!opts.length) { this.setState('PLAYING'); return; } // all perks owned
-    this.perkChoice = { options: opts, selected: 0 };
+    this.perkChoice = { options: opts, selected: 0, _arm: 0.4 };
     this.setState('PERK_CHOICE');
     audio.perkChoice();
   },
 
-  updatePerkChoice() {
+  updatePerkChoice(dt) {
     const pc = this.perkChoice;
     if (!pc) { this.setState('PLAYING'); return; }
+    if (pc._arm > 0) {
+      pc._arm -= (dt || 1/60);
+      if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = Math.max(0, pc.selected - 1);
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
+      return;
+    }
     if (jp('Digit1')) { this.applyPerkChoice(0); return; }
     if (jp('Digit2')) { this.applyPerkChoice(1); return; }
     if (jp('Digit3') && pc.options.length > 2) { this.applyPerkChoice(2); return; }
@@ -1980,14 +2031,20 @@ const game = {
 
   // ─── Augment Choice ──────────────────────────────────────────────────────
   openAugmentChoice(options) {
-    this.augmentChoice = { options, selected: 0 };
+    this.augmentChoice = { options, selected: 0, _arm: 0.4 };
     this.setState('AUGMENT_CHOICE');
     audio.augmentChoice();
   },
 
-  updateAugmentChoice() {
+  updateAugmentChoice(dt) {
     const ac = this.augmentChoice;
     if (!ac) { this.setState('PLAYING'); return; }
+    if (ac._arm > 0) {
+      ac._arm -= (dt || 1/60);
+      if (jp(ALT_KEYS.left) || jp(km('left')))  ac.selected = Math.max(0, ac.selected - 1);
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  ac.selected = Math.min(ac.options.length - 1, ac.selected + 1);
+      return;
+    }
     if (jp('Digit1')) { this.applyAugmentChoice(0); return; }
     if (jp('Digit2') && ac.options.length > 1) { this.applyAugmentChoice(1); return; }
     if (jp(ALT_KEYS.left) || jp(km('left')))  ac.selected = Math.max(0, ac.selected - 1);
