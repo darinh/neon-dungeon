@@ -850,7 +850,7 @@ class Enemy {
 
   aiBrute(dt,player,map,d,los) {
     if (los && this._canTarget() && d < 14) this.state = 'CHASE';
-    else if (d > 16) this.state = 'PATROL';
+    else if (!los || !this._canTarget() || d > 16) this.state = 'PATROL';
     if (this.state !== 'CHASE') { this.patrol(dt, map); return; }
     const chaseSpd = d < 2.0 ? this.spd * 0.65 : this.spd * 0.9;
     this.moveToward(this._tx, this._ty, chaseSpd, dt, map);
