@@ -4624,8 +4624,16 @@ resize();
 updateBtns();
 mouse.x = W/2; mouse.y = H/2;
 window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); mouse.x = W/2; mouse.y = H/2; });
-// Initialize telemetry (local-only until a transport is configured)
-if (typeof NEON !== 'undefined' && NEON.telemetry) { NEON.telemetry.init(); }
+// Initialize telemetry — connects PostHog as transport if API key is configured
+if (typeof NEON !== 'undefined' && NEON.telemetry) {
+  const _phTransport = (typeof posthog !== 'undefined' && posthog.__SV)
+    ? function (batch) {
+        for (const ev of batch) posthog.capture('neon_' + ev.e, ev.p);
+        return Promise.resolve();
+      }
+    : null;
+  NEON.telemetry.init({ transport: _phTransport });
+}
 game.state='MENU';
 game.menuParticles=[];
 requestAnimationFrame(loop);
