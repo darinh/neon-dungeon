@@ -1862,11 +1862,25 @@ function generateFloor(floorNum) {
   root.carveRooms(map);
   const rooms = root.getLeaves().map(l=>l.room).filter(Boolean);
 
-  // spawn in first room
-  const spawnRoom = rooms[0];
+  // Pick spawn room — try several candidates and pick the one that maximizes
+  // BFS distance to the farthest room (ensures exit is far from spawn).
+  let spawnRoom = rooms[0];
+  if (rooms.length > 3) {
+    const candidates = [];
+    for (let ci = 0; ci < Math.min(rooms.length, 6); ci++) candidates.push(rooms[ci]);
+    // Also try a random room for variety
+    candidates.push(rooms[rndInt(0, rooms.length - 1)]);
+    let bestMaxD = 0;
+    for (const c of candidates) {
+      const cd = bfsRooms(rooms, c, map);
+      let cMax = 0;
+      for (const [,dd] of cd) { if (dd > cMax) cMax = dd; }
+      if (cMax > bestMaxD) { bestMaxD = cMax; spawnRoom = c; }
+    }
+  }
   const playerPos = { x: spawnRoom.cx + 0.5, y: spawnRoom.cy + 0.5 };
 
-  // furthest room from spawn for stairs
+  // Furthest room from spawn for stairs
   const dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
   for (const [r,d] of dist) { if (d>farthestD) { farthestD=d; farthest=r; } }

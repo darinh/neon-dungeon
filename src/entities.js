@@ -2880,8 +2880,64 @@ class Enemy {
       ctx.fill();
       // boss HP shown in cinematic HUD bar (drawBossBar), not overhead
     } else {
-      const sz=TILE*(this.isShard?0.25:0.4);
-      ctx.fillRect(sx-sz/2, sy-sz/2, sz, sz);
+      const baseSz = TILE * (this.isShard ? 0.25 : 0.4);
+      const sz = baseSz; // compat alias — used by SHIELDER/REFLECTOR overlays below
+      const t = this.type;
+      // Per-type visual shapes — break up the uniform square look.
+      if (t === 'CHARGER') {
+        // Triangle pointing toward target
+        const sz = TILE * 0.45;
+        const fdx = (this._tx || this.x) - this.x, fdy = (this._ty || this.y) - this.y;
+        const angle = (fdx || fdy) ? Math.atan2(fdy, fdx) : 0;
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(angle);
+        ctx.beginPath(); ctx.moveTo(sz * 0.6, 0); ctx.lineTo(-sz * 0.4, -sz * 0.4); ctx.lineTo(-sz * 0.4, sz * 0.4); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      } else if (t === 'PHANTOM' || t === 'WRAITH') {
+        // Diamond, semi-transparent
+        const sz = TILE * 0.35;
+        ctx.save(); ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.65;
+        ctx.translate(sx, sy); ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
+        ctx.restore();
+      } else if (t === 'GRENADIER' || t === 'PULSER') {
+        // Circle
+        const r = TILE * 0.2;
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      } else if (t === 'SNIPER') {
+        // Thin tall rectangle
+        const w = TILE * 0.18, h = TILE * 0.5;
+        ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+      } else if (t === 'SUMMONER' || t === 'HEALER' || t === 'NEXUS') {
+        // Circle with outer ring
+        const r = TILE * 0.22;
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.arc(sx, sy, r * 1.6, 0, TWO_PI); ctx.stroke();
+        ctx.restore();
+      } else if (t === 'LEAPER') {
+        // Small circle that pulses during windup
+        const lpScale = this._lpState === 'windup' ? 1.0 + 0.3 * Math.sin(this.bobAngle * 8) : (this._lpState === 'airborne' ? 1.4 : 0.8);
+        const r = TILE * 0.2 * lpScale;
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      } else if (t === 'CRAWLER') {
+        // Low wide rectangle
+        const w = TILE * 0.48, h = TILE * 0.24;
+        ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+      } else if (t === 'TURRET') {
+        // Plus/cross shape
+        const a = TILE * 0.14, b = TILE * 0.38;
+        ctx.fillRect(sx - a / 2, sy - b / 2, a, b);
+        ctx.fillRect(sx - b / 2, sy - a / 2, b, a);
+      } else if (t === 'DRONE' || t === 'SEEKER') {
+        // Small diamond
+        const sz = TILE * 0.28;
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
+        ctx.restore();
+      } else {
+        // Default: square (GUARD, SPLITTER, TELEPORTER, MIMIC, SIPHON, DISRUPTOR, GRAVITON, REFLECTOR)
+        ctx.fillRect(sx - baseSz / 2, sy - baseSz / 2, baseSz, baseSz);
+      }
       // Shielder: draw 120° shield arc facing the player
       if (this.type === 'SHIELDER') {
         ctx.save();
@@ -3639,7 +3695,7 @@ const ENEMY_WEIGHTS = {
   SUMMONER:   { base: 1,  perFloor: 2, minFloor: 6 },  // spawns minion drones
   HEALER:     { base: 1,  perFloor: 2, minFloor: 5 },  // heals wounded allies
   CHARGER:    { base: 2,  perFloor: 2, minFloor: 4 },  // charge-attack melee rusher
-  LEAPER:     { base: 2,  perFloor: 2, minFloor: 5 },  // jumping shockwave attacker
+  LEAPER:     { base: 4,  perFloor: 2, minFloor: 2 },  // jumping shockwave attacker — appears early
   REFLECTOR:  { base: 1,  perFloor: 2, minFloor: 7 },  // projectile-reflecting shield
   DISRUPTOR:  { base: 1,  perFloor: 2, minFloor: 6 },  // area-denial field deployer
   WRAITH:     { base: 1,  perFloor: 2, minFloor: 8 },  // wall-phasing ethereal predator
