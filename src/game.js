@@ -3094,6 +3094,11 @@ const game = {
     // UNCHAINED #42 — ending-unlock markers. Drawn after leaderboard so they
     // don't fight the title layout. "FREED" is a persistent watermark; NG+
     // is a discrete badge under the subtitle.
+    // Privacy policy link (bottom of screen)
+    ctx.save(); ctx.textAlign = 'center';
+    ctx.fillStyle = '#333355'; ctx.font = (narrow ? 8 : 9) + 'px monospace';
+    ctx.fillText('Privacy Policy: darinh.github.io/neon-dungeon/privacy.html', W / 2, H - 8);
+    ctx.restore();
     {
       const m = loadMeta();
       const freed  = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('unchained');
