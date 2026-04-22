@@ -40,75 +40,299 @@ function _labDecoHash(tx, ty, floor) {
   return h >>> 0;
 }
 
-function drawLabFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
-  if (!game || game.floor < 2) return;
+// Reused per-tile scratch context — avoids allocating a fresh object on
+// every decorated floor tile in the render hot path. Single-threaded
+// rendering means consumers never need to retain the reference.
+const _DECO_CX = { h: 0, roll: 0, wallSide: null, flicker: 0 };
+// Hoisted to module scope so _decoContext does not allocate per call.
+const _DECO_NEIGHBOR_OFFSETS = [[0,-1],[0,1],[-1,0],[1,0]];
+function _decoIsSolid(t) {
+  return t===T.WALL || t===T.VOID || t===T.CRACKED || t===T.LOCKED_R ||
+         t===T.LOCKED_B || t===T.LOCKED_G || t===T.CRATE;
+}
+
+// Build a per-tile decor context shared by every biome decor function:
+// deterministic hash + sparse density roll + which neighbouring side is a
+// wall (used to anchor wall-mounted props) + a per-tile flicker. Returns
+// null when the tile is unsuitable (out of bounds, neighbouring an
+// interactable / hazard) so caller can early-return without drawing.
+function _decoContext(dungeon, tx, ty) {
+  if (!game || game.floor < 2) return null;
   const map = dungeon.map;
   const h = _labDecoHash(tx, ty, game.floor);
   const roll = h % 100;
-  if (roll >= 11) return; // sparse, deterministic dressing
+  if (roll >= 11) return null; // sparse, deterministic dressing
 
-  // Keep readability around interactables and hazards.
-  for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+  for (let i = 0; i < 4; i++) {
+    const dx = _DECO_NEIGHBOR_OFFSETS[i][0];
+    const dy = _DECO_NEIGHBOR_OFFSETS[i][1];
     const nt = map[ty + dy]?.[tx + dx];
-    if (nt == null) return;
+    if (nt == null) return null;
     if (isDoor(nt) || nt === T.DOOR_OPEN || nt === T.STAIRS || nt === T.TERMINAL ||
         nt === T.VENDOR || nt === T.LORE || nt === T.IMPLANT_SHRINE || nt === T.EVENT_TERMINAL ||
         nt === T.TELEPORT_PAD || nt === T.CHALLENGE_GATE || nt === T.PLASMA || nt === T.ARC || nt === T.TOXIC) {
-      return;
+      return null;
     }
   }
 
-  const solid = (t) => t===T.WALL || t===T.VOID || t===T.CRACKED || t===T.LOCKED_R || t===T.LOCKED_B || t===T.LOCKED_G || t===T.CRATE;
-  const n = solid(map[ty - 1]?.[tx]);
-  const s = solid(map[ty + 1]?.[tx]);
-  const w = solid(map[ty]?.[tx - 1]);
-  const e = solid(map[ty]?.[tx + 1]);
-  const wallSide = n ? 'N' : s ? 'S' : w ? 'W' : e ? 'E' : null;
-  const flicker = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 8 + (h % 17));
+  const n = _decoIsSolid(map[ty - 1]?.[tx]);
+  const s = _decoIsSolid(map[ty + 1]?.[tx]);
+  const w = _decoIsSolid(map[ty]?.[tx - 1]);
+  const e = _decoIsSolid(map[ty]?.[tx + 1]);
+  _DECO_CX.h = h;
+  _DECO_CX.roll = roll;
+  _DECO_CX.wallSide = n ? 'N' : s ? 'S' : w ? 'W' : e ? 'E' : null;
+  _DECO_CX.flicker = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 8 + (h % 17));
+  return _DECO_CX;
+}
 
-  ctx.save();
-  ctx.globalAlpha = brightness * 0.45 * flicker;
-  if (roll < 4 && wallSide) {
-    // Wall console panel
-    ctx.fillStyle = '#0e2230';
-    if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
-    else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
-    else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
-    else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = '#44ccff';
-    ctx.fillStyle = '#44ccff';
-    if (wallSide === 'N' || wallSide === 'S') {
-      ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
-      ctx.fillRect(sx + 9, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+// Per-biome decor renderers. Keyed by AREAS[i].id from src/data/biomes.js.
+// Each receives the shared context and draws a small dressing prop using
+// canvas primitives — no images, no allocations, deterministic per tile.
+// All decor is purely cosmetic (no collision); _decoContext already
+// guarantees readable spacing around doors / hazards / interactables.
+const _BIOME_DECOR = {
+  // sandbox / NEON DUNGEON — original cyan dressing (the simulation aesthetic)
+  sandbox(sx, sy, brightness, cx) {
+    const { h, roll, wallSide, flicker } = cx;
+    ctx.save();
+    ctx.globalAlpha = brightness * 0.45 * flicker;
+    if (roll < 4 && wallSide) {
+      ctx.fillStyle = '#0e2230';
+      if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
+      else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
+      else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
+      else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#44ccff';
+      ctx.fillStyle = '#44ccff';
+      if (wallSide === 'N' || wallSide === 'S') {
+        ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+        ctx.fillRect(sx + 9, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+      } else {
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 5, 2, 2);
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 9, 2, 2);
+      }
+    } else if (roll < 8) {
+      ctx.fillStyle = '#2a2a3a';
+      if ((h & 1) === 0) {
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
+        ctx.fillStyle = '#3c3c56';
+        ctx.fillRect(sx + 2, sy + TILE / 2 + 1, TILE - 4, 1);
+      } else {
+        ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
+        ctx.fillStyle = '#3c3c56';
+        ctx.fillRect(sx + TILE / 2 + 1, sy + 2, 1, TILE - 4);
+      }
     } else {
-      ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 5, 2, 2);
-      ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 9, 2, 2);
+      ctx.fillStyle = '#1c2d3f';
+      ctx.fillRect(sx + 4, sy + TILE - 8, 4, 6);
+      ctx.fillRect(sx + 10, sy + TILE - 7, 4, 5);
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#66e0ff';
+      ctx.fillStyle = '#66e0ff';
+      ctx.fillRect(sx + 5, sy + TILE - 8, 2, 1);
+      ctx.fillRect(sx + 11, sy + TILE - 7, 2, 1);
     }
-  } else if (roll < 8) {
-    // Cable run
-    ctx.fillStyle = '#2a2a3a';
-    if ((h & 1) === 0) {
-      ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
-      ctx.fillStyle = '#3c3c56';
-      ctx.fillRect(sx + 2, sy + TILE / 2 + 1, TILE - 4, 1);
+    ctx.restore();
+  },
+
+  // cache / THE LAB — sterile white wall consoles, steel pipes,
+  // biohazard canisters with caution-yellow bands.
+  cache(sx, sy, brightness, cx) {
+    const { h, roll, wallSide, flicker } = cx;
+    ctx.save();
+    ctx.globalAlpha = brightness * 0.50 * flicker;
+    if (roll < 4 && wallSide) {
+      ctx.fillStyle = '#1e2228';
+      if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
+      else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
+      else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
+      else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#ffffff';
+      ctx.fillStyle = '#e8eef2';
+      if (wallSide === 'N' || wallSide === 'S') {
+        ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+        ctx.shadowColor = '#ff4466'; ctx.fillStyle = '#ff4466';
+        ctx.fillRect(sx + 9, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
+      } else {
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 5, 2, 2);
+        ctx.shadowColor = '#ff4466'; ctx.fillStyle = '#ff4466';
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 9, 2, 2);
+      }
+    } else if (roll < 8) {
+      ctx.fillStyle = '#666c74';
+      if ((h & 1) === 0) {
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 3);
+        ctx.fillStyle = '#a8b0b8';
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 2, TILE - 4, 1);
+      } else {
+        ctx.fillRect(sx + TILE / 2 - 2, sy + 2, 3, TILE - 4);
+        ctx.fillStyle = '#a8b0b8';
+        ctx.fillRect(sx + TILE / 2 - 2, sy + 2, 1, TILE - 4);
+      }
     } else {
-      ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
-      ctx.fillStyle = '#3c3c56';
-      ctx.fillRect(sx + TILE / 2 + 1, sy + 2, 1, TILE - 4);
+      ctx.fillStyle = '#d8dce0';
+      ctx.fillRect(sx + 4, sy + TILE - 8, 4, 6);
+      ctx.fillRect(sx + 10, sy + TILE - 7, 4, 5);
+      ctx.fillStyle = '#ffcc22';
+      ctx.fillRect(sx + 4, sy + TILE - 5, 4, 1);
+      ctx.fillRect(sx + 10, sy + TILE - 4, 4, 1);
     }
-  } else {
-    // Low profile lab canister pair
-    ctx.fillStyle = '#1c2d3f';
-    ctx.fillRect(sx + 4, sy + TILE - 8, 4, 6);
-    ctx.fillRect(sx + 10, sy + TILE - 7, 4, 5);
-    ctx.shadowBlur = 4;
-    ctx.shadowColor = '#66e0ff';
-    ctx.fillStyle = '#66e0ff';
-    ctx.fillRect(sx + 5, sy + TILE - 8, 2, 1);
-    ctx.fillRect(sx + 11, sy + TILE - 7, 2, 1);
-  }
-  ctx.restore();
+    ctx.restore();
+  },
+
+  // firewall / THE COMPLEX — sodium-vapor wall sconces, dark conduit runs
+  // with amber accents, concrete bollards with caution stripes.
+  firewall(sx, sy, brightness, cx) {
+    const { h, roll, wallSide, flicker } = cx;
+    ctx.save();
+    ctx.globalAlpha = brightness * 0.45 * flicker;
+    if (roll < 4 && wallSide) {
+      ctx.fillStyle = '#1a1612';
+      if (wallSide === 'N') ctx.fillRect(sx + 5, sy + 2, TILE - 10, 3);
+      else if (wallSide === 'S') ctx.fillRect(sx + 5, sy + TILE - 5, TILE - 10, 3);
+      else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 5, 3, TILE - 10);
+      else ctx.fillRect(sx + TILE - 5, sy + 5, 3, TILE - 10);
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffaa44';
+      ctx.fillStyle = '#ffaa44';
+      if (wallSide === 'N') ctx.fillRect(sx + 7, sy + 4, TILE - 14, 1);
+      else if (wallSide === 'S') ctx.fillRect(sx + 7, sy + TILE - 5, TILE - 14, 1);
+      else if (wallSide === 'W') ctx.fillRect(sx + 4, sy + 7, 1, TILE - 14);
+      else ctx.fillRect(sx + TILE - 5, sy + 7, 1, TILE - 14);
+    } else if (roll < 8) {
+      ctx.fillStyle = '#3a2e22';
+      if ((h & 1) === 0) {
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
+        ctx.fillStyle = '#ffaa44'; ctx.globalAlpha *= 0.6;
+        ctx.fillRect(sx + 2, sy + TILE / 2 + 1, TILE - 4, 1);
+      } else {
+        ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
+        ctx.fillStyle = '#ffaa44'; ctx.globalAlpha *= 0.6;
+        ctx.fillRect(sx + TILE / 2 + 1, sy + 2, 1, TILE - 4);
+      }
+    } else {
+      ctx.fillStyle = '#5a544a';
+      ctx.fillRect(sx + 5, sy + TILE - 9, 5, 7);
+      ctx.fillStyle = '#ffaa44';
+      ctx.fillRect(sx + 5, sy + TILE - 6, 5, 1);
+      ctx.fillStyle = '#3a3428';
+      ctx.fillRect(sx + 5, sy + TILE - 3, 5, 1);
+    }
+    ctx.restore();
+  },
+
+  // uplink / THE WILDS — moss patches on stone, twisting vines, glowing
+  // fungi clusters. Slower, breathier flicker (it is a forest, not a
+  // server room).
+  uplink(sx, sy, brightness, cx) {
+    const { h, roll, wallSide } = cx;
+    const breath = 0.85 + 0.15 * Math.sin((game.floorTime || 0) * 1.5 + (h % 9));
+    ctx.save();
+    ctx.globalAlpha = brightness * 0.55 * breath;
+    if (roll < 4 && wallSide) {
+      ctx.fillStyle = '#2a4018';
+      if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
+      else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
+      else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
+      else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
+      ctx.fillStyle = '#5a8030';
+      if (wallSide === 'N' || wallSide === 'S') {
+        ctx.fillRect(sx + 4 + (h & 3), sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 1);
+        ctx.fillRect(sx + 9 + ((h >> 2) & 3), sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 1);
+      } else {
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 4 + (h & 3), 1, 2);
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 9 + ((h >> 2) & 3), 1, 2);
+      }
+    } else if (roll < 8) {
+      ctx.fillStyle = '#1e2e0c';
+      if ((h & 1) === 0) {
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
+        ctx.fillStyle = '#5a8030';
+        ctx.fillRect(sx + 4, sy + TILE / 2 - 2, 2, 1);
+        ctx.fillRect(sx + 9, sy + TILE / 2 + 2, 2, 1);
+      } else {
+        ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
+        ctx.fillStyle = '#5a8030';
+        ctx.fillRect(sx + TILE / 2 - 2, sy + 4, 1, 2);
+        ctx.fillRect(sx + TILE / 2 + 2, sy + 9, 1, 2);
+      }
+    } else {
+      ctx.fillStyle = '#3a2820';
+      ctx.fillRect(sx + 5, sy + TILE - 5, 3, 3);
+      ctx.fillRect(sx + 10, sy + TILE - 4, 3, 2);
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#aaff88';
+      ctx.fillStyle = '#aaff88';
+      ctx.fillRect(sx + 5, sy + TILE - 6, 3, 1);
+      ctx.fillRect(sx + 10, sy + TILE - 5, 3, 1);
+    }
+    ctx.restore();
+  },
+
+  // opennet / THE GRID — holographic ad strips (alternating magenta/cyan),
+  // electric magenta cable runs, trash + vending-machine pile.
+  opennet(sx, sy, brightness, cx) {
+    const { h, roll, wallSide, flicker } = cx;
+    ctx.save();
+    ctx.globalAlpha = brightness * 0.50 * flicker;
+    if (roll < 4 && wallSide) {
+      const hot = ((h >> 3) & 1) === 0;
+      ctx.fillStyle = '#15082a';
+      if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
+      else if (wallSide === 'S') ctx.fillRect(sx + 3, sy + TILE - 6, TILE - 6, 4);
+      else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
+      else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
+      ctx.shadowBlur = 7;
+      ctx.shadowColor = hot ? '#ff44aa' : '#44ddff';
+      ctx.fillStyle = hot ? '#ff44aa' : '#44ddff';
+      if (wallSide === 'N' || wallSide === 'S') {
+        ctx.fillRect(sx + 4, sy + (wallSide === 'N' ? 3 : TILE - 5), TILE - 8, 1);
+      } else {
+        ctx.fillRect(sx + (wallSide === 'W' ? 3 : TILE - 5), sy + 4, 1, TILE - 8);
+      }
+    } else if (roll < 8) {
+      ctx.fillStyle = '#1a0a2a';
+      if ((h & 1) === 0) {
+        ctx.fillRect(sx + 2, sy + TILE / 2 - 1, TILE - 4, 2);
+        ctx.fillStyle = '#ff44aa'; ctx.globalAlpha *= 0.7;
+        ctx.fillRect(sx + 2, sy + TILE / 2, TILE - 4, 1);
+      } else {
+        ctx.fillRect(sx + TILE / 2 - 1, sy + 2, 2, TILE - 4);
+        ctx.fillStyle = '#ff44aa'; ctx.globalAlpha *= 0.7;
+        ctx.fillRect(sx + TILE / 2, sy + 2, 1, TILE - 4);
+      }
+    } else {
+      ctx.fillStyle = '#1a2418';
+      ctx.fillRect(sx + 4, sy + TILE - 7, 4, 5);
+      ctx.fillStyle = '#2a1a3a';
+      ctx.fillRect(sx + 10, sy + TILE - 8, 4, 6);
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#ff44aa';
+      ctx.fillStyle = '#ff44aa';
+      ctx.fillRect(sx + 11, sy + TILE - 7, 2, 1);
+    }
+    ctx.restore();
+  },
+};
+
+// Routes per-tile floor decor to the current biome's renderer. Falls back
+// to the sandbox (cyan) variant if the biome lookup fails so a missing
+// NEON.biomes module never produces an undecorated floor.
+function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
+  const cx = _decoContext(dungeon, tx, ty);
+  if (!cx) return;
+  let id = 'sandbox';
+  try {
+    if (typeof NEON !== 'undefined' && NEON.biomes) {
+      const a = NEON.biomes.areaForFloor(game.floor);
+      if (a && a.id) id = a.id;
+    }
+  } catch (_) {}
+  const fn = _BIOME_DECOR[id] || _BIOME_DECOR.sandbox;
+  fn(sx, sy, brightness, cx);
 }
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
@@ -151,7 +375,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle = rc || pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
           if ((tx+ty)%4===0) { ctx.fillStyle= rc ? '#0e0e0e' : pal.floorAccent; ctx.globalAlpha=brightness*0.3; ctx.fillRect(sx,sy,TILE,TILE); }
-          drawLabFloorDeco(dungeon, tx, ty, sx, sy, brightness);
+          drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness);
           break;
         }
         case T.STAIRS:

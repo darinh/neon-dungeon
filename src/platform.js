@@ -317,6 +317,31 @@ canvas.addEventListener('touchstart', e => {
         else if (cy < H * 0.62) justPressed.add('KeyS');
         else justPressed.add('KeyQ');
       }
+      else if (game.state === 'HUB') {
+        // The Gap. Mobile users have no SPACE key to descend and no number
+        // keys to pick a terminal — route taps via hub.hitTestHub which owns
+        // the hub layout (single source of truth, see hub.js _layoutHub).
+        let hit = null;
+        try {
+          if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.hitTestHub) {
+            hit = NEON.hub.hitTestHub(game, cx, cy);
+          }
+        } catch (_) {}
+        if (hit && hit.kind === 'terminal') {
+          // Tap a card → select + activate. Always select first so the
+          // highlight reflects the tap even if the same card is re-tapped.
+          if (game.hub) game.hub.selected = hit.index;
+          justPressed.add('Enter');
+        } else if (hit && hit.kind === 'descend') {
+          justPressed.add('Space');
+        } else if (game.hub && game.hub.activePanel) {
+          // Tap-outside-panel close (existing behavior in updateHub).
+          mouse.x = cx; mouse.y = cy;
+          justPressed.add('MouseLeft');
+        }
+        // Otherwise: tap on empty hub space → no-op (don't accidentally
+        // activate the selected terminal).
+      }
       else if (game.state === 'MENU') {
         const narrow = layout.compact;
         // Confirm overlay intercepts touches when active

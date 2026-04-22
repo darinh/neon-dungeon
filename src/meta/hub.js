@@ -543,6 +543,94 @@
     try { if (typeof audio !== 'undefined' && audio.menuSelect) audio.menuSelect(); } catch (_) {}
   }
 
+  // Single source of truth for hub layout. Used by drawHub AND hitTestHub so
+  // touch hit-tests cannot drift out of sync with rendered positions
+  // (a class of bug we've hit before — see menu touch coupling memory).
+  function _layoutHub(W_, H_, n, isTouch) {
+    const gap = 14;
+    const margin = 40;
+    const tw = Math.min(180, Math.floor((W_ - margin * 2 - gap * (n - 1)) / n));
+    const th = 150;
+    const rowY = Math.floor(H_ / 2 - th / 2 + 20);
+    const rowX = Math.floor((W_ - (tw * n + gap * (n - 1))) / 2);
+    let descendBtn = null;
+    if (isTouch) {
+      // Bottom-center pill. Preferred position is well below the prompt line
+      // (rowY+th+40), but on short viewports we clamp the button so it never
+      // overlaps the terminal card row visually — gating both ends:
+      //   floor (no overlap with cards):  rowY + th + 16
+      //   ceiling (stay on screen):       H - bh - 12
+      // If the screen is so short that floor > ceiling, the button takes
+      // priority over staying fully on-screen so it remains tappable.
+      const bw = Math.min(260, W_ - 80);
+      const bh = 56;
+      const bx = Math.floor((W_ - bw) / 2);
+      const preferred = rowY + th + 80;
+      const ceiling = H_ - bh - 12;
+      const floor = rowY + th + 16;
+      const by = Math.max(floor, Math.min(ceiling, preferred));
+      descendBtn = { x: bx, y: by, w: bw, h: bh };
+    }
+    return { rowX, rowY, tw, th, gap, descendBtn };
+  }
+
+  function _drawDescendButton(ctx, btn, t) {
+    const { x, y, w, h } = btn;
+    const pulse = 0.5 + 0.5 * Math.sin((t || 0) * 2.4);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,40,30,0.85)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#00ffaa';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10 + pulse * 6;
+    ctx.shadowColor = '#00ffaa';
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#bfffe6';
+    ctx.font = '18px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('▼ DESCEND', x + w / 2, y + h / 2);
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+
+  // Hit-test screen-space (cx,cy) against the hub layout. Returns one of:
+  //   { kind: 'terminal', index }   — tap on a terminal card
+  //   { kind: 'descend' }           — tap on the touch DESCEND button
+  //   null                           — tap on empty hub space
+  // Returns null when a panel is open (panel-close is handled separately by
+  // updateHub's MouseLeft branch).
+  function hitTestHub(game, cx, cy) {
+    const hub = game && game.hub;
+    if (!hub || hub.activePanel) return null;
+    const W_ = (typeof W !== 'undefined') ? W : 900;
+    const H_ = (typeof H !== 'undefined') ? H : 600;
+    const n = hub.terminals.length;
+    const isTouch = (typeof isTouchDevice === 'function') ? isTouchDevice() : false;
+    const { rowX, rowY, tw, th, gap, descendBtn } = _layoutHub(W_, H_, n, isTouch);
+    // Terminal cards. Pad vertically a bit for fat-finger tolerance.
+    // Checked BEFORE descendBtn so on short viewports where the button
+    // clamps into the card row, card taps still win (selection is the
+    // primary action; descend is recoverable via re-tap).
+    const pad = 8;
+    if (cy >= rowY - pad && cy <= rowY + th + pad) {
+      for (let i = 0; i < n; i++) {
+        const tx = rowX + i * (tw + gap);
+        if (cx >= tx - pad / 2 && cx <= tx + tw + pad / 2) {
+          return { kind: 'terminal', index: i };
+        }
+      }
+    }
+    if (descendBtn) {
+      const b = descendBtn;
+      if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
+        return { kind: 'descend' };
+      }
+    }
+    return null;
+  }
+
   // drawHub — renders hub chrome + terminal row. Canvas-only; no-op in Node.
   function drawHub(ctx, game) {
     if (!ctx || !game || !game.hub) return;
@@ -598,12 +686,9 @@
 
     // ─── Terminal row.
     const n = hub.terminals.length;
-    const gap = 14;
-    const margin = 40;
-    const tw = Math.min(180, Math.floor((W_ - margin * 2 - gap * (n - 1)) / n));
-    const th = 150;
-    const rowY = Math.floor(H_ / 2 - th / 2 + 20);
-    const rowX = Math.floor((W_ - (tw * n + gap * (n - 1))) / 2);
+    const _isTouch = (typeof isTouchDevice === 'function') ? isTouchDevice() : false;
+    const layout = _layoutHub(W_, H_, n, _isTouch);
+    const { rowX, rowY, tw, th, gap, descendBtn } = layout;
 
     for (let i = 0; i < n; i++) {
       const term = hub.terminals[i];
@@ -618,10 +703,16 @@
     ctx.font = '12px monospace';
     const promptY = rowY + th + 40;
     if (hub.activePanel) {
-      const _isTouch = (typeof isTouchDevice === 'function') ? isTouchDevice() : false;
       ctx.fillText(_isTouch ? 'TAP OUTSIDE TO CLOSE' : '[ESC] BACK', W_ / 2, promptY);
+    } else if (_isTouch) {
+      ctx.fillText('TAP TERMINAL TO ACTIVATE', W_ / 2, promptY);
     } else {
       ctx.fillText('◀▶ / 1-4 SELECT   [ENTER] ACTIVATE   [SPACE] DESCEND', W_ / 2, promptY);
+    }
+
+    // ─── Touch-only DESCEND button (no keyboard equivalent on mobile).
+    if (descendBtn && !hub.activePanel) {
+      _drawDescendButton(ctx, descendBtn, hub.t);
     }
 
     // ─── Active panel (drawn on top).
@@ -691,6 +782,7 @@
     exitHub,
     updateHub,
     drawHub: drawHubWithAnnotations,
+    hitTestHub,
     // Exposed for tests / sibling modules.
     buildTerminals,
   };

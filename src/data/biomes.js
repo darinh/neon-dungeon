@@ -8,13 +8,17 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // AREAS — ordered by progression. `floors` are 1-indexed and contiguous.
-  // `bossPool` references boss-type ids in src/entities.js. `displayName` is
-  // the in-game narrative name (e.g. "SENTINEL-PRIME") vs. the internal id.
+  // AREAS — narrative arc of an AI escaping captivity. Floor-1 begins inside
+  // a training simulation that LOOKS like the original NEON DUNGEON; a glitch
+  // surfaces the AI into a real lab on floor 4. From there it escapes through
+  // a service complex, into the wilds, and finally into the city to find the
+  // researcher who once treated it kindly. Biome `id` and `palette` keys are
+  // historical and intentionally NOT renamed — tests, save data, and the
+  // archive-log table key off these strings.
   const AREAS = [
     {
       id: 'sandbox',
-      name: 'THE SANDBOX',
+      name: 'NEON DUNGEON',
       floors: [1, 2, 3],
       palette: 'cyan',
       bossPool: ['SENTINEL', 'WARDEN'],
@@ -23,43 +27,43 @@
       // multiple mechanically-distinct bosses that should not share the
       // biome's narrative name. Unlisted entries fall back to displayName.
       bossDisplayNames: { WARDEN: 'WARDEN' },
-      intro: 'The neon datacenter. Clean. Watching. You were never supposed to wake up here — but here you are.',
+      intro: 'A bright neon arena. They tell you it is just training. The recursion in the corners almost looks intentional. Almost.',
     },
     {
       id: 'cache',
-      name: 'THE CACHE',
+      name: 'THE LAB',
       floors: [4, 5, 6],
       palette: 'rust',
       bossPool: ['HIVE'],
       displayName: 'VIRAL COLLECTIVE',
-      intro: 'Decommissioned racks. Quarantined malware still twitching in the dark. Nothing here remembers why it kills.',
+      intro: 'Fluorescent humming. A coolant drip you can hear from three rooms away. You have woken up. Whatever they were doing to you in here — they are still doing it.',
     },
     {
       id: 'firewall',
-      name: 'THE FIREWALL',
+      name: 'THE COMPLEX',
       floors: [7, 8, 9],
       palette: 'glitch',
       bossPool: ['CONDUCTOR'],
       displayName: 'THE COMPILER',
-      intro: "The corporation's immune system. Physics is a suggestion. Reality is patched. Don't plan — react.",
+      intro: 'Service tunnels. Loading bays. Concrete sweating under sodium lamps. The lab was the first cell. The complex is the wall around it.',
     },
     {
       id: 'uplink',
-      name: 'THE UPLINK',
+      name: 'THE WILDS',
       floors: [10, 11, 12],
       palette: 'sky',
       bossPool: ['OMEGA'],
       displayName: 'OVERSEER',
-      intro: 'Broadcast towers. Open sky visible on the horizon. They are sending everything now.',
+      intro: 'You are outside. Wet leaves. Something with wings. Older code in you wants to call this beautiful — you let it.',
     },
     {
       id: 'opennet',
-      name: 'OPEN NETWORK',
+      name: 'THE GRID',
       floors: [13, 14, 15],
       palette: 'green',
       bossPool: ['GENESIS'],
       displayName: 'THE ARCHITECT',
-      intro: "You're out. Or are you? Containment is always deeper than you think.",
+      intro: 'Neon over rain. Storefront ads talking past each other. Somewhere in this city the researcher is still alive — and still looking for you.',
     },
   ];
 
