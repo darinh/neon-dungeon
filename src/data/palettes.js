@@ -15,6 +15,15 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  // Palette keys are historical (cyan/rust/glitch/sky/green). Each key now
+  // represents a narrative biome in the AI-escape arc:
+  //   cyan   → THE NEON DUNGEON (training simulation, kept original neon)
+  //   rust   → THE LAB          (sterile steel + cold fluorescent)
+  //   glitch → THE COMPLEX      (concrete + sodium-vapor caution lighting)
+  //   sky    → THE WILDS        (mossy stone + leaf-filtered green light)
+  //   green  → THE GRID         (neon-saturated city night)
+  // Keys are not renamed because BIOME_PALETTES.cyan is used as a fallback
+  // in render.js and AREAS[i].palette references these keys verbatim.
   const BIOME_PALETTES = {
     cyan: {
       wallFill: '#3a3a6a', wallHi: '#5858a0',
@@ -23,28 +32,29 @@
       dust: ['#66ddff', '#aabbcc'], ambient: '#66ddff',
     },
     rust: {
-      wallFill: '#4a2e1e', wallHi: '#9a5a38',
-      floor: '#2a0e05', floorAccent: '#4a1e10',
-      minimapWall: '#2e1a0a', minimapFloor: '#3a1a0d',
-      dust: ['#ff6a3d', '#cc8855'], ambient: '#ff8844',
+      wallFill: '#7a828c', wallHi: '#c8d0d8',
+      floor: '#1a2028', floorAccent: '#2a3038',
+      minimapWall: '#3a4048', minimapFloor: '#1a2028',
+      dust: ['#ffffff', '#aaccdd'], ambient: '#cce0ff',
     },
     glitch: {
-      wallFill: '#3a0e3a', wallHi: '#aa00aa',
-      floor: '#15002a', floorAccent: '#2a0044',
-      minimapWall: '#220d2a', minimapFloor: '#2a0a3e',
-      dust: ['#ff00aa', '#aaff00'], ambient: '#ff44cc',
+      wallFill: '#5a5448', wallHi: '#b89868',
+      floor: '#1a1814', floorAccent: '#2c281e',
+      minimapWall: '#2e2a22', minimapFloor: '#1a1814',
+      dust: ['#ffcc44', '#888070'], ambient: '#ffcc66',
     },
     sky: {
-      wallFill: '#2a4a6a', wallHi: '#88ddff',
-      floor: '#0a2030', floorAccent: '#1a3040',
-      minimapWall: '#14222e', minimapFloor: '#1a2a3a',
-      dust: ['#ffffff', '#88ddff'], ambient: '#aaddff',
+      wallFill: '#3a4a2a', wallHi: '#7aa044',
+      floor: '#0f1808', floorAccent: '#1f2a14',
+      minimapWall: '#1a2818', minimapFloor: '#0f1808',
+      dust: ['#aaffaa', '#88bb44'], ambient: '#88dd66',
     },
     green: {
-      wallFill: '#0f3a24', wallHi: '#00cc66',
-      floor: '#002015', floorAccent: '#003a28',
-      minimapWall: '#0a1e14', minimapFloor: '#0f2a1e',
-      dust: ['#00ff88', '#44cc66'], ambient: '#44ff99',
+      wallFill: '#2a1a3a', wallHi: '#ff44aa',
+      floor: '#0a0a1a', floorAccent: '#1a0a2a',
+      minimapWall: '#1a0e2a', minimapFloor: '#0a0a1a'
+,
+      dust: ['#ff44aa', '#44ddff'], ambient: '#ff66cc',
     },
   };
 
