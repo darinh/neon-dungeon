@@ -1023,11 +1023,19 @@ const game = {
       }
     }
 
-    // aim with mouse
-    const worldAimX=(mouse.x+cam.x)/TILE;
-    const worldAimY=(mouse.y+cam.y)/TILE;
-    const [afx,afy]=norm(worldAimX-player.x,worldAimY-player.y);
-    if (afx||afy) player.facing={x:afx,y:afy};
+    // aim with mouse (or lock to walking direction if setting enabled)
+    let worldAimX, worldAimY;
+    if (settings.lockAimToMove) {
+      // Use last walked direction (player.facing is updated only when moving,
+      // so it stays sticky when stationary). Project a point in front of player.
+      worldAimX = player.x + player.facing.x * 8;
+      worldAimY = player.y + player.facing.y * 8;
+    } else {
+      worldAimX = (mouse.x + cam.x) / TILE;
+      worldAimY = (mouse.y + cam.y) / TILE;
+      const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
+      if (afx || afy) player.facing = { x: afx, y: afy };
+    }
 
     // shoot (suppressed during dash)
     if ((mouse.down||keys.has(km('shoot'))) && player.shootCooldown<=0 && player.dashTimer<=0) {
@@ -2663,8 +2671,8 @@ const game = {
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 4;     // row index where key rebind rows begin
-    // Total items: 2 sliders + 2 toggles + N rebind rows + 1 reset row + 1 back row
+    const CTRL_START = 5;     // row index where key rebind rows begin (3 toggles)
+    // Total items: 2 sliders + 3 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
 
     // Key capture mode — wait for next keydown
@@ -2728,7 +2736,7 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
@@ -2826,7 +2834,7 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 4;
+    const CTRL_START = 5;
     const totalRows = CTRL_START + actions.length + 2;
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
@@ -2874,8 +2882,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS'];
-    const toggleKeys = ['screenShake', 'damageNumbers'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
