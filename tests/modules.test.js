@@ -221,6 +221,62 @@ test('applyMetaToPlayer applies installed-module effects', () => {
   save._setStorageForTests(null);
 });
 
+test('applyMetaToPlayer: all module flags are set correctly', () => {
+  fresh();
+  const meta = save.loadMeta();
+  meta.modulesOwned = [
+    'neural_coprocessor', 'shield_capacitor', 'ammo_reclaimer',
+    'kinetic_buffer', 'dash_cooler', 'reactive_core',
+  ];
+  meta.modulesInstalled = [
+    'neural_coprocessor', 'shield_capacitor', 'ammo_reclaimer',
+  ];
+  save.saveMeta(meta);
+
+  const player = { maxHp: 100, hp: 100, atk: 10, def: 2, spd: 3.5, hackwareSlots: 3 };
+  save.applyMetaToPlayer(player);
+
+  const f = player.metaFlags;
+  assert.ok(f, 'metaFlags must exist');
+  assert.equal(f.extraHackwareSlots, 1, 'neural_coprocessor +1 hackware slot flag');
+  assert.equal(player.hackwareSlots, 4, 'neural_coprocessor bumps hackwareSlots to 4');
+  assert.equal(f.floorStartShieldCharges, 1, 'shield_capacitor sets floor-start shield');
+  assert.ok(Math.abs(f.doubleCreditChance - 0.10) < 1e-9, 'ammo_reclaimer 10% double credits');
+  save._setStorageForTests(null);
+});
+
+test('applyMetaToPlayer: kinetic_buffer, dash_cooler, reactive_core flags', () => {
+  fresh();
+  const meta = save.loadMeta();
+  meta.modulesOwned = ['kinetic_buffer', 'dash_cooler', 'reactive_core'];
+  meta.modulesInstalled = ['kinetic_buffer', 'dash_cooler', 'reactive_core'];
+  save.saveMeta(meta);
+
+  const player = { maxHp: 100, hp: 100, atk: 10, def: 2, spd: 3.5 };
+  save.applyMetaToPlayer(player);
+
+  const f = player.metaFlags;
+  assert.ok(Math.abs(f.knockbackTakenMul - 0.90) < 1e-9, 'kinetic_buffer 0.90×');
+  assert.ok(Math.abs(f.dashCooldownMul - 0.85) < 1e-9, 'dash_cooler 0.85×');
+  assert.ok(Math.abs(f.reflectDamagePct - 0.10) < 1e-9, 'reactive_core 10% reflect');
+  save._setStorageForTests(null);
+});
+
+test('module flags stack multiplicatively with two of same type', () => {
+  fresh();
+  const meta = save.loadMeta();
+  meta.modulesOwned = ['kinetic_buffer', 'kinetic_buffer'];
+  meta.modulesInstalled = ['kinetic_buffer', 'kinetic_buffer', null];
+  save.saveMeta(meta);
+
+  const player = { maxHp: 100, hp: 100, atk: 10, def: 2, spd: 3.5 };
+  save.applyMetaToPlayer(player);
+
+  assert.ok(Math.abs(player.metaFlags.knockbackTakenMul - 0.81) < 1e-9,
+    'two kinetic_buffers: 0.9 × 0.9 = 0.81');
+  save._setStorageForTests(null);
+});
+
 test('applyMetaToPlayer is a no-op when no modules installed', () => {
   fresh();
   const player = { maxHp: 100, hp: 100, atk: 10, def: 2, spd: 3.5 };

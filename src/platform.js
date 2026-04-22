@@ -40,6 +40,7 @@ const settings = {
   musicVol: 1.0,
   screenShake: true,
   damageNumbers: true,
+  lockAimToMove: false,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -49,6 +50,7 @@ const settings = {
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
       if (typeof raw.screenShake === 'boolean') this.screenShake = raw.screenShake;
       if (typeof raw.damageNumbers === 'boolean') this.damageNumbers = raw.damageNumbers;
+      if (typeof raw.lockAimToMove === 'boolean') this.lockAimToMove = raw.lockAimToMove;
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -61,6 +63,7 @@ const settings = {
       localStorage.setItem('neonDungeonSettings', JSON.stringify({
         sfxVol: this.sfxVol, musicVol: this.musicVol,
         screenShake: this.screenShake, damageNumbers: this.damageNumbers,
+        lockAimToMove: this.lockAimToMove,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -68,6 +71,7 @@ const settings = {
   resetAll() {
     this.sfxVol = 1.0; this.musicVol = 1.0;
     this.screenShake = true; this.damageNumbers = true;
+    this.lockAimToMove = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
@@ -212,6 +216,11 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 window.addEventListener('mouseup',   e => { mouse.down = false; });
+// Scroll wheel: weapon belt cycling
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  justPressed.add(e.deltaY > 0 ? 'WheelDown' : 'WheelUp');
+}, { passive: false });
 
 // ─── Touch Controls ──────────────────────────────────────────────────────────
 const JR = 55; // joystick base radius
@@ -336,11 +345,11 @@ canvas.addEventListener('touchstart', e => {
           }
           continue;
         }
-        // Hit-test against actual menu item positions
-        const titleFs = narrow ? 48 : 72;
+        // Hit-test against actual menu item positions (must match renderMenu)
+        const titleFs = narrow ? 56 : 72;
         const ty1 = narrow ? 120 : 160;
         const startY = ty1 + titleFs * 0.95 + 80;
-        const gap = narrow ? 40 : 32;
+        const gap = narrow ? 48 : 36;
         const opts = game.getMenuOptions();
         // Bounding-box hit test: tap must be within gap/2 of a row center
         let hit = -1;
@@ -585,6 +594,11 @@ function clampToBossRoom(entity) {
   const r = game.bossRoom;
   entity.x = Math.max(r.x + 0.5, Math.min(r.x + r.w - 0.5, entity.x));
   entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
+}
+// UNCHAINED #37 KINETIC_BUFFER: scale boss knockback by module multiplier.
+function playerKnockMul() {
+  const p = game && game.player;
+  return (p && p.metaFlags && p.metaFlags.knockbackTakenMul) || 1;
 }
 
 // ─── LOS memoisation (Phase 2) ────────────────────────────────────────────────

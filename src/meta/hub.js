@@ -443,6 +443,8 @@
       game.state = 'HUB';
     }
     try { if (typeof audio !== 'undefined' && audio.hubAmbient) audio.hubAmbient(); } catch (_) {}
+    // Telemetry
+    try { if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('hub_enter', { floor: fromFloor }); } catch (_) {}
   }
 
   // exitHub advances to the next floor and restores 'PLAYING'. Uses the
@@ -491,6 +493,23 @@
         hub.activePanel = null;
         try { if (typeof audio !== 'undefined' && audio.menuSelect) audio.menuSelect(); } catch (_) {}
       }
+      // Touch/click: tap outside panel or on the BACK prompt area to close.
+      if (_jp('MouseLeft')) {
+        const W_ = (typeof W !== 'undefined') ? W : 900;
+        const H_ = (typeof H !== 'undefined') ? H : 600;
+        const pw = Math.min(560, W_ - 60);
+        const ph = Math.min(380, H_ - 120);
+        const px = Math.floor((W_ - pw) / 2);
+        const py = Math.floor((H_ - ph) / 2);
+        const mx = (typeof mouse !== 'undefined') ? mouse.x : 0;
+        const my = (typeof mouse !== 'undefined') ? mouse.y : 0;
+        // Outside panel bounds = close
+        if (mx < px || mx > px + pw || my < py || my > py + ph) {
+          try { hub.activePanel.onClose(game); } catch (_) {}
+          hub.activePanel = null;
+          try { if (typeof audio !== 'undefined' && audio.menuSelect) audio.menuSelect(); } catch (_) {}
+        }
+      }
       return;
     }
 
@@ -510,6 +529,7 @@
         hub.activePanel = term;
         try { term.onOpen(game); } catch (_) {}
         try { if (typeof audio !== 'undefined' && audio.menuSelect) audio.menuSelect(); } catch (_) {}
+        try { if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('hub_terminal', { terminal: term.id }); } catch (_) {}
       }
       return;
     }
@@ -598,15 +618,16 @@
     ctx.font = '12px monospace';
     const promptY = rowY + th + 40;
     if (hub.activePanel) {
-      ctx.fillText('[ESC] BACK', W_ / 2, promptY);
+      const _isTouch = (typeof isTouchDevice === 'function') ? isTouchDevice() : false;
+      ctx.fillText(_isTouch ? 'TAP OUTSIDE TO CLOSE' : '[ESC] BACK', W_ / 2, promptY);
     } else {
       ctx.fillText('◀▶ / 1-4 SELECT   [ENTER] ACTIVATE   [SPACE] DESCEND', W_ / 2, promptY);
     }
 
     // ─── Active panel (drawn on top).
     if (hub.activePanel) {
-      const pw = Math.min(520, W_ - 80);
-      const ph = Math.min(320, H_ - 160);
+      const pw = Math.min(560, W_ - 60);
+      const ph = Math.min(380, H_ - 120);
       const px = Math.floor((W_ - pw) / 2);
       const py = Math.floor((H_ - ph) / 2);
       // Dim backdrop.

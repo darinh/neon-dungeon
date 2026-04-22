@@ -96,6 +96,8 @@ const game = {
     else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
     else if (s === 'PLAYING') music.resume();
     else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
+    // Show privacy link only on menu screen
+    try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === 'MENU' ? '' : 'none'; } catch(_){}
     if (callback) callback();
   },
 
@@ -191,6 +193,11 @@ const game = {
       NEON.cores.clearCoreDrops(this);
     }
     populateFloor(this.dungeon,n);
+    // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
+    // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
+    if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
+      this.player._shieldCharges = (this.player._shieldCharges | 0) + this.player.metaFlags.floorStartShieldCharges;
+    }
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
     if (hasAugment('ECHO_MAPPER') || (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.hasBoost(this.player, 'RECON_PING'))) {
@@ -203,6 +210,10 @@ const game = {
     this.player.y=this.dungeon.playerPos.y;
     messages=[];
     this.msg('FLOOR '+n,'#ff00c8');
+    // Telemetry: floor start
+    if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('floor_start', { floor: n, modifier: this.modifier || null });
+    }
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10)) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
@@ -316,6 +327,10 @@ const game = {
       startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
     }
     this.loadFloor(startFloor);
+    // Telemetry: run start
+    if (typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty });
+    }
     // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
     // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
     // introSeen back to false, so it replays on a true new start.
@@ -654,6 +669,24 @@ const game = {
       victory: victory,
       hackware: p.hackware,
     };
+    // Telemetry: run end — the single most valuable event
+    if (typeof NEON !== 'undefined' && NEON.telemetry) {
+      NEON.telemetry.track('run_end', {
+        victory: !!victory,
+        floor: this.floor,
+        score: p.score,
+        level: p.level,
+        runTime: Math.round((this.runTime || 0) * 1000),
+        killedBy: p.killedBy || null,
+        enemiesKilled: p.enemiesKilled,
+        roomsCleared: p.roomsCleared,
+        weapon: p.weapon ? (p.weapon._base || p.weapon.name) : null,
+        weaponBeltSize: p.weapons ? p.weapons.length : 1,
+        difficulty: this.difficulty,
+        bossesCleared: this.bossesCleared,
+      });
+      NEON.telemetry.flush();
+    }
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
     const meta = loadMeta();
@@ -713,6 +746,7 @@ const game = {
     if (!this.player) return;
     const p = this.player;
     const weaponSave = { _base: p.weapon._base || 'PULSE_PISTOL', _affixes: p.weapon._affixes || [] };
+    const weaponsSave = (p.weapons || [p.weapon]).map(w => ({ _base: w._base || 'PULSE_PISTOL', _affixes: w._affixes || [] }));
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
@@ -722,7 +756,7 @@ const game = {
       runTime: this.runTime,
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
-        level:p.level, xp:p.xp, weapon:weaponSave,
+        level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
         upgrades:{...p.upgrades}, perks:{...p.perks},
         keys:{...p.keys}, shards:p.shards,
         permSpeedBonus:p.permSpeedBonus, score:p.score,
@@ -799,6 +833,18 @@ const game = {
     } else {
       p.weapon = buildWeapon(typeof s.weapon === 'string' ? s.weapon : 'PULSE_PISTOL', []);
     }
+    // Restore weapon belt (backwards-compatible with old saves)
+    if (Array.isArray(s.weapons) && s.weapons.length) {
+      p.weapons = s.weapons.map(ws => {
+        if (ws && typeof ws === 'object' && ws._base) return buildWeapon(ws._base, ws._affixes || []);
+        return buildWeapon(typeof ws === 'string' ? ws : 'PULSE_PISTOL', []);
+      });
+      p.weaponIdx = Math.min(s.weaponIdx || 0, p.weapons.length - 1);
+      p.weapon = p.weapons[p.weaponIdx];
+    } else {
+      p.weapons = [p.weapon];
+      p.weaponIdx = 0;
+    }
     p.upgrades=s.upgrades||{};
     p.perks=s.perks||{};
     p.keys=s.keys||{red:0,blue:0,gold:0};
@@ -851,9 +897,9 @@ const game = {
       case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
-      case 'POWERUP_CHOICE': this.updatePowerupChoice(); break;
-      case 'PERK_CHOICE':    this.updatePerkChoice(); break;
-      case 'AUGMENT_CHOICE': this.updateAugmentChoice(); break;
+      case 'POWERUP_CHOICE': this.updatePowerupChoice(dt); break;
+      case 'PERK_CHOICE':    this.updatePerkChoice(dt); break;
+      case 'AUGMENT_CHOICE': this.updateAugmentChoice(dt); break;
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
@@ -942,6 +988,18 @@ const game = {
     const dungeon=this.dungeon;
     this.floorTime = (this.floorTime || 0) + dt;
     this.runTime = (this.runTime || 0) + dt;
+    // Telemetry: perf sample every ~10s
+    this._perfSampleTimer = (this._perfSampleTimer || 0) + dt;
+    if (this._perfSampleTimer >= 10 && typeof NEON !== 'undefined' && NEON.telemetry) {
+      this._perfSampleTimer = 0;
+      NEON.telemetry.track('perf_sample', {
+        floor: this.floor,
+        fps: this.perf ? Math.round(this.perf.fps) : null,
+        enemies: enemies.length,
+        projectiles: projectiles.length,
+        particles: particles ? particles.length : 0,
+      });
+    }
     this.hint = null;
 
     // Expanded map modal — freeze gameplay, only handle dismiss
@@ -965,11 +1023,19 @@ const game = {
       }
     }
 
-    // aim with mouse
-    const worldAimX=(mouse.x+cam.x)/TILE;
-    const worldAimY=(mouse.y+cam.y)/TILE;
-    const [afx,afy]=norm(worldAimX-player.x,worldAimY-player.y);
-    if (afx||afy) player.facing={x:afx,y:afy};
+    // aim with mouse (or lock to walking direction if setting enabled)
+    let worldAimX, worldAimY;
+    if (settings.lockAimToMove) {
+      // Use last walked direction (player.facing is updated only when moving,
+      // so it stays sticky when stationary). Project a point in front of player.
+      worldAimX = player.x + player.facing.x * 8;
+      worldAimY = player.y + player.facing.y * 8;
+    } else {
+      worldAimX = (mouse.x + cam.x) / TILE;
+      worldAimY = (mouse.y + cam.y) / TILE;
+      const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
+      if (afx || afy) player.facing = { x: afx, y: afy };
+    }
 
     // shoot (suppressed during dash)
     if ((mouse.down||keys.has(km('shoot'))) && player.shootCooldown<=0 && player.dashTimer<=0) {
@@ -1109,9 +1175,34 @@ const game = {
         // Generate 2 upgrade options
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
-        this.powerupChoice = { options:[optA, optB], selected:0 };
+        // Auto-collect simple consumables (health/XP/shard) to reduce popup fatigue.
+        const _isSimple = o => !o.persistent && !o.id.startsWith('WEAPON_') && !o.id.startsWith('HACKWARE_');
+        // Auto-collect weapons into belt if space available.
+        const _isAutoWeapon = o => o.id.startsWith('WEAPON_') && o._weaponObj && player.weapons && player.weapons.length < 3;
+        if (_isSimple(optA) && _isSimple(optB)) {
+          const needsHp = player.hp < player.maxHp;
+          const aIsHeal = optA.id === 'MED_PACK' || optA.id === 'NANO_REPAIR';
+          const bIsHeal = optB.id === 'MED_PACK' || optB.id === 'NANO_REPAIR';
+          const pick = (needsHp && bIsHeal && !aIsHeal) ? optB : optA;
+          pick.fn(player);
+          this.msg(pick.name, pick.colour);
+          if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('auto_collect', { item: pick.id, floor: this.floor });
+          continue;
+        }
+        // Auto-collect weapon if belt has space (prefer weapon option for belt, apply other)
+        if (_isAutoWeapon(optA) && _isSimple(optB)) {
+          optA.fn(player); optB.fn(player);
+          this.msg(optA.name + ' + ' + optB.name, optA.colour);
+          continue;
+        }
+        if (_isAutoWeapon(optB) && _isSimple(optA)) {
+          optB.fn(player); optA.fn(player);
+          this.msg(optB.name + ' + ' + optA.name, optB.colour);
+          continue;
+        }
+        this.powerupChoice = { options:[optA, optB], selected:0, _arm: 0.4 };
         this.setState('POWERUP_CHOICE');
-        return; // freeze gameplay immediately
+        return;
       }
     }
 
@@ -1162,7 +1253,11 @@ const game = {
         clears++;
         lastCx = room.cx; lastCy = room.cy;
         const d = getDiff();
-        const cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
+        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && Math.random() < player.metaFlags.doubleCreditChance) {
+          cr *= 2;
+        }
         player.credits += cr;
         player.score += 50 * this.floor;
         player.roomsCleared++;
@@ -1587,7 +1682,7 @@ const game = {
             if (opts.length === 0) {
               this.msg('ALL AUGMENTS OWNED', '#cc44ff');
             } else {
-              this.augmentChoice = { options: opts, selected: 0, room: r };
+              this.augmentChoice = { options: opts, selected: 0, room: r, _arm: 0.4 };
               this.setState('AUGMENT_CHOICE');
               audio.augmentChoice();
             }
@@ -1866,9 +1961,17 @@ const game = {
     }
   },
 
-  updatePowerupChoice() {
+  updatePowerupChoice(dt) {
     const pc = this.powerupChoice;
     if (!pc) { this.setState('PLAYING'); return; }
+    // Arming delay — block selection for a short period to prevent accidental picks.
+    if (pc._arm > 0) {
+      pc._arm -= (dt || 1/60);
+      // Allow navigation while arming, but consume selection keys.
+      if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
+      return;
+    }
     // Keyboard: left/right to select, 1/2 for direct pick, 3/Escape to skip
     if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
     if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
@@ -1909,8 +2012,16 @@ const game = {
       opt.fn(this.player);
       audio.menuSelect();
       this.msg('Chose ' + opt.name, opt.colour);
+      // Telemetry: upgrade pick
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        const skipped = pc.options.filter((_, i) => i !== idx).map(o => o.id || o.name);
+        NEON.telemetry.track('upgrade_pick', { picked: opt.id || opt.name, skipped, floor: this.floor });
+      }
     } else {
       this.msg('Skipped upgrade', '#666688');
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        NEON.telemetry.track('upgrade_skip', { options: pc.options.map(o => o.id || o.name), floor: this.floor });
+      }
     }
     this.powerupChoice = null;
     // Check for queued perk choices before returning to PLAYING
@@ -1924,14 +2035,20 @@ const game = {
     this.pendingPerkChoices.shift(); // consume the milestone
     const opts = rollPerkChoices(this.player, 3);
     if (!opts.length) { this.setState('PLAYING'); return; } // all perks owned
-    this.perkChoice = { options: opts, selected: 0 };
+    this.perkChoice = { options: opts, selected: 0, _arm: 0.4 };
     this.setState('PERK_CHOICE');
     audio.perkChoice();
   },
 
-  updatePerkChoice() {
+  updatePerkChoice(dt) {
     const pc = this.perkChoice;
     if (!pc) { this.setState('PLAYING'); return; }
+    if (pc._arm > 0) {
+      pc._arm -= (dt || 1/60);
+      if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = Math.max(0, pc.selected - 1);
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
+      return;
+    }
     if (jp('Digit1')) { this.applyPerkChoice(0); return; }
     if (jp('Digit2')) { this.applyPerkChoice(1); return; }
     if (jp('Digit3') && pc.options.length > 2) { this.applyPerkChoice(2); return; }
@@ -1971,14 +2088,20 @@ const game = {
 
   // ─── Augment Choice ──────────────────────────────────────────────────────
   openAugmentChoice(options) {
-    this.augmentChoice = { options, selected: 0 };
+    this.augmentChoice = { options, selected: 0, _arm: 0.4 };
     this.setState('AUGMENT_CHOICE');
     audio.augmentChoice();
   },
 
-  updateAugmentChoice() {
+  updateAugmentChoice(dt) {
     const ac = this.augmentChoice;
     if (!ac) { this.setState('PLAYING'); return; }
+    if (ac._arm > 0) {
+      ac._arm -= (dt || 1/60);
+      if (jp(ALT_KEYS.left) || jp(km('left')))  ac.selected = Math.max(0, ac.selected - 1);
+      if (jp(ALT_KEYS.right)|| jp(km('right')))  ac.selected = Math.min(ac.options.length - 1, ac.selected + 1);
+      return;
+    }
     if (jp('Digit1')) { this.applyAugmentChoice(0); return; }
     if (jp('Digit2') && ac.options.length > 1) { this.applyAugmentChoice(1); return; }
     if (jp(ALT_KEYS.left) || jp(km('left')))  ac.selected = Math.max(0, ac.selected - 1);
@@ -2072,7 +2195,7 @@ const game = {
       ctx.fillStyle = aug.colour;
       ctx.fillText(aug.name, cx + cw / 2, cardY + (narrow ? 58 : 72));
       // Description — word wrap
-      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#ccbbdd';
       const words = aug.desc.split(' ');
       let line = '', lineY = cardY + (narrow ? 75 : 92);
@@ -2198,7 +2321,7 @@ const game = {
       ctx.fillStyle = sel ? ev.colour : '#88bbaa';
       ctx.fillText(ch.label, cx + cw / 2, cardY + (narrow ? 22 : 28));
       // Choice description — word wrap
-      ctx.font = (narrow ? 9 : 11) + 'px monospace';
+      ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#99bbaa';
       const cWords = ch.desc.split(' ');
       let cLine = '', cY = cardY + (narrow ? 40 : 50);
@@ -2548,8 +2671,8 @@ const game = {
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 4;     // row index where key rebind rows begin
-    // Total items: 2 sliders + 2 toggles + N rebind rows + 1 reset row + 1 back row
+    const CTRL_START = 5;     // row index where key rebind rows begin (3 toggles)
+    // Total items: 2 sliders + 3 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
 
     // Key capture mode — wait for next keydown
@@ -2613,7 +2736,7 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
@@ -2711,7 +2834,7 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 4;
+    const CTRL_START = 5;
     const totalRows = CTRL_START + actions.length + 2;
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
@@ -2759,8 +2882,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS'];
-    const toggleKeys = ['screenShake', 'damageNumbers'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
@@ -2800,7 +2923,7 @@ const game = {
         ctx.fillText(KEY_DISPLAY(settings.keyMap[a]), W/2, ry);
         // Show default if different
         if (settings.keyMap[a] !== DEFAULT_KEY_MAP[a]) {
-          ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+          ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 11 : 11}px monospace`;
           ctx.fillText(`(default: ${KEY_DISPLAY(DEFAULT_KEY_MAP[a])})`, W/2 + (narrow ? 60 : 80), ry);
           ctx.font = `${fs}px monospace`;
         }
@@ -2824,7 +2947,7 @@ const game = {
 
     // Navigation hint
     ctx.save(); ctx.textAlign = 'center';
-    ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 11 : 11}px monospace`;
     if (isTouchDevice()) {
       ctx.fillText('Tap to adjust · ESC to go back', W/2, H - 20);
     } else {
@@ -2865,16 +2988,16 @@ const game = {
     ctx.save();
     ctx.textAlign='center';
     ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700'; ctx.font=`${narrow?12:14}px monospace`;
+    ctx.fillStyle='#ffb700'; ctx.font=`${narrow?14:14}px monospace`;
     ctx.fillText('— HIGH SCORES —',W/2,y);
     ctx.shadowBlur=0;
-    const lineH=narrow?16:18;
-    const startY=y+(narrow?18:20);
+    const lineH=narrow?20:18;
+    const startY=y+(narrow?22:20);
     scores.forEach((s,i)=>{
       const isHL=i===highlightRank;
       ctx.fillStyle=isHL?'#00f5ff':'#aaaacc';
       if (isHL) { ctx.shadowBlur=6; ctx.shadowColor='#00f5ff'; }
-      ctx.font=`${isHL?'bold ':''}${narrow?10:12}px monospace`;
+      ctx.font=`${isHL?'bold ':''}${narrow?12:12}px monospace`;
       if (narrow) {
         ctx.fillText(`${i+1}. ${s.name}  ${s.score}  FLR ${s.floor}`,W/2,startY+i*lineH);
       } else {
@@ -2883,7 +3006,7 @@ const game = {
       if (isHL) ctx.shadowBlur=0;
     });
     if (!scores.length) {
-      ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
+      ctx.fillStyle='#555577'; ctx.font=`${narrow?12:12}px monospace`;
       ctx.fillText('No scores yet.',W/2,startY);
     }
     ctx.restore();
@@ -2900,7 +3023,7 @@ const game = {
     const t=Date.now()/1000;
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
-    const titleFs = narrow ? 48 : 72;
+    const titleFs = narrow ? 56 : 72;
     // grid lines
     ctx.save(); ctx.globalAlpha=0.05; ctx.strokeStyle='#00f5ff';
     for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
@@ -2922,14 +3045,14 @@ const game = {
     ctx.restore();
 
     ctx.save(); ctx.textAlign='center';
-    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 12 : 16}px monospace`;
+    ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
     ctx.fillText('A CYBERPUNK DUNGEON CRAWLER',W/2,ty2 + 35);
     ctx.restore();
 
     // Menu options — array-driven
     const startY = ty2 + 80;
-    const gap = isTouch ? (narrow ? 40 : 32) : (narrow ? 24 : 28);
-    const fs = isTouch ? (narrow ? 18 : 20) : (narrow ? 15 : 18);
+    const gap = isTouch ? (narrow ? 48 : 36) : (narrow ? 24 : 28);
+    const fs = isTouch ? (narrow ? 22 : 22) : (narrow ? 15 : 18);
     const opts = this.getMenuOptions();
     const sel = this.menuSel || 0;
     ctx.save(); ctx.textAlign='center';
@@ -2964,10 +3087,15 @@ const game = {
     // controls hint
     const hintY = startY + opts.length * gap + (narrow?24:32);
     ctx.save(); ctx.textAlign='center';
-    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+    ctx.fillStyle='#555577'; ctx.font=`${narrow ? 13 : 12}px monospace`;
     if (isTouch) {
       ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
-      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
+      if (narrow) {
+        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash', W/2, hintY + 18);
+        ctx.fillText(KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 34);
+      } else {
+        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
+      }
     } else {
       ctx.fillText(KEY_DISPLAY(km('up'))+KEY_DISPLAY(km('left'))+KEY_DISPLAY(km('down'))+KEY_DISPLAY(km('right'))+': Move  |  Mouse: Aim  |  Click/'+KEY_DISPLAY(km('shoot'))+': Shoot', W/2, hintY);
       ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  '+KEY_DISPLAY(km('dash'))+': Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ESC: Pause', W/2, hintY + 16);
@@ -3680,13 +3808,13 @@ const game = {
 
       // Description
       ctx.fillStyle = '#aaaacc';
-      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      ctx.font = `${narrow ? 11 : 11}px monospace`;
       ctx.fillText(item.desc, cx + cw / 2, cardY + 92);
 
       // Level info for persistent upgrades
       if (item.persistent && item.levelDesc) {
         ctx.fillStyle = '#888899';
-        ctx.font = `${narrow ? 9 : 11}px monospace`;
+        ctx.font = `${narrow ? 11 : 11}px monospace`;
         ctx.fillText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), cx + cw / 2, cardY + 108);
       }
 
@@ -3724,7 +3852,7 @@ const game = {
 
     // Hint
     ctx.fillStyle = '#444466';
-    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.font = `${narrow ? 11 : 11}px monospace`;
     if (isTouch) {
       ctx.fillText('Tap to buy · Tap Leave to exit', W / 2, leaveY + leaveH + 18);
     } else {
@@ -3779,7 +3907,7 @@ const game = {
     // Lore count
     const count = this.player ? this.player.loreRead.size : 0;
     ctx.fillStyle = '#886622';
-    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.font = `${narrow ? 11 : 11}px monospace`;
     ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
 
     // Word-wrapped lore text
@@ -4406,6 +4534,8 @@ function loop(ts) {
     }
   } finally {
     clearJust();
+    // Telemetry periodic flush
+    if (typeof NEON !== 'undefined' && NEON.telemetry) { try { NEON.telemetry.update(dt); } catch(_){} }
     requestAnimationFrame(loop);
   }
 }
@@ -4509,6 +4639,17 @@ resize();
 updateBtns();
 mouse.x = W/2; mouse.y = H/2;
 window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); mouse.x = W/2; mouse.y = H/2; });
+// Initialize telemetry — connects PostHog as transport if API key is configured
+if (typeof NEON !== 'undefined' && NEON.telemetry) {
+  const _phTransport = (typeof posthog !== 'undefined' && posthog.__SV)
+    ? function (batch) {
+        for (const ev of batch) posthog.capture('neon_' + ev.e, ev.p);
+        return Promise.resolve();
+      }
+    : null;
+  NEON.telemetry.init({ transport: _phTransport });
+}
 game.state='MENU';
+try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = ''; } catch(_){}
 game.menuParticles=[];
 requestAnimationFrame(loop);

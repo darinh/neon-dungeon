@@ -201,7 +201,9 @@
       const bw = buildWeaponFn || (typeof buildWeapon !== 'undefined' ? buildWeapon : null);
       if (bw) {
         const pool = ['SCATTER_GUN','RAILGUN','PLASMA_SWORD','VOID_CANNON'];
-        player.weapon = bw(pool[Math.floor(Math.random() * pool.length)], []);
+        const _sgw = bw(pool[Math.floor(Math.random() * pool.length)], []);
+        if (player.equipWeapon) player.equipWeapon(_sgw);
+        else player.weapon = _sgw;
       }
     }
     // ─── UNCHAINED Phase 2 (#36) — apply persistent upgrade-tree nodes ──────

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON DUNGEON — Privacy</title>
+<style>
+  body { background: #0a0a12; color: #c0c0e0; font-family: monospace; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.7; }
+  h1 { color: #00f5ff; font-size: 1.4em; }
+  h2 { color: #bb44ff; font-size: 1.1em; margin-top: 2em; }
+  a { color: #00f5ff; }
+  .back { display: inline-block; margin-top: 2em; padding: 8px 16px; background: #1a1a2e; border: 1px solid #333; color: #00f5ff; text-decoration: none; }
+  .back:hover { background: #222244; }
+  .dim { color: #666688; }
+</style>
+</head>
+<body>
+<h1>NEON DUNGEON — Privacy</h1>
+
+<p>Here's the deal: <strong>we don't care who you are.</strong></p>
+
+<p>We don't collect your name, your email, your location, or anything that identifies you. We don't set cookies. We don't track you across sessions. When you close the tab, we forget you exist.</p>
+
+<h2>So what DO we collect?</h2>
+
+<p>Anonymous gameplay stats. Things like:</p>
+<ul>
+  <li>Which floor you died on (and what killed you)</li>
+  <li>Which weapons and upgrades people actually pick</li>
+  <li>Whether anyone uses the Fusion Sword <span class="dim">(we have opinions)</span></li>
+  <li>Frame rate and performance, so we know if something's lagging</li>
+</ul>
+
+<p>That's it. No personal info. No fingerprinting. Just "did people like this thing or not."</p>
+
+<h2>Why?</h2>
+
+<p>Because we want to make the game better, and guessing doesn't work. If nobody picks a weapon, maybe it needs a buff — or maybe it needs to go. If everyone dies on floor 6, maybe the boss is overtuned. We can't fix what we can't see.</p>
+
+<h2>The technical bits</h2>
+
+<ul>
+  <li><strong>No cookies.</strong> Zero. Analytics run in memory only.</li>
+  <li><strong>No cross-session tracking.</strong> Every time you load the game is a fresh start as far as analytics are concerned.</li>
+  <li>Events are sent to <a href="https://posthog.com" target="_blank" rel="noopener">PostHog</a> (US cloud). Their privacy policy: <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a>.</li>
+  <li>Your save data (progress, settings) lives in your browser's localStorage and never leaves your device.</li>
+</ul>
+
+<h2>Want to opt out?</h2>
+
+<p>Block <code>us.i.posthog.com</code> in your browser or use any ad blocker. The game works exactly the same without it.</p>
+
+<p class="dim">Last updated: 2026-04-21</p>
+
+<a class="back" href="index.html">← Back to game</a>
+</body>
+</html>
