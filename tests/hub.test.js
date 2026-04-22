@@ -88,3 +88,106 @@ test('updateHub Enter opens selected panel; Escape closes it', () => {
   hub.updateHub(g, 0.016);
   assert.equal(g.hub.activePanel, null, 'panel closed');
 });
+
+// ─── Touch hit-test (mobile DESCEND + terminal selection) ──────────────────
+// Globals W/H/isTouchDevice are normally provided by platform.js in the
+// browser. For Node we set them on globalThis before the call.
+function withGlobals(W_, H_, isTouch, fn) {
+  const prev = {
+    W: globalThis.W, H: globalThis.H,
+    isTouchDevice: globalThis.isTouchDevice,
+  };
+  globalThis.W = W_;
+  globalThis.H = H_;
+  globalThis.isTouchDevice = () => !!isTouch;
+  try { return fn(); } finally {
+    globalThis.W = prev.W;
+    globalThis.H = prev.H;
+    globalThis.isTouchDevice = prev.isTouchDevice;
+  }
+}
+
+test('hitTestHub returns null when no hub or panel open', () => {
+  assert.equal(hub.hitTestHub({}, 100, 100), null);
+  const g = fakeGame(1); hub.enterHub(g);
+  g.hub.activePanel = g.hub.terminals[0]; // panel open
+  withGlobals(900, 600, true, () => {
+    assert.equal(hub.hitTestHub(g, 450, 300), null,
+      'panel-open suppresses hit-test (panel close is handled separately)');
+  });
+});
+
+test('hitTestHub finds terminal cards on tap (touch and desktop)', () => {
+  const g = fakeGame(1); hub.enterHub(g);
+  // Card centers should always hit. Use the layout math from hub.js:
+  //   tw = min(180, floor((W - 80 - 14*(n-1)) / n))  with n=4, W=900 → 180
+  //   rowX = floor((900 - (180*4 + 14*3)) / 2) = floor((900 - 762)/2) = 69
+  //   rowY = floor(600/2 - 75 + 20) = 245
+  withGlobals(900, 600, false, () => {
+    for (let i = 0; i < 4; i++) {
+      const cx = 69 + i * (180 + 14) + 90; // center of card i
+      const cy = 245 + 75; // center of card vertically
+      const hit = hub.hitTestHub(g, cx, cy);
+      assert.deepEqual(hit, { kind: 'terminal', index: i },
+        `card ${i} center should hit`);
+    }
+  });
+});
+
+test('hitTestHub exposes DESCEND button on touch only', () => {
+  const g = fakeGame(1); hub.enterHub(g);
+  // Bottom-center pill at (W-bw)/2, by = min(H-bh-24, rowY+th+80)
+  // rowY=245, th=150 → rowY+th+80=475. H-bh-24 = 600-56-24 = 520. min=475.
+  // bw = min(260, 900-80) = 260. bx = (900-260)/2 = 320.
+  const cxBtn = 320 + 130;
+  const cyBtn = 475 + 28;
+  withGlobals(900, 600, true, () => {
+    assert.deepEqual(hub.hitTestHub(g, cxBtn, cyBtn), { kind: 'descend' });
+  });
+  withGlobals(900, 600, false, () => {
+    assert.equal(hub.hitTestHub(g, cxBtn, cyBtn), null,
+      'no DESCEND button on desktop — keyboard handles it');
+  });
+});
+
+test('hitTestHub returns null for taps on empty hub space', () => {
+  const g = fakeGame(1); hub.enterHub(g);
+  withGlobals(900, 600, true, () => {
+    // Top-left corner — far from anything
+    assert.equal(hub.hitTestHub(g, 10, 10), null);
+    // Between cards (gap area). Card 0 ends at 69+180=249; card 1 starts at 263.
+    // Midpoint 256 — but we pad by 4 each side, so 256 still falls inside the
+    // pad of card 1 (≥ 263-4=259? no, 256 < 259) → null.
+    assert.equal(hub.hitTestHub(g, 256, 320), null,
+      'gap between cards (with small fat-finger pad) is not a hit');
+  });
+});
+
+test('hitTestHub: short viewport — terminal cards win over DESCEND overlap', () => {
+  // On H<=366 the DESCEND button used to clamp up into the card row. After
+  // the collision-aware layout fix, the button is also visually held below
+  // the cards. This test pins both behaviors:
+  //   1) terminal hits take priority over descend (defensive)
+  //   2) descend button never overlaps the card row vertically
+  const g = fakeGame(1); hub.enterHub(g);
+  withGlobals(640, 360, true, () => {
+    // Layout (n=4, W=640, H=360):
+    //   rowY = floor(180-75+20) = 125, th = 150 → card row [125..275]
+    //   descend by clamped to max(rowY+th+16=291, min(H-bh-12=292, preferred=355)) = 292
+    //   bw = min(260, 560) = 260, bx = (640-260)/2 = 190
+    const cardCx = 41 + 1 * (129 + 14) + 64;
+    const cardCy = 125 + 145; // near bottom of card 1
+    assert.deepEqual(hub.hitTestHub(g, cardCx, cardCy), { kind: 'terminal', index: 1 },
+      'terminal card hit-test must take priority over overlapping DESCEND');
+    // Tap centered on descend button area must still resolve to descend
+    assert.deepEqual(hub.hitTestHub(g, 320, 292 + 28), { kind: 'descend' });
+    // No-overlap invariant: descend button top must be ≥ card row bottom
+    // (we can't read layout from outside; assert via a tap just above the
+    // descend button being a card hit, just below being descend).
+    const justAbove = hub.hitTestHub(g, 320, 280);
+    const justBelow = hub.hitTestHub(g, 320, 295);
+    assert.ok(justAbove === null || justAbove.kind === 'terminal',
+      'space above DESCEND is empty or a card, never DESCEND');
+    assert.deepEqual(justBelow, { kind: 'descend' });
+  });
+});
