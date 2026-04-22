@@ -5982,6 +5982,9 @@ class Player {
       let dx, dy;
       if (mx||my) {
         [dx,dy]=norm(mx,my);
+      } else if (settings.lockAimToMove) {
+        // Lock-aim mode: ignore mouse, dash in last-walked direction
+        dx=this.facing.x; dy=this.facing.y;
       } else {
         // Use current aim direction (facing may be stale by one frame)
         const cam=getCamera(this);

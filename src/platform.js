@@ -40,6 +40,7 @@ const settings = {
   musicVol: 1.0,
   screenShake: true,
   damageNumbers: true,
+  lockAimToMove: false,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -49,6 +50,7 @@ const settings = {
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
       if (typeof raw.screenShake === 'boolean') this.screenShake = raw.screenShake;
       if (typeof raw.damageNumbers === 'boolean') this.damageNumbers = raw.damageNumbers;
+      if (typeof raw.lockAimToMove === 'boolean') this.lockAimToMove = raw.lockAimToMove;
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -61,6 +63,7 @@ const settings = {
       localStorage.setItem('neonDungeonSettings', JSON.stringify({
         sfxVol: this.sfxVol, musicVol: this.musicVol,
         screenShake: this.screenShake, damageNumbers: this.damageNumbers,
+        lockAimToMove: this.lockAimToMove,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -68,6 +71,7 @@ const settings = {
   resetAll() {
     this.sfxVol = 1.0; this.musicVol = 1.0;
     this.screenShake = true; this.damageNumbers = true;
+    this.lockAimToMove = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
