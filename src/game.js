@@ -206,8 +206,29 @@ const game = {
       this.mapRevealed = false;
     }
     this.mapExpanded = false;
-    this.player.x=this.dungeon.playerPos.x;
-    this.player.y=this.dungeon.playerPos.y;
+    // Floor exit-position carryover: if the player descended from a previous
+    // floor, drop them near the same world coordinates on the new floor
+    // (procedural layout means we may need the nearest passable tile). Skips
+    // on save-resume (savedModifier !== undefined) so reloading a save does
+    // not relocate the player. _exitPos is captured in descend() and consumed
+    // here exactly once.
+    let spawn = this.dungeon.playerPos;
+    if (savedModifier === undefined && this._exitPos &&
+        typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
+      try {
+        // Prefer a safe tile (no hazards). Fall back to any passable tile.
+        const isSafeSpawn = (t) => isPassable(t) &&
+          t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
+          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC;
+        const near =
+          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
+          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
+        if (near) spawn = near;
+      } catch (_) { /* fall through to default spawn */ }
+    }
+    this._exitPos = null;
+    this.player.x = spawn.x;
+    this.player.y = spawn.y;
     messages=[];
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
@@ -299,6 +320,7 @@ const game = {
     this._newGameConfirm = null;
     this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
     this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
+    this._exitPos = null;     // clear any stale exit-position from a prior run
     audio.resume();
     const meta = loadMeta();
     meta.lastDifficulty = this.difficulty;
@@ -542,6 +564,10 @@ const game = {
   },
 
   descend() {
+    // Capture exit position for the next floor's spawn carryover. Only set
+    // when we actually transition to a new floor (not on victory — endRun
+    // handles that path). loadFloor() consumes and clears this exactly once.
+    this._exitPos = { x: this.player.x, y: this.player.y };
     // UNCHAINED #39: vacuum any leftover core drops into the wallet before
     // the floor transitions. Player can't pick them up after the fade, so
     // forceCollectAll is safer than relying on magnet-pull during the fade.
@@ -803,6 +829,7 @@ const game = {
     combo.best=0;
     this._runEnded = false;
     this._lastEnding = null;
+    this._exitPos = null;     // resume should not relocate the player
     this.pendingPerkChoices=[];
     this.perkChoice=null;
     this.augmentChoice=null;
