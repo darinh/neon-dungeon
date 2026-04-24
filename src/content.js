@@ -591,7 +591,7 @@ const HACKWARE = {
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
-let hackwareEffects = []; // active world-space hackware effects (gravity wells, swarm particles)
+const hackwareEffects = []; // active world-space hackware effects (gravity wells, swarm particles)
 
 function canTargetPlayer() {
   const p = game.player;
@@ -1191,8 +1191,8 @@ function sellModule(moduleId, refund)           { return NEON.save.sellModule(mo
 // exhaustive reset, not by the act of reuse.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-let particles = [];
-let _particlePool = [];
+const particles = [];
+const _particlePool = [];
 
 function _newParticleSlot() {
   return { x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, colour:'#fff', type:'', grav:0, alive:false };
@@ -1284,7 +1284,7 @@ function clearParticles() {
 }
 
 // ─── Ambient Particles ───────────────────────────────────────────────────────
-let ambientParticles = [];
+const ambientParticles = [];
 const AMB_CAP = 80;
 const AMB_SPAWN_INTERVAL = 0.08; // seconds between spawn attempts
 let ambSpawnTimer = 0;
@@ -1457,7 +1457,7 @@ function drawAmbient(camX, camY) {
 }
 
 // ─── Floating Damage Numbers ─────────────────────────────────────────────────
-let floatingTexts = [];
+const floatingTexts = [];
 function spawnDmgText(wx, wy, text, colour) {
   if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
@@ -2546,7 +2546,7 @@ function updateLighting(dungeon, px, py) {
 function tileHasLOS(x1, y1, tx, ty, map) {
   let cx = Math.floor(x1), cy = Math.floor(y1);
   if (cx === tx && cy === ty) return true;
-  let dx = Math.abs(tx - cx), dy = Math.abs(ty - cy);
+  const dx = Math.abs(tx - cx), dy = Math.abs(ty - cy);
   const sx = cx < tx ? 1 : -1, sy = cy < ty ? 1 : -1;
   let err = dx - dy;
   for (let i = 0; i < 100; i++) {
@@ -2574,7 +2574,7 @@ function tileHasLOS(x1, y1, tx, ty, map) {
 // _init() so there is zero stale bleed-through between reuses. Release
 // happens in the main update loop when p.dead becomes true.
 const PROJECTILE_CAP = 200;
-let projectiles = [];
+const projectiles = [];
 const _projPool = [];
 
 function releaseProjectile(p) {

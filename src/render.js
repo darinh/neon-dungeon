@@ -1762,7 +1762,7 @@ function drawExpandedMinimap(dungeon, player) {
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
-let messages=[];
+const messages=[];
 function drawMessages() {
   const msgFs = 16, msgLh = 22;
   for (let i=messages.length-1;i>=0;i--) {
@@ -1849,7 +1849,7 @@ function populateFloor(dungeon, floorNum) {
   for (let i = 0, n = projectiles.length; i < n; i++) releaseProjectile(projectiles[i]);
   projectiles.length = 0;
   clearParticles();
-  enemies=[]; items=[]; hazardZones=[]; pendingEnemySpawns=[]; floatingTexts=[]; ambientParticles=[]; hackwareEffects=[]; vcores=[]; crates=[]; beacons=[]; mines=[]; shieldGens=[]; cameras=[]; lasers=[]; wallTurrets=[]; disruptionFields=[]; gravityWells=[];
+  enemies.length=0; items.length=0; hazardZones.length=0; pendingEnemySpawns.length=0; floatingTexts.length=0; ambientParticles.length=0; hackwareEffects.length=0; vcores.length=0; crates.length=0; beacons.length=0; mines.length=0; shieldGens.length=0; cameras.length=0; lasers.length=0; wallTurrets.length=0; disruptionFields.length=0; gravityWells.length=0;
   clearEnemiesByRoom();
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;

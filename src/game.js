@@ -229,7 +229,7 @@ const game = {
     this._exitPos = null;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
-    messages=[];
+    messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
     if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.telemetry) {
@@ -4217,7 +4217,7 @@ const game = {
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs1}px monospace`;
-    let statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
+    const statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
     ctx.fillText(statsLine, W/2, y); y += lh;
     if ((r.bestCombo||combo.best) >= 2) {
       ctx.fillStyle=comboColour();
@@ -4598,20 +4598,20 @@ function _onFrameError(phase, err) {
   // logging so we never reintroduce the silent-crash class of bug.
   try {
     if (typeof NEON === 'undefined' || !NEON.renderBoundary) {
-      // eslint-disable-next-line no-console
+       
       console.error('[render-boundary:fallback] ' + phase + '() threw:', err);
       return;
     }
     const next = NEON.renderBoundary.trackRenderError(game._renderError, phase, err);
     if (NEON.renderBoundary.shouldLog(next)) {
-      // eslint-disable-next-line no-console
+       
       console.error('[render-boundary] ' + phase + '() threw (\u00D7' + next.count + '):', err);
     }
     game._renderError = next;
     game._renderHealthyFrames = 0;
   } catch (innerErr) {
     // Last-resort: never let the boundary itself crash the loop.
-    // eslint-disable-next-line no-console
+     
     try { console.error('[render-boundary:meta-fail]', innerErr, 'original:', err); } catch (_) {}
   }
 }

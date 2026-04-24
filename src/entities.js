@@ -1,19 +1,19 @@
 'use strict';
 
 // ─── Enemies ─────────────────────────────────────────────────────────────────
-let enemies = [];
-let items   = [];
-let hazardZones = [];
-let vcores  = [];
-let crates  = [];
-let beacons = [];
-let mines   = [];
-let shieldGens = [];
-let cameras = [];
-let lasers  = [];
-let wallTurrets = [];
-let disruptionFields = [];
-let gravityWells = [];
+const enemies = [];
+const items   = [];
+const hazardZones = [];
+const vcores  = [];
+const crates  = [];
+const beacons = [];
+const mines   = [];
+const shieldGens = [];
+const cameras = [];
+const lasers  = [];
+const wallTurrets = [];
+const disruptionFields = [];
+const gravityWells = [];
 
 // Phase 2c — room-scoped enemy index. Support structure for Phase 4 broadphase
 // (wall turret acquisition, NEXUS link candidates, room-clear detection, frenzy
@@ -123,7 +123,7 @@ const BOSS_PHASE_MARKS = {
 function getBossPhaseMarks(boss) {
   return BOSS_PHASE_MARKS[boss.type] || [];
 }
-let pendingEnemySpawns = [];
+const pendingEnemySpawns = [];
 
 // ─── Weapon Affix Effect Application ─────────────────────────────────────────
 // Called on every weapon hit (projectile or melee). hitCtx = {name, affixes, effects, isProc}
@@ -734,7 +734,7 @@ class Enemy {
 
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
     spd = modSpeed(spd) * this.slowFactor * this.berserkerMul() * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
-    let [dx,dy]=norm(tx-this.x,ty-this.y);
+    const [dx,dy]=norm(tx-this.x,ty-this.y);
     const nx=this.x+dx*spd*dt, ny=this.y+dy*spd*dt;
     if (ignoreWalls) { this.x=nx; this.y=ny; return; }
     const fx=Math.floor(nx), fy=Math.floor(this.y);

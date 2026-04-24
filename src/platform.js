@@ -193,8 +193,8 @@ onOrientationChange();
 // ─── Input ───────────────────────────────────────────────────────────────────
 const keys = new Set();
 const mouse = { x: W/2, y: H/2, down: false };
-let justPressed = new Set();
-let justReleased = new Set();
+const justPressed = new Set();
+const justReleased = new Set();
 let lastKey = '';
 let nameEntryTap = null;
 
@@ -639,8 +639,8 @@ function _losCacheStats() { return { size: _losCache.size, hits: _losHits, misse
 function _hasLOSRaw(x1, y1, x2, y2, map) {
   let cx = Math.floor(x1), cy = Math.floor(y1);
   const ex = Math.floor(x2), ey = Math.floor(y2);
-  let dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
-  let sx = cx<ex?1:-1, sy = cy<ey?1:-1;
+  const dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
+  const sx = cx<ex?1:-1, sy = cy<ey?1:-1;
   let err = dx - dy;
   for (let i=0; i<100; i++) {
     if (cx===ex && cy===ey) return true;

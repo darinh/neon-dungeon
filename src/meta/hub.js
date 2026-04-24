@@ -239,7 +239,7 @@
       ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       let ry = y + headerH;
-      let lastAxiom = -1;
+      const lastAxiom = -1;
       const endIdx = Math.min(list.length, this._scroll + rowsVisible);
       for (let i = this._scroll; i < endIdx; i++) {
         const entry = list[i];
