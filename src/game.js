@@ -1260,7 +1260,6 @@ const game = {
     if (this.enemyDiedThisFrame && this.clearedRooms) {
       this.enemyDiedThisFrame = false;
       let clears = 0;
-      let lastCx = 0, lastCy = 0;
       for (const room of dungeon.rooms) {
         if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
@@ -1278,7 +1277,6 @@ const game = {
         if (wallTurrets.some(wt => !wt.dead && !wt.hacked && wt.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
-        lastCx = room.cx; lastCy = room.cy;
         const d = getDiff();
         let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
@@ -2402,7 +2400,6 @@ const game = {
 
     // Mouse/touch click on cards or leave button
     if (jp('MouseLeft')) {
-      const narrow = layout.compact;
       const cw = Math.min(200, W * 0.28);
       const gap = 16;
       const totalW = cw * 3 + gap * 2;
@@ -2862,7 +2859,6 @@ const game = {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
     const CTRL_START = 5;
-    const totalRows = CTRL_START + actions.length + 2;
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -3094,7 +3090,6 @@ const game = {
     // Navigation hint (context-sensitive for difficulty row)
     ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
     const diffHint = opts[sel]?.isDiffRow;
-    const diffLocked = diffHint && !isDiffUnlocked(this.difficulty);
     if (isTouch) {
       ctx.fillText(diffHint ? 'Tap edges ◀▶ to change difficulty · center to start' : 'Tap to select', W/2, startY + opts.length * gap + 8);
     } else {
@@ -3393,7 +3388,7 @@ const game = {
     // Difficulty badge below minimap (non-NORMAL only)
     if (game.difficulty !== 'NORMAL') {
       const d = getDiff();
-      const bx = W - 128 - safeRight, by = 92 + safeTop + _boostOffset;
+      const by = 92 + safeTop + _boostOffset;
       ctx.save(); ctx.textAlign='right';
       ctx.font='bold 9px monospace';
       ctx.shadowBlur=4; ctx.shadowColor=d.colour;
@@ -3405,7 +3400,7 @@ const game = {
     // Quest HUD (below minimap)
     if (game.quest) {
       const q = game.quest;
-      const qx = W - 128 - safeRight, qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
+      const qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
       ctx.save();
       ctx.font='10px monospace'; ctx.textAlign='right';
       if (q.done) {

@@ -44,12 +44,29 @@ module.exports = [
       // <script> tags in index.html). Re-enable only if/when the codebase is
       // converted to ES modules.
       'no-implicit-globals': 'off',
+      // `vars: 'local'` skips top-level (script-scope) declarations because
+      // they are the UMD export pattern of this codebase — eslint sees them
+      // as "unused" but they are consumed cross-file via <script> tags.
+      // Genuine top-level dead code will be caught by tsc (noUnusedLocals:true
+      // in tsconfig.json) once a file opts in via `// @ts-check` (Phase 3).
+      // This rule still flags function-scope dead code, which is what we
+      // actually care about today.
+      // `caughtErrors: 'none'` matches the established `try { ... } catch(e){}`
+      // swallow convention used 16 places in src/. The 4 sites that DO use
+      // `e` (game.js:842 fallback, game.js render boundary x2 + update x2)
+      // remain free to do so.
       'no-unused-vars': ['warn', {
+        vars: 'local',
         args: 'none',
+        caughtErrors: 'none',
         varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
       }],
-      'no-shadow': ['warn', { hoist: 'functions' }],
+      // `no-shadow` flagged 14 sites that all turned out to be intentional
+      // inner-block declarations (e.g. `const tx,ty` in an emergency-search
+      // nested loop that semantically resets the value). Disabling avoids
+      // noise; `// @ts-check` (Phase 3) provides better type-aware shadow
+      // detection where it matters.
+      'no-shadow': 'off',
       'no-unreachable': 'error',
       'no-fallthrough': 'error',
       'no-dupe-keys': 'error',

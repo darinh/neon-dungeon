@@ -3282,7 +3282,6 @@ function rollEvent(player) {
 
 function applyEventEffect(event, choice, player, gm) {
   const floor = gm.floor;
-  const d = getDiff();
   if (choice === 'a') {
     switch (event.id) {
       case 'STASIS_POD': {

@@ -251,7 +251,6 @@ function updateBtns() {
   BTNS.F.hidden = false;
   // Position from edges, respecting safe-area insets
   const pr = Math.max(10, safeRight);
-  const pb = Math.max(10, safeBottom);
   const pt = Math.max(10, safeTop);
   const btnY = layout.hudTop - BTNS.E.r - 16;
   BTNS.E.x     = W - pr - 230;
@@ -351,7 +350,6 @@ canvas.addEventListener('touchstart', e => {
           const boxH = narrow ? 180 : 200;
           const bx = (W - boxW) / 2, by = (H - boxH) / 2;
           const btnY = by + (narrow ? 120 : 138);
-          const spacing = boxW / 2;
           // Hit-test inside the dialog box
           if (cx >= bx && cx <= bx + boxW && cy >= by && cy <= by + boxH) {
             // Button zone: within 20px of button Y

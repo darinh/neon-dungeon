@@ -26,41 +26,6 @@
   'use strict';
 
   // ─── Terminals ────────────────────────────────────────────────────────────
-  // Stubs for #36/#37/#41. Each conforms to the terminal-panel API; the full
-  // implementations will replace the placeholder draw/update bodies without
-  // touching the hub harness.
-
-  function makePlaceholder(id, label, hint, accent) {
-    return {
-      id, label,
-      _accent: accent || '#00f5ff',
-      _hint: hint,
-      onOpen() {},
-      onClose() {},
-      update(/* dt, input */) {},
-      draw(ctx, x, y, w, h) {
-        ctx.save();
-        ctx.fillStyle = 'rgba(8,10,20,0.92)';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = this._accent;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-        ctx.fillStyle = this._accent;
-        ctx.font = '18px monospace';
-        ctx.textAlign = 'center';
-        ctx.shadowBlur = 10; ctx.shadowColor = this._accent;
-        ctx.fillText(this.label, x + w / 2, y + 32);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#888ab0';
-        ctx.font = '12px monospace';
-        ctx.fillText(this._hint, x + w / 2, y + 60);
-        ctx.fillStyle = '#555577';
-        ctx.font = '11px monospace';
-        ctx.fillText('[ESC] BACK', x + w / 2, y + h - 16);
-        ctx.restore();
-      },
-    };
-  }
 
   // ARMORY — minimal stub: shows currently-equipped weapon name. Real weapon
   // swap UI wire-up is deferred (noted in the PR); keeping the API identical
@@ -239,7 +204,6 @@
       ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       let ry = y + headerH;
-      const lastAxiom = -1;
       const endIdx = Math.min(list.length, this._scroll + rowsVisible);
       for (let i = this._scroll; i < endIdx; i++) {
         const entry = list[i];

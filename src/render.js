@@ -1472,8 +1472,8 @@ function drawBoostStrip(player) {
   if (!player || typeof NEON === 'undefined' || !NEON.boosts) return;
   const list = NEON.boosts.getActiveBoostList(player);
   if (!list.length) return;
-  const MW=120, MH=80;
-  const MX=W-MW-8-safeRight, MY=8+safeTop;
+  const MH=80;
+  const MY=8+safeTop;
   const pillH = 18;
   const startY = MY + MH + 8; // 8px gap below minimap
   ctx.save();
@@ -1540,7 +1540,6 @@ function drawExpandedMinimap(dungeon, player) {
   const echoMap = game.mapRevealed;
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   const pois = [];
-  const roomCenters = [];
 
   // Tiles
   for (let ty = 0; ty < MAP_H; ty++) {

@@ -4962,7 +4962,6 @@ function updateLasers(dt) {
           p.shockTimer = Math.max(p.shockTimer || 0, 0.3);
           audio.laserHit();
           spawnParticles(p.x, p.y, 'SPARK', '#ff8844', 8);
-          const mx = (l.x1 + l.x2) / 2, my = (l.y1 + l.y2) / 2;
           game.msg('⚡ LASER TRIP', '#ff8844');
         }
       }
