@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Local agent extensions (user-specific, not part of repo)
+.github/extensions/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+*.Zone.Identifier
+
+# Build output (reserved for future bundler if Path B is ever taken)
+dist/
+build/
+
+# Test/debug artifacts
+*.log
+coverage/
