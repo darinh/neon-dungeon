@@ -61,7 +61,14 @@ function _decoContext(dungeon, tx, ty) {
   const map = dungeon.map;
   const h = _labDecoHash(tx, ty, game.floor);
   const roll = h % 100;
-  if (roll >= 11) return null; // sparse, deterministic dressing
+  // Tile must be eligible for SOMETHING — regular biome decor (roll<11)
+  // or an alarm-light beacon (alarm-light's own gate, ~4.3% of tiles).
+  // alarmEligible is computed without an extra map lookup so the bail
+  // path stays cheap.
+  const alarmEligible = (typeof NEON !== 'undefined' && NEON.alarmLight)
+    ? NEON.alarmLight.isAlarmSlot(h) : false;
+  const decorEligible = roll < 11;
+  if (!decorEligible && !alarmEligible) return null;
 
   for (let i = 0; i < 4; i++) {
     const dx = _DECO_NEIGHBOR_OFFSETS[i][0];
@@ -83,7 +90,63 @@ function _decoContext(dungeon, tx, ty) {
   _DECO_CX.roll = roll;
   _DECO_CX.wallSide = n ? 'N' : s ? 'S' : w ? 'W' : e ? 'E' : null;
   _DECO_CX.flicker = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 8 + (h % 17));
+  _DECO_CX.alarmEligible = alarmEligible;
+  _DECO_CX.decorEligible = decorEligible;
   return _DECO_CX;
+}
+
+// Atmospheric alarm-light decor. Pulse + biome opt-in math lives in
+// src/meta/alarm-light.js (testable, no DOM). Canvas draw is here so it
+// can use the module-scope ctx / TILE / shadow* state already in flight.
+// Drawn on top of the existing wall-mount housing so the bulb sits where
+// a console light would, but pulses red and washes the floor in front.
+function _drawAlarmLight(sx, sy, brightness, wallSide, h, baseAlpha) {
+  const t = (typeof game !== 'undefined' && game) ? (game.floorTime || 0) : 0;
+  const ap = (typeof NEON !== 'undefined' && NEON.alarmLight)
+    ? NEON.alarmLight.intensity(t, h)
+    : 0.5;
+  // Draw inside the caller's save/restore. baseAlpha is the per-tile
+  // brightness*flicker the caller had set; we override globalAlpha for
+  // both housing and bulb so the pulse reads cleanly through the dark.
+  const housingA = brightness * 0.55;
+  const bulbA = brightness * (0.35 + 0.55 * ap);
+  const washA = brightness * 0.18 * ap;
+
+  // Dark housing rectangle along the inner wall edge.
+  ctx.globalAlpha = housingA;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#1a0608';
+  if (wallSide === 'N') ctx.fillRect(sx + 4, sy + 2, TILE - 8, 4);
+  else if (wallSide === 'S') ctx.fillRect(sx + 4, sy + TILE - 6, TILE - 8, 4);
+  else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 4, 4, TILE - 8);
+  else ctx.fillRect(sx + TILE - 6, sy + 4, 4, TILE - 8);
+
+  // Soft floor wash — additive radial-ish glow sold via large shadowBlur
+  // on a tiny rect. No createRadialGradient (would allocate per tile).
+  ctx.globalAlpha = washA;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = '#ff2244';
+  ctx.fillStyle = '#ff2244';
+  let bx, by;
+  if (wallSide === 'N') { bx = sx + TILE / 2 - 1; by = sy + 4; }
+  else if (wallSide === 'S') { bx = sx + TILE / 2 - 1; by = sy + TILE - 6; }
+  else if (wallSide === 'W') { bx = sx + 4; by = sy + TILE / 2 - 1; }
+  else { bx = sx + TILE - 6; by = sy + TILE / 2 - 1; }
+  ctx.fillRect(bx, by, 2, 2);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Bright bulb on top of the housing.
+  ctx.globalAlpha = bulbA;
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = '#ff2244';
+  ctx.fillStyle = ap > 0.6 ? '#ffeaea' : '#ff5566';
+  ctx.fillRect(bx, by, 2, 2);
+
+  // Restore caller's alpha so any subsequent draw inside the same
+  // save() sees the value it expected.
+  ctx.globalAlpha = baseAlpha;
+  ctx.shadowBlur = 0;
 }
 
 // Per-biome decor renderers. Keyed by AREAS[i].id from src/data/biomes.js.
@@ -321,6 +384,13 @@ const _BIOME_DECOR = {
 // Routes per-tile floor decor to the current biome's renderer. Falls back
 // to the sandbox (cyan) variant if the biome lookup fails so a missing
 // NEON.biomes module never produces an undecorated floor.
+//
+// Two passes:
+//   1. Alarm pass — biome-opt-in pulsing red beacons. Runs first because
+//      they replace any regular decor on the same tile (one prop per tile
+//      is the design rule). Requires wall-adjacent + biome whitelist +
+//      alarm-light's own gate (~4.3% of all tiles).
+//   2. Regular biome decor pass — only if cx.decorEligible (roll<11).
 function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
   const cx = _decoContext(dungeon, tx, ty);
   if (!cx) return;
@@ -331,6 +401,14 @@ function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
       if (a && a.id) id = a.id;
     }
   } catch (_) {}
+  if (cx.alarmEligible && cx.wallSide && typeof NEON !== 'undefined' &&
+      NEON.alarmLight && NEON.alarmLight.shouldDraw(id, cx.h)) {
+    ctx.save();
+    _drawAlarmLight(sx, sy, brightness, cx.wallSide, cx.h, brightness);
+    ctx.restore();
+    return;
+  }
+  if (!cx.decorEligible) return;
   const fn = _BIOME_DECOR[id] || _BIOME_DECOR.sandbox;
   fn(sx, sy, brightness, cx);
 }
