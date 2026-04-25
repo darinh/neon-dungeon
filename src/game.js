@@ -3712,6 +3712,55 @@ const game = {
     const startX = (W - totalW) / 2;
     const cardY = H * 0.28;
     const cardH = Math.min(220, H * 0.38);
+    // Word-wrap helper (centered). Returns the y of the next line below the
+    // wrapped block. text padding leaves 8px on each side of the card.
+    const wrapMaxW = cw - 16;
+    const cardBottomY = cardY + cardH - 8;
+    /**
+     * @param {string} text
+     * @param {number} cxC center x
+     * @param {number} y top y of first line
+     * @param {number} lineH
+     */
+    const drawWrapCentered = (text, cxC, y, lineH) => {
+      const words = String(text == null ? '' : text).split(' ');
+      let line = '', dy = y;
+      const flush = () => {
+        if (!line) return;
+        if (dy + lineH > cardBottomY) return;
+        ctx.fillText(line, cxC, dy);
+        dy += lineH;
+        line = '';
+      };
+      for (const w of words) {
+        // Hard-break a single word that's wider than wrapMaxW (no spaces).
+        if (ctx.measureText(w).width > wrapMaxW) {
+          flush();
+          let chunk = '';
+          for (let k=0; k<w.length; k++) {
+            const ch = w[k] || '';
+            const test = chunk + ch;
+            if (ctx.measureText(test).width > wrapMaxW && chunk) {
+              line = chunk; flush();
+              chunk = ch;
+            } else {
+              chunk = test;
+            }
+          }
+          line = chunk;
+          continue;
+        }
+        const test = line ? line + ' ' + w : w;
+        if (ctx.measureText(test).width > wrapMaxW && line) {
+          flush();
+          line = w;
+        } else {
+          line = test;
+        }
+      }
+      flush();
+      return dy;
+    };
 
     for (let i=0; i<2; i++) {
       const opt = pc.options[i];
@@ -3767,41 +3816,49 @@ const game = {
       ctx.font=`bold ${narrow?13:16}px monospace`;
       ctx.fillText(opt.name, cx + cw/2, cardY + 90);
 
-      // Description
+      // Description (word-wrapped). Track running y so subsequent lines
+      // don't collide when the desc spans 2+ lines on narrow viewports.
       ctx.fillStyle='#aaaacc';
-      ctx.font=`${narrow?11:13}px monospace`;
-      ctx.fillText(opt.desc, cx + cw/2, cardY + 112);
+      const descFs = narrow ? 11 : 13;
+      ctx.font=`${descFs}px monospace`;
+      let runY = drawWrapCentered(opt.desc, cx + cw/2, cardY + 112, descFs + 3);
+      runY += 4; // small gutter
 
       // Level info for persistent upgrades
       if (opt.persistent && opt.levelDesc) {
         ctx.fillStyle='#888899';
-        ctx.font=`${narrow?10:12}px monospace`;
-        ctx.fillText('Lv '+(curLvl)+'→'+(curLvl+1)+': '+opt.levelDesc(curLvl), cx + cw/2, cardY + 134);
+        const lvFs = narrow ? 10 : 12;
+        ctx.font=`${lvFs}px monospace`;
+        runY = drawWrapCentered('Lv '+(curLvl)+'→'+(curLvl+1)+': '+opt.levelDesc(curLvl), cx + cw/2, runY, lvFs + 3);
+        runY += 4;
       }
 
       // Hackware badge
       if (opt.isHackware) {
         ctx.fillStyle=opt.colour;
         ctx.font=`bold ${narrow?9:10}px monospace`;
-        ctx.fillText('⚙ HACKWARE [F]', cx + cw/2, cardY + 134);
+        ctx.fillText('⚙ HACKWARE [F]', cx + cw/2, runY);
+        runY += (narrow ? 12 : 13);
       }
 
       // Weapon stats line for weapon options
       if (opt.id && opt.id.startsWith('WEAPON_')) {
         ctx.fillStyle='#ffcc44';
-        ctx.font=`${narrow?10:12}px monospace`;
-        ctx.fillText(opt.desc, cx + cw/2, cardY + 134);
+        const wFs = narrow ? 10 : 12;
+        ctx.font=`${wFs}px monospace`;
+        runY = drawWrapCentered(opt.desc, cx + cw/2, runY, wFs + 3);
         // Affix description line
         if (opt.affixDesc) {
           ctx.fillStyle=opt._rarityColour || '#39ff14';
-          ctx.font=`${narrow?9:11}px monospace`;
-          ctx.fillText(opt.affixDesc, cx + cw/2, cardY + 150);
+          const aFs = narrow ? 9 : 11;
+          ctx.font=`${aFs}px monospace`;
+          runY = drawWrapCentered(opt.affixDesc, cx + cw/2, runY, aFs + 3);
         }
         // Rarity label
         if (opt._rarity > 0) {
           ctx.fillStyle=opt._rarityColour;
           ctx.font=`bold ${narrow?9:10}px monospace`;
-          ctx.fillText(RARITY_LABELS[opt._rarity] || '', cx + cw/2, cardY + 164);
+          ctx.fillText(RARITY_LABELS[opt._rarity] || '', cx + cw/2, runY);
         }
       }
     }
@@ -4776,7 +4833,7 @@ function loop(ts) {
 // but rAF kept rescheduling, so input still worked while the world silently
 // vanished. Now each phase has its own catch; failures populate
 // game._renderError and a visible overlay is drawn over whatever managed to
-// render before the throw. See src/meta/render-boundary.js.
+// render before the throw. See engine/render-boundary.js.
 //
 // Auto-recovery: a transient error (one bad frame during a particle burst,
 // say) shouldn't pin the overlay forever. After RECOVERY_FRAMES consecutive

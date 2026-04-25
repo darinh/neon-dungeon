@@ -58,9 +58,12 @@ Reusable as-is. These are the candidates for the first engine package.
 
 | Module | Surface | Why it's engine |
 |---|---|---|
-| `src/meta/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
-| `src/meta/spawn.js` | `NEON.spawn.findNearestPassable` | Tile-grid BFS. Knows about an `isPassable(tileCode)` callback only — caller decides which tile codes are walkable. |
-| `src/meta/telemetry.js` | `NEON.telemetry.{init, track, flush, update}` | Generic offline-safe event batching. Privacy-conscious by default. No game keys. |
+| `engine/alarm-light.js` | `NEON.alarmLightEngine.{isAlarmSlot, intensity, createAlarmLight}` | Reusable pulse math for any flickering wall decor. Biome allowlist injected via `createAlarmLight({allowedBiomes})` — game-side wiring lives at `src/meta/alarm-light.js`. |
+| `engine/biomes.js` | `NEON.biomesEngine.createBiomeRouter` | Floor↔area routing factory: takes any `{floors:[]}`-shaped table and returns `{areas, areaForFloor, isBiomeBossFloor, firstFloorOfBiomeContaining, biomeIndex, areaForIndex, finalFloor}`. Zero NEON content. Game-side wiring at `src/data/biomes.js`. |
+| `engine/cinematic.js` | `NEON.cinematic.createCinematicController` | Generic timed-slide controller: state machine, fade in/out, advance/skip key callbacks, optional final-slide flash envelope. Caller injects slide schema and `drawSlide` callback. Game-side wiring at `src/meta/intro.js`. |
+| `engine/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
+| `engine/spawn.js` | `NEON.spawn.findNearestPassable` | Tile-grid BFS. Knows about an `isPassable(tileCode)` callback only — caller decides which tile codes are walkable. |
+| `engine/telemetry.js` | `NEON.telemetry.{init, track, flush, update}` | Generic offline-safe event batching. Privacy-conscious by default. No game keys. |
 | `src/data/palettes.js` (shape) | `BIOME_PALETTES` table | The **schema** (palette per biome id) is engine; the **values** are game (see Mixed). |
 
 ### 🟧 Game modules
@@ -73,7 +76,7 @@ NEON DUNGEON-specific. These would not ship with the engine.
 | `src/meta/boosts.js` | `BOOSTS` catalog + `applyBoost` runtime | NEON DUNGEON's specific in-run boost roster (damage, speed, crit, shield, heal, reveal). |
 | `src/meta/cores.js` | CORES currency world-entities | NEON DUNGEON's post-run currency. Tightly coupled to `save.js` wallet. |
 | `src/meta/hub.js` | THE GAP hub between floors | NEON DUNGEON's specific 4-terminal layout (Upgrade Matrix / Module Slots / Armory / Archive). |
-| `src/meta/intro.js` | 5-slide intro crawl | NEON DUNGEON's narrative opener. The **controller pattern** is engine-shaped (see Mixed). |
+| `src/meta/intro.js` | 5-slide intro crawl (NEON-specific narrative; engine controller in `engine/cinematic.js`) | NEON DUNGEON's narrative opener. The **controller pattern** is engine (see Mixed). |
 | `src/meta/logs.js` + `src/data/logs.js` | ARCHIVE terminal + AXIOM-1..6 predecessor logs | Pure NEON DUNGEON narrative. |
 | `src/meta/modules.js` | UPGRADE MODULES catalog + effect logic | NEON DUNGEON's 10 modules (crit, dash, reflect, shield, doubleCredit, hackware, etc.). |
 | `src/meta/save.js` | Persistent meta state, wallet, module install/sell | NEON DUNGEON's save schema (internal `META_VERSION = 2`; the legacy `SAVE_VERSION = 9.0` constant lives in `src/platform.js`). Shards/cores/modules/upgradeNodes are all NEON-specific. |
@@ -90,10 +93,10 @@ would stay in game.
 
 | Module | Engine part | Game part |
 |---|---|---|
-| `src/meta/alarm-light.js` | The pulse math: `isAlarmSlot(h)` (stable ~3.2% true rate keyed by tile hash) and `intensity(floorTime, h)` (sinusoidal flicker with hash-derived phase). Reusable for any flickering wall decor. | `shouldDraw` hardcodes the NEON DUNGEON biome-id allowlist (`'cache'`, `'firewall'`). An extraction pass would inject the allowlist via parameter or a setter. |
-| `src/data/biomes.js` | The `Area` schema (`{id, name, palette, floors[], bossPool, displayName, intro}`), and the `areaForFloor` / `areaForIndex` / `biomeIndex` / `isBiomeBossFloor` / `finalFloor` helpers. | The `AREAS` rows themselves (sandbox, cache, firewall, uplink, opennet) and their narrative copy. |
-| `src/data/palettes.js` | The `BIOME_PALETTES: Record<string, Palette>` shape with keys `wallFill`, `wallHi`, `floor`, `floorAccent`, `minimapWall`, `minimapFloor`, `dust[]`, `ambient`. | The actual hex values per palette. |
-| `src/meta/intro.js` | The `createIntroController(host)` controller pattern returning `{ update(dt), draw(ctx, W, H), done }`. Generic enough for any cinematic. | The slides and their narrative text. |
+| `src/meta/alarm-light.js` + `engine/alarm-light.js` | **Extracted** to `engine/alarm-light.js`: `isAlarmSlot(h)` (stable ~3.2% true rate keyed by tile hash), `intensity(floorTime, h)` (sinusoidal flicker with hash-derived phase), and `createAlarmLight({allowedBiomes})` factory. Reusable for any flickering wall decor. | `src/meta/alarm-light.js` is the wiring shim that injects NEON DUNGEON's biome allowlist (`'cache'`, `'firewall'`) into the engine factory and re-exports the configured surface as `NEON.alarmLight`. |
+| `src/data/biomes.js` + `engine/biomes.js` | **Extracted** to `engine/biomes.js`: `createBiomeRouter(areas)` factory returning `{areas, areaForFloor, isBiomeBossFloor, firstFloorOfBiomeContaining, biomeIndex, areaForIndex, finalFloor}`. Operates on any `{floors:[]}`-shaped table. Clamps out-of-range floors and indexes to first/last. | `src/data/biomes.js` is the wiring shim that owns the AREAS rows (sandbox/cache/firewall/uplink/opennet, narrative `intro` copy, `bossPool`, `displayName` overrides) and re-exports the configured surface as `NEON.biomes`. |
+| `src/data/palettes.js` | The `BIOME_PALETTES: Record<string, Palette>` shape with keys `wallFill`, `wallHi`, `floor`, `floorAccent`, `minimapWall`, `minimapFloor`, `dust[]`, `ambient`. **No extraction**: pure data table with no behavioural helpers — extracting a `validatePalette` shim purely to mirror the biomes split would be ceremony without value. | The actual hex values per palette. |
+| `src/meta/intro.js` + `engine/cinematic.js` | **Extracted** to `engine/cinematic.js`: `createCinematicController({slides, onFinish, isAdvanceKey, isSkipKey, drawSlide, fadeIn, fadeOut, flashSlideIndex, flashRampSeconds})`. State machine, fade math, flash envelope. Generic enough for any cinematic. | `src/meta/intro.js` is the wiring shim that owns SLIDES (the AXIOM-7 narrative copy + per-slide effect flags), the canvas effect renderer (cyanGlow/glitch/whiteFlash/stark), and the `_markIntroSeen` save flip via `NEON.save`. |
 
 ### 🟨 The five large `src/*.js` files (mostly mixed)
 
@@ -189,8 +192,14 @@ import", but their internals stay put.
 - **No types tighten beyond opt-in.** `Window.NEON: Record<string, any>`
   stays loose to avoid forcing changes across all `// @ts-check`'d files.
   Tightening is a separate, file-by-file effort.
-- **No build-time enforcement.** ESLint rules forbidding `import` of game
-  modules from engine modules can be added later; not in scope here.
+- ~~**No build-time enforcement.**~~ As of Phase D, `npm run check:engine`
+  (auto-invoked by `npm run check`) runs `scripts/check-engine-purity.js`,
+  which scans `engine/*.js` for NEON-specific narrative tokens (AXIOM,
+  UNCHAINED, SENTINEL, OVERSEER, ARCHITECT, NEON DUNGEON, etc.) and the
+  quoted biome ids `'sandbox'` / `'opennet'`. Hits in non-comment, non-UMD
+  lines fail the build. The forbidden list is conservative — common words
+  like "core", "shard", "boost" stay allowed. To extend it, edit
+  `FORBIDDEN` in the script.
 
 ---
 

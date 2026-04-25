@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const telemetry = require(path.resolve(__dirname, '..', 'src', 'meta', 'telemetry.js'));
+const telemetry = require(path.resolve(__dirname, '..', 'engine', 'telemetry.js'));
 
 function makeFakeStorage() {
   const map = new Map();

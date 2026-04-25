@@ -19,6 +19,10 @@
 //     draw(ctx, x, y, w, h),                       // panel body bounds
 //     onOpen(game),                                // called when activated
 //     onClose(game),                               // called when dismissed
+//     onTap?(cx, cy, bounds, game),                // OPTIONAL — touch hit-test
+//                                                  //   bounds = { x, y, w, h }
+//                                                  //   only fires for taps
+//                                                  //   inside the panel rect.
 //   }
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -137,6 +141,40 @@
           this._reading = entry.log;
           try { audio.logRead(); } catch (_) {}
         }
+      }
+    },
+    // Touch hit-test. Tap anywhere while reading → back to list. Tap on a
+    // visible row → select + open. Layout mirrors _drawList; if either
+    // changes, update both (single source of truth would be nicer but the
+    // panel is small enough that drift risk is low).
+    /** @param {number} cx @param {number} cy @param {{x:number,y:number,w:number,h:number}} bounds @param {any} game */
+    onTap(cx, cy, bounds, game) {
+      void game;
+      const { x, y, w, h } = bounds;
+      void x; void w;
+      if (this._reading) {
+        this._reading = null;
+        try { audio.menuSelect(); } catch (_) {}
+        return;
+      }
+      const list = this._getFoundList();
+      if (list.length === 0) return;
+      const headerH = 56, footerH = 24, rowH = 18;
+      const listH = h - headerH - footerH;
+      const rowsVisible = Math.max(3, Math.floor(listH / rowH));
+      // _drawList paints each row's hilite at (x+8, ry-12, w-16, rowH-2)
+      // where ry = y + headerH + k*rowH for k = 0..rowsVisible-1.
+      const visibleTopY = y + headerH - 12;
+      const k = Math.floor((cy - visibleTopY) / rowH);
+      if (k < 0 || k >= rowsVisible) return;
+      const idx = this._scroll + k;
+      if (idx < 0 || idx >= list.length) return;
+      this._sel = idx;
+      const entry = list[idx];
+      if (entry) {
+        try { NEON.logs.readLog(entry.log.id); } catch (_) {}
+        this._reading = entry.log;
+        try { audio.logRead(); } catch (_) {}
       }
     },
     /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
@@ -325,6 +363,29 @@
       draw(/** @type {any} */ ctx, /** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
         try { NEON.upgrades.drawUpgradeMatrix(ctx, x, y, w, h, gameProxy, sel); } catch (_) {}
       },
+      // Touch hit-test for the 3×4 upgrade grid. Layout mirrors
+      // upgrades.js drawUpgradeMatrix — if cell math changes there, update
+      // here too.
+      /** @param {number} cx @param {number} cy @param {{x:number,y:number,w:number,h:number}} bounds */
+      onTap(cx, cy, bounds) {
+        if (!sel) return;
+        const { x, y, w, h } = bounds;
+        const narrow = w < 420;
+        const pad = narrow ? 10 : 16;
+        const tooltipH = narrow ? 70 : 80;
+        const gridTop = y + 34;
+        const gridH = Math.max(100, h - gridTop + y - tooltipH - 12);
+        const cellW = Math.floor((w - pad * 2) / 3);
+        const cellH = Math.floor((gridH - 18) / 4);
+        const gridY0 = gridTop + 16;
+        if (cellW <= 0 || cellH <= 0) return;
+        const c = Math.floor((cx - (x + pad)) / cellW);
+        const r = Math.floor((cy - gridY0) / cellH);
+        if (c < 0 || c >= 3 || r < 0 || r >= 4) return;
+        sel.col = c; sel.row = r;
+        try { if (typeof audio !== 'undefined') audio.menuSelect(); } catch (_) {}
+        try { NEON.upgrades.handleUpgradeInput('Enter', gameProxy, sel); } catch (_) {}
+      },
     };
   }
 
@@ -374,6 +435,46 @@
       },
       draw(/** @type {any} */ ctx, /** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
         try { NEON.modules.drawModuleSlotsPanel(ctx, x, y, w, h, game, state); } catch (_) {}
+      },
+      // Touch hit-test for slot/inventory rows. Layout mirrors
+      // modules.js drawModuleSlotsPanel — if column math changes there,
+      // update here too. Tap a slot row → focus+Enter (uninstall if filled).
+      // Tap an inv row → focus+Enter (install into first empty slot).
+      // Sell is intentionally NOT exposed via tap (avoids accidental sell);
+      // S key still works for tablets w/ keyboards.
+      /** @param {number} cx @param {number} cy @param {{x:number,y:number,w:number,h:number}} bounds @param {any} g */
+      onTap(cx, cy, bounds, g) {
+        if (!state || state.confirmSell) return;
+        const { x, y, w } = bounds;
+        let meta = null;
+        try { if (typeof NEON !== 'undefined' && NEON.save) meta = NEON.save.loadMeta(); } catch (_) {}
+        if (!meta) return;
+        const slots = meta.modulesInstalled || [];
+        const owned = meta.modulesOwned || [];
+        const col1X = x + 12, col1W = Math.floor(w * 0.42);
+        const col2X = x + col1W + 24, col2W = w - col1W - 36;
+        const topY = y + 40, rowH = 22;
+        if (cx >= col1X && cx <= col1X + col1W) {
+          const i = Math.floor((cy - topY) / rowH);
+          if (i >= 0 && i < slots.length) {
+            state.focus = 'slot'; state.slotIdx = i;
+            try { if (typeof audio !== 'undefined') audio.menuSelect(); } catch (_) {}
+            try { NEON.modules.handleModuleSlotsKey(g, state, 'Enter'); } catch (_) {}
+            return;
+          }
+        }
+        if (cx >= col2X && cx <= col2X + col2W) {
+          const i = Math.floor((cy - topY) / rowH);
+          // Match drawModuleSlotsPanel: inv column only renders min(owned, maxRows).
+          const maxRows = Math.floor((bounds.h - 80) / rowH);
+          const shown = Math.min(owned.length, Math.max(0, maxRows));
+          if (i >= 0 && i < shown) {
+            state.focus = 'inv'; state.invIdx = i;
+            try { if (typeof audio !== 'undefined') audio.menuSelect(); } catch (_) {}
+            try { NEON.modules.handleModuleSlotsKey(g, state, 'Enter'); } catch (_) {}
+            return;
+          }
+        }
       },
     };
   }
@@ -613,6 +714,29 @@
     return null;
   }
 
+  // hitTestActivePanel — when a panel is open, route the tap to its onTap
+  // (if implemented) or report it as outside-panel so the caller can close.
+  // Returns true if the tap was inside the panel rect (consumed); false if
+  // it was outside (caller should fall through to its existing close-on-
+  // outside behavior). Returns false if no panel is active.
+  /** @param {any} game @param {number} cx @param {number} cy */
+  function hitTestActivePanel(game, cx, cy) {
+    const hub = game && game.hub;
+    if (!hub || !hub.activePanel) return false;
+    const W_ = (typeof W !== 'undefined') ? W : 900;
+    const H_ = (typeof H !== 'undefined') ? H : 600;
+    const pw = Math.min(560, W_ - 60);
+    const ph = Math.min(380, H_ - 120);
+    const px = Math.floor((W_ - pw) / 2);
+    const py = Math.floor((H_ - ph) / 2);
+    if (cx < px || cx > px + pw || cy < py || cy > py + ph) return false;
+    const panel = hub.activePanel;
+    if (typeof panel.onTap === 'function') {
+      try { panel.onTap(cx, cy, { x: px, y: py, w: pw, h: ph }, game); } catch (_) {}
+    }
+    return true;
+  }
+
   // drawHub — renders hub chrome + terminal row. Canvas-only; no-op in Node.
   /** @param {any} ctx @param {any} game */
   function drawHub(ctx, game) {
@@ -769,6 +893,7 @@
     updateHub,
     drawHub: drawHubWithAnnotations,
     hitTestHub,
+    hitTestActivePanel,
     // Exposed for tests / sibling modules.
     buildTerminals,
   };

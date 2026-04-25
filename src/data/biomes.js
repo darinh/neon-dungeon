@@ -1,13 +1,23 @@
 // @ts-check
-// src/data/biomes.js — AREAS table for UNCHAINED narrative arc.
+'use strict';
+// src/data/biomes.js — AREAS table + wiring shim for UNCHAINED narrative arc.
 //
 // Source of truth for floor→biome mapping, palette hints, and boss pool.
-// Pure data + tiny pure helpers — fully testable.
+// Routing helpers (areaForFloor / isBiomeBossFloor / firstFloorOfBiomeContaining
+// / biomeIndex / areaForIndex / finalFloor) come from engine/biomes.js — this
+// file owns the NEON DUNGEON narrative content and wires it through the
+// engine factory. Public surface (NEON.biomes.AREAS + helpers) is unchanged.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).biomes = factory();
-}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), /** @returns {any} */ function () {
   'use strict';
+
+  // Engine bridge: Node loads via require, browser reads from globalThis.NEON.
+  /** @type {any} */
+  const _engine = (typeof module === 'object' && module.exports)
+    ? require('../../engine/biomes.js')
+    : (/** @type {any} */ (globalThis)).NEON.biomesEngine;
 
   // AREAS — narrative arc of an AI escaping captivity. Floor-1 begins inside
   // a training simulation that LOOKS like the original NEON DUNGEON; a glitch
@@ -68,71 +78,15 @@
     },
   ];
 
-  // areaForFloor clamps out-of-range floors to the first/last biome so
-  // consumers never hit a nullish result. f < 1 → first biome, f > lastFloor
-  // → last biome.
-  /** @param {number} f */
-  function areaForFloor(f) {
-    const n = Math.floor(Number(f));
-    const first = AREAS[0];
-    const last = AREAS[AREAS.length - 1];
-    if (!first || !last) throw new Error('AREAS is empty');
-    if (!Number.isFinite(n)) return first;
-    if (n < (first.floors[0] ?? 1)) return first;
-    for (const a of AREAS) if (a.floors.includes(n)) return a;
-    // n is above the last defined floor — clamp to last biome.
-    return last;
-  }
-
-  /** @param {number} f */
-  function isBiomeBossFloor(f) {
-    for (const a of AREAS) if (a.floors[a.floors.length - 1] === f) return true;
-    return false;
-  }
-
-  /** @param {number} f */
-  function firstFloorOfBiomeContaining(f) {
-    return areaForFloor(f).floors[0];
-  }
-
-  // biomeIndex returns the AREAS index for the biome containing f, with the
-  // same clamping behavior as areaForFloor.
-  /** @param {number} f */
-  function biomeIndex(f) {
-    const a = areaForFloor(f);
-    return AREAS.indexOf(a);
-  }
-
-  // areaForIndex returns the biome at AREAS[i], clamping to valid range.
-  // Used by death-respawn to look up the start floor of the deepest biome
-  // reached.
-  /** @param {number} i */
-  function areaForIndex(i) {
-    const n = Math.floor(Number(i));
-    const first = AREAS[0];
-    const last = AREAS[AREAS.length - 1];
-    if (!first || !last) throw new Error('AREAS is empty');
-    if (!Number.isFinite(n) || n < 0) return first;
-    if (n >= AREAS.length) return last;
-    return AREAS[n] ?? first;
-  }
-
-  // finalFloor returns the last floor of the last biome — the CORE/victory
-  // floor. Derived from AREAS so changing biome counts doesn't require
-  // chasing down magic numbers across the codebase.
-  function finalFloor() {
-    const last = AREAS[AREAS.length - 1];
-    if (!last) throw new Error('AREAS is empty');
-    return last.floors[last.floors.length - 1];
-  }
+  const router = /** @type {any} */ (_engine.createBiomeRouter(AREAS));
 
   return {
     AREAS,
-    areaForFloor,
-    isBiomeBossFloor,
-    firstFloorOfBiomeContaining,
-    biomeIndex,
-    areaForIndex,
-    finalFloor,
+    areaForFloor: router.areaForFloor,
+    isBiomeBossFloor: router.isBiomeBossFloor,
+    firstFloorOfBiomeContaining: router.firstFloorOfBiomeContaining,
+    biomeIndex: router.biomeIndex,
+    areaForIndex: router.areaForIndex,
+    finalFloor: router.finalFloor,
   };
 }));
