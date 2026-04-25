@@ -1191,7 +1191,7 @@ function sellModule(moduleId, refund)           { return NEON.save.sellModule(mo
 // exhaustive reset, not by the act of reuse.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-const particles = [];
+/** @type {any[]} */ const particles = [];
 const _particlePool = [];
 
 function _newParticleSlot() {
@@ -2574,7 +2574,7 @@ function tileHasLOS(x1, y1, tx, ty, map) {
 // _init() so there is zero stale bleed-through between reuses. Release
 // happens in the main update loop when p.dead becomes true.
 const PROJECTILE_CAP = 200;
-const projectiles = [];
+/** @type {any[]} */ const projectiles = [];
 const _projPool = [];
 
 function releaseProjectile(p) {

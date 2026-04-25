@@ -1,19 +1,19 @@
 'use strict';
 
 // ─── Enemies ─────────────────────────────────────────────────────────────────
-const enemies = [];
-const items   = [];
-const hazardZones = [];
-const vcores  = [];
-const crates  = [];
-const beacons = [];
-const mines   = [];
-const shieldGens = [];
-const cameras = [];
-const lasers  = [];
-const wallTurrets = [];
-const disruptionFields = [];
-const gravityWells = [];
+/** @type {any[]} */ const enemies = [];
+/** @type {any[]} */ const items   = [];
+/** @type {any[]} */ const hazardZones = [];
+/** @type {any[]} */ const vcores  = [];
+/** @type {any[]} */ const crates  = [];
+/** @type {any[]} */ const beacons = [];
+/** @type {any[]} */ const mines   = [];
+/** @type {any[]} */ const shieldGens = [];
+/** @type {any[]} */ const cameras = [];
+/** @type {any[]} */ const lasers  = [];
+/** @type {any[]} */ const wallTurrets = [];
+/** @type {any[]} */ const disruptionFields = [];
+/** @type {any[]} */ const gravityWells = [];
 
 // Phase 2c — room-scoped enemy index. Support structure for Phase 4 broadphase
 // (wall turret acquisition, NEXUS link candidates, room-clear detection, frenzy

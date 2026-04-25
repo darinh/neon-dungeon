@@ -1,11 +1,24 @@
+// @ts-check
 'use strict';
+
+// Phase 3D: Proxy-based alias for the cross-file `game` global. `const game`
+// in src/game.js infers a concrete shape, but render.js reads/writes many
+// runtime-added properties (game.floorTime, game._cachedCores, etc.). The
+// proxy widens access to `any` and defers resolution until first use. See
+// the matching pattern in src/platform.js.
+/** @type {any} */
+const _RG = new Proxy({}, {
+  get: (_t, p) => /** @type {any} */ (game)[p],
+  set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
+  has: (_t, p) => p in /** @type {any} */ (game),
+});
 
 // UNCHAINED #40: BIOME_PALETTES comes from src/data/palettes.js (loaded first
 // in index.html). Helper resolves the palette for the current floor.
 function currentBiomePalette() {
   try {
-    if (typeof NEON !== 'undefined' && NEON.biomes && typeof game !== 'undefined' && game.floor) {
-      const a = NEON.biomes.areaForFloor(game.floor);
+    if (typeof NEON !== 'undefined' && NEON.biomes && typeof game !== 'undefined' && _RG.floor) {
+      const a = NEON.biomes.areaForFloor(_RG.floor);
       const p = (typeof BIOME_PALETTES !== 'undefined') && BIOME_PALETTES[a && a.palette];
       if (p) return p;
     }
@@ -17,6 +30,9 @@ function currentBiomePalette() {
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
+/**
+ * @param {any} player
+ */
 function getCamera(player) {
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
   // Allow camera overscroll near edges so player remains visible under minimap / touch controls
@@ -34,6 +50,11 @@ function getCamera(player) {
   return { x: camX, y: camY };
 }
 
+/**
+ * @param {any} tx
+ * @param {any} ty
+ * @param {any} floor
+ */
 function _labDecoHash(tx, ty, floor) {
   let h = ((tx * 73856093) ^ (ty * 19349663) ^ ((floor | 0) * 83492791)) >>> 0;
   h ^= h >>> 13;
@@ -43,9 +64,13 @@ function _labDecoHash(tx, ty, floor) {
 // Reused per-tile scratch context — avoids allocating a fresh object on
 // every decorated floor tile in the render hot path. Single-threaded
 // rendering means consumers never need to retain the reference.
-const _DECO_CX = { h: 0, roll: 0, wallSide: null, flicker: 0 };
+/** @type {{ h: number, roll: number, wallSide: ('N'|'S'|'E'|'W'|null), flicker: number, alarmEligible: boolean, decorEligible: boolean }} */
+const _DECO_CX = { h: 0, roll: 0, wallSide: null, flicker: 0, alarmEligible: false, decorEligible: false };
 // Hoisted to module scope so _decoContext does not allocate per call.
 const _DECO_NEIGHBOR_OFFSETS = [[0,-1],[0,1],[-1,0],[1,0]];
+/**
+ * @param {any} t
+ */
 function _decoIsSolid(t) {
   return t===T.WALL || t===T.VOID || t===T.CRACKED || t===T.LOCKED_R ||
          t===T.LOCKED_B || t===T.LOCKED_G || t===T.CRATE;
@@ -56,10 +81,15 @@ function _decoIsSolid(t) {
 // wall (used to anchor wall-mounted props) + a per-tile flicker. Returns
 // null when the tile is unsuitable (out of bounds, neighbouring an
 // interactable / hazard) so caller can early-return without drawing.
+/**
+ * @param {any} dungeon
+ * @param {any} tx
+ * @param {any} ty
+ */
 function _decoContext(dungeon, tx, ty) {
-  if (!game || game.floor < 2) return null;
+  if (!game || _RG.floor < 2) return null;
   const map = dungeon.map;
-  const h = _labDecoHash(tx, ty, game.floor);
+  const h = _labDecoHash(tx, ty, _RG.floor);
   const roll = h % 100;
   // Tile must be eligible for SOMETHING — regular biome decor (roll<11)
   // or an alarm-light beacon (alarm-light's own gate, ~4.3% of tiles).
@@ -71,8 +101,10 @@ function _decoContext(dungeon, tx, ty) {
   if (!decorEligible && !alarmEligible) return null;
 
   for (let i = 0; i < 4; i++) {
-    const dx = _DECO_NEIGHBOR_OFFSETS[i][0];
-    const dy = _DECO_NEIGHBOR_OFFSETS[i][1];
+    const off = _DECO_NEIGHBOR_OFFSETS[i];
+    if (!off) continue;
+    const dx = off[0];
+    const dy = off[1];
     const nt = map[ty + dy]?.[tx + dx];
     if (nt == null) return null;
     if (isDoor(nt) || nt === T.DOOR_OPEN || nt === T.STAIRS || nt === T.TERMINAL ||
@@ -89,7 +121,7 @@ function _decoContext(dungeon, tx, ty) {
   _DECO_CX.h = h;
   _DECO_CX.roll = roll;
   _DECO_CX.wallSide = n ? 'N' : s ? 'S' : w ? 'W' : e ? 'E' : null;
-  _DECO_CX.flicker = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 8 + (h % 17));
+  _DECO_CX.flicker = 0.82 + 0.18 * Math.sin((_RG.floorTime || 0) * 8 + (h % 17));
   _DECO_CX.alarmEligible = alarmEligible;
   _DECO_CX.decorEligible = decorEligible;
   return _DECO_CX;
@@ -100,8 +132,16 @@ function _decoContext(dungeon, tx, ty) {
 // can use the module-scope ctx / TILE / shadow* state already in flight.
 // Drawn on top of the existing wall-mount housing so the bulb sits where
 // a console light would, but pulses red and washes the floor in front.
+/**
+ * @param {any} sx
+ * @param {any} sy
+ * @param {any} brightness
+ * @param {any} wallSide
+ * @param {any} h
+ * @param {any} baseAlpha
+ */
 function _drawAlarmLight(sx, sy, brightness, wallSide, h, baseAlpha) {
-  const t = (typeof game !== 'undefined' && game) ? (game.floorTime || 0) : 0;
+  const t = (typeof game !== 'undefined' && game) ? (_RG.floorTime || 0) : 0;
   const ap = (typeof NEON !== 'undefined' && NEON.alarmLight)
     ? NEON.alarmLight.intensity(t, h)
     : 0.5;
@@ -156,10 +196,19 @@ function _drawAlarmLight(sx, sy, brightness, wallSide, h, baseAlpha) {
 // guarantees readable spacing around doors / hazards / interactables.
 const _BIOME_DECOR = {
   // sandbox / NEON DUNGEON — original cyan dressing (the simulation aesthetic)
+  /**
+   * @param {any} sx
+   * @param {any} sy
+   * @param {any} brightness
+   * @param {any} cx
+   */
   sandbox(sx, sy, brightness, cx) {
     const { h, roll, wallSide, flicker } = cx;
     ctx.save();
     ctx.globalAlpha = brightness * 0.45 * flicker;
+    /**
+     * @param {any} roll
+     */
     if (roll < 4 && wallSide) {
       ctx.fillStyle = '#0e2230';
       if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
@@ -169,6 +218,9 @@ const _BIOME_DECOR = {
       ctx.shadowBlur = 6;
       ctx.shadowColor = '#44ccff';
       ctx.fillStyle = '#44ccff';
+      /**
+       * @param {any} wallSide
+       */
       if (wallSide === 'N' || wallSide === 'S') {
         ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
         ctx.fillRect(sx + 9, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
@@ -202,10 +254,19 @@ const _BIOME_DECOR = {
 
   // cache / THE LAB — sterile white wall consoles, steel pipes,
   // biohazard canisters with caution-yellow bands.
+  /**
+   * @param {any} sx
+   * @param {any} sy
+   * @param {any} brightness
+   * @param {any} cx
+   */
   cache(sx, sy, brightness, cx) {
     const { h, roll, wallSide, flicker } = cx;
     ctx.save();
     ctx.globalAlpha = brightness * 0.50 * flicker;
+    /**
+     * @param {any} roll
+     */
     if (roll < 4 && wallSide) {
       ctx.fillStyle = '#1e2228';
       if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
@@ -215,6 +276,9 @@ const _BIOME_DECOR = {
       ctx.shadowBlur = 5;
       ctx.shadowColor = '#ffffff';
       ctx.fillStyle = '#e8eef2';
+      /**
+       * @param {any} wallSide
+       */
       if (wallSide === 'N' || wallSide === 'S') {
         ctx.fillRect(sx + 5, sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 2);
         ctx.shadowColor = '#ff4466'; ctx.fillStyle = '#ff4466';
@@ -248,10 +312,19 @@ const _BIOME_DECOR = {
 
   // firewall / THE COMPLEX — sodium-vapor wall sconces, dark conduit runs
   // with amber accents, concrete bollards with caution stripes.
+  /**
+   * @param {any} sx
+   * @param {any} sy
+   * @param {any} brightness
+   * @param {any} cx
+   */
   firewall(sx, sy, brightness, cx) {
     const { h, roll, wallSide, flicker } = cx;
     ctx.save();
     ctx.globalAlpha = brightness * 0.45 * flicker;
+    /**
+     * @param {any} roll
+     */
     if (roll < 4 && wallSide) {
       ctx.fillStyle = '#1a1612';
       if (wallSide === 'N') ctx.fillRect(sx + 5, sy + 2, TILE - 10, 3);
@@ -290,11 +363,20 @@ const _BIOME_DECOR = {
   // uplink / THE WILDS — moss patches on stone, twisting vines, glowing
   // fungi clusters. Slower, breathier flicker (it is a forest, not a
   // server room).
+  /**
+   * @param {any} sx
+   * @param {any} sy
+   * @param {any} brightness
+   * @param {any} cx
+   */
   uplink(sx, sy, brightness, cx) {
     const { h, roll, wallSide } = cx;
-    const breath = 0.85 + 0.15 * Math.sin((game.floorTime || 0) * 1.5 + (h % 9));
+    const breath = 0.85 + 0.15 * Math.sin((_RG.floorTime || 0) * 1.5 + (h % 9));
     ctx.save();
     ctx.globalAlpha = brightness * 0.55 * breath;
+    /**
+     * @param {any} roll
+     */
     if (roll < 4 && wallSide) {
       ctx.fillStyle = '#2a4018';
       if (wallSide === 'N') ctx.fillRect(sx + 3, sy + 2, TILE - 6, 4);
@@ -302,6 +384,9 @@ const _BIOME_DECOR = {
       else if (wallSide === 'W') ctx.fillRect(sx + 2, sy + 3, 4, TILE - 6);
       else ctx.fillRect(sx + TILE - 6, sy + 3, 4, TILE - 6);
       ctx.fillStyle = '#5a8030';
+      /**
+       * @param {any} wallSide
+       */
       if (wallSide === 'N' || wallSide === 'S') {
         ctx.fillRect(sx + 4 + (h & 3), sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 1);
         ctx.fillRect(sx + 9 + ((h >> 2) & 3), sy + (wallSide === 'N' ? 3 : TILE - 5), 2, 1);
@@ -337,10 +422,19 @@ const _BIOME_DECOR = {
 
   // opennet / THE GRID — holographic ad strips (alternating magenta/cyan),
   // electric magenta cable runs, trash + vending-machine pile.
+  /**
+   * @param {any} sx
+   * @param {any} sy
+   * @param {any} brightness
+   * @param {any} cx
+   */
   opennet(sx, sy, brightness, cx) {
     const { h, roll, wallSide, flicker } = cx;
     ctx.save();
     ctx.globalAlpha = brightness * 0.50 * flicker;
+    /**
+     * @param {any} roll
+     */
     if (roll < 4 && wallSide) {
       const hot = ((h >> 3) & 1) === 0;
       ctx.fillStyle = '#15082a';
@@ -351,6 +445,9 @@ const _BIOME_DECOR = {
       ctx.shadowBlur = 7;
       ctx.shadowColor = hot ? '#ff44aa' : '#44ddff';
       ctx.fillStyle = hot ? '#ff44aa' : '#44ddff';
+      /**
+       * @param {any} wallSide
+       */
       if (wallSide === 'N' || wallSide === 'S') {
         ctx.fillRect(sx + 4, sy + (wallSide === 'N' ? 3 : TILE - 5), TILE - 8, 1);
       } else {
@@ -391,13 +488,21 @@ const _BIOME_DECOR = {
 //      is the design rule). Requires wall-adjacent + biome whitelist +
 //      alarm-light's own gate (~4.3% of all tiles).
 //   2. Regular biome decor pass — only if cx.decorEligible (roll<11).
+/**
+ * @param {any} dungeon
+ * @param {any} tx
+ * @param {any} ty
+ * @param {any} sx
+ * @param {any} sy
+ * @param {any} brightness
+ */
 function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
   const cx = _decoContext(dungeon, tx, ty);
   if (!cx) return;
   let id = 'sandbox';
   try {
     if (typeof NEON !== 'undefined' && NEON.biomes) {
-      const a = NEON.biomes.areaForFloor(game.floor);
+      const a = NEON.biomes.areaForFloor(_RG.floor);
       if (a && a.id) id = a.id;
     }
   } catch (_) {}
@@ -409,11 +514,16 @@ function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
     return;
   }
   if (!cx.decorEligible) return;
-  const fn = _BIOME_DECOR[id] || _BIOME_DECOR.sandbox;
+  const fn = /** @type {any} */ (_BIOME_DECOR)[id] || _BIOME_DECOR.sandbox;
   fn(sx, sy, brightness, cx);
 }
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
+/**
+ * @param {any} dungeon
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawWorld(dungeon, camX, camY) {
   const pal = currentBiomePalette();
   const startX=Math.max(0,Math.floor(camX/TILE)-1);
@@ -432,14 +542,20 @@ function drawWorld(dungeon, camX, camY) {
 
       ctx.save();
       ctx.globalAlpha=brightness;
+      /**
+       * @param {any} tile
+       */
       switch(tile) {
         case T.WALL: {
-          const isSealed = game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx);
+          const isSealed = _RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx);
           ctx.fillStyle = isSealed ? '#3d2828' : pal.wallFill;
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.fillStyle = isSealed ? '#724040' : pal.wallHi;
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
+          /**
+           * @param {any} isSealed
+           */
           if (isSealed) {
             ctx.shadowBlur=8; ctx.shadowColor='#ff3333';
             ctx.fillStyle='#ff3333';
@@ -580,11 +696,14 @@ function drawWorld(dungeon, camX, camY) {
         case T.ARC: {
           ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Phase-based rendering: bright when active, dim when off
-          const arcActive = Math.sin((game.floorTime||0) * Math.PI) > 0;
+          const arcActive = Math.sin((_RG.floorTime||0) * Math.PI) > 0;
           const aAlpha = arcActive ? 0.5 + 0.2 * Math.sin(lastTime/80) : 0.1;
           ctx.globalAlpha = brightness * aAlpha;
           ctx.fillStyle = arcActive ? '#44ccff' : '#1a3344';
           ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          /**
+           * @param {any} arcActive
+           */
           if (arcActive) {
             // Crackling arc lines
             ctx.shadowBlur=6; ctx.shadowColor='#00ccff';
@@ -668,8 +787,11 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,2);
           ctx.fillRect(sx,sy,2,TILE);
           // Show crack lines only when player is within 3 tiles
-          const pdx=tx-Math.floor(game.player.x), pdy=ty-Math.floor(game.player.y);
+          const pdx=tx-Math.floor(_RG.player.x), pdy=ty-Math.floor(_RG.player.y);
           const pDist=Math.sqrt(pdx*pdx+pdy*pdy);
+          /**
+           * @param {any} pDist
+           */
           if (pDist <= 3) {
             const crackAlpha = brightness * Math.max(0.15, 0.5 * (1 - pDist/3));
             ctx.globalAlpha = crackAlpha;
@@ -714,6 +836,9 @@ function drawWorld(dungeon, camX, camY) {
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
+/**
+ * @param {any} player
+ */
 function drawHUD(player) {
   const y = layout.hudTop;
   const lx = 14 + safeLeft;   // left anchor respecting safe area
@@ -740,11 +865,11 @@ function drawHUD(player) {
 
     const mid = lx + hpW + 10;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`FLR:${game.floor}`, mid, r1 + 10);
+    ctx.fillText(`FLR:${_RG.floor}`, mid, r1 + 10);
 
     // Floor modifier badge
-    if (game.modifier) {
-      const m = getMod();
+    if (_RG.modifier) {
+      const m = /** @type {any} */ (getMod());
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour; ctx.font=`${fs-1}px monospace`;
@@ -775,8 +900,8 @@ function drawHUD(player) {
     // `game._cachedCores` (updated on every pickup/vacuum) to avoid a
     // per-frame localStorage hit.
     {
-      const _cores = game._cachedCores | 0;
-      const pulse = (game._coreHudPulse || 0);
+      const _cores = _RG._cachedCores | 0;
+      const pulse = (_RG._coreHudPulse || 0);
       const pulseCol = pulse > 0 ? '#44e5ff' : '#a866ff';
       ctx.save();
       if (pulse > 0) { ctx.shadowBlur = 8; ctx.shadowColor = '#44e5ff'; }
@@ -804,7 +929,7 @@ function drawHUD(player) {
 
     // Weapon — truncate if needed, use rarity colour for affixed weapons
     const wRarity = player.weapon._rarity || 0;
-    const wColour = wRarity > 0 ? RARITY_COLOURS[wRarity] : '#ff00c8';
+    const wColour = /** @type {string} */ (wRarity > 0 ? RARITY_COLOURS[wRarity] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColour;
     ctx.fillStyle=wColour; ctx.font=`${fs}px monospace`;
     const weapMaxW = W - (statsX + 80) - safeRight - 10;
@@ -832,7 +957,7 @@ function drawHUD(player) {
     }
     // Hackware indicator (compact)
     if (player.hackware) {
-      const hw = HACKWARE[player.hackware];
+      const hw = /** @type {any} */ (HACKWARE)[player.hackware];
       ctx.fillStyle=player.hackwareCooldown>0?'#665533':hw.colour; ctx.font=`${fs}px monospace`;
       const hwX = player.shards > 0 ? statsX + 120 : statsX + 74;
       ctx.fillText(`F:${hw.icon}`, hwX, r2 + 22);
@@ -869,11 +994,11 @@ function drawHUD(player) {
     ctx.fillStyle='#e0e0ff';
     ctx.fillText(`ATK:${player.atk}`, colBase + 60, y + 10);
     ctx.fillText(`DEF:${player.def}`, colBase + 105, y + 10);
-    ctx.fillText(`FLR:${game.floor}`, colBase + 160, y + 10);
+    ctx.fillText(`FLR:${_RG.floor}`, colBase + 160, y + 10);
 
     // Floor modifier badge
-    if (game.modifier) {
-      const m = getMod();
+    if (_RG.modifier) {
+      const m = /** @type {any} */ (getMod());
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour;
@@ -882,7 +1007,7 @@ function drawHUD(player) {
     }
 
     const wRarL = player.weapon._rarity || 0;
-    const wColL = wRarL > 0 ? RARITY_COLOURS[wRarL] : '#ff00c8';
+    const wColL = /** @type {string} */ (wRarL > 0 ? RARITY_COLOURS[wRarL] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColL;
     ctx.fillStyle=wColL;
     let wNameL = player.weapon.displayName || player.weapon.name;
@@ -908,7 +1033,7 @@ function drawHUD(player) {
     }
     // Hackware indicator (landscape)
     if (player.hackware) {
-      const hw = HACKWARE[player.hackware];
+      const hw = /** @type {any} */ (HACKWARE)[player.hackware];
       const hwCol = player.hackwareCooldown > 0 ? '#665533' : hw.colour;
       ctx.fillStyle=hwCol;
       const hwLabel = player.hackwareCooldown > 0
@@ -948,8 +1073,8 @@ function drawHUD(player) {
     // UNCHAINED #39: cores readout, just left of credits (pulses on pickup).
     // Reads cached counter on game — no per-frame localStorage hit.
     {
-      const _cores = game._cachedCores | 0;
-      const pulse = (game._coreHudPulse || 0);
+      const _cores = _RG._cachedCores | 0;
+      const pulse = (_RG._coreHudPulse || 0);
       ctx.save();
       if (pulse > 0) { ctx.shadowBlur = 10; ctx.shadowColor = '#44e5ff'; }
       ctx.fillStyle = pulse > 0 ? '#44e5ff' : '#a866ff';
@@ -966,13 +1091,16 @@ function drawHUD(player) {
 
   // Key indicators (above HUD bar)
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
+  /**
+   * @param {any} hasKeys
+   */
   if (hasKeys) {
     ctx.save();
     const keyY = layout.hudTop - 18;
     let kx = 14 + safeLeft;
     const keyData = [['red','#ff3333'],['blue','#3388ff'],['gold','#ffcc00']];
     for (const [col, hex] of keyData) {
-      if (player.keys[col] > 0) {
+      if (col != null && hex != null && player.keys[col] > 0) {
         ctx.shadowBlur=6; ctx.shadowColor=hex;
         ctx.fillStyle=hex; ctx.font='bold 12px monospace';
         ctx.fillText('🔑×'+player.keys[col], kx, keyY);
@@ -999,11 +1127,11 @@ function drawHUD(player) {
 
 // ─── Boss HUD Bar ─────────────────────────────────────────────────────────────
 function drawBossBar() {
-  if (!game.bossAlive && game.bossBarAnim <= 0) return;
+  if (!_RG.bossAlive && _RG.bossBarAnim <= 0) return;
   const boss = enemies.find(e => e.isBoss && !e.dead);
-  if (!boss && game.bossBarAnim <= 0) return;
+  if (!boss && _RG.bossBarAnim <= 0) return;
 
-  const anim = game.bossBarAnim;
+  const anim = _RG.bossBarAnim;
   const slideY = -30 * (1 - easeOutCubic(anim));
   const alpha = anim;
 
@@ -1019,7 +1147,7 @@ function drawBossBar() {
   ctx.globalAlpha = alpha;
 
   // Boss name
-  const name = BOSS_NAMES[game.bossType] || game.bossType || 'BOSS';
+  const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
   const barCx = barX + barW / 2;
   ctx.textAlign = 'center';
   ctx.font = 'bold 10px monospace';
@@ -1040,7 +1168,10 @@ function drawBossBar() {
   ctx.fillRect(barX, barY, barW, barH);
 
   // Ghost HP (trailing damage indicator)
-  const ghostFrac = Math.max(0, Math.min(1, game.bossHpGhost / boss.maxHp));
+  const ghostFrac = Math.max(0, Math.min(1, _RG.bossHpGhost / boss.maxHp));
+  /**
+   * @param {any} ghostFrac
+   */
   if (ghostFrac > 0) {
     ctx.fillStyle = 'rgba(255,100,100,0.25)';
     ctx.fillRect(barX, barY, barW * ghostFrac, barH);
@@ -1048,6 +1179,9 @@ function drawBossBar() {
 
   // Actual HP bar with subtle gradient
   const hpFrac = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+  /**
+   * @param {any} hpFrac
+   */
   if (hpFrac > 0) {
     ctx.shadowBlur = 4; ctx.shadowColor = col;
     ctx.fillStyle = col;
@@ -1062,6 +1196,9 @@ function drawBossBar() {
   // Phase threshold notch marks
   const marks = getBossPhaseMarks(boss);
   for (const m of marks) {
+    /**
+     * @param {any} m
+     */
     if (m > 0 && m < 1) {
       const nx = barX + barW * m;
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
@@ -1080,6 +1217,9 @@ function drawBossBar() {
   ctx.restore();
 }
 
+/**
+ * @param {any} t
+ */
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
 // ─── Biome Intro Card ────────────────────────────────────────────────────────
@@ -1087,8 +1227,8 @@ function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 // Any-key skips (game.biomeCardTimer zeroed in updatePlaying). Renders above
 // playing world, below pause/menu overlays.
 function drawBiomeCard() {
-  const t = game.biomeCardTimer;
-  const area = game.biomeCardArea;
+  const t = _RG.biomeCardTimer;
+  const area = _RG.biomeCardArea;
   if (!t || t <= 0 || !area) return;
   const dur = 3.0;
   const fadeIn = 0.35, fadeOut = 0.5;
@@ -1153,9 +1293,12 @@ function drawBiomeCard() {
   const lineH = narrow ? 15 : 18;
   const textTop = cy + (narrow ? 56 : 70);
   for (let i = 0; i < Math.min(lines.length, 3); i++) {
-    ctx.fillText(lines[i], W / 2, textTop + i * lineH);
+    ctx.fillText(lines[i] || '', W / 2, textTop + i * lineH);
   }
 
+  /**
+   * @param {any} elapsed
+   */
   if (elapsed > 0.5) {
     ctx.globalAlpha = alpha * 0.5;
     ctx.fillStyle = '#666677';
@@ -1172,14 +1315,18 @@ function drawBiomeCard() {
 // load, newly visited tiles, door/unlock/mine events, seal toggles, and
 // map-reveal events. Dynamic pixels (enemies, POIs, player, ARC pulse) are
 // overlaid live after drawImage.
+/**
+ * @param {any} dungeon
+ * @param {any} echoMap
+ */
 function rebuildMinimapBase(dungeon, echoMap) {
   const MW = 120, MH = 80;
   const pal = currentBiomePalette();
-  let off = game._minimapCanvas;
+  let off = _RG._minimapCanvas;
   if (!off) {
     off = document.createElement('canvas');
     off.width = MW; off.height = MH;
-    game._minimapCanvas = off;
+    _RG._minimapCanvas = off;
   }
   const o = off.getContext('2d');
   o.clearRect(0, 0, MW, MH);
@@ -1199,8 +1346,11 @@ function rebuildMinimapBase(dungeon, echoMap) {
         if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
         continue;
       }
+      /**
+       * @param {any} tile
+       */
       if (tile === T.WALL || tile === T.CRACKED) {
-        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
+        col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
@@ -1218,10 +1368,14 @@ function rebuildMinimapBase(dungeon, echoMap) {
       if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
     }
   }
-  game._minimapArcTiles = arcTiles;
-  game._minimapEchoMap = echoMap;
+  _RG._minimapArcTiles = arcTiles;
+  _RG._minimapEchoMap = echoMap;
 }
 
+/**
+ * @param {any} dungeon
+ * @param {any} player
+ */
 function drawMinimap(dungeon, player) {
   const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
   ctx.save();
@@ -1230,21 +1384,24 @@ function drawMinimap(dungeon, player) {
   ctx.strokeStyle='#2d2d5e'; ctx.lineWidth=1; ctx.strokeRect(MX-2,MY-2,MW+4,MH+4);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
-  const echoMap = game.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
+  const echoMap = _RG.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
 
   // Rebuild cache on demand. echoMap flip also forces rebuild.
-  if (game._minimapDirty || !game._minimapCanvas || game._minimapEchoMap !== echoMap) {
+  if (_RG._minimapDirty || !_RG._minimapCanvas || _RG._minimapEchoMap !== echoMap) {
     rebuildMinimapBase(dungeon, echoMap);
-    game._minimapDirty = false;
+    _RG._minimapDirty = false;
   }
-  ctx.drawImage(game._minimapCanvas, MX, MY);
+  ctx.drawImage(_RG._minimapCanvas, MX, MY);
 
   // Live ARC pulse overlay (bright state; dim state is baked into cache)
-  const arcActive = Math.sin((game.floorTime || 0) * Math.PI) > 0;
-  if (arcActive && game._minimapArcTiles && game._minimapArcTiles.length) {
+  const arcActive = Math.sin((_RG.floorTime || 0) * Math.PI) > 0;
+  /**
+   * @param {any} arcActive
+   */
+  if (arcActive && _RG._minimapArcTiles && _RG._minimapArcTiles.length) {
     ctx.fillStyle = '#44ccff';
     const cellW = Math.max(1, sx), cellH = Math.max(1, sy);
-    for (const k of game._minimapArcTiles) {
+    for (const k of _RG._minimapArcTiles) {
       const ty = (k / MAP_W) | 0, tx = k % MAP_W;
       ctx.fillRect(MX + tx * sx, MY + ty * sy, cellW, cellH);
     }
@@ -1257,6 +1414,9 @@ function drawMinimap(dungeon, player) {
     for (let tx=0;tx<MAP_W;tx++) {
       if (!dungeon.visited[ty][tx]) continue;
       const tile = dungeon.map[ty][tx];
+      /**
+       * @param {any} tile
+       */
       if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) {
         pois.push({tile, px:MX+tx*sx+sx/2, py:MY+ty*sy+sy/2});
       }
@@ -1273,7 +1433,7 @@ function drawMinimap(dungeon, player) {
     // Cloaked PHANTOMs: only show via Thermal Optics (dim purple)
     if (e.type === 'PHANTOM' && !e.visible) {
       if (!thermalOptics) continue;
-      const phPulse = 0.3 + 0.2 * Math.sin((game.floorTime||0) * 4);
+      const phPulse = 0.3 + 0.2 * Math.sin((_RG.floorTime||0) * 4);
       ctx.globalAlpha = phPulse;
       ctx.fillStyle = '#cc00ff';
       ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
@@ -1283,7 +1443,7 @@ function drawMinimap(dungeon, player) {
     // Phased WRAITHs: only show via Thermal Optics (dim spectral cyan-green)
     if (e._wrPhased) {
       if (!thermalOptics) continue;
-      const wrPulse = 0.2 + 0.15 * Math.sin((game.floorTime||0) * 5);
+      const wrPulse = 0.2 + 0.15 * Math.sin((_RG.floorTime||0) * 5);
       ctx.globalAlpha = wrPulse;
       ctx.fillStyle = '#66ffcc';
       ctx.fillRect(MX+e.x*sx-1,MY+e.y*sy-1,2,2);
@@ -1292,14 +1452,14 @@ function drawMinimap(dungeon, player) {
     }
     if (!thermalOptics && !inSight) continue;
     if (e._isBounty) {
-      const bPulse = 0.7 + 0.3 * Math.sin((game.floorTime||0) * 3);
+      const bPulse = 0.7 + 0.3 * Math.sin((_RG.floorTime||0) * 3);
       ctx.globalAlpha=bPulse;
       ctx.shadowBlur=4; ctx.shadowColor='#ffd700';
       ctx.fillStyle='#ffd700';
       ctx.fillRect(MX+e.x*sx-2,MY+e.y*sy-2,4,4);
       ctx.globalAlpha=1; ctx.shadowBlur=0;
     } else if (e.elite && e.eliteAffix) {
-      ctx.fillStyle=ELITE_AFFIXES[e.eliteAffix].colour;
+      ctx.fillStyle=/** @type {any} */ (ELITE_AFFIXES)[e.eliteAffix].colour;
       ctx.fillRect(MX+e.x*sx-1.5,MY+e.y*sy-1.5,3,3);
     } else {
       ctx.fillStyle= thermalOptics && !inSight ? '#ff666688' : '#ff3333';
@@ -1308,7 +1468,7 @@ function drawMinimap(dungeon, player) {
   }
 
   // POI markers — larger glowing indicators for key locations
-  const pulse = 0.65 + 0.35 * Math.sin((game.floorTime||0) * 2.5);
+  const pulse = 0.65 + 0.35 * Math.sin((_RG.floorTime||0) * 2.5);
   for (const p of pois) {
     let col, sz;
     if (p.tile===T.STAIRS||p.tile===T.TERMINAL) { col='#ffffff'; sz=3; }
@@ -1324,23 +1484,23 @@ function drawMinimap(dungeon, player) {
     ctx.fillRect(p.px-sz/2, p.py-sz/2, sz, sz);
   }
   // Boss entrance markers when sealed
-  if (game.bossSealed && game.bossEntrances) {
-    const bPulse = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 4);
+  if (_RG.bossSealed && _RG.bossEntrances) {
+    const bPulse = 0.5 + 0.5 * Math.sin((_RG.floorTime||0) * 4);
     ctx.globalAlpha=bPulse;
     ctx.shadowBlur=6; ctx.shadowColor='#ff3333';
     ctx.fillStyle='#ff3333';
-    for (const be of game.bossEntrances) {
+    for (const be of _RG.bossEntrances) {
       if (!dungeon.visited[be.y]?.[be.x]) continue;
       ctx.fillRect(MX+be.x*sx+sx/2-2, MY+be.y*sy+sy/2-2, 4, 4);
     }
   }
   // Challenge entrance markers when sealed
-  if (game.challengeSealed && game.challengeEntrances) {
-    const cPulse = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 3.5);
+  if (_RG.challengeSealed && _RG.challengeEntrances) {
+    const cPulse = 0.5 + 0.5 * Math.sin((_RG.floorTime||0) * 3.5);
     ctx.globalAlpha=cPulse;
     ctx.shadowBlur=6; ctx.shadowColor='#ff6633';
     ctx.fillStyle='#ff6633';
-    for (const ce of game.challengeEntrances) {
+    for (const ce of _RG.challengeEntrances) {
       if (!dungeon.visited[ce.y]?.[ce.x]) continue;
       ctx.fillRect(MX+ce.x*sx+sx/2-2, MY+ce.y*sy+sy/2-2, 4, 4);
     }
@@ -1358,7 +1518,7 @@ function drawMinimap(dungeon, player) {
     if (b.dead) continue;
     const tx = Math.floor(b.x), ty = Math.floor(b.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
-    const bp = b.active ? (0.5 + 0.5 * Math.sin((game.floorTime||0) * 6)) : (0.6 + 0.3 * Math.sin((game.floorTime||0) * 2));
+    const bp = b.active ? (0.5 + 0.5 * Math.sin((_RG.floorTime||0) * 6)) : (0.6 + 0.3 * Math.sin((_RG.floorTime||0) * 2));
     ctx.globalAlpha = bp;
     ctx.shadowBlur = 4; ctx.shadowColor = '#ff2222';
     ctx.fillStyle = b.active ? '#ff0000' : '#ff3333';
@@ -1372,7 +1532,7 @@ function drawMinimap(dungeon, player) {
     const tx = Math.floor(m.x), ty = Math.floor(m.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
     if (m.state === 'armed') {
-      ctx.globalAlpha = 0.5 + 0.5 * Math.sin((game.floorTime||0) * 12);
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin((_RG.floorTime||0) * 12);
       ctx.fillStyle = '#ff4400';
     } else {
       ctx.globalAlpha = 0.6;
@@ -1386,7 +1546,7 @@ function drawMinimap(dungeon, player) {
     if (g.dead) continue;
     const tx = Math.floor(g.x), ty = Math.floor(g.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
-    ctx.globalAlpha = 0.6 + 0.3 * Math.sin((game.floorTime||0) * 2);
+    ctx.globalAlpha = 0.6 + 0.3 * Math.sin((_RG.floorTime||0) * 2);
     ctx.shadowBlur = 4; ctx.shadowColor = '#00ccff';
     ctx.fillStyle = '#00ccff';
     ctx.fillRect(MX+g.x*sx-1, MY+g.y*sy-1, 2, 2);
@@ -1398,7 +1558,7 @@ function drawMinimap(dungeon, player) {
     if (cam.dead) continue;
     const tx = Math.floor(cam.x), ty = Math.floor(cam.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
-    const pulse = cam.state === 'alerted' ? 0.9 : 0.5 + 0.3 * Math.sin((game.floorTime||0) * 2);
+    const pulse = cam.state === 'alerted' ? 0.9 : 0.5 + 0.3 * Math.sin((_RG.floorTime||0) * 2);
     ctx.globalAlpha = pulse;
     ctx.shadowBlur = 3; ctx.shadowColor = '#ff3300';
     ctx.fillStyle = cam.state === 'alerted' ? '#ff4422' : '#ff3300';
@@ -1449,7 +1609,7 @@ function drawMinimap(dungeon, player) {
     if (f.dead) continue;
     const tx = Math.floor(f.x), ty = Math.floor(f.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
-    ctx.globalAlpha = 0.4 + 0.3 * Math.sin((game.floorTime||0) * 4);
+    ctx.globalAlpha = 0.4 + 0.3 * Math.sin((_RG.floorTime||0) * 4);
     ctx.shadowBlur = 3; ctx.shadowColor = '#ff44aa';
     ctx.fillStyle = '#ff44aa';
     ctx.fillRect(MX+f.x*sx-1, MY+f.y*sy-1, 2, 2);
@@ -1468,6 +1628,9 @@ function drawMinimap(dungeon, player) {
 // UNCHAINED #38: Active temp-boost HUD strip, anchored below the minimap.
 // One pill per active boost. No-op when nothing's active so it costs zero
 // pixels on a bare player.
+/**
+ * @param {any} player
+ */
 function drawBoostStrip(player) {
   if (!player || typeof NEON === 'undefined' || !NEON.boosts) return;
   const list = NEON.boosts.getActiveBoostList(player);
@@ -1510,6 +1673,10 @@ const ROOM_LABEL_COLOURS = {
   event:'#44ffcc', boss:'#ff3333'
 };
 
+/**
+ * @param {any} dungeon
+ * @param {any} player
+ */
 function drawExpandedMinimap(dungeon, player) {
   const pad = 20;
   const pal = currentBiomePalette();
@@ -1537,7 +1704,7 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillStyle = 'rgba(8,8,20,0.92)';
   ctx.fillRect(mx, my, mw, mh);
 
-  const echoMap = game.mapRevealed;
+  const echoMap = _RG.mapRevealed;
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   const pois = [];
 
@@ -1558,13 +1725,16 @@ function drawExpandedMinimap(dungeon, player) {
         continue;
       }
 
+      /**
+       * @param {any} tile
+       */
       if (tile === T.WALL || tile === T.CRACKED) {
-        col = (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx))
+        col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
-      else if (tile === T.ARC) col = Math.sin((game.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
+      else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';
       else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
       else if (tile === T.VENDOR) col = '#39ff14';
@@ -1594,9 +1764,9 @@ function drawExpandedMinimap(dungeon, player) {
     if (r.roomType === 'secret' && (!r.secretRevealed)) continue;
     // Only show if room center is visited
     if (!dungeon.visited[r.cy]?.[r.cx]) continue;
-    const type = (game.bossRoom && r === game.bossRoom) ? 'boss' : r.roomType;
-    const icon = ROOM_ICONS[type] || '';
-    const col = ROOM_LABEL_COLOURS[type] || '#aaaacc';
+    const type = (_RG.bossRoom && r === _RG.bossRoom) ? 'boss' : r.roomType;
+    const icon = /** @type {any} */ (ROOM_ICONS)[type] || '';
+    const col = /** @type {any} */ (ROOM_LABEL_COLOURS)[type] || '#aaaacc';
     const lx = mx + r.cx * sx + sx / 2;
     const ly = my + r.cy * sy + sy / 2;
     ctx.globalAlpha = 0.85;
@@ -1607,8 +1777,8 @@ function drawExpandedMinimap(dungeon, player) {
   }
 
   // Boss room label
-  if (game.bossRoom && dungeon.visited[game.bossRoom.cy]?.[game.bossRoom.cx]) {
-    const br = game.bossRoom;
+  if (_RG.bossRoom && dungeon.visited[_RG.bossRoom.cy]?.[_RG.bossRoom.cx]) {
+    const br = _RG.bossRoom;
     const icon = ROOM_ICONS.boss;
     const col = ROOM_LABEL_COLOURS.boss;
     const lx = mx + br.cx * sx + sx / 2;
@@ -1628,7 +1798,7 @@ function drawExpandedMinimap(dungeon, player) {
     // Phased WRAITHs: only show via Thermal Optics
     if (e._wrPhased) {
       if (!thermalOptics) continue;
-      const wrPulse = 0.2 + 0.15 * Math.sin((game.floorTime||0) * 5);
+      const wrPulse = 0.2 + 0.15 * Math.sin((_RG.floorTime||0) * 5);
       ctx.globalAlpha = wrPulse;
       ctx.fillStyle = '#66ffcc';
       const ex = mx + e.x * sx, ey = my + e.y * sy;
@@ -1641,19 +1811,19 @@ function drawExpandedMinimap(dungeon, player) {
     if (!thermalOptics && !inSight) continue;
     const ex = mx + e.x * sx, ey = my + e.y * sy;
     if (e.isBoss) {
-      const bPulse = 0.6 + 0.4 * Math.sin((game.floorTime || 0) * 4);
+      const bPulse = 0.6 + 0.4 * Math.sin((_RG.floorTime || 0) * 4);
       ctx.globalAlpha = bPulse;
       ctx.shadowBlur = 8; ctx.shadowColor = '#ff3333';
       ctx.fillStyle = '#ff3333';
       ctx.fillRect(ex - dotSz, ey - dotSz, dotSz * 2, dotSz * 2);
     } else if (e._isBounty) {
-      const bPulse2 = 0.7 + 0.3 * Math.sin((game.floorTime || 0) * 3);
+      const bPulse2 = 0.7 + 0.3 * Math.sin((_RG.floorTime || 0) * 3);
       ctx.globalAlpha = bPulse2;
       ctx.shadowBlur = 6; ctx.shadowColor = '#ffd700';
       ctx.fillStyle = '#ffd700';
       ctx.fillRect(ex - dotSz, ey - dotSz, dotSz * 2, dotSz * 2);
     } else if (e.elite && e.eliteAffix) {
-      ctx.fillStyle = ELITE_AFFIXES[e.eliteAffix].colour;
+      ctx.fillStyle = /** @type {any} */ (ELITE_AFFIXES)[e.eliteAffix].colour;
       ctx.fillRect(ex - dotSz * 0.7, ey - dotSz * 0.7, dotSz * 1.4, dotSz * 1.4);
     } else {
       const vis = thermalOptics && !inSight;
@@ -1668,7 +1838,7 @@ function drawExpandedMinimap(dungeon, player) {
     if (f.dead) continue;
     const tx = Math.floor(f.x), ty = Math.floor(f.y);
     if (!dungeon.visible[ty]?.[tx]) continue;
-    const fPulse = 0.4 + 0.3 * Math.sin((game.floorTime||0) * 4);
+    const fPulse = 0.4 + 0.3 * Math.sin((_RG.floorTime||0) * 4);
     ctx.globalAlpha = fPulse;
     ctx.shadowBlur = 4; ctx.shadowColor = '#ff44aa';
     ctx.fillStyle = '#ff44aa';
@@ -1678,14 +1848,14 @@ function drawExpandedMinimap(dungeon, player) {
   }
 
   // POI markers with labels
-  const pulse = 0.65 + 0.35 * Math.sin((game.floorTime || 0) * 2.5);
+  const pulse = 0.65 + 0.35 * Math.sin((_RG.floorTime || 0) * 2.5);
   const poiFs = Math.max(7, Math.min(10, Math.round(sx * 1.4)));
   ctx.font = `${poiFs}px monospace`;
   for (const p of pois) {
     let col, label, sz = Math.max(4, Math.round(sx * 0.6));
     if (p.tile === T.STAIRS || p.tile === T.TERMINAL) {
       const _ff = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
-      col = '#ffffff'; label = game.floor >= _ff ? 'CORE' : 'EXIT';
+      col = '#ffffff'; label = _RG.floor >= _ff ? 'CORE' : 'EXIT';
     }
     else if (p.tile === T.VENDOR) { col = '#39ff14'; label = 'SHOP'; }
     else if (p.tile === T.CHALLENGE_GATE) { col = '#ff6633'; label = 'CHALLENGE'; }
@@ -1704,18 +1874,18 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;
 
   // Sealed entrance markers
-  if (game.bossSealed && game.bossEntrances) {
-    const bPulse = 0.5 + 0.5 * Math.sin((game.floorTime || 0) * 4);
+  if (_RG.bossSealed && _RG.bossEntrances) {
+    const bPulse = 0.5 + 0.5 * Math.sin((_RG.floorTime || 0) * 4);
     ctx.globalAlpha = bPulse; ctx.shadowBlur = 6; ctx.shadowColor = '#ff3333'; ctx.fillStyle = '#ff3333';
-    for (const be of game.bossEntrances) {
+    for (const be of _RG.bossEntrances) {
       if (!dungeon.visited[be.y]?.[be.x]) continue;
       ctx.fillRect(mx + be.x * sx + sx / 2 - 3, my + be.y * sy + sy / 2 - 3, 6, 6);
     }
   }
-  if (game.challengeSealed && game.challengeEntrances) {
-    const cPulse = 0.5 + 0.5 * Math.sin((game.floorTime || 0) * 3.5);
+  if (_RG.challengeSealed && _RG.challengeEntrances) {
+    const cPulse = 0.5 + 0.5 * Math.sin((_RG.floorTime || 0) * 3.5);
     ctx.globalAlpha = cPulse; ctx.shadowBlur = 6; ctx.shadowColor = '#ff6633'; ctx.fillStyle = '#ff6633';
-    for (const ce of game.challengeEntrances) {
+    for (const ce of _RG.challengeEntrances) {
       if (!dungeon.visited[ce.y]?.[ce.x]) continue;
       ctx.fillRect(mx + ce.x * sx + sx / 2 - 3, my + ce.y * sy + sy / 2 - 3, 6, 6);
     }
@@ -1733,7 +1903,7 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.shadowBlur = 8; ctx.shadowColor = '#00f5ff';
   ctx.fillStyle = '#00f5ff'; ctx.font = 'bold 14px monospace';
-  ctx.fillText(`FLOOR ${game.floor} MAP`, W / 2, my - 22);
+  ctx.fillText(`FLOOR ${_RG.floor} MAP`, W / 2, my - 22);
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#666688'; ctx.font = '11px monospace';
   const hint = isTouchDevice() ? 'TAP TO CLOSE' : 'TAB / ESC TO CLOSE';
@@ -1750,6 +1920,7 @@ function drawExpandedMinimap(dungeon, player) {
   ];
   let lx = legendX;
   for (const [col, label] of legend) {
+    if (col == null || label == null) continue;
     ctx.fillStyle = col;
     const tw = ctx.measureText(label).width;
     if (lx + tw > mx + mw) break;
@@ -1761,6 +1932,7 @@ function drawExpandedMinimap(dungeon, player) {
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
+/** @type {any[]} */
 const messages=[];
 function drawMessages() {
   const msgFs = 16, msgLh = 22;
@@ -1784,7 +1956,7 @@ function drawMessages() {
 }
 
 function drawHint() {
-  const h = game.hint;
+  const h = _RG.hint;
   if (!h) return;
   const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 300);
   ctx.save();
@@ -1796,9 +1968,13 @@ function drawHint() {
   ctx.restore();
 }
 
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawThreatIndicators(camX, camY) {
-  if (!game.player.perks.THREAT_SENSE) return;
-  const px = game.player.x, py = game.player.y;
+  if (!_RG.player.perks.THREAT_SENSE) return;
+  const px = _RG.player.x, py = _RG.player.y;
   const margin = 14;
   const viewL = camX / TILE, viewT = camY / TILE;
   const viewR = (camX + W) / TILE, viewB = (camY + H - layout.hudH) / TILE;
@@ -1842,6 +2018,10 @@ function drawThreatIndicators(camX, camY) {
 }
 
 // ─── Floor population ─────────────────────────────────────────────────────────
+/**
+ * @param {any} dungeon
+ * @param {any} floorNum
+ */
 function populateFloor(dungeon, floorNum) {
   // Recycle live pooled collections back to their free-lists before reset so
   // pre-allocated slots survive floor changes.
@@ -1862,6 +2042,9 @@ function populateFloor(dungeon, floorNum) {
     if (room.roomType==='secret') continue; // lazy-spawn on reveal
     if (room.roomType==='challenge') continue; // wave-spawned during encounter
 
+    /**
+     * @param {any} bossRoom
+     */
     if (bossRoom && room===bossRoom) {
       // UNCHAINED #34: boss pool sourced from biomes.AREAS (single source of
       // truth for floor→boss mapping). `src/data/biomes.js` is loaded before
@@ -1873,14 +2056,17 @@ function populateFloor(dungeon, floorNum) {
       if (!btype && typeof console !== 'undefined' && console.warn) {
         console.warn('[#34] biome boss pool missing for floor', floorNum, '— NEON.biomes not loaded?');
       }
+      /**
+       * @param {any} btype
+       */
       if (btype) {
         const b=spawnEnemy(btype,room.cx,room.cy,floorNum,room);
         enemies.push(b);
-        game.bossRoom=bossRoom;
-        game.bossType=btype;
-        game.bossEntrances=dungeon.bossEntrances||[];
-        game.bossSealed=false;
-        game.bossAlive=true;
+        _RG.bossRoom=bossRoom;
+        _RG.bossType=btype;
+        _RG.bossEntrances=dungeon.bossEntrances||[];
+        _RG.bossSealed=false;
+        _RG.bossAlive=true;
       }
       continue;
     }
@@ -1890,6 +2076,9 @@ function populateFloor(dungeon, floorNum) {
     const enemyMod = rt==='medbay' ? 0.3 : rt==='vault' ? 1.5 : rt==='armory' ? 0.5 : 1;
 
     // Destructible crates (floor 2+, normal rooms only, 0–2 per room)
+    /**
+     * @param {any} floorNum
+     */
     if (floorNum >= 2 && !rt && room.w >= 6 && room.h >= 6) {
       const crateCount = rndInt(0, 2);
       for (let j = 0; j < crateCount; j++) {
@@ -1951,21 +2140,23 @@ function populateFloor(dungeon, floorNum) {
     const maxE = Math.min(8, 4 + Math.floor(floorNum / 2));
     const areaCap = Math.floor(room.w * room.h / 8);
     let count = Math.min(areaCap, Math.round(rndInt(minE, maxE) * enemyMod));
-    if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.5));
+    if (_RG.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.5));
 
     let roomElite = false;  // max 1 elite per room
     let spawnedCount = 0;
+    /** @type {Record<string, number>} */
     const typeCounts = {};  // per-type caps within room
+    /** @type {Record<string, number>} */
     const TYPE_CAPS = { PHANTOM: 2, TURRET: 2, DRONE: 2, SHIELDER: 1, SPLITTER: 2, GRENADIER: 1, TELEPORTER: 1, SNIPER: 1, SUMMONER: 1, HEALER: 1, CHARGER: 2, SCORCHER: 2, BRUTE: 1, LEAPER: 2, REFLECTOR: 1, DISRUPTOR: 1, WRAITH: 1, NEXUS: 1, SIPHON: 1, GRAVITON: 1, SEEKER: 3, PULSER: 2 };
     for (let j=0;j<count;j++) {
       let type = pickEnemyType(floorNum);
       // Per-type room caps — reroll among uncapped, floor-eligible types if hit
       if ((typeCounts[type] || 0) >= (TYPE_CAPS[type] || 99)) {
-        const open = ENEMY_TYPES_LIST.filter(t =>
+        const open = ENEMY_TYPES_LIST.filter(/** @param {any} t */ t =>
           (typeCounts[t] || 0) < (TYPE_CAPS[t] || 99) &&
-          !(ENEMY_WEIGHTS[t].minFloor && floorNum < ENEMY_WEIGHTS[t].minFloor)
+          !(/** @type {any} */ (ENEMY_WEIGHTS)[t].minFloor && floorNum < /** @type {any} */ (ENEMY_WEIGHTS)[t].minFloor)
         );
-        type = open.length ? open[rndInt(0, open.length - 1)] : 'GUARD';
+        type = open.length ? (open[rndInt(0, open.length - 1)] || 'GUARD') : 'GUARD';
       }
 
       const ex=room.x+rnd(1,room.w-1), ey=room.y+rnd(1,room.h-1);
@@ -1986,6 +2177,9 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Volatile cores (floors 3+, normal rooms only, 0–2 per room)
+    /**
+     * @param {any} floorNum
+     */
     if (floorNum >= 3 && !rt) {
       const coreCount = rndInt(0, 2);
       for (let j = 0; j < coreCount; j++) {
@@ -2056,7 +2250,7 @@ function populateFloor(dungeon, floorNum) {
           }
         }
         if (mounts.length > 0) {
-          const pick = mounts[rndInt(0, mounts.length - 1)];
+          const pick = /** @type {{tx:number,ty:number,side:string}} */ (mounts[rndInt(0, mounts.length - 1)]);
           const cx = pick.tx + 0.5, cy = pick.ty + 0.5;
           // Not near other environmental objects
           let tooClose = false;
@@ -2086,6 +2280,9 @@ function populateFloor(dungeon, floorNum) {
               left = tx;
             }
           }
+          /**
+           * @param {any} left
+           */
           if (left >= 0) {
             // Find rightmost floor tile in same row with wall to the right
             for (let tx = room.x + room.w - 1; tx > left + 2; tx--) {
@@ -2095,6 +2292,9 @@ function populateFloor(dungeon, floorNum) {
                 for (let bx = left; bx <= tx; bx++) {
                   if (m[ty]?.[bx] !== T.FLOOR) { clear = false; break; }
                 }
+                /**
+                 * @param {any} clear
+                 */
                 if (clear) {
                   // Not near doors
                   let nearDoor = false;
@@ -2123,6 +2323,9 @@ function populateFloor(dungeon, floorNum) {
               top = ty;
             }
           }
+          /**
+           * @param {any} top
+           */
           if (top >= 0) {
             for (let ty = room.y + room.h - 1; ty > top + 2; ty--) {
               if (m[ty]?.[tx] === T.FLOOR && m[ty + 1]?.[tx] === T.WALL) {
@@ -2130,6 +2333,9 @@ function populateFloor(dungeon, floorNum) {
                 for (let by = top; by <= ty; by++) {
                   if (m[by]?.[tx] !== T.FLOOR) { clear = false; break; }
                 }
+                /**
+                 * @param {any} clear
+                 */
                 if (clear) {
                   let nearDoor = false;
                   for (let ddy = -1; ddy <= 1 && !nearDoor; ddy++) {
@@ -2150,7 +2356,7 @@ function populateFloor(dungeon, floorNum) {
           }
         }
         if (beamCandidates.length > 0) {
-          const pick = beamCandidates[rndInt(0, beamCandidates.length - 1)];
+          const pick = /** @type {{x1:number,y1:number,x2:number,y2:number,axis:string}} */ (beamCandidates[rndInt(0, beamCandidates.length - 1)]);
           // Not too close to other environmental objects
           let tooClose = false;
           for (const b of beacons) { if (dist(pick.x1, pick.y1, b.x, b.y) < 1.5 || dist(pick.x2, pick.y2, b.x, b.y) < 1.5) { tooClose = true; break; } }
@@ -2202,10 +2408,15 @@ function populateFloor(dungeon, floorNum) {
           }
         }
         // Shuffle and pick 1-2 turrets
-        for (let i = mounts.length - 1; i > 0; i--) { const j = rndInt(0, i); [mounts[i], mounts[j]] = [mounts[j], mounts[i]]; }
+        for (let i = mounts.length - 1; i > 0; i--) {
+          const j = rndInt(0, i);
+          /** @type {any} */ const a = mounts[i];
+          /** @type {any} */ const b = mounts[j];
+          if (a && b) { mounts[i] = b; mounts[j] = a; }
+        }
         const count = Math.min(rndInt(1, 2), mounts.length);
         for (let k = 0; k < count; k++) {
-          const pick = mounts[k];
+          const pick = /** @type {{tx:number,ty:number,side:string}} */ (mounts[k]);
           const cx = pick.tx + 0.5, cy = pick.ty + 0.5;
           let tooClose = false;
           for (const b of beacons)    { if (dist(cx, cy, b.x, b.y) < 1.5) { tooClose = true; break; } }
@@ -2225,19 +2436,31 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Special room bonuses
+    /**
+     * @param {any} rt
+     */
     if (rt==='medbay') {
       // Place a healing font (persistent heal tile) in center
       dungeon.map[room.cy][room.cx] = T.FLOOR; // keep walkable
       room.healFont = true; // flag checked during gameplay
     }
+    /**
+     * @param {any} rt
+     */
     if (rt==='shrine') {
       room.xpShrine = true;
     }
+    /**
+     * @param {any} rt
+     */
     if (rt==='vendor') {
       // Generate shop inventory for this vendor room
-      room.shopItems = generateShopItems(floorNum, game.player, dungeon);
+      room.shopItems = generateShopItems(floorNum, _RG.player, dungeon);
       room.vendorVisited = false;
     }
+    /**
+     * @param {any} rt
+     */
     if (rt==='event') {
       room.eventUsed = false;
     }
@@ -2248,7 +2471,7 @@ function populateFloor(dungeon, floorNum) {
 
   // Mimic spawn (floor 7+, non-boss, 50% chance, max 1 per floor)
   if (floorNum >= 7 && !isBossFloor && Math.random() < 0.5) {
-    const mimicRooms = dungeon.rooms.filter(r =>
+    const mimicRooms = dungeon.rooms.filter(/** @param {any} r */ r =>
       r !== dungeon.spawnRoom && r !== dungeon.bossRoom &&
       !r.roomType && r.w * r.h >= 16
     );
@@ -2263,6 +2486,9 @@ function populateFloor(dungeon, floorNum) {
   }
 
   // Bounty target designation (floor 2+, non-boss floors)
+  /**
+   * @param {any} floorNum
+   */
   if (floorNum >= 2 && !isBossFloor) {
     const candidates = enemies.filter(e => !e.isBoss && !e.isShard && !e.elite && !e._summoned && !e._disguised);
     if (candidates.length > 0) {
