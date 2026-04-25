@@ -1,3 +1,4 @@
+// @ts-check
 // UNCHAINED Phase 2 (#36) — pure runtime behaviour helpers for upgrade-node
 // flags set on player.metaFlags by save.applyMetaToPlayer(). Kept in a small
 // isolated module so the logic can be unit-tested without constructing a full
@@ -22,15 +23,16 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = factory();
   } else {
-    root.NEON = root.NEON || {};
-    root.NEON.behavior = factory();
+    /** @type {any} */ (root).NEON = /** @type {any} */ (root).NEON || {};
+    /** @type {any} */ (root).NEON.behavior = factory();
   }
-})(typeof self !== 'undefined' ? self : this, function () {
+})(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
 
   // Overall outgoing-damage multiplier from persistent upgrade nodes
   // (excluding surge which is consumed separately at shot time).
   //   damageMult : stat carrier from overclock (1 + 0.05*level)
   //   momentum   : flag — while _momentumTimer > 0, +15% damage per level
+  /** @param {any} player */
   function computeOutgoingDmgMul(player) {
     let mul = player.damageMult || 1;
     const f = player.metaFlags;
@@ -45,6 +47,7 @@
 
   // Advance the surge shot counter and return the multiplier for *this* shot.
   // Returns 1 when surge doesn't trigger. Mutates player._surgeShotCount.
+  /** @param {any} player */
   function consumeSurgeShot(player) {
     const f = player.metaFlags;
     const surgeLv = f ? (f.surge | 0) : 0;
@@ -57,6 +60,7 @@
 
   // Called from Enemy.die() — refresh the 3-second momentum window on any
   // enemy death. No-op when player has no momentum node.
+  /** @param {any} player */
   function onKillRefreshMomentum(player) {
     if (!player || !player.metaFlags) return;
     if ((player.metaFlags.momentum | 0) > 0) {
@@ -65,6 +69,7 @@
   }
 
   // Countdown the momentum window. Safe on players without the flag.
+  /** @param {any} player @param {number} dt */
   function tickMomentum(player, dt) {
     if ((player._momentumTimer || 0) > 0) {
       player._momentumTimer = Math.max(0, player._momentumTimer - dt);
@@ -76,6 +81,7 @@
   // threshold chosen to match typical ARPG regen grace periods — short
   // enough to be felt during exploration, long enough to not trivialise
   // combat encounters.
+  /** @param {any} player @param {number} dt */
   function tickOutOfCombatRegen(player, dt) {
     player._outOfCombatTimer = (player._outOfCombatTimer || 0) + dt;
     if (player.regenPerSec && player._outOfCombatTimer > 3 && player.hp < player.maxHp) {
@@ -83,6 +89,7 @@
     }
   }
 
+  /** @param {any} player */
   function resetOutOfCombat(player) {
     player._outOfCombatTimer = 0;
   }
@@ -90,6 +97,7 @@
   // Attempt the meta second_wind revive. Returns true if it fired (caller
   // must then apply visual/audio fx and skip the death path). Parallel to
   // the legacy SECOND_WIND perk — they fire independently.
+  /** @param {any} player */
   function tryMetaSecondWind(player) {
     const f = player.metaFlags;
     const lv = f ? (f.second_wind | 0) : 0;
