@@ -4,7 +4,11 @@
 // During Phase 3 the goal is to TURN ON `// @ts-check` per-file, not to perfect
 // every type — many properties are intentionally loose (`any`) so that leaf
 // modules can opt in without forcing a cascade of typing the whole codebase.
-// Phase 4 will tighten the engine-boundary types.
+//
+// Phase 4 (DONE): engine-boundary types live in types/engine.d.ts and
+// types/game.d.ts. They declare `EngineSurface` and `GameSurface` as opt-in
+// typed contracts; this file's `Window.NEON: Record<string, any>` stays
+// loose by design so existing call sites don't churn. See docs/engine-boundary.md.
 
 export {};
 
