@@ -58,6 +58,7 @@ Reusable as-is. These are the candidates for the first engine package.
 
 | Module | Surface | Why it's engine |
 |---|---|---|
+| `engine/alarm-light.js` | `NEON.alarmLightEngine.{isAlarmSlot, intensity, createAlarmLight}` | Reusable pulse math for any flickering wall decor. Biome allowlist injected via `createAlarmLight({allowedBiomes})` — game-side wiring lives at `src/meta/alarm-light.js`. |
 | `engine/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
 | `engine/spawn.js` | `NEON.spawn.findNearestPassable` | Tile-grid BFS. Knows about an `isPassable(tileCode)` callback only — caller decides which tile codes are walkable. |
 | `engine/telemetry.js` | `NEON.telemetry.{init, track, flush, update}` | Generic offline-safe event batching. Privacy-conscious by default. No game keys. |
@@ -90,7 +91,7 @@ would stay in game.
 
 | Module | Engine part | Game part |
 |---|---|---|
-| `src/meta/alarm-light.js` | The pulse math: `isAlarmSlot(h)` (stable ~3.2% true rate keyed by tile hash) and `intensity(floorTime, h)` (sinusoidal flicker with hash-derived phase). Reusable for any flickering wall decor. | `shouldDraw` hardcodes the NEON DUNGEON biome-id allowlist (`'cache'`, `'firewall'`). An extraction pass would inject the allowlist via parameter or a setter. |
+| `src/meta/alarm-light.js` + `engine/alarm-light.js` | **Extracted** to `engine/alarm-light.js`: `isAlarmSlot(h)` (stable ~3.2% true rate keyed by tile hash), `intensity(floorTime, h)` (sinusoidal flicker with hash-derived phase), and `createAlarmLight({allowedBiomes})` factory. Reusable for any flickering wall decor. | `src/meta/alarm-light.js` is the wiring shim that injects NEON DUNGEON's biome allowlist (`'cache'`, `'firewall'`) into the engine factory and re-exports the configured surface as `NEON.alarmLight`. |
 | `src/data/biomes.js` | The `Area` schema (`{id, name, palette, floors[], bossPool, displayName, intro}`), and the `areaForFloor` / `areaForIndex` / `biomeIndex` / `isBiomeBossFloor` / `finalFloor` helpers. | The `AREAS` rows themselves (sandbox, cache, firewall, uplink, opennet) and their narrative copy. |
 | `src/data/palettes.js` | The `BIOME_PALETTES: Record<string, Palette>` shape with keys `wallFill`, `wallHi`, `floor`, `floorAccent`, `minimapWall`, `minimapFloor`, `dust[]`, `ambient`. | The actual hex values per palette. |
 | `src/meta/intro.js` | The `createIntroController(host)` controller pattern returning `{ update(dt), draw(ctx, W, H), done }`. Generic enough for any cinematic. | The slides and their narrative text. |
