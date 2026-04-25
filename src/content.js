@@ -1,22 +1,53 @@
+// @ts-check
 'use strict';
+
+// Phase 3D batch 4: Proxy-based alias for the cross-file `game` global.
+// content.js touches many runtime-added game props (game._minimapDirty,
+// game.mapRevealed, etc.) that don't appear on the typed game shape declared
+// in src/game.js. The proxy widens access to `any` and defers resolution.
+// Mirrors the pattern in src/render.js (_RG) and src/platform.js (_G).
+/** @type {any} */
+const _CG = new Proxy({}, {
+  get: (_t, p) => /** @type {any} */ (game)[p],
+  set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
+  has: (_t, p) => p in /** @type {any} */ (game),
+});
 
 // ─── Procedural Music ────────────────────────────────────────────────────────
 const music = (() => {
-  let bus = null, ctx = null;
+  /** @type {any} */ let bus = null;
+  /** @type {any} */ let ctx = null;
   let state = 'idle';
   let floor = 1;
   let nextStep = 0, step = 0;
   let paused = false;
-  let hatBuf = null, airBuf = null;
+  /** @type {any} */ let hatBuf = null;
+  /** @type {any} */ let airBuf = null;
   let droneGen = 0;
   let motifCursor = 0;
 
   // Layer gain nodes
-  let droneG = null, pulseG = null, arpG = null, bassG = null;
+  /** @type {any} */ let droneG = null;
+  /** @type {any} */ let pulseG = null;
+  /** @type {any} */ let arpG = null;
+  /** @type {any} */ let bassG = null;
   // Persistent drone synth parts
-  let droneOscA = null, droneOscB = null, droneSub = null, droneFilter = null, droneLFO = null, droneLfoDepth = null;
+  /** @type {any} */ let droneOscA = null;
+  /** @type {any} */ let droneOscB = null;
+  /** @type {any} */ let droneSub = null;
+  /** @type {any} */ let droneFilter = null;
+  /** @type {any} */ let droneLFO = null;
+  /** @type {any} */ let droneLfoDepth = null;
 
+  /**
+   * @param {any} n
+   */
   function midi(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+  /**
+   * @param {any} v
+   * @param {any} lo
+   * @param {any} hi
+   */
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   const TIERS = [
@@ -26,10 +57,14 @@ const music = (() => {
     { root: 29, bpm: 136, scale: [0, 1, 3, 5, 7, 8, 10] }, // F phrygian tint
   ];
 
+  /** @type {Record<string, any>} */
+
   const STATE_SPEED = { idle: 0.85, explore: 1.0, tension: 1.10, combat: 1.22, boss: 1.32 };
+  /** @type {Record<string, any>} */
   const SWING = { idle: 0, explore: 0.02, tension: 0.04, combat: 0.06, boss: 0.08 };
 
   // Target gains per music state [drone, pulse, arp, bass]
+  /** @type {Record<string, any>} */
   const TARGETS = {
     idle:    [0, 0, 0, 0],
     explore: [0.50, 0.50, 0.88, 0.55],
@@ -37,6 +72,8 @@ const music = (() => {
     combat:  [0.38, 1.0, 0.82, 1.0],
     boss:    [0.55, 1.0, 0.72, 1.0],
   };
+
+  /** @type {Record<string, any>} */
 
   const PROGRESSIONS = {
     idle:    [0, 5, 3, 4],
@@ -46,12 +83,16 @@ const music = (() => {
     boss:    [0, 6, 1, 5],
   };
 
+  /** @type {Record<string, any>} */
+
   const RHYTHM = {
     explore: { kick: [0, 8, 11], snare: [4, 12], hat: [2, 6, 10, 14], open: [15] },
     tension: { kick: [0, 6, 8, 11, 14], snare: [4, 12], hat: [2, 4, 6, 8, 10, 12, 14], open: [15] },
     combat:  { kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: [1, 3, 5, 7, 9, 11, 13, 15], open: [6, 14] },
     boss:    { kick: [0, 2, 5, 8, 10, 13], snare: [4, 12], hat: [1, 3, 5, 7, 9, 11, 13, 15], open: [7, 15] },
   };
+
+  /** @type {Record<string, any>} */
 
   const MOTIFS = {
     explore: [
@@ -73,12 +114,16 @@ const music = (() => {
     ],
   };
 
+  /** @type {Record<string, any>} */
+
   const BASS_PATTERNS = {
     explore: [0, null, 0, null, 2, null, 2, null, 4, null, 4, null, 2, null, null, 0],
     tension: [0, null, 0, 1, 2, null, 1, null, 4, null, 2, 1, 0, null, null, null],
     combat:  [0, null, 0, 4, 2, null, 2, 1, 0, null, 0, 4, 2, null, 1, null],
     boss:    [0, null, 0, null, 5, null, 5, 4, 0, null, 0, null, 6, null, 6, 4],
   };
+
+  /** @type {Record<string, any>} */
 
   const DRONE_TONE = {
     idle:    { cutoff: 150, q: 1.2, lfoRate: 0.08, lfoDepth: 40 },
@@ -89,6 +134,7 @@ const music = (() => {
   };
 
   function tier() { return floor <= 3 ? 0 : floor <= 6 ? 1 : floor <= 9 ? 2 : 3; }
+  /** @returns {any} */
   function params() { return TIERS[tier()]; }
 
   function stepDur() {
@@ -96,6 +142,9 @@ const music = (() => {
     return (baseQuarter / (STATE_SPEED[state] || 1)) / 4; // 16th-note grid
   }
 
+  /**
+   * @param {any} deg
+   */
   function degreeToSemi(deg) {
     const sc = params().scale;
     const idx = ((deg % 7) + 7) % 7;
@@ -103,18 +152,31 @@ const music = (() => {
     return sc[idx] + oct * 12;
   }
 
+  /** @returns {any} */
   function progression() { return PROGRESSIONS[state] || PROGRESSIONS.explore; }
 
+  /**
+   * @param {any} stepIx
+   */
   function chordDegree(stepIx) {
     const prog = progression();
     const bar = Math.floor(stepIx / 16);
     return prog[bar % prog.length];
   }
 
+  /**
+   * @param {any} deg
+   * @param {any} oct
+   */
   function noteFromDegree(deg, oct) {
     return midi(params().root + (oct || 0) * 12 + degreeToSemi(deg));
   }
 
+  /**
+   * @param {any} target
+   * @param {any} pan
+   * @param {any} lifetime
+   */
   function withPan(target, pan, lifetime) {
     const out = target || bus;
     if (!ctx || !ctx.createStereoPanner || Math.abs(pan) < 0.01) return out;
@@ -125,6 +187,9 @@ const music = (() => {
     return p;
   }
 
+  /**
+   * @param {any} dur
+   */
   function rampGains(dur) {
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -160,6 +225,9 @@ const music = (() => {
     for (let i = 0; i < aLen; i++) ad[i] = (Math.random() * 2 - 1) * (1 - i / aLen);
   }
 
+  /**
+   * @param {any} ramp
+   */
   function updateDroneTone(ramp) {
     if (!ctx || !droneFilter) return;
     const t = ctx.currentTime;
@@ -183,6 +251,10 @@ const music = (() => {
     }
   }
 
+  /**
+   * @param {any} atTime
+   * @param {any} stepIx
+   */
   function retuneDrone(atTime, stepIx) {
     if (!ctx || !droneOscA) return;
     const t = atTime || ctx.currentTime;
@@ -245,6 +317,10 @@ const music = (() => {
   }
 
   // ── Pulse layer: kick/snare/hat with state-specific patterns ──
+  /**
+   * @param {any} t
+   * @param {any} weight
+   */
   function kick(t, weight) {
     const w = weight || 1;
     const body = ctx.createOscillator();
@@ -269,6 +345,10 @@ const music = (() => {
     click.start(t); click.stop(t + 0.07);
   }
 
+  /**
+   * @param {any} t
+   * @param {any} weight
+   */
   function snare(t, weight) {
     const w = weight || 1;
     const src = ctx.createBufferSource();
@@ -297,6 +377,11 @@ const music = (() => {
     body.start(t); body.stop(t + 0.11);
   }
 
+  /**
+   * @param {any} t
+   * @param {any} open
+   * @param {any} pan
+   */
   function hat(t, open, pan) {
     const src = ctx.createBufferSource();
     src.buffer = hatBuf;
@@ -311,6 +396,9 @@ const music = (() => {
     src.start(t); src.stop(t + d + 0.02);
   }
 
+  /**
+   * @param {any} t
+   */
   function schedPulse(t) {
     const pat = RHYTHM[state] || RHYTHM.explore;
     const s = step % 16;
@@ -321,6 +409,9 @@ const music = (() => {
   }
 
   // ── Arp/motif layer: recurring phrase fragments tied to progression ──
+  /**
+   * @param {any} t
+   */
   function schedArp(t) {
     const bank = MOTIFS[state] || MOTIFS.explore;
     if (!bank || !bank.length) return;
@@ -356,6 +447,9 @@ const music = (() => {
   }
 
   // ── Bass layer: progression-following low pulses with passing tones ──
+  /**
+   * @param {any} t
+   */
   function schedBass(t) {
     const pat = BASS_PATTERNS[state] || BASS_PATTERNS.explore;
     const rel = pat[step % 16];
@@ -384,6 +478,9 @@ const music = (() => {
   }
 
   // Occasional filtered noise swell for timbral depth
+  /**
+   * @param {any} t
+   */
   function schedAir(t) {
     if (state === 'combat' || state === 'idle') return;
     if (step % 8 !== 0 || Math.random() > (state === 'boss' ? 0.7 : 0.45)) return;
@@ -402,6 +499,9 @@ const music = (() => {
     src.start(t); src.stop(t + 0.58);
   }
 
+  /**
+   * @param {any} t
+   */
   function schedChordLift(t) {
     if (step % 16 !== 0) return;
     const chord = chordDegree(step);
@@ -421,6 +521,9 @@ const music = (() => {
   }
 
   return {
+    /**
+     * @param {any} s
+     */
     setState(s) {
       const next = TARGETS[s] ? s : 'idle';
       if (next === state) return;
@@ -442,6 +545,9 @@ const music = (() => {
       }
     },
 
+    /**
+     * @param {any} n
+     */
     setFloor(n) {
       floor = n;
       if (ctx && state !== 'idle') retuneDrone(ctx.currentTime, step);
@@ -530,6 +636,7 @@ const LORE_ENTRIES = [
 ];
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const WEAPONS = {
   PULSE_PISTOL: { name:'Pulse Pistol', dmg:15, rate:3,   range:10, spread:0,   count:1, colour:'#00f5ff' },
   SCATTER_GUN:  { name:'Scatter Gun',  dmg:8,  rate:1,   range:5,  spread:0.3, count:4, colour:'#ff8800' },
@@ -540,6 +647,7 @@ const WEAPONS = {
 const WEAPON_KEYS = Object.keys(WEAPONS);
 
 // ─── Weapon Affixes ──────────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const WEAPON_AFFIXES = {
   // Prefixes (stat modifiers) — max 1 per weapon
   RAPID:    { slot:'prefix', label:'Rapid',    colour:'#44ff88', desc:'+30% fire rate',    mods:{rate:1.3} },
@@ -560,6 +668,7 @@ const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix
 const AFFIX_SUFFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'suffix');
 
 // ─── Elite Enemy Affixes ──────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const ELITE_AFFIXES = {
   SHIELDED:     { label:'Shielded',     colour:'#4488ff', desc:'Energy shield absorbs damage', icon:'◈' },
   BERSERKER:    { label:'Berserker',    colour:'#ff2222', desc:'Faster at low HP',             icon:'⚡' },
@@ -570,6 +679,9 @@ const ELITE_AFFIXES = {
 };
 const ELITE_AFFIX_KEYS = Object.keys(ELITE_AFFIXES);
 
+/**
+ * @param {any} enemyType
+ */
 function rollEliteAffix(enemyType) {
   // Filter out redundant combos
   const eligible = ELITE_AFFIX_KEYS.filter(k => {
@@ -581,6 +693,7 @@ function rollEliteAffix(enemyType) {
 }
 
 // ─── Hackware — Collectible Active Abilities ──────────────────────────────────
+/** @type {Record<string, any>} */
 const HACKWARE = {
   EMP_BURST:    { name:'EMP Burst',    desc:'Stun nearby enemies for 2s',      colour:'#00ddff', icon:'⚡', cooldown:10 },
   PHASE_CLOAK:  { name:'Phase Cloak',  desc:'2.5s invisibility & immunity',    colour:'#cc44ff', icon:'◇', cooldown:14 },
@@ -591,29 +704,32 @@ const HACKWARE = {
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
-let hackwareEffects = []; // active world-space hackware effects (gravity wells, swarm particles)
+/** @type {any[]} */ const hackwareEffects = []; // active world-space hackware effects (gravity wells, swarm particles)
 
 function canTargetPlayer() {
-  const p = game.player;
+  const p = _CG.player;
   if (!p || p.hp <= 0) return false;
   if (p.cloakTimer > 0) return false;
   return true;
 }
 
 function isPlayerDamageImmune() {
-  const p = game.player;
+  const p = _CG.player;
   if (!p) return false;
   if (p.dashTimer > 0) return true;
   if (p.cloakTimer > 0) return true;
   return false;
 }
 
+/**
+ * @param {any} player
+ */
 function activateHackware(player) {
   if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
   player.hackwareCooldown = hw.cooldown * (hasAugment('OVERCLOCKER') ? 0.7 : 1);
-  const map = game.dungeon ? game.dungeon.map : null;
+  const map = _CG.dungeon ? _CG.dungeon.map : null;
 
   switch (player.hackware) {
     case 'EMP_BURST': {
@@ -693,7 +809,7 @@ function activateHackware(player) {
       audio.hackwareCloak();
       player.cloakTimer = 2.5;
       spawnParticles(player.x, player.y, 'EXPLOSION', '#cc44ff', 12);
-      game.msg('◇ PHASE CLOAK ACTIVE', '#cc44ff');
+      _CG.msg('◇ PHASE CLOAK ACTIVE', '#cc44ff');
       break;
     }
     case 'NANO_SWARM': {
@@ -738,7 +854,7 @@ function activateHackware(player) {
       });
       spawnParticles(sx, sy, 'EXPLOSION', '#44ccff', 15);
       triggerShake(3, 0.15);
-      game.msg('⌁ STATIC FIELD DEPLOYED', '#44ccff');
+      _CG.msg('⌁ STATIC FIELD DEPLOYED', '#44ccff');
       break;
     }
     case 'HOLO_DECOY': {
@@ -755,14 +871,17 @@ function activateHackware(player) {
       }
       hackwareEffects.push({ type:'hologram', x:hx, y:hy, age:0, maxAge:4 });
       spawnParticles(hx, hy, 'EXPLOSION', '#ff44ff', 12);
-      game.msg('⬡ HOLO DECOY DEPLOYED', '#ff44ff');
+      _CG.msg('⬡ HOLO DECOY DEPLOYED', '#ff44ff');
       break;
     }
   }
 }
 
+/**
+ * @param {any} dt
+ */
 function updateHackwareEffects(dt) {
-  const map = game.dungeon ? game.dungeon.map : null;
+  const map = _CG.dungeon ? _CG.dungeon.map : null;
   for (let i = hackwareEffects.length - 1; i >= 0; i--) {
     const fx = hackwareEffects[i];
     fx.age += dt;
@@ -947,6 +1066,10 @@ function updateHackwareEffects(dt) {
   }
 }
 
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawHackwareEffects(camX, camY) {
   for (const fx of hackwareEffects) {
     if (fx.type === 'emp_ring') {
@@ -1062,6 +1185,10 @@ function drawHackwareEffects(camX, camY) {
   }
 }
 
+/**
+ * @param {any} affixId
+ * @param {any} baseWeapon
+ */
 function affixEligible(affixId, baseWeapon) {
   if (affixId === 'PRECISE'  && baseWeapon.spread === 0) return false;
   if (affixId === 'TWIN'     && baseWeapon.melee)        return false;
@@ -1070,6 +1197,10 @@ function affixEligible(affixId, baseWeapon) {
 }
 
 // Deterministic weapon construction from base key + affix list
+/**
+ * @param {any} baseKey
+ * @param {any} affixIds
+ */
 function buildWeapon(baseKey, affixIds) {
   const base = WEAPONS[baseKey];
   if (!base) return { ...WEAPONS.PULSE_PISTOL, _base:'PULSE_PISTOL', _affixes:[], _rarity:0, displayName:'Pulse Pistol' };
@@ -1085,18 +1216,22 @@ function buildWeapon(baseKey, affixIds) {
     if (af.mods.countAdd) w.count  = w.count + af.mods.countAdd;
   }
   // Build display name: "Rapid Pulse Pistol of Flame"
-  const prefix = affixIds.find(id => WEAPON_AFFIXES[id]?.slot === 'prefix');
-  const suffix = affixIds.find(id => WEAPON_AFFIXES[id]?.slot === 'suffix');
+  const prefix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'prefix');
+  const suffix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'suffix');
   let dn = base.name;
   if (prefix) dn = WEAPON_AFFIXES[prefix].label + ' ' + dn;
   if (suffix) dn = dn + ' ' + WEAPON_AFFIXES[suffix].label;
   w.displayName = dn;
   // Collect on-hit/on-kill effects
-  w._effects = affixIds.map(id => WEAPON_AFFIXES[id]?.effect).filter(Boolean);
+  w._effects = affixIds.map((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.effect).filter(Boolean);
   return w;
 }
 
 // Roll random affixes based on floor depth
+/**
+ * @param {any} baseKey
+ * @param {any} floor
+ */
 function rollWeapon(baseKey, floor) {
   if (floor <= 1) return buildWeapon(baseKey, []);
   const base = WEAPONS[baseKey];
@@ -1133,6 +1268,7 @@ const RARITY_COLOURS = ['#aaaaaa', '#39ff14', '#cc44ff']; // common, uncommon, r
 const RARITY_LABELS  = ['COMMON', 'UNCOMMON', 'RARE'];
 
 // ─── Difficulty ──────────────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const DIFFICULTIES = {
   EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.25, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75, roomLoot:2 },
   NORMAL: { id:'NORMAL', label:'NORMAL', colour:'#00f5ff', enemyHp:1.0,  enemyAtk:1.0,  enemySpd:1.0,  itemDrop:0.15, creditMul:1.0, xpMul:1.0,  eliteRate:0.10, shardMul:1.0,  envDmg:1.0,  roomLoot:1 },
@@ -1140,9 +1276,10 @@ const DIFFICULTIES = {
   NIGHTMARE: { id:'NIGHTMARE', label:'NIGHTMARE', colour:'#9400ff', enemyHp:2.0,  enemyAtk:1.6,  enemySpd:1.2,  itemDrop:0.08, creditMul:0.85, xpMul:1.35, eliteRate:0.28, shardMul:1.8,  envDmg:1.5,  roomLoot:0 },
 };
 const DIFF_ORDER = ['EASY','NORMAL','HARD','NIGHTMARE'];
-function getDiff() { return DIFFICULTIES[game.difficulty] || DIFFICULTIES.NORMAL; }
+function getDiff() { return DIFFICULTIES[_CG.difficulty] || DIFFICULTIES.NORMAL; }
 
 // ─── Floor Modifiers ─────────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const FLOOR_MODIFIERS = {
   BLACKOUT:  { label:'BLACKOUT',  desc:'Emergency lights only',     colour:'#4466aa', icon:'◐' },
   SWARM:     { label:'SWARM',     desc:'Alert — all units respond', colour:'#ff6644', icon:'⚠' },
@@ -1154,8 +1291,11 @@ const FLOOR_MODIFIERS = {
   CHARGED:   { label:'CHARGED',   desc:'Supercharged projectiles',    colour:'#aaccff', icon:'⊕' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
-function getMod() { return game.modifier && FLOOR_MODIFIERS[game.modifier] || null; }
-function modSpeed(base) { return game.modifier === 'OVERCLOCK' ? base * 1.2 : base; }
+function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
+/**
+ * @param {any} base
+ */
+function modSpeed(base) { return _CG.modifier === 'OVERCLOCK' ? base * 1.2 : base; }
 
 // ─── Meta-Progression (persistent across runs) ──────────────────────────────
 // Implementation extracted to src/meta/save.js. These wrappers preserve call
@@ -1166,20 +1306,58 @@ const META_UPGRADES     = NEON.save.META_UPGRADES;
 const DIFF_UNLOCK_REQS  = NEON.save.DIFF_UNLOCK_REQS;
 
 function loadMeta()                             { return NEON.save.loadMeta(DIFFICULTIES); }
+/**
+ * @param {any} meta
+ */
 function saveMeta(meta)                         { return NEON.save.saveMeta(meta); }
+/**
+ * @param {any} id
+ */
 function getMetaLevel(id)                       { return NEON.save.getMetaLevel(id, DIFFICULTIES); }
+/**
+ * @param {any} diffId
+ */
 function isDiffUnlocked(diffId)                 { return NEON.save.isDiffUnlocked(diffId, DIFFICULTIES); }
+/**
+ * @param {any} floor
+ * @param {any} score
+ * @param {any} bc
+ * @param {any} vic
+ */
 function calcRunShards(floor, score, bc, vic)   { return NEON.save.calcRunShards(floor, score, bc, vic, getDiff().shardMul); }
+/**
+ * @param {any} player
+ */
 function applyMetaToPlayer(player)              { return NEON.save.applyMetaToPlayer(player, buildWeapon); }
 function getMetaXPMultiplier()                  { return NEON.save.getMetaXPMultiplier(); }
 function getMetaCreditMultiplier()              { return NEON.save.getMetaCreditMultiplier(); }
 // UNCHAINED helpers — thin wrappers so game.js can call them without NEON.save.
 function resetMeta()                            { return NEON.save.resetMeta(); }
+/**
+ * @param {any} n
+ */
 function addCores(n)                            { return NEON.save.addCores(n); }
+/**
+ * @param {any} n
+ */
 function spendCores(n)                          { return NEON.save.spendCores(n); }
+/**
+ * @param {any} id
+ */
 function addLogFound(id)                        { return NEON.save.addLogFound(id); }
+/**
+ * @param {any} id
+ */
 function markLogRead(id)                        { return NEON.save.markLogRead(id); }
+/**
+ * @param {any} slot
+ * @param {any} moduleId
+ */
 function installModule(slot, moduleId)          { return NEON.save.installModule(slot, moduleId); }
+/**
+ * @param {any} moduleId
+ * @param {any} refund
+ */
 function sellModule(moduleId, refund)           { return NEON.save.sellModule(moduleId, refund); }
 
 // ─── Particles (pooled) ──────────────────────────────────────────────────────
@@ -1191,8 +1369,8 @@ function sellModule(moduleId, refund)           { return NEON.save.sellModule(mo
 // exhaustive reset, not by the act of reuse.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-let particles = [];
-let _particlePool = [];
+/** @type {any[]} */ const particles = [];
+/** @type {any[]} */ const _particlePool = [];
 
 function _newParticleSlot() {
   return { x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, colour:'#fff', type:'', grav:0, alive:false };
@@ -1206,6 +1384,13 @@ function _acquireParticle() {
   return _newParticleSlot();
 }
 
+/**
+ * @param {any} wx
+ * @param {any} wy
+ * @param {any} type
+ * @param {any} colour
+ * @param {any} count
+ */
 function spawnParticles(wx, wy, type, colour, count) {
   // Burst cap — under extreme stacking, halve new burst sizes to protect the
   // frame budget. Gameplay-visible only in pathological scenarios.
@@ -1233,6 +1418,9 @@ function spawnParticles(wx, wy, type, colour, count) {
   }
 }
 
+/**
+ * @param {any} dt
+ */
 function updateParticles(dt) {
   // Compact-in-place: alive slots shift left, dead slots return to pool.
   let w = 0;
@@ -1253,6 +1441,10 @@ function updateParticles(dt) {
   particles.length = w;
 }
 
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawParticles(camX, camY) {
   for (let i = 0, n = particles.length; i < n; i++) {
     const p = particles[i];
@@ -1284,11 +1476,14 @@ function clearParticles() {
 }
 
 // ─── Ambient Particles ───────────────────────────────────────────────────────
-let ambientParticles = [];
+/** @type {any[]} */ const ambientParticles = [];
 const AMB_CAP = 80;
 const AMB_SPAWN_INTERVAL = 0.08; // seconds between spawn attempts
 let ambSpawnTimer = 0;
 
+/**
+ * @param {any} dt
+ */
 function updateAmbient(dt) {
   // Update existing
   for (let i = ambientParticles.length - 1; i >= 0; i--) {
@@ -1312,8 +1507,8 @@ function updateAmbient(dt) {
   }
   ambSpawnTimer = 0;
 
-  const dungeon = game.dungeon;
-  const player = game.player;
+  const dungeon = _CG.dungeon;
+  const player = _CG.player;
   if (!dungeon || !player) return;
 
   const cam = getCamera(player);
@@ -1321,7 +1516,7 @@ function updateAmbient(dt) {
   const startY = Math.max(0, Math.floor(cam.y / TILE) - 1);
   const endX = Math.min(MAP_W, startX + Math.ceil(W / TILE) + 2);
   const endY = Math.min(MAP_H, startY + Math.ceil((H - layout.hudH) / TILE) + 2);
-  const torchR = game.modifier === 'BLACKOUT' ? 5 : 9;
+  const torchR = _CG.modifier === 'BLACKOUT' ? 5 : 9;
   const ptx = Math.floor(player.x), pty = Math.floor(player.y);
 
   // Collect emitter candidates in visible range
@@ -1340,7 +1535,7 @@ function updateAmbient(dt) {
       } else if (tile === T.PLASMA) {
         if (Math.random() < 0.15) emitters.push({ kind: 'EMBER', tx, ty });
       } else if (tile === T.ARC) {
-        const arcActive = Math.sin((game.floorTime || 0) * Math.PI) > 0;
+        const arcActive = Math.sin((_CG.floorTime || 0) * Math.PI) > 0;
         if (arcActive && Math.random() < 0.12) emitters.push({ kind: 'ZAP', tx, ty });
       } else if (tile === T.CRACKED) {
         const pdx = tx - Math.floor(player.x), pdy = ty - Math.floor(player.y);
@@ -1348,7 +1543,7 @@ function updateAmbient(dt) {
           if (Math.random() < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
         }
       } else if (tile === T.WALL) {
-        if (game.sealedEntranceSet && game.sealedEntranceSet.has(ty * MAP_W + tx)) {
+        if (_CG.sealedEntranceSet && _CG.sealedEntranceSet.has(ty * MAP_W + tx)) {
           if (Math.random() < 0.18) emitters.push({ kind: 'WISP', tx, ty });
         }
       }
@@ -1360,7 +1555,7 @@ function updateAmbient(dt) {
   const count = Math.min(emitters.length, budget, 3);
   for (let i = 0; i < count; i++) {
     const idx = Math.floor(Math.random() * emitters.length);
-    const e = emitters.splice(idx, 1)[0];
+    const e = /** @type {any} */ (emitters.splice(idx, 1)[0]);
     const cx = e.tx * TILE + rnd(2, TILE - 2);
     const cy = e.ty * TILE + rnd(2, TILE - 2);
 
@@ -1370,7 +1565,7 @@ function updateAmbient(dt) {
         let dustPal = ['#66ddff','#aabbcc'];
         try {
           if (typeof NEON !== 'undefined' && NEON.biomes && typeof BIOME_PALETTES !== 'undefined') {
-            const a = NEON.biomes.areaForFloor(game.floor);
+            const a = NEON.biomes.areaForFloor(_CG.floor);
             const bp = a && BIOME_PALETTES[a.palette];
             if (bp && Array.isArray(bp.dust) && bp.dust.length) dustPal = bp.dust;
           }
@@ -1425,6 +1620,10 @@ function updateAmbient(dt) {
   }
 }
 
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawAmbient(camX, camY) {
   for (const p of ambientParticles) {
     const sx = p.x - camX, sy = p.y - camY;
@@ -1457,7 +1656,13 @@ function drawAmbient(camX, camY) {
 }
 
 // ─── Floating Damage Numbers ─────────────────────────────────────────────────
-let floatingTexts = [];
+/** @type {any[]} */ const floatingTexts = [];
+/**
+ * @param {any} wx
+ * @param {any} wy
+ * @param {any} text
+ * @param {any} colour
+ */
 function spawnDmgText(wx, wy, text, colour) {
   if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
@@ -1466,6 +1671,9 @@ function spawnDmgText(wx, wy, text, colour) {
     vy: -40, life: 1, text: String(text), colour
   });
 }
+/**
+ * @param {any} dt
+ */
 function updateFloatingTexts(dt) {
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const f = floatingTexts[i];
@@ -1475,6 +1683,10 @@ function updateFloatingTexts(dt) {
     if (f.life <= 0) floatingTexts.splice(i, 1);
   }
 }
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawFloatingTexts(camX, camY) {
   for (const f of floatingTexts) {
     const sx = f.x - camX, sy = f.y - camY;
@@ -1492,6 +1704,10 @@ function drawFloatingTexts(camX, camY) {
 
 // ─── Screen Shake ────────────────────────────────────────────────────────────
 const shake = { intensity: 0, timer: 0, ox: 0, oy: 0 };
+/**
+ * @param {any} intensity
+ * @param {any} duration
+ */
 function triggerShake(intensity, duration = 0.25) {
   if (!settings.screenShake) return;
   if (intensity > shake.intensity) {
@@ -1499,6 +1715,9 @@ function triggerShake(intensity, duration = 0.25) {
     shake.timer = duration;
   }
 }
+/**
+ * @param {any} dt
+ */
 function updateShake(dt) {
   if (!settings.screenShake || shake.timer <= 0) { shake.intensity = 0; shake.timer = 0; shake.ox = shake.oy = 0; return; }
   shake.timer -= dt;
@@ -1511,6 +1730,9 @@ function updateShake(dt) {
 
 // ─── Status Effect Indicators ────────────────────────────────────────────────
 // Low-HP danger vignette (red pulsing edge glow at ≤25% HP)
+/**
+ * @param {any} player
+ */
 function drawDangerVignette(player) {
   const frac = player.hp / player.maxHp;
   if (frac > 0.25 || player.hp <= 0) return;
@@ -1535,8 +1757,8 @@ function drawDangerVignette(player) {
 
 // Floor modifier announcement banner (slides down on floor entry)
 function drawModBanner() {
-  const t = game.modBannerTimer;
-  if (!t || t <= 0 || !game.modifier) return;
+  const t = _CG.modBannerTimer;
+  if (!t || t <= 0 || !_CG.modifier) return;
   const m = getMod();
   const dur = 3.0;
   const fadeIn = 0.3, fadeOut = 0.3;
@@ -1595,11 +1817,15 @@ function drawModBanner() {
 }
 
 // Status effect badges — compact indicators above HUD bar
+/** @type {Record<string, any>} */
 const statusFx = {};
+/**
+ * @param {any} player
+ */
 function getStatusEffects(player) {
   const fx = [];
   // Floor modifier
-  if (game.modifier) {
+  if (_CG.modifier) {
     const m = getMod();
     fx.push({ id: 'mod', icon: m.icon, label: m.label, colour: m.colour });
   }
@@ -1679,6 +1905,9 @@ function getStatusEffects(player) {
   return fx;
 }
 
+/**
+ * @param {any} player
+ */
 function drawStatusBar(player) {
   const effects = getStatusEffects(player);
 
@@ -1755,6 +1984,9 @@ function comboColour() {
   if (c >= 5)  return '#ffb700';  // yellow
   return '#00f5ff';               // cyan
 }
+/**
+ * @param {any} isBoss
+ */
 function registerKill(isBoss) {
   combo.count++;
   combo.timer = COMBO_WINDOW;
@@ -1763,10 +1995,13 @@ function registerKill(isBoss) {
   if (combo.count >= 2) audio.comboTick(combo.count);
   // milestone floating text at kill position
   if (combo.count === 5 || combo.count === 10 || combo.count === 15 || combo.count === 20) {
-    const p = game.player;
+    const p = _CG.player;
     spawnDmgText(p.x, p.y - 0.5, `×${combo.count} COMBO!`, comboColour());
   }
 }
+/**
+ * @param {any} dt
+ */
 function updateCombo(dt) {
   if (combo.count < 1) return;
   combo.timer -= dt;
@@ -1775,16 +2010,32 @@ function updateCombo(dt) {
 }
 
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
+/** @returns {any} */
 function createMap() {
   return Array.from({length: MAP_H}, () => new Uint8Array(MAP_W).fill(T.WALL));
 }
 
+/**
+ * @param {any} map
+ * @param {any} x
+ * @param {any} y
+ * @param {any} w
+ * @param {any} h
+ * @param {any} tile
+ */
 function carveRect(map, x, y, w, h, tile) {
   for (let ty=y; ty<y+h; ty++)
     for (let tx=x; tx<x+w; tx++)
       if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H) map[ty][tx]=tile;
 }
 
+/**
+ * @param {any} map
+ * @param {any} x1
+ * @param {any} y1
+ * @param {any} x2
+ * @param {any} y2
+ */
 function carveCorridor(map, x1, y1, x2, y2) {
   let x=x1, y=y1;
   while (x!==x2) { map[y][x]=T.FLOOR; x += x<x2?1:-1; }
@@ -1792,7 +2043,16 @@ function carveCorridor(map, x1, y1, x2, y2) {
 }
 
 class BSPNode {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} w
+   * @param {any} h
+   */
   constructor(x,y,w,h) { this.x=x; this.y=y; this.w=w; this.h=h; this.left=null; this.right=null; this.room=null; }
+  /**
+   * @param {any} depth
+   */
   split(depth) {
     if (depth<=0 || (this.w<16 && this.h<16)) return;
     const horiz = this.h > this.w ? true : this.w > this.h ? false : Math.random()<0.5;
@@ -1808,10 +2068,14 @@ class BSPNode {
     this.left.split(depth-1);
     this.right.split(depth-1);
   }
+  /** @returns {any[]} */
   getLeaves() {
     if (!this.left && !this.right) return [this];
     return [...(this.left?.getLeaves()??[]), ...(this.right?.getLeaves()??[])];
   }
+  /**
+   * @param {any} map
+   */
   carveRooms(map) {
     if (!this.left && !this.right) {
       const rw = rndInt(5, Math.max(6,this.w-2));
@@ -1829,6 +2093,7 @@ class BSPNode {
     const rr = this.right?.getRoom();
     if (lr && rr) carveCorridor(map, lr.cx, lr.cy, rr.cx, rr.cy);
   }
+  /** @returns {any} */
   getRoom() {
     if (this.room) return this.room;
     const l = this.left?.getRoom(), r = this.right?.getRoom();
@@ -1837,6 +2102,11 @@ class BSPNode {
   }
 }
 
+/**
+ * @param {any} rooms
+ * @param {any} startRoom
+ * @param {any} map
+ */
 function bfsRooms(rooms, startRoom, map) {
   const dist = new Map();
   const q = [startRoom];
@@ -1855,12 +2125,15 @@ function bfsRooms(rooms, startRoom, map) {
   return dist;
 }
 
+/**
+ * @param {any} floorNum
+ */
 function generateFloor(floorNum) {
   const map = createMap();
   const root = new BSPNode(0,0,MAP_W,MAP_H);
   root.split(5);
   root.carveRooms(map);
-  const rooms = root.getLeaves().map(l=>l.room).filter(Boolean);
+  const rooms = root.getLeaves().map((/** @type {any} */ l)=>l.room).filter(Boolean);
 
   // Pick spawn room — try several candidates and pick the one that maximizes
   // BFS distance to the farthest room (ensures exit is far from spawn).
@@ -1889,8 +2162,8 @@ function generateFloor(floorNum) {
   map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
 
   // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
-  let bossRoom = null;
-  let bossEntrances = [];
+  /** @type {any} */ let bossRoom = null;
+  /** @type {any[]} */ let bossEntrances = [];
   if (_isBossFloor) {
     // use the room furthest from spawn that isn't the stair room
     let br = null, bd = 0;
@@ -1981,21 +2254,21 @@ function generateFloor(floorNum) {
   }
 
   // fog of war
-  const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
-  const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
-  const visible = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+  /** @type {any} */ const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+  /** @type {any} */ const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
+  /** @type {any} */ const visible = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
 
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a'};
-  const specialRooms = [];
-  const eligible = rooms.filter(r => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
+  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a'};
+  /** @type {any[]} */ const specialRooms = [];
+  const eligible = rooms.filter((/** @type {any} */ r) => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
   // ── Vendor room (floor 2+, one per non-boss floor) — reserved first ─────
-  let vendorRoom = null;
+  /** @type {any} */ let vendorRoom = null;
   if (floorNum >= 2 && !bossRoom) {
-    const vendorEligible = eligible.filter(r => r.w >= 5 && r.h >= 5);
+    const vendorEligible = eligible.filter((/** @type {any} */ r) => r.w >= 5 && r.h >= 5);
     if (vendorEligible.length > 0) {
       vendorRoom = vendorEligible[rndInt(0, vendorEligible.length - 1)];
       vendorRoom.roomType = 'vendor';
@@ -2005,7 +2278,7 @@ function generateFloor(floorNum) {
   }
 
   // ── Special room rotation (excluding vendor room) ───────────────────────
-  const specialEligible = eligible.filter(r => r !== vendorRoom);
+  const specialEligible = eligible.filter((/** @type {any} */ r) => r !== vendorRoom);
   const numSpecial = Math.min(specialEligible.length, Math.floor(floorNum/2)+1);
   const picked = specialEligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
   for (let i=0; i<picked.length; i++) {
@@ -2017,9 +2290,12 @@ function generateFloor(floorNum) {
   // ── Doors: place at room-corridor junctions (chokepoints only) ──────────
   // Helper: find entrance clusters for a room (groups of adjacent boundary tiles
   // connecting to corridors). Returns array of arrays.
+  /**
+   * @param {any} room
+   */
   function getEntranceClusters(room) {
     const edges = [];
-    const isEntry = t => t===T.FLOOR||t===T.DOOR;
+    const isEntry = (/** @type {any} */ t) => t===T.FLOOR||t===T.DOOR;
     for (let tx=room.x; tx<room.x+room.w; tx++) {
       if (room.y>0 && isEntry(map[room.y][tx]) && map[room.y-1][tx]===T.FLOOR) edges.push({x:tx, y:room.y});
       const by=room.y+room.h-1;
@@ -2042,7 +2318,7 @@ function generateFloor(floorNum) {
       const cl = [e]; used.add(k);
       let qi = 0;
       while (qi < cl.length) {
-        const c = cl[qi++];
+        const c = /** @type {any} */ (cl[qi++]);
         for (const o of dedup) {
           const ok = o.x+','+o.y;
           if (used.has(ok)) continue;
@@ -2077,7 +2353,7 @@ function generateFloor(floorNum) {
     for (const r of specialRooms) {
       if (!lockPriority.includes(r) && r.roomType !== 'vendor' && r.roomType !== 'secret') lockPriority.push(r);
     }
-    const fallback = rooms.filter(r =>
+    const fallback = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r !== bossRoom &&
       !specialRooms.includes(r) && r.w * r.h >= 20
     );
@@ -2114,10 +2390,10 @@ function generateFloor(floorNum) {
 
       // BFS from spawn to find rooms reachable without this lock
       const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
-      const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+      /** @type {any} */ const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
       vis2[spawnRoom.cy][spawnRoom.cx] = 1;
       while (q2.length) {
-        const {x:cx,y:cy} = q2.shift();
+        const {x:cx,y:cy} = /** @type {{x:any,y:any}} */ (q2.shift());
         for (const [ddx,ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
           const nx2=cx+ddx, ny2=cy+ddy;
           if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
@@ -2128,7 +2404,7 @@ function generateFloor(floorNum) {
         }
       }
       // Find a reachable room to place the key
-      const keyRoom = rooms.filter(r => r!==lr && r!==bossRoom && vis2[r.cy][r.cx]);
+      const keyRoom = rooms.filter((/** @type {any} */ r) => r!==lr && r!==bossRoom && vis2[r.cy][r.cx]);
       if (keyRoom.length) {
         const kr = keyRoom[rndInt(0, keyRoom.length-1)];
         keyItems.push({ x: kr.cx, y: kr.cy, colour: colours[ci], tileColour: lockColours[ci] });
@@ -2150,7 +2426,7 @@ function generateFloor(floorNum) {
   const secretRooms = [];
   {
     // Candidates: not spawn, not stair, not boss, not already special, decent size
-    const secretEligible = rooms.filter(r =>
+    const secretEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r !== bossRoom && !r.roomType && r.w * r.h >= 20
     );
     // Shuffle and try to find one with a narrow entrance cluster
@@ -2170,7 +2446,7 @@ function generateFloor(floorNum) {
         for (const e of cl) map[e.y][e.x] = T.WALL;
       }
       // Place T.CRACKED at one narrow cluster (the "hidden entrance")
-      const crackedCluster = narrow[rndInt(0, narrow.length - 1)];
+      const crackedCluster = /** @type {any} */ (narrow[rndInt(0, narrow.length - 1)]);
       for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
 
       break; // only one secret room per floor
@@ -2178,10 +2454,10 @@ function generateFloor(floorNum) {
   }
 
   // ── Challenge Room (floor 2+, non-boss): optional wave-based arena ─────
-  let challengeRoom = null;
+  /** @type {any} */ let challengeRoom = null;
   const challengeEntrances = [];
   if (floorNum >= 2 && !bossRoom) {
-    const challengeEligible = rooms.filter(r =>
+    const challengeEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 30
     );
@@ -2206,9 +2482,9 @@ function generateFloor(floorNum) {
   }
 
   // ── Implant Room (floor 2+, non-boss, ~50% chance): augment shrine ─────
-  let implantRoom = null;
+  /** @type {any} */ let implantRoom = null;
   if (floorNum >= 2 && !bossRoom && Math.random() < 0.5) {
-    const implantEligible = rooms.filter(r =>
+    const implantEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 16
     );
@@ -2221,9 +2497,9 @@ function generateFloor(floorNum) {
   }
 
   // ── Event Room (floor 2+, non-boss): risk/reward encounter terminal ───
-  let eventRoom = null;
+  /** @type {any} */ let eventRoom = null;
   if (floorNum >= 2 && !bossRoom) {
-    const eventEligible = rooms.filter(r =>
+    const eventEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 16
     );
@@ -2242,14 +2518,14 @@ function generateFloor(floorNum) {
   // never walk down a tunnel to nowhere.
   {
     // Build room membership lookup
-    const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    /** @type {any} */ const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
     for (const r of rooms) {
       for (let ty = r.y; ty < r.y + r.h; ty++)
         for (let tx = r.x; tx < r.x + r.w; tx++)
           if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
     }
     let pruned = true;
-    const connects = t => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
+    const connects = (/** @type {any} */ t) => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
     while (pruned) {
       pruned = false;
       for (let y = 1; y < MAP_H - 1; y++) {
@@ -2274,8 +2550,8 @@ function generateFloor(floorNum) {
   {
     const sx = spawnRoom.cx, sy = spawnRoom.cy;
     const stairTile = floorNum >= _finalFloor ? T.TERMINAL : T.STAIRS;
-    const vis = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    const prev = Array.from({length: MAP_H}, () => new Int16Array(MAP_W).fill(-1));
+    /** @type {any} */ const vis = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    /** @type {any} */ const prev = Array.from({length: MAP_H}, () => new Int16Array(MAP_W).fill(-1));
     const q = [{x: sx, y: sy}];
     vis[sy][sx] = 1;
     let stairX = -1, stairY = -1;
@@ -2285,7 +2561,7 @@ function generateFloor(floorNum) {
         if (map[y][x] === stairTile) { stairX = x; stairY = y; }
 
     while (q.length) {
-      const {x, y} = q.shift();
+      const {x, y} = /** @type {{x:any,y:any}} */ (q.shift());
       if (x === stairX && y === stairY) break;
       for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
         const nx = x + dx, ny = y + dy;
@@ -2334,8 +2610,8 @@ function generateFloor(floorNum) {
       const poolSize = rndInt(2, 4);
       let cx = sx, cy = sy;
       for (let p = 1; p < poolSize; p++) {
-        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
-        const [ddx, ddy] = dirs[rndInt(0, 3)];
+        const dirs = /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]]);
+        const [ddx, ddy] = /** @type {[number,number]} */ (dirs[rndInt(0, 3)]);
         const nx = cx + ddx, ny = cy + ddy;
         if (nx > r.x && nx < r.x+r.w-1 && ny > r.y && ny < r.y+r.h-1 && map[ny][nx] === T.FLOOR) {
           map[ny][nx] = T.TOXIC;
@@ -2359,8 +2635,8 @@ function generateFloor(floorNum) {
       const poolSize = rndInt(2, 4);
       let cx = sx, cy = sy;
       for (let p = 1; p < poolSize; p++) {
-        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
-        const [ddx, ddy] = dirs[rndInt(0, 3)];
+        const dirs = /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]]);
+        const [ddx, ddy] = /** @type {[number,number]} */ (dirs[rndInt(0, 3)]);
         const nx = cx + ddx, ny = cy + ddy;
         if (nx > r.x && nx < r.x+r.w-1 && ny > r.y && ny < r.y+r.h-1 && map[ny][nx] === T.FLOOR) {
           map[ny][nx] = T.PLASMA;
@@ -2373,7 +2649,7 @@ function generateFloor(floorNum) {
   // ── Lore Terminals (floor 2+, non-boss): 1–2 data terminals per floor ────
   const loreTerminals = [];
   if (floorNum >= 2 && !bossRoom) {
-    const loreEligible = rooms.filter(r =>
+    const loreEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
       r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
     );
@@ -2395,7 +2671,7 @@ function generateFloor(floorNum) {
   // ── Arc Grids (floor 5+): pulsing hazards in corridors ───────────────
   if (floorNum >= 5) {
     // Build room mask to identify corridor tiles
-    const roomMask = Array.from({length:MAP_H}, ()=>new Uint8Array(MAP_W));
+    /** @type {any} */ const roomMask = Array.from({length:MAP_H}, ()=>new Uint8Array(MAP_W));
     for (const r of rooms) {
       for (let ty = r.y; ty < r.y + r.h; ty++)
         for (let tx = r.x; tx < r.x + r.w; tx++)
@@ -2408,7 +2684,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.FLOOR || roomMask[ty][tx]) continue;
         // Skip if adjacent to door, stairs, terminal, or locked door
         let nearSpecial = false;
-        for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+        for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
           const nt = map[ty+ddy]?.[tx+ddx];
           if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
@@ -2423,7 +2699,7 @@ function generateFloor(floorNum) {
       if (placed >= arcCount) break;
       // Don't place adjacent to another arc
       let adjArc = false;
-      for (const [ddx, ddy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
         if (map[ct.y+ddy]?.[ct.x+ddx] === T.ARC) { adjArc = true; break; }
       }
       if (adjArc) continue;
@@ -2435,7 +2711,7 @@ function generateFloor(floorNum) {
   // ── Teleport Pads (floor 3+, non-boss): linked pairs for fast travel ───
   const teleportPads = [];
   if (floorNum >= 3 && !bossRoom) {
-    const padEligible = rooms.filter(r =>
+    const padEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 16 &&
       map[r.cy][r.cx] === T.FLOOR
@@ -2455,7 +2731,7 @@ function generateFloor(floorNum) {
         }
       }
       if (bestA !== null && bestDist >= 15) {
-        const rA = shuffled[bestA], rB = shuffled[bestB];
+        const rA = shuffled[/** @type {number} */ (bestA)], rB = shuffled[/** @type {number} */ (bestB)];
         map[rA.cy][rA.cx] = T.TELEPORT_PAD;
         map[rB.cy][rB.cx] = T.TELEPORT_PAD;
         teleportPads.push({ x1: rA.cx, y1: rA.cy, x2: rB.cx, y2: rB.cy, pairIndex: p });
@@ -2466,7 +2742,7 @@ function generateFloor(floorNum) {
   }
 
   // Room colour map (floor tile → tint)
-  const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
+  /** @type {any} */ const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
   for (const r of rooms) {
     if (!r.roomType) continue;
     const col = ROOM_COLOURS[r.roomType];
@@ -2477,7 +2753,7 @@ function generateFloor(floorNum) {
 
   // Secret room mask — tiles inside unrevealed secret rooms are hidden from lighting/rendering
   // Cracked entrance tiles are excluded so they can receive light and render crack visuals
-  const secretMask = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+  /** @type {any} */ const secretMask = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   for (const r of secretRooms) {
     for (let ty=r.y; ty<r.y+r.h; ty++)
       for (let tx=r.x; tx<r.x+r.w; tx++)
@@ -2488,9 +2764,14 @@ function generateFloor(floorNum) {
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
+/**
+ * @param {any} dungeon
+ * @param {any} px
+ * @param {any} py
+ */
 function updateLighting(dungeon, px, py) {
   const map = dungeon.map;
-  const mod = game.modifier;
+  const mod = _CG.modifier;
   const r = mod === 'BLACKOUT' ? 5 : 9;
   const tx = Math.floor(px), ty = Math.floor(py);
   // Incremental FOV (Phase 2b): if the player is still on the same floor tile
@@ -2520,15 +2801,15 @@ function updateLighting(dungeon, px, py) {
       const l = Math.max(0, 1 - d / r);
       dungeon.light[y][x] = l;
       dungeon.visible[y][x] = 1;
-      if (!dungeon.visited[y][x]) { dungeon.visited[y][x] = 1; game._minimapDirty = true; }
+      if (!dungeon.visited[y][x]) { dungeon.visited[y][x] = 1; _CG._minimapDirty = true; }
     }
   // Sconce ambient — only brightens already-visited tiles, no visibility grant.
   // Add deterministic flicker so floors read like unstable lab lighting.
   for (const sc of dungeon.lights) {
     const sdx = sc.x - tx, sdy = sc.y - ty;
     if (Math.abs(sdx) > 6 || Math.abs(sdy) > 6) continue;
-    const flickerBase = 0.82 + 0.18 * Math.sin((game.floorTime || 0) * 7 + sc.x * 0.73 + sc.y * 1.11);
-    const flickerDrop = Math.sin((game.floorTime || 0) * 19 + sc.x * 1.7 + sc.y * 2.3) > 0.94 ? 0.55 : 1;
+    const flickerBase = 0.82 + 0.18 * Math.sin((_CG.floorTime || 0) * 7 + sc.x * 0.73 + sc.y * 1.11);
+    const flickerDrop = Math.sin((_CG.floorTime || 0) * 19 + sc.x * 1.7 + sc.y * 2.3) > 0.94 ? 0.55 : 1;
     const sconceMul = flickerBase * flickerDrop;
     for (let dy = -4; dy <= 4; dy++)
       for (let dx = -4; dx <= 4; dx++) {
@@ -2543,10 +2824,17 @@ function updateLighting(dungeon, px, py) {
 }
 
 // LOS check for FOV: like hasLOS but uses isSeeThrough and blocks diagonal corner-cuts
+/**
+ * @param {any} x1
+ * @param {any} y1
+ * @param {any} tx
+ * @param {any} ty
+ * @param {any} map
+ */
 function tileHasLOS(x1, y1, tx, ty, map) {
   let cx = Math.floor(x1), cy = Math.floor(y1);
   if (cx === tx && cy === ty) return true;
-  let dx = Math.abs(tx - cx), dy = Math.abs(ty - cy);
+  const dx = Math.abs(tx - cx), dy = Math.abs(ty - cy);
   const sx = cx < tx ? 1 : -1, sy = cy < ty ? 1 : -1;
   let err = dx - dy;
   for (let i = 0; i < 100; i++) {
@@ -2574,9 +2862,12 @@ function tileHasLOS(x1, y1, tx, ty, map) {
 // _init() so there is zero stale bleed-through between reuses. Release
 // happens in the main update loop when p.dead becomes true.
 const PROJECTILE_CAP = 200;
-let projectiles = [];
-const _projPool = [];
+/** @type {any[]} */ const projectiles = [];
+/** @type {any[]} */ const _projPool = [];
 
+/**
+ * @param {any} p
+ */
 function releaseProjectile(p) {
   if (_projPool.length >= PROJECTILE_CAP) return; // hard cap
   // Best-effort cleanup of references that could hold onto dead enemies/
@@ -2592,6 +2883,49 @@ function releaseProjectile(p) {
 }
 
 class Projectile {
+  /** @type {any} */ x;
+  /** @type {any} */ y;
+  /** @type {any} */ dx;
+  /** @type {any} */ dy;
+  /** @type {any} */ spd;
+  /** @type {any} */ dmg;
+  /** @type {any} */ maxRange;
+  /** @type {any} */ travelled;
+  /** @type {any} */ colour;
+  /** @type {any} */ piercing;
+  /** @type {any} */ fromPlayer;
+  /** @type {any} */ weaponName;
+  /** @type {any} */ dead;
+  /** @type {any} */ hitEnemies;
+  /** @type {any} */ homing;
+  /** @type {any} */ trail;
+  /** @type {any} */ bouncesLeft;
+  /** @type {any} */ _hasRicochet;
+  /** @type {any} */ _effects;
+  /** @type {any} */ _affixes;
+  /** @type {any} */ isGrenade;
+  /** @type {any} */ grenadeDmg;
+  /** @type {any} */ isCrit;
+  /** @type {any} */ ownerType;
+  /** @type {any} */ _owner;
+  /** @type {any} */ grenadeColour;
+  /** @type {any} */ targetX;
+  /** @type {any} */ targetY;
+  /** @type {any} */ maxPierces;
+  /** @type {any} */ isAllyTurret;
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} dx
+   * @param {any} dy
+   * @param {any} spd
+   * @param {any} dmg
+   * @param {any} range
+   * @param {any} colour
+   * @param {any} piercing
+   * @param {any} fromPlayer
+   * @param {any} [weaponName]
+   */
   constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     // Reuse a dead slot from the pool when possible. Returning an object from
     // a constructor makes `new Projectile(...)` yield that object instead of
@@ -2603,14 +2937,27 @@ class Projectile {
     }
     this._init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName);
   }
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} dx
+   * @param {any} dy
+   * @param {any} spd
+   * @param {any} dmg
+   * @param {any} range
+   * @param {any} colour
+   * @param {any} piercing
+   * @param {any} fromPlayer
+   * @param {any} [weaponName]
+   */
   _init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     // ── Core motion/state (mirrors original constructor) ──
-    this.x=x; this.y=y;
+    /** @type {any} */ (this).x=x; /** @type {any} */ (this).y=y;
     [this.dx,this.dy]=norm(dx,dy);
     this.spd= fromPlayer && hasAugment('KINETIC_AMPLIFIER') ? spd * 1.2 : spd;
-    if (game.modifier === 'CHARGED') this.spd *= 1.4;
+    if (_CG.modifier === 'CHARGED') this.spd *= 1.4;
     this.dmg=dmg;
-    if (fromPlayer && game.modifier === 'CHARGED') this.dmg = Math.round(this.dmg * 1.2);
+    if (fromPlayer && _CG.modifier === 'CHARGED') this.dmg = Math.round(this.dmg * 1.2);
     this.maxRange=range; this.travelled=0;
     this.colour=colour; this.piercing=piercing;
     this.maxPierces=piercing?Infinity:0;
@@ -2618,29 +2965,35 @@ class Projectile {
     this.weaponName=weaponName||null;
     // Reuse containers in place to avoid alloc; fall back to fresh if null.
     if (this._effects && this._effects.length) this._effects.length = 0;
-    else if (!this._effects) this._effects = [];
+    else if (!this._effects) this._effects = /** @type {any[]} */ ([]);
     if (this.hitEnemies) this.hitEnemies.clear();
     else this.hitEnemies = new Set();
     this.bouncesLeft=0;
     this._hasRicochet=false;
     if (this.trail) this.trail.length = 0;
-    else this.trail = [];
+    else this.trail = /** @type {any[]} */ ([]);
     // ── Optional fields — EXPLICITLY reset so stale values from a prior
     // occupant of this slot cannot leak into new behaviour. Every property
     // that any callsite ever assigns must be zeroed here. ──
-    this.homing = null;
+    this.homing = /** @type {any} */ (null);
     this.isGrenade = false;
     this.grenadeDmg = 0;
-    this.grenadeColour = null;
+    this.grenadeColour = /** @type {any} */ (null);
     this.targetX = 0;
     this.targetY = 0;
     this.ownerType = null;
     this.isAllyTurret = false;
-    this._owner = null;
+    this._owner = /** @type {any} */ (null);
     this.isCrit = false;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
-    else if (!this._affixes) this._affixes = [];
+    else if (!this._affixes) this._affixes = /** @type {any[]} */ ([]);
   }
+  /**
+   * @param {any} dt
+   * @param {any} map
+   * @param {any} player
+   * @param {any} enemies
+   */
   update(dt, map, player, enemies) {
     // Homing: steer toward target
     if (this.homing && !this.homing.dead) {
@@ -2657,7 +3010,8 @@ class Projectile {
       this.trail.push(this.x*TILE, this.y*TILE);
       if (this.trail.length>24) this.trail.splice(0,2); // max 12 points (x,y pairs)
     }
-    const prevX=this.x, prevY=this.y;
+          /** @type {any} */ const prevX=this.x;
+          /** @type {any} */ const prevY=this.y;
     const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
@@ -2747,8 +3101,8 @@ class Projectile {
             this.bouncesLeft = 0;
             this._hasRicochet = false;
             this.travelled = 0;
-            this._effects = [];
-            this._affixes = [];
+            this._effects = /** @type {any[]} */ ([]);
+            this._affixes = /** @type {any[]} */ ([]);
             this.isCrit = false;
             spawnParticles(this.x, this.y, 'SPARK', '#88ddff', 8);
             audio.reflect();
@@ -2903,6 +3257,10 @@ class Projectile {
       }
     }
   }
+  /**
+   * @param {any} camX
+   * @param {any} camY
+   */
   draw(camX,camY) {
     // Ricochet trail — fading cyan line behind bouncing projectiles
     const tl=this.trail.length;
@@ -2953,20 +3311,29 @@ class Projectile {
 }
 
 // ─── Hazard Zones (grenade AoE) ───────────────────────────────────────────────
+/**
+ * @param {any} x
+ * @param {any} y
+ * @param {any} dmg
+ */
 function detonateGrenade(x, y, dmg) {
   hazardZones.push({ x, y, radius: 1.5, age: 0, maxAge: 3, tickCd: 0, armTimer: 0, dmg, colour: '#ff6622' });
   spawnParticles(x, y, 'EXPLOSION', '#ff6622', 10);
   audio.grenadeExplode();
-  primeVCoresInRadius(x, y, 1.5, game.dungeon.map);
-  damageCratesInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  damageBeaconsInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  damageShieldGensInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  damageCamerasInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  damageLasersInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  damageWallTurretsInRadius(x, y, 1.5, dmg, game.dungeon.map);
-  triggerMinesInRadius(x, y, 1.5, game.dungeon.map);
+  primeVCoresInRadius(x, y, 1.5, _CG.dungeon.map);
+  damageCratesInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  damageBeaconsInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  damageShieldGensInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  damageCamerasInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  damageLasersInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  damageWallTurretsInRadius(x, y, 1.5, dmg, _CG.dungeon.map);
+  triggerMinesInRadius(x, y, 1.5, _CG.dungeon.map);
 }
 
+/**
+ * @param {any} dt
+ * @param {any} player
+ */
 function updateHazardZones(dt, player) {
   for (let i = hazardZones.length - 1; i >= 0; i--) {
     const z = hazardZones[i];
@@ -2976,7 +3343,7 @@ function updateHazardZones(dt, player) {
     if (z.age >= z.maxAge) { hazardZones.splice(i, 1); continue; }
     if (z.armTimer <= 0 && z.tickCd <= 0 && !player.invincibleTimer && !isPlayerDamageImmune() &&
         dist(player.x, player.y, z.x, z.y) < z.radius &&
-        hasLOS(z.x, z.y, player.x, player.y, game.dungeon.map)) {
+        hasLOS(z.x, z.y, player.x, player.y, _CG.dungeon.map)) {
       player.takeDamage(z.dmg, z.source || 'Grenade');
       spawnParticles(player.x, player.y, 'SPARK', z.colour || '#ff6622', 4);
       z.tickCd = 0.8;
@@ -2984,6 +3351,10 @@ function updateHazardZones(dt, player) {
   }
 }
 
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
 function drawHazardZones(camX, camY) {
   for (const z of hazardZones) {
     const sx = z.x * TILE - camX, sy = z.y * TILE - camY;
@@ -3023,98 +3394,105 @@ function drawHazardZones(camX, camY) {
 const UPGRADES = [
   // Instant (one-time) upgrades
   {id:'MED_PACK',    name:'Med-Pack',     desc:'+40 HP',               colour:'#00ff88', rarity:40, persistent:false,
-   fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
+   fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
   {id:'NANO_REPAIR', name:'Nano-Repair',  desc:'+15 HP',               colour:'#88ff88', rarity:35, persistent:false,
-   fn: p=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
+   fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
   {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
-   fn: p=>{ p.gainXP(50); }},
+   fn: (/** @type {any} */ p)=>{ p.gainXP(50); }},
   {id:'VOID_SHARD',  name:'Void Shard',   desc:'+1 void bomb charge',  colour:'#aa00ff', rarity:4,  persistent:false,
-   fn: p=>{ p.shards=(p.shards||0)+1; game.msg('Got Void Shard! ('+p.shards+')','#aa00ff'); }},
+   fn: (/** @type {any} */ p)=>{ p.shards=(p.shards||0)+1; _CG.msg('Got Void Shard! ('+p.shards+')','#aa00ff'); }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
-   levelDesc: l=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
-   fn: p=>{ p.upgrades.SAW_BLADE=(p.upgrades.SAW_BLADE||0)+1; }},
+   levelDesc: (/** @type {any} */ l)=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.SAW_BLADE=(p.upgrades.SAW_BLADE||0)+1; }},
   {id:'PLASMA_ORB',  name:'Plasma Orb',   desc:'Auto-fires homing orb',       colour:'#ff44cc', rarity:10, persistent:true, maxLevel:3,
-   levelDesc: l=>'25 dmg, '+(3-l*0.7).toFixed(1)+'s cooldown',
-   fn: p=>{ p.upgrades.PLASMA_ORB=(p.upgrades.PLASMA_ORB||0)+1; }},
+   levelDesc: (/** @type {any} */ l)=>'25 dmg, '+(3-l*0.7).toFixed(1)+'s cooldown',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.PLASMA_ORB=(p.upgrades.PLASMA_ORB||0)+1; }},
   {id:'NANO_REGEN',  name:'Nano Regen',   desc:'Passive HP regeneration',     colour:'#44ffaa', rarity:15, persistent:true, maxLevel:5,
-   levelDesc: l=>'+'+(l+1)+' HP/s',
-   fn: p=>{ p.upgrades.NANO_REGEN=(p.upgrades.NANO_REGEN||0)+1; }},
+   levelDesc: (/** @type {any} */ l)=>'+'+(l+1)+' HP/s',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.NANO_REGEN=(p.upgrades.NANO_REGEN||0)+1; }},
   {id:'OVERCLOCK',   name:'Overclock',    desc:'Permanent speed boost',       colour:'#ff00c8', rarity:10, persistent:true, maxLevel:3,
-   levelDesc: l=>'+'+(15*(l+1))+'% speed',
-   fn: p=>{ p.upgrades.OVERCLOCK=(p.upgrades.OVERCLOCK||0)+1; p.permSpeedBonus=(p.upgrades.OVERCLOCK)*0.5; }},
+   levelDesc: (/** @type {any} */ l)=>'+'+(15*(l+1))+'% speed',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.OVERCLOCK=(p.upgrades.OVERCLOCK||0)+1; p.permSpeedBonus=(p.upgrades.OVERCLOCK)*0.5; }},
   {id:'ARMOR_UP',    name:'Reinforced Armor', desc:'Permanent +3 DEF',        colour:'#00aaff', rarity:12, persistent:true, maxLevel:5,
-   levelDesc: l=>'+'+(3*(l+1))+' DEF total',
-   fn: p=>{ p.upgrades.ARMOR_UP=(p.upgrades.ARMOR_UP||0)+1; p.def+=3; }},
+   levelDesc: (/** @type {any} */ l)=>'+'+(3*(l+1))+' DEF total',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.ARMOR_UP=(p.upgrades.ARMOR_UP||0)+1; p.def+=3; }},
   {id:'RICOCHET',   name:'Ricochet Module',  desc:'Bullets bounce off walls', colour:'#00ffff', rarity:8,  persistent:true, maxLevel:3,
-   levelDesc: l=>(l+1)+' bounce'+(l>0?'s':''),
-   fn: p=>{ p.upgrades.RICOCHET=(p.upgrades.RICOCHET||0)+1; }},
+   levelDesc: (/** @type {any} */ l)=>(l+1)+' bounce'+(l>0?'s':''),
+   fn: (/** @type {any} */ p)=>{ p.upgrades.RICOCHET=(p.upgrades.RICOCHET||0)+1; }},
   {id:'SENTRY_DRONE', name:'Sentry Drone', desc:'Orbiting drone auto-fires at enemies', colour:'#00e5ff', rarity:7, persistent:true, maxLevel:3,
-   levelDesc: l=>(l+1)+' drone'+(l>0?'s':'')+', 8 dmg, '+(2.0-l*0.4).toFixed(1)+'s cd',
-   fn: p=>{ p.upgrades.SENTRY_DRONE=(p.upgrades.SENTRY_DRONE||0)+1; }},
+   levelDesc: (/** @type {any} */ l)=>(l+1)+' drone'+(l>0?'s':'')+', 8 dmg, '+(2.0-l*0.4).toFixed(1)+'s cd',
+   fn: (/** @type {any} */ p)=>{ p.upgrades.SENTRY_DRONE=(p.upgrades.SENTRY_DRONE||0)+1; }},
 ];
 
 // Generate a weapon upgrade option (pre-rolled so player sees exact weapon)
 function makeWeaponOption() {
   const k=WEAPON_KEYS[rndInt(0,WEAPON_KEYS.length-1)];
-  const aw=rollWeapon(k, game.floor || 1);
+  const aw=rollWeapon(k, _CG.floor || 1);
   const rarityCol = RARITY_COLOURS[aw._rarity] || '#aaaaaa';
-  const affixDesc = aw._affixes.map(id => WEAPON_AFFIXES[id]?.desc).filter(Boolean).join(', ');
+  const affixDesc = aw._affixes.map((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.desc).filter(Boolean).join(', ');
   const statsDesc = aw.melee ? aw.dmg+' dmg, melee, '+aw.rate+'/s' : aw.dmg+(aw.count>1?'×'+aw.count:'')+' dmg, '+aw.rate+'/s, rng '+aw.range;
   return {
     id:'WEAPON_'+k, name:aw.displayName, colour:aw.colour, rarity:10, persistent:false,
     _rarity: aw._rarity, _rarityColour: rarityCol, _weaponObj: aw,
     desc: statsDesc,
     affixDesc: affixDesc || null,
-    fn: p=>{
+    fn: (/** @type {any} */ p)=>{
       if (p.collectWeapon) {
         if (p.collectWeapon(aw)) {
-          game.msg('Collected '+aw.displayName+'! [Scroll] to switch',rarityCol);
+          _CG.msg('Collected '+aw.displayName+'! [Scroll] to switch',rarityCol);
           return;
         }
       }
       if (p.equipWeapon) p.equipWeapon(aw);
       else p.weapon=aw;
-      game.msg('Equipped '+aw.displayName+'!',rarityCol);
+      _CG.msg('Equipped '+aw.displayName+'!',rarityCol);
     }
   };
 }
 
+/**
+ * @param {any} exclude
+ */
 function makeHackwareOption(exclude) {
   // Pick a random hackware module different from what player has and the excluded id
-  const current = game.player ? game.player.hackware : null;
+  const current = _CG.player ? _CG.player.hackware : null;
   const eligible = HACKWARE_KEYS.filter(k => {
     if (exclude && exclude === 'HACKWARE_' + k) return false;
     return true;
   });
   if (eligible.length === 0) return null;
-  const key = eligible[rndInt(0, eligible.length - 1)];
+  const key = /** @type {string} */ (eligible[rndInt(0, eligible.length - 1)]);
   const hw = HACKWARE[key];
   const replaces = current ? HACKWARE[current] : null;
   return {
     id:'HACKWARE_'+key, name:hw.name,
     desc:hw.desc + (replaces ? ' [replaces '+replaces.name+']' : ''),
     colour:hw.colour, rarity:0, persistent:false, isHackware:true,
-    fn: p => {
+    fn: (/** @type {any} */ p) => {
       p.hackware = key;
       p.hackwareCooldown = 0; // fresh cooldown on equip
-      game.msg(hw.icon+' '+hw.name+' INSTALLED', hw.colour);
+      _CG.msg(hw.icon+' '+hw.name+' INSTALLED', hw.colour);
     }
   };
 }
 
+/**
+ * @param {any} exclude
+ * @returns {any}
+ */
 function pickUpgradeOption(exclude) {
   // Build eligible pool: exclude maxed persistent upgrades and the excluded id
   const pool = UPGRADES.filter(u => {
     if (exclude && u.id === exclude) return false;
-    if (u.persistent && game.player) {
-      const cur = game.player.upgrades[u.id] || 0;
-      if (cur >= u.maxLevel) return false;
+    if (u.persistent && _CG.player) {
+      const cur = _CG.player.upgrades[u.id] || 0;
+      if (cur >= (u.maxLevel ?? Infinity)) return false;
     }
     return true;
   });
   // 12% chance for a hackware option (floor 3+)
-  if (game.floor >= 3 && Math.random() < 0.12 && (!exclude || !exclude.startsWith('HACKWARE_'))) {
+  if (_CG.floor >= 3 && Math.random() < 0.12 && (!exclude || !exclude.startsWith('HACKWARE_'))) {
     const hw = makeHackwareOption(exclude);
     if (hw) return hw;
   }
@@ -3133,6 +3511,7 @@ function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
 
 // ─── Level-Up Perks ──────────────────────────────────────────────────────────
 // Choose-one-of-three at levels 2, 4, 6, 8. Auto-Laser capstone at level 10.
+/** @type {Record<string, any>} */
 const PERK_POOL = {
   LASER_SIGHT:     { name:'Laser Sight',     icon:'◎', desc:'Shows aim trajectory',                colour:'#00f5ff' },
   THREAT_SENSE:    { name:'Threat Sense',     icon:'⚠', desc:'Detects nearby off-screen foes',      colour:'#ff6644' },
@@ -3153,33 +3532,45 @@ const PERK_POOL = {
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
 
+/**
+ * @param {any} player
+ * @param {any} count
+ */
 function rollPerkChoices(player, count) {
   const available = Object.keys(PERK_POOL).filter(id => !player.perks[id]);
   // Fisher-Yates shuffle, take first `count`
   for (let i = available.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [available[j], available[i]];
+    [available[i], available[j]] = [/** @type {string} */ (available[j]), /** @type {string} */ (available[i])];
   }
   return available.slice(0, Math.min(count, available.length));
 }
 
+/**
+ * @param {any} player
+ * @param {any} id
+ */
 function applyPerk(player, id) {
   player.perks[id] = true;
   const perk = PERK_POOL[id];
   if (id === 'ENERGY_SHIELD') player.energyShield = true;
   if (id === 'THICK_ARMOR') player.def += 3;
-  if (perk) setTimeout(() => game.msg('⚡ PERK: '+perk.name, perk.colour), 200);
+  if (perk) setTimeout(() => _CG.msg('⚡ PERK: '+perk.name, perk.colour), 200);
 }
 
+/**
+ * @param {any} player
+ */
 function grantCapstone(player) {
   if (!player.perks.AUTO_LASER) {
     player.perks.AUTO_LASER = true;
-    setTimeout(() => game.msg('⚡ CAPSTONE: '+PERK_CAPSTONE.name, PERK_CAPSTONE.colour), 200);
+    setTimeout(() => _CG.msg('⚡ CAPSTONE: '+PERK_CAPSTONE.name, PERK_CAPSTONE.colour), 200);
   }
 }
 
 // ─── Augments (Cybernetic Implants) ──────────────────────────────────────────
 const MAX_AUGMENTS = 3;
+/** @type {Record<string, any>} */
 const AUGMENTS = {
   NEURAL_LINK:      { name:'Neural Link',         icon:'🧠', colour:'#cc44ff', desc:'+25% XP from all sources' },
   TITANIUM_PLATING: { name:'Titanium Plating',     icon:'🛡', colour:'#4488cc', desc:'Reduce all damage by 1' },
@@ -3195,40 +3586,50 @@ const AUGMENTS = {
   REACTIVE_ARMOR:   { name:'Reactive Armor',        icon:'💥', colour:'#ff6644', desc:'When hit, emit damage pulse' },
 };
 const AUGMENT_KEYS = Object.keys(AUGMENTS);
-function hasAugment(id) { return !!(game.player && game.player.augments[id]); }
+/**
+ * @param {any} id
+ */
+function hasAugment(id) { return !!(_CG.player && _CG.player.augments[id]); }
 
+/**
+ * @param {any} player
+ * @param {any} count
+ */
 function rollAugmentChoices(player, count) {
   const owned = player.augments || {};
   const available = AUGMENT_KEYS.filter(id => !owned[id]);
   // Fisher-Yates shuffle
   for (let i = available.length - 1; i > 0; i--) {
     const j = rndInt(0, i);
-    [available[i], available[j]] = [available[j], available[i]];
+    [available[i], available[j]] = [/** @type {string} */ (available[j]), /** @type {string} */ (available[i])];
   }
   return available.slice(0, count);
 }
 
+/**
+ * @param {any} exclude
+ */
 function makeAugmentShopOption(exclude) {
-  const owned = game.player ? game.player.augments || {} : {};
+  const owned = _CG.player ? _CG.player.augments || {} : {};
   const slots = Object.keys(owned).length;
   if (slots >= MAX_AUGMENTS) return null;
   const available = AUGMENT_KEYS.filter(id => !owned[id] && id !== exclude);
   if (!available.length) return null;
-  const id = available[rndInt(0, available.length - 1)];
+  const id = /** @type {string} */ (available[rndInt(0, available.length - 1)]);
   const aug = AUGMENTS[id];
   return {
     id: 'SHOP_AUG_' + id, name: aug.name, isAugment: true,
     desc: aug.icon + ' ' + aug.desc + ' [AUGMENT]',
-    colour: aug.colour, price: 120 + (game.floor || 1) * 15,
-    fn: p => {
+    colour: aug.colour, price: 120 + (_CG.floor || 1) * 15,
+    fn: (/** @type {any} */ p) => {
       // Guard: don't exceed max slots or install duplicates
       if (Object.keys(p.augments).length >= MAX_AUGMENTS || p.augments[id]) {
-        game.msg('AUGMENT SLOTS FULL', '#993366');
+        _CG.msg('AUGMENT SLOTS FULL', '#993366');
         return;
       }
       p.augments[id] = true;
       audio.augmentInstall();
-      game.msg(aug.icon + ' ' + aug.name + ' INSTALLED', aug.colour);
+      _CG.msg(aug.icon + ' ' + aug.name + ' INSTALLED', aug.colour);
       spawnParticles(p.x, p.y, 'EXPLOSION', aug.colour, 12);
     }
   };
@@ -3270,6 +3671,9 @@ const EVENTS = [
     b:{ label:'HOTWIRE',  desc:'Tap the pod\'s power cell for your systems.', summary:'reset hackware CD +credits' } },
 ];
 
+/**
+ * @param {any} player
+ */
 function rollEvent(player) {
   const available = EVENTS.filter(e => {
     if (e.id === 'RADIATION_LEAK' && Object.keys(player.augments || {}).length >= MAX_AUGMENTS) return false;
@@ -3280,9 +3684,14 @@ function rollEvent(player) {
   return available[rndInt(0, available.length - 1)];
 }
 
+/**
+ * @param {any} event
+ * @param {any} choice
+ * @param {any} player
+ * @param {any} gm
+ */
 function applyEventEffect(event, choice, player, gm) {
   const floor = gm.floor;
-  const d = getDiff();
   if (choice === 'a') {
     switch (event.id) {
       case 'STASIS_POD': {
@@ -3297,7 +3706,7 @@ function applyEventEffect(event, choice, player, gm) {
       case 'CORRUPTED_TERMINAL': {
         if (Math.random() < 0.6) {
           if (!player.hackware) {
-            const hw = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)];
+            const hw = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)]);
             player.hackware = hw;
             player.hackwareCooldown = 0;
             gm.msg('HACKWARE: ' + HACKWARE[hw].name, HACKWARE[hw].colour);
@@ -3321,7 +3730,7 @@ function applyEventEffect(event, choice, player, gm) {
       }
       case 'ARMS_CACHE': {
         const bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
-        const baseKey = bases[rndInt(0, bases.length - 1)];
+        const baseKey = /** @type {string} */ (bases[rndInt(0, bases.length - 1)]);
         const _aw = rollWeapon(baseKey, Math.min(10, floor + 1));
         if (player.equipWeapon) player.equipWeapon(_aw);
         else player.weapon = _aw;
@@ -3337,7 +3746,7 @@ function applyEventEffect(event, choice, player, gm) {
         if (slots < MAX_AUGMENTS) {
           const available = AUGMENT_KEYS.filter(id => !owned[id]);
           if (available.length) {
-            const id = available[rndInt(0, available.length - 1)];
+            const id = /** @type {string} */ (available[rndInt(0, available.length - 1)]);
             player.augments[id] = true;
             audio.augmentInstall();
             gm.msg(AUGMENTS[id].icon + ' ' + AUGMENTS[id].name + ' INSTALLED', AUGMENTS[id].colour);
@@ -3486,27 +3895,38 @@ function applyEventEffect(event, choice, player, gm) {
 
 // ─── Vendor / Shop ───────────────────────────────────────────────────────────
 // Shop prices are explicit per upgrade id (not derived from rarity which is spawn weight)
+/** @type {Record<string, any>} */
 const SHOP_PRICES = {
   MED_PACK:60, NANO_REPAIR:35, XP_CHIP:45, VOID_SHARD:90,
   SAW_BLADE:120, PLASMA_ORB:130, NANO_REGEN:80, OVERCLOCK:110, ARMOR_UP:100, RICOCHET:115
 };
+/**
+ * @param {any} id
+ * @param {any} floor
+ * @param {any} playerUpgrades
+ */
 function shopPrice(id, floor, playerUpgrades) {
   const base = SHOP_PRICES[id] || 80;
   const lvl = (playerUpgrades && playerUpgrades[id]) || 0;
   return Math.floor((base + floor * 5) * (1 + lvl * 0.4));
 }
 
+/**
+ * @param {any} floor
+ * @param {any} player
+ * @param {any} dungeon
+ */
 function generateShopItems(floor, player, dungeon) {
   const pool = [];
   // Always offer a heal option
   pool.push({
     id:'SHOP_HEAL', name:'Full Repair', desc:'Restore all HP',
     colour:'#00ff88', price: 50 + floor * 12,
-    fn: p => { p.hp = p.maxHp; game.msg('Fully repaired!','#00ff88'); }
+    fn: (/** @type {any} */ p) => { p.hp = p.maxHp; _CG.msg('Fully repaired!','#00ff88'); }
   });
   // Offer a key if the floor has locked doors the player can't open
   if (dungeon) {
-    const neededColours = [];
+    /** @type {any[]} */ const neededColours = [];
     for (let ty=0; ty<MAP_H; ty++) for (let tx=0; tx<MAP_W; tx++) {
       const t = dungeon.map[ty][tx];
       const kc = doorKeyColour(t);
@@ -3518,20 +3938,20 @@ function generateShopItems(floor, player, dungeon) {
       pool.push({
         id:'SHOP_KEY_'+kc.toUpperCase(), name:kc.charAt(0).toUpperCase()+kc.slice(1)+' Key',
         desc:'Unlocks '+kc+' doors', colour:tileCol, price: 80 + floor * 8,
-        fn: p => { p.keys[kc]++; game.msg('Bought '+kc.toUpperCase()+' KEY!', tileCol); }
+        fn: (/** @type {any} */ p) => { p.keys[kc]++; _CG.msg('Bought '+kc.toUpperCase()+' KEY!', tileCol); }
       });
     }
   }
   // Offer a hackware module on floor 3+ (~40% chance per vendor)
   if (floor >= 3 && Math.random() < 0.4) {
-    const hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)];
+    const hwKey = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)]);
     const hw = HACKWARE[hwKey];
     const replaces = player.hackware ? HACKWARE[player.hackware] : null;
     pool.push({
       id:'SHOP_HW_'+hwKey, name:hw.name, isHackware:true,
       desc:hw.desc + (replaces ? ' [replaces '+replaces.name+']' : ''),
       colour:hw.colour, price: 90 + floor * 10,
-      fn: p => { p.hackware=hwKey; p.hackwareCooldown=0; game.msg(hw.icon+' '+hw.name+' INSTALLED',hw.colour); }
+      fn: (/** @type {any} */ p) => { p.hackware=hwKey; p.hackwareCooldown=0; _CG.msg(hw.icon+' '+hw.name+' INSTALLED',hw.colour); }
     });
   }
   // Offer an augment on floor 3+ (~20% chance, if player has room)
@@ -3558,12 +3978,12 @@ function generateShopItems(floor, player, dungeon) {
       id: bid, name: b.name, desc: b.desc, colour: b.colour,
       price: b.price + Math.floor(floor * 2), // mild floor scaling keeps late-game meaningful
       isBoost: true, boostId: bk, icon: b.icon,
-      fn: p => {
+      fn: (/** @type {any} */ p) => {
         NEON.boosts.applyBoost(p, bk);
         // UNCHAINED #38: RECON PING flips the runtime minimap reveal
         // immediately (loadFloor already honours the flag on floor entry).
-        if (bk === 'RECON_PING') { game.mapRevealed = true; game._minimapDirty = true; }
-        game.msg(b.icon + ' ' + b.name, b.colour);
+        if (bk === 'RECON_PING') { _CG.mapRevealed = true; _CG._minimapDirty = true; }
+        _CG.msg(b.icon + ' ' + b.name, b.colour);
       }
     });
     usedIds.add(bid);
@@ -3575,7 +3995,7 @@ function generateShopItems(floor, player, dungeon) {
     ? NEON.boosts.filterVendorPool(UPGRADES)
     : UPGRADES.filter(u => !u.persistent);
   const used = usedIds;
-  const eligible = nonPersistentPool.filter(u => !used.has(u.id));
+  const eligible = nonPersistentPool.filter((/** @type {any} */ u) => !used.has(u.id));
   // Shuffle eligible and pick enough to fill 3 total slots
   const shuffled = eligible.sort(() => Math.random() - 0.5);
   while (pool.length < 3 && shuffled.length > 0) {
@@ -3595,14 +4015,26 @@ function generateShopItems(floor, player, dungeon) {
 }
 
 class Item {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} [type]
+   */
   constructor(x,y,type) {
     this.x=x; this.y=y; this.type=type||pickItemType();
     this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=false;
   }
+  /**
+   * @param {any} dt
+   */
   update(dt) { this.bob+=dt*2.5; }
+  /**
+   * @param {any} camX
+   * @param {any} camY
+   */
   draw(camX,camY) {
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) return;
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
     const bobY = Math.sin(this.bob) * 3;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY+bobY;
     const pulse = 0.65 + 0.35 * Math.sin(this.bob * 1.3);
@@ -3620,16 +4052,29 @@ class Item {
 }
 
 class KeyItem {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} colour
+   * @param {any} tileColour
+   */
   constructor(x,y,colour,tileColour) {
     this.x=x; this.y=y;
     this.colour=colour; // 'red','blue','gold'
     this.tileColour=tileColour;
     this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=true;
   }
+  /**
+   * @param {any} dt
+   */
   update(dt) { this.bob+=dt*2; }
+  /**
+   * @param {any} camX
+   * @param {any} camY
+   */
   draw(camX,camY) {
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) return;
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*3;
     ctx.save();
     ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
@@ -3651,6 +4096,10 @@ class KeyItem {
 // transient run array, plays the pickup jingle, and toasts the HUD.
 // NOTE: The boss-drop equivalent is intentionally not wired in this PR —
 // see issue #37 body ("#39 can do the boss hook; may be split").
+/**
+ * @param {any} gm
+ * @param {any} player
+ */
 function tryRareTerminalModuleDrop(gm, player) {
   if (!gm || (gm.floor|0) < 2) return;
   if (typeof NEON === 'undefined' || !NEON.modules) return;
@@ -3671,6 +4120,10 @@ function tryRareTerminalModuleDrop(gm, player) {
 // Returns true if a log was awarded (caller should then SKIP the module roll —
 // logs and modules are mutually exclusive per spec).
 const _LOG_DROP_CHANCE = 0.40;
+/**
+ * @param {any} gm
+ * @param {any} player
+ */
 function tryRareTerminalLogDrop(gm, player) {
   if (!gm) return false;
   if (typeof NEON === 'undefined' || !NEON.logs) return false;

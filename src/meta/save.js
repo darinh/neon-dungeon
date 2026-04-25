@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/save.js — persistent meta-progression state (shards, upgrades, stats)
 //
 // This file follows the NEON "UMD-lite" module pattern: IIFE that exposes a
@@ -7,8 +8,8 @@
 // See CONTRIBUTING.md for the pattern template.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).save = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).save = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // ─── Schema ────────────────────────────────────────────────────────────────
@@ -68,7 +69,9 @@
   }
 
   // Test hook — lets Node tests inject a fake storage object.
+  /** @type {any} */
   let _testStorage = null;
+  /** @param {any} s */
   function _setStorageForTests(s) { _testStorage = s; }
   function _getStorage() { return _testStorage || _browserStorage(); }
 
@@ -76,6 +79,7 @@
 
   let _migrationLogged = false;
 
+  /** @param {any} arr */
   function _coerceIntArray(arr) {
     if (!Array.isArray(arr)) return [];
     const out = [];
@@ -83,13 +87,15 @@
     return out;
   }
 
+  /** @param {any} arr */
   function _coerceEndings(arr) {
     if (!Array.isArray(arr)) return [];
-    return arr.filter(v => v === 'keeper' || v === 'unchained');
+    return arr.filter((/** @type {any} */ v) => v === 'keeper' || v === 'unchained');
   }
 
   // _migrateToV2 fills in every v2 field that's missing on an older save.
   // Mutates and returns the passed object. Idempotent.
+  /** @param {any} m */
   function _migrateToV2(m) {
     const d = defaultMeta();
     const wasOlder = (m.version == null) || (Number(m.version) < META_VERSION);
@@ -127,6 +133,7 @@
   // `validDifficulties` is an optional map used to sanity-check lastDifficulty.
   // If omitted, lastDifficulty is passed through unchanged. Browser passes the
   // DIFFICULTIES global; Node tests can pass a test fixture or omit.
+  /** @param {Record<string, any>} [validDifficulties] */
   function loadMeta(validDifficulties) {
     const storage = _getStorage();
     const defaults = defaultMeta();
@@ -153,25 +160,29 @@
     }
   }
 
+  /** @param {any} meta */
   function saveMeta(meta) {
     const storage = _getStorage();
     if (!storage) return;
     try { storage.setItem(STORAGE_KEY, JSON.stringify(meta)); } catch (_) { /* ignore quota */ }
   }
 
+  /** @param {string} id @param {Record<string, any>} [validDifficulties] */
   function getMetaLevel(id, validDifficulties) {
     return loadMeta(validDifficulties).upgrades[id] || 0;
   }
 
+  /** @param {string} diffId @param {Record<string, any>} [validDifficulties] */
   function isDiffUnlocked(diffId, validDifficulties) {
-    const reqs = DIFF_UNLOCK_REQS[diffId];
+    const reqs = (/** @type {Record<string, string[]>} */ (DIFF_UNLOCK_REQS))[diffId];
     if (!reqs) return true;
     const cleared = loadMeta(validDifficulties).clearedDifficulties;
-    return reqs.every(r => cleared.includes(r));
+    return reqs.every((/** @type {string} */ r) => cleared.includes(r));
   }
 
   // calcRunShards is pure — all inputs are parameters. shardMul defaults to 1
   // so Node tests can exercise the formula without wiring a difficulty table.
+  /** @param {number} floor @param {number} score @param {number} bossesCleared @param {boolean} victory @param {number} [shardMul] */
   function calcRunShards(floor, score, bossesCleared, victory, shardMul) {
     shardMul = (shardMul == null) ? 1 : shardMul;
     let runShards = floor;
@@ -186,12 +197,15 @@
   // Module-effects hook — populated by src/meta/modules.js on load. Kept as
   // a registration rather than a direct dependency so save.js has no hard
   // reference to the module catalog (which lives in modules.js).
+  /** @type {((player: any, modulesInstalled: any) => void) | null} */
   let _moduleEffectsFn = null;
+  /** @param {any} fn */
   function registerModuleEffects(fn) { _moduleEffectsFn = (typeof fn === 'function') ? fn : null; }
 
   // applyMetaToPlayer mutates the passed player object. buildWeaponFn is
   // optional — browser falls through to the global `buildWeapon`. This avoids
   // a hard import dependency between the meta layer and the weapon data layer.
+  /** @param {any} player @param {any} [buildWeaponFn] */
   function applyMetaToPlayer(player, buildWeaponFn) {
     const m = loadMeta();
     const u = m.upgrades;
@@ -225,13 +239,15 @@
   // _applyUpgradeNodes — encapsulates per-node stat application. Defensive:
   // unknown ids and non-positive levels are ignored. Idempotent on a fresh
   // player snapshot (callers rebuild the player at run-start).
+  /** @param {any} player @param {Record<string, number>} nodes */
   function _applyUpgradeNodes(player, nodes) {
     for (const id in nodes) {
-      const lv = nodes[id] | 0;
+      const lv = (nodes[id] ?? 0) | 0;
       if (lv > 0) _applyNode(player, id, lv);
     }
   }
 
+  /** @param {any} player @param {string} id @param {number} level */
   function _applyNode(player, id, level) {
     const f = player.metaFlags;
     switch (id) {
@@ -292,6 +308,7 @@
   // All mutating helpers load → modify → save atomically so callers never hold
   // stale state. Return values document success/failure where relevant.
 
+  /** @param {number} n */
   function addCores(n) {
     n = Math.floor(Number(n) || 0);
     if (n <= 0) return loadMeta().cores;
@@ -303,6 +320,7 @@
 
   // spendCores deducts `n` iff the wallet has at least that much. Returns true
   // on success, false if insufficient (wallet unchanged). Never goes negative.
+  /** @param {number} n */
   function spendCores(n) {
     n = Math.floor(Number(n) || 0);
     if (n <= 0) return true;
@@ -313,6 +331,7 @@
     return true;
   }
 
+  /** @param {string} id */
   function addLogFound(id) {
     if (typeof id !== 'string' || !id) return false;
     const m = loadMeta();
@@ -322,6 +341,7 @@
     return true;
   }
 
+  /** @param {string} id */
   function markLogRead(id) {
     if (typeof id !== 'string' || !id) return false;
     const m = loadMeta();
@@ -338,6 +358,7 @@
   // and returns undefined without mutating state. A string moduleId must be
   // in modulesOwned. Same module cannot occupy two slots — if it's already
   // installed elsewhere, that slot is cleared first.
+  /** @param {number} slot @param {string|null} moduleId */
   function installModule(slot, moduleId) {
     slot = Math.floor(Number(slot));
     if (!(slot >= 0 && slot < MODULE_SLOTS)) return undefined;
@@ -362,6 +383,7 @@
   // Callers compute the refund (module data lives outside save.js). The passed
   // refund is credited to the wallet; 0/negative values are ignored. Returns
   // the refund amount on success, 0 if the module was not owned.
+  /** @param {string} moduleId @param {number} refund */
   function sellModule(moduleId, refund) {
     if (typeof moduleId !== 'string' || !moduleId) return 0;
     refund = Math.max(0, Math.floor(Number(refund) || 0));

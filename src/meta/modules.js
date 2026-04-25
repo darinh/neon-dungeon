@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/modules.js — UPGRADE MODULES (UNCHAINED #37)
 //
 // Persistent equippable items dropped by rare terminals and bosses. Up to
@@ -12,8 +13,8 @@
 // `window.NEON.modules` and in Node tests via `require`.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./save.js'));
-  else (root.NEON = root.NEON || {}).modules = factory((root.NEON && root.NEON.save) || null);
-}(typeof self !== 'undefined' ? self : this, function (save) {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).modules = factory((root.NEON && root.NEON.save) || null);
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function (/** @type {any} */ save) {
   'use strict';
 
   // ─── Catalog ───────────────────────────────────────────────────────────────
@@ -34,13 +35,16 @@
   const RARE_TERMINAL_DROP_PCT = 0.25;
   const BOSS_GENESIS_CORES = 10;    // final-boss bonus (issue #39 may wire this)
 
+  /** @type {Record<string, any>} */
   const _byId = Object.create(null);
   for (const m of MODULES) _byId[m.id] = m;
 
+  /** @param {string} id */
   function getModule(id) { return (typeof id === 'string' && _byId[id]) || null; }
 
   // ─── State queries ─────────────────────────────────────────────────────────
   // `meta` may be a loaded save object; when omitted we load on demand.
+  /** @param {any} meta */
   function _meta(meta) { return meta || (save ? save.loadMeta() : null); }
 
   // canInstall: true iff `id` is a valid owned module AND `slot` is a valid
@@ -48,6 +52,7 @@
   // (save.installModule clears dupes anyway; we still surface this so the UI
   // can preview the move). An empty slot containing the same id is a no-op
   // and reports false.
+  /** @param {any} meta @param {number} slot @param {string} id */
   function canInstall(meta, slot, id) {
     const m = _meta(meta);
     if (!m) return false;
@@ -60,12 +65,15 @@
     return true;
   }
 
-  function install(meta, slot, id)   { return save ? save.installModule(slot, id)   : undefined; }
-  function uninstall(meta, slot)     { return save ? save.installModule(slot, null) : undefined; }
+  /** @param {any} meta @param {number} slot @param {string} id */
+  function install(meta, slot, id)   { void meta; return save ? save.installModule(slot, id)   : undefined; }
+  /** @param {any} meta @param {number} slot */
+  function uninstall(meta, slot)     { void meta; return save ? save.installModule(slot, null) : undefined; }
 
   // sell: thin wrapper that bakes in the v1 fixed refund. Returns refund
   // actually credited (0 if unowned).
-  function sell(meta, id) {
+  /** @param {any} meta @param {string} id */
+  function sell(meta, id) { void meta;
     if (!save) return 0;
     return save.sellModule(id, SELL_PRICE);
   }
@@ -77,12 +85,13 @@
   //   source='boss-genesis'   → guaranteed drop (+10 cores awarded separately
   //                             by the boss hook; see #39 follow-up).
   // Unknown sources: guaranteed drop (treated as boss-style).
+  /** @param {{source?: string}} [opts] */
   function rollModuleDrop(opts) {
     const source = (opts && opts.source) || '';
     if (source === 'rare-terminal') {
       if (Math.random() >= RARE_TERMINAL_DROP_PCT) return null;
     }
-    return MODULES[Math.floor(Math.random() * MODULES.length)].id;
+    return /** @type {{id:string}} */ (MODULES[Math.floor(Math.random() * MODULES.length)]).id;
   }
 
   // ─── Run-pickup (transient) ────────────────────────────────────────────────
@@ -90,6 +99,7 @@
   // committed to meta.modulesOwned on floor clear or victory. On death they
   // are discarded — the run's transient array is simply dropped when the
   // next run starts.
+  /** @param {any} game @param {string} id */
   function addRunPickup(game, id) {
     if (!game || !getModule(id)) return false;
     if (!Array.isArray(game.runModules)) game.runModules = [];
@@ -97,6 +107,7 @@
     return true;
   }
 
+  /** @param {any} game */
   function commitRunModules(game) {
     if (!save) return 0;
     if (!game || !Array.isArray(game.runModules) || !game.runModules.length) return 0;
@@ -110,6 +121,7 @@
     return n;
   }
 
+  /** @param {any} game */
   function clearRunModules(game) { if (game) game.runModules = []; }
 
   // ─── Effect application (called by save.applyMetaToPlayer) ─────────────────
@@ -117,6 +129,7 @@
   // player.metaFlags (same pattern as UNCHAINED #36 hub upgrades). Flag
   // semantics are documented inline — consumers read them wherever the
   // relevant game mechanic lives.
+  /** @param {any} player @param {Array<string|null|undefined>} installedIds */
   function applyModulesToPlayer(player, installedIds) {
     if (!player || !Array.isArray(installedIds)) return;
     player.metaFlags = player.metaFlags || {};
@@ -190,7 +203,8 @@
     return { focus: 'slot', slotIdx: 0, invIdx: 0, confirmSell: false };
   }
 
-  function drawModuleSlotsPanel(ctx, x, y, w, h, game, state) {
+  /** @param {CanvasRenderingContext2D|null|undefined} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} game @param {any} state */
+  function drawModuleSlotsPanel(ctx, x, y, w, h, game, state) { void game;
     if (!ctx) return;
     if (!state) state = defaultPanelState();
     const meta = save ? save.loadMeta() : { modulesInstalled:[null,null,null], modulesOwned:[], cores:0 };
@@ -292,7 +306,8 @@
   //   'exit'     → caller should close the panel (ESC).
   //   'handled'  → input consumed.
   //   'ignored'  → caller may handle the key itself.
-  function handleModuleSlotsKey(game, state, key) {
+  /** @param {any} game @param {any} state @param {string} key */
+  function handleModuleSlotsKey(game, state, key) { void game;
     if (!state) return 'ignored';
     const meta = save ? save.loadMeta() : null;
     if (!meta) return 'ignored';

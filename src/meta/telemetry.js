@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/telemetry.js — Lightweight game telemetry with offline-safe localStorage batching
 //
 // UMD module. Browser: NEON.telemetry. Node tests: require().
@@ -9,8 +10,8 @@
 // All data stays local until a transport is configured.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).telemetry = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).telemetry = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   const STORAGE_KEY = 'neon_telemetry';
@@ -18,11 +19,15 @@
   const MAX_STORED = 2000;     // max events in localStorage (oldest trimmed)
   const FLUSH_INTERVAL = 30;   // seconds between auto-flushes
 
+  /** @type {Array<{e:string,t:number,s:string,p:any}>} */
   let _queue = [];
+  /** @type {string|null} */
   let _sessionId = null;
   let _sessionStart = 0;
+  /** @type {((batch: any) => Promise<any>) | null} */
   let _transport = null;       // function(batch) → Promise; null = local-only
   let _flushTimer = 0;
+  /** @type {Storage|null} */
   let _storage = null;         // injectable for tests
   let _enabled = true;
 
@@ -41,8 +46,12 @@
 
   // ─── Public API ────────────────────────────────────────────────────────────
 
-  let _visHandler = null, _unloadHandler = null;
+  /** @type {((this: Document, ev: Event) => any) | null} */
+  let _visHandler = null;
+  /** @type {((this: Window, ev: Event) => any) | null} */
+  let _unloadHandler = null;
 
+  /** @param {any} [opts] */
   function init(opts) {
     const o = opts || {};
     _sessionId = _genId();
@@ -80,6 +89,7 @@
     });
   }
 
+  /** @param {string} event @param {any} [props] */
   function track(event, props) {
     if (!_enabled) return;
     _queue.push({
@@ -98,6 +108,7 @@
     _send(batch);
   }
 
+  /** @param {Array<any>} batch */
   function _persist(batch) {
     const store = _getStorage();
     if (!store) return;
@@ -112,6 +123,7 @@
     } catch (_) { /* storage full or unavailable — drop silently */ }
   }
 
+  /** @param {Array<any>} batch */
   function _send(batch) {
     if (!_transport) return;
     try {
@@ -134,6 +146,7 @@
   }
 
   // Called from game loop (dt in seconds). Handles periodic auto-flush.
+  /** @param {number} [dt] */
   function update(dt) {
     _flushTimer += (dt || 0);
     if (_flushTimer >= FLUSH_INTERVAL) {
@@ -158,10 +171,13 @@
     if (store) try { store.removeItem(STORAGE_KEY); } catch (_) {}
   }
 
+  /** @param {any} fn */
   function setTransport(fn) { _transport = typeof fn === 'function' ? fn : null; }
+  /** @param {any} v */
   function setEnabled(v) { _enabled = !!v; }
 
   // Test helper
+  /** @param {any} s */
   function _setStorageForTests(s) { _storage = s; }
   function _reset() { _queue = []; _sessionId = null; _sessionStart = 0; _transport = null; _flushTimer = 0; _enabled = true; _visHandler = null; _unloadHandler = null; }
 

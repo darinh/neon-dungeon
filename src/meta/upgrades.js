@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/upgrades.js — UNCHAINED Phase 2 (#36) — persistent UPGRADE MATRIX
 //
 // Pure data + pure functions for the 12-node upgrade tree spent with cores at
@@ -13,10 +14,10 @@
   if (typeof module === 'object' && module.exports) {
     module.exports = factory(require('./save.js'));
   } else {
-    const ns = (root.NEON = root.NEON || {});
+    const ns = /** @type {any} */ ((root.NEON = root.NEON || {}));
     ns.upgrades = factory(ns.save);
   }
-}(typeof self !== 'undefined' ? self : this, function (save) {
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function (/** @type {any} */ save) {
   'use strict';
 
   // ─── Node Table ────────────────────────────────────────────────────────────
@@ -50,12 +51,14 @@
     BY_BRANCH_TIER[n.branch + ':' + n.tier] = n;
   }
 
+  /** @param {string} id */
   function getNode(id) { return BY_ID[id] || null; }
 
   // ─── Cost Curve ────────────────────────────────────────────────────────────
   // Linear: cost of level L (1-indexed) = baseCost × L. So purchasing the next
   // level when currently at level `level` costs baseCost × (level + 1).
   // Returns undefined if the node is unknown or already at maxLevel.
+  /** @param {string} id @param {number} level */
   function nodeCost(id, level) {
     const node = BY_ID[id];
     if (!node) return undefined;
@@ -65,11 +68,13 @@
   }
 
   // Sum of every cost paid to reach `level` from 0: baseCost × L(L+1)/2.
+  /** @param {any} node @param {number} level */
   function _spentForLevel(node, level) {
     const L = Math.max(0, Math.min(node.maxLevel, Math.floor(Number(level) || 0)));
     return node.baseCost * (L * (L + 1)) / 2;
   }
 
+  /** @param {any} meta */
   function totalSpent(meta) {
     if (!meta || !meta.upgradeNodes) return 0;
     let sum = 0;
@@ -82,6 +87,7 @@
 
   // ─── Prereqs ───────────────────────────────────────────────────────────────
   // Tier N requires the same-branch tier (N-1) at level >= 1.
+  /** @param {any} meta @param {string} id */
   function prereqMet(meta, id) {
     const node = BY_ID[id];
     if (!node) return false;
@@ -101,6 +107,7 @@
   // but we always re-load from storage to do the mutation atomically — same
   // pattern as save.spendCores. The passed meta is updated in-place to reflect
   // the new state so callers holding a reference see the change.
+  /** @param {any} meta @param {string} id */
   function purchase(meta, id) {
     const node = BY_ID[id];
     if (!node) return { ok: false, reason: 'unknown' };
@@ -133,6 +140,7 @@
 
   function defaultSelectorState() { return { col: 0, row: 0 }; }
 
+  /** @param {number} col @param {number} row */
   function _nodeAt(col, row) {
     const branch = BRANCHES[col];
     return branch ? BY_BRANCH_TIER[branch + ':' + (row + 1)] || null : null;
@@ -142,6 +150,7 @@
   // `key` is a normalized key string ('ArrowUp', 'ArrowDown', 'ArrowLeft',
   // 'ArrowRight', 'Enter'). `game` may expose `game.audio` for sfx and
   // `game.meta` for the live meta snapshot.
+  /** @param {string} key @param {any} game @param {any} selectorState */
   function handleUpgradeInput(key, game, selectorState) {
     const sel = selectorState || defaultSelectorState();
     if (key === 'ArrowLeft')  { sel.col = (sel.col + BRANCHES.length - 1) % BRANCHES.length; return true; }
@@ -166,6 +175,7 @@
   // drawUpgradeMatrix — renders the 3×4 grid + tooltip on `ctx` within bounds.
   // Pure-ish: depends on canvas API only. Skips draw entirely when ctx is
   // missing (Node tests). game.meta supplies cores + upgradeNodes.
+  /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} game @param {any} selectorState */
   function drawUpgradeMatrix(ctx, x, y, w, h, game, selectorState) {
     if (!ctx || typeof ctx.fillRect !== 'function') return;
     const sel = selectorState || defaultSelectorState();
@@ -204,7 +214,7 @@
     ctx.fillStyle = '#9ad';
     ctx.font = cellFs + 'px monospace';
     for (let c = 0; c < BRANCHES.length; c++) {
-      ctx.fillText(BRANCHES[c].toUpperCase(), x + pad + c * cellW + 6, gridTop);
+      ctx.fillText(/** @type {string} */ (BRANCHES[c]).toUpperCase(), x + pad + c * cellW + 6, gridTop);
     }
 
     const gridY0 = gridTop + 16;
@@ -343,22 +353,26 @@
   // Convenience factory mirroring the terminal-panel API shape that #35 will
   // expect ({ id, label, update, draw, onOpen, onClose }). #35 may call this
   // directly or build its own panel using the bare draw/input helpers above.
+  /** @param {any} game */
   function createUpgradeMatrixPanel(game) {
     const sel = defaultSelectorState();
     return {
       id: 'upgrade_matrix',
       label: 'UPGRADE MATRIX',
+      /** @param {any} _dt @param {any} input */
       update: function (_dt, input) {
         if (!input) return;
         const keys = input.justPressed || input.pressed || null;
         if (!keys) return;
         // Accept either a Set-like (has) or array (includes) interface.
+        /** @param {string} k */
         const has = (k) => (keys.has ? keys.has(k) : (keys.includes ? keys.includes(k) : false));
         const candidates = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Space'];
         for (const k of candidates) {
           if (has(k)) { handleUpgradeInput(k === 'Space' ? ' ' : k, game, sel); break; }
         }
       },
+      /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
       draw: function (ctx, x, y, w, h) {
         drawUpgradeMatrix(ctx, x, y, w, h, game, sel);
       },

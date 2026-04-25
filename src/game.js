@@ -1,5 +1,7 @@
+// @ts-check
 'use strict';
 
+/** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
   difficulty: loadMeta().lastDifficulty || 'NORMAL',
@@ -60,6 +62,10 @@ const game = {
   // Teleport pad state
   teleportCooldown: 0, // seconds remaining before pads can be used again
 
+  /**
+   * @param {any} text
+   * @param {any} colour
+   */
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
   },
@@ -89,6 +95,10 @@ const game = {
   // the same tick reflect the new map state.
   markMapMutated() { this._minimapDirty = true; clearLosCache(); if (this.dungeon) this.dungeon._fovDirty = true; },
 
+  /**
+   * @param {any} s
+   * @param {any} callback
+   */
   setState(s, callback) {
     this.state=s;
     this.mapExpanded = false;
@@ -101,6 +111,11 @@ const game = {
     if (callback) callback();
   },
 
+  /**
+   * @param {any} text
+   * @param {any} callback
+   * @param {any} nextState
+   */
   fadeTo(text, callback, nextState) {
     this.state='FADE';
     this.transitionText=text;
@@ -120,6 +135,10 @@ const game = {
     this.loadFloor(1);
   },
 
+  /**
+   * @param {any} n
+   * @param {any} savedModifier
+   */
   loadFloor(n, savedModifier) {
     this.floor=n;
     // UNCHAINED #34: track current biome index and bump meta.deepestBiome on
@@ -217,6 +236,9 @@ const game = {
         typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
       try {
         // Prefer a safe tile (no hazards). Fall back to any passable tile.
+        /**
+         * @param {any} t
+         */
         const isSafeSpawn = (t) => isPassable(t) &&
           t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
           t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC;
@@ -229,7 +251,7 @@ const game = {
     this._exitPos = null;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
-    messages=[];
+    messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
     if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.telemetry) {
@@ -268,13 +290,19 @@ const game = {
     this.saveGame();
   },
 
+  /**
+   * @param {any} floorNum
+   */
   generateQuest(floorNum) {
     const questTypes = [
       { id:'EXTERMINATE', label:'Exterminate all enemies', check: ()=>enemies.length===0 && (!game.challengeSealed || game.challengeComplete),
         reward: ()=>{ this.player.score+=200*floorNum; this.msg('Quest complete! +'+200*floorNum+' pts','#39ff14'); }},
       { id:'EXPLORE', label:'Visit all visible rooms', check: ()=>{
           const d=this.dungeon;
-          return d.rooms.every(r=>r.roomType==='secret' && !r.secretRevealed || d.visited[r.cy]?.[r.cx]);
+          /**
+           * @param {any} r
+           */
+          return d.rooms.every((/** @type {any} */ r)=>r.roomType==='secret' && !r.secretRevealed || d.visited[r.cy]?.[r.cx]);
         },
         reward: ()=>{ this.player.gainXP(40+floorNum*8); this.msg('Quest complete! +XP','#39ff14'); }},
       { id:'SPEEDRUN', label:'Reach stairs in 60s', timer:60, check: function(){
@@ -307,6 +335,9 @@ const game = {
     setTimeout(()=>this.msg('⚡ '+this.quest.label,'#39ff14'), 800);
   },
 
+  /**
+   * @param {any} opts
+   */
   startGame(opts) {
     opts = opts || {};
     // UNCHAINED: prompt before wiping nothing but *also* before carrying
@@ -375,6 +406,9 @@ const game = {
     this.setState('PLAYING');
   },
 
+  /**
+   * @param {any} dt
+   */
   updateIntro(dt) {
     if (!this._intro) { this.setState('PLAYING'); return; }
     this._intro.update(dt);
@@ -394,12 +428,18 @@ const game = {
   // into its _unchainedPhase form (1.5× HP, inverted palette, phase-3
   // patterns forced in aiBossGenesis). On second death, endRun grants
   // 'unchained'.
+  /**
+   * @param {any} genesisEntity
+   */
   openEndgameChoice(genesisEntity) {
     this._endgameChoice = { selected: 0, t: 0, anim: 0, genesis: genesisEntity };
     this.setState('ENDGAME_CHOICE');
     try { audio.phaseShift && audio.phaseShift(); } catch (_) {}
   },
 
+  /**
+   * @param {any} dt
+   */
   updateEndgameChoice(dt) {
     const ec = this._endgameChoice;
     if (!ec) { this.setState('PLAYING'); return; }
@@ -522,14 +562,15 @@ const game = {
     const optY = by + boxH - (narrow ? 56 : 60);
     const labels = ['[ ACCEPT ]', '[ REFUSE ]'];
     const colours = ['#ffcc00', '#88ccff'];
+    const labelDefault = '#555577';
     const spacing = boxW / 2;
     for (let i = 0; i < 2; i++) {
       const selected = ec.selected === i;
-      ctx.fillStyle = selected ? colours[i] : '#555577';
-      ctx.shadowColor = colours[i];
+      ctx.fillStyle = selected ? (colours[i] || labelDefault) : labelDefault;
+      ctx.shadowColor = colours[i] || labelDefault;
       ctx.shadowBlur = selected ? 14 : 0;
       ctx.font = (selected ? 'bold ' : '') + (narrow ? 14 : 18) + 'px monospace';
-      ctx.fillText(labels[i], bx + spacing * (i + 0.5), optY);
+      ctx.fillText(labels[i] || '', bx + spacing * (i + 0.5), optY);
     }
     ctx.shadowBlur = 0;
 
@@ -606,6 +647,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} sr
+   */
   revealSecretRoom(sr) {
     sr.secretRevealed = true;
     const dungeon = this.dungeon;
@@ -649,16 +693,29 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} name
+   */
   saveScore(name) {
     const scores=this.getScores();
     const entry={name:name||'ANON',score:this.player.score,floor:this.floor,date:new Date().toLocaleDateString()};
     scores.push(entry);
-    scores.sort((a,b)=>b.score-a.score);
-    this.lastSavedRank=scores.findIndex(s=>s===entry);
+    /**
+     * @param {any} a
+     * @param {any} b
+     */
+    scores.sort((/** @type {any} */ a,/** @type {any} */ b)=>b.score-a.score);
+    /**
+     * @param {any} s
+     */
+    this.lastSavedRank=scores.findIndex((/** @type {any} */ s)=>s===entry);
     scores.splice(10);
     try { localStorage.setItem('neonDungeonScores',JSON.stringify(scores)); } catch(e){}
   },
 
+  /**
+   * @param {any} victory
+   */
   endRun(victory) {
     if (this._runEnded) return;
     this._runEnded = true;
@@ -737,7 +794,10 @@ const game = {
         // Check if this clear unlocks a new difficulty
         for (const d of DIFF_ORDER) {
           const reqs = DIFF_UNLOCK_REQS[d];
-          if (reqs && reqs.includes(this.difficulty) && reqs.every(r => meta.clearedDifficulties.includes(r))) {
+          /**
+           * @param {any} r
+           */
+          if (reqs && reqs.includes(this.difficulty) && reqs.every((/** @type {any} */ r) => meta.clearedDifficulties.includes(r))) {
             this._newlyUnlocked = d;
           }
         }
@@ -748,8 +808,15 @@ const game = {
     const scores=this.getScores();
     const testEntry={score:this.player.score};
     scores.push(testEntry);
-    scores.sort((a,b)=>b.score-a.score);
-    const rank=scores.findIndex(s=>s===testEntry);
+    /**
+     * @param {any} a
+     * @param {any} b
+     */
+    scores.sort((/** @type {any} */ a,/** @type {any} */ b)=>b.score-a.score);
+    /**
+     * @param {any} s
+     */
+    const rank=scores.findIndex((/** @type {any} */ s)=>s===testEntry);
     if (rank>=0 && rank<10) {
       this.nameEntry={name:'',rank,victory,cursorBlink:0};
       this.setState('NAME_ENTRY');
@@ -760,7 +827,7 @@ const game = {
   },
 
   getScores() {
-    try { return JSON.parse(localStorage.getItem('neonDungeonScores'))||[]; } catch(e){return[];}
+    try { return JSON.parse(localStorage.getItem('neonDungeonScores') || 'null')||[]; } catch(e){return[];}
   },
 
   // ── Save / Load ────────────────────────────────────────────────────────
@@ -772,7 +839,10 @@ const game = {
     if (!this.player) return;
     const p = this.player;
     const weaponSave = { _base: p.weapon._base || 'PULSE_PISTOL', _affixes: p.weapon._affixes || [] };
-    const weaponsSave = (p.weapons || [p.weapon]).map(w => ({ _base: w._base || 'PULSE_PISTOL', _affixes: w._affixes || [] }));
+    /**
+     * @param {any} w
+     */
+    const weaponsSave = (p.weapons || [p.weapon]).map((/** @type {any} */ w) => ({ _base: w._base || 'PULSE_PISTOL', _affixes: w._affixes || [] }));
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
@@ -839,7 +909,7 @@ const game = {
       this._cachedCores = (_m && typeof _m.cores === 'number') ? (_m.cores|0) : 0;
     }
     let save;
-    try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){ save = null; }
+    try { save = JSON.parse(localStorage.getItem('neonDungeonSave') || 'null'); } catch(e){ save = null; }
     if (!save || !save.player || save.v !== SAVE_VERSION) {
       this.deleteSave();
       this.startGame();
@@ -862,7 +932,10 @@ const game = {
     }
     // Restore weapon belt (backwards-compatible with old saves)
     if (Array.isArray(s.weapons) && s.weapons.length) {
-      p.weapons = s.weapons.map(ws => {
+      /**
+       * @param {any} ws
+       */
+      p.weapons = s.weapons.map((/** @type {any} */ ws) => {
         if (ws && typeof ws === 'object' && ws._base) return buildWeapon(ws._base, ws._affixes || []);
         return buildWeapon(typeof ws === 'string' ? ws : 'PULSE_PISTOL', []);
       });
@@ -916,6 +989,9 @@ const game = {
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
 
+  /**
+   * @param {any} dt
+   */
   update(dt) {
     clearLosCache();
     switch(this.state) {
@@ -943,7 +1019,7 @@ const game = {
   getMenuOptions() {
     const opts = [];
     if (this.hasSave()) {
-      let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave')); } catch(e){}
+      let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave') || 'null'); } catch(e){}
       const saveDiff = DIFFICULTIES[save?.difficulty] ? save.difficulty : 'NORMAL';
       opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
     }
@@ -961,6 +1037,9 @@ const game = {
     return opts;
   },
 
+  /**
+   * @param {any} dt
+   */
   updateMenu(dt) {
     // animate bg particles
     this.menuParticles=this.menuParticles||[];
@@ -1010,6 +1089,9 @@ const game = {
     if (this._menuMsg && this._menuMsg.life > 0) this._menuMsg.life -= dt;
   },
 
+  /**
+   * @param {any} dt
+   */
   updatePlaying(dt) {
     const player=this.player;
     const dungeon=this.dungeon;
@@ -1203,8 +1285,14 @@ const game = {
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
         // Auto-collect simple consumables (health/XP/shard) to reduce popup fatigue.
+        /**
+         * @param {any} o
+         */
         const _isSimple = o => !o.persistent && !o.id.startsWith('WEAPON_') && !o.id.startsWith('HACKWARE_');
         // Auto-collect weapons into belt if space available.
+        /**
+         * @param {any} o
+         */
         const _isAutoWeapon = o => o.id.startsWith('WEAPON_') && o._weaponObj && player.weapons && player.weapons.length < 3;
         if (_isSimple(optA) && _isSimple(optB)) {
           const needsHp = player.hp < player.maxHp;
@@ -1260,7 +1348,6 @@ const game = {
     if (this.enemyDiedThisFrame && this.clearedRooms) {
       this.enemyDiedThisFrame = false;
       let clears = 0;
-      let lastCx = 0, lastCy = 0;
       for (const room of dungeon.rooms) {
         if (!room._hadEnemies || this.clearedRooms.has(room)) continue;
         if (room === dungeon.bossRoom || room === dungeon.spawnRoom) continue;
@@ -1278,7 +1365,6 @@ const game = {
         if (wallTurrets.some(wt => !wt.dead && !wt.hacked && wt.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
-        lastCx = room.cx; lastCy = room.cy;
         const d = getDiff();
         let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
@@ -1456,9 +1542,9 @@ const game = {
     if (tile===T.LORE) {
       if (jp(km('interact'))) {
         const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !player.loreRead.has(i));
-        const idx = unseen.length > 0 ? unseen[Math.floor(Math.random() * unseen.length)] : Math.floor(Math.random() * LORE_ENTRIES.length);
+        const idx = unseen.length > 0 ? (unseen[Math.floor(Math.random() * unseen.length)] ?? 0) : Math.floor(Math.random() * LORE_ENTRIES.length);
         player.loreRead.add(idx);
-        this.currentLore = LORE_ENTRIES[idx];
+        this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;
         this.msg('+50 DATA RECOVERED', '#ffb700');
         // Consume the terminal — single use
@@ -1530,7 +1616,7 @@ const game = {
 
     // door interaction (check adjacent tiles when pressing E)
     if (jp(km('interact'))) {
-      const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+      const dirs = /** @type {[number,number][]} */ ([[0,-1],[0,1],[-1,0],[1,0]]);
       for (const [ddx,ddy] of dirs) {
         const dx=tx+ddx, dy=ty+ddy;
         if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
@@ -1561,20 +1647,20 @@ const game = {
         }
         if (isDoor(dt)) {
           const kc=doorKeyColour(dt);
-          if (player.keys[kc] > 0) {
+          if (kc && player.keys[kc] > 0) {
             dungeon.map[dy][dx]=T.DOOR_OPEN;
             this.markMapMutated();
             this.msg('Unlocked '+kc+' door!', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
             spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00', 8);
             break;
-          } else {
+          } else if (kc) {
             this.msg('Need '+kc.toUpperCase()+' KEY', dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00');
           }
         }
       }
     }
     // door / cracked wall prompt
-    const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+    const dirs = /** @type {[number,number][]} */ ([[0,-1],[0,1],[-1,0],[1,0]]);
     for (const [ddx,ddy] of dirs) {
       const dx=tx+ddx, dy=ty+ddy;
       if (dx<0||dy<0||dx>=MAP_W||dy>=MAP_H) continue;
@@ -1584,9 +1670,9 @@ const game = {
       if (isDoor(dt)) {
         const kc=doorKeyColour(dt);
         const colour = dt===T.LOCKED_R?'#ff3333':dt===T.LOCKED_B?'#3388ff':'#ffcc00';
-        if (player.keys[kc] > 0) {
+        if (kc && player.keys[kc] > 0) {
           this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to unlock '+kc.toUpperCase()+' door', colour};
-        } else {
+        } else if (kc) {
           this.hint={text:'Need '+kc.toUpperCase()+' KEY (press '+KEY_DISPLAY(km('interact'))+')', colour};
         }
         break;
@@ -1728,7 +1814,10 @@ const game = {
         }
         if (!r.eventUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at terminal',colour:'#44ffcc'};
       }
-      if (r.shopItems && r.shopItems.some(i => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
+      /**
+       * @param {any} i
+       */
+      if (r.shopItems && r.shopItems.some((/** @type {any} */ i) => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           // Revalidate shop items (maxed upgrades, stale prices, unneeded keys, owned/capped augments)
           for (const si of r.shopItems) {
@@ -1747,7 +1836,10 @@ const game = {
               if (player.augments[augId] || Object.keys(player.augments).length >= MAX_AUGMENTS) si.sold = true;
             }
           }
-          if (!r.shopItems.some(i => !i.sold)) continue; // all invalidated
+          /**
+           * @param {any} i
+           */
+          if (!r.shopItems.some((/** @type {any} */ i) => !i.sold)) continue; // all invalidated
           this.shopRoom = r;
           this.shopSelected = 0;
           this.shopClosing = false;
@@ -1778,7 +1870,10 @@ const game = {
     // boss seal check — seal when player is clearly inside the boss room
     if (this.bossRoom && !this.bossSealed && this.bossAlive) {
       const r = this.bossRoom;
-      const onEntrance = this.bossEntrances.some(e =>
+      /**
+       * @param {any} e
+       */
+      const onEntrance = this.bossEntrances.some((/** @type {any} */ e) =>
         Math.floor(player.x)===e.x && Math.floor(player.y)===e.y);
       if (!onEntrance &&
           player.x >= r.x && player.x < r.x + r.w &&
@@ -1837,7 +1932,10 @@ const game = {
       const cr = this.challengeRoom;
       // Seal when player is clearly inside the challenge room (same pattern as boss)
       if (!this.challengeSealed) {
-        const onEntrance = this.challengeEntrances.some(e =>
+        /**
+         * @param {any} e
+         */
+        const onEntrance = this.challengeEntrances.some((/** @type {any} */ e) =>
           Math.floor(player.x)===e.x && Math.floor(player.y)===e.y);
         if (!onEntrance &&
             player.x >= cr.x && player.x < cr.x + cr.w &&
@@ -1872,16 +1970,18 @@ const game = {
           let count = Math.min(areaCap, Math.round((3 + this.floor) * d.enemyHp));
           if (game.modifier === 'SWARM') count = Math.min(areaCap, Math.ceil(count * 1.3));
           const effectiveFloor = Math.min(this.floor + 1, 9);
+          /** @type {Record<string, number>} */
           const typeCounts = {};
+          /** @type {Record<string, number>} */
           const TYPE_CAPS = { PHANTOM:2, TURRET:2, DRONE:1, SHIELDER:1, SPLITTER:1, GRENADIER:1, TELEPORTER:1, SNIPER:1, SUMMONER:1, HEALER:1, CHARGER:2, LEAPER:2, REFLECTOR:1, DISRUPTOR:1, WRAITH:1, NEXUS:1, SIPHON:1, GRAVITON:1, SEEKER:3, PULSER:2 };
           for (let j = 0; j < count; j++) {
-            let type = pickEnemyType(effectiveFloor);
+            let type = pickEnemyType(effectiveFloor) || 'GUARD';
             if ((typeCounts[type]||0) >= (TYPE_CAPS[type]||99)) {
-              const open = ENEMY_TYPES_LIST.filter(t =>
+              const open = ENEMY_TYPES_LIST.filter((/** @type {any} */ t) =>
                 (typeCounts[t]||0) < (TYPE_CAPS[t]||99) &&
                 !(ENEMY_WEIGHTS[t].minFloor && effectiveFloor < ENEMY_WEIGHTS[t].minFloor)
               );
-              type = open.length ? open[rndInt(0, open.length-1)] : 'GUARD';
+              type = open.length ? (open[rndInt(0, open.length-1)] || 'GUARD') : 'GUARD';
             }
             typeCounts[type] = (typeCounts[type]||0) + 1;
             // Spawn away from player
@@ -1950,7 +2050,10 @@ const game = {
     else {
       // Check if enemies are alive in the player's current room
       const px = Math.floor(player.x), py = Math.floor(player.y);
-      const pRoom = this.dungeon.rooms.find(r =>
+      /**
+       * @param {any} r
+       */
+      const pRoom = this.dungeon.rooms.find((/** @type {any} */ r) =>
         px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h);
       let inCombat = false;
       if (pRoom) {
@@ -1981,13 +2084,16 @@ const game = {
       const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
       let best = -1, bestD = 15;
       for (let i = 0; i < 3; i++) {
-        const d = Math.abs(mouse.y - optY[i]);
+        const d = Math.abs(mouse.y - (optY[i] ?? 0));
         if (d < bestD) { bestD = d; best = i; }
       }
       this._pauseSel = best;
     }
   },
 
+  /**
+   * @param {any} dt
+   */
   updatePowerupChoice(dt) {
     const pc = this.powerupChoice;
     if (!pc) { this.setState('PLAYING'); return; }
@@ -2032,6 +2138,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} idx
+   */
   applyPowerupChoice(idx) {
     const pc = this.powerupChoice;
     if (idx >= 0 && idx < pc.options.length) {
@@ -2041,13 +2150,21 @@ const game = {
       this.msg('Chose ' + opt.name, opt.colour);
       // Telemetry: upgrade pick
       if (typeof NEON !== 'undefined' && NEON.telemetry) {
-        const skipped = pc.options.filter((_, i) => i !== idx).map(o => o.id || o.name);
+        /**
+         * @param {any} _
+         * @param {any} i
+         * @param {any} o
+         */
+        const skipped = pc.options.filter((/** @type {any} */ _, /** @type {any} */ i) => i !== idx).map((/** @type {any} */ o) => o.id || o.name);
         NEON.telemetry.track('upgrade_pick', { picked: opt.id || opt.name, skipped, floor: this.floor });
       }
     } else {
       this.msg('Skipped upgrade', '#666688');
       if (typeof NEON !== 'undefined' && NEON.telemetry) {
-        NEON.telemetry.track('upgrade_skip', { options: pc.options.map(o => o.id || o.name), floor: this.floor });
+        /**
+         * @param {any} o
+         */
+        NEON.telemetry.track('upgrade_skip', { options: pc.options.map((/** @type {any} */ o) => o.id || o.name), floor: this.floor });
       }
     }
     this.powerupChoice = null;
@@ -2067,6 +2184,9 @@ const game = {
     audio.perkChoice();
   },
 
+  /**
+   * @param {any} dt
+   */
   updatePerkChoice(dt) {
     const pc = this.perkChoice;
     if (!pc) { this.setState('PLAYING'); return; }
@@ -2101,6 +2221,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} idx
+   */
   applyPerkChoice(idx) {
     const pc = this.perkChoice;
     if (idx >= 0 && idx < pc.options.length) {
@@ -2114,12 +2237,18 @@ const game = {
   },
 
   // ─── Augment Choice ──────────────────────────────────────────────────────
+  /**
+   * @param {any} options
+   */
   openAugmentChoice(options) {
     this.augmentChoice = { options, selected: 0, _arm: 0.4 };
     this.setState('AUGMENT_CHOICE');
     audio.augmentChoice();
   },
 
+  /**
+   * @param {any} dt
+   */
   updateAugmentChoice(dt) {
     const ac = this.augmentChoice;
     if (!ac) { this.setState('PLAYING'); return; }
@@ -2152,6 +2281,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} idx
+   */
   applyAugmentChoice(idx) {
     const ac = this.augmentChoice;
     if (!ac || idx < 0 || idx >= ac.options.length) { this.setState('PLAYING'); return; }
@@ -2270,6 +2402,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} choice
+   */
   applyEventChoice(choice) {
     const ec = this.eventChoice;
     if (!ec) { this.setState('PLAYING'); return; }
@@ -2380,7 +2515,10 @@ const game = {
     if (!room || !room.shopItems) { this.setState('PLAYING'); return; }
     const items = room.shopItems;
     // If all sold, wait for auto-close timer (set in tryShopBuy)
-    if (this.shopClosing || items.every(i => i.sold)) return;
+    /**
+     * @param {any} i
+     */
+    if (this.shopClosing || items.every((/** @type {any} */ i) => i.sold)) return;
 
     // Keyboard navigation
     if (jp('Escape') || jp('KeyQ')) { audio.menuSelect(); this.setState('PLAYING'); return; }
@@ -2402,7 +2540,6 @@ const game = {
 
     // Mouse/touch click on cards or leave button
     if (jp('MouseLeft')) {
-      const narrow = layout.compact;
       const cw = Math.min(200, W * 0.28);
       const gap = 16;
       const totalW = cw * 3 + gap * 2;
@@ -2429,6 +2566,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} idx
+   */
   tryShopBuy(idx) {
     const item = this.shopRoom.shopItems[idx];
     if (!item || item.sold) return;
@@ -2445,11 +2585,21 @@ const game = {
     spawnParticles(this.player.x, this.player.y, 'SPARK', item.colour, 8);
     // Advance cursor to next unsold slot
     const items = this.shopRoom.shopItems;
-    const nextUnsold = items.findIndex((it, i) => i > idx && !it.sold);
-    const prevUnsold = items.findIndex(it => !it.sold);
+    /**
+     * @param {any} it
+     * @param {any} i
+     */
+    const nextUnsold = items.findIndex((/** @type {any} */ it, /** @type {any} */ i) => i > idx && !it.sold);
+    /**
+     * @param {any} it
+     */
+    const prevUnsold = items.findIndex((/** @type {any} */ it) => !it.sold);
     this.shopSelected = nextUnsold >= 0 ? nextUnsold : (prevUnsold >= 0 ? prevUnsold : idx);
     // If all sold, auto-leave after brief delay
-    if (items.every(i => i.sold)) {
+    /**
+     * @param {any} i
+     */
+    if (items.every((/** @type {any} */ i) => i.sold)) {
       this.shopClosing = true;
       setTimeout(() => { if (this.state === 'SHOPPING') this.setState('PLAYING'); this.shopClosing = false; }, 400);
     }
@@ -2466,6 +2616,9 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} dt
+   */
   updateFade(dt) {
     this.fadeTime+=dt;
     // Refresh glitch bars every ~100ms
@@ -2513,6 +2666,9 @@ const game = {
   _vkChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'.split(''),
   _vkCols: 10,
 
+  /**
+   * @param {any} narrow
+   */
   _vkLayout(narrow) {
     const cols=this._vkCols;
     const cellW=narrow?28:36, cellH=narrow?28:36, gap=narrow?3:4;
@@ -2522,6 +2678,12 @@ const game = {
     return {cellW,cellH,gap,cols,rows,ox,gridW};
   },
 
+  /**
+   * @param {any} cx
+   * @param {any} cy
+   * @param {any} oy
+   * @param {any} narrow
+   */
   _vkHitTest(cx,cy,oy,narrow) {
     const {cellW,cellH,gap,cols,ox}=this._vkLayout(narrow);
     const allKeys=[...this._vkChars,'←','OK'];
@@ -2535,6 +2697,9 @@ const game = {
     return null;
   },
 
+  /**
+   * @param {any} dt
+   */
   updateNameEntry(dt) {
     const ne=this.nameEntry;
     if (!ne) return;
@@ -2712,10 +2877,12 @@ const game = {
         if (RESERVED_KEYS.has(code)) continue; // reserved keys can't be bound
         // Swap: if another action already uses this code, swap them
         const curAction = this._settingsCapture;
+        if (!curAction) return;
         const oldCode = settings.keyMap[curAction];
         for (const a of actions) {
           if (a !== curAction && settings.keyMap[a] === code) {
-            settings.keyMap[a] = oldCode; break;
+            if (oldCode !== undefined) settings.keyMap[a] = oldCode;
+            break;
           }
         }
         settings.keyMap[curAction] = code;
@@ -2767,9 +2934,13 @@ const game = {
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
-        settings[key] = !settings[key];
-        settings.save();
-        audio.menuSelect();
+        if (key) {
+          /** @type {any} */
+          const s = settings;
+          s[key] = !s[key];
+          settings.save();
+          audio.menuSelect();
+        }
       }
     }
 
@@ -2802,7 +2973,12 @@ const game = {
         const ry = startY + (TOGGLE_START + i) * rowH;
         if (my >= ry - 8 && my <= ry + 14) {
           this._settingsSel = TOGGLE_START + i;
-          settings[toggleKeys[i]] = !settings[toggleKeys[i]];
+          const tk = toggleKeys[i];
+          if (tk) {
+            /** @type {any} */
+            const s = settings;
+            s[tk] = !s[tk];
+          }
           settings.save();
           audio.menuSelect();
           return;
@@ -2862,7 +3038,6 @@ const game = {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
     const CTRL_START = 5;
-    const totalRows = CTRL_START + actions.length + 2;
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -2890,13 +3065,13 @@ const game = {
       const isSel = sel === i;
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.textAlign = 'left';
-      ctx.fillText(volLabels[i], labelX, ry);
+      ctx.fillText(volLabels[i] || '', labelX, ry);
       // Slider track
       const trackY = ry - 4;
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.fillRect(sliderX, trackY, sliderW, 10);
       // Slider fill
-      const fillW = sliderW * volVals[i];
+      const fillW = sliderW * (volVals[i] ?? 0);
       ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
       ctx.fillRect(sliderX, trackY, fillW, 10);
       // Slider knob
@@ -2905,7 +3080,7 @@ const game = {
       // Percentage
       ctx.textAlign = 'right';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
-      ctx.fillText(`${Math.round(volVals[i] * 100)}%`, sliderX + sliderW + (narrow ? 40 : 60), ry);
+      ctx.fillText(`${Math.round((volVals[i] ?? 0) * 100)}%`, sliderX + sliderW + (narrow ? 40 : 60), ry);
     }
 
     // ── Display section ──
@@ -2914,10 +3089,11 @@ const game = {
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
-      const on = settings[toggleKeys[i]];
+      const tk = toggleKeys[i];
+      const on = tk ? /** @type {any} */ (settings)[tk] : false;
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
-      ctx.fillText(toggleLabels[i], labelX, ry);
+      ctx.fillText(toggleLabels[i] || '', labelX, ry);
       ctx.textAlign = 'center';
       ctx.fillStyle = on ? (isSel ? '#00ff88' : '#22aa66') : (isSel ? '#ff4466' : '#884444');
       ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
@@ -2933,11 +3109,12 @@ const game = {
     for (let i = 0; i < actions.length; i++) {
       const ry = startY + (CTRL_START + i) * rowH;
       const a = actions[i];
+      if (!a) continue;
       const isSel = sel === CTRL_START + i;
       const isCapturing = this._settingsCapture === a;
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#ff00c8' : '#888899';
-      ctx.fillText(ACTION_LABELS[a], labelX, ry);
+      ctx.fillText(ACTION_LABELS[a] || a, labelX, ry);
       ctx.textAlign = 'center';
       if (isCapturing) {
         const blink = Math.sin(Date.now() / 200) > 0 ? 1 : 0.3;
@@ -3009,6 +3186,11 @@ const game = {
     }
   },
 
+  /**
+   * @param {any} y
+   * @param {any} maxEntries
+   * @param {any} highlightRank
+   */
   renderLeaderboard(y, maxEntries, highlightRank) {
     const narrow=layout.compact;
     const scores=this.getScores().slice(0,maxEntries);
@@ -3020,7 +3202,11 @@ const game = {
     ctx.shadowBlur=0;
     const lineH=narrow?20:18;
     const startY=y+(narrow?22:20);
-    scores.forEach((s,i)=>{
+    /**
+     * @param {any} s
+     * @param {any} i
+     */
+    scores.forEach((/** @type {any} */ s,/** @type {any} */ i)=>{
       const isHL=i===highlightRank;
       ctx.fillStyle=isHL?'#00f5ff':'#aaaacc';
       if (isHL) { ctx.shadowBlur=6; ctx.shadowColor='#00f5ff'; }
@@ -3094,7 +3280,6 @@ const game = {
     // Navigation hint (context-sensitive for difficulty row)
     ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
     const diffHint = opts[sel]?.isDiffRow;
-    const diffLocked = diffHint && !isDiffUnlocked(this.difficulty);
     if (isTouch) {
       ctx.fillText(diffHint ? 'Tap edges ◀▶ to change difficulty · center to start' : 'Tap to select', W/2, startY + opts.length * gap + 8);
     } else {
@@ -3195,11 +3380,11 @@ const game = {
       const spacing = boxW / 2;
       for (let i = 0; i < 2; i++) {
         const selected = c.selected === i;
-        const col = selected ? btnCols[i] : '#555577';
+        const col = (selected ? btnCols[i] : '#555577') || '#555577';
         ctx.fillStyle = col;
         ctx.font = `${selected?'bold ':''}${narrow?13:16}px monospace`;
         ctx.shadowBlur = selected ? 12 : 0; ctx.shadowColor = col;
-        ctx.fillText(`${selected?'▶ ':'  '}${btnLbls[i]}`, bx + spacing * (i + 0.5), btnY);
+        ctx.fillText(`${selected?'▶ ':'  '}${btnLbls[i] || ''}`, bx + spacing * (i + 0.5), btnY);
       }
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#444466'; ctx.font = `${narrow?9:11}px monospace`;
@@ -3244,7 +3429,10 @@ const game = {
         ctx.fillText('◆', sx, sy+6);
         ctx.restore();
       }
-      if (r.shopItems && r.shopItems.some(i => !i.sold)) {
+      /**
+       * @param {any} i
+       */
+      if (r.shopItems && r.shopItems.some((/** @type {any} */ i) => !i.sold)) {
         const sx=r.cx*TILE-cam.x+TILE/2, sy=r.cy*TILE-cam.y+TILE/2;
         ctx.save();
         ctx.shadowBlur=12; ctx.shadowColor='#39ff14'; ctx.globalAlpha=0.6+Math.sin(Date.now()/350)*0.2;
@@ -3393,7 +3581,7 @@ const game = {
     // Difficulty badge below minimap (non-NORMAL only)
     if (game.difficulty !== 'NORMAL') {
       const d = getDiff();
-      const bx = W - 128 - safeRight, by = 92 + safeTop + _boostOffset;
+      const by = 92 + safeTop + _boostOffset;
       ctx.save(); ctx.textAlign='right';
       ctx.font='bold 9px monospace';
       ctx.shadowBlur=4; ctx.shadowColor=d.colour;
@@ -3405,7 +3593,7 @@ const game = {
     // Quest HUD (below minimap)
     if (game.quest) {
       const q = game.quest;
-      const qx = W - 128 - safeRight, qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
+      const qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
       ctx.save();
       ctx.font='10px monospace'; ctx.textAlign='right';
       if (q.done) {
@@ -3479,19 +3667,19 @@ const game = {
     const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
     if (isTouch) {
       ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
-      ctx.fillText('TAP TOP — Resume',W/2, optY[0]);
-      ctx.fillText('TAP MIDDLE — Settings',W/2, optY[1]);
-      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, optY[2]);
+      ctx.fillText('TAP TOP — Resume',W/2, optY[0] ?? 0);
+      ctx.fillText('TAP MIDDLE — Settings',W/2, optY[1] ?? 0);
+      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, optY[2] ?? 0);
     } else {
       const labels = ['ESC — Resume', 'S   — Settings', 'Q   — Quit to Menu'];
       const colours = ['#00f5ff', '#ffb700', '#ff4466'];
       for (let i = 0; i < 3; i++) {
         const hovered = sel === i;
-        ctx.fillStyle = hovered ? colours[i] : '#aaaacc';
+        ctx.fillStyle = hovered ? (colours[i] || '#aaaacc') : '#aaaacc';
         ctx.shadowBlur = hovered ? 10 : 0;
-        ctx.shadowColor = colours[i];
+        ctx.shadowColor = colours[i] || '#aaaacc';
         ctx.font = `${hovered ? 'bold ' : ''}${fs}px monospace`;
-        ctx.fillText(labels[i], W/2, optY[i]);
+        ctx.fillText(labels[i] || '', W/2, optY[i] ?? 0);
       }
       ctx.shadowBlur = 0;
     }
@@ -3613,7 +3801,7 @@ const game = {
         if (opt._rarity > 0) {
           ctx.fillStyle=opt._rarityColour;
           ctx.font=`bold ${narrow?9:10}px monospace`;
-          ctx.fillText(RARITY_LABELS[opt._rarity], cx + cw/2, cardY + 164);
+          ctx.fillText(RARITY_LABELS[opt._rarity] || '', cx + cw/2, cardY + 164);
         }
       }
     }
@@ -3962,7 +4150,7 @@ const game = {
     ctx.textAlign = 'left';
     const textX = fx + 20;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], textX, textStartY + i * lineH);
+      ctx.fillText(lines[i] || '', textX, textStartY + i * lineH);
     }
 
     // Close hint
@@ -4217,7 +4405,7 @@ const game = {
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs1}px monospace`;
-    let statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
+    const statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
     ctx.fillText(statsLine, W/2, y); y += lh;
     if ((r.bestCombo||combo.best) >= 2) {
       ctx.fillStyle=comboColour();
@@ -4245,7 +4433,9 @@ const game = {
       const barH = narrow ? 10 : 12;
       ctx.textAlign='left';
       for (let i = 0; i < Math.min(maxBars, entries.length); i++) {
-        const [src, dmg] = entries[i];
+        const entry = entries[i];
+        if (!entry) continue;
+        const [src, dmg] = entry;
         const pct = dmg / totalDmg;
         const col = sourceColour(src);
         const bx = W/2 - barW/2 - (narrow ? 10 : 20);
@@ -4413,11 +4603,17 @@ const perf = {
   // Rolling capture (time-based). Start with game.capturePerf(label, durationMs).
   capturing: false,
   captureLabel: '',
+  /** @type {Float32Array | null} */
   captureFrames: null,
   captureIdx: 0,
   captureMaxFrames: 1200, // hard cap to avoid unbounded allocation
   captureDurationMs: 5000,
   captureStart: 0,
+  /**
+   * @param {any} frameMs
+   * @param {any} updateMs
+   * @param {any} renderMs
+   */
   push(frameMs, updateMs, renderMs) {
     this.frames[this.idx] = frameMs;
     this.updates[this.idx] = updateMs;
@@ -4426,7 +4622,7 @@ const perf = {
     this.idx = (this.idx + 1) % PERF_SAMPLES;
     if (this.filled < PERF_SAMPLES) this.filled++;
     if (this.capturing) {
-      if (this.captureIdx < this.captureMaxFrames) {
+      if (this.captureIdx < this.captureMaxFrames && this.captureFrames) {
         this.captureFrames[this.captureIdx++] = frameMs;
       }
       if (performance.now() - this.captureStart >= this.captureDurationMs) this.finishCapture();
@@ -4436,8 +4632,8 @@ const perf = {
     const n = this.filled || 1;
     let fs = 0, us = 0, rs = 0, fmax = 0;
     for (let i = 0; i < n; i++) {
-      fs += this.frames[i]; us += this.updates[i]; rs += this.renders[i];
-      if (this.frames[i] > fmax) fmax = this.frames[i];
+      fs += this.frames[i] ?? 0; us += this.updates[i] ?? 0; rs += this.renders[i] ?? 0;
+      if ((this.frames[i] ?? 0) > fmax) fmax = this.frames[i] ?? 0;
     }
     const avgFrame = fs / n;
     return {
@@ -4445,6 +4641,10 @@ const perf = {
       avgFrame, avgUpdate: us / n, avgRender: rs / n, maxFrame: fmax,
     };
   },
+  /**
+   * @param {any} label
+   * @param {any} durationMs
+   */
   startCapture(label, durationMs) {
     this.captureLabel = label || 'capture';
     this.captureDurationMs = (typeof durationMs === 'number' && durationMs > 0) ? durationMs : 5000;
@@ -4457,11 +4657,11 @@ const perf = {
   finishCapture() {
     this.capturing = false;
     const n = this.captureIdx;
-    if (n === 0) { console.log('[perf] capture empty'); return; }
+    if (n === 0 || !this.captureFrames) { console.log('[perf] capture empty'); return; }
     const data = this.captureFrames.subarray(0, n);
     let sum = 0, max = 0, min = Infinity, over33 = 0, over20 = 0;
     for (let i = 0; i < n; i++) {
-      const v = data[i]; sum += v;
+      const v = data[i] ?? 0; sum += v;
       if (v > max) max = v;
       if (v < min) min = v;
       if (v > 33) over33++;
@@ -4469,9 +4669,9 @@ const perf = {
     }
     const avg = sum / n;
     const sorted = Array.from(data).sort((a, b) => a - b);
-    const p50 = sorted[Math.floor(n * 0.5)];
-    const p95 = sorted[Math.floor(n * 0.95)];
-    const p99 = sorted[Math.floor(n * 0.99)];
+    const p50 = sorted[Math.floor(n * 0.5)] ?? 0;
+    const p95 = sorted[Math.floor(n * 0.95)] ?? 0;
+    const p99 = sorted[Math.floor(n * 0.99)] ?? 0;
     console.log(`[perf] ${this.captureLabel} — n=${n} avg=${avg.toFixed(2)}ms p50=${p50.toFixed(2)} p95=${p95.toFixed(2)} p99=${p99.toFixed(2)} max=${max.toFixed(2)} min=${min.toFixed(2)} fps=${(1000/avg).toFixed(1)} drops>20ms=${over20} drops>33ms=${over33}`);
     this.captureFrames = null;
   },
@@ -4499,6 +4699,7 @@ function renderPerfHUD() {
     lines.push('─ subsystems (avg/max ms) ─');
     for (let i = 0; i < subs.length; i++) {
       const sub = subs[i];
+      if (!sub) continue;
       lines.push(`  ${sub.label.padEnd(10)} ${sub.avg.toFixed(2).padStart(5)} / ${sub.max.toFixed(2).padStart(5)}`);
     }
   }
@@ -4519,13 +4720,16 @@ function renderPerfHUD() {
   ctx.textBaseline = 'top';
   ctx.fillStyle = s.avgFrame > 20 ? '#ff8888' : (s.avgFrame > 17.5 ? '#ffcc66' : '#88ffaa');
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x + pad, y + pad + i * lineH);
+    ctx.fillText(lines[i] || '', x + pad, y + pad + i * lineH);
   }
   ctx.restore();
 }
 
 // ─── Main Loop ────────────────────────────────────────────────────────────────
 let lastTime=0;
+/**
+ * @param {any} ts
+ */
 function loop(ts) {
   const dt=Math.min((ts-lastTime)/1000,0.05);
   // F3 toggles perf HUD (check before anything else so it's always responsive)
@@ -4593,31 +4797,39 @@ function _onFrameOk() {
     game._renderHealthyFrames = 0;
   }
 }
+/**
+ * @param {any} phase
+ * @param {any} err
+ */
 function _onFrameError(phase, err) {
   // Defensive: if the boundary module failed to load, fall back to console
   // logging so we never reintroduce the silent-crash class of bug.
   try {
     if (typeof NEON === 'undefined' || !NEON.renderBoundary) {
-      // eslint-disable-next-line no-console
+       
       console.error('[render-boundary:fallback] ' + phase + '() threw:', err);
       return;
     }
     const next = NEON.renderBoundary.trackRenderError(game._renderError, phase, err);
     if (NEON.renderBoundary.shouldLog(next)) {
-      // eslint-disable-next-line no-console
+       
       console.error('[render-boundary] ' + phase + '() threw (\u00D7' + next.count + '):', err);
     }
     game._renderError = next;
     game._renderHealthyFrames = 0;
   } catch (innerErr) {
     // Last-resort: never let the boundary itself crash the loop.
-    // eslint-disable-next-line no-console
+     
     try { console.error('[render-boundary:meta-fail]', innerErr, 'original:', err); } catch (_) {}
   }
 }
 
 // Expose capture helper for manual profiling in devtools.
 // Usage: game.capturePerf('boss-fight')  or  game.capturePerf('label', 10000) for 10s.
+/**
+ * @param {any} label
+ * @param {any} durationMs
+ */
 game.capturePerf = function(label, durationMs) { perf.startCapture(label, durationMs); };
 game.perf = perf;
 
@@ -4633,6 +4845,10 @@ game.perf = perf;
 const PERF_SUB_SAMPLES = 60;
 const perfSubsystems = new Map();
 function perfEnabled() { return perf.visible || perf.capturing; }
+/**
+ * @param {any} label
+ * @param {any} ms
+ */
 function perfRecord(label, ms) {
   let s = perfSubsystems.get(label);
   if (!s) {
@@ -4669,7 +4885,10 @@ window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); 
 // Initialize telemetry — connects PostHog as transport if API key is configured
 if (typeof NEON !== 'undefined' && NEON.telemetry) {
   const _phTransport = (typeof posthog !== 'undefined' && posthog.__SV)
-    ? function (batch) {
+    /**
+     * @param {any} batch
+     */
+    ? function (/** @type {any} */ batch) {
         for (const ev of batch) posthog.capture('neon_' + ev.e, ev.p);
         return Promise.resolve();
       }

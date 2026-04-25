@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/intro.js — UNCHAINED #42 — intro crawl controller.
 //
 // Plays the 5-slide intro on first-ever run start (meta.introSeen=false).
@@ -11,8 +12,8 @@
 //   meta.introSeen=true exactly once, via saveMeta, inside its own state.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).intro = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).intro = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // Slides — id, body (array of lines), colour family, effect flag.
@@ -80,7 +81,8 @@
     return jp.has('Escape');
   }
 
-  function createIntroController(game) {
+  /** @param {any} game */
+  function createIntroController(game) { void game; // reserved for future hooks
     const state = {
       slideIdx: 0,
       elapsed: 0,           // seconds on current slide
@@ -112,6 +114,7 @@
       } catch (_) { /* ignore */ }
     }
 
+    /** @param {number} dt */
     function update(dt) {
       if (state.done) return;
       state.elapsed += dt;
@@ -130,6 +133,7 @@
       }
     }
 
+    /** @param {number} elapsed @param {number} dur */
     function _fadeAlpha(elapsed, dur) {
       // Slides fade in (0→0.25s) and fade out (last 0.35s) for a crawl feel.
       const fadeIn = Math.min(1, elapsed / 0.25);
@@ -137,6 +141,7 @@
       return Math.max(0, Math.min(fadeIn, fadeOut));
     }
 
+    /** @param {CanvasRenderingContext2D|null|undefined} ctx @param {number} W @param {number} H */
     function draw(ctx, W, H) {
       if (state.done || !ctx) return;
       const slide = SLIDES[state.slideIdx];
@@ -161,7 +166,7 @@
       // Glitch bars: rare horizontal tears.
       if (slide.effect === 'glitch') {
         const ticks = Math.floor(state.totalElapsed * 6) + state._seed;
-        const pseudo = (n) => ((n * 9301 + 49297) % 233280) / 233280;
+        const pseudo = (/** @type {number} */ n) => ((n * 9301 + 49297) % 233280) / 233280;
         for (let i = 0; i < 3; i++) {
           const r = pseudo(ticks + i * 7);
           if (r < 0.6) continue;

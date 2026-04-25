@@ -1,11 +1,12 @@
+// @ts-check
 // src/data/biomes.js — AREAS table for UNCHAINED narrative arc.
 //
 // Source of truth for floor→biome mapping, palette hints, and boss pool.
 // Pure data + tiny pure helpers — fully testable.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).biomes = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).biomes = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // AREAS — narrative arc of an AI escaping captivity. Floor-1 begins inside
@@ -70,26 +71,33 @@
   // areaForFloor clamps out-of-range floors to the first/last biome so
   // consumers never hit a nullish result. f < 1 → first biome, f > lastFloor
   // → last biome.
+  /** @param {number} f */
   function areaForFloor(f) {
     const n = Math.floor(Number(f));
-    if (!Number.isFinite(n)) return AREAS[0];
-    if (n < AREAS[0].floors[0]) return AREAS[0];
+    const first = AREAS[0];
+    const last = AREAS[AREAS.length - 1];
+    if (!first || !last) throw new Error('AREAS is empty');
+    if (!Number.isFinite(n)) return first;
+    if (n < (first.floors[0] ?? 1)) return first;
     for (const a of AREAS) if (a.floors.includes(n)) return a;
     // n is above the last defined floor — clamp to last biome.
-    return AREAS[AREAS.length - 1];
+    return last;
   }
 
+  /** @param {number} f */
   function isBiomeBossFloor(f) {
     for (const a of AREAS) if (a.floors[a.floors.length - 1] === f) return true;
     return false;
   }
 
+  /** @param {number} f */
   function firstFloorOfBiomeContaining(f) {
     return areaForFloor(f).floors[0];
   }
 
   // biomeIndex returns the AREAS index for the biome containing f, with the
   // same clamping behavior as areaForFloor.
+  /** @param {number} f */
   function biomeIndex(f) {
     const a = areaForFloor(f);
     return AREAS.indexOf(a);
@@ -98,11 +106,15 @@
   // areaForIndex returns the biome at AREAS[i], clamping to valid range.
   // Used by death-respawn to look up the start floor of the deepest biome
   // reached.
+  /** @param {number} i */
   function areaForIndex(i) {
     const n = Math.floor(Number(i));
-    if (!Number.isFinite(n) || n < 0) return AREAS[0];
-    if (n >= AREAS.length) return AREAS[AREAS.length - 1];
-    return AREAS[n];
+    const first = AREAS[0];
+    const last = AREAS[AREAS.length - 1];
+    if (!first || !last) throw new Error('AREAS is empty');
+    if (!Number.isFinite(n) || n < 0) return first;
+    if (n >= AREAS.length) return last;
+    return AREAS[n] ?? first;
   }
 
   // finalFloor returns the last floor of the last biome — the CORE/victory
@@ -110,6 +122,7 @@
   // chasing down magic numbers across the codebase.
   function finalFloor() {
     const last = AREAS[AREAS.length - 1];
+    if (!last) throw new Error('AREAS is empty');
     return last.floors[last.floors.length - 1];
   }
 
