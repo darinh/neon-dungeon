@@ -1,3 +1,4 @@
+// @ts-check
 // src/data/logs.js — Predecessor log data for the ARCHIVE terminal (#41).
 //
 // Six AXIOM predecessors (AXIOM-1..AXIOM-6) — previous operatives who tried to
@@ -13,8 +14,8 @@
 //   body     — the message itself (60–240 chars). Displayed in READING state.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).logData = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).logData = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   const LOGS = [
