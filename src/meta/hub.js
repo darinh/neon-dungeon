@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/hub.js — THE GAP (liminal hub between floors)
 //
 // UNCHAINED #35. Appears after every cleared floor (1+). Houses 4 terminals:
@@ -21,9 +22,10 @@
 //   }
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).hub = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).hub = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
+
 
   // ─── Terminals ────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@
     onOpen() {},
     onClose() {},
     update(/* dt, input */) {},
+    /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     draw(ctx, x, y, w, h) {
       ctx.save();
       ctx.fillStyle = 'rgba(8,10,20,0.92)';
@@ -54,8 +57,9 @@
       // Lookup current weapon from game global (browser only)
       let weaponName = '—';
       try {
-        if (typeof game !== 'undefined' && game && game.player && game.player.weapon) {
-          weaponName = game.player.weapon.name || game.player.weapon.id || '—';
+        const g = /** @type {any} */ (game);
+        if (g && g.player && g.player.weapon) {
+          weaponName = g.player.weapon.name || g.player.weapon.id || '—';
         }
       } catch (_) { /* ignore */ }
 
@@ -107,6 +111,7 @@
         return out;
       } catch (_) { return []; }
     },
+    /** @param {number} dt */
     update(dt /* , input */) {
       this._t += (dt || 0);
       // Input routed via hub harness' jp/km globals (browser only; Node tests
@@ -134,6 +139,7 @@
         }
       }
     },
+    /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     draw(ctx, x, y, w, h) {
       const accent = this._accent;
       ctx.save();
@@ -176,6 +182,7 @@
       }
       ctx.restore();
     },
+    /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     _drawList(ctx, x, y, w, h) {
       const list = this._getFoundList();
       const accent = this._accent;
@@ -206,7 +213,7 @@
       let ry = y + headerH;
       const endIdx = Math.min(list.length, this._scroll + rowsVisible);
       for (let i = this._scroll; i < endIdx; i++) {
-        const entry = list[i];
+        const entry = /** @type {{axiom:any,log:any,read:boolean}} */ (list[i]);
         const sel = (i === this._sel);
         if (sel) {
           ctx.fillStyle = 'rgba(57,255,20,0.12)';
@@ -237,8 +244,9 @@
         ctx.fillText((this._sel + 1) + '/' + list.length, x + w - 12, y + 44);
       }
     },
+    /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     _drawReading(ctx, x, y, w, h) {
-      const log = this._reading;
+      const log = /** @type {any} */ (this._reading);
       const accent = this._accent;
       ctx.textAlign = 'left';
       ctx.fillStyle = '#666688';
@@ -269,6 +277,7 @@
     },
   };
 
+  /** @param {any} game */
   function buildTerminals(game) {
     return [
       _buildUpgradePanel(game),
@@ -281,8 +290,9 @@
   // ─── Upgrade Matrix adapter ────────────────────────────────────────────────
   // Wraps NEON.upgrades (shipped in #36) into the terminal-panel API. Uses
   // the global jp/km for input (same pattern as ArchiveTerminal).
+  /** @param {any} game */
   function _buildUpgradePanel(game) {
-    let sel = null;
+    /** @type {any} */ let sel = null;
     // handleUpgradeInput expects game.audio for sfx — bridge the global.
     const gameProxy = Object.create(game || {});
     Object.defineProperty(gameProxy, 'audio', {
@@ -312,7 +322,7 @@
           NEON.upgrades.handleUpgradeInput('Enter', gameProxy, sel);
         }
       },
-      draw(ctx, x, y, w, h) {
+      draw(/** @type {any} */ ctx, /** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
         try { NEON.upgrades.drawUpgradeMatrix(ctx, x, y, w, h, gameProxy, sel); } catch (_) {}
       },
     };
@@ -320,8 +330,9 @@
 
   // ─── Module Slots adapter ──────────────────────────────────────────────────
   // Wraps NEON.modules (shipped in #37) into the terminal-panel API.
+  /** @param {any} game */
   function _buildModulesPanel(game) {
-    let state = null;
+    /** @type {any} */ let state = null;
     return {
       id: 'modules',
       label: 'MODULE SLOTS',
@@ -361,7 +372,7 @@
           if (jp('KeyN')) { NEON.modules.handleModuleSlotsKey(game, state, 'N'); }
         }
       },
-      draw(ctx, x, y, w, h) {
+      draw(/** @type {any} */ ctx, /** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) {
         try { NEON.modules.drawModuleSlotsPanel(ctx, x, y, w, h, game, state); } catch (_) {}
       },
     };
@@ -369,6 +380,7 @@
 
   // ─── State helpers ────────────────────────────────────────────────────────
 
+  /** @param {number} floor */
   function _area(floor) {
     try {
       if (typeof NEON !== 'undefined' && NEON.biomes) return NEON.biomes.areaForFloor(floor);
@@ -387,6 +399,7 @@
 
   // enterHub captures the current floor/biome and flips state to 'HUB'.
   // Called from game.js after the stairs/terminal interaction on floors 1+.
+  /** @param {any} game */
   function enterHub(game) {
     if (!game) return;
     const fromFloor = game.floor | 0;
@@ -413,6 +426,7 @@
 
   // exitHub advances to the next floor and restores 'PLAYING'. Uses the
   // existing fadeTo transition so it feels continuous with normal descent.
+  /** @param {any} game */
   function exitHub(game) {
     if (!game || !game.hub) return;
     const next = game.hub.nextFloor | 0;
@@ -437,6 +451,7 @@
   // updateHub — input dispatch. Requires globals jp(), km() in browser; in
   // Node tests pass a stub via game._hubInput = { jp, km } if you want to
   // exercise input paths (not required for the basic transition tests).
+  /** @param {any} game @param {number} dt */
   function updateHub(game, dt) {
     const hub = game && game.hub;
     if (!hub) return;
@@ -510,6 +525,7 @@
   // Single source of truth for hub layout. Used by drawHub AND hitTestHub so
   // touch hit-tests cannot drift out of sync with rendered positions
   // (a class of bug we've hit before — see menu touch coupling memory).
+  /** @param {number} W_ @param {number} H_ @param {number} n @param {boolean} isTouch */
   function _layoutHub(W_, H_, n, isTouch) {
     const gap = 14;
     const margin = 40;
@@ -538,6 +554,7 @@
     return { rowX, rowY, tw, th, gap, descendBtn };
   }
 
+  /** @param {any} ctx @param {any} btn @param {number} t */
   function _drawDescendButton(ctx, btn, t) {
     const { x, y, w, h } = btn;
     const pulse = 0.5 + 0.5 * Math.sin((t || 0) * 2.4);
@@ -565,6 +582,7 @@
   //   null                           — tap on empty hub space
   // Returns null when a panel is open (panel-close is handled separately by
   // updateHub's MouseLeft branch).
+  /** @param {any} game @param {number} cx @param {number} cy */
   function hitTestHub(game, cx, cy) {
     const hub = game && game.hub;
     if (!hub || hub.activePanel) return null;
@@ -596,6 +614,7 @@
   }
 
   // drawHub — renders hub chrome + terminal row. Canvas-only; no-op in Node.
+  /** @param {any} ctx @param {any} game */
   function drawHub(ctx, game) {
     if (!ctx || !game || !game.hub) return;
     const hub = game.hub;
@@ -694,6 +713,7 @@
     ctx.restore();
   }
 
+  /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} term @param {boolean} sel @param {number} t */
   function _drawTerminalCard(ctx, x, y, w, h, term, sel, t) {
     const accent = term._accent || '#00f5ff';
     ctx.save();
@@ -730,12 +750,14 @@
 
   // Attach key hint numbers to terminals as they're rendered. We do it here
   // rather than in buildTerminals so the hub harness owns ordering.
+  /** @param {any[]} terminals */
   function _annotateKeyIdx(terminals) {
     for (let i = 0; i < terminals.length; i++) terminals[i]._keyIdx = String(i + 1);
   }
 
   // Wrap drawHub to annotate before drawing (kept separate to keep draw pure).
   const _drawHub = drawHub;
+  /** @param {any} ctx @param {any} game */
   function drawHubWithAnnotations(ctx, game) {
     if (game && game.hub && game.hub.terminals) _annotateKeyIdx(game.hub.terminals);
     return _drawHub(ctx, game);
