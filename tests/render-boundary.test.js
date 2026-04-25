@@ -1,13 +1,13 @@
 'use strict';
 // Render error boundary (post-v116). Pure-Node tests for the helpers in
-// src/meta/render-boundary.js. The drawErrorOverlay path is exercised against
+// engine/render-boundary.js. The drawErrorOverlay path is exercised against
 // a fake ctx that records calls — we verify it doesn't throw and emits the
 // key strings, which is enough for a regression net.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const rb = require(path.resolve(__dirname, '..', 'src', 'meta', 'render-boundary.js'));
+const rb = require(path.resolve(__dirname, '..', 'engine', 'render-boundary.js'));
 
 test('trackRenderError: first error initialises state with count 1', () => {
   const err = new Error('boom');

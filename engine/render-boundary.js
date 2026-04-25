@@ -1,5 +1,5 @@
 // @ts-check
-// src/meta/render-boundary.js — render error boundary (post-v116 hardening)
+// engine/render-boundary.js — render error boundary (post-v116 hardening)
 //
 // The main loop in src/game.js wraps update() and render() in try/finally
 // (no catch), so any uncaught exception in those phases aborts the frame

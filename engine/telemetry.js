@@ -1,5 +1,5 @@
 // @ts-check
-// src/meta/telemetry.js — Lightweight game telemetry with offline-safe localStorage batching
+// engine/telemetry.js — Lightweight game telemetry with offline-safe localStorage batching
 //
 // UMD module. Browser: NEON.telemetry. Node tests: require().
 // Events are queued in memory, flushed to localStorage on interval + page

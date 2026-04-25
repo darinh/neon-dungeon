@@ -58,9 +58,9 @@ Reusable as-is. These are the candidates for the first engine package.
 
 | Module | Surface | Why it's engine |
 |---|---|---|
-| `src/meta/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
-| `src/meta/spawn.js` | `NEON.spawn.findNearestPassable` | Tile-grid BFS. Knows about an `isPassable(tileCode)` callback only — caller decides which tile codes are walkable. |
-| `src/meta/telemetry.js` | `NEON.telemetry.{init, track, flush, update}` | Generic offline-safe event batching. Privacy-conscious by default. No game keys. |
+| `engine/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
+| `engine/spawn.js` | `NEON.spawn.findNearestPassable` | Tile-grid BFS. Knows about an `isPassable(tileCode)` callback only — caller decides which tile codes are walkable. |
+| `engine/telemetry.js` | `NEON.telemetry.{init, track, flush, update}` | Generic offline-safe event batching. Privacy-conscious by default. No game keys. |
 | `src/data/palettes.js` (shape) | `BIOME_PALETTES` table | The **schema** (palette per biome id) is engine; the **values** are game (see Mixed). |
 
 ### 🟧 Game modules

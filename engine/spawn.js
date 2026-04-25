@@ -1,5 +1,5 @@
 // @ts-check
-// src/meta/spawn.js — spawn-position utilities.
+// engine/spawn.js — spawn-position utilities.
 //
 // findNearestPassable: BFS from a target tile to the closest passable tile
 // within `maxRadius` rings. Used by game.loadFloor() to drop the player near

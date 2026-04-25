@@ -4776,7 +4776,7 @@ function loop(ts) {
 // but rAF kept rescheduling, so input still worked while the world silently
 // vanished. Now each phase has its own catch; failures populate
 // game._renderError and a visible overlay is drawn over whatever managed to
-// render before the throw. See src/meta/render-boundary.js.
+// render before the throw. See engine/render-boundary.js.
 //
 // Auto-recovery: a transient error (one bad frame during a particle burst,
 // say) shouldn't pin the overlay forever. After RECOVERY_FRAMES consecutive
