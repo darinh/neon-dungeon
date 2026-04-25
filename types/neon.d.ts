@@ -25,4 +25,11 @@ declare global {
   // in both, but TS needs a global escape hatch for the Node path.
   // eslint-disable-next-line no-var
   var NEON: Record<string, any> | undefined;
+
+  // The shared `game` object is declared as `const game = {...}` in
+  // src/game.js and accessed from many other src/*.js modules via the UMD
+  // script-tag pattern. Until Phase 4 introduces a typed Game contract,
+  // checked files treat it as `any` to avoid a cascading cross-file rewrite.
+  // Files that currently @ts-check use `_G` (a local `any` alias of the
+  // global) to access fields without TS2339s.
 }
