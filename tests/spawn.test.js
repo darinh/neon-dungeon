@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const { findNearestPassable } = require(path.resolve(
-  __dirname, '..', 'src', 'meta', 'spawn.js'
+  __dirname, '..', 'engine', 'spawn.js'
 ));
 
 // 1 = wall (impassable), 0 = floor (passable). Tiny tile codes for tests.
