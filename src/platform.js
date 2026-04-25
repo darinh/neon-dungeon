@@ -377,9 +377,21 @@ canvas.addEventListener('touchstart', e => {
         } else if (hit && hit.kind === 'descend') {
           justPressed.add('Space');
         } else if (_G.hub && _G.hub.activePanel) {
-          // Tap-outside-panel close (existing behavior in updateHub).
-          mouse.x = cx; mouse.y = cy;
-          justPressed.add('MouseLeft');
+          // A panel is open. Route the tap to the panel's onTap if it
+          // implements one (upgrade matrix grid, module slots rows,
+          // archive list rows). If the tap was outside the panel rect,
+          // synthesize MouseLeft so updateHub's existing close-on-
+          // outside-tap branch fires.
+          let consumedByPanel = false;
+          try {
+            if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.hitTestActivePanel) {
+              consumedByPanel = !!NEON.hub.hitTestActivePanel(_G, cx, cy);
+            }
+          } catch (_) {}
+          if (!consumedByPanel) {
+            mouse.x = cx; mouse.y = cy;
+            justPressed.add('MouseLeft');
+          }
         }
         // Otherwise: tap on empty hub space → no-op (don't accidentally
         // activate the selected terminal).
