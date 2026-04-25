@@ -192,8 +192,14 @@ import", but their internals stay put.
 - **No types tighten beyond opt-in.** `Window.NEON: Record<string, any>`
   stays loose to avoid forcing changes across all `// @ts-check`'d files.
   Tightening is a separate, file-by-file effort.
-- **No build-time enforcement.** ESLint rules forbidding `import` of game
-  modules from engine modules can be added later; not in scope here.
+- ~~**No build-time enforcement.**~~ As of Phase D, `npm run check:engine`
+  (auto-invoked by `npm run check`) runs `scripts/check-engine-purity.js`,
+  which scans `engine/*.js` for NEON-specific narrative tokens (AXIOM,
+  UNCHAINED, SENTINEL, OVERSEER, ARCHITECT, NEON DUNGEON, etc.) and the
+  quoted biome ids `'sandbox'` / `'opennet'`. Hits in non-comment, non-UMD
+  lines fail the build. The forbidden list is conservative — common words
+  like "core", "shard", "boost" stay allowed. To extend it, edit
+  `FORBIDDEN` in the script.
 
 ---
 
