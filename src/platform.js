@@ -1,3 +1,4 @@
+// @ts-check
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -11,22 +12,26 @@ const SAVE_VERSION = '9.0';
 const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
+/** @type {Record<string, string>} */
 const DEFAULT_KEY_MAP = {
   up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
   interact:'KeyE', hackware:'KeyF', voidshard:'KeyV',
   dash:'ShiftLeft', shoot:'Space'
 };
+/** @type {Record<string, string>} */
 const ACTION_LABELS = {
   up:'Move Up', down:'Move Down', left:'Move Left', right:'Move Right',
   interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
   dash:'Dash', shoot:'Shoot'
 };
 const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab','F3']);
+/** @param {string | null | undefined} k */
 const KEY_DISPLAY = k => {
   if (!k) return '???';
   if (k.startsWith('Key')) return k.slice(3);
   if (k.startsWith('Digit')) return k.slice(5);
   if (k.startsWith('Arrow')) return '↑↓←→'[['Up','Down','Left','Right'].indexOf(k.slice(5))] || k.slice(5);
+  /** @type {Record<string,string>} */
   const map = {ShiftLeft:'L-Shift',ShiftRight:'R-Shift',Space:'Space',
     ControlLeft:'L-Ctrl',ControlRight:'R-Ctrl',AltLeft:'L-Alt',AltRight:'R-Alt',
     Tab:'Tab',Backspace:'Bksp',CapsLock:'Caps',Backquote:'`',
@@ -35,6 +40,7 @@ const KEY_DISPLAY = k => {
   return map[k] || k;
 };
 
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -44,7 +50,7 @@ const settings = {
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
-      const raw = JSON.parse(localStorage.getItem('neonDungeonSettings'));
+      const raw = JSON.parse(localStorage.getItem('neonDungeonSettings') || 'null');
       if (!raw) return;
       if (typeof raw.sfxVol === 'number') this.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
@@ -78,14 +84,27 @@ const settings = {
 settings.load();
 
 // Key-map lookup: km('interact') returns the current key code for that action
+/** @param {string} action */
 function km(action) { return settings.keyMap[action]; }
 // Alternate keys that always work alongside the mapped key
 const ALT_KEYS = { up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight', dash:'ShiftRight' };
 
 // ─── Canvas Setup ────────────────────────────────────────────────────────────
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('c'));
+const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
 canvas.width = W; canvas.height = H;
+
+// Phase 3B: Proxy-based alias for the cross-file `game` global. Resolved
+// lazily on each property access, so this works even though platform.js
+// loads BEFORE game.js (where `const game = {...}` lives) — see types/neon.d.ts.
+// Avoids a cascade of TS2339s when accessing fields that are added at runtime
+// (e.g. game.hub, game._newGameConfirm, game.menuSel).
+/** @type {any} */
+const _G = new Proxy({}, {
+  get: (_t, p) => /** @type {any} */ (game)[p],
+  set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
+  has: (_t, p) => p in /** @type {any} */ (game),
+});
 
 // Safe-area insets (logical px) for notched devices
 let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
@@ -129,13 +148,18 @@ function updateLayout() {
 }
 
 // ─── Fullscreen (landscape auto-request, portrait auto-exit) ─────────────────
+// Treat the fullscreen-related Element/Document/HTMLCanvasElement extensions as
+// `any` — modern TS lib.dom.d.ts only declares the standard names, but we need
+// to feature-detect webkit-prefixed variants for Safari/iOS.
+const _fsCanvas = /** @type {any} */ (canvas);
+const _fsDoc = /** @type {any} */ (document);
 const fsApi = {
-  request: canvas.requestFullscreen ? 'requestFullscreen'
-         : canvas.webkitRequestFullscreen ? 'webkitRequestFullscreen' : null,
-  exit: document.exitFullscreen ? 'exitFullscreen'
-      : document.webkitExitFullscreen ? 'webkitExitFullscreen' : null,
-  element: () => document.fullscreenElement ?? document.webkitFullscreenElement,
-  supported: !!(canvas.requestFullscreen || canvas.webkitRequestFullscreen),
+  request: _fsCanvas.requestFullscreen ? 'requestFullscreen'
+         : _fsCanvas.webkitRequestFullscreen ? 'webkitRequestFullscreen' : null,
+  exit: _fsDoc.exitFullscreen ? 'exitFullscreen'
+      : _fsDoc.webkitExitFullscreen ? 'webkitExitFullscreen' : null,
+  element: () => _fsDoc.fullscreenElement ?? _fsDoc.webkitFullscreenElement,
+  supported: !!(_fsCanvas.requestFullscreen || _fsCanvas.webkitRequestFullscreen),
 };
 let fsWantLandscape = false;   // true when landscape but no gesture yet
 let fsDismissed = false;       // user tapped X to dismiss the prompt this session
@@ -152,7 +176,9 @@ function isTouchDevice() {
 function tryFullscreen() {
   if (!fsApi.supported || fsApi.element()) return;
   try {
-    const ret = document.documentElement[fsApi.request]?.();
+    const req = fsApi.request;
+    if (!req) return;
+    const ret = /** @type {any} */ (document.documentElement)[req]?.();
     if (ret && typeof ret.catch === 'function') ret.catch(() => {});
   } catch (_) {}
 }
@@ -160,7 +186,9 @@ function tryFullscreen() {
 function exitFullscreen() {
   if (!fsApi.element()) return;
   try {
-    const ret = document[fsApi.exit]?.();
+    const ex = fsApi.exit;
+    if (!ex) return;
+    const ret = /** @type {any} */ (document)[ex]?.();
     if (ret && typeof ret.catch === 'function') ret.catch(() => {});
   } catch (_) {}
 }
@@ -193,9 +221,10 @@ onOrientationChange();
 // ─── Input ───────────────────────────────────────────────────────────────────
 const keys = new Set();
 const mouse = { x: W/2, y: H/2, down: false };
-let justPressed = new Set();
-let justReleased = new Set();
+const justPressed = new Set();
+const justReleased = new Set();
 let lastKey = '';
+/** @type {any} */
 let nameEntryTap = null;
 
 window.addEventListener('keydown', e => {
@@ -224,6 +253,7 @@ canvas.addEventListener('wheel', e => {
 
 // ─── Touch Controls ──────────────────────────────────────────────────────────
 const JR = 55; // joystick base radius
+/** @type {{ joystick:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number}, aim:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number,shooting:boolean}, btnE:number|null, btnV:number|null, btnF:number|null, btnDash:number|null, btnPause:number|null }} */
 const touch = {
   joystick: { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0 },
   aim:      { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0, shooting:false },
@@ -232,6 +262,9 @@ const touch = {
 };
 
 // Button definitions — positions updated dynamically by updateBtns()
+/** @typedef {{ x:number, y:number, r:number, label:string, colour:string, hidden?:boolean }} TouchBtn */
+
+/** @type {Record<'E'|'F'|'V'|'DASH'|'PAUSE', TouchBtn>} */
 const BTNS = {
   E:     { x:0, y:0, r:30, label:'E',  colour:'#00f5ff' },
   F:     { x:0, y:0, r:28, label:'F',  colour:'#ff8800' },
@@ -251,7 +284,6 @@ function updateBtns() {
   BTNS.F.hidden = false;
   // Position from edges, respecting safe-area insets
   const pr = Math.max(10, safeRight);
-  const pb = Math.max(10, safeBottom);
   const pt = Math.max(10, safeTop);
   const btnY = layout.hudTop - BTNS.E.r - 16;
   BTNS.E.x     = W - pr - 230;
@@ -266,12 +298,22 @@ function updateBtns() {
   BTNS.PAUSE.y = pt + 30;
 }
 
+/**
+ * @param {number} clientX
+ * @param {number} clientY
+ * @returns {[number, number]}
+ */
 function toCanvas(clientX, clientY) {
   const r = canvas.getBoundingClientRect();
   return [(clientX - r.left) * canvas.width / r.width,
           (clientY - r.top)  * canvas.height / r.height];
 }
 
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @param {TouchBtn} btn
+ */
 function hitBtn(cx, cy, btn) {
   const dx=cx-btn.x, dy=cy-btn.y;
   // Expand hit area on small screens to meet minimum touch target
@@ -284,7 +326,7 @@ canvas.addEventListener('touchstart', e => {
   audio.resume();
   // check if any touch hit the fullscreen dismiss button first
   let dismissed = false;
-  for (const t of e.changedTouches) {
+  for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
     if (fsWantLandscape && !fsApi.element() && !fsDismissed
         && cx < 48 && cy < 48) {
@@ -293,48 +335,48 @@ canvas.addEventListener('touchstart', e => {
   }
   // piggyback on user gesture: request fullscreen if landscape wants it
   if (!dismissed && fsWantLandscape && !fsApi.element() && !fsDismissed) tryFullscreen();
-  for (const t of e.changedTouches) {
+  for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
     // skip the dismiss touch (already handled above)
     if (cx < 48 && cy < 48 && dismissed) continue;
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
-    if (game.state !== 'PLAYING' && game.state !== 'FADE') {
-      if (game.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (game.state === 'POWERUP_CHOICE' || game.state === 'SHOPPING' || game.state === 'PERK_CHOICE' || game.state === 'AUGMENT_CHOICE' || game.state === 'EVENT_CHOICE') {
+    if (_G.state !== 'PLAYING' && _G.state !== 'FADE') {
+      if (_G.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
         continue;
       }
-      if (game.state === 'SETTINGS') {
+      if (_G.state === 'SETTINGS') {
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
         continue;
       }
-      if (game.state === 'PAUSED') {
+      if (_G.state === 'PAUSED') {
         // 3 zones: top third = resume, middle third = settings, bottom third = quit
         if (cy < H * 0.38) justPressed.add('Escape');
         else if (cy < H * 0.62) justPressed.add('KeyS');
         else justPressed.add('KeyQ');
       }
-      else if (game.state === 'HUB') {
+      else if (_G.state === 'HUB') {
         // The Gap. Mobile users have no SPACE key to descend and no number
         // keys to pick a terminal — route taps via hub.hitTestHub which owns
         // the hub layout (single source of truth, see hub.js _layoutHub).
         let hit = null;
         try {
           if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.hitTestHub) {
-            hit = NEON.hub.hitTestHub(game, cx, cy);
+            hit = NEON.hub.hitTestHub(_G, cx, cy);
           }
         } catch (_) {}
         if (hit && hit.kind === 'terminal') {
           // Tap a card → select + activate. Always select first so the
           // highlight reflects the tap even if the same card is re-tapped.
-          if (game.hub) game.hub.selected = hit.index;
+          if (_G.hub) _G.hub.selected = hit.index;
           justPressed.add('Enter');
         } else if (hit && hit.kind === 'descend') {
           justPressed.add('Space');
-        } else if (game.hub && game.hub.activePanel) {
+        } else if (_G.hub && _G.hub.activePanel) {
           // Tap-outside-panel close (existing behavior in updateHub).
           mouse.x = cx; mouse.y = cy;
           justPressed.add('MouseLeft');
@@ -342,16 +384,15 @@ canvas.addEventListener('touchstart', e => {
         // Otherwise: tap on empty hub space → no-op (don't accidentally
         // activate the selected terminal).
       }
-      else if (game.state === 'MENU') {
+      else if (_G.state === 'MENU') {
         const narrow = layout.compact;
         // Confirm overlay intercepts touches when active
-        if (game._newGameConfirm) {
-          const c = game._newGameConfirm;
+        if (_G._newGameConfirm) {
+          const c = _G._newGameConfirm;
           const boxW = Math.min(520, W - 40);
           const boxH = narrow ? 180 : 200;
           const bx = (W - boxW) / 2, by = (H - boxH) / 2;
           const btnY = by + (narrow ? 120 : 138);
-          const spacing = boxW / 2;
           // Hit-test inside the dialog box
           if (cx >= bx && cx <= bx + boxW && cy >= by && cy <= by + boxH) {
             // Button zone: within 20px of button Y
@@ -375,7 +416,7 @@ canvas.addEventListener('touchstart', e => {
         const ty1 = narrow ? 120 : 160;
         const startY = ty1 + titleFs * 0.95 + 80;
         const gap = narrow ? 48 : 36;
-        const opts = game.getMenuOptions();
+        const opts = _G.getMenuOptions();
         // Bounding-box hit test: tap must be within gap/2 of a row center
         let hit = -1;
         for (let i = 0; i < opts.length; i++) {
@@ -383,7 +424,7 @@ canvas.addEventListener('touchstart', e => {
           if (Math.abs(cy - oy) <= gap / 2) { hit = i; break; }
         }
         if (hit < 0) continue; // tap outside any menu item — ignore
-        game.menuSel = hit;
+        _G.menuSel = hit;
         // On the difficulty row, left/right edge taps cycle, center taps start
         if (opts[hit]?.isDiffRow) {
           if (cx < W * 0.35) justPressed.add('ArrowLeft');
@@ -393,7 +434,7 @@ canvas.addEventListener('touchstart', e => {
           justPressed.add('Enter');
         }
       }
-      else if (game.state === 'ARCHIVES') {
+      else if (_G.state === 'ARCHIVES') {
         // Hit-test against upgrade rows or back button
         const narrow = layout.compact;
         const startY = narrow ? 95 : 120;
@@ -409,18 +450,18 @@ canvas.addEventListener('touchstart', e => {
             const d = Math.abs(cy - oy);
             if (d < bestDist) { bestDist = d; best = i; }
           }
-          game.archivesSel = best;
+          _G.archivesSel = best;
           justPressed.add('Enter');
         }
       }
-      else if (game.state === 'ENDGAME_CHOICE') {
+      else if (_G.state === 'ENDGAME_CHOICE') {
         // Two-option dialog: left half = ACCEPT (selected=0), right half =
         // REFUSE (selected=1). Single tap selects + confirms — keyboard users
         // get arrow-key preview, touch users commit in one motion. The 0.5s
         // input lock-out in updateEndgameChoice still absorbs accidental
         // mashes during the dialog fade-in, so the synthesised Enter is safe.
-        if (game._endgameChoice) {
-          game._endgameChoice.selected = (cx < W / 2) ? 0 : 1;
+        if (_G._endgameChoice) {
+          _G._endgameChoice.selected = (cx < W / 2) ? 0 : 1;
         }
         justPressed.add('Enter');
       }
@@ -429,9 +470,9 @@ canvas.addEventListener('touchstart', e => {
     }
     // button priority
     // Expanded map: any tap closes (modal — takes priority)
-    if (game.mapExpanded) { justPressed.add('Tab'); continue; }
+    if (_G.mapExpanded) { justPressed.add('Tab'); continue; }
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
-    if (hitBtn(cx,cy,BTNS.F) && game.player && game.player.hackware) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
+    if (hitBtn(cx,cy,BTNS.F) && _G.player && _G.player.hackware) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }
     if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
@@ -456,7 +497,7 @@ canvas.addEventListener('touchstart', e => {
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
-  for (const t of e.changedTouches) {
+  for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
     const [cx, cy] = toCanvas(t.clientX, t.clientY);
     if (t.identifier === touch.joystick.id) {
       let dx=cx-touch.joystick.baseX, dy=cy-touch.joystick.baseY;
@@ -476,7 +517,7 @@ canvas.addEventListener('touchmove', e => {
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-  for (const t of e.changedTouches) {
+  for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
     if (t.identifier===touch.joystick.id) { touch.joystick.active=false; touch.joystick.dx=0; touch.joystick.dy=0; }
     if (t.identifier===touch.aim.id)      { touch.aim.active=false; touch.aim.shooting=false; touch.aim.dx=0; touch.aim.dy=0; mouse.down=false; }
     if (t.identifier===touch.btnE)   touch.btnE=null;
@@ -551,14 +592,14 @@ function drawTouchUI() {
   for (const [key,btn] of Object.entries(BTNS)) {
     if (btn.hidden) continue;
     const active = (key==='E'&&touch.btnE!==null)||(key==='F'&&touch.btnF!==null)||(key==='V'&&touch.btnV!==null)||(key==='DASH'&&touch.btnDash!==null)||(key==='PAUSE'&&touch.btnPause!==null);
-    const noHackware = key==='F' && !(game.player && game.player.hackware);
+    const noHackware = key==='F' && !(_G.player && _G.player.hackware);
     ctx.save();
     // Show cooldown overlay on dash button
-    if (key==='DASH' && game.player && game.player.dashCooldown > 0) {
+    if (key==='DASH' && _G.player && _G.player.dashCooldown > 0) {
       ctx.globalAlpha = 0.25;
     } else if (key==='F' && noHackware) {
       ctx.globalAlpha = 0.15;
-    } else if (key==='F' && game.player && game.player.hackwareCooldown > 0) {
+    } else if (key==='F' && _G.player && _G.player.hackwareCooldown > 0) {
       ctx.globalAlpha = 0.25;
     } else {
       ctx.globalAlpha = active ? 0.9 : 0.45;
@@ -603,26 +644,39 @@ function drawTouchUI() {
   }
 }
 
+/** @param {string} code */
 function jp(code) { return justPressed.has(code); }
 function clearJust() { justPressed.clear(); justReleased.clear(); lastKey=''; nameEntryTap=null; }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
+/** @param {number} min @param {number} max */
 function rnd(min, max) { return min + Math.random() * (max - min); }
+/** @param {number} min @param {number} max */
 function rndInt(min, max) { return Math.floor(rnd(min, max + 1)); }
+/** @param {number} v @param {number} lo @param {number} hi */
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
 function dist(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx+dy*dy); }
+/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
 function dist2(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
+/** @param {number} dx @param {number} dy @returns {[number, number]} */
 function norm(dx, dy) { const l=Math.sqrt(dx*dx+dy*dy)||1; return [dx/l, dy/l]; }
+/** @param {number} a @param {number} b @param {number} t */
 function lerp(a, b, t) { return a + (b-a)*t; }
+/** @param {{x:number,y:number}} entity */
 function clampToBossRoom(entity) {
-  if (!game.bossSealed || !game.bossRoom) return;
-  const r = game.bossRoom;
+  if (!_G.bossSealed || !_G.bossRoom) return;
+  const r = _G.bossRoom;
   entity.x = Math.max(r.x + 0.5, Math.min(r.x + r.w - 0.5, entity.x));
   entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
 }
 // UNCHAINED #37 KINETIC_BUFFER: scale boss knockback by module multiplier.
 function playerKnockMul() {
-  const p = game && game.player;
+  // typeof guard: matches the safe-init pattern used at the bottom of this
+  // file (lines ~1974, ~1986). `_G && ...` would NOT short-circuit because
+  // _G is a Proxy and Proxies are always truthy.
+  if (typeof game === 'undefined') return 1;
+  const p = _G.player;
   return (p && p.metaFlags && p.metaFlags.knockbackTakenMul) || 1;
 }
 
@@ -636,11 +690,12 @@ let _losHits = 0, _losMisses = 0;
 function clearLosCache() { _losCache.clear(); _losHits = 0; _losMisses = 0; }
 function _losCacheStats() { return { size: _losCache.size, hits: _losHits, misses: _losMisses }; }
 
+/** @param {number} x1 @param {number} y1 @param {number} x2 @param {number} y2 @param {any} map */
 function _hasLOSRaw(x1, y1, x2, y2, map) {
   let cx = Math.floor(x1), cy = Math.floor(y1);
   const ex = Math.floor(x2), ey = Math.floor(y2);
-  let dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
-  let sx = cx<ex?1:-1, sy = cy<ey?1:-1;
+  const dx = Math.abs(ex-cx), dy = Math.abs(ey-cy);
+  const sx = cx<ex?1:-1, sy = cy<ey?1:-1;
   let err = dx - dy;
   for (let i=0; i<100; i++) {
     if (cx===ex && cy===ey) return true;
@@ -659,6 +714,7 @@ function _hasLOSRaw(x1, y1, x2, y2, map) {
   return true;
 }
 
+/** @param {number} x1 @param {number} y1 @param {number} x2 @param {number} y2 @param {any} map */
 function hasLOS(x1, y1, x2, y2, map) {
   const fx = Math.floor(x1), fy = Math.floor(y1);
   const tx = Math.floor(x2), ty = Math.floor(y2);
@@ -678,21 +734,30 @@ function hasLOS(x1, y1, x2, y2, map) {
 }
 
 // Tile helpers
+/** @param {any} t */
 function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC; }
+/** @param {any} t */
 function isSeeThrough(t) {
   return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
 }
+/** @param {any} t */
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
+/** @param {any} t */
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
 // ─── Audio Engine ────────────────────────────────────────────────────────────
 const audio = (() => {
-  let actx = null, master = null, compressor = null, reverbNode = null,
-      reverbGain = null, noiseBuf = null, musicBus = null;
+  /** @type {any} */ let actx = null;
+  /** @type {any} */ let master = null;
+  /** @type {any} */ let compressor = null;
+  /** @type {any} */ let reverbNode = null;
+  /** @type {any} */ let reverbGain = null;
+  /** @type {any} */ let noiseBuf = null;
+  /** @type {any} */ let musicBus = null;
 
   function getCtx() {
     if (!actx) {
-      actx = new (window.AudioContext || window.webkitAudioContext)();
+      actx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
       // Master bus: compressor → destination
       compressor = actx.createDynamicsCompressor();
       compressor.threshold.value = -12;
@@ -732,8 +797,10 @@ const audio = (() => {
     }
   }
 
+  /** @param {number} v @param {number} lo @param {number} hi */
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+  /** @param {any} target @param {number} pan @param {number} lifetime */
   function panOut(target, pan, lifetime) {
     const c = getCtx();
     const out = target || master;
@@ -746,6 +813,7 @@ const audio = (() => {
   }
 
   // Core voice: oscillator → gain/filter → optional pan → target node
+  /** @param {OscillatorType} type @param {number} freq1 @param {number} freq2 @param {number} vol @param {number} start @param {number} dur @param {any} [target] @param {any} [opt] */
   function osc(type, freq1, freq2, vol, start, dur, target, opt) {
     const c = getCtx();
     const o = c.createOscillator();
@@ -779,6 +847,7 @@ const audio = (() => {
   }
 
   // Noise burst from cached buffer
+  /** @param {number} vol @param {number} start @param {number} dur @param {number} filterFreq @param {any} [target] @param {any} [opt] */
   function noise(vol, start, dur, filterFreq, target, opt) {
     const c = getCtx();
     const src = c.createBufferSource();
@@ -801,6 +870,7 @@ const audio = (() => {
 
   // Reverb send helper — routes signal to both dry and wet buses
   // lifetime: seconds until all voices through this bus have finished (excludes reverb tail)
+  /** @param {number} vol @param {number} wetAmt @param {number} lifetime */
   function wetDry(vol, wetAmt, lifetime) {
     const c = getCtx();
     const split = c.createGain();
@@ -820,11 +890,11 @@ const audio = (() => {
   return {
     resume,
     isRunning() { return actx && actx.state === 'running'; },
-    setSfxVolume(v) {
+    setSfxVolume(/** @type {number} */ v) {
       settings.sfxVol = v;
       if (master) { const t = actx.currentTime; master.gain.cancelScheduledValues(t); master.gain.linearRampToValueAtTime(0.7 * v, t + 0.02); }
     },
-    setMusicVolume(v) {
+    setMusicVolume(/** @type {number} */ v) {
       settings.musicVol = v;
       if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.20 * v, t + 0.02); }
     },
@@ -840,7 +910,7 @@ const audio = (() => {
       }
       return { bus: musicBus, ctx: c };
     },
-    shoot(isPlayer, weapon) {
+    shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon = null) {
       const c = getCtx(); const t = c.currentTime;
       if (!isPlayer) {
         const pan = Math.random() * 0.3 - 0.15;
@@ -893,7 +963,7 @@ const audio = (() => {
         osc('sine', 210, 120, 0.04, t, 0.08, bus, { pan:-0.03 });
       }
     },
-    hit(isPlayer, weaponName) {
+    hit(/** @type {boolean} */ isPlayer, /** @type {string} */ weaponName = '') {
       const c = getCtx(); const t = c.currentTime;
       if (isPlayer) {
         // Player hurt: chest thump + brittle impact transient
@@ -1569,7 +1639,7 @@ const audio = (() => {
       osc('sawtooth', 700, 150, 0.07, t, 0.12, bus);
       osc('sine', 400, 80, 0.05, t + 0.04, 0.1, bus);
     },
-    comboTick(count) {
+    comboTick(/** @type {number} */ count) {
       const c = getCtx(); const t = c.currentTime;
       // Ascending pitch with combo — quick chirp
       const base = Math.min(1800, 400 + count * 80);
@@ -1908,10 +1978,10 @@ function _onVisibilityHidden() {
     try { audio.resume(); } catch (_) {} // no-op in 'running', but this accesses getCtx()
   }
   // Only auto-pause gameplay states — menus/game-over/etc. are fine
-  if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(game.state)) {
-    _preVisibilityState = game.state;
+  if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(_G.state)) {
+    _preVisibilityState = _G.state;
     _autoPaused = true;
-    game.setState('PAUSED');
+    _G.setState('PAUSED');
   }
 }
 

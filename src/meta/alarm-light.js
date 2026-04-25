@@ -1,3 +1,4 @@
+// @ts-check
 'use strict';
 // src/meta/alarm-light.js — atmospheric alarm-light decor math.
 //
@@ -11,8 +12,8 @@
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;
-  else (root.NEON = root.NEON || {}).alarmLight = v;
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).alarmLight = v;
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // Biomes that opt in to alarm lights. Keyed by AREAS[i].id from
@@ -35,12 +36,14 @@
   // Lands inside the requested 1-3 per room band across the typical
   // room-size mix. Verified empirically with the seed used by the
   // procedural generator.
+  /** @param {number} h */
   function isAlarmSlot(h) {
     return ((h >>> 0) % 31) === 0;
   }
 
   // shouldDraw — true iff this biome opts in AND the tile won the slot.
   // Call from render.js with the biome id and the per-tile decor hash.
+  /** @param {string} biomeId @param {number} h */
   function shouldDraw(biomeId, h) {
     if (!ALARM_BIOMES.has(biomeId)) return false;
     return isAlarmSlot(h);
@@ -53,6 +56,7 @@
   //
   // floorTime is seconds (game.floorTime). h is the tile decor hash —
   // any 32-bit unsigned int works.
+  /** @param {number} floorTime @param {number} h */
   function intensity(floorTime, h) {
     const t = (typeof floorTime === 'number' && isFinite(floorTime)) ? floorTime : 0;
     const phase = (h >>> 0) % 17; // 0..16, integer rad offset

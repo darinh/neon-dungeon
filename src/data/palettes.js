@@ -1,3 +1,4 @@
+// @ts-check
 // src/data/palettes.js — BIOME_PALETTES table for UNCHAINED #40.
 //
 // Keyed by AREAS[i].palette. Drives wall/floor/minimap tints per biome and
@@ -10,9 +11,9 @@
   if (typeof module === 'object' && module.exports) module.exports = v;
   else {
     root.BIOME_PALETTES = v.BIOME_PALETTES;
-    (root.NEON = root.NEON || {}).palettes = v;
+    (/** @type {any} */ (root.NEON = root.NEON || {})).palettes = v;
   }
-}(typeof self !== 'undefined' ? self : this, function () {
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // Palette keys are historical (cyan/rust/glitch/sky/green). Each key now

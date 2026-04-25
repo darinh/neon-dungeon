@@ -69,7 +69,7 @@ test('endingsUnlocked accepts both keeper and unchained', () => {
   const m = save.loadMeta();
   m.endingsUnlocked = ['keeper'];
   save.saveMeta(m);
-  let m2 = save.loadMeta();
+  const m2 = save.loadMeta();
   m2.endingsUnlocked.push('unchained');
   save.saveMeta(m2);
   const m3 = save.loadMeta();

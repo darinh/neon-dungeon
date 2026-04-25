@@ -5,7 +5,16 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "test:watch": "node --test --watch tests/*.test.js"
+    "test:watch": "node --test --watch tests/*.test.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "eslint": "^9.39.4",
+    "globals": "^15.15.0",
+    "typescript": "^5.9.3"
+  }
 }

@@ -1,3 +1,4 @@
+// @ts-check
 // src/meta/render-boundary.js — render error boundary (post-v116 hardening)
 //
 // The main loop in src/game.js wraps update() and render() in try/finally
@@ -15,14 +16,19 @@
 // UMD-lite so Node tests can exercise trackRenderError without a canvas.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else (root.NEON = root.NEON || {}).renderBoundary = factory();
-}(typeof self !== 'undefined' ? self : this, function () {
+  else (/** @type {any} */ (root.NEON = root.NEON || {})).renderBoundary = factory();
+}(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
   // Build a fresh error-state record or bump the count if the same error is
   // firing every frame. Identity = message only (phase-agnostic) so the same
   // ReferenceError firing in alternating update/render frames still throttles
   // correctly. The latest phase is preserved on the record for display.
+  /**
+   * @param {any} prev
+   * @param {string} phase
+   * @param {any} err
+   */
   function trackRenderError(prev, phase, err) {
     const message = (err && err.message) ? String(err.message) : String(err);
     const stack = (err && err.stack) ? String(err.stack) : '';
@@ -46,6 +52,7 @@
 
   // Should we log this occurrence to console? First time always, then every
   // 60th to avoid spamming devtools when the error fires every frame.
+  /** @param {any} state */
   function shouldLog(state) {
     return state.count === 1 || (state.count % 60) === 0;
   }
@@ -53,6 +60,12 @@
   // Draw a high-contrast, dependency-free overlay. Uses only raw ctx
   // primitives so it can render even when game state is corrupt. Wrapped in
   // try/catch by the caller; if even this throws there's nothing we can do.
+  /**
+   * @param {any} ctx
+   * @param {number} W
+   * @param {number} H
+   * @param {any} state
+   */
   function drawErrorOverlay(ctx, W, H, state) {
     if (!ctx || !state) return;
     ctx.save();
@@ -75,8 +88,8 @@
     ctx.font = '11px monospace';
     const stackLines = (state.stack || '')
       .split('\n')
-      .map(function (s) { return s.trim(); })
-      .filter(function (s) { return s.length > 0 && s !== state.message; })
+      .map(function (/** @type {string} */ s) { return s.trim(); })
+      .filter(function (/** @type {string} */ s) { return s.length > 0 && s !== state.message; })
       .slice(0, 8);
     let y = 135;
     for (let i = 0; i < stackLines.length; i++) {
