@@ -656,7 +656,7 @@ function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 function dist(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx+dy*dy); }
 /** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
 function dist2(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
-/** @param {number} dx @param {number} dy */
+/** @param {number} dx @param {number} dy @returns {[number, number]} */
 function norm(dx, dy) { const l=Math.sqrt(dx*dx+dy*dy)||1; return [dx/l, dy/l]; }
 /** @param {number} a @param {number} b @param {number} t */
 function lerp(a, b, t) { return a + (b-a)*t; }

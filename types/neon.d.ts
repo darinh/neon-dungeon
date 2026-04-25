@@ -85,8 +85,7 @@ declare global {
   var wallTurrets: any[];
   // eslint-disable-next-line no-var
   var disruptionFields: any[];
-  // eslint-disable-next-line no-var
-  var particles: any[];
-  // eslint-disable-next-line no-var
-  var projectiles: any[];
+  // particles / projectiles are declared as `const = []` in src/content.js
+  // (which is // @ts-check'd). Other consumers see them via cross-file
+  // resolution; no ambient redeclare needed.
 }
