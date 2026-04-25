@@ -2542,6 +2542,66 @@ function generateFloor(floorNum) {
     }
   }
 
+  // ── Key reachability gate ──────────────────────────────────────────────
+  // The per-lock BFS at line 2392 ensured each key was placed in a room
+  // reachable from spawn WITHOUT crossing locks at the moment of placement.
+  // But subsequent passes can later seal that key in:
+  //   - Secret room placement (line 2429-2453) walls a regular room's
+  //     entrances — including, possibly, a room a key was just placed in.
+  //   - Dead-end corridor pruning (line 2519-2542) converts dangling
+  //     corridor floor to wall; if a key was placed near such a tile, fine,
+  //     but the room-eligibility filter for secrets does NOT exclude key
+  //     rooms, so the key can end up behind T.CRACKED.
+  // Reported twice on floor 3 by users on develop: "the exit is behind a
+  // red key door and there is no red key" / "spawned with red door, no key".
+  //
+  // Fix: BFS from spawn through ACTUALLY passable tiles (no locks, no
+  // cracked, no walls). For each key item, if its tile is unreachable,
+  // downgrade every locked door of that colour to FLOOR. The player loses
+  // the gating gameplay but the floor remains completable. The orphaned
+  // key item is left in place (still rewards finding the secret).
+  {
+    const passable = (/** @type {any} */ t) =>
+      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
+      t === T.STAIRS || t === T.TERMINAL ||
+      t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+      t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+      t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
+      t === T.CHALLENGE_GATE; // walkable at runtime (isPassable in platform.js)
+    const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
+    /** @type {any} */ const reach = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    reach[sy0][sx0] = 1;
+    const q = [{x: sx0, y: sy0}];
+    while (q.length) {
+      const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
+      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+        if (reach[ny][nx]) continue;
+        if (!passable(map[ny][nx])) continue;
+        reach[ny][nx] = 1;
+        q.push({x: nx, y: ny});
+      }
+    }
+    /** @type {Record<string, number>} */
+    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
+    /** @type {Set<string>} */ const orphaned = new Set();
+    for (const ki of keyItems) {
+      if (!reach[ki.y][ki.x] && ki.colour) orphaned.add(/** @type {string} */ (ki.colour));
+    }
+    if (orphaned.size > 0) {
+      for (const col of orphaned) {
+        const lt = lockTileForColour[col];
+        if (lt == null) continue;
+        for (let y = 0; y < MAP_H; y++) {
+          for (let x = 0; x < MAP_W; x++) {
+            if (map[y][x] === lt) map[y][x] = T.FLOOR;
+          }
+        }
+      }
+    }
+  }
+
   // ── Reachability guarantee: spawn → stairs must always be connected ────
   // BFS from spawn across all non-wall/void tiles (doors + locked doors
   // count as passable since the player will acquire keys). If stairs are
