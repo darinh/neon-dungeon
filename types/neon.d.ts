@@ -54,6 +54,13 @@ declare global {
   function norm(dx: number, dy: number): [number, number];
   function lerp(a: number, b: number, t: number): number;
 
+  // Viewport helpers live under window.NEON.viewport (engine/viewport.js,
+  // Phase C1d). NOT mounted as bare globals — src/platform.js wraps them in
+  // its existing resize()/updateLayout()/isLandscape() functions and keeps
+  // the W/H/scale/offX/offY/safe-area mutable state. NEON is already declared
+  // as `var NEON: any` above, so consumers reach the helpers via NEON.viewport
+  // with no extra ambient needed.
+
   // BIOME_PALETTES is declared via UMD attachment in src/data/palettes.js and
   // referenced by name in src/render.js. AREAS is similar but currently
   // unused in @ts-checked files. Keep loose until Phase 4 introduces

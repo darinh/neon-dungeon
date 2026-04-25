@@ -106,6 +106,16 @@ const _G = new Proxy({}, {
   has: (_t, p) => p in /** @type {any} */ (game),
 });
 
+// Phase C1d: viewport math lives in engine/viewport.js (pure helpers).
+// platform.js still owns the mutable W/H/gameScale/scale/offX/offY/safe-area
+// state for back-compat with all consumers in src/*.js — resize() and
+// updateLayout() are now thin orchestrators over the engine helpers.
+// Browser-only: engine/viewport.js loads first via index.html and mounts
+// itself as window.NEON.viewport. No Node fallback (platform.js never runs
+// under Node — it touches `document`, `window`, `screen` at module top).
+/** @type {any} */
+const _vp = /** @type {any} */ (NEON).viewport;
+
 // Safe-area insets (logical px) for notched devices
 let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
 
@@ -119,9 +129,10 @@ function resize() {
   // Scale: smaller viewport dimension maps to ~600 logical px
   // Tiles (20 logical px) appear as 20 × gameScale CSS px on screen
   // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
-  gameScale = clamp(Math.min(vw, vh) / 600, 0.7, 1.5);
-  W = Math.round(vw / gameScale);
-  H = Math.round(vh / gameScale);
+  gameScale = _vp.computeScale(vw, vh);
+  const _sz = _vp.computeLogicalSize(vw, vh, gameScale);
+  W = _sz.W;
+  H = _sz.H;
   canvas.width = W;
   canvas.height = H;
   scale = gameScale;
@@ -129,10 +140,11 @@ function resize() {
   offY = 0;
   // Read safe-area insets from CSS env() and convert to logical px
   const cs = getComputedStyle(document.documentElement);
-  safeTop    = (parseFloat(cs.getPropertyValue('--sat')) || 0) / gameScale;
-  safeRight  = (parseFloat(cs.getPropertyValue('--sar')) || 0) / gameScale;
-  safeBottom = (parseFloat(cs.getPropertyValue('--sab')) || 0) / gameScale;
-  safeLeft   = (parseFloat(cs.getPropertyValue('--sal')) || 0) / gameScale;
+  const _sa = _vp.parseSafeAreaInsets((/** @type {string} */ n) => cs.getPropertyValue(n), gameScale);
+  safeTop    = _sa.top;
+  safeRight  = _sa.right;
+  safeBottom = _sa.bottom;
+  safeLeft   = _sa.left;
   updateLayout();
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
@@ -141,10 +153,11 @@ function resize() {
 // ─── Layout (shared HUD / bottom-UI metrics) ────────────────────────────────
 const layout = { compact: false, hudH: 40, hudTop: 0, msgBase: 0 };
 function updateLayout() {
-  layout.compact = H > W && W <= 600;
-  layout.hudH    = layout.compact ? 58 : 40;
-  layout.hudTop  = H - layout.hudH - safeBottom;
-  layout.msgBase = layout.hudTop - 12;
+  const _l = _vp.computeLayout(W, H, safeBottom);
+  layout.compact = _l.compact;
+  layout.hudH    = _l.hudH;
+  layout.hudTop  = _l.hudTop;
+  layout.msgBase = _l.msgBase;
 }
 
 // ─── Fullscreen (landscape auto-request, portrait auto-exit) ─────────────────
@@ -165,8 +178,7 @@ let fsWantLandscape = false;   // true when landscape but no gesture yet
 let fsDismissed = false;       // user tapped X to dismiss the prompt this session
 
 function isLandscape() {
-  if (screen.orientation) return screen.orientation.type.startsWith('landscape');
-  return window.innerWidth > window.innerHeight;
+  return _vp.isLandscape(window, screen);
 }
 
 function isTouchDevice() {
