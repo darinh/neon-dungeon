@@ -82,7 +82,7 @@
   }
 
   /** @param {any} game */
-  function createIntroController(game) { void game; // eslint-disable-line no-unused-vars -- reserved for future hooks
+  function createIntroController(game) { void game; // reserved for future hooks
     const state = {
       slideIdx: 0,
       elapsed: 0,           // seconds on current slide
