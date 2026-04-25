@@ -231,24 +231,25 @@ window.addEventListener('resize', onOrientationChange);
 onOrientationChange();
 
 // ─── Input ───────────────────────────────────────────────────────────────────
-const keys = new Set();
+// Phase C1b: keyboard event wiring + held-keys/justPressed/justReleased state
+// live in engine/input.js (NEON.input.createEngine factory). Host owns content-
+// layer state: `lastKey` (name-entry text capture, see game.js NAME_ENTRY) and
+// `nameEntryTap` (touch hit-test relay). We layer those onto the engine via
+// the onKeyDown callback. clearJust() wraps engine.clearJust() and also nulls
+// host state so the existing one-call-per-frame contract is preserved for all
+// downstream consumers (game.js, render.js, content.js).
+const _input = /** @type {any} */ (NEON).input.createEngine({
+  win: window,
+  onKeyDown: (/** @type {any} */ e) => { lastKey = e.key; },
+});
+_input.attach();
+const keys = _input.keys;
+const justPressed = _input.justPressed;
+const justReleased = _input.justReleased;
 const mouse = { x: W/2, y: H/2, down: false };
-const justPressed = new Set();
-const justReleased = new Set();
 let lastKey = '';
 /** @type {any} */
 let nameEntryTap = null;
-
-window.addEventListener('keydown', e => {
-  if (!keys.has(e.code)) justPressed.add(e.code);
-  keys.add(e.code);
-  lastKey = e.key;
-  e.preventDefault();
-});
-window.addEventListener('keyup', e => {
-  keys.delete(e.code);
-  justReleased.add(e.code);
-});
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * canvas.width / r.width;
@@ -670,7 +671,7 @@ function drawTouchUI() {
 
 /** @param {string} code */
 function jp(code) { return justPressed.has(code); }
-function clearJust() { justPressed.clear(); justReleased.clear(); lastKey=''; nameEntryTap=null; }
+function clearJust() { _input.clearJust(); lastKey=''; nameEntryTap=null; }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 // Math/RNG primitives moved to engine/math.js (Phase C1a). They are mounted as
