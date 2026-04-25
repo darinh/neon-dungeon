@@ -761,170 +761,34 @@ function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LO
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
 // ─── Audio Engine ────────────────────────────────────────────────────────────
+// Engine primitives (AudioContext, busses, voices, noise buffer) live in
+// engine/audio.js — see Phase C1c. This IIFE wraps the engine and defines all
+// the NEON-specific named SFX (shoot, hit, menuSelect, etc.) as a content
+// layer on top of those primitives.
 const audio = (() => {
-  /** @type {any} */ let actx = null;
-  /** @type {any} */ let master = null;
-  /** @type {any} */ let compressor = null;
-  /** @type {any} */ let reverbNode = null;
-  /** @type {any} */ let reverbGain = null;
-  /** @type {any} */ let noiseBuf = null;
-  /** @type {any} */ let musicBus = null;
-
-  function getCtx() {
-    if (!actx) {
-      actx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
-      // Master bus: compressor → destination
-      compressor = actx.createDynamicsCompressor();
-      compressor.threshold.value = -12;
-      compressor.ratio.value = 4;
-      compressor.connect(actx.destination);
-      master = actx.createGain();
-      master.gain.value = 0.7 * settings.sfxVol;
-      master.connect(compressor);
-      // Reverb bus: ConvolverNode with procedural impulse response
-      reverbNode = actx.createConvolver();
-      const irLen = actx.sampleRate * 1.6;
-      const irBuf = actx.createBuffer(2, irLen, actx.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const d = irBuf.getChannelData(ch);
-        for (let i = 0; i < irLen; i++) {
-          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.5);
-        }
-      }
-      reverbNode.buffer = irBuf;
-      reverbGain = actx.createGain();
-      reverbGain.gain.value = 0.35;
-      reverbNode.connect(reverbGain);
-      reverbGain.connect(master);
-      // Cached noise buffer (2 seconds, reused by all noise calls)
-      const nLen = actx.sampleRate * 2;
-      noiseBuf = actx.createBuffer(1, nLen, actx.sampleRate);
-      const nd = noiseBuf.getChannelData(0);
-      for (let i = 0; i < nLen; i++) nd[i] = Math.random() * 2 - 1;
-    }
-    return actx;
-  }
-
-  function resume() {
-    const c = getCtx();
-    if (c.state !== 'running') {
-      try { c.resume().catch(() => {}); } catch (_) {}
-    }
-  }
-
-  /** @param {number} v @param {number} lo @param {number} hi */
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-  /** @param {any} target @param {number} pan @param {number} lifetime */
-  function panOut(target, pan, lifetime) {
-    const c = getCtx();
-    const out = target || master;
-    if (!c.createStereoPanner || Math.abs(pan || 0) < 0.01) return out;
-    const p = c.createStereoPanner();
-    p.pan.value = clamp(pan, -1, 1);
-    p.connect(out);
-    setTimeout(() => { try { p.disconnect(); } catch (e) {} }, Math.max(80, (lifetime || 0.2) * 1000));
-    return p;
-  }
-
-  // Core voice: oscillator → gain/filter → optional pan → target node
-  /** @param {OscillatorType} type @param {number} freq1 @param {number} freq2 @param {number} vol @param {number} start @param {number} dur @param {any} [target] @param {any} [opt] */
-  function osc(type, freq1, freq2, vol, start, dur, target, opt) {
-    const c = getCtx();
-    const o = c.createOscillator();
-    const g = c.createGain();
-    const opts = opt || {};
-    const attack = opts.attack == null ? 0.002 : opts.attack;
-    const releaseAt = start + (opts.release == null ? dur : opts.release);
-    o.type = type;
-    if (opts.detune) o.detune.value = opts.detune;
-    o.frequency.setValueAtTime(Math.max(1, freq1), start);
-    if (freq2 !== freq1) o.frequency.exponentialRampToValueAtTime(Math.max(freq2, 1), start + dur);
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
-    g.gain.exponentialRampToValueAtTime(0.001, releaseAt);
-
-    let tail = g;
-    if (opts.filterType) {
-      const flt = c.createBiquadFilter();
-      flt.type = opts.filterType;
-      const ff = Math.max(40, opts.filterFreq || Math.max(freq1, freq2, 300));
-      flt.frequency.setValueAtTime(ff, start);
-      if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
-      if (opts.q != null) flt.Q.value = opts.q;
-      g.connect(flt);
-      tail = flt;
-    }
-    o.connect(g);
-    tail.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
-    o.start(start);
-    o.stop(releaseAt + 0.04);
-  }
-
-  // Noise burst from cached buffer
-  /** @param {number} vol @param {number} start @param {number} dur @param {number} filterFreq @param {any} [target] @param {any} [opt] */
-  function noise(vol, start, dur, filterFreq, target, opt) {
-    const c = getCtx();
-    const src = c.createBufferSource();
-    src.buffer = noiseBuf;
-    const flt = c.createBiquadFilter();
-    const opts = opt || {};
-    flt.type = opts.filterType || 'lowpass';
-    const ff = Math.max(40, filterFreq || 800);
-    flt.frequency.setValueAtTime(ff, start);
-    if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
-    if (opts.q != null) flt.Q.value = opts.q;
-    const g = c.createGain();
-    const attack = opts.attack == null ? 0.001 : opts.attack;
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
-    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-    src.connect(flt); flt.connect(g); g.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
-    src.start(start); src.stop(start + dur + 0.03);
-  }
-
-  // Reverb send helper — routes signal to both dry and wet buses
-  // lifetime: seconds until all voices through this bus have finished (excludes reverb tail)
-  /** @param {number} vol @param {number} wetAmt @param {number} lifetime */
-  function wetDry(vol, wetAmt, lifetime) {
-    const c = getCtx();
-    const split = c.createGain();
-    split.gain.value = vol;
-    const dry = c.createGain();
-    dry.gain.value = 1;
-    const wet = c.createGain();
-    wet.gain.value = wetAmt;
-    split.connect(dry); dry.connect(master);
-    split.connect(wet); wet.connect(reverbNode);
-    // Schedule cleanup after voices + reverb tail finish
-    const cleanup = () => { split.disconnect(); dry.disconnect(); wet.disconnect(); };
-    setTimeout(cleanup, (lifetime + 2.0) * 1000);
-    return split;
-  }
+  const _eng = /** @type {any} */ (NEON).audio.createEngine({
+    getSfxVolume:   () => settings.sfxVol,
+    getMusicVolume: () => settings.musicVol,
+  });
+  const getCtx = _eng.getCtx;
+  const resume = _eng.resume;
+  const osc = _eng.osc;
+  const noise = _eng.noise;
+  const wetDry = _eng.wetDry;
+  const getNoiseBuffer = _eng.getNoiseBuffer;
 
   return {
     resume,
-    isRunning() { return actx && actx.state === 'running'; },
+    isRunning() { return _eng.isRunning(); },
     setSfxVolume(/** @type {number} */ v) {
       settings.sfxVol = v;
-      if (master) { const t = actx.currentTime; master.gain.cancelScheduledValues(t); master.gain.linearRampToValueAtTime(0.7 * v, t + 0.02); }
+      _eng.setSfxVolume(v);
     },
     setMusicVolume(/** @type {number} */ v) {
       settings.musicVol = v;
-      if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.20 * v, t + 0.02); }
+      _eng.setMusicVolume(v);
     },
-    getMusicBus() {
-      const c = getCtx();
-      if (!musicBus) {
-        const mc = c.createDynamicsCompressor();
-        mc.threshold.value = -18; mc.ratio.value = 2; mc.attack.value = 0.05;
-        mc.connect(c.destination);
-        musicBus = c.createGain();
-        musicBus.gain.value = 0.20 * settings.musicVol;
-        musicBus.connect(mc);
-      }
-      return { bus: musicBus, ctx: c };
-    },
+    getMusicBus() { return _eng.getMusicBus(); },
     shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon = null) {
       const c = getCtx(); const t = c.currentTime;
       if (!isPlayer) {
@@ -1141,7 +1005,7 @@ const audio = (() => {
       }
       // Filtered noise sweep (low → high, like data streaming)
       const nSrc = c.createBufferSource();
-      nSrc.buffer = noiseBuf;
+      nSrc.buffer = getNoiseBuffer();
       const flt = c.createBiquadFilter();
       flt.type = 'bandpass';
       flt.Q.value = 3;
