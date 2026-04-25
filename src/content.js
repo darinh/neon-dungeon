@@ -3479,6 +3479,7 @@ function makeHackwareOption(exclude) {
 
 /**
  * @param {any} exclude
+ * @returns {any}
  */
 function pickUpgradeOption(exclude) {
   // Build eligible pool: exclude maxed persistent upgrades and the excluded id

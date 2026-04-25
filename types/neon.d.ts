@@ -30,20 +30,9 @@ declare global {
   var NEON: any;
 
   // The shared `game` object is declared as `const game = {...}` in
-  // src/game.js and accessed from many other src/*.js modules via the UMD
-  // script-tag pattern. Until Phase 4 introduces a typed Game contract,
-  // checked files treat it as `any` to avoid a cascading cross-file rewrite.
-
-  // Cross-file lexical globals declared in src/platform.js / src/game.js as
-  // top-level `const`/`let` bindings. They are visible to other scripts via
-  // the shared Script Realm (NOT via `globalThis` — `const`/`let` aren't
-  // global-object properties). Most are visible to tsc directly because their
-  // declaring files are themselves @ts-checked (see src/platform.js's
-  // `const audio`, `let W,H`, etc — declared there, no need to redeclare
-  // here). Only `game` needs an ambient declaration since src/game.js does
-  // not yet opt into // @ts-check.
-  // eslint-disable-next-line no-var
-  var game: any;
+  // src/game.js (which is @ts-checked) with a `Record<string, any>` JSDoc
+  // type. Cross-file consumers see it via the shared Script Realm — no
+  // ambient redeclare needed.
   function jp(code: string | null | undefined): boolean;
   function km(action: string): string | null | undefined;
   function isTouchDevice(): boolean;
@@ -56,6 +45,13 @@ declare global {
   var BIOME_PALETTES: any;
   // eslint-disable-next-line no-var
   var AREAS: any;
+
+  // PostHog analytics global, attached by the optional posthog-js snippet in
+  // index.html. Wrapped in `typeof posthog !== 'undefined'` guards at every
+  // call site (see src/game.js telemetry init); ambient kept as `any` so
+  // those guards type-check without forcing PostHog's full SDK type surface.
+  // eslint-disable-next-line no-var
+  var posthog: any;
 
   // Entity arrays (enemies, items, vcores, crates, beacons, mines, shieldGens,
   // cameras, lasers, wallTurrets, disruptionFields, hazardZones, gravityWells)

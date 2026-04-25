@@ -12,18 +12,20 @@ const SAVE_VERSION = '9.0';
 const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
+/** @type {Record<string, string>} */
 const DEFAULT_KEY_MAP = {
   up:'KeyW', down:'KeyS', left:'KeyA', right:'KeyD',
   interact:'KeyE', hackware:'KeyF', voidshard:'KeyV',
   dash:'ShiftLeft', shoot:'Space'
 };
+/** @type {Record<string, string>} */
 const ACTION_LABELS = {
   up:'Move Up', down:'Move Down', left:'Move Left', right:'Move Right',
   interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
   dash:'Dash', shoot:'Shoot'
 };
 const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab','F3']);
-/** @param {string} k */
+/** @param {string | null | undefined} k */
 const KEY_DISPLAY = k => {
   if (!k) return '???';
   if (k.startsWith('Key')) return k.slice(3);
@@ -222,6 +224,7 @@ const mouse = { x: W/2, y: H/2, down: false };
 const justPressed = new Set();
 const justReleased = new Set();
 let lastKey = '';
+/** @type {any} */
 let nameEntryTap = null;
 
 window.addEventListener('keydown', e => {
