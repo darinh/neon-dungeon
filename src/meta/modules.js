@@ -218,6 +218,10 @@
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
+    // textAlign/textBaseline reset — drawHub leaves textAlign='center' from
+    // its prompt line (hub.js _drawHub), which would center every label in
+    // this panel on its x coord and bleed half-text past the left edge.
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#22ddff';
     ctx.font = '14px monospace';
     ctx.textBaseline = 'top';
