@@ -57,35 +57,10 @@ declare global {
   // eslint-disable-next-line no-var
   var AREAS: any;
 
-  // Entity arrays declared as top-level `const X = []` in non-@ts-checked
-  // files (entities.js, content.js). They infer as `any[]` there but tsc
-  // flags TS7005 when @ts-checked files reference them. Ambient `let X: any[]`
-  // gives consumers a typed view without forcing those declaration files
-  // to opt in. Reassignment-vs-mutation is enforced at runtime by the
-  // .length=0 + push() pattern (memory: 'eslint UMD limitation').
-  // eslint-disable-next-line no-var
-  var enemies: any[];
-  // eslint-disable-next-line no-var
-  var items: any[];
-  // eslint-disable-next-line no-var
-  var vcores: any[];
-  // eslint-disable-next-line no-var
-  var crates: any[];
-  // eslint-disable-next-line no-var
-  var beacons: any[];
-  // eslint-disable-next-line no-var
-  var mines: any[];
-  // eslint-disable-next-line no-var
-  var shieldGens: any[];
-  // eslint-disable-next-line no-var
-  var cameras: any[];
-  // eslint-disable-next-line no-var
-  var lasers: any[];
-  // eslint-disable-next-line no-var
-  var wallTurrets: any[];
-  // eslint-disable-next-line no-var
-  var disruptionFields: any[];
-  // particles / projectiles are declared as `const = []` in src/content.js
-  // (which is // @ts-check'd). Other consumers see them via cross-file
+  // Entity arrays (enemies, items, vcores, crates, beacons, mines, shieldGens,
+  // cameras, lasers, wallTurrets, disruptionFields, hazardZones, gravityWells)
+  // are declared as `/** @type {any[]} */ const X = []` in src/entities.js,
+  // which is now // @ts-check'd. Other consumers see them via cross-file
   // resolution; no ambient redeclare needed.
+  // particles / projectiles are similarly declared in src/content.js.
 }

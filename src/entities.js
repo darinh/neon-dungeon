@@ -1,4 +1,18 @@
+// @ts-check
 'use strict';
+
+// Phase 3D batch 5: Proxy-based alias for the cross-file `game` global.
+// entities.js touches many runtime-added game props (player, dungeon,
+// _chainBolts, etc.) that don't appear on the typed shape declared in
+// src/game.js. The proxy widens access to any and defers resolution.
+// Mirrors src/render.js (_RG), src/platform.js (_G), src/content.js (_CG).
+/** @type {any} */
+const _EG = new Proxy({}, {
+  get: (_t, p) => /** @type {any} */ (game)[p],
+  set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
+  has: (_t, p) => p in /** @type {any} */ (game),
+});
+
 
 // ─── Enemies ─────────────────────────────────────────────────────────────────
 /** @type {any[]} */ const enemies = [];
@@ -20,28 +34,39 @@
 // notify). Maintained by registerEnemyInRoom() from spawnEnemy() and
 // unregisterEnemyFromRoom() from Enemy.die(). Reset in populateFloor().
 const enemiesByRoom = new Map();
+/**
+ * @param {any} [e]
+ */
 function registerEnemyInRoom(e) {
   if (!e || !e.room) return;
   let set = enemiesByRoom.get(e.room);
   if (!set) { set = new Set(); enemiesByRoom.set(e.room, set); }
   set.add(e);
 }
+/**
+ * @param {any} [e]
+ */
 function unregisterEnemyFromRoom(e) {
   if (!e || !e.room) return;
   const set = enemiesByRoom.get(e.room);
   if (set) set.delete(e);
 }
 function clearEnemiesByRoom() { enemiesByRoom.clear(); }
-function getEnemiesInRoom(room) { return enemiesByRoom.get(room) || null; }
+function getEnemiesInRoom(/** @type {any} */ room) { return enemiesByRoom.get(room) || null; }
 // Phase 4 — convenience iterator. Safe when `room` is null/undefined or empty.
 // Callers still must guard for e.dead / e._disguised / e._wrPhased etc.
 const _EMPTY_ENEMY_SET = new Set();
+/**
+ * @param {any} [room]
+ */
 function enemiesInRoomIter(room) {
   if (!room) return _EMPTY_ENEMY_SET;
   return enemiesByRoom.get(room) || _EMPTY_ENEMY_SET;
 }
 
+/** @type {Record<string, any>} */
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+/** @type {Record<string, any>} */
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
@@ -66,6 +91,7 @@ const SOURCE_LABELS = {
   'Pulser Bolt':'Pulser Bolt',
   'Scorcher Trail':'Scorcher Trail',
 };
+/** @type {Record<string, any>} */
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
@@ -91,8 +117,9 @@ const SOURCE_COLOURS = {
   'Pulser Bolt':'#44ddff',
   'Scorcher Trail':'#ff5a22',
 };
-function sourceLabel(s) { return SOURCE_LABELS[s] || s; }
-function sourceColour(s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
+function sourceLabel(/** @type {any} */ s) { return SOURCE_LABELS[s] || s; }
+function sourceColour(/** @type {any} */ s) { return SOURCE_COLOURS[s] || '#aaaacc'; }
+/** @type {Record<string, any>} */
 const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
 // UNCHAINED #40: biome-narrative displayName overrides. BOSS_NAMES keys that
 // appear in AREAS[].bossPool get rewritten to AREAS[].displayName so HUD/
@@ -112,6 +139,7 @@ const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',
   } catch(_) { /* biomes optional — keep built-in defaults */ }
 })();
 // Phase transition thresholds as hpPct values (descending); absolute-HP bosses computed at draw time
+/** @type {Record<string, number[]>} */
 const BOSS_PHASE_MARKS = {
   SENTINEL: [0.33],
   WARDEN:   [0.4],
@@ -120,13 +148,22 @@ const BOSS_PHASE_MARKS = {
   OMEGA:    [0.7, 0.4, 0.2],
   GENESIS:  [0.7, 0.35],
 };
+/**
+ * @param {any} [boss]
+ */
 function getBossPhaseMarks(boss) {
   return BOSS_PHASE_MARKS[boss.type] || [];
 }
+/** @type {any[]} */
 const pendingEnemySpawns = [];
 
 // ─── Weapon Affix Effect Application ─────────────────────────────────────────
 // Called on every weapon hit (projectile or melee). hitCtx = {name, affixes, effects, isProc}
+/**
+ * @param {any} [enemy]
+ * @param {any} [actualDmg]
+ * @param {any} [hitCtx]
+ */
 function applyHitEffects(enemy, actualDmg, hitCtx) {
   const effects = hitCtx.effects || [];
   if (!effects.length) return;
@@ -139,9 +176,9 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#66ccff', 3);
     } else if (eff === 'leech') {
       const heal = Math.max(1, Math.round(actualDmg * 0.08));
-      if (game.player) {
-        game.player.hp = Math.min(game.player.maxHp, game.player.hp + heal);
-        spawnDmgText(game.player.x, game.player.y, '+' + heal, '#ff0066');
+      if (_EG.player) {
+        _EG.player.hp = Math.min(_EG.player.maxHp, _EG.player.hp + heal);
+        spawnDmgText(_EG.player.x, _EG.player.y, '+' + heal, '#ff0066');
       }
     } else if (eff === 'chain') {
       if (Math.random() < 0.20) {
@@ -157,8 +194,8 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
           const chainDmg = Math.round(actualDmg * 0.5);
           best.takeDamage(chainDmg, { name: hitCtx.name, isProc: true });
           // Visual: lightning bolt stored for rendering
-          if (!game._chainBolts) game._chainBolts = [];
-          game._chainBolts.push({ x1:enemy.x, y1:enemy.y, x2:best.x, y2:best.y, timer:0.15, colour:'#ffff44' });
+          if (!_EG._chainBolts) _EG._chainBolts = [];
+          _EG._chainBolts.push({ x1:enemy.x, y1:enemy.y, x2:best.x, y2:best.y, timer:0.15, colour:'#ffff44' });
           audio.hit(false, 'Railgun'); // zap sound
         }
       }
@@ -179,6 +216,9 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
 }
 
 // Called when an enemy dies — checks for on-kill affix effects
+/**
+ * @param {any} [enemy]
+ */
 function applyOnKill(enemy) {
   const ctx = enemy._lastHitCtx;
   if (!ctx || ctx.isProc) return;
@@ -190,32 +230,36 @@ function applyOnKill(enemy) {
   triggerShake(5, 0.18);
   for (const e of enemies) {
     if (e === enemy || e.dead) continue;
-    if (dist(e.x, e.y, enemy.x, enemy.y) < aoeR && hasLOS(enemy.x, enemy.y, e.x, e.y, game.dungeon.map)) {
+    if (dist(e.x, e.y, enemy.x, enemy.y) < aoeR && hasLOS(enemy.x, enemy.y, e.x, e.y, _EG.dungeon.map)) {
       e.takeDamage(aoeDmg, { name: 'Detonation', isProc: true });
     }
   }
   // Also damage player if in range
-  const p = game.player;
-  if (p && dist(p.x, p.y, enemy.x, enemy.y) < aoeR && hasLOS(enemy.x, enemy.y, p.x, p.y, game.dungeon.map)) {
+  const p = _EG.player;
+  if (p && dist(p.x, p.y, enemy.x, enemy.y) < aoeR && hasLOS(enemy.x, enemy.y, p.x, p.y, _EG.dungeon.map)) {
     p.takeDamage(Math.round(aoeDmg * 0.5), 'Detonation');
   }
   // Destroy nearby crates
-  damageCratesInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageCratesInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Damage nearby beacons
-  damageBeaconsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageBeaconsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Damage nearby shield generators
-  damageShieldGensInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageShieldGensInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Damage nearby cameras
-  damageCamerasInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageCamerasInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Damage nearby laser tripwire emitters
-  damageLasersInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageLasersInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Damage nearby wall turrets
-  damageWallTurretsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, game.dungeon.map);
+  damageWallTurretsInRadius(enemy.x, enemy.y, aoeR, aoeDmg, _EG.dungeon.map);
   // Trigger nearby mines
-  triggerMinesInRadius(enemy.x, enemy.y, aoeR, game.dungeon.map);
+  triggerMinesInRadius(enemy.x, enemy.y, aoeR, _EG.dungeon.map);
 }
 
 // Tick enemy status effects (called in update loop per enemy)
+/**
+ * @param {any} [enemy]
+ * @param {any} [dt]
+ */
 function tickEnemyStatusEffects(enemy, dt) {
   // Burn
   if (enemy.burnTimer > 0) {
@@ -251,6 +295,10 @@ function tickEnemyStatusEffects(enemy, dt) {
 }
 
 // Tick elite affix behaviours (called per enemy per frame)
+/**
+ * @param {any} [enemy]
+ * @param {any} [dt]
+ */
 function tickEliteAffix(enemy, dt) {
   if (!enemy.elite || !enemy.eliteAffix) return;
   const aff = enemy.eliteAffix;
@@ -286,6 +334,10 @@ function tickEliteAffix(enemy, dt) {
 }
 
 // Notify FRENZY-affix elites within 4 tiles of a death — grant a frenzy stack
+/**
+ * @param {any} [deathX]
+ * @param {any} [deathY]
+ */
 function notifyFrenzyElites(deathX, deathY) {
   for (const e of enemies) {
     if (e.dead || e.eliteAffix !== 'FRENZY') continue;
@@ -294,13 +346,163 @@ function notifyFrenzyElites(deathX, deathY) {
       e.frenzyStacks++;
       spawnParticles(e.x, e.y, 'EXPLOSION', '#ff4466', 8);
       audio.eliteFrenzy();
-      game.msg('⚡ FRENZY!', '#ff4466');
+      _EG.msg('⚡ FRENZY!', '#ff4466');
     }
   }
 }
 
 
 class Enemy {
+  /** @type {any} */ _arcSpin;
+  /** @type {any} */ _burstLeft;
+  /** @type {any} */ _challengeWave;
+  /** @type {any} */ _chargeDur;
+  /** @type {any} */ _chargeDx;
+  /** @type {any} */ _chargeDy;
+  /** @type {any} */ _chargeState;
+  /** @type {any} */ _chargeWindup;
+  /** @type {any} */ _chgCooldown;
+  /** @type {any} */ _chgDur;
+  /** @type {any} */ _chgDx;
+  /** @type {any} */ _chgDy;
+  /** @type {any} */ _chgState;
+  /** @type {any} */ _chgWindup;
+  /** @type {any} */ _dDeployTimer;
+  /** @type {any} */ _dFields;
+  /** @type {any} */ _dFireTimer;
+  /** @type {any} */ _despawning;
+  /** @type {any} */ _dischargeChannel;
+  /** @type {any} */ _disguised;
+  /** @type {any} */ _endgameOffered;
+  /** @type {any} */ _gvDeployTimer;
+  /** @type {any} */ _gvFireTimer;
+  /** @type {any} */ _gvWells;
+  /** @type {any} */ _healBeam;
+  /** @type {any} */ _healTimer;
+  /** @type {any} */ _isBounty;
+  /** @type {any} */ _lanceLock;
+  /** @type {any} */ _lanceTelegraph;
+  /** @type {any} */ _laserTarget;
+  /** @type {any} */ _laserTimer;
+  /** @type {any} */ _lastHitCtx;
+  /** @type {any} */ _lpAirTime;
+  /** @type {any} */ _lpCooldown;
+  /** @type {any} */ _lpFromX;
+  /** @type {any} */ _lpFromY;
+  /** @type {any} */ _lpHeight;
+  /** @type {any} */ _lpRecovery;
+  /** @type {any} */ _lpState;
+  /** @type {any} */ _lpTargetX;
+  /** @type {any} */ _lpTargetY;
+  /** @type {any} */ _lpWindup;
+  /** @type {any} */ _materialize;
+  /** @type {any} */ _mimicBob;
+  /** @type {any} */ _mimicBurstTimer;
+  /** @type {any} */ _mimicColour;
+  /** @type {any} */ _mimicLungeDx;
+  /** @type {any} */ _mimicLungeDy;
+  /** @type {any} */ _nxBoosted;
+  /** @type {any} */ _nxFireTimer;
+  /** @type {any} */ _nxLinkTimer;
+  /** @type {any} */ _nxLinks;
+  /** @type {any} */ _phAimDx;
+  /** @type {any} */ _phAimDy;
+  /** @type {any} */ _phBurstDelay;
+  /** @type {any} */ _phBurstLeft;
+  /** @type {any} */ _phState;
+  /** @type {any} */ _phTimer;
+  /** @type {any} */ _plAimDx;
+  /** @type {any} */ _plAimDy;
+  /** @type {any} */ _plCooldown;
+  /** @type {any} */ _plState;
+  /** @type {any} */ _plTimer;
+  /** @type {any} */ _repositionTarget;
+  /** @type {any} */ _repositionTimer;
+  /** @type {any} */ _revealTimer;
+  /** @type {any} */ _rfAngle;
+  /** @type {any} */ _scStrafeSeed;
+  /** @type {any} */ _scTrailTimer;
+  /** @type {any} */ _shockICD;
+  /** @type {any} */ _skProximity;
+  /** @type {any} */ _sniperCooldown;
+  /** @type {any} */ _spDrainBeam;
+  /** @type {any} */ _spFireTimer;
+  /** @type {any} */ _spFrenzy;
+  /** @type {any} */ _spiralSpin;
+  /** @type {any} */ _summonTimer;
+  /** @type {any} */ _summoned;
+  /** @type {any} */ _summons;
+  /** @type {any} */ _tauntTarget;
+  /** @type {any} */ _tx;
+  /** @type {any} */ _ty;
+  /** @type {any} */ _unchainedPhase;
+  /** @type {any} */ _volatileKill;
+  /** @type {any} */ _warpFade;
+  /** @type {any} */ _warpFromX;
+  /** @type {any} */ _warpFromY;
+  /** @type {any} */ _wrFireTimer;
+  /** @type {any} */ _wrHitICD;
+  /** @type {any} */ _wrPhased;
+  /** @type {any} */ _wrState;
+  /** @type {any} */ _wrTimer;
+  /** @type {any} */ atk;
+  /** @type {any} */ attackTimer;
+  /** @type {any} */ bobAngle;
+  /** @type {any} */ bossTimers;
+  /** @type {any} */ burnDps;
+  /** @type {any} */ burnTimer;
+  /** @type {any} */ colour;
+  /** @type {any} */ dead;
+  /** @type {any} */ elite;
+  /** @type {any} */ eliteAffix;
+  /** @type {any} */ flashTimer;
+  /** @type {any} */ frenzyStacks;
+  /** @type {any} */ g;
+  /** @type {any} */ grenadeTimer;
+  /** @type {any} */ hp;
+  /** @type {any} */ isBoss;
+  /** @type {any} */ isShard;
+  /** @type {any} */ maxHp;
+  /** @type {any} */ patrolTarget;
+  /** @type {any} */ phase;
+  /** @type {any} */ phaseImmune;
+  /** @type {any} */ phaseTimer;
+  /** @type {any} */ prevPhase;
+  /** @type {any} */ room;
+  /** @type {any} */ shieldAngle;
+  /** @type {any} */ shieldBurstTimer;
+  /** @type {any} */ shieldHp;
+  /** @type {any} */ shieldMax;
+  /** @type {any} */ shieldRegenDelay;
+  /** @type {any} */ shootTimer;
+  /** @type {any} */ slowFactor;
+  /** @type {any} */ slowTimer;
+  /** @type {any} */ spawnCooldown;
+  /** @type {any} */ spd;
+  /** @type {any} */ state;
+  /** @type {any} */ stunTimer;
+  /** @type {any} */ teleportTimer;
+  /** @type {any} */ type;
+  /** @type {any} */ visible;
+  /** @type {any} */ voidOrbs;
+  /** @type {any} */ x;
+  /** @type {any} */ xpValue;
+  /** @type {any} */ y;
+  /** @type {any} */ zigzag;
+  /** @type {any} */ _bountyRevealed;
+  /** @type {any} */ _summonerRef;
+  /** @type {any} */ _toxicDmgCD;
+  /** @type {any} */ origTile;
+  /**
+   * @param {any} [x]
+   * @param {any} [y]
+   * @param {any} [hp]
+   * @param {any} [atk]
+   * @param {any} [spd]
+   * @param {any} [xpVal]
+   * @param {any} [colour]
+   * @param {any} [type]
+   */
   constructor(x,y,hp,atk,spd,xpVal,colour,type) {
     this.x=x; this.y=y;
     this.hp=hp; this.maxHp=hp;
@@ -342,6 +544,10 @@ class Enemy {
     this._tx=x; this._ty=y;              // perceived target position (hologram or player)
   }
 
+  /**
+   * @param {any} [dmg]
+   * @param {any} [hitCtx]
+   */
   takeDamage(dmg, hitCtx) {
     if (this.dead) return 0;
     // PHASING elite affix: immune during phase window
@@ -367,7 +573,7 @@ class Enemy {
     }
     // MIMIC: damage forces reveal (capture state first for shield gen DR check)
     const wasDisguised = this._disguised;
-    if (this._disguised) this.revealMimic(game.player);
+    if (this._disguised) this.revealMimic(_EG.player);
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first
@@ -412,7 +618,7 @@ class Enemy {
       this.hp = 1;
       this._endgameOffered = true;
       this._lanceTelegraph = 0; this._lanceLock = null;
-      if (typeof game !== 'undefined' && game.openEndgameChoice) game.openEndgameChoice(this);
+      if (typeof game !== 'undefined' && _EG.openEndgameChoice) _EG.openEndgameChoice(this);
       audio.hit(false, ctx.name || null);
       return actual;
     }
@@ -433,14 +639,14 @@ class Enemy {
     }
     // Silent despawn for summoned minions when their summoner dies
     if (this._despawning) {
-      game.enemyDiedThisFrame=true;
+      _EG.enemyDiedThisFrame=true;
       spawnParticles(this.x, this.y, 'SPARK', this.colour, 6);
       return;
     }
-    game.enemyDiedThisFrame=true;
+    _EG.enemyDiedThisFrame=true;
     audio.death();
     if (this.type === 'GENESIS' && this._unchainedPhase && typeof game !== 'undefined') {
-      game._lastEnding = 'unchained';
+      _EG._lastEnding = 'unchained';
     }
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
     // Summoned minions: reduced rewards (like shards — no drops, no combo, no kill count)
@@ -448,29 +654,29 @@ class Enemy {
     // Weapon affix on-kill effects (before drops/scoring)
     applyOnKill(this);
     // UNCHAINED #36 momentum: refresh player damage-bonus window on any kill.
-    NEON.behavior.onKillRefreshMomentum(game.player);
+    NEON.behavior.onKillRefreshMomentum(_EG.player);
     const d=getDiff();
-    const dropRate = game.modifier === 'FORTIFIED' ? d.itemDrop * 1.3 : d.itemDrop;
+    const dropRate = _EG.modifier === 'FORTIFIED' ? d.itemDrop * 1.3 : d.itemDrop;
     // MIMIC: guaranteed single drop (suppress normal roll)
     if (this.type === 'MIMIC') {
       items.push(new Item(this.x, this.y));
     } else if (!this.isShard && !isSummon && Math.random()<dropRate) {
       items.push(new Item(this.x,this.y));
     }
-    game.player.gainXP(Math.round(this.xpValue*d.xpMul));
+    _EG.player.gainXP(Math.round(this.xpValue*d.xpMul));
     // Combo: SHARDs, summons, and VOLATILE chain kills don't build streak
     const comboEligible = !this.isShard && !isSummon && !this._volatileKill;
     if (comboEligible) registerKill(this.isBoss);
     const mul = this.isBoss ? comboBossMultiplier() : comboMultiplier();
-    game.player.score += Math.round(this.xpValue * game.floor * mul);
-    if (game.quest && game.quest.kills !== undefined) game.quest.kills++;
-    if (!this.isShard && !isSummon) game.player.enemiesKilled++;
+    _EG.player.score += Math.round(this.xpValue * _EG.floor * mul);
+    if (_EG.quest && _EG.quest.kills !== undefined) _EG.quest.kills++;
+    if (!this.isShard && !isSummon) _EG.player.enemiesKilled++;
     const baseCr = isSummon ? 0 : (CREDIT_VALUES[this.type] || 5);
     const creditSiphonMul = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
-    const corrosiveMul = game.modifier === 'CORROSIVE' ? 1.5 : 1;
-    const cr = Math.round(baseCr * (1 + game.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // UNCHAINED #38: -15% credit drops (credits are now consumable-only)
-    game.player.credits += cr;
-    if (this.isBoss) game.bossesCleared++;
+    const corrosiveMul = _EG.modifier === 'CORROSIVE' ? 1.5 : 1;
+    const cr = Math.round(baseCr * (1 + _EG.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // UNCHAINED #38: -15% credit drops (credits are now consumable-only)
+    _EG.player.credits += cr;
+    if (this.isBoss) _EG.bossesCleared++;
     // UNCHAINED #39: CORES drops on elite/boss kills. Summons / shard-split
     // enemies don't drop cores (same rule as items/credits). isBoss takes
     // precedence over elite so the boss amount is final.
@@ -484,75 +690,75 @@ class Enemy {
       if (coreVal > 0) NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal);
     }
     // Vampiric perk: heal on kill
-    if (game.player.perks.VAMPIRIC && !this.isShard) {
+    if (_EG.player.perks.VAMPIRIC && !this.isShard) {
       const heal = 2;
-      game.player.hp = Math.min(game.player.maxHp, game.player.hp + heal);
-      spawnDmgText(game.player.x, game.player.y, '+'+heal, '#ff3366');
+      _EG.player.hp = Math.min(_EG.player.maxHp, _EG.player.hp + heal);
+      spawnDmgText(_EG.player.x, _EG.player.y, '+'+heal, '#ff3366');
     }
     // SCAVENGER_NANITES augment: 10% kill chance to heal 5 HP
     if (hasAugment('SCAVENGER_NANITES') && !this.isShard && Math.random() < 0.10) {
-      game.player.hp = Math.min(game.player.maxHp, game.player.hp + 5);
-      spawnDmgText(game.player.x, game.player.y, '+5', '#88ff44');
+      _EG.player.hp = Math.min(_EG.player.maxHp, _EG.player.hp + 5);
+      spawnDmgText(_EG.player.x, _EG.player.y, '+5', '#88ff44');
     }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
-      game.player.adrenalineTimer = 2;
+      _EG.player.adrenalineTimer = 2;
     }
     // Bounty target: bonus rewards
     if (this._isBounty) {
-      const bCr = Math.round((30 + game.floor * 8) * creditSiphonMul * corrosiveMul);
-      game.player.credits += bCr;
-      game.player.score += 150 * game.floor;
-      game.player.bountiesCollected++;
+      const bCr = Math.round((30 + _EG.floor * 8) * creditSiphonMul * corrosiveMul);
+      _EG.player.credits += bCr;
+      _EG.player.score += 150 * _EG.floor;
+      _EG.player.bountiesCollected++;
       items.push(new Item(this.x, this.y)); // guaranteed bonus drop
       audio.bountyKill();
-      game.msg('BOUNTY ELIMINATED  +' + bCr + ' CR  +' + (150 * game.floor) + ' pts', '#ffd700');
+      _EG.msg('BOUNTY ELIMINATED  +' + bCr + ' CR  +' + (150 * _EG.floor) + ' pts', '#ffd700');
       spawnParticles(this.x, this.y, 'EXPLOSION', '#ffd700', 20);
       triggerShake(5, 0.2);
     }
     // Death explosion: VOLATILE modifier and/or EXPLOSIVE_KILLS perk (shared helper, non-stacking)
-    const wantExplosion = (game.modifier === 'VOLATILE' || game.player.perks.EXPLOSIVE_KILLS) && !this.isBoss && !this._volatileKill;
+    const wantExplosion = (_EG.modifier === 'VOLATILE' || _EG.player.perks.EXPLOSIVE_KILLS) && !this.isBoss && !this._volatileKill;
     if (wantExplosion) {
-      const bothActive = game.modifier === 'VOLATILE' && game.player.perks.EXPLOSIVE_KILLS;
+      const bothActive = _EG.modifier === 'VOLATILE' && _EG.player.perks.EXPLOSIVE_KILLS;
       const vr = bothActive ? 2.5 : 2;
-      const vdmg = (bothActive ? 20 : 15) + game.floor * 2;
-      const col = game.modifier === 'VOLATILE' ? '#ff4422' : '#ff6600';
+      const vdmg = (bothActive ? 20 : 15) + _EG.floor * 2;
+      const col = _EG.modifier === 'VOLATILE' ? '#ff4422' : '#ff6600';
       spawnParticles(this.x, this.y, 'EXPLOSION', col, 18);
       triggerShake(6, 0.2);
-      const p = game.player;
+      const p = _EG.player;
       // VOLATILE hurts the player; perk-only does not
-      if (game.modifier === 'VOLATILE' && dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
+      if (_EG.modifier === 'VOLATILE' && dist(p.x, p.y, this.x, this.y) < vr && hasLOS(this.x, this.y, p.x, p.y, _EG.dungeon.map)) {
         p.takeDamage(vdmg, 'Volatile');
       }
       for (const e of enemies) {
         if (e === this || e.dead) continue;
         if (e._wrPhased) continue;
-        if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, game.dungeon.map)) {
+        if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, _EG.dungeon.map)) {
           e._volatileKill = true;
-          e.takeDamage(vdmg, game.modifier === 'VOLATILE' ? 'Volatile' : 'Explosion');
+          e.takeDamage(vdmg, _EG.modifier === 'VOLATILE' ? 'Volatile' : 'Explosion');
           if (!e.dead) e._volatileKill = false;
         }
       }
       // Chain to volatile cores
-      primeVCoresInRadius(this.x, this.y, vr, game.dungeon.map);
+      primeVCoresInRadius(this.x, this.y, vr, _EG.dungeon.map);
       // Destroy nearby crates
-      damageCratesInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageCratesInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Damage nearby beacons
-      damageBeaconsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageBeaconsInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Damage nearby shield generators
-      damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageShieldGensInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Damage nearby cameras
-      damageCamerasInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageCamerasInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Damage nearby laser tripwire emitters
-      damageLasersInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageLasersInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Damage nearby wall turrets
-      damageWallTurretsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
+      damageWallTurretsInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
       // Trigger nearby mines
-      triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
+      triggerMinesInRadius(this.x, this.y, vr, _EG.dungeon.map);
     }
     // NEXUS death: neural feedback — stun + damage all linked enemies
     if (this.type === 'NEXUS' && this._nxLinks) {
-      const feedbackDmg = 10 + (game.floor || 1) * 2;
+      const feedbackDmg = 10 + (_EG.floor || 1) * 2;
       for (const linked of this._nxLinks) {
         if (linked.dead) continue;
         linked._nxBoosted = false;
@@ -580,14 +786,14 @@ class Enemy {
     if (this.type === 'SPLITTER') {
       audio.enemySplit();
       spawnParticles(this.x, this.y, 'EXPLOSION', '#00ff88', 15);
-      const map = game.dungeon.map;
+      const map = _EG.dungeon.map;
       for (let s = 0; s < 2; s++) {
         let sx = this.x + rnd(-1, 1), sy = this.y + rnd(-1, 1);
         const fx = Math.floor(sx), fy = Math.floor(sy);
         if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H || !isPassable(map[fy][fx])) {
           sx = this.x; sy = this.y;
         }
-        pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: game.floor, room: this.room, _challengeWave: !!this._challengeWave });
+        pendingEnemySpawns.push({ type: 'SHARD', x: sx, y: sy, floor: _EG.floor, room: this.room, _challengeWave: !!this._challengeWave });
       }
     }
     // VOLATILE elite affix: death explosion (2-tile AoE, ATK×1.5, LOS-gated)
@@ -597,31 +803,36 @@ class Enemy {
       spawnParticles(this.x, this.y, 'EXPLOSION', '#ff6600', 22);
       triggerShake(7, 0.25);
       audio.eliteVolatile();
-      const p = game.player;
-      if (dist(p.x, p.y, this.x, this.y) < vr && p.dashTimer <= 0 && hasLOS(this.x, this.y, p.x, p.y, game.dungeon.map)) {
+      const p = _EG.player;
+      if (dist(p.x, p.y, this.x, this.y) < vr && p.dashTimer <= 0 && hasLOS(this.x, this.y, p.x, p.y, _EG.dungeon.map)) {
         p.takeDamage(vdmg, 'Volatile Elite');
       }
       for (const e of enemies) {
         if (e === this || e.dead || e._wrPhased) continue;
-        if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, game.dungeon.map)) {
+        if (dist(e.x, e.y, this.x, this.y) < vr && hasLOS(this.x, this.y, e.x, e.y, _EG.dungeon.map)) {
           e._volatileKill = true;
           e.takeDamage(vdmg, 'Volatile Elite');
           if (!e.dead) e._volatileKill = false;
         }
       }
-      primeVCoresInRadius(this.x, this.y, vr, game.dungeon.map);
-      damageCratesInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      damageBeaconsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      damageShieldGensInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      damageCamerasInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      damageLasersInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      damageWallTurretsInRadius(this.x, this.y, vr, vdmg, game.dungeon.map);
-      triggerMinesInRadius(this.x, this.y, vr, game.dungeon.map);
+      primeVCoresInRadius(this.x, this.y, vr, _EG.dungeon.map);
+      damageCratesInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      damageBeaconsInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      damageShieldGensInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      damageCamerasInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      damageLasersInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      damageWallTurretsInRadius(this.x, this.y, vr, vdmg, _EG.dungeon.map);
+      triggerMinesInRadius(this.x, this.y, vr, _EG.dungeon.map);
     }
     // FRENZY elite affix: notify nearby frenzy elites of this death
     notifyFrenzyElites(this.x, this.y);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   */
   update(dt, player, map) {
     if (this.dead) return;
     this.bobAngle+=dt*3;
@@ -651,7 +862,7 @@ class Enemy {
       }
       // WRAITH: stun forces corporeal — must find valid tile first
       if (this._wrState && this._wrState !== 'corporeal') {
-        const emerge = this._wrFindEmergeTile(map, game.player);
+        const emerge = this._wrFindEmergeTile(map, _EG.player);
         if (emerge) {
           this.x = emerge.x; this.y = emerge.y;
           this._wrState = 'corporeal'; this._wrTimer = 2.0;
@@ -732,6 +943,14 @@ class Enemy {
     return (t && t.age < t.maxAge) || canTargetPlayer();
   }
 
+  /**
+   * @param {any} [tx]
+   * @param {any} [ty]
+   * @param {any} [spd]
+   * @param {any} [dt]
+   * @param {any} [map]
+   * @param {any} [ignoreWalls]
+   */
   moveToward(tx,ty,spd,dt,map,ignoreWalls) {
     spd = modSpeed(spd) * this.slowFactor * this.berserkerMul() * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     const [dx,dy]=norm(tx-this.x,ty-this.y);
@@ -743,6 +962,10 @@ class Enemy {
     if (xf>=0&&yf>=0&&xf<MAP_W&&yf<MAP_H && isPassable(map[yf][xf])) this.y=ny;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [map]
+   */
   patrol(dt,map) {
     if (!this.patrolTarget || dist(this.x,this.y,this.patrolTarget.x,this.patrolTarget.y)<0.5) {
       if (this.room) {
@@ -755,23 +978,34 @@ class Enemy {
     if (this.patrolTarget) this.moveToward(this.patrolTarget.x,this.patrolTarget.y,this.spd*0.5,dt,map);
   }
 
+  /**
+   * @param {any} [player]
+   */
   meleeAttack(player) {
     if (this.attackTimer<=0 && this._canTarget()) {
       if (dist(this.x, this.y, player.x, player.y) > 1.2) return; // hologram whiff
       const dealt = player.takeDamage(this.atk, this.type);
-      const baseCd = game.modifier==='OVERCLOCK' ? 0.83 : 1.0;
+      const baseCd = _EG.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       this.attackTimer = baseCd / this.berserkerMul();
       spawnParticles(player.x,player.y,'SPARK','#ff4444',5);
       // CRAWLER inflicts burn on successful hit
       if (dealt > 0 && this.type === 'CRAWLER') {
         const wasBurning = player.burnTimer > 0;
         player.burnTimer = Math.max(player.burnTimer, 2);
-        player.burnDps = Math.max(player.burnDps, 2 + game.floor * 0.3);
+        player.burnDps = Math.max(player.burnDps, 2 + _EG.floor * 0.3);
         if (!wasBurning) audio.playerBurn();
       }
     }
   }
 
+  /**
+   * @param {any} [px]
+   * @param {any} [py]
+   * @param {any} [spd]
+   * @param {any} [dmg]
+   * @param {any} [range]
+   * @param {any} [colour]
+   */
   fireAt(px,py,spd,dmg,range,colour) {
     const [dx,dy]=norm(px-this.x,py-this.y);
     const p=new Projectile(this.x,this.y,dx,dy,spd,dmg,range,colour,false,false);
@@ -781,8 +1015,15 @@ class Enemy {
     audio.shoot(false);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiGuard(dt,player,map,d,los) {
-    const detectRange = 10 + (game.floor || 1) * 0.4;
+    const detectRange = 10 + (_EG.floor || 1) * 0.4;
     if (los && d<detectRange) { this.state='CHASE'; }
     else if (d>detectRange+2) { this.state='PATROL'; }
     if (this.state==='PATROL') this.patrol(dt,map);
@@ -792,14 +1033,28 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiTurret(dt,player,map,d,los) {
-    const cooldown = Math.max(1.0, 2.0 - (game.floor || 1) * 0.11) / (game.modifier==='OVERCLOCK'?1.2:1);
+    const cooldown = Math.max(1.0, 2.0 - (_EG.floor || 1) * 0.11) / (_EG.modifier==='OVERCLOCK'?1.2:1);
     if (los && d<12 && this.shootTimer<=0) {
       this.fireAt(this._tx,this._ty,8,this.atk,13,'#ffb700');
       this.shootTimer=cooldown / this.berserkerMul();
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiCrawler(dt,player,map,d,los) {
     if (los||(d<8 && this._canTarget())) {
       this.zigzag+=dt*5;
@@ -812,6 +1067,13 @@ class Enemy {
     } else this.patrol(dt,map);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiScorcher(dt,player,map,d,los) {
     this._scTrailTimer = Math.max(0, (this._scTrailTimer || 0) - dt);
     if (los || (d < 9 && this._canTarget())) {
@@ -848,6 +1110,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBrute(dt,player,map,d,los) {
     if (los && this._canTarget() && d < 14) this.state = 'CHASE';
     else if (!los || !this._canTarget() || d > 16) this.state = 'PATROL';
@@ -857,9 +1126,16 @@ class Enemy {
     if (d < 1.3) this.meleeAttack(player);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiPhantom(dt,player,map,d,los) {
     const bm = this.berserkerMul();
-    const ocMul = game.modifier==='OVERCLOCK' ? 1.2 : 1;
+    const ocMul = _EG.modifier==='OVERCLOCK' ? 1.2 : 1;
 
     // ── Cloaked: stalk toward player, transition to telegraph ──
     if (this._phState === 'cloaked') {
@@ -952,6 +1228,10 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [map]
+   * @param {any} [player]
+   */
   _phReposition(map, player) {
     if (!this.room) return;
     let bestX = this.x, bestY = this.y, bestD = 0;
@@ -967,11 +1247,18 @@ class Enemy {
     this.x = bestX; this.y = bestY;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiDrone(dt,player,map,d,los) {
-    const cooldown = Math.max(0.9, 1.5 - (game.floor || 1) * 0.07) / (game.modifier==='OVERCLOCK'?1.2:1);
+    const cooldown = Math.max(0.9, 1.5 - (_EG.floor || 1) * 0.07) / (_EG.modifier==='OVERCLOCK'?1.2:1);
     if (d<15 && this._canTarget()) {
       // Drones respect walls when boss room is sealed
-      const canPhase = !game.bossSealed && !game.challengeSealed;
+      const canPhase = !_EG.bossSealed && !_EG.challengeSealed;
       this.moveToward(this._tx,this._ty,this.spd,dt,map,canPhase);
       if (this.shootTimer<=0) {
         this.fireAt(this._tx,this._ty,7,this.atk,16,'#00aaff');
@@ -980,6 +1267,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiShielder(dt,player,map,d,los) {
     // Only update facing when player is visible (prevents wall-hack orientation)
     if (los) this.shieldAngle = Math.atan2(this._ty - this.y, this._tx - this.x);
@@ -993,6 +1287,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiReflector(dt,player,map,d,los) {
     // Smooth-lerp shield facing toward player (with tracking lag)
     if (los) {
@@ -1030,9 +1331,16 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiDisruptor(dt, player, map, d, los) {
     // Prune dead field refs
-    this._dFields = this._dFields.filter(f => f && !f.dead);
+    this._dFields = this._dFields.filter((/** @type {any} */ f) => f && !f.dead);
     this._dDeployTimer = Math.max(0, this._dDeployTimer - dt);
     this._dFireTimer = Math.max(0, this._dFireTimer - dt);
     const bm = this.berserkerMul();
@@ -1086,9 +1394,16 @@ class Enemy {
   }
 
   // ── WRAITH: ethereal wall-phasing predator ──
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiWraith(dt, player, map, d, los) {
     const bm = this.berserkerMul();
-    const ocMul = game.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
     this._wrHitICD = Math.max(0, (this._wrHitICD || 0) - dt);
 
     // ── Phased: move through walls toward player ──
@@ -1180,6 +1495,10 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [map]
+   * @param {any} [player]
+   */
   _wrFindEmergeTile(map, player) {
     // Try to emerge near perceived target on a passable tile
     const tx = this._tx ?? player.x, ty = this._ty ?? player.y;
@@ -1215,6 +1534,9 @@ class Enemy {
     return null;
   }
 
+  /**
+   * @param {any} [proj]
+   */
   blocksProjectile(proj) {
     // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/orbitals)
     if (this.type === 'SHIELDER' && !this.dead) {
@@ -1235,6 +1557,9 @@ class Enemy {
     return false;
   }
 
+  /**
+   * @param {any} [proj]
+   */
   reflectsProjectile(proj) {
     // REFLECTOR: 90° frontal arc reflects player projectiles back at them
     if (this.type !== 'REFLECTOR' || this.dead) return false;
@@ -1245,6 +1570,13 @@ class Enemy {
     return Math.abs(diff) < Math.PI / 4;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiGrenadier(dt,player,map,d,los) {
     this.grenadeTimer = Math.max(0, this.grenadeTimer - dt);
     const bm = this.berserkerMul();
@@ -1263,7 +1595,7 @@ class Enemy {
     } else if (los && d <= 12) {
       if (this.grenadeTimer <= 0) {
         this.lobGrenade(this._tx, this._ty, map);
-        this.grenadeTimer = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier==='OVERCLOCK'?1.2:1) / bm;
+        this.grenadeTimer = Math.max(2.5, 3.5 - (_EG.floor || 1) * 0.1) / (_EG.modifier==='OVERCLOCK'?1.2:1) / bm;
       }
     } else if (d > 12 && los) {
       this.moveToward(this._tx, this._ty, this.spd * 0.7, dt, map);
@@ -1272,6 +1604,11 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [tx]
+   * @param {any} [ty]
+   * @param {any} [map]
+   */
   lobGrenade(tx, ty, map) {
     // Create a grenade projectile targeting (tx,ty)
     const [dx, dy] = norm(tx - this.x, ty - this.y);
@@ -1284,6 +1621,13 @@ class Enemy {
     audio.grenadeLob();
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiSplitter(dt,player,map,d,los) {
     const speedMul = this.hp < this.maxHp * 0.3 ? 1.3 : 1;
     if (los && d < 10) {
@@ -1296,6 +1640,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiShard(dt,player,map,d,los) {
     if (los || (d < 8 && this._canTarget())) {
       this.zigzag += dt * 6;
@@ -1308,6 +1659,13 @@ class Enemy {
     } else this.patrol(dt, map);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiTeleporter(dt,player,map,d,los) {
     this.teleportTimer = Math.max(0, this.teleportTimer - dt);
     if (this._materialize > 0) this._materialize -= dt;
@@ -1334,7 +1692,7 @@ class Enemy {
         spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 8);
         audio.teleport();
       }
-      const cd = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+      const cd = Math.max(2.0, 3.0 - (_EG.floor || 1) * 0.1) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1);
       this.teleportTimer = cd;
       this._materialize = 0.4;
       this._burstLeft = 2;
@@ -1351,6 +1709,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiSniper(dt,player,map,d,los) {
     this._sniperCooldown = Math.max(0, (this._sniperCooldown || 0) - dt);
     this._repositionTimer = Math.max(0, (this._repositionTimer || 0) - dt);
@@ -1386,8 +1751,8 @@ class Enemy {
         projectiles.push(p);
         audio.sniperFire();
         this._laserTarget = null;
-        this._repositionTimer = 1.0 / this.berserkerMul() / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
-        this._sniperCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / this.berserkerMul() / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        this._repositionTimer = 1.0 / this.berserkerMul() / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        this._sniperCooldown = Math.max(2.5, 3.5 - (_EG.floor || 1) * 0.1) / this.berserkerMul() / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1);
       }
       return;
     }
@@ -1429,10 +1794,17 @@ class Enemy {
     // If in room with LOS but on cooldown, hold position (menacing idle)
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiSummoner(dt,player,map,d,los) {
     this._summonTimer = Math.max(0, (this._summonTimer || 0) - dt);
     // Prune dead summons from tracking array
-    if (this._summons) this._summons = this._summons.filter(s => !s.dead);
+    if (this._summons) this._summons = this._summons.filter((/** @type {any} */ s) => !s.dead);
     const bm = this.berserkerMul();
     if (los && d < 5) {
       // Too close — retreat
@@ -1450,7 +1822,7 @@ class Enemy {
       // In range — summon minions if cooldown ready
       if (this._summonTimer <= 0 && (this._summons || []).length < 3) {
         this.summonMinion(map);
-        this._summonTimer = Math.max(3.5, 5 - (game.floor || 1) * 0.15) / (game.modifier==='OVERCLOCK'?1.2:1) / bm;
+        this._summonTimer = Math.max(3.5, 5 - (_EG.floor || 1) * 0.15) / (_EG.modifier==='OVERCLOCK'?1.2:1) / bm;
       }
     } else if (d > 14 && los) {
       this.moveToward(this._tx, this._ty, this.spd * 0.6, dt, map);
@@ -1459,6 +1831,9 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [map]
+   */
   summonMinion(map) {
     // Find a passable tile near the summoner
     let sx, sy, found = false;
@@ -1473,7 +1848,7 @@ class Enemy {
     if (!found) { sx = this.x; sy = this.y; }
     if (!this._summons) this._summons = [];
     pendingEnemySpawns.push({
-      type: 'DRONE', x: sx, y: sy, floor: game.floor, room: this.room,
+      type: 'DRONE', x: sx, y: sy, floor: _EG.floor, room: this.room,
       _challengeWave: !!this._challengeWave,
       _summoned: true, _summonerRef: this
     });
@@ -1482,6 +1857,13 @@ class Enemy {
     spawnParticles(sx, sy, 'SPARK', '#bb44ff', 6);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiHealer(dt,player,map,d,los) {
     this._healTimer = Math.max(0, (this._healTimer || 0) - dt);
     this._healBeam = this._healBeam ? { ...this._healBeam, t: this._healBeam.t - dt } : null;
@@ -1507,7 +1889,7 @@ class Enemy {
           const healAmt = Math.round(target.maxHp * 0.15);
           target.hp = Math.min(target.maxHp, target.hp + healAmt);
           this._healBeam = { tx: target.x, ty: target.y, t: 0.4 };
-          this._healTimer = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+          this._healTimer = Math.max(2.0, 3.0 - (_EG.floor || 1) * 0.1) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
           audio.heal();
           spawnParticles(this.x, this.y, 'MUZZLE', '#44ffaa', 5);
           spawnParticles(target.x, target.y, 'SPARK', '#44ffaa', 6);
@@ -1534,6 +1916,13 @@ class Enemy {
     return best;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiCharger(dt,player,map,d,los) {
     this._chgCooldown = Math.max(0, (this._chgCooldown || 0) - dt);
     const bm = this.berserkerMul();
@@ -1569,7 +1958,7 @@ class Enemy {
           audio.chargerImpact();
         }
         this._chgState = 'idle';
-        this._chgCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        this._chgCooldown = Math.max(2.5, 3.5 - (_EG.floor || 1) * 0.1) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1);
         return;
       }
 
@@ -1585,7 +1974,7 @@ class Enemy {
         }
         this._chgState = 'idle';
         this.stunTimer = Math.max(this.stunTimer, 1.0);
-        this._chgCooldown = Math.max(2.5, 3.5 - (game.floor || 1) * 0.1) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1);
+        this._chgCooldown = Math.max(2.5, 3.5 - (_EG.floor || 1) * 0.1) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1);
         return;
       }
 
@@ -1635,6 +2024,13 @@ class Enemy {
   }
 
   // ─── LEAPER AI ─────────────────────────────────────────────────────────────
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiLeaper(dt,player,map,d,los) {
     this._lpCooldown = Math.max(0, (this._lpCooldown || 0) - dt);
 
@@ -1643,7 +2039,7 @@ class Enemy {
       this._lpRecovery -= dt;
       if (this._lpRecovery <= 0) {
         this._lpState = 'idle';
-        this._lpCooldown = Math.max(2.0, 3.0 - (game.floor || 1) * 0.1);
+        this._lpCooldown = Math.max(2.0, 3.0 - (_EG.floor || 1) * 0.1);
       }
       return;
     }
@@ -1750,6 +2146,13 @@ class Enemy {
   }
 
   // ─── SEEKER AI — Guided Explosive Drone ───────────────────────────────────
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiSeeker(dt, player, map, d, los) {
     // Proximity glow ramp (used by draw)
     this._skProximity = los ? Math.max(0, 1 - d / 6) : 0;
@@ -1771,6 +2174,10 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [player]
+   * @param {any} [map]
+   */
   _seekerDetonate(player, map) {
     if (this.dead) return;
     const r = 2;
@@ -1807,8 +2214,15 @@ class Enemy {
   }
 
   // ─── PULSER AI ────────────────────────────────────────────────────────────
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiPulser(dt, player, map, d, los) {
-    const ocMul = game.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
     const chargeRange = 6;
 
     // ── Idle: patrol or approach ──
@@ -1879,6 +2293,9 @@ class Enemy {
   }
 
   // ─── MIMIC AI ──────────────────────────────────────────────────────────────
+  /**
+   * @param {any} [player]
+   */
   revealMimic(player) {
     if (!this._disguised) return;
     this._disguised = false;
@@ -1886,13 +2303,20 @@ class Enemy {
     audio.mimicReveal();
     spawnParticles(this.x, this.y, 'EXPLOSION', '#cc33ff', 18);
     triggerShake(4, 0.15);
-    game.msg('⚠ MIMIC!', '#cc33ff');
+    _EG.msg('⚠ MIMIC!', '#cc33ff');
     // Lock lunge direction toward perceived target
     const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
     this._mimicLungeDx = dx;
     this._mimicLungeDy = dy;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiMimic(dt, player, map, d, los) {
     // Reveal telegraph: expanding ring, no AI yet
     if (this._revealTimer > 0) {
@@ -1933,6 +2357,13 @@ class Enemy {
   }
 
   // ── NEXUS: Neural Command Node — links to nearby allies, buffing with DR ──
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiNexus(dt, player, map, d, los) {
     const bm = this.berserkerMul();
     // Update links every 0.5s
@@ -1944,7 +2375,7 @@ class Enemy {
     // Fire rate scales with link count: 2.0s base → 1.0s with 3 links
     this._nxFireTimer = Math.max(0, (this._nxFireTimer || 0) - dt);
     const linkCount = this._nxLinks ? this._nxLinks.length : 0;
-    const fireInterval = Math.max(1.0, 2.0 - linkCount * 0.33) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+    const fireInterval = Math.max(1.0, 2.0 - linkCount * 0.33) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
 
     if (los && d < 4) {
       // Too close — retreat toward nearest ally cluster
@@ -2040,6 +2471,13 @@ class Enemy {
     return best;
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiSiphon(dt, player, map, d, los) {
     const bm = this.berserkerMul();
     // Frenzy latch: once below 40% HP, permanently activated
@@ -2048,7 +2486,7 @@ class Enemy {
       audio.siphonFrenzy();
       spawnParticles(this.x, this.y, 'SPARK', '#dd2244', 12);
     }
-    const fireInterval = (this._spFrenzy ? 1.0 : 2.0) / (game.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+    const fireInterval = (this._spFrenzy ? 1.0 : 2.0) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
     this._spFireTimer = Math.max(0, (this._spFireTimer || 0) - dt);
     // Drain beam fade
     if (this._spDrainBeam) {
@@ -2073,9 +2511,16 @@ class Enemy {
   }
 
   // ── GRAVITON: Gravity Manipulation — deploys wells that pull the player ──
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiGraviton(dt, player, map, d, los) {
     // Prune dead well refs
-    this._gvWells = this._gvWells.filter(w => w && !w.dead);
+    this._gvWells = this._gvWells.filter((/** @type {any} */ w) => w && !w.dead);
     this._gvDeployTimer = Math.max(0, this._gvDeployTimer - dt);
     this._gvFireTimer = Math.max(0, this._gvFireTimer - dt);
     const bm = this.berserkerMul();
@@ -2107,7 +2552,7 @@ class Enemy {
             this._gvWells.shift();
           }
           // Derive room from well position (not owner) to handle cross-room LOS
-          const wellRoom = game.dungeon?.rooms?.find(r =>
+          const wellRoom = _EG.dungeon?.rooms?.find((/** @type {any} */ r) =>
             wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h) || null;
           const well = { x: wx, y: wy, owner: this, timer: 0, maxTimer: 4, radius: 2.5, dead: false, room: wellRoom };
           gravityWells.push(well);
@@ -2129,13 +2574,20 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossSentinel(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
     this.phase = hpPct <= 0.33 ? 2 : 1;
     if (this.phase!==this.prevPhase) {
       spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
       audio.phaseShift();
-      game.msg('⚠ SENTINEL PHASE 2','#ff4444');
+      _EG.msg('⚠ SENTINEL PHASE 2','#ff4444');
       this.prevPhase=this.phase;
     }
 
@@ -2179,6 +2631,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossWarden(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
     this.phase = hpPct <= 0.4 ? 2 : 1;
@@ -2186,7 +2645,7 @@ class Enemy {
     if (this.phase !== this.prevPhase) {
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 20);
       audio.phaseShift();
-      game.msg('⚠ WARDEN PHASE 2', '#ff8800');
+      _EG.msg('⚠ WARDEN PHASE 2', '#ff8800');
       this.prevPhase = this.phase;
     }
 
@@ -2295,6 +2754,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossHive(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
     this.phase = hpPct <= 0.30 ? 3 : hpPct <= 0.70 ? 2 : 1;
@@ -2302,7 +2768,7 @@ class Enemy {
     if (this.phase!==this.prevPhase) {
       spawnParticles(this.x,this.y,'EXPLOSION',this.colour,20);
       audio.phaseShift();
-      game.msg('⚠ HIVE PHASE '+this.phase,'#aa00ff');
+      _EG.msg('⚠ HIVE PHASE '+this.phase,'#aa00ff');
       this.prevPhase=this.phase;
     }
 
@@ -2325,7 +2791,7 @@ class Enemy {
 
     if (this.phase>=2 && this.bossTimers.spawn<=0 && this.spawnCooldown<=0) {
       for (let i=0;i<2;i++) {
-        const cr=spawnEnemy('CRAWLER',this.x+rnd(-2,2),this.y+rnd(-2,2),game.floor,this.room,false);
+        const cr=spawnEnemy('CRAWLER',this.x+rnd(-2,2),this.y+rnd(-2,2),_EG.floor,this.room,false);
         enemies.push(cr);
       }
       this.bossTimers.spawn=5;
@@ -2347,14 +2813,21 @@ class Enemy {
     }
 
     if (this.phase===3 && this.bossTimers.shock<=0) {
-      if (dist(game.player.x,game.player.y,this.x,this.y)<10) {
-        game.player.takeDamage(Math.round(25*getDiff().enemyAtk), 'HIVE');
+      if (dist(_EG.player.x,_EG.player.y,this.x,this.y)<10) {
+        _EG.player.takeDamage(Math.round(25*getDiff().enemyAtk), 'HIVE');
         spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',15);
       }
       this.bossTimers.shock=4;
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossConductor(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
     this.phase = hpPct <= 0.25 ? 3 : hpPct <= 0.55 ? 2 : 1;
@@ -2362,7 +2835,7 @@ class Enemy {
     if (this.phase !== this.prevPhase) {
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 20);
       audio.phaseShift();
-      game.msg('⚠ CONDUCTOR PHASE ' + this.phase, '#00ccff');
+      _EG.msg('⚠ CONDUCTOR PHASE ' + this.phase, '#00ccff');
       this.prevPhase = this.phase;
     }
 
@@ -2466,6 +2939,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossOmega(dt,player,map,d,los) {
     // Phase transitions based on maxHp percentage
     const hpPct = this.hp / this.maxHp;
@@ -2478,11 +2958,11 @@ class Enemy {
     if (this.phase !== this.prevPhase) {
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 25);
       audio.phaseShift();
-      game.msg('⚠ OMEGA PHASE ' + this.phase, '#ff00c8');
+      _EG.msg('⚠ OMEGA PHASE ' + this.phase, '#ff00c8');
       this.prevPhase = this.phase;
     }
 
-    const spd = [1, 1.2, 1.5, 2][this.phase - 1];
+    const spd = /** @type {number} */ ([1, 1.2, 1.5, 2][this.phase - 1]);
     const T = this.bossTimers;
     T.turret = (T.turret || 0) - dt;
     T.homing = (T.homing || 0) - dt;
@@ -2531,7 +3011,7 @@ class Enemy {
         const addType = Math.random() < 0.6 ? 'CRAWLER' : 'DRONE';
         const count = Math.min(this.phase >= 4 ? 3 : 2, 8 - activeAdds);
         for (let i = 0; i < count; i++) {
-          const add = spawnEnemy(addType, this.x + rnd(-3, 3), this.y + rnd(-3, 3), game.floor, this.room, false);
+          const add = spawnEnemy(addType, this.x + rnd(-3, 3), this.y + rnd(-3, 3), _EG.floor, this.room, false);
           enemies.push(add);
         }
       }
@@ -2607,6 +3087,13 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
   aiBossGenesis(dt,player,map,d,los) {
     const hpPct = this.hp / this.maxHp;
     // UNCHAINED #42: _unchainedPhase locks the boss into phase-3 attack
@@ -2617,7 +3104,7 @@ class Enemy {
       this.phase = newPhase;
       spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 22);
       audio.phaseShift();
-      game.msg('⚠ GENESIS PHASE ' + this.phase, '#ffcc00');
+      _EG.msg('⚠ GENESIS PHASE ' + this.phase, '#ffcc00');
       this.prevPhase = this.phase;
       // Seed timers so attacks don't all fire at once on phase transition
       const T = this.bossTimers;
@@ -2693,7 +3180,7 @@ class Enemy {
       const hazCount = this.phase >= 3 ? 3 : 2;
       const armTime = this.phase >= 3 ? 0.8 : 1.2;
       for (let h = 0; h < hazCount; h++) {
-        let hx, hy, attempts = 0, valid = false;
+        let /** @type {number} */ hx = 0, /** @type {number} */ hy = 0, attempts = 0, valid = false;
         do {
           hx = player.x + rnd(-4, 4);
           hy = player.y + rnd(-4, 4);
@@ -2736,12 +3223,16 @@ class Enemy {
     }
   }
 
+  /**
+   * @param {any} [camX]
+   * @param {any} [camY]
+   */
   draw(camX,camY) {
     if (this.dead) return;
     // FOV gating: only draw enemies the player can currently see
     const etx = Math.floor(this.x), ety = Math.floor(this.y);
     // WRAITH emerging telegraph is always visible (warns player)
-    if (!game.dungeon?.visible?.[ety]?.[etx] && !(this.type === 'WRAITH' && this._wrState === 'emerging')) return;
+    if (!_EG.dungeon?.visible?.[ety]?.[etx] && !(this.type === 'WRAITH' && this._wrState === 'emerging')) return;
     const sx=this.x*TILE-camX, syBase=this.y*TILE-camY;
     const sy = syBase - (this._lpHeight || 0) * TILE;
     if (sx<-40||sx>W+40||syBase<-40||syBase>H+40) return;
@@ -2752,7 +3243,7 @@ class Enemy {
       ctx.fillStyle = this._mimicColour;
       ctx.fillRect(sx - 5, sy - 5 + bobY, 10, 10);
       // Subtle shimmer tell every ~2.5s (0.15s flash)
-      const shimCycle = ((game.floorTime || 0) * 0.4) % 1;
+      const shimCycle = ((_EG.floorTime || 0) * 0.4) % 1;
       if (shimCycle > 0.92) {
         ctx.globalAlpha = 0.3 + 0.4 * Math.sin(shimCycle * 80);
         ctx.fillStyle = '#ffffff';
@@ -3763,6 +4254,7 @@ class Enemy {
 }
 
 // ─── Enemy Weights & Spawning ─────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const ENEMY_WEIGHTS = {
   GUARD:    { base: 40, perFloor: -3 },   // common early, fades
   TURRET:   { base: 20, perFloor: 1 },    // steady
@@ -3791,6 +4283,9 @@ const ENEMY_WEIGHTS = {
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
+/**
+ * @param {any} [floorNum]
+ */
 function pickEnemyType(floorNum) {
   const weights = [];
   let total = 0;
@@ -3806,10 +4301,18 @@ function pickEnemyType(floorNum) {
   return 'GUARD';
 }
 
+/**
+ * @param {any} [type]
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floorNum]
+ * @param {any} [room]
+ * @param {any} [allowElite]
+ */
 function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const scale=1+0.15*(floorNum-1);
   const d=getDiff();
-  let hp,atk,spd,xpVal,colour;
+  let /** @type {number} */ hp = 0, /** @type {number} */ atk = 0, /** @type {number} */ spd = 0, /** @type {number} */ xpVal = 0, /** @type {string} */ colour = '#ffffff';
   switch(type) {
     case 'GUARD':   hp=40;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
     case 'TURRET':  hp=25;  atk=12; spd=0;   xpVal=15; colour='#ffb700'; break;
@@ -3847,8 +4350,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA','GENESIS'].includes(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
   if (!isBoss) {
-    if (game.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
-    if (game.modifier === 'FORTIFIED') hp = Math.round(hp * 1.4);
+    if (_EG.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
+    if (_EG.modifier === 'FORTIFIED') hp = Math.round(hp * 1.4);
   }
   const e=new Enemy(x,y,
     Math.round(hp*scale*d.enemyHp), Math.round(atk*scale*d.enemyAtk),
@@ -3915,10 +4418,20 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
 }
 
 // ─── Volatile Cores (Explosive Barrels) ───────────────────────────────────────
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ */
 function createVCore(x, y) {
   return { x, y, primed: false, timer: 0, dead: false, bob: Math.random() * TWO_PI, glow: 0 };
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [map]
+ */
 function primeVCoresInRadius(wx, wy, radius, map) {
   for (const c of vcores) {
     if (c.dead || c.primed) continue;
@@ -3930,11 +4443,14 @@ function primeVCoresInRadius(wx, wy, radius, map) {
   }
 }
 
+/**
+ * @param {any} [c]
+ */
 function detonateVCore(c) {
   c.dead = true;
   const r = 2.2;
-  const dmg = 30 + game.floor * 3;
-  const map = game.dungeon.map;
+  const dmg = 30 + _EG.floor * 3;
+  const map = _EG.dungeon.map;
   spawnParticles(c.x, c.y, 'EXPLOSION', '#ff6622', 22);
   spawnParticles(c.x, c.y, 'EXPLOSION', '#ffaa00', 10);
   triggerShake(8, 0.25);
@@ -3947,7 +4463,7 @@ function detonateVCore(c) {
     }
   }
   // Damage player (risk/reward)
-  const p = game.player;
+  const p = _EG.player;
   if (dist(p.x, p.y, c.x, c.y) < r && !isPlayerDamageImmune() && hasLOS(c.x, c.y, p.x, p.y, map)) {
     p.takeDamage(dmg, 'Volatile Core');
   }
@@ -3969,6 +4485,9 @@ function detonateVCore(c) {
   triggerMinesInRadius(c.x, c.y, r, map);
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateVCores(dt) {
   for (const c of vcores) {
     if (c.dead) continue;
@@ -3983,11 +4502,15 @@ function updateVCores(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawVCores(camX, camY) {
   for (const c of vcores) {
     if (c.dead) continue;
     const tx = Math.floor(c.x), ty = Math.floor(c.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = c.x * TILE - camX, sy = c.y * TILE - camY;
     ctx.save();
     if (c.primed) {
@@ -4023,16 +4546,29 @@ function drawVCores(camX, camY) {
 }
 
 // ─── Crates ───────────────────────────────────────────────────────────────────
+/**
+ * @param {any} [tx]
+ * @param {any} [ty]
+ * @param {any} [floor]
+ */
 function createCrate(tx, ty, floor) {
   const maxHp = 15 + floor * 5;
   return { tx, ty, hp: maxHp, maxHp };
 }
 
+/**
+ * @param {any} [tx]
+ * @param {any} [ty]
+ */
 function getCrateAt(tx, ty) {
   for (const c of crates) if (c.tx === tx && c.ty === ty) return c;
   return null;
 }
 
+/**
+ * @param {any} [c]
+ * @param {any} [dmg]
+ */
 function damageCrate(c, dmg) {
   if (!c || c.hp <= 0) return;
   c.hp -= dmg;
@@ -4040,28 +4576,43 @@ function damageCrate(c, dmg) {
   else spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#88aacc', 3);
 }
 
+/**
+ * @param {any} [c]
+ */
 function destroyCrate(c) {
-  const map = game.dungeon.map;
+  const map = _EG.dungeon.map;
   map[c.ty][c.tx] = T.FLOOR;
-  game.markMapMutated();
+  _EG.markMapMutated();
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'EXPLOSION', '#667788', 10);
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
   audio.crateBreak();
   // 25% chance to drop credits
   if (Math.random() < 0.25) {
-    const amt = game.floor * 4;
-    game.player.credits = (game.player.credits || 0) + amt;
+    const amt = _EG.floor * 4;
+    _EG.player.credits = (_EG.player.credits || 0) + amt;
     spawnDmgText(c.tx + 0.5, c.ty + 0.2, '+' + amt + '◈', '#39ff14');
   }
   const idx = crates.indexOf(c);
   if (idx >= 0) crates.splice(idx, 1);
 }
 
+/**
+ * @param {any} [tx]
+ * @param {any} [ty]
+ * @param {any} [dmg]
+ */
 function damageCrateAtTile(tx, ty, dmg) {
   const c = getCrateAt(tx, ty);
   if (c) damageCrate(c, dmg);
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageCratesInRadius(wx, wy, radius, dmg, map) {
   for (let i = crates.length - 1; i >= 0; i--) {
     const c = crates[i];
@@ -4075,12 +4626,22 @@ function damageCratesInRadius(wx, wy, radius, dmg, map) {
 // ─── Alarm Beacons ────────────────────────────────────────────────────────────
 const BEACON_COUNTDOWN = 4; // seconds before reinforcements spawn
 
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floor]
+ * @param {any} [room]
+ */
 function createBeacon(x, y, floor, room) {
   const maxHp = 10 + floor * 3;
   return { x, y, hp: maxHp, maxHp, active: false, timer: 0, dead: false,
            room, floor, bob: Math.random() * TWO_PI, ringTimer: 0 };
 }
 
+/**
+ * @param {any} [b]
+ * @param {any} [dmg]
+ */
 function damageBeacon(b, dmg) {
   if (!b || b.dead) return;
   b.hp -= dmg;
@@ -4088,6 +4649,9 @@ function damageBeacon(b, dmg) {
   else spawnParticles(b.x, b.y, 'SPARK', '#ff4444', 4);
 }
 
+/**
+ * @param {any} [b]
+ */
 function destroyBeacon(b) {
   b.dead = true;
   spawnParticles(b.x, b.y, 'EXPLOSION', '#ff3333', 14);
@@ -4095,15 +4659,22 @@ function destroyBeacon(b) {
   audio.beaconDestroy();
   // Credit reward with economy multipliers
   const d = getDiff();
-  const amt = Math.round(game.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-  game.player.credits += amt;
+  const amt = Math.round(_EG.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  _EG.player.credits += amt;
   spawnDmgText(b.x, b.y - 0.3, '+' + amt + '◈', '#ff6644');
   const idx = beacons.indexOf(b);
   if (idx >= 0) beacons.splice(idx, 1);
   // Trigger room-clear re-evaluation (beacon was blocking clear)
-  game.enemyDiedThisFrame = true;
+  _EG.enemyDiedThisFrame = true;
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageBeaconsInRadius(wx, wy, radius, dmg, map) {
   for (let i = beacons.length - 1; i >= 0; i--) {
     const b = beacons[i];
@@ -4114,8 +4685,11 @@ function damageBeaconsInRadius(wx, wy, radius, dmg, map) {
   }
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateBeacons(dt) {
-  const p = game.player;
+  const p = _EG.player;
   for (let i = beacons.length - 1; i >= 0; i--) {
     const b = beacons[i];
     if (b.dead) continue;
@@ -4127,7 +4701,7 @@ function updateBeacons(dt) {
         b.active = true;
         b.timer = BEACON_COUNTDOWN;
         audio.beaconAlarm();
-        game.msg('⚠ ALARM BEACON ACTIVE', '#ff3333');
+        _EG.msg('⚠ ALARM BEACON ACTIVE', '#ff3333');
       }
     }
     if (b.active) {
@@ -4137,10 +4711,10 @@ function updateBeacons(dt) {
         // Trigger reinforcements
         b.dead = true;
         audio.beaconTrigger();
-        game.msg('⚠ REINFORCEMENTS INCOMING', '#ff4444');
+        _EG.msg('⚠ REINFORCEMENTS INCOMING', '#ff4444');
         spawnParticles(b.x, b.y, 'EXPLOSION', '#ff2222', 16);
         const count = rndInt(2, 3);
-        const map = game.dungeon.map;
+        const map = _EG.dungeon.map;
         for (let j = 0; j < count; j++) {
           const type = pickEnemyType(b.floor);
           let ex, ey, att = 0;
@@ -4161,11 +4735,15 @@ function updateBeacons(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawBeacons(camX, camY) {
   for (const b of beacons) {
     if (b.dead) continue;
     const tx = Math.floor(b.x), ty = Math.floor(b.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = b.x * TILE - camX, sy = b.y * TILE - camY;
     const pulse = 0.5 + 0.3 * Math.sin(b.bob * 2);
 
@@ -4195,7 +4773,7 @@ function drawBeacons(camX, camY) {
       ctx.fillStyle = '#ff4444'; ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.shadowBlur = 6; ctx.shadowColor = '#ff0000';
-      ctx.fillText(Math.ceil(b.timer), sx, sy - 10);
+      ctx.fillText(String(Math.ceil(b.timer)), sx, sy - 10);
       ctx.restore();
     } else {
       // Idle: subtle red glow diamond
@@ -4233,12 +4811,22 @@ const MINE_BLAST_RADIUS   = 2.0;
 const MINE_FUSE_NORMAL    = 0.8;  // walked-into fuse
 const MINE_FUSE_SHOT      = 0.3;  // shot-by-projectile fuse
 
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floor]
+ * @param {any} [room]
+ */
 function createMine(x, y, floor, room) {
   const dmg = 12 + floor * 3;
   return { x, y, dmg, state: 'dormant', fuse: 0, revealed: false, dead: false,
            room, floor, bob: Math.random() * TWO_PI, flash: 0 };
 }
 
+/**
+ * @param {any} [m]
+ * @param {any} [fuseTime]
+ */
 function armMine(m, fuseTime) {
   if (!m || m.dead || m.state !== 'dormant') return;
   m.state = 'armed';
@@ -4246,12 +4834,15 @@ function armMine(m, fuseTime) {
   audio.mineArm();
 }
 
+/**
+ * @param {any} [m]
+ */
 function detonateMine(m) {
   if (!m || m.dead) return;
   m.dead = true;
   m.state = 'detonated';
   const r = MINE_BLAST_RADIUS;
-  const map = game.dungeon.map;
+  const map = _EG.dungeon.map;
   spawnParticles(m.x, m.y, 'EXPLOSION', '#ff8800', 18);
   spawnParticles(m.x, m.y, 'EXPLOSION', '#ffcc44', 8);
   triggerShake(6, 0.2);
@@ -4264,7 +4855,7 @@ function detonateMine(m) {
     }
   }
   // Damage player (environmental — bypasses defense)
-  const p = game.player;
+  const p = _EG.player;
   if (dist(p.x, p.y, m.x, m.y) < r && !isPlayerDamageImmune() && hasLOS(m.x, m.y, p.x, p.y, map)) {
     p.takeDamage(m.dmg, 'Proximity Mine', { ignoreDefense: true });
   }
@@ -4289,6 +4880,12 @@ function detonateMine(m) {
   if (idx >= 0) mines.splice(idx, 1);
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [map]
+ */
 function triggerMinesInRadius(wx, wy, radius, map) {
   for (const m of mines) {
     if (m.dead || m.state !== 'dormant') continue;
@@ -4300,8 +4897,11 @@ function triggerMinesInRadius(wx, wy, radius, map) {
   }
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateMines(dt) {
-  const p = game.player;
+  const p = _EG.player;
   for (let i = mines.length - 1; i >= 0; i--) {
     const m = mines[i];
     if (m.dead) continue;
@@ -4337,11 +4937,15 @@ function updateMines(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawMines(camX, camY) {
   for (const m of mines) {
     if (m.dead) continue;
     const tx = Math.floor(m.x), ty = Math.floor(m.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = m.x * TILE - camX, sy = m.y * TILE - camY;
     ctx.save();
 
@@ -4397,11 +5001,21 @@ function drawMines(camX, camY) {
 // ─── Shield Generators ────────────────────────────────────────────────────────
 const SHIELD_GEN_DR = 0.35; // 35% damage reduction to room enemies
 
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floor]
+ * @param {any} [room]
+ */
 function createShieldGen(x, y, floor, room) {
   const maxHp = 15 + floor * 4;
   return { x, y, hp: maxHp, maxHp, dead: false, room, floor, bob: Math.random() * TWO_PI };
 }
 
+/**
+ * @param {any} [g]
+ * @param {any} [dmg]
+ */
 function damageShieldGen(g, dmg) {
   if (!g || g.dead) return;
   g.hp -= dmg;
@@ -4409,6 +5023,9 @@ function damageShieldGen(g, dmg) {
   else spawnParticles(g.x, g.y, 'SPARK', '#00ccff', 4);
 }
 
+/**
+ * @param {any} [g]
+ */
 function destroyShieldGen(g) {
   g.dead = true;
   spawnParticles(g.x, g.y, 'EXPLOSION', '#00ccff', 18);
@@ -4416,11 +5033,11 @@ function destroyShieldGen(g) {
   audio.generatorDestroy();
   // Credit reward
   const d = getDiff();
-  const amt = Math.round(game.floor * 5 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-  game.player.credits += amt;
+  const amt = Math.round(_EG.floor * 5 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  _EG.player.credits += amt;
   spawnDmgText(g.x, g.y - 0.3, '+' + amt + '◈', '#00ccff');
   // EMP burst — stun enemies in radius (LOS-gated)
-  const empR = 3, empDur = 0.8, map = game.dungeon.map;
+  const empR = 3, empDur = 0.8, map = _EG.dungeon.map;
   for (const e of enemies) {
     if (e.dead || e.isBoss || e._disguised) continue;
     if (e._wrPhased) continue;
@@ -4435,6 +5052,13 @@ function destroyShieldGen(g) {
   if (idx >= 0) shieldGens.splice(idx, 1);
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageShieldGensInRadius(wx, wy, radius, dmg, map) {
   for (let i = shieldGens.length - 1; i >= 0; i--) {
     const g = shieldGens[i];
@@ -4446,6 +5070,9 @@ function damageShieldGensInRadius(wx, wy, radius, dmg, map) {
 }
 
 // Check if an enemy is protected by a shield generator (room + spatial bounds)
+/**
+ * @param {any} [e]
+ */
 function isEnemyShieldGenProtected(e) {
   if (e.dead || e._disguised) return false;
   for (const g of shieldGens) {
@@ -4458,6 +5085,9 @@ function isEnemyShieldGenProtected(e) {
   return false;
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateShieldGens(dt) {
   for (const g of shieldGens) {
     if (g.dead) continue;
@@ -4465,11 +5095,15 @@ function updateShieldGens(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawShieldGens(camX, camY) {
   for (const g of shieldGens) {
     if (g.dead) continue;
     const tx = Math.floor(g.x), ty = Math.floor(g.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = g.x * TILE - camX, sy = g.y * TILE - camY;
     const pulse = 0.6 + 0.3 * Math.sin(g.bob * 2);
     const t = g.bob;
@@ -4537,8 +5171,16 @@ const CAMERA_ALERT_TIME = 1.5;          // seconds before reinforcements
 const CAMERA_REARM_CD = 0.5;            // debounce after losing detection
 
 // Wall direction → base facing angle (into room)
+/** @type {Record<string, number>} */
 const WALL_FACING = { N: Math.PI / 2, S: -Math.PI / 2, E: Math.PI, W: 0 };
 
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floor]
+ * @param {any} [room]
+ * @param {any} [wallSide]
+ */
 function createCamera(x, y, floor, room, wallSide) {
   const maxHp = 12 + floor * 3;
   const baseAngle = WALL_FACING[wallSide];
@@ -4553,6 +5195,10 @@ function createCamera(x, y, floor, room, wallSide) {
   };
 }
 
+/**
+ * @param {any} [c]
+ * @param {any} [dmg]
+ */
 function damageCamera(c, dmg) {
   if (!c || c.dead) return;
   c.hp -= dmg;
@@ -4560,6 +5206,9 @@ function damageCamera(c, dmg) {
   else spawnParticles(c.x, c.y, 'SPARK', '#ff4444', 4);
 }
 
+/**
+ * @param {any} [c]
+ */
 function destroyCamera(c) {
   c.dead = true;
   c.state = 'triggered'; // prevent further logic
@@ -4567,14 +5216,21 @@ function destroyCamera(c) {
   spawnParticles(c.x, c.y, 'SPARK', '#ff8844', 8);
   audio.cameraDestroy();
   const d = getDiff();
-  const amt = Math.round(game.floor * 4 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-  game.player.credits += amt;
+  const amt = Math.round(_EG.floor * 4 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  _EG.player.credits += amt;
   spawnDmgText(c.x, c.y - 0.3, '+' + amt + '◈', '#ff4444');
   const idx = cameras.indexOf(c);
   if (idx >= 0) cameras.splice(idx, 1);
-  game.enemyDiedThisFrame = true; // re-evaluate room-clear
+  _EG.enemyDiedThisFrame = true; // re-evaluate room-clear
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageCamerasInRadius(wx, wy, radius, dmg, map) {
   for (let i = cameras.length - 1; i >= 0; i--) {
     const c = cameras[i];
@@ -4586,15 +5242,21 @@ function damageCamerasInRadius(wx, wy, radius, dmg, map) {
 }
 
 // Normalize angle to [-PI, PI]
+/**
+ * @param {any} [a]
+ */
 function normalizeAngle(a) {
   while (a > Math.PI) a -= TWO_PI;
   while (a < -Math.PI) a += TWO_PI;
   return a;
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateCameras(dt) {
-  const p = game.player;
-  const map = game.dungeon?.map;
+  const p = _EG.player;
+  const map = _EG.dungeon?.map;
   if (!map) return;
   for (let i = cameras.length - 1; i >= 0; i--) {
     const c = cameras[i];
@@ -4632,14 +5294,14 @@ function updateCameras(dt) {
         c.state = 'alerted';
         c.alertTimer = CAMERA_ALERT_TIME;
         audio.cameraDetect();
-        game.msg('⚠ CAMERA ALERT', '#ff6644');
+        _EG.msg('⚠ CAMERA ALERT', '#ff6644');
       }
     } else if (c.state === 'alerted') {
       if (!detected) {
         // Player left cone — return to scanning with debounce
         c.state = 'scanning';
         c.rearmCd = CAMERA_REARM_CD;
-        game.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocked while alerted)
+        _EG.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocked while alerted)
       } else {
         c.alertTimer -= dt;
         if (c.alertTimer <= 0) {
@@ -4647,7 +5309,7 @@ function updateCameras(dt) {
           c.state = 'triggered';
           c.dead = true;
           audio.cameraAlert();
-          game.msg('⚠ SECURITY RESPONSE INCOMING', '#ff3333');
+          _EG.msg('⚠ SECURITY RESPONSE INCOMING', '#ff3333');
           spawnParticles(c.x, c.y, 'EXPLOSION', '#ff3333', 12);
           const count = rndInt(2, 3);
           for (let j = 0; j < count; j++) {
@@ -4671,12 +5333,16 @@ function updateCameras(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawCameras(camX, camY) {
-  const map = game.dungeon?.map;
+  const map = _EG.dungeon?.map;
   for (const c of cameras) {
     if (c.dead) continue;
     const tx = Math.floor(c.x), ty = Math.floor(c.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = c.x * TILE - camX, sy = c.y * TILE - camY;
     const currentAngle = c.baseAngle + c.sweepAngle;
 
@@ -4794,6 +5460,16 @@ const LASER_CYCLE_ON = 1.5;    // seconds beam stays on (cycling lasers)
 const LASER_CYCLE_OFF = 1.5;   // seconds beam stays off (cycling lasers)
 const LASER_REARM_GRACE = 0.2; // grace period after cycle-on before beam can hit
 
+/**
+ * @param {any} [x1]
+ * @param {any} [y1]
+ * @param {any} [x2]
+ * @param {any} [y2]
+ * @param {any} [floor]
+ * @param {any} [room]
+ * @param {any} [axis]
+ * @param {any} [cycling]
+ */
 function createLaser(x1, y1, x2, y2, floor, room, axis, cycling) {
   const emitterHp = 10 + floor * 3;
   return {
@@ -4814,6 +5490,10 @@ function createLaser(x1, y1, x2, y2, floor, room, axis, cycling) {
   };
 }
 
+/**
+ * @param {any} [l]
+ * @param {any} [which]
+ */
 function destroyLaserEmitter(l, which) {
   if (which === 'A') l.deadA = true;
   else l.deadB = true;
@@ -4826,14 +5506,19 @@ function destroyLaserEmitter(l, which) {
   l.dead = true;
   l.active = false;
   const d = getDiff();
-  const amt = Math.round(game.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-  game.player.credits += amt;
+  const amt = Math.round(_EG.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  _EG.player.credits += amt;
   const mx = (l.x1 + l.x2) / 2, my = (l.y1 + l.y2) / 2;
   spawnDmgText(mx, my - 0.3, '+' + amt + '◈', '#ff6644');
   const idx = lasers.indexOf(l);
   if (idx >= 0) lasers.splice(idx, 1);
 }
 
+/**
+ * @param {any} [l]
+ * @param {any} [which]
+ * @param {any} [dmg]
+ */
 function damageLaserEmitter(l, which, dmg) {
   if (l.dead) return;
   if (which === 'A') {
@@ -4849,6 +5534,13 @@ function damageLaserEmitter(l, which, dmg) {
   }
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageLasersInRadius(wx, wy, radius, dmg, map) {
   for (let i = lasers.length - 1; i >= 0; i--) {
     const l = lasers[i];
@@ -4865,6 +5557,13 @@ function damageLasersInRadius(wx, wy, radius, dmg, map) {
 }
 
 // Segment intersection: does segment (px,py)→(px2,py2) cross laser beam?
+/**
+ * @param {any} [l]
+ * @param {any} [px]
+ * @param {any} [py]
+ * @param {any} [px2]
+ * @param {any} [py2]
+ */
 function crossesLaserBeam(l, px, py, px2, py2) {
   // Beam from (l.x1,l.y1) to (l.x2,l.y2), player from (px,py) to (px2,py2)
   const d1x = l.x2 - l.x1, d1y = l.y2 - l.y1;
@@ -4877,6 +5576,10 @@ function crossesLaserBeam(l, px, py, px2, py2) {
 }
 
 // Check if beam path is clear of opaque tiles
+/**
+ * @param {any} [l]
+ * @param {any} [map]
+ */
 function isBeamClear(l, map) {
   const steps = Math.ceil(dist(l.x1, l.y1, l.x2, l.y2) * 2);
   for (let s = 1; s < steps; s++) {
@@ -4891,9 +5594,12 @@ function isBeamClear(l, map) {
   return true;
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateLasers(dt) {
-  const p = game.player;
-  const map = game.dungeon?.map;
+  const p = _EG.player;
+  const map = _EG.dungeon?.map;
   if (!map) return;
   for (let i = lasers.length - 1; i >= 0; i--) {
     const l = lasers[i];
@@ -4962,23 +5668,27 @@ function updateLasers(dt) {
           p.shockTimer = Math.max(p.shockTimer || 0, 0.3);
           audio.laserHit();
           spawnParticles(p.x, p.y, 'SPARK', '#ff8844', 8);
-          game.msg('⚡ LASER TRIP', '#ff8844');
+          _EG.msg('⚡ LASER TRIP', '#ff8844');
         }
       }
     }
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawLasers(camX, camY) {
-  const map = game.dungeon?.map;
+  const map = _EG.dungeon?.map;
   if (!map) return;
   for (const l of lasers) {
     if (l.dead) continue;
     // Visibility: either emitter visible
     const t1x = Math.floor(l.x1), t1y = Math.floor(l.y1);
     const t2x = Math.floor(l.x2), t2y = Math.floor(l.y2);
-    const vis1 = game.dungeon?.visible?.[t1y]?.[t1x];
-    const vis2 = game.dungeon?.visible?.[t2y]?.[t2x];
+    const vis1 = _EG.dungeon?.visible?.[t1y]?.[t1x];
+    const vis2 = _EG.dungeon?.visible?.[t2y]?.[t2x];
     if (!vis1 && !vis2) continue;
 
     const s1x = l.x1 * TILE - camX, s1y = l.y1 * TILE - camY;
@@ -5111,6 +5821,13 @@ const WTURRET_PROJ_SPD = 7;
 const WTURRET_PROJ_RANGE = 10;
 const WTURRET_DISABLE_DUR = 3; // EMP disable duration (before hack)
 
+/**
+ * @param {any} [x]
+ * @param {any} [y]
+ * @param {any} [floor]
+ * @param {any} [room]
+ * @param {any} [wallSide]
+ */
 function createWallTurret(x, y, floor, room, wallSide) {
   const maxHp = 12 + floor * 3;
   return {
@@ -5126,8 +5843,12 @@ function createWallTurret(x, y, floor, room, wallSide) {
   };
 }
 
-function wallTurretDmg(floor) { return Math.round(5 + floor * 1.5); }
+function wallTurretDmg(/** @type {any} */ floor) { return Math.round(5 + floor * 1.5); }
 
+/**
+ * @param {any} [t]
+ * @param {any} [dmg]
+ */
 function damageWallTurret(t, dmg) {
   if (!t || t.dead) return;
   t.hp -= dmg;
@@ -5135,20 +5856,26 @@ function damageWallTurret(t, dmg) {
   else spawnParticles(t.x, t.y, 'SPARK', t.hacked ? '#00ffaa' : '#ff4400', 4);
 }
 
+/**
+ * @param {any} [t]
+ */
 function destroyWallTurret(t) {
   t.dead = true;
   spawnParticles(t.x, t.y, 'EXPLOSION', '#ff6622', 14);
   spawnParticles(t.x, t.y, 'SPARK', '#ff8844', 8);
   audio.turretDestroy();
   const d = getDiff();
-  const amt = Math.round(game.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-  game.player.credits += amt;
+  const amt = Math.round(_EG.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+  _EG.player.credits += amt;
   spawnDmgText(t.x, t.y - 0.3, '+' + amt + '◈', '#ff6622');
   const idx = wallTurrets.indexOf(t);
   if (idx >= 0) wallTurrets.splice(idx, 1);
-  game.enemyDiedThisFrame = true; // re-evaluate room-clear
+  _EG.enemyDiedThisFrame = true; // re-evaluate room-clear
 }
 
+/**
+ * @param {any} [t]
+ */
 function hackWallTurret(t) {
   if (!t || t.dead || t.hacked) return;
   t.hacked = true;
@@ -5157,9 +5884,16 @@ function hackWallTurret(t) {
   spawnParticles(t.x, t.y, 'SPARK', '#00ffaa', 10);
   spawnDmgText(t.x, t.y - 0.3, '◇ HACKED', '#00ffaa');
   audio.turretHack();
-  game.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocking)
+  _EG.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocking)
 }
 
+/**
+ * @param {any} [wx]
+ * @param {any} [wy]
+ * @param {any} [radius]
+ * @param {any} [dmg]
+ * @param {any} [map]
+ */
 function damageWallTurretsInRadius(wx, wy, radius, dmg, map) {
   for (let i = wallTurrets.length - 1; i >= 0; i--) {
     const t = wallTurrets[i];
@@ -5170,9 +5904,12 @@ function damageWallTurretsInRadius(wx, wy, radius, dmg, map) {
   }
 }
 
+/**
+ * @param {any} [dt]
+ */
 function updateWallTurrets(dt) {
-  const p = game.player;
-  const map = game.dungeon?.map;
+  const p = _EG.player;
+  const map = _EG.dungeon?.map;
   if (!map) return;
   for (let i = wallTurrets.length - 1; i >= 0; i--) {
     const t = wallTurrets[i];
@@ -5247,11 +5984,15 @@ function updateWallTurrets(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawWallTurrets(camX, camY) {
   for (const t of wallTurrets) {
     if (t.dead) continue;
     const tx = Math.floor(t.x), ty = Math.floor(t.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = t.x * TILE - camX, sy = t.y * TILE - camY;
     const isHacked = t.hacked;
     const mainCol = t.disabled ? '#555555' : (isHacked ? '#00ffaa' : '#ff4400');
@@ -5311,6 +6052,10 @@ function drawWallTurrets(camX, camY) {
 }
 
 // ─── Disruption Fields (DISRUPTOR area-denial zones) ──────────────────────────
+/**
+ * @param {any} [dt]
+ * @param {any} [player]
+ */
 function updateDisruptionFields(dt, player) {
   player.disruptionFieldActive = false;
   for (let i = disruptionFields.length - 1; i >= 0; i--) {
@@ -5322,7 +6067,7 @@ function updateDisruptionFields(dt, player) {
     if (dist(player.x, player.y, f.x, f.y) < f.radius && !isPlayerDamageImmune()) {
       player.disruptionFieldActive = true;
       if (f.tickCd <= 0) {
-        const dps = (3 + (game.floor || 1) * 0.5) * getDiff().envDmg;
+        const dps = (3 + (_EG.floor || 1) * 0.5) * getDiff().envDmg;
         const tickDmg = Math.round(dps * 0.5); // 0.5s interval
         player.takeDamage(tickDmg, 'Disruption Field', {
           ignoreInvincible: true,
@@ -5339,6 +6084,10 @@ function updateDisruptionFields(dt, player) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawDisruptionFields(camX, camY) {
   for (const f of disruptionFields) {
     const sx = f.x * TILE - camX, sy = f.y * TILE - camY;
@@ -5389,6 +6138,9 @@ function drawDisruptionFields(camX, camY) {
 }
 
 // ─── Gravity Wells ────────────────────────────────────────────────────────────
+/**
+ * @param {any} [dt]
+ */
 function updateGravityWells(dt) {
   for (let i = gravityWells.length - 1; i >= 0; i--) {
     const w = gravityWells[i];
@@ -5401,11 +6153,15 @@ function updateGravityWells(dt) {
   }
 }
 
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
 function drawGravityWells(camX, camY) {
   for (const w of gravityWells) {
     if (w.dead) continue;
     const tx = Math.floor(w.x), ty = Math.floor(w.y);
-    if (!game.dungeon?.visible?.[ty]?.[tx]) continue;
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = w.x * TILE - camX, sy = w.y * TILE - camY;
     const r = w.radius * TILE;
     const life = 1 - (w.timer / w.maxTimer);
@@ -5454,6 +6210,89 @@ function drawGravityWells(camX, camY) {
 
 // ─── Player ───────────────────────────────────────────────────────────────────
 class Player {
+  /** @type {any} */ _metaSecondWindUsed;
+  /** @type {any} */ _momentumTimer;
+  /** @type {any} */ _outOfCombatTimer;
+  /** @type {any} */ _prevX;
+  /** @type {any} */ _prevY;
+  /** @type {any} */ _shieldCharges;
+  /** @type {any} */ _surgeShotCount;
+  /** @type {any} */ activeBoosts;
+  /** @type {any} */ adrenalineTimer;
+  /** @type {any} */ arcCooldown;
+  /** @type {any} */ atk;
+  /** @type {any} */ augments;
+  /** @type {any} */ autoLaserBeam;
+  /** @type {any} */ autoLaserTimer;
+  /** @type {any} */ bountiesCollected;
+  /** @type {any} */ burnDps;
+  /** @type {any} */ burnTimer;
+  /** @type {any} */ cloakTimer;
+  /** @type {any} */ credits;
+  /** @type {any} */ damageLog;
+  /** @type {any} */ dashCooldown;
+  /** @type {any} */ dashDx;
+  /** @type {any} */ dashDy;
+  /** @type {any} */ dashTimer;
+  /** @type {any} */ dashTrail;
+  /** @type {any} */ def;
+  /** @type {any} */ disruptionFieldActive;
+  /** @type {any} */ droneAngle;
+  /** @type {any} */ enemiesKilled;
+  /** @type {any} */ energyShield;
+  /** @type {any} */ energyShieldTimer;
+  /** @type {any} */ eventsResolved;
+  /** @type {any} */ facing;
+  /** @type {any} */ flashTimer;
+  /** @type {any} */ gravityPullActive;
+  /** @type {any} */ hackware;
+  /** @type {any} */ hackwareCooldown;
+  /** @type {any} */ hitsBlocked;
+  /** @type {any} */ hp;
+  /** @type {any} */ invincibleTimer;
+  /** @type {any} */ keys;
+  /** @type {any} */ killedBy;
+  /** @type {any} */ level;
+  /** @type {any} */ levelFlash;
+  /** @type {any} */ loreRead;
+  /** @type {any} */ lowHpTimer;
+  /** @type {any} */ maxHp;
+  /** @type {any} */ metaFlags;
+  /** @type {any} */ orbitalAngle;
+  /** @type {any} */ orbitalHits;
+  /** @type {any} */ perks;
+  /** @type {any} */ permSpeedBonus;
+  /** @type {any} */ plasmaBurnTimer;
+  /** @type {any} */ reactiveArmorCD;
+  /** @type {any} */ regenTimer;
+  /** @type {any} */ roomsCleared;
+  /** @type {any} */ score;
+  /** @type {any} */ secondWindUsed;
+  /** @type {any} */ shards;
+  /** @type {any} */ shieldBonus;
+  /** @type {any} */ shockTimer;
+  /** @type {any} */ shootCooldown;
+  /** @type {any} */ spd;
+  /** @type {any} */ speedBoost;
+  /** @type {any} */ speedTimer;
+  /** @type {any} */ spellTimers;
+  /** @type {any} */ toxicBurnTimer;
+  /** @type {any} */ toxicSlowActive;
+  /** @type {any} */ trapCooldown;
+  /** @type {any} */ upgrades;
+  /** @type {any} */ weapon;
+  /** @type {any} */ weaponIdx;
+  /** @type {any} */ weapons;
+  /** @type {any} */ x;
+  /** @type {any} */ xp;
+  /** @type {any} */ y;
+  /** @type {any} */ critChance;
+  /** @type {any} */ damageMult;
+  /** @type {any} */ regenPerSec;
+  /** @type {any} */ sensorRadiusMult;
+  /** @type {any} */ hackwareSlots;
+  /** @type {any} */ dashIFrameBonus;
+  /** @type {any} */ bonusCreditPerPickup;
   constructor() { this.reset(); }
   reset() {
     this.x=5; this.y=5;
@@ -5497,7 +6336,7 @@ class Player {
     this.autoLaserBeam=null;    // {x1,y1,x2,y2,timer} for beam rendering
     this.credits=0;             // vendor currency
     // UNCHAINED #38: temp-boost floor-scoped flags + one-shot shield charges.
-    // Cleared by game.loadFloor via NEON.boosts.clearFloorBoosts().
+    // Cleared by _EG.loadFloor via NEON.boosts.clearFloorBoosts().
     this.activeBoosts={};
     this._shieldCharges=0;
     this.loreRead=new Set();    // indices of lore entries read this run
@@ -5533,6 +6372,9 @@ class Player {
   }
 
   // ── Weapon Belt ──────────────────────────────────────────────────────
+  /**
+   * @param {any} [dir]
+   */
   cycleWeapon(dir) {
     if (!this.weapons || this.weapons.length <= 1) return;
     this.weaponIdx = (this.weaponIdx + (dir || 1) + this.weapons.length) % this.weapons.length;
@@ -5540,6 +6382,9 @@ class Player {
     this.shootCooldown = 0;
   }
 
+  /**
+   * @param {any} [w]
+   */
   collectWeapon(w) {
     if (!this.weapons) { this.weapons = [this.weapon]; this.weaponIdx = 0; }
     const MAX_BELT = 3;
@@ -5550,12 +6395,19 @@ class Player {
     return false; // belt full — caller should show swap UI
   }
 
+  /**
+   * @param {any} [slotIdx]
+   * @param {any} [w]
+   */
   swapWeapon(slotIdx, w) {
     if (!this.weapons || slotIdx < 0 || slotIdx >= this.weapons.length) return;
     this.weapons[slotIdx] = w;
     if (slotIdx === this.weaponIdx) this.weapon = w;
   }
 
+  /**
+   * @param {any} [w]
+   */
   equipWeapon(w) {
     if (!this.weapons) { this.weapons = []; this.weaponIdx = 0; }
     this.weapon = w;
@@ -5573,6 +6425,10 @@ class Player {
     return NEON.behavior.consumeSurgeShot(this);
   }
 
+  /**
+   * @param {any} [source]
+   * @param {any} [amount]
+   */
   logDamage(source, amount) {
     this.damageLog[source] = (this.damageLog[source] || 0) + amount;
   }
@@ -5585,6 +6441,9 @@ class Player {
     return a;
   }
 
+  /**
+   * @param {any} [amount]
+   */
   gainXP(amount) {
     const augMul = hasAugment('NEURAL_LINK') ? 1.25 : 1;
     this.xp+=Math.round(amount * getMetaXPMultiplier() * augMul);
@@ -5595,18 +6454,23 @@ class Player {
       this.atk+=3; this.def+=1;
       this.levelFlash=1.5;
       audio.levelUp();
-      game.msg('LEVEL UP! Now level '+this.level,'#00f5ff');
+      _EG.msg('LEVEL UP! Now level '+this.level,'#00f5ff');
       if (PERK_LEVELS.includes(this.level)) {
-        game.pendingPerkChoices.push(this.level);
+        _EG.pendingPerkChoices.push(this.level);
       }
       if (this.level === 10) grantCapstone(this);
     }
     // Trigger perk choice UI after the loop (deferred so XP chips etc. resolve first)
-    if (game.pendingPerkChoices.length && game.state === 'PLAYING') {
-      game.openNextPerkChoice();
+    if (_EG.pendingPerkChoices.length && _EG.state === 'PLAYING') {
+      _EG.openNextPerkChoice();
     }
   }
 
+  /**
+   * @param {any} [dmg]
+   * @param {any} [source]
+   * @param {any} [opts]
+   */
   takeDamage(dmg, source, opts) {
     const options = opts || {};
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
@@ -5622,7 +6486,7 @@ class Player {
       audio.shieldBreak();
       spawnParticles(this.x,this.y,'EXPLOSION','#44aaff',10);
       spawnDmgText(this.x, this.y, 'ABSORB', '#44aaff');
-      game.msg('◈ SHIELD DRIVER ABSORB','#44aaff');
+      _EG.msg('◈ SHIELD DRIVER ABSORB','#44aaff');
       triggerShake(3, 0.12);
       return 0;
     }
@@ -5635,7 +6499,7 @@ class Player {
       audio.shieldBreak();
       spawnParticles(this.x,this.y,'EXPLOSION','#4488ff',12);
       spawnDmgText(this.x, this.y, 'BLOCK', '#4488ff');
-      game.msg('🛡 SHIELD BROKEN','#4488ff');
+      _EG.msg('🛡 SHIELD BROKEN','#4488ff');
       triggerShake(4, 0.15);
       return 0;
     }
@@ -5646,7 +6510,7 @@ class Player {
       const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
       actual = Math.max(1, dmg - this.def - titaniumReduction);
     }
-    if (game.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
+    if (_EG.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
     if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
     // UNCHAINED #36 regenerator: took real damage → out of combat timer resets.
@@ -5667,12 +6531,12 @@ class Player {
       audio.reactiveArmor();
       const rRadius = 2.5;
       spawnParticles(this.x, this.y, 'EXPLOSION', '#ff6644', 14);
-      const map = game.dungeon ? game.dungeon.map : null;
+      const map = _EG.dungeon ? _EG.dungeon.map : null;
       for (const e of enemies) {
         if (e.dead) continue;
         if (e._wrPhased) continue;
         if (dist(this.x, this.y, e.x, e.y) < rRadius && (!map || hasLOS(this.x, this.y, e.x, e.y, map))) {
-          e.takeDamage(10 + game.floor * 2, 'Reactive Armor');
+          e.takeDamage(10 + _EG.floor * 2, 'Reactive Armor');
         }
       }
     }
@@ -5700,7 +6564,7 @@ class Player {
         audio.secondWind();
         spawnParticles(this.x, this.y, 'EXPLOSION', '#00ddff', 20);
         triggerShake(8, 0.3);
-        game.msg('💀 SECOND WIND!', '#00ddff');
+        _EG.msg('💀 SECOND WIND!', '#00ddff');
         return actual;
       }
       // UNCHAINED #36 meta second_wind: persistent upgrade, one revive per run.
@@ -5710,14 +6574,19 @@ class Player {
         audio.secondWind();
         spawnParticles(this.x, this.y, 'EXPLOSION', '#00ddff', 20);
         triggerShake(8, 0.3);
-        game.msg('💀 SECOND WIND!', '#00ddff');
+        _EG.msg('💀 SECOND WIND!', '#00ddff');
         return actual;
       }
-      this.killedBy=src; audio.gameOver(); game.endRun(false);
+      this.killedBy=src; audio.gameOver(); _EG.endRun(false);
     }
     return actual;
   }
 
+  /**
+   * @param {any} [aimX]
+   * @param {any} [aimY]
+   * @param {any} [map]
+   */
   shoot(aimX,aimY,map) {
     if (this.shootCooldown>0) return;
     const w=this.weapon;
@@ -5750,7 +6619,7 @@ class Player {
       }
     } else {
       for (let i=0;i<w.count;i++) {
-        const spread=(Math.random()-0.5)*(w.spread + (game.modifier==='SCRAMBLED' ? 0.15 : 0));
+        const spread=(Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
         const isCrit = critChance > 0 && Math.random() < critChance;
@@ -5795,10 +6664,14 @@ class Player {
       if (!e.dead && !e._wrPhased && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
     }
     spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
-    game.msg('VOID SHARD DETONATED!','#aa00ff');
+    _EG.msg('VOID SHARD DETONATED!','#aa00ff');
     triggerShake(10, 0.3);
   }
 
+  /**
+   * @param {any} [dt]
+   * @param {any} [map]
+   */
   update(dt,map) {
     this._prevX = this.x; this._prevY = this.y;
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
@@ -5815,7 +6688,7 @@ class Player {
         this.cloakTimer = 0;
         audio.hackwareCloakEnd();
         spawnParticles(this.x, this.y, 'EXPLOSION', '#cc44ff', 8);
-        game.msg('◇ CLOAK EXPIRED', '#886699');
+        _EG.msg('◇ CLOAK EXPIRED', '#886699');
       }
     }
     if (this.speedTimer>0) { this.speedTimer-=dt; if(this.speedTimer<=0)this.speedBoost=0; }
@@ -5879,7 +6752,7 @@ class Player {
         this.energyShield=true;
         this.energyShieldTimer=0;
         audio.shieldRestore();
-        game.msg('🛡 SHIELD RESTORED','#4488ff');
+        _EG.msg('🛡 SHIELD RESTORED','#4488ff');
       }
     }
 
@@ -6001,6 +6874,10 @@ class Player {
     }
   }
 
+  /**
+   * @param {any} [camX]
+   * @param {any} [camY]
+   */
   draw(camX,camY) {
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     const col=this.flashTimer>0?'#ffffff':'#00f5ff';
@@ -6017,8 +6894,8 @@ class Player {
     }
 
     // Laser sight (drawn under player so it originates from centre)
-    if (this.perks.LASER_SIGHT && game.dungeon && !this.weapon.melee) {
-      const map = game.dungeon.map;
+    if (this.perks.LASER_SIGHT && _EG.dungeon && !this.weapon.melee) {
+      const map = _EG.dungeon.map;
       const maxDist = this.weapon.range;
       const step = 0.15;
       let rx = this.x, ry = this.y;

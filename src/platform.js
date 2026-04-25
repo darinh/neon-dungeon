@@ -907,7 +907,7 @@ const audio = (() => {
       }
       return { bus: musicBus, ctx: c };
     },
-    shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon) {
+    shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon = null) {
       const c = getCtx(); const t = c.currentTime;
       if (!isPlayer) {
         const pan = Math.random() * 0.3 - 0.15;
@@ -960,7 +960,7 @@ const audio = (() => {
         osc('sine', 210, 120, 0.04, t, 0.08, bus, { pan:-0.03 });
       }
     },
-    hit(/** @type {boolean} */ isPlayer, /** @type {string} */ weaponName) {
+    hit(/** @type {boolean} */ isPlayer, /** @type {string} */ weaponName = '') {
       const c = getCtx(); const t = c.currentTime;
       if (isPlayer) {
         // Player hurt: chest thump + brittle impact transient

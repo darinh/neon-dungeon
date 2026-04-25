@@ -668,6 +668,7 @@ const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix
 const AFFIX_SUFFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'suffix');
 
 // ─── Elite Enemy Affixes ──────────────────────────────────────────────────────
+/** @type {Record<string, any>} */
 const ELITE_AFFIXES = {
   SHIELDED:     { label:'Shielded',     colour:'#4488ff', desc:'Energy shield absorbs damage', icon:'◈' },
   BERSERKER:    { label:'Berserker',    colour:'#ff2222', desc:'Faster at low HP',             icon:'⚡' },
@@ -2923,7 +2924,7 @@ class Projectile {
    * @param {any} colour
    * @param {any} piercing
    * @param {any} fromPlayer
-   * @param {any} weaponName
+   * @param {any} [weaponName]
    */
   constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     // Reuse a dead slot from the pool when possible. Returning an object from
@@ -2947,7 +2948,7 @@ class Projectile {
    * @param {any} colour
    * @param {any} piercing
    * @param {any} fromPlayer
-   * @param {any} weaponName
+   * @param {any} [weaponName]
    */
   _init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
     // ── Core motion/state (mirrors original constructor) ──
