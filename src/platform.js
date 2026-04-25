@@ -661,20 +661,11 @@ function jp(code) { return justPressed.has(code); }
 function clearJust() { justPressed.clear(); justReleased.clear(); lastKey=''; nameEntryTap=null; }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
-/** @param {number} min @param {number} max */
-function rnd(min, max) { return min + Math.random() * (max - min); }
-/** @param {number} min @param {number} max */
-function rndInt(min, max) { return Math.floor(rnd(min, max + 1)); }
-/** @param {number} v @param {number} lo @param {number} hi */
-function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
-/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
-function dist(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx+dy*dy); }
-/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
-function dist2(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
-/** @param {number} dx @param {number} dy @returns {[number, number]} */
-function norm(dx, dy) { const l=Math.sqrt(dx*dx+dy*dy)||1; return [dx/l, dy/l]; }
-/** @param {number} a @param {number} b @param {number} t */
-function lerp(a, b, t) { return a + (b-a)*t; }
+// Math/RNG primitives moved to engine/math.js (Phase C1a). They are mounted as
+// bare globals (rnd, rndInt, clamp, dist, dist2, norm, lerp) by that module's
+// UMD bootstrap, which loads before this file. Call sites here and across
+// src/* keep working without any rename. Do not redeclare them here — adding
+// a `function rnd(){}` etc. would shadow the engine version.
 /** @param {{x:number,y:number}} entity */
 function clampToBossRoom(entity) {
   if (!_G.bossSealed || !_G.bossRoom) return;
