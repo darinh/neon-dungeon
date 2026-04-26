@@ -21,7 +21,7 @@ const DEFAULT_KEY_MAP = {
 /** @type {Record<string, string>} */
 const ACTION_LABELS = {
   up:'Move Up', down:'Move Down', left:'Move Left', right:'Move Right',
-  interact:'Interact', hackware:'Hackware', voidshard:'Void Shard',
+  interact:'Interact', hackware:'Hackware', voidshard:'Bomb',
   dash:'Dash', shoot:'Shoot'
 };
 const RESERVED_KEYS = new Set(['Escape','Enter','KeyQ','Digit1','Digit2','Digit3','Tab','F3']);
@@ -626,6 +626,8 @@ function drawTouchUI() {
     } else if (key==='F' && noHackware) {
       ctx.globalAlpha = 0.15;
     } else if (key==='F' && _G.player && _G.player.hackwareCooldown > 0) {
+      ctx.globalAlpha = 0.25;
+    } else if (key==='V' && _G.player && _G.player.bombCooldown > 0) {
       ctx.globalAlpha = 0.25;
     } else {
       ctx.globalAlpha = active ? 0.9 : 0.45;

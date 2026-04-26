@@ -3625,8 +3625,6 @@ const UPGRADES = [
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
   {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.gainXP(50); }},
-  {id:'VOID_SHARD',  name:'Void Shard',   desc:'+1 charge — AOE damage + breaks cracked walls',  colour:'#aa00ff', rarity:4,  persistent:false,
-   fn: (/** @type {any} */ p)=>{ p.shards=(p.shards||0)+1; _CG.msg('Got Void Shard! ('+p.shards+')','#aa00ff'); }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
    levelDesc: (/** @type {any} */ l)=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
@@ -4123,7 +4121,7 @@ function applyEventEffect(event, choice, player, gm) {
 // Shop prices are explicit per upgrade id (not derived from rarity which is spawn weight)
 /** @type {Record<string, any>} */
 const SHOP_PRICES = {
-  MED_PACK:60, NANO_REPAIR:35, XP_CHIP:45, VOID_SHARD:90,
+  MED_PACK:60, NANO_REPAIR:35, XP_CHIP:45,
   SAW_BLADE:120, PLASMA_ORB:130, NANO_REGEN:80, OVERCLOCK:110, ARMOR_UP:100, RICOCHET:115
 };
 /**

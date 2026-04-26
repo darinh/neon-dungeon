@@ -18,6 +18,7 @@ const _EG = new Proxy({}, {
 /** @type {any[]} */ const enemies = [];
 /** @type {any[]} */ const items   = [];
 /** @type {any[]} */ const hazardZones = [];
+/** @type {any[]} */ const fuseShards = [];
 /** @type {any[]} */ const vcores  = [];
 /** @type {any[]} */ const crates  = [];
 /** @type {any[]} */ const beacons = [];
@@ -82,6 +83,7 @@ const SOURCE_LABELS = {
   'Sentry Drone':'Sentry Drone',
   'Leaper Shockwave':'Leaper Shockwave',
   'Burn':'Burn', 'Shock':'Shock',
+  'Bomb':'Bomb',
   'laser':'Laser Tripwire',
   'Toxic Pool':'Toxic Pool',
   'Wall Turret':'Wall Turret',
@@ -107,6 +109,7 @@ const SOURCE_COLOURS = {
   'Sentry Drone':'#00e5ff',
   'Leaper Shockwave':'#22ff88',
   'Burn':'#ff6600', 'Shock':'#ffee44',
+  'Bomb':'#aa00ff',
   'laser':'#ff6644',
   'Toxic Pool':'#33ff00',
   'Wall Turret':'#ff4400',
@@ -6189,6 +6192,7 @@ class Player {
   /** @type {any} */ shieldBonus;
   /** @type {any} */ shockTimer;
   /** @type {any} */ shootCooldown;
+  /** @type {any} */ bombCooldown;
   /** @type {any} */ spd;
   /** @type {any} */ speedBoost;
   /** @type {any} */ speedTimer;
@@ -6222,6 +6226,7 @@ class Player {
     this.score=0;
     this.invincibleTimer=0;
     this.shootCooldown=0;
+    this.bombCooldown=0;
     this.facing={x:1,y:0};
     this.speedBoost=0; this.speedTimer=0;
     this.shieldBonus=0;
@@ -6574,55 +6579,24 @@ class Player {
     this.shootCooldown = (1/w.rate) * (this.perks.RAPID_FIRE ? 0.85 : 1);
   }
 
-  useVoidShard() {
-    if (!this.shards) return;
-    this.shards--;
-    for (const e of enemies) {
-      if (!e.dead && !e._wrPhased && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
+  // Tap-tap fuse bomb (Metroid-style infinite, gated by drop cooldown).
+  // First tap: drop a fuse bomb at feet (3s telegraph: slow→fast→rapid flash).
+  // Second tap while ANY fuse is active: detonate ALL active fuses immediately
+  // (the panic-detonate, preserves the V-shard "oh shit" feel).
+  // Drop cooldown prevents literal spam without limiting strategic chains.
+  // Replaces the consumable VOID_SHARD; player.shards field is now vestigial
+  // (kept for save back-compat at game.js:858/952; never read).
+  tapBombKey() {
+    // Panic mode: any unfused bomb? Detonate them all.
+    let detonatedAny = false;
+    for (const fs of fuseShards) {
+      if (!fs.dead) { fs.detonate(); detonatedAny = true; }
     }
-    spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
-    triggerShake(10, 0.3);
-    // Shatter any cracked walls in blast radius (alternative to interact-break
-    // at src/game.js:1718). Mirrors that path's side-effects: tile→FLOOR,
-    // markMapMutated, audio.wallBreak, gold burst particles, and reveal of any
-    // secret room the cracked tile borders.
-    const map = _EG.dungeon && _EG.dungeon.map;
-    let wallsBroken = 0;
-    if (map) {
-      const cx = Math.floor(this.x), cy = Math.floor(this.y);
-      const R = 6;
-      const x0 = Math.max(0, cx - R), x1 = Math.min(MAP_W - 1, cx + R);
-      const y0 = Math.max(0, cy - R), y1 = Math.min(MAP_H - 1, cy + R);
-      for (let ty = y0; ty <= y1; ty++) {
-        const row = map[ty]; if (!row) continue;
-        for (let tx = x0; tx <= x1; tx++) {
-          if (row[tx] !== T.CRACKED) continue;
-          // Tile-center distance check (matches enemy radius semantics).
-          if (dist(this.x, this.y, tx + 0.5, ty + 0.5) >= R) continue;
-          row[tx] = T.FLOOR;
-          wallsBroken++;
-          spawnParticles(tx + 0.5, ty + 0.5, 'EXPLOSION', '#ffb700', 12);
-          if (_EG.dungeon && Array.isArray(_EG.dungeon.secretRooms)) {
-            for (const sr of _EG.dungeon.secretRooms) {
-              if (sr.secretRevealed) continue;
-              if (tx >= sr.x - 1 && tx <= sr.x + sr.w && ty >= sr.y - 1 && ty <= sr.y + sr.h) {
-                if (typeof _EG.revealSecretRoom === 'function') _EG.revealSecretRoom(sr);
-                break;
-              }
-            }
-          }
-        }
-      }
-      if (wallsBroken > 0) {
-        if (typeof _EG.markMapMutated === 'function') _EG.markMapMutated();
-        audio.wallBreak();
-      }
-    }
-    if (wallsBroken > 0) {
-      _EG.msg('VOID SHARD DETONATED — ' + wallsBroken + ' wall' + (wallsBroken > 1 ? 's' : '') + ' shattered!', '#ffb700');
-    } else {
-      _EG.msg('VOID SHARD DETONATED!', '#aa00ff');
-    }
+    if (detonatedAny) return;
+    // Drop mode: gated by cooldown (prevents tap-spam carpet bombing).
+    if (this.bombCooldown > 0) return;
+    fuseShards.push(new FuseShard(this.x, this.y));
+    this.bombCooldown = BOMB_DROP_COOLDOWN;
   }
 
   /**
@@ -6633,6 +6607,7 @@ class Player {
     this._prevX = this.x; this._prevY = this.y;
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
     this.shootCooldown=Math.max(0,this.shootCooldown-dt);
+    this.bombCooldown=Math.max(0,this.bombCooldown-dt);
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     this.dashCooldown=Math.max(0,this.dashCooldown-dt);
@@ -6795,7 +6770,7 @@ class Player {
     }
 
     // void shard
-    if (jp(km('voidshard'))) this.useVoidShard();
+    if (jp(km('voidshard'))) this.tapBombKey();
     if (jp(km('hackware'))) activateHackware(this);
     // Weapon belt cycle: scroll wheel or number keys
     if (jp('WheelDown')) { this.cycleWeapon(1); try { audio.menuSelect(); } catch(_){} }
@@ -6949,3 +6924,147 @@ class Player {
     }
   }
 }
+
+// ─── Fuse Bomb (tap-tap V) ───────────────────────────────────────────────────
+// FuseShard replaces the old consumable VOID_SHARD detonation. Players tap V
+// to drop one at their feet (3s telegraph: slow→fast→rapid flash), then tap V
+// again to detonate ALL active fuses early (panic mode). Bombs are infinite,
+// gated by BOMB_DROP_COOLDOWN to prevent literal spam without limiting
+// strategic chains. Wall-shatter + secret-room reveal logic preserved from the
+// original useVoidShard (was at src/entities.js:6577 pre-refactor).
+const FUSE_DURATION       = 3.0;   // seconds from drop to auto-detonate
+const FUSE_PHASE_FAST     = 1.5;   // s remaining when flash speeds up
+const FUSE_PHASE_RAPID    = 0.5;   // s remaining when flash goes rapid
+const FUSE_FLASH_SLOW     = 0.50;  // toggle period in slow phase (s)
+const FUSE_FLASH_FAST     = 0.20;  // toggle period in fast phase (s)
+const FUSE_FLASH_RAPID    = 0.08;  // toggle period in rapid phase (s)
+const BOMB_DROP_COOLDOWN  = 1.0;   // min seconds between drops
+const BOMB_BLAST_RADIUS   = 6;     // tiles (matches old useVoidShard)
+const BOMB_DAMAGE         = 80;    // matches old useVoidShard
+
+class FuseShard {
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.fuseTime = FUSE_DURATION;
+    this.dead = false;
+    this._elapsed = 0;
+  }
+  /**
+   * @param {number} dt
+   */
+  update(dt) {
+    if (this.dead) return;
+    this.fuseTime -= dt;
+    this._elapsed += dt;
+    if (this.fuseTime <= 0) this.detonate();
+  }
+  detonate() {
+    if (this.dead) return;
+    this.dead = true;
+    _detonateBombAt(this.x, this.y);
+  }
+  /**
+   * @param {number} camX
+   * @param {number} camY
+   */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const sx = (this.x - camX) * TILE;
+    const sy = (this.y - camY) * TILE;
+    const remaining = this.fuseTime;
+    let period;
+    if (remaining > FUSE_PHASE_FAST) period = FUSE_FLASH_SLOW;
+    else if (remaining > FUSE_PHASE_RAPID) period = FUSE_FLASH_FAST;
+    else period = FUSE_FLASH_RAPID;
+    const on = (Math.floor(this._elapsed / period) % 2) === 0;
+    ctx.save();
+    ctx.shadowBlur = on ? 18 : 6;
+    ctx.shadowColor = '#aa00ff';
+    ctx.fillStyle = on ? '#ff66ff' : '#aa00ff';
+    NEON.draw.circle(ctx, sx, sy, 7);
+    ctx.fillStyle = on ? '#ffffff' : '#cc44cc';
+    NEON.draw.circle(ctx, sx, sy, 3);
+    ctx.restore();
+  }
+}
+
+/**
+ * Bomb detonation: damage mobs in radius, shatter cracked walls, reveal
+ * adjacent secret rooms. Called by FuseShard.detonate() (auto-fuse expiry or
+ * panic-tap). Mirrors old useVoidShard's side-effects exactly.
+ * @param {number} x
+ * @param {number} y
+ */
+function _detonateBombAt(x, y) {
+  for (const e of enemies) {
+    if (!e.dead && !e._wrPhased && dist(x, y, e.x, e.y) < BOMB_BLAST_RADIUS) {
+      e.takeDamage(BOMB_DAMAGE, 'Bomb');
+    }
+  }
+  spawnParticles(x, y, 'EXPLOSION', '#aa00ff', 30);
+  triggerShake(10, 0.3);
+  const map = _EG.dungeon && _EG.dungeon.map;
+  let wallsBroken = 0;
+  if (map) {
+    const cx = Math.floor(x), cy = Math.floor(y);
+    const R = BOMB_BLAST_RADIUS;
+    const x0 = Math.max(0, cx - R), x1 = Math.min(MAP_W - 1, cx + R);
+    const y0 = Math.max(0, cy - R), y1 = Math.min(MAP_H - 1, cy + R);
+    for (let ty = y0; ty <= y1; ty++) {
+      const row = map[ty]; if (!row) continue;
+      for (let tx = x0; tx <= x1; tx++) {
+        if (row[tx] !== T.CRACKED) continue;
+        if (dist(x, y, tx + 0.5, ty + 0.5) >= R) continue;
+        row[tx] = T.FLOOR;
+        wallsBroken++;
+        spawnParticles(tx + 0.5, ty + 0.5, 'EXPLOSION', '#ffb700', 12);
+        if (_EG.dungeon && Array.isArray(_EG.dungeon.secretRooms)) {
+          for (const sr of _EG.dungeon.secretRooms) {
+            if (sr.secretRevealed) continue;
+            if (tx >= sr.x - 1 && tx <= sr.x + sr.w && ty >= sr.y - 1 && ty <= sr.y + sr.h) {
+              if (typeof _EG.revealSecretRoom === 'function') _EG.revealSecretRoom(sr);
+              break;
+            }
+          }
+        }
+      }
+    }
+    if (wallsBroken > 0) {
+      if (typeof _EG.markMapMutated === 'function') _EG.markMapMutated();
+      audio.wallBreak();
+    }
+  }
+  if (wallsBroken > 0) {
+    _EG.msg('BOMB DETONATED — ' + wallsBroken + ' wall' + (wallsBroken > 1 ? 's' : '') + ' shattered!', '#ffb700');
+  } else {
+    _EG.msg('BOMB DETONATED!', '#aa00ff');
+  }
+}
+
+/**
+ * Per-frame update + dead-bomb prune. Called from game.js update loop.
+ * @param {number} dt
+ */
+function updateFuseShards(dt) {
+  for (const fs of fuseShards) fs.update(dt);
+  for (let i = fuseShards.length - 1; i >= 0; i--) {
+    if (fuseShards[i].dead) fuseShards.splice(i, 1);
+  }
+}
+
+/**
+ * Per-frame draw. Called from game.js render loop, drawn between items and
+ * enemies so the bomb is visible above ground but obscured by mobs (so a
+ * planted bomb under a charging enemy still looks "in the world").
+ * @param {number} camX
+ * @param {number} camY
+ */
+function drawFuseShards(camX, camY) {
+  for (const fs of fuseShards) fs.draw(camX, camY);
+}
+
+function clearFuseShards() { fuseShards.length = 0; }
