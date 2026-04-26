@@ -2530,63 +2530,136 @@ function generateFloor(floorNum) {
     }
   }
 
-  // ── Key reachability gate ──────────────────────────────────────────────
-  // The per-lock BFS at line 2392 ensured each key was placed in a room
-  // reachable from spawn WITHOUT crossing locks at the moment of placement.
-  // But subsequent passes can later seal that key in:
-  //   - Secret room placement (line 2429-2453) walls a regular room's
-  //     entrances — including, possibly, a room a key was just placed in.
-  //   - Dead-end corridor pruning (line 2519-2542) converts dangling
-  //     corridor floor to wall; if a key was placed near such a tile, fine,
-  //     but the room-eligibility filter for secrets does NOT exclude key
-  //     rooms, so the key can end up behind T.CRACKED.
-  // Reported twice on floor 3 by users on develop: "the exit is behind a
-  // red key door and there is no red key" / "spawned with red door, no key".
+  // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
+  // Goal: from spawn, the player must be able to reach EVERY room — not just
+  // the stairs. Special rooms (vendor / lore / event terminal / shrine /
+  // challenge) host gameplay-critical interactions; if any becomes unreachable
+  // due to lock placement + later passes (secret rooms, dead-end pruning), the
+  // floor feels broken even when technically completable.
   //
-  // Fix: BFS from spawn through ACTUALLY passable tiles (no locks, no
-  // cracked, no walls). For each key item, if its tile is unreachable,
-  // downgrade every locked door of that colour to FLOOR. The player loses
-  // the gating gameplay but the floor remains completable. The orphaned
-  // key item is left in place (still rewards finding the secret).
+  // User reports on floor 3 (twice on 2026-04-25 / 6bc2e985):
+  //   "spawned into a room with the exit and a red key door, but no red key,
+  //    so I can't explore the floor or fight the miniboss"
+  //
+  // The previous fix only checked KEY-item reachability and missed the case
+  // where a key is reachable but the rooms it would unlock are still gated
+  // behind ANOTHER unreachable lock (multi-color cascades) or the key is
+  // simply absent for a placed lock (lockPriority/keyRoom empty edge cases).
+  //
+  // Algorithm:
+  //   1. BFS from spawn through `passable` tiles + locks of any colour for
+  //      which a reachable key exists. Iterate until fixed point (each pass
+  //      may discover new keys, which open new locks, exposing more keys).
+  //   2. If any room has zero reachable tiles after fixed point, downgrade
+  //      every locked door whose colour the player COULDN'T pick up. The
+  //      floor loses some gating gameplay but every room becomes reachable.
+  //   3. If rooms are still unreachable (e.g. structurally walled by gen),
+  //      the rescue-corridor pass below carves spawn→stairs as a last resort.
+  //
+  // Tile vocabulary kept in sync with src/platform.js isPassable() so this
+  // gen-time reachability matches what the player actually experiences. The
+  // notable additions over the prior fix are T.PLASMA, T.ARC (walkable
+  // hazards — runtime isPassable allows them, the prior gen-time check did
+  // not) and T.CRACKED (interact-breakable per game.js:663,1691 — secret
+  // rooms ARE reachable to the player without keys/upgrades, so they should
+  // count as reachable here too). T.DOOR (closed) stays passable because the
+  // player can open closed doors via interact; that diverges from runtime
+  // isPassable but is intentional (matches dungeon-gen connectivity intent).
   {
     const passable = (/** @type {any} */ t) =>
       t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+      t === T.PLASMA || t === T.ARC ||
+      t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
-      t === T.CHALLENGE_GATE; // walkable at runtime (isPassable in platform.js)
-    const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
-    /** @type {any} */ const reach = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    reach[sy0][sx0] = 1;
-    const q = [{x: sx0, y: sy0}];
-    while (q.length) {
-      const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
-      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-        if (reach[ny][nx]) continue;
-        if (!passable(map[ny][nx])) continue;
-        reach[ny][nx] = 1;
-        q.push({x: nx, y: ny});
+      t === T.CHALLENGE_GATE;
+
+    /** @param {Set<string>} haveColours @returns {Uint8Array[]} */
+    const computeReach = (haveColours) => {
+      /** @type {any} */ const r = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+      const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
+      r[sy0][sx0] = 1;
+      const q = [{x: sx0, y: sy0}];
+      while (q.length) {
+        const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+          if (r[ny][nx]) continue;
+          const t = map[ny][nx];
+          const open = passable(t) ||
+            (haveColours.has('red')  && t === T.LOCKED_R) ||
+            (haveColours.has('blue') && t === T.LOCKED_B) ||
+            (haveColours.has('gold') && t === T.LOCKED_G);
+          if (!open) continue;
+          r[ny][nx] = 1;
+          q.push({x: nx, y: ny});
+        }
+      }
+      return r;
+    };
+
+    /** @type {Set<string>} */ const haveColours = new Set();
+    /** @type {any} */ let reach = null;
+    let progressIter = true;
+    let safetyIter = 6; // hard cap (3 colours × 2 = 6 expansion rounds max)
+    while (progressIter && safetyIter-- > 0) {
+      progressIter = false;
+      reach = computeReach(haveColours);
+      for (const ki of keyItems) {
+        if (ki && ki.colour && reach[ki.y][ki.x] && !haveColours.has(ki.colour)) {
+          haveColours.add(/** @type {string} */ (ki.colour));
+          progressIter = true;
+        }
       }
     }
-    /** @type {Record<string, number>} */
-    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
-    /** @type {Set<string>} */ const orphaned = new Set();
-    for (const ki of keyItems) {
-      if (!reach[ki.y][ki.x] && ki.colour) orphaned.add(/** @type {string} */ (ki.colour));
-    }
-    if (orphaned.size > 0) {
-      for (const col of orphaned) {
-        const lt = lockTileForColour[col];
-        if (lt == null) continue;
+    // After fixed point, `reach` reflects max possible exploration with all
+    // collectible keys. Check every room for at least one reachable tile.
+    /** @param {{x:number,y:number,w:number,h:number,cx:number,cy:number}} room */
+    const roomTouchesReach = (room) => {
+      // Cheap-path: spot-check center first (most rooms).
+      if (reach[room.cy] && reach[room.cy][room.cx]) return true;
+      // Full-path: scan room rect (tiles set to special types may not be
+      // at center; e.g. vendor tile, lore terminal).
+      for (let yy = room.y; yy < room.y + room.h; yy++) {
+        const row = reach[yy];
+        if (!row) continue;
+        for (let xx = room.x; xx < room.x + room.w; xx++) {
+          if (row[xx]) return true;
+        }
+      }
+      return false;
+    };
+    // Cracked walls are now in passable() (interact-breakable). Secret rooms
+    // become naturally reachable through them, so no special exclusion is
+    // needed in the unreachable filter.
+    const unreachable = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
+    if (unreachable.length > 0) {
+      // Downgrade every locked door whose colour the player couldn't pick up.
+      // This includes colours with no key item placed at all (the
+      // lockPriority/keyRoom empty-fallback edge case in the lock-placement
+      // loop above).
+      const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
+      for (const colour of /** @type {const} */ (['red', 'blue', 'gold'])) {
+        if (haveColours.has(colour)) continue;
+        const lt = lockTileForColour[colour];
         for (let y = 0; y < MAP_H; y++) {
           for (let x = 0; x < MAP_W; x++) {
             if (map[y][x] === lt) map[y][x] = T.FLOOR;
           }
         }
       }
+      // After downgrading, recompute reach (no longer gated by missing keys).
+      reach = computeReach(new Set(['red', 'blue', 'gold']));
+      // Any rooms STILL unreachable are walled off structurally (secret room
+      // boundaries, dead-end pruning that nuked the only corridor). The
+      // rescue-corridor pass below handles spawn→stairs; non-stairs special
+      // rooms still unreachable here will be quietly orphaned (acceptable
+      // edge case; alternative would be to carve more rescue corridors,
+      // which risks visual oddities). Telemetry could surface this in a
+      // future pass.
     }
   }
 
