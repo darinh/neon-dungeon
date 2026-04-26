@@ -13,9 +13,9 @@ This file documents conventions for any agent working on the **`v2` branch** of 
 
 | Command | Purpose |
 |---|---|
-| `npm test` | Run the full test suite (Node built-in test runner, 242+ tests). Must exit 0. |
-| `npm run typecheck` | Run `tsc --noEmit` over `src/` + `tests/` + `types/`. Only files with `// @ts-check` are checked. |
-| `npm run lint` | Run eslint over `src/` + `tests/`. Errors block; warnings are tolerated during the Phase 2 cleanup but should be reduced over time. |
+| `npm test` | Run the full test suite (Node built-in test runner, 427+ tests). Must exit 0. |
+| `npm run typecheck` | Run `tsc --noEmit` over `src/` + `tests/` + `types/`. Only files with `// @ts-check` are checked. As of 2026-04-26 every `src/**/*.js` has `// @ts-check`, so the typecheck covers the whole runtime tree. Must exit 0. |
+| `npm run lint` | Run eslint over `src/` + `tests/`. Currently exits 0 with no errors and no warnings — keep it that way. |
 | `npm run lint:fix` | Auto-fix what eslint can. |
 | `npm run check` | Run lint + typecheck + tests in sequence. **This is the canonical pre-commit gate.** |
 
@@ -23,25 +23,20 @@ This file documents conventions for any agent working on the **`v2` branch** of 
 
 **Path A (chosen 2026-04-24)**: JSDoc + `// @ts-check` per file, strict eslint, no bundler, no file extension changes.
 
-**Phase 1 — Tooling baseline**: COMPLETE on `v2`. `tsconfig.json`, `eslint.config.js`, npm scripts wired.
+**Phase 1 — Tooling baseline**: ✅ COMPLETE. `tsconfig.json`, `eslint.config.js`, npm scripts wired.
 
-**Phase 2 — Eslint cleanup**: in progress. Goal: zero warnings on `npm run lint`. Batched per-directory.
+**Phase 2 — Eslint cleanup**: ✅ COMPLETE. `npm run lint` exits 0 with zero warnings across `src/` and `tests/`.
 
-**Phase 3 — Per-file `// @ts-check`**: not started. Order:
-1. Leaves first: `src/data/*`, `src/meta/{save,logs,cores,alarm-light}.js`
-2. Up the dep tree: rest of `src/meta/*` → `src/render.js` → `src/content.js` → `src/entities.js` → `src/platform.js`
-3. **`src/game.js` LAST** — 75 NEON.* refs, integration point, treat as 🔴 Large.
+**Phase 3 — Per-file `// @ts-check`**: ✅ COMPLETE. Every `src/**/*.js` (including `src/game.js`, `src/entities.js`, `src/content.js`, `src/render.js`, `src/platform.js`, all of `src/data/*` and `src/meta/*`) has `// @ts-check` at the top, and `npm run typecheck` exits 0. New `.js` files MUST keep this convention — see "Type checking" below.
 
-**Phase 4 — Engine boundary**: `types/engine.d.ts`, `types/game.d.ts`, `docs/engine-boundary.md`. This is also the entry point for the deferred `p4-engine-extraction` design work.
-
-Full plan: `~/.copilot/session-state/56900f4d-0ac2-4dff-a7dc-4a1c285fc1bd/plan.md` (or its successor in the next session's workspace).
+**Phase 4 — Engine boundary**: ✅ COMPLETE for the type surface. `types/engine.d.ts`, `types/game.d.ts`, `types/neon.d.ts`, and `docs/engine-boundary.md` exist and are referenced by the typecheck. The deferred `p4-engine-extraction` design work (extracting the engine into its own package) is still open and tracked outside this file.
 
 ## Conventions
 
 ### Type checking
 - New code: add `// @ts-check` at top of every new `.js` file. Use JSDoc `@param`/`@returns`/`@typedef` for shapes.
 - Existing code: opt in file-by-file. When you add `// @ts-check`, fix all `tsc --noEmit` errors that file produces (or use `// @ts-expect-error` with a tracking todo).
-- Shared shapes: declare in `types/*.d.ts` (created in Phase 3).
+- Shared shapes: declare in `types/*.d.ts` (see `types/engine.d.ts`, `types/game.d.ts`, `types/neon.d.ts`).
 
 ### Linting
 - `// eslint-disable-next-line <rule> -- <reason>` is acceptable when justified, with a comment explaining why.
