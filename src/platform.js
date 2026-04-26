@@ -647,9 +647,7 @@ function drawTouchUI() {
     ctx.fillStyle = '#0a0a12';
     ctx.strokeStyle = '#00f5ff';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.rect(px, py, pw, ph);
-    ctx.fill(); ctx.stroke();
+    NEON.draw.rectFillStroke(ctx, px, py, pw, ph);
     // text
     ctx.fillStyle = '#00f5ff';
     ctx.font = 'bold 12px monospace';
