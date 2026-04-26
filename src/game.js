@@ -256,6 +256,10 @@ const game = {
     // floor cannot fire at a position the player held on the previous
     // floor (locks need ECHOER_LOOKBACK seconds of fresh samples).
     if (this.player._posHistory) this.player._posHistory.length = 0;
+    // Same rationale for shot kinematics history — a MIRROR on the new
+    // floor must not be able to mimic a shot the player fired on the
+    // previous floor before they have fired anything on the current floor.
+    if (this.player._shotHistory) this.player._shotHistory.length = 0;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start

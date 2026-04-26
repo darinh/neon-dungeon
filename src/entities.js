@@ -66,7 +66,7 @@ function enemiesInRoomIter(room) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -89,6 +89,26 @@ const RESONATOR_RANGE      = 6;              // tiles — cone depth
 const RESONATOR_CONE_DEG   = 60;             // full cone angular width (degrees)
 const RESONATOR_DMG_MUL    = 0.8;            // damage = atk * 0.8
 const RESONATOR_HALF_RAD   = (RESONATOR_CONE_DEG * 0.5) * Math.PI / 180; // precomputed
+
+// MIRROR tuning constants — exported on globalThis for cross-file test reads.
+// Stationary mob whose hook is mimicry: it fires a single projectile at the
+// player using the kinematics (speed, colour, range) of the player's *last*
+// fired ranged shot. Damage is mob-scaled (this.atk * MIRROR_DMG_MUL) — the
+// player's actual damage roll is NEVER replayed, since late-game crits/perks
+// would yield 200+ dmg returns. Replayed projectile is intentionally vanilla:
+// no piercing, no ricochet, no homing — those player perks must not leak
+// into enemy projectiles. Counter-play: dash i-frames pass through (canonical
+// for telegraphed mobs) and the mob is vulnerable during the visible aim line.
+const MIRROR_CHARGE        = 2.5;            // silent windup before telegraph
+const MIRROR_TELEGRAPH     = 1.0;            // aim line visible — fairness window
+const MIRROR_RECOVERY      = 1.5;            // post-fire cooldown
+const MIRROR_RANGE         = 12;             // tiles — max engage / aim distance
+const MIRROR_DMG_MUL       = 1.0;            // damage = atk * mul (mob-scaled, NOT player-scaled)
+const MIRROR_PROJ_SPD_DEF  = 9;              // tile/sec fallback if shotHistory empty
+const MIRROR_PROJ_SPD_MIN  = 4;              // clamp player kinematics into a fair band
+const MIRROR_PROJ_SPD_MAX  = 14;
+const MIRROR_PROJ_RANGE    = 16;             // tiles — projectile lifetime range
+const SHOT_HISTORY_LEN     = 4;              // ring cap on player._shotHistory
 
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
@@ -148,11 +168,37 @@ function getPositionAgoFromHistory(history, seconds) {
   }
   return null; // history doesn't go back that far yet
 }
+
+/**
+ * Pure helper: pick safe projectile kinematics for a MIRROR shot from the
+ * player's _shotHistory ring. Returns the most recent entry's speed and
+ * colour, clamped into the fair band (MIRROR_PROJ_SPD_MIN..MAX) so a
+ * future bullet-time perk can't yield invisible-fast return shots, and
+ * defaulted when the player hasn't fired yet (or has only used melee).
+ *
+ * Damage is intentionally NOT pulled from history — it's mob-scaled at
+ * fire time so the player's late-game crit/perk damage never returns.
+ *
+ * Extracted so it's testable without instantiating browser-bound classes.
+ *
+ * @param {Array<{spd?:number,colour?:string}> | null | undefined} shotHistory
+ * @returns {{spd:number, colour:string}}
+ */
+function pickMirrorKinematics(shotHistory) {
+  const def = { spd: MIRROR_PROJ_SPD_DEF, colour: '#88ff44' };
+  if (!shotHistory || shotHistory.length === 0) return def;
+  const last = shotHistory[shotHistory.length - 1];
+  if (!last) return def;
+  const rawSpd = (typeof last.spd === 'number' && isFinite(last.spd)) ? last.spd : MIRROR_PROJ_SPD_DEF;
+  const spd = Math.max(MIRROR_PROJ_SPD_MIN, Math.min(MIRROR_PROJ_SPD_MAX, rawSpd));
+  const colour = (typeof last.colour === 'string' && last.colour) ? last.colour : '#88ff44';
+  return { spd, colour };
+}
 /** @type {Record<string, any>} */
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -178,7 +224,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -534,6 +580,14 @@ class Enemy {
   /** @type {any} */ _rsRec;
   /** @type {any} */ _rsAimDx;
   /** @type {any} */ _rsAimDy;
+  /** @type {any} */ _miState;
+  /** @type {any} */ _miCharge;
+  /** @type {any} */ _miTele;
+  /** @type {any} */ _miRec;
+  /** @type {any} */ _miAimDx;
+  /** @type {any} */ _miAimDy;
+  /** @type {any} */ _miShotSpd;
+  /** @type {any} */ _miShotColour;
   /** @type {any} */ _tnState;
   /** @type {any} */ _tnTimer;
   /** @type {any} */ _tnTargetX;
@@ -968,6 +1022,9 @@ class Enemy {
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
       if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
+      // Cancel mirror telegraph on stun — drop straight to recovery so the
+      // shot doesn't fire after stun ends and the player can punish the stun.
+      if (this._miState === 'telegraph') { this._miState = 'recovery'; this._miRec = MIRROR_RECOVERY; this._miTele = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -1047,6 +1104,7 @@ class Enemy {
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
+      case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
@@ -1977,6 +2035,117 @@ class Enemy {
         this._rsState = 'telegraph';
         this._rsTele = RESONATOR_TELEGRAPH;
         if (audio.resonatorCharge) audio.resonatorCharge();
+      }
+    }
+    // Stationary: never patrol, never reposition. Sitting duck by design.
+  }
+
+  // ─── MIRROR AI — Stationary Mimic Battery ──────────────────────────────
+  // Stationary mob (spd=0). Cycles silently, then commits to a single
+  // projectile telegraphed for MIRROR_TELEGRAPH seconds before firing.
+  // The hook: kinematics (speed, colour, range) are pulled from the
+  // player's last fired ranged shot — so the projectile coming back is
+  // visually + mechanically a copy of the player's own gun. Damage is
+  // mob-scaled (this.atk * MIRROR_DMG_MUL); the player's actual damage
+  // roll is NEVER replayed (late-game crits/perks would yield 200+ dmg).
+  // Replayed projectile is intentionally vanilla: no piercing, no
+  // ricochet, no homing — those player perks must not leak into enemy
+  // projectiles.
+  //
+  // Aim source is `_tx,_ty` (canonical taunt-aware target), so hologram
+  // decoys redirect the shot correctly with no special branch.
+  //
+  // States:
+  //   idle:      _miCharge ticks down. When 0 + inRoom + canTarget + LoS,
+  //              lock aim at (_tx,_ty), resolve kinematics from
+  //              player._shotHistory, enter telegraph.
+  //   telegraph: _miTele ticks down; aim line + colour-tinted ring rendered.
+  //              On 0, fire one projectile, transition to recovery.
+  //   recovery:  _miRec ticks down; on 0, reset _miCharge, return to idle.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiMirror(dt, player, map, d, los) {
+    void d; void los; // recomputed against the lock for fairness
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // Room-gated: only engage when target or player is inside this mob's room.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Telegraph: aim line visible, fire on completion ──
+    if (this._miState === 'telegraph') {
+      this._miTele -= dt; // fixed-rate countdown — fairness > tempo
+      if (this._miTele <= 0) {
+        // FIRE: spawn a single projectile aimed at (_tx,_ty) using the
+        // cached kinematics. Use the LOCKED aim (set at telegraph entry)
+        // — chasing a moving player during the telegraph would defeat
+        // the fairness window.
+        const ax = this._miAimDx, ay = this._miAimDy;
+        const dmg = Math.round(this.atk * MIRROR_DMG_MUL);
+        const spd = this._miShotSpd || MIRROR_PROJ_SPD_DEF;
+        const colour = this._miShotColour || '#88ff44';
+        // Vanilla projectile — never piercing, never homing, never bouncing.
+        // The 'false, false' tail is (piercing, friendly) per Projectile ctor.
+        const p = new Projectile(this.x, this.y, ax, ay, spd, dmg,
+                                  MIRROR_PROJ_RANGE, colour, false, false);
+        // Override the post-construction speed so the MIRROR_PROJ_SPD_*
+        // clamp stays authoritative — Projectile._init applies the global
+        // CHARGED modifier (*1.4) and KINETIC_AMPLIFIER multipliers
+        // unconditionally, which would otherwise leak past our clamp band
+        // and produce invisible-fast return shots on CHARGED floors.
+        p.spd = spd;
+        // Damage attribution: tag with our source label so death recap
+        // and damage logs show "Mirror Shot" instead of generic "Projectile".
+        p.ownerType = 'Mirror Shot';
+        projectiles.push(p);
+        if (audio.mirrorFire) audio.mirrorFire();
+        spawnParticles(this.x, this.y, 'MUZZLE', colour, 4);
+        triggerShake(1.5, 0.08);
+        this._miState = 'recovery';
+        this._miRec = MIRROR_RECOVERY;
+        this._miTele = 0;
+      }
+      return;
+    }
+
+    // ── Recovery: cooling down, no aim attempts ──
+    if (this._miState === 'recovery') {
+      this._miRec -= dt * ocMul * bm;
+      if (this._miRec <= 0) {
+        this._miState = 'idle';
+        this._miCharge = MIRROR_CHARGE;
+      }
+      return;
+    }
+
+    // ── Idle: silent charge, then try to commit ──
+    this._miCharge = Math.max(0, (this._miCharge || 0) - dt * ocMul * bm);
+    if (this._miCharge <= 0 && inRoom && this._canTarget()) {
+      const dLock = dist(this.x, this.y, this._tx, this._ty);
+      // Range gate is INCLUSIVE to match the engagement intuition.
+      // dLock > 0.1 prevents the zero-aim edge case (target sitting exactly
+      // on the apex would yield norm(0,0) = [0,0], producing an east-pointing
+      // shot that misses — "phantom shot" bug; same lesson as RESONATOR).
+      if (dLock > 0.1 && dLock <= MIRROR_RANGE && hasLOS(this.x, this.y, this._tx, this._ty, map)) {
+        const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
+        this._miAimDx = dx; this._miAimDy = dy;
+        // Resolve kinematics at LOCK time (not fire time) so the telegraph
+        // colour matches the shot the player is about to receive.
+        const k = pickMirrorKinematics(player && player._shotHistory);
+        this._miShotSpd = k.spd;
+        this._miShotColour = k.colour;
+        this._miState = 'telegraph';
+        this._miTele = MIRROR_TELEGRAPH;
+        if (audio.mirrorCharge) audio.mirrorCharge();
       }
     }
     // Stationary: never patrol, never reposition. Sitting duck by design.
@@ -4388,7 +4557,54 @@ class Enemy {
         }
         ctx.restore();
       }
-      // SUMMONER: pulsing violet summon ring
+      // MIRROR: lime-green ambient pulse during idle/recovery; during the
+      // telegraph window, draw a dashed aim line from the body to the locked
+      // target plus a colour-tinted ring on the body in the player's last
+      // shot colour — that's the "I'm about to fire YOUR gun back" tell.
+      // Aim line/ring tinting drives the entire visual from the cached lock
+      // (this._miAimDx/Dy + this._miShotColour), so what the player SEES is
+      // exactly what the projectile WILL be.
+      if (this.type === 'MIRROR') {
+        ctx.save();
+        if (this._miState === 'telegraph' && this._miTele > 0) {
+          const progress = 1 - Math.max(0, Math.min(1, this._miTele / MIRROR_TELEGRAPH));
+          const ax = this._miAimDx, ay = this._miAimDy;
+          const radPx = MIRROR_RANGE * TILE;
+          const shotColour = this._miShotColour || '#88ff44';
+          // Dashed aim line in the SHOT'S colour (the player's last weapon
+          // colour) — telegraphs both direction and what kind of shot.
+          ctx.globalAlpha = 0.30 + progress * 0.55;
+          ctx.strokeStyle = shotColour;
+          ctx.shadowBlur = 6 + progress * 12;
+          ctx.shadowColor = shotColour;
+          ctx.lineWidth = 1.4 + progress * 1.6;
+          ctx.setLineDash([5, 7 - progress * 4]);
+          ctx.lineDashOffset = -progress * 18;
+          NEON.draw.line(ctx, sx, sy, sx + ax * radPx, sy + ay * radPx);
+          ctx.setLineDash([]);
+          // Body ring in the shot colour — pulses faster as fire approaches.
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 22);
+          ctx.globalAlpha = (0.35 + progress * 0.50) * pulse;
+          ctx.lineWidth = 1.6 + progress * 1.4;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.2 + progress * 0.4));
+          // Outer lime ring — mob identity stays readable even while the
+          // inner ring takes the shot colour.
+          ctx.globalAlpha = 0.25 + progress * 0.30;
+          ctx.strokeStyle = '#88ff44';
+          ctx.lineWidth = 1.2;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * 1.55);
+        } else {
+          // Idle/recovery: faint lime core pulse on the body — ambient threat.
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.18 + 0.12 * pulse;
+          ctx.strokeStyle = '#88ff44';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#88ff44';
+          ctx.lineWidth = 1.2;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        }
+        ctx.restore();
+      }
       if (this.type === 'SUMMONER') {
         ctx.save();
         const sPulse = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
@@ -4781,6 +4997,7 @@ const ENEMY_WEIGHTS = {
   TUNNELLER:  { base: 2,  perFloor: 2, minFloor: 4 },  // burrows underground, surfaces beneath player with AoE telegraph
   ECHOER:     { base: 2,  perFloor: 2, minFloor: 5 },  // sonar predictor — fires at where the player WAS (anti-pattern punisher)
   RESONATOR:  { base: 2,  perFloor: 2, minFloor: 6 },  // stationary cone battery — telegraphed 60° wedge, dash-through counter
+  MIRROR:     { base: 2,  perFloor: 1, minFloor: 8 },  // stationary mimic battery — fires single shot using player's last-fired kinematics
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -4851,6 +5068,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
     case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
     case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
+    case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -4938,12 +5156,26 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._rsRec=0;
     e._rsAimDx=0; e._rsAimDy=0;
   }
+  if (type==='MIRROR') {
+    // Stationary mimic battery. Stagger initial charge so a clustered
+    // spawn doesn't telegraph in unison. First charge completes ~1.5–3s
+    // after spawn (matches RESONATOR rhythm).
+    e._miState='idle';
+    e._miCharge=1.5+Math.random()*1.5;
+    e._miTele=0;
+    e._miRec=0;
+    e._miAimDx=0; e._miAimDy=0;
+    // Cached kinematics resolved at lock-time and used at fire-time so the
+    // player can SEE (via the telegraph colour) what shot is coming back.
+    e._miShotSpd=MIRROR_PROJ_SPD_DEF;
+    e._miShotColour='#88ff44';
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -6728,6 +6960,7 @@ class Player {
   /** @type {any} */ _prevX;
   /** @type {any} */ _prevY;
   /** @type {any} */ _posHistory;
+  /** @type {any} */ _shotHistory;
   /** @type {any} */ _shieldCharges;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
@@ -6865,6 +7098,10 @@ class Player {
     // ~PLAYER_HISTORY_WINDOW seconds of samples (see update()). Cleared
     // on floor transitions so cross-floor lookbacks can't fire stale.
     this._posHistory=[];
+    // Shot kinematics history ring — used by MIRROR mob to mimic the
+    // player's last fired projectile (speed + colour only; damage is
+    // mob-scaled, perks are NOT replayed). Bounded at SHOT_HISTORY_LEN.
+    this._shotHistory=[];
     // Death recap tracking
     this.damageLog={};          // source → total damage taken
     this.killedBy='';           // source of killing blow
@@ -7151,6 +7388,7 @@ class Player {
         }
       }
     } else {
+      let lastProjSpd = 12;
       for (let i=0;i<w.count;i++) {
         const spread=(Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
@@ -7167,6 +7405,10 @@ class Player {
         proj.bouncesLeft=this.upgrades.RICOCHET||0;
         if (proj.bouncesLeft) proj._hasRicochet=true;
         projectiles.push(proj);
+        // Capture the post-_init speed so MIRROR mimicry sees the actual
+        // value (KINETIC_AMPLIFIER, CHARGED modifier, etc) rather than the
+        // base 12. MIRROR re-clamps into its fair band before firing back.
+        lastProjSpd = proj.spd;
       }
       // MULTI_SHOT perk: fire a bonus 60%-damage projectile (ranged only)
       if (this.perks.MULTI_SHOT) {
@@ -7185,6 +7427,15 @@ class Player {
         projectiles.push(proj);
       }
       spawnParticles(this.x+dx*0.8,this.y+dy*0.8,'MUZZLE',w.colour,3);
+      // Record a kinematics sample for MIRROR mob mimicry. Only ranged shots
+      // are recorded — melee swings have no projectile to mimic. We store
+      // ONLY speed and colour: damage is intentionally omitted so MIRROR
+      // re-derives damage from its own atk (no late-game crit replay), and
+      // piercing/ricochet/homing are omitted so player perks never leak into
+      // enemy projectiles. Bounded ring (SHOT_HISTORY_LEN); shift on overflow.
+      if (!this._shotHistory) this._shotHistory = [];
+      this._shotHistory.push({ spd: lastProjSpd, colour: w.colour });
+      while (this._shotHistory.length > SHOT_HISTORY_LEN) this._shotHistory.shift();
     }
     audio.shoot(true, w);
     this.shootCooldown = (1/w.rate) * (this.perks.RAPID_FIRE ? 0.85 : 1);
