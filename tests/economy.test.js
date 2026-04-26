@@ -160,6 +160,20 @@ test('filterVendorPool strips persistent upgrades', () => {
   assert.equal(filtered[1].id, 'XP_CHIP');
 });
 
+test('filterVendorPool excludes CREDIT_CACHE (currency drops are not for sale)', () => {
+  // Vendors must never sell CREDIT_CACHE: it's a kill/exploration drop, and
+  // its payout scales with floor + meta + augments + difficulty so a flat
+  // shop price would create an arbitrage loop at high floors.
+  const pool = [
+    { id: 'MED_PACK', persistent: false },
+    { id: 'CREDIT_CACHE', persistent: false },
+    { id: 'XP_CHIP', persistent: false },
+  ];
+  const filtered = boosts.filterVendorPool(pool);
+  assert.equal(filtered.length, 2);
+  assert.ok(!filtered.some(u => u.id === 'CREDIT_CACHE'));
+});
+
 test('filterVendorPool tolerates null / non-array', () => {
   assert.deepEqual(boosts.filterVendorPool(null), []);
   assert.deepEqual(boosts.filterVendorPool(undefined), []);
