@@ -43,7 +43,6 @@
 // Node: module.exports = { circle, circleStroke, arcStroke, line,
 //                          setShadow, clearShadow }.
 
-/* eslint-disable no-undef -- UMD root resolution: `module` ref */
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {
