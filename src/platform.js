@@ -1212,6 +1212,24 @@ const audio = (() => {
       noise(0.10, t, 0.08, 2400, bus);
       osc('square', 660, 220, 0.10, t + 0.04, 0.16, bus);
     },
+    ghostProjectorMemory() {
+      // Soft chime + downward whisper — projector has CLAIMED a memory.
+      // Subtle so it doesn't spam during a kill streak; player should
+      // perceive it as ambience until they learn what it means.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 0.35);
+      osc('sine', 880, 440, 0.05, t, 0.10, bus);
+      osc('triangle', 660, 330, 0.04, t + 0.05, 0.10, bus);
+    },
+    ghostProjectorSpawn() {
+      // Reverb-heavy rising tone + airy noise — "haunting commits".
+      // Distinctly spectral compared to normal spawn sounds.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.65, 0.50);
+      osc('sine', 220, 660, 0.18, t, 0.18, bus);
+      osc('triangle', 440, 1100, 0.14, t + 0.04, 0.14, bus);
+      noise(0.12, t, 0.18, 3200, bus);
+    },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Low rumble + rising whoosh

@@ -1477,11 +1477,17 @@ const game = {
       if (enemies[i].dead) enemies.splice(i,1);
     }
 
-    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs)
+    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs,
+    // GHOST_PROJECTOR → ghosts)
     if (pendingEnemySpawns.length) {
       for (const s of pendingEnemySpawns) {
         // Skip orphan summons whose summoner died this frame
         if (s._summoned && (!s._summonerRef || s._summonerRef.dead)) continue;
+        // Skip orphan ghosts whose projector died this frame — the haunt
+        // dies with its source. Avoids spectral ghosts wandering after
+        // their projector is gone (would also be unfair: the player
+        // pre-empted the projector but still got a ghost).
+        if (s._ghIsGhost && (!s._ghOwnerProjector || s._ghOwnerProjector.dead)) continue;
         const e = spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false);
         if (s._challengeWave) e._challengeWave = true;
         if (s._summoned && s._summonerRef) {
@@ -1489,6 +1495,25 @@ const game = {
           e._summonerRef = s._summonerRef;
           e.xpValue = 0; // no XP farming from summons
           s._summonerRef._summons.push(e);
+        }
+        if (s._ghIsGhost) {
+          // Apply ghost mutations after a real spawnEnemy build so AI/
+          // collision/draw paths all work with normal enemy state.
+          e._ghIsGhost = true;
+          e._ghLife = GHOST_PROJECTOR_GHOST_LIFE;
+          e.hp = Math.max(1, Math.round(e.hp * GHOST_PROJECTOR_HP_MUL));
+          e.maxHp = e.hp;
+          e.atk = Math.max(1, Math.round(e.atk * GHOST_PROJECTOR_ATK_MUL));
+          e.xpValue = 0; // no XP from ghost kills
+          // Atomically clear the projector's pending state AND back-assign
+          // the live ghost ref. Done together (and only here) so the
+          // notifyGhostProjectors busy-skip stays valid across the
+          // queue→flush window via the _gpAwaitingFlush sentinel.
+          const proj = s._ghOwnerProjector;
+          proj._gpActiveGhost = e;
+          proj._gpPendingType = null;
+          proj._gpPendingDelay = 0;
+          proj._gpAwaitingFlush = false;
         }
         enemies.push(e);
       }
