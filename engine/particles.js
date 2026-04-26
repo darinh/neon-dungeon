@@ -55,7 +55,6 @@
 // Browser: attaches as `window.NEON.particles` with `{ createSystem }`.
 // Node: module.exports = { createSystem } (for tests).
 
-/* eslint-disable no-undef -- UMD root resolution: `module` ref */
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {

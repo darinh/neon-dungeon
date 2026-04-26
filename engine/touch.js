@@ -29,7 +29,6 @@
 // Browser: attaches as `window.NEON.touch`. Pure helpers only — does NOT
 // own state (unlike engine/input.js's createEngine factory).
 
-/* eslint-disable no-undef -- UMD root resolution */
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {
