@@ -32,7 +32,7 @@
   // Current meta schema version. Bumped whenever defaultMeta() grows new
   // persistent fields. loadMeta() migrates older saves forward; it never
   // migrates backward (older builds simply ignore unknown fields).
-  const META_VERSION = 2;
+  const META_VERSION = 3;
   const MODULE_SLOTS = 3;
 
   function defaultMeta() {
@@ -52,6 +52,8 @@
       modulesInstalled: new Array(MODULE_SLOTS).fill(null), // 3 equipped slots
       logsRead: [],                                    // log ids read in Archive (#41)
       logsFound: [],                                   // found but not yet read
+      whispersRead: [],                                // secret-room whispers read (subplot)
+      whispersFound: [],                               // whispers found but not yet read
       endingsUnlocked: [],                             // 'keeper' | 'unchained'
       introSeen: false,                                // UNCHAINED #42 — intro crawl flag
       runsCompleted: 0,
@@ -112,6 +114,8 @@
     m.modulesInstalled = inst;
     m.logsRead        = _coerceIntArray(m.logsRead);
     m.logsFound       = _coerceIntArray(m.logsFound);
+    m.whispersRead    = _coerceIntArray(m.whispersRead);
+    m.whispersFound   = _coerceIntArray(m.whispersFound);
     m.endingsUnlocked = _coerceEndings(m.endingsUnlocked);
     m.introSeen = (m.introSeen === true);
     if (m.runsCompleted == null) m.runsCompleted = 0;
@@ -352,6 +356,31 @@
     return changed;
   }
 
+  // Whispers (secret-room subplot) — mirrors the log API exactly.
+  /** @param {string} id */
+  function addWhisperFound(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const m = loadMeta();
+    if (!Array.isArray(m.whispersFound)) m.whispersFound = [];
+    if (m.whispersFound.includes(id)) return false;
+    m.whispersFound.push(id);
+    saveMeta(m);
+    return true;
+  }
+
+  /** @param {string} id */
+  function markWhisperRead(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const m = loadMeta();
+    if (!Array.isArray(m.whispersFound)) m.whispersFound = [];
+    if (!Array.isArray(m.whispersRead))  m.whispersRead  = [];
+    let changed = false;
+    if (!m.whispersFound.includes(id)) { m.whispersFound.push(id); changed = true; }
+    if (!m.whispersRead.includes(id))  { m.whispersRead.push(id);  changed = true; }
+    if (changed) saveMeta(m);
+    return changed;
+  }
+
   // installModule places moduleId into slot (0..MODULE_SLOTS-1). Returns the
   // previously installed id (or null). Pass `null` explicitly to unslot.
   // Any other non-string moduleId (undefined, number, object) is invalid input
@@ -413,6 +442,7 @@
     calcRunShards, applyMetaToPlayer,
     getMetaXPMultiplier, getMetaCreditMultiplier,
     addCores, spendCores, addLogFound, markLogRead,
+    addWhisperFound, markWhisperRead,
     installModule, sellModule, resetMeta,
     registerModuleEffects,
     _setStorageForTests

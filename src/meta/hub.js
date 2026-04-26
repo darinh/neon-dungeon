@@ -296,7 +296,7 @@
       }
       const list = this._getFoundList();
       if (list.length === 0) return;
-      const headerH = 56, footerH = 24, rowH = 18;
+      const headerH = 72, footerH = 24, rowH = 18;  // headerH matches _drawList
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));
       // _drawList paints each row's hilite at (x+8, ry-12, w-16, rowH-2)
@@ -339,6 +339,17 @@
       ctx.font = '11px monospace';
       ctx.fillText('SIGNAL FRAGMENTS: ' + progress.read + '/' + progress.total, x + w / 2, y + 44);
 
+      // Whispers progress (secret-room subplot — see src/data/whispers.js).
+      // Shown as a separate counter so the player can tell at a glance there's
+      // a deeper layer to discover. Empty progress (0/0 or 0/N) renders dim.
+      let wprog = { read: 0, total: 0 };
+      try { if (NEON && NEON.whispers) wprog = NEON.whispers.progress(); } catch (_) {}
+      if (wprog.total > 0) {
+        ctx.fillStyle = wprog.read > 0 ? '#aa66cc' : '#444466';
+        ctx.font = '10px monospace';
+        ctx.fillText('WHISPERS: ' + wprog.read + '/' + wprog.total, x + w / 2, y + 58);
+      }
+
       // Body.
       if (this._reading) {
         this._drawReading(ctx, x, y, w, h);
@@ -375,7 +386,7 @@
 
       // Scroll window.
       const rowH = 18;
-      const headerH = 56;
+      const headerH = 72;  // 56 base + 16 for the WHISPERS counter line
       const footerH = 24;
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));
