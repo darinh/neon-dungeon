@@ -2205,26 +2205,79 @@ function generateFloor(floorNum) {
       map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
     }
 
-    // Record entrance tiles: floor tiles on room boundary that connect to corridors
+    // Record entrance tiles: floor tiles on the boss room boundary that
+    // connect to a CORRIDOR tile (not the interior of another adjacent
+    // room). Without the corridor check, when the boss room shares a
+    // boundary with another room (no carved-corridor gap between them),
+    // every shared boundary tile would be sealed to WALL on boss-spawn —
+    // putting walls INSIDE the neighbouring room and trapping the player
+    // against them (reported by user 2026-04-20 b95c0573: 'the fence that
+    // surrounds a boss should not leave a room's boundary. It went into
+    // another room and trapped me against a wall').
+    //
+    // Both the boundary tile AND its outside neighbour must NOT be inside
+    // another room — boundary check catches overlapping-rect gen edge
+    // cases (where the boundary tile itself is shared); outside check
+    // catches abutting-rooms (most common case).
     const rx=bossRoom.x, ry=bossRoom.y, rw=bossRoom.w, rh=bossRoom.h;
-    for (let tx=rx; tx<rx+rw; tx++) {
-      // top edge
-      if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR)
-        bossEntrances.push({x:tx, y:ry});
-      // bottom edge
-      const by=ry+rh-1;
-      if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR)
-        bossEntrances.push({x:tx, y:by});
-    }
-    for (let ty=ry; ty<ry+rh; ty++) {
-      // left edge
-      if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR)
-        bossEntrances.push({x:rx, y:ty});
-      // right edge
-      const bx=rx+rw-1;
-      if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR)
-        bossEntrances.push({x:bx, y:ty});
-    }
+    /** @param {number} px @param {number} py */
+    const isInsideAnotherRoom = (px, py) => {
+      for (const r of rooms) {
+        if (r === bossRoom) continue;
+        if (px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h) return true;
+      }
+      return false;
+    };
+    /** Filtered + safe scan — both edge tile and outside tile must be
+     *  outside any other room. */
+    const _scanFiltered = () => {
+      /** @type {Array<{x:number,y:number}>} */
+      const out = [];
+      for (let tx=rx; tx<rx+rw; tx++) {
+        if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR
+            && !isInsideAnotherRoom(tx, ry) && !isInsideAnotherRoom(tx, ry-1))
+          out.push({x:tx, y:ry});
+        const by=ry+rh-1;
+        if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR
+            && !isInsideAnotherRoom(tx, by) && !isInsideAnotherRoom(tx, by+1))
+          out.push({x:tx, y:by});
+      }
+      for (let ty=ry; ty<ry+rh; ty++) {
+        if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR
+            && !isInsideAnotherRoom(rx, ty) && !isInsideAnotherRoom(rx-1, ty))
+          out.push({x:rx, y:ty});
+        const bx=rx+rw-1;
+        if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR
+            && !isInsideAnotherRoom(bx, ty) && !isInsideAnotherRoom(bx+1, ty))
+          out.push({x:bx, y:ty});
+      }
+      return out;
+    };
+    /** Unfiltered fallback — original logic, keeps lock-arena mechanic
+     *  working even in the degenerate case where the boss room only
+     *  shares boundaries with other rooms (no corridor entrance). The
+     *  re-carve loop at L2198-2202 makes this near-impossible in
+     *  practice but the fallback is here for safety: the lesser evil
+     *  is the original cosmetic bug (wall poking into neighbour) vs
+     *  losing boss arena lockout entirely. */
+    const _scanUnfiltered = () => {
+      /** @type {Array<{x:number,y:number}>} */
+      const out = [];
+      for (let tx=rx; tx<rx+rw; tx++) {
+        if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR) out.push({x:tx, y:ry});
+        const by=ry+rh-1;
+        if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR) out.push({x:tx, y:by});
+      }
+      for (let ty=ry; ty<ry+rh; ty++) {
+        if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR) out.push({x:rx, y:ty});
+        const bx=rx+rw-1;
+        if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR) out.push({x:bx, y:ty});
+      }
+      return out;
+    };
+    const filtered = _scanFiltered();
+    const chosen = filtered.length > 0 ? filtered : _scanUnfiltered();
+    for (const e of chosen) bossEntrances.push(e);
     // Deduplicate — corners scanned by both edge loops cause permanent seal bug
     const seen = new Set();
     bossEntrances = bossEntrances.filter(e => {
