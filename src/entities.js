@@ -111,8 +111,46 @@ function enemiesInRoomIter(room) {
   return enemiesByRoom.get(room) || _EMPTY_ENEMY_SET;
 }
 
+// GHOST_PROJECTOR kill hook. Called from Enemy.die() AFTER per-room
+// bookkeeping but BEFORE drops/credits. Walks live projectors in the
+// dead enemy's room; the first eligible projector (no pending memory,
+// no active ghost) claims the kill and arms a haunt. Anti-recursion:
+// ghosts (_ghIsGhost), shards, summons, bosses, and types not in
+// GHOSTABLE_TYPES are silently ignored. Stationary projectors only;
+// the projector itself is excluded from the allowlist so we never
+// haunt a projector death.
+/**
+ * @param {any} deadEnemy
+ */
+function notifyGhostProjectors(deadEnemy) {
+  if (!deadEnemy || !deadEnemy.room) return;
+  if (deadEnemy._ghIsGhost) return;        // no haunt-of-haunt
+  if (deadEnemy.isShard) return;
+  if (deadEnemy._summoned) return;
+  if (deadEnemy.isBoss) return;
+  if (!GHOSTABLE_TYPES.has(deadEnemy.type)) return;
+  // Iterate the room's enemy set. enemiesByRoom stores LIVE refs; dead
+  // entries are pruned by unregisterEnemyFromRoom in die(). The dead
+  // enemy itself was just unregistered above the call site.
+  const inRoom = enemiesByRoom.get(deadEnemy.room);
+  if (!inRoom) return;
+  for (const proj of inRoom) {
+    if (!proj || proj.dead) continue;
+    if (proj.type !== 'GHOST_PROJECTOR') continue;
+    if (proj._gpPendingType) continue;     // already pending
+    if (proj._gpAwaitingFlush) continue;   // queued, awaiting flush back-assign
+    if (proj._gpActiveGhost && !proj._gpActiveGhost.dead) continue; // ghost still out
+    proj._gpPendingType  = deadEnemy.type;
+    proj._gpPendingX     = deadEnemy.x;
+    proj._gpPendingY     = deadEnemy.y;
+    proj._gpPendingDelay = GHOST_PROJECTOR_DELAY;
+    if (audio && audio.ghostProjectorMemory) audio.ghostProjectorMemory();
+    return;                                 // first claim wins
+  }
+}
+
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -172,6 +210,33 @@ const REAPER_TELEGRAPH        = 1.0;          // seconds — red ring on player
 const REAPER_FRENZY_DURATION  = 4.0;          // seconds — +60% spd window
 const REAPER_FRENZY_SPD_MUL   = 1.6;          // chase speed multiplier in frenzy
 const REAPER_DETECT_RANGE     = 14;           // tiles — chase pickup range
+
+// GHOST_PROJECTOR tuning constants. Stationary "lens" mob (floor 8+) that
+// memorises the type+position of the most recent ghostable enemy killed in
+// its room and, after a delay, spawns a translucent ghost replay at that
+// site with reduced HP/atk and a fixed lifetime. The ghost has the same AI
+// as the original type, awards no XP/credits/cores/drops/combo (treated as
+// a summon for reward purposes), and is excluded from elite affix rolls.
+//
+// Per-projector single-projection: while a pending memory is in countdown
+// OR an active ghost is alive, the projector ignores further kills. Once
+// the active ghost dies/expires, the projector becomes free again.
+//
+// Anti-recursion: the kill hook skips ghosts (no haunting from haunting),
+// shards, summons, and bosses. GHOSTABLE_TYPES is a tight allowlist of
+// "simple" mobs whose AI replays cleanly without spawn-init quirks
+// (TUNNELLER underground state, MIMIC disguise, SUMMONER cascade etc).
+//
+// Stun cancels any pending haunt (the projector forgets its memory) — a
+// fair defuse path that mirrors REAPER/RESONATOR/MIRROR stun semantics.
+const GHOST_PROJECTOR_DELAY     = 3.0;         // seconds — memory → ghost spawn
+const GHOST_PROJECTOR_GHOST_LIFE= 6.0;         // seconds — ghost lifetime
+const GHOST_PROJECTOR_HP_MUL    = 0.5;         // ghost HP fraction
+const GHOST_PROJECTOR_ATK_MUL   = 0.5;         // ghost damage fraction
+const GHOSTABLE_TYPES = new Set([
+  'GUARD', 'CRAWLER', 'DRONE', 'BRUTE', 'PHANTOM',
+  'CHARGER', 'LEAPER', 'SCORCHER', 'SEEKER', 'REAPER'
+]);
 
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
@@ -261,7 +326,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -287,7 +352,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -656,6 +721,14 @@ class Enemy {
   /** @type {any} */ _reFrenzy;
   /** @type {any} */ _reFrenzied;
   /** @type {any} */ _reHasFrenzied;
+  /** @type {any} */ _gpPendingType;
+  /** @type {any} */ _gpPendingX;
+  /** @type {any} */ _gpPendingY;
+  /** @type {any} */ _gpPendingDelay;
+  /** @type {any} */ _gpActiveGhost;
+  /** @type {any} */ _gpAwaitingFlush;
+  /** @type {any} */ _ghIsGhost;
+  /** @type {any} */ _ghLife;
   /** @type {any} */ _tnState;
   /** @type {any} */ _tnTimer;
   /** @type {any} */ _tnTargetX;
@@ -862,6 +935,11 @@ class Enemy {
     if (this.dead) return;
     this.dead=true;
     unregisterEnemyFromRoom(this);
+    // GHOST_PROJECTOR haunt hook — must fire BEFORE the _despawning early
+    // return so a non-summon kill in a room with a projector arms a haunt
+    // even if the kill came via cascade-adjacent paths. The hook itself
+    // gates on _summoned/_ghIsGhost/isShard/isBoss/type.
+    notifyGhostProjectors(this);
     // SUMMONER cascade: despawn all active summons silently
     if (this._summons) {
       for (const s of this._summons) {
@@ -880,8 +958,10 @@ class Enemy {
       _EG._lastEnding = 'unchained';
     }
     spawnParticles(this.x,this.y,'EXPLOSION',this.colour,12);
-    // Summoned minions: reduced rewards (like shards — no drops, no combo, no kill count)
-    const isSummon = !!this._summoned;
+    // Summoned minions: reduced rewards (like shards — no drops, no combo, no kill count).
+    // Ghosts (GHOST_PROJECTOR replays) are treated as summons for rewards: no drops,
+    // no credits, no XP, no combo, no kill count, no REAPER aggression bump.
+    const isSummon = !!this._summoned || !!this._ghIsGhost;
     // Weapon affix on-kill effects (before drops/scoring)
     applyOnKill(this);
     // UNCHAINED #36 momentum: refresh player damage-bonus window on any kill.
@@ -900,7 +980,12 @@ class Enemy {
     if (comboEligible) registerKill(this.isBoss);
     const mul = this.isBoss ? comboBossMultiplier() : comboMultiplier();
     _EG.player.score += Math.round(this.xpValue * _EG.floor * mul);
-    if (_EG.quest && _EG.quest.kills !== undefined) _EG.quest.kills++;
+    // Quest kill counter (PACIFIST etc.) — exclude ghosts only (preserves
+    // existing summon-counts-as-kill behavior). The player did not summon
+    // the ghost, the projector did, and the ghost will expire on its own —
+    // so killing one shouldn't break a pacifist run. (gpt-5.5 review #2,
+    // ghost-projector PR.)
+    if (_EG.quest && _EG.quest.kills !== undefined && !this._ghIsGhost) _EG.quest.kills++;
     if (!this.isShard && !isSummon) _EG.player.enemiesKilled++;
     // REAPER aggression counter — only count kills in the player's current
     // room. We compute room-at-death-time from player position (NOT the
@@ -1084,6 +1169,18 @@ class Enemy {
     this.bobAngle+=dt*3;
     this.flashTimer=Math.max(0,this.flashTimer-dt);
 
+    // GHOST lifetime tick — ticks even while stunned (stun shouldn't extend
+    // a haunting). Silent despawn (no drops/credits) via _despawning latch
+    // so die() takes the SUMMONER-cascade rewards-suppressed path.
+    if (this._ghIsGhost) {
+      this._ghLife = (this._ghLife || 0) - dt;
+      if (this._ghLife <= 0) {
+        this._despawning = true;
+        this.die();
+        return;
+      }
+    }
+
     // Set perceived target position (hologram taunt redirection)
     this._tx = player.x; this._ty = player.y;
     const _t = this._tauntTarget;
@@ -1118,6 +1215,17 @@ class Enemy {
       // doesn't trigger after stun ends. _reHasFrenzied stays true (one-shot
       // defuse, not a re-trigger reset — re-arm only on player room change).
       if (this._reState === 'telegraph') { this._reState = 'idle'; this._reTele = 0; }
+      // Cancel GHOST_PROJECTOR pending haunt on stun — defusing the
+      // projector before its delay expires drops the memory entirely
+      // (the slot frees up for the next ghostable kill in the room).
+      // Does NOT clear _gpAwaitingFlush — once the spawn is queued the
+      // ghost is materialising whether the projector is stunned or not
+      // (the queue is committed). The flush will clear awaiting-flush
+      // along with the back-assign.
+      if (this.type === 'GHOST_PROJECTOR' && this._gpPendingType) {
+        this._gpPendingType = null;
+        this._gpPendingDelay = 0;
+      }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -1199,6 +1307,7 @@ class Enemy {
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
+      case 'GHOST_PROJECTOR': this.aiGhostProjector(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
@@ -2330,6 +2439,72 @@ class Enemy {
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.patrol(dt, map);
+    }
+  }
+
+  // ─── GHOST_PROJECTOR AI — Stationary Memory Lens ──────────────────────
+  // Floor 8+. Stationary mob (spd=0, no attack of its own). Listens for
+  // ghostable kills in its room via notifyGhostProjectors() (called from
+  // Enemy.die). When a memory is claimed, _gpPendingDelay counts down from
+  // GHOST_PROJECTOR_DELAY (3.0s); on 0, spawnGhost() conjures a translucent
+  // replay at the kill site with reduced HP/atk. The active ghost ref is
+  // held in _gpActiveGhost so we don't claim a new memory until the ghost
+  // dies/expires.
+  //
+  // States are implicit:
+  //   idle:      no memory, no active ghost. Claimable.
+  //   pending:   _gpPendingType set, _gpPendingDelay > 0. Visual telegraph
+  //              (orb at projector + ghosting at spawn site). Stun cancels.
+  //   haunting:  _gpActiveGhost is alive. New memories blocked.
+  //
+  // Counter-play: kill the projector before its 3s delay expires (HP is
+  // low, no defenses). Or stun it (drops the pending memory). Ghosts
+  // themselves are normal enemies — kill them as usual.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiGhostProjector(dt, player, map, d, los) {
+    void player; void map; void d; void los; // stationary, no engagement logic
+    // Free the active-ghost slot once the ghost is gone, so the next
+    // ghostable kill in the room can claim a new memory.
+    if (this._gpActiveGhost && this._gpActiveGhost.dead) {
+      this._gpActiveGhost = null;
+    }
+    // Pending memory: tick down delay, queue ghost on completion.
+    if (this._gpPendingType && !this._gpAwaitingFlush) {
+      this._gpPendingDelay -= dt;
+      if (this._gpPendingDelay <= 0) {
+        const queued = spawnGhost(
+          this._gpPendingType,
+          this._gpPendingX,
+          this._gpPendingY,
+          this.room,
+          this
+        );
+        if (queued) {
+          // Sentinel: blocks notifyGhostProjectors from re-claiming this
+          // projector during the same-frame window between queueing and
+          // the flush back-assigning _gpActiveGhost. Without this, a
+          // second ghostable kill in the same frame (e.g. SEEKER death
+          // explosion chain) would arm a NEW pending memory — and the
+          // flush would then leave us with both an active ghost AND a
+          // new pending claim, violating the per-projector single-
+          // projection rule. Cleared by the flush in game.js along with
+          // _gpPendingType when _gpActiveGhost is back-assigned.
+          this._gpAwaitingFlush = true;
+          if (audio && audio.ghostProjectorSpawn) audio.ghostProjectorSpawn();
+          spawnParticles(this._gpPendingX, this._gpPendingY, 'EXPLOSION', '#ccaaff', 10);
+        } else {
+          // Spawn refused (unknown type / no _EG) — drop the memory so
+          // the projector becomes claimable again next frame.
+          this._gpPendingType = null;
+          this._gpPendingDelay = 0;
+        }
+      }
     }
   }
 
@@ -4086,6 +4261,12 @@ class Enemy {
       else alpha=0.85;
     }
     if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
+    // Ghost replays render translucent so the player can immediately read
+    // them as "not real" at a glance. Multiplies any per-type alpha (none
+    // of the ghostable types currently set their own alpha, but the
+    // multiplication keeps the rule sound if PHANTOM ever joins the
+    // GHOSTABLE_TYPES set later).
+    if (this._ghIsGhost) alpha *= 0.55;
 
     // TUNNELLER: while underground or surfacing, draw a dust mound + telegraph
     // ring instead of the body. Returns early so the regular sprite is hidden.
@@ -4812,6 +4993,47 @@ class Enemy {
         }
         ctx.restore();
       }
+      // GHOST_PROJECTOR: stationary lens with violet pulse. Brighter and
+      // faster pulse while a memory is pending (telegraphs the haunt
+      // countdown — a player who recognises this can rush the projector
+      // to interrupt). Subtle ring while haunting (a ghost is out).
+      if (this.type === 'GHOST_PROJECTOR') {
+        ctx.save();
+        const pendingProgress = this._gpPendingType
+          ? 1 - Math.max(0, Math.min(1, this._gpPendingDelay / GHOST_PROJECTOR_DELAY))
+          : 0;
+        const haunting = !!(this._gpActiveGhost && !this._gpActiveGhost.dead);
+        const pulseRate = this._gpPendingType ? (3 + pendingProgress * 18) : 1.5;
+        const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * pulseRate);
+        // Body aura
+        const intensity = this._gpPendingType ? (0.4 + pendingProgress * 0.5) : (haunting ? 0.3 : 0.18);
+        ctx.globalAlpha = (0.18 + 0.30 * pulse) * (intensity / 0.4);
+        ctx.strokeStyle = '#cc99ff';
+        ctx.shadowBlur = 8 + pulse * 10 * intensity;
+        ctx.shadowColor = '#cc99ff';
+        ctx.lineWidth = 1.4 + intensity * 1.4;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        // Pending memory: dashed ring at the spawn site, growing as delay
+        // approaches 0 — fairness window so the player can pre-empt.
+        if (this._gpPendingType) {
+          const gx = this._gpPendingX * TILE - camX;
+          const gy = this._gpPendingY * TILE - camY;
+          ctx.globalAlpha = 0.30 + pendingProgress * 0.55;
+          ctx.lineWidth = 1.2 + pendingProgress * 1.4;
+          ctx.setLineDash([4, 6]);
+          ctx.lineDashOffset = -this.bobAngle * 18;
+          NEON.draw.circleStroke(ctx, gx, gy, TILE * (0.45 + pendingProgress * 0.45));
+          ctx.setLineDash([]);
+          // Spectral link from projector to spawn site (faint dashed line)
+          ctx.globalAlpha = 0.18 + pendingProgress * 0.32;
+          ctx.lineWidth = 1.0;
+          ctx.setLineDash([3, 8]);
+          ctx.lineDashOffset = -this.bobAngle * 8;
+          NEON.draw.line(ctx, sx, sy, gx, gy);
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      }
       if (this.type === 'SUMMONER') {
         ctx.save();
         const sPulse = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
@@ -5206,6 +5428,7 @@ const ENEMY_WEIGHTS = {
   RESONATOR:  { base: 2,  perFloor: 2, minFloor: 6 },  // stationary cone battery — telegraphed 60° wedge, dash-through counter
   MIRROR:     { base: 2,  perFloor: 1, minFloor: 8 },  // stationary mimic battery — fires single shot using player's last-fired kinematics
   REAPER:     { base: 2,  perFloor: 2, minFloor: 7 },  // aggression-punishing chaser — frenzy at 5 kills in current room
+  GHOST_PROJECTOR: { base: 1, perFloor: 1, minFloor: 8 },  // stationary lens — replays a ghost of the last ghostable kill in its room
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -5225,6 +5448,39 @@ function pickEnemyType(floorNum) {
   let r = Math.random() * total;
   for (const { type, w } of weights) { r -= w; if (r <= 0) return type; }
   return 'GUARD';
+}
+
+/**
+ * Queue a translucent ghost replay of a previously-killed enemy. Used by
+ * GHOST_PROJECTOR. Pushes the spawn intent onto pendingEnemySpawns so the
+ * ghost is materialised AFTER the current enemy update loop completes —
+ * the deferred-spawn convention every other in-loop spawner uses
+ * (SPLITTER → SHARDs, SUMMONER → DRONEs, BRUTE → adds, CONDUCTOR → adds).
+ * Without deferral the ghost gets `update()` in the same frame it spawns
+ * because for-of over the live `enemies` array visits appended entries.
+ *
+ * The flush in game.js (`pendingEnemySpawns` block) recognises the
+ * `_ghIsGhost` marker and applies the HP/atk/xpValue mutations and back-
+ * assigns the live ref to projector._gpActiveGhost.
+ *
+ * Returns true if a spawn was queued, false on validation failure.
+ *
+ * @param {string} type      ghostable enemy type from GHOSTABLE_TYPES
+ * @param {number} x         tile x
+ * @param {number} y         tile y
+ * @param {any}    room      room reference (for AI room-gating)
+ * @param {any}    projector the GHOST_PROJECTOR claiming this ghost
+ * @returns {boolean}
+ */
+function spawnGhost(type, x, y, room, projector) {
+  if (!_EG || !GHOSTABLE_TYPES.has(type)) return false;
+  const floorNum = _EG.floor || 1;
+  pendingEnemySpawns.push({
+    type, x, y, floor: floorNum, room,
+    _ghIsGhost: true,
+    _ghOwnerProjector: projector,
+  });
+  return true;
 }
 
 /**
@@ -5278,6 +5534,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
     case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
     case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
+    case 'GHOST_PROJECTOR': hp=50; atk=0; spd=0; xpVal=24; colour='#cc99ff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -5390,12 +5647,24 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._reFrenzied = false;
     e._reHasFrenzied = false;
   }
+  if (type==='GHOST_PROJECTOR') {
+    // Stationary lens. _gpPendingType is the most recent claimed kill
+    // (set by notifyGhostProjectors); _gpPendingDelay counts down to
+    // ghost spawn. _gpActiveGhost holds the live ghost ref so we don't
+    // claim a new memory while a haunt is in progress. All cleared on
+    // stun (see update() stun branch).
+    e._gpPendingType  = null;
+    e._gpPendingX     = 0;
+    e._gpPendingY     = 0;
+    e._gpPendingDelay = 0;
+    e._gpActiveGhost  = null;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
