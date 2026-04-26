@@ -3625,6 +3625,29 @@ const UPGRADES = [
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
   {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.gainXP(50); }},
+  // Credit Cache — currency drop. Per user "loot philosophy" rule, drops are
+  // heals / XP / **currency** only; persistents live in meta-progression.
+  // Amount scales with floor + meta credit multiplier + CREDIT_SIPHON augment
+  // so it stays meaningful in late-game. Gold colour reads as currency on
+  // sight; auto-applied via the _isSimple path in src/game.js (non-persistent,
+  // not WEAPON_/HACKWARE_) so there's no popup. Rarity 50 sits between
+  // MED_PACK (40) and NANO_REPAIR (35) so currency is the most common drop —
+  // that's the point: drops mostly become things you spend at the Gap / shops.
+  {id:'CREDIT_CACHE', name:'Credit Cache', desc:'+CR',                  colour:'#ffd700', rarity:50, persistent:false,
+   fn: (/** @type {any} */ p)=>{
+     const floor = (typeof _CG !== 'undefined' && _CG.floor) ? _CG.floor : 1;
+     const base = 15 + floor * 5;
+     const metaMul = (typeof getMetaCreditMultiplier === 'function') ? getMetaCreditMultiplier() : 1;
+     const siphon = (typeof hasAugment === 'function' && hasAugment('CREDIT_SIPHON')) ? 1.5 : 1;
+     // Match existing credit award paths (game.js:1472 room-clear,
+     // entities.js:690 kill credits): scale by difficulty creditMul so
+     // NIGHTMARE (0.85) and EASY (1.2) don't break the economy.
+     const diffMul = (typeof getDiff === 'function') ? (getDiff().creditMul || 1) : 1;
+     const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul));
+     p.credits = (p.credits || 0) + amt;
+     // Mirror kill-credit telemetry: a floating "+N CR" so the player sees it.
+     if (typeof spawnDmgText === 'function') spawnDmgText(p.x, p.y, '+' + amt + ' CR', '#ffd700');
+   }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
    levelDesc: (/** @type {any} */ l)=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
@@ -4224,7 +4247,7 @@ function generateShopItems(floor, player, dungeon) {
   // credits (UNCHAINED #38).
   const nonPersistentPool = (typeof NEON !== 'undefined' && NEON.boosts)
     ? NEON.boosts.filterVendorPool(UPGRADES)
-    : UPGRADES.filter(u => !u.persistent);
+    : UPGRADES.filter(u => !u.persistent && u.id !== 'CREDIT_CACHE');
   const used = usedIds;
   const eligible = nonPersistentPool.filter((/** @type {any} */ u) => !used.has(u.id));
   // Shuffle eligible and pick enough to fill 3 total slots
