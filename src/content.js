@@ -2560,15 +2560,18 @@ function generateFloor(floorNum) {
   // gen-time reachability matches what the player actually experiences. The
   // notable additions over the prior fix are T.PLASMA, T.ARC (walkable
   // hazards — runtime isPassable allows them, the prior gen-time check did
-  // not). T.DOOR (closed) stays passable here because the player can open
-  // closed doors via interact; that diverges from runtime isPassable but is
-  // intentional (matches dungeon-gen connectivity intent).
+  // not) and T.CRACKED (interact-breakable per game.js:663,1691 — secret
+  // rooms ARE reachable to the player without keys/upgrades, so they should
+  // count as reachable here too). T.DOOR (closed) stays passable because the
+  // player can open closed doors via interact; that diverges from runtime
+  // isPassable but is intentional (matches dungeon-gen connectivity intent).
   {
     const passable = (/** @type {any} */ t) =>
       t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
       t === T.PLASMA || t === T.ARC ||
+      t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
       t === T.CHALLENGE_GATE;
@@ -2629,16 +2632,10 @@ function generateFloor(floorNum) {
       }
       return false;
     };
-    // Secret rooms are intentionally cracked-wall-gated (see secret-room
-    // placement at L2417-2441). They will always appear unreachable to this
-    // BFS. Excluding them from the unreachability check avoids over-firing
-    // the downgrade path on every floor with a secret. The per-keyItem
-    // cascade above still correctly detects the regression case where a
-    // key item happens to sit inside a now-secret room — the key just
-    // never enters haveColours, and any non-secret room gated by that
-    // colour gets caught here and triggers the downgrade.
-    const unreachable = rooms.filter((/** @type {any} */ r) =>
-      r.roomType !== 'secret' && !roomTouchesReach(r));
+    // Cracked walls are now in passable() (interact-breakable). Secret rooms
+    // become naturally reachable through them, so no special exclusion is
+    // needed in the unreachable filter.
+    const unreachable = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
     if (unreachable.length > 0) {
       // Downgrade every locked door whose colour the player couldn't pick up.
       // This includes colours with no key item placed at all (the
