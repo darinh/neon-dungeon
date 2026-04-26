@@ -217,6 +217,299 @@ declare global {
     readonly done: boolean;
   }
 
+  // ─── Pure-helper engine modules (relocated to engine/ in Phase A+) ────────
+
+  /**
+   * Math primitives (engine/math.js — Phase C1a, PR #88).
+   *
+   * Browser also exposes each function as a bare global on `window.*` for
+   * back-compat with existing UMD callers (e.g. `window.clamp`); see file
+   * header.
+   */
+  interface EngineMathAPI {
+    /** Uniform float in `[min, max)`. */
+    rnd(min: number, max: number): number;
+    /** Uniform int in `[min, max]` inclusive. */
+    rndInt(min: number, max: number): number;
+    /** Clamp `v` to `[lo, hi]`. */
+    clamp(v: number, lo: number, hi: number): number;
+    /** Euclidean distance between `(ax, ay)` and `(bx, by)`. */
+    dist(ax: number, ay: number, bx: number, by: number): number;
+    /** Squared distance — cheaper when only used for comparisons. */
+    dist2(ax: number, ay: number, bx: number, by: number): number;
+    /** Unit vector for `(dx, dy)`; returns `[0, 0]` when both are zero. */
+    norm(dx: number, dy: number): [number, number];
+    /** Linear interpolation; `t` is NOT clamped. */
+    lerp(a: number, b: number, t: number): number;
+  }
+
+  /**
+   * Viewport math (engine/viewport.js — Phase C1d, PR #89). Pure helpers
+   * — no DOM mutation. The host owns canvas resize.
+   */
+  interface EngineViewportAPI {
+    /** Compares `win.innerWidth/Height` (and falls back to `scr` if needed). */
+    isLandscape(win: any, scr?: any): boolean;
+    /** Largest integer scale that keeps `target` inside `(vw, vh)` within `[lo, hi]`. All three trailing args are optional (defaults: `target=600`, `lo=0.7`, `hi=1.5`). */
+    computeScale(vw: number, vh: number, target?: number, lo?: number, hi?: number): number;
+    /** Logical canvas size given device viewport `(vw, vh)` and scale. */
+    computeLogicalSize(vw: number, vh: number, scale: number): { W: number; H: number };
+    /** HUD/footer layout for logical size `(W, H)` and `safeBottom` inset. */
+    computeLayout(
+      W: number,
+      H: number,
+      safeBottom: number,
+    ): { compact: boolean; hudH: number; hudTop: number; msgBase: number };
+    /** Reads CSS `env(safe-area-inset-*)` via `getProp` and divides by `scale`. */
+    parseSafeAreaInsets(
+      getProp: (name: string) => string | number | null | undefined,
+      scale: number,
+    ): { top: number; right: number; bottom: number; left: number };
+  }
+
+  /**
+   * Touch helpers (engine/touch.js — Phase C1e, PR #92). Pure helpers,
+   * no module state. The host owns the `touch` / `mouse` state objects.
+   */
+  interface EngineTouchAPI {
+    /** Converts client `(clientX, clientY)` to canvas coords using bounding rect. Returns `[x, y]` tuple. */
+    toCanvas(clientX: number, clientY: number, canvas: any): [number, number];
+    /** Circular hit-test: `(cx, cy)` vs centre `(btn.x, btn.y)` radius `btn.r` (with a 22/scale floor). */
+    hitBtn(cx: number, cy: number, btn: { x: number; y: number; r: number }, scale: number): boolean;
+    /** Reset the host-owned `touch` and `mouse` state objects in place. */
+    resetTouch(touch: any, mouse: any): void;
+  }
+
+  /**
+   * 2D canvas draw primitives (engine/draw.js — Phase C2a, PR #93).
+   * Allocation-free, hot-path safe. Callers set fillStyle/strokeStyle/
+   * lineWidth before invoking; helpers only call beginPath/arc/moveTo/
+   * lineTo/fill/stroke. `setShadow`/`clearShadow` are the explicit
+   * exceptions that mutate shadow state.
+   */
+  interface EngineDrawAPI {
+    /** Filled circle at `(x, y)` radius `r` using current fillStyle. */
+    circle(ctx: CanvasRenderingContext2D | any, x: number, y: number, r: number): void;
+    /** Stroked circle using current strokeStyle + lineWidth. */
+    circleStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, r: number): void;
+    /** Stroked partial arc from angle `a1` to `a2` (radians). */
+    arcStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, r: number, a1: number, a2: number): void;
+    /** Stroked line segment from `(x1, y1)` to `(x2, y2)`. */
+    line(ctx: CanvasRenderingContext2D | any, x1: number, y1: number, x2: number, y2: number): void;
+    /** Filled rounded rect using current fillStyle. */
+    roundRect(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Stroked rounded rect using current strokeStyle + lineWidth. */
+    roundRectStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Fill THEN stroke a rounded rect on a single shared path. */
+    roundRectFillStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Fill THEN stroke a non-rounded rect on a single shared path. For fill-only / stroke-only use native `ctx.fillRect` / `ctx.strokeRect`. */
+    rectFillStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number): void;
+    /** Sets `ctx.shadowColor` + `ctx.shadowBlur`. */
+    setShadow(ctx: CanvasRenderingContext2D | any, color: string, blur: number): void;
+    /** Resets `ctx.shadowBlur = 0` (cheaper than `setShadow` for the common reset). */
+    clearShadow(ctx: CanvasRenderingContext2D | any): void;
+  }
+
+  /** Per-tile decor scratch (engine/decor.js — Phase C2b, PR #94). */
+  interface EngineDecorScratch {
+    h: number;
+    roll: number;
+    wallSide: any;
+    flicker: number;
+    alarmEligible: boolean;
+    decorEligible: boolean;
+  }
+
+  /**
+   * Per-tile decor primitives (engine/decor.js — Phase C2b, PR #94).
+   * Hot-path safe — host hoists ONE scratch instance to module scope and
+   * reuses it across all tile decor draws (per the `decor primitives` and
+   * `hot path closure` memories).
+   */
+  interface EngineDecorAPI {
+    /** Knuth-style stable uint32 hash of `(tx, ty, floor)`. */
+    tileHash(tx: number, ty: number, floor: number): number;
+    /** Frozen `[N, S, W, E]` neighbour offsets — do not mutate. */
+    readonly NEIGHBOR_OFFSETS_4: ReadonlyArray<readonly [number, number]>;
+    /** Allocates one scratch object. Host hoists this; do not call per-tile. */
+    createContextScratch(): EngineDecorScratch;
+  }
+
+  // ─── Factory engine modules (createX(opts) → instance) ────────────────────
+
+  /**
+   * Input engine instance (engine/input.js — Phase C1b, PR #91). Returned
+   * by `createEngine(opts)`. Owns the keyboard listener pair.
+   *
+   * The `Set<string>` collections are LIVE — observe but don't mutate.
+   */
+  interface EngineInputInstance {
+    /** Currently-held key codes. */
+    readonly keys: Set<string>;
+    /** Codes that went down between `clearJust()` calls. */
+    readonly justPressed: Set<string>;
+    /** Codes that went up between `clearJust()` calls. */
+    readonly justReleased: Set<string>;
+    /** Convenience: `justPressed.has(code)`. */
+    jp(code: string): boolean;
+    /** Clear the `justPressed` + `justReleased` sets (call once per frame). */
+    clearJust(): void;
+    /** Attach `keydown` + `keyup` listeners on the configured `win`. Idempotent. */
+    attach(): void;
+    /** Detach AND clear all key state — prevents phantom held keys on re-attach. */
+    detach(): void;
+  }
+
+  interface EngineInputAPI {
+    createEngine(opts?: {
+      /** Defaults to `window`/`self`. */
+      win?: any;
+      /** Optional pre-default-prevent hook. */
+      onKeyDown?: (e: any) => void;
+      /** Optional post-handler hook. */
+      onKeyUp?: (e: any) => void;
+    }): EngineInputInstance;
+  }
+
+  /**
+   * Web Audio synth engine instance (engine/audio.js — Phase C1c, PR #90).
+   * Returned by `createEngine(opts)`. Lazily creates `AudioContext` on first
+   * use. Most parameter shapes are loose `any` — Web Audio is dynamically
+   * typed and the synth options bag accepts many optional fields.
+   */
+  interface EngineAudioInstance {
+    /** Lazily creates and returns the `AudioContext` (called internally). */
+    getCtx(): any;
+    /** Resumes the suspended `AudioContext` (best-effort; swallows errors). */
+    resume(): void;
+    /** True iff the context exists AND `state === 'running'`. */
+    isRunning(): boolean;
+    setSfxVolume(v: number): void;
+    setMusicVolume(v: number): void;
+    /** Creates the music bus on first call; returns `{ bus, ctx }`. */
+    getMusicBus(): { bus: any; ctx: any };
+    /** Cached pink-noise buffer (one allocation per session). */
+    getNoiseBuffer(): any;
+    /** Insert a transient stereo panner before `target`; auto-disconnects. */
+    panOut(target: any, pan: number, lifetime: number): any;
+    /** Core voice: oscillator → optional filter → optional pan → target. */
+    osc(
+      type: OscillatorType,
+      freq1: number,
+      freq2: number,
+      vol: number,
+      start: number,
+      dur: number,
+      target?: any,
+      opt?: any,
+    ): void;
+    /** Noise burst from cached buffer, filtered + enveloped. */
+    noise(
+      vol: number,
+      start: number,
+      dur: number,
+      filterFreq: number,
+      target?: any,
+      opt?: any,
+    ): void;
+    /** Reverb send: returns the split-gain node; auto-disconnects after `lifetime + 2.0s`. */
+    wetDry(vol: number, wetAmt: number, lifetime: number): any;
+  }
+
+  interface EngineAudioAPI {
+    createEngine(opts?: {
+      getSfxVolume?: () => number;
+      getMusicVolume?: () => number;
+      win?: any;
+    }): EngineAudioInstance;
+  }
+
+  /**
+   * One particle slot in the pool (engine/particles.js — Phase C2c, PR #95).
+   * Type vocab (`'EXPLOSION'`/`'MUZZLE'`/`'SPARK'`/`'BLOOD'`) is host-defined
+   * — engine treats `type` as opaque.
+   */
+  interface EngineParticle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    life: number;
+    maxLife: number;
+    grav: number;
+    alive: boolean;
+    size: number;
+    colour: string;
+    type: string;
+  }
+
+  /**
+   * Pooled particle system instance. `count`/`pooled`/`capacity` are getter
+   * properties (read-only views over internal arrays).
+   */
+  interface EngineParticleSystem {
+    /** Pop a slot from the pool, or allocate a new one if under cap. Returns `null` at cap. */
+    acquire(): EngineParticle | null;
+    /** Release `p` back to the pool (no-op if not currently alive). */
+    release(p: EngineParticle): void;
+    /** Integrate physics for `dt` seconds; auto-releases dead particles. */
+    update(dt: number): void;
+    /** Iterate live particles in insertion order. */
+    forEach(cb: (p: EngineParticle, i: number) => void): void;
+    /** Release all live particles back to the pool. */
+    clear(): void;
+    /** When `count > burstScaleThreshold`, returns `(n * 0.5) | 0` (min 1); else `n`. */
+    scaleBurst(n: number): number;
+    /** Live particle count. */
+    readonly count: number;
+    /** Pooled (recyclable) slot count. */
+    readonly pooled: number;
+    /** Hard cap on live particles. */
+    readonly capacity: number;
+  }
+
+  interface EngineParticlesAPI {
+    createSystem(opts?: {
+      /** Hard cap on live particles. Default 2000. */
+      cap?: number;
+      /** When live > this, `scaleBurst()` halves requested counts. Default 1500. */
+      burstScaleThreshold?: number;
+    }): EngineParticleSystem;
+  }
+
+  /**
+   * Biome router instance (engine/biomes.js — Phase B3, PR #83). Returned
+   * by `createBiomeRouter(areas)`. Pure: no module state, indexes the
+   * passed-in `areas` table.
+   *
+   * Distinct from `EngineBiomeTableAPI` which describes the `src/data/biomes.js`
+   * data + helpers module (game data shaped via engine schema).
+   */
+  interface EngineBiomeRouter {
+    /** The areas table the router was constructed with. */
+    readonly areas: ReadonlyArray<EngineArea>;
+    areaForFloor(f: number): EngineArea;
+    isBiomeBossFloor(f: number): boolean;
+    firstFloorOfBiomeContaining(f: number): number;
+    biomeIndex(f: number): number;
+    areaForIndex(i: number): EngineArea;
+    finalFloor(): number;
+  }
+
+  interface EngineBiomesRouterAPI {
+    createBiomeRouter(areas: ReadonlyArray<EngineArea>): EngineBiomeRouter;
+  }
+
+  /**
+   * Cinematic controller factory (engine/cinematic.js — Phase B2). The
+   * controller protocol is described by `EngineCinematicController` above.
+   * Slide content is host-supplied; the controller only schedules updates
+   * and fade alphas.
+   */
+  interface EngineCinematicAPI {
+    createCinematicController(opts: any): EngineCinematicController;
+  }
+
   // ─── Aggregate ────────────────────────────────────────────────────────────
 
   /**
@@ -226,9 +519,22 @@ declare global {
    * `window.NEON` is **not** narrowed to this — see the file header for why.
    */
   interface EngineSurface {
+    // Mixed (engine math + game wiring shim) — see EngineAlarmLightAPI note.
     alarmLight: EngineAlarmLightAPI;
+    // Pure-engine helper modules.
+    math: EngineMathAPI;
+    viewport: EngineViewportAPI;
+    touch: EngineTouchAPI;
+    draw: EngineDrawAPI;
+    decor: EngineDecorAPI;
     renderBoundary: EngineRenderBoundaryAPI;
     spawn: EngineSpawnAPI;
     telemetry: EngineTelemetryAPI;
+    // Factory engine modules — call createX(opts) for an instance.
+    input: EngineInputAPI;
+    audio: EngineAudioAPI;
+    particles: EngineParticlesAPI;
+    biomesEngine: EngineBiomesRouterAPI;
+    cinematic: EngineCinematicAPI;
   }
 }

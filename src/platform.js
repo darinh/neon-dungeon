@@ -106,6 +106,16 @@ const _G = new Proxy({}, {
   has: (_t, p) => p in /** @type {any} */ (game),
 });
 
+// Phase C1d: viewport math lives in engine/viewport.js (pure helpers).
+// platform.js still owns the mutable W/H/gameScale/scale/offX/offY/safe-area
+// state for back-compat with all consumers in src/*.js — resize() and
+// updateLayout() are now thin orchestrators over the engine helpers.
+// Browser-only: engine/viewport.js loads first via index.html and mounts
+// itself as window.NEON.viewport. No Node fallback (platform.js never runs
+// under Node — it touches `document`, `window`, `screen` at module top).
+/** @type {any} */
+const _vp = /** @type {any} */ (NEON).viewport;
+
 // Safe-area insets (logical px) for notched devices
 let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
 
@@ -119,9 +129,10 @@ function resize() {
   // Scale: smaller viewport dimension maps to ~600 logical px
   // Tiles (20 logical px) appear as 20 × gameScale CSS px on screen
   // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
-  gameScale = clamp(Math.min(vw, vh) / 600, 0.7, 1.5);
-  W = Math.round(vw / gameScale);
-  H = Math.round(vh / gameScale);
+  gameScale = _vp.computeScale(vw, vh);
+  const _sz = _vp.computeLogicalSize(vw, vh, gameScale);
+  W = _sz.W;
+  H = _sz.H;
   canvas.width = W;
   canvas.height = H;
   scale = gameScale;
@@ -129,10 +140,11 @@ function resize() {
   offY = 0;
   // Read safe-area insets from CSS env() and convert to logical px
   const cs = getComputedStyle(document.documentElement);
-  safeTop    = (parseFloat(cs.getPropertyValue('--sat')) || 0) / gameScale;
-  safeRight  = (parseFloat(cs.getPropertyValue('--sar')) || 0) / gameScale;
-  safeBottom = (parseFloat(cs.getPropertyValue('--sab')) || 0) / gameScale;
-  safeLeft   = (parseFloat(cs.getPropertyValue('--sal')) || 0) / gameScale;
+  const _sa = _vp.parseSafeAreaInsets((/** @type {string} */ n) => cs.getPropertyValue(n), gameScale);
+  safeTop    = _sa.top;
+  safeRight  = _sa.right;
+  safeBottom = _sa.bottom;
+  safeLeft   = _sa.left;
   updateLayout();
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
@@ -141,10 +153,11 @@ function resize() {
 // ─── Layout (shared HUD / bottom-UI metrics) ────────────────────────────────
 const layout = { compact: false, hudH: 40, hudTop: 0, msgBase: 0 };
 function updateLayout() {
-  layout.compact = H > W && W <= 600;
-  layout.hudH    = layout.compact ? 58 : 40;
-  layout.hudTop  = H - layout.hudH - safeBottom;
-  layout.msgBase = layout.hudTop - 12;
+  const _l = _vp.computeLayout(W, H, safeBottom);
+  layout.compact = _l.compact;
+  layout.hudH    = _l.hudH;
+  layout.hudTop  = _l.hudTop;
+  layout.msgBase = _l.msgBase;
 }
 
 // ─── Fullscreen (landscape auto-request, portrait auto-exit) ─────────────────
@@ -165,8 +178,7 @@ let fsWantLandscape = false;   // true when landscape but no gesture yet
 let fsDismissed = false;       // user tapped X to dismiss the prompt this session
 
 function isLandscape() {
-  if (screen.orientation) return screen.orientation.type.startsWith('landscape');
-  return window.innerWidth > window.innerHeight;
+  return _vp.isLandscape(window, screen);
 }
 
 function isTouchDevice() {
@@ -219,24 +231,25 @@ window.addEventListener('resize', onOrientationChange);
 onOrientationChange();
 
 // ─── Input ───────────────────────────────────────────────────────────────────
-const keys = new Set();
+// Phase C1b: keyboard event wiring + held-keys/justPressed/justReleased state
+// live in engine/input.js (NEON.input.createEngine factory). Host owns content-
+// layer state: `lastKey` (name-entry text capture, see game.js NAME_ENTRY) and
+// `nameEntryTap` (touch hit-test relay). We layer those onto the engine via
+// the onKeyDown callback. clearJust() wraps engine.clearJust() and also nulls
+// host state so the existing one-call-per-frame contract is preserved for all
+// downstream consumers (game.js, render.js, content.js).
+const _input = /** @type {any} */ (NEON).input.createEngine({
+  win: window,
+  onKeyDown: (/** @type {any} */ e) => { lastKey = e.key; },
+});
+_input.attach();
+const keys = _input.keys;
+const justPressed = _input.justPressed;
+const justReleased = _input.justReleased;
 const mouse = { x: W/2, y: H/2, down: false };
-const justPressed = new Set();
-const justReleased = new Set();
 let lastKey = '';
 /** @type {any} */
 let nameEntryTap = null;
-
-window.addEventListener('keydown', e => {
-  if (!keys.has(e.code)) justPressed.add(e.code);
-  keys.add(e.code);
-  lastKey = e.key;
-  e.preventDefault();
-});
-window.addEventListener('keyup', e => {
-  keys.delete(e.code);
-  justReleased.add(e.code);
-});
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * canvas.width / r.width;
@@ -298,15 +311,18 @@ function updateBtns() {
   BTNS.PAUSE.y = pt + 30;
 }
 
+// toCanvas / hitBtn are pure helpers extracted to engine/touch.js (Phase C1e).
+// Host keeps thin wrappers so the canvas + gameScale stay implicit at call
+// sites in this file.
+const _touchHelpers = NEON.touch;
+
 /**
  * @param {number} clientX
  * @param {number} clientY
  * @returns {[number, number]}
  */
 function toCanvas(clientX, clientY) {
-  const r = canvas.getBoundingClientRect();
-  return [(clientX - r.left) * canvas.width / r.width,
-          (clientY - r.top)  * canvas.height / r.height];
+  return _touchHelpers.toCanvas(clientX, clientY, canvas);
 }
 
 /**
@@ -315,10 +331,7 @@ function toCanvas(clientX, clientY) {
  * @param {TouchBtn} btn
  */
 function hitBtn(cx, cy, btn) {
-  const dx=cx-btn.x, dy=cy-btn.y;
-  // Expand hit area on small screens to meet minimum touch target
-  const hitR = Math.max(btn.r, 22 / gameScale);
-  return dx*dx+dy*dy <= hitR*hitR;
+  return _touchHelpers.hitBtn(cx, cy, btn, gameScale);
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -546,10 +559,7 @@ canvas.addEventListener('touchcancel', e => {
 }, {passive:false});
 
 function resetTouch() {
-  touch.joystick.active=false; touch.joystick.id=null; touch.joystick.dx=0; touch.joystick.dy=0;
-  touch.aim.active=false; touch.aim.id=null; touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=false;
-  touch.btnE=null; touch.btnF=null; touch.btnV=null; touch.btnDash=null; touch.btnPause=null;
-  mouse.down=false;
+  _touchHelpers.resetTouch(touch, mouse);
 }
 
 function drawTouchUI() {
@@ -566,18 +576,18 @@ function drawTouchUI() {
     ctx.save();
     ctx.globalAlpha=0.35;
     ctx.strokeStyle='#00f5ff'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(bx,by,JR,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,bx,by,JR);
     ctx.fillStyle='#00f5ff';
-    ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,bx+dx*JR,by+dy*JR,18);
     ctx.restore();
   } else {
     // ghost move joystick hint
     const hintY = layout.hudTop - 26;
     ctx.save(); ctx.globalAlpha=0.12;
     ctx.strokeStyle='#00f5ff'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(80, hintY, JR, 0, TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,80,hintY,JR);
     ctx.fillStyle='#00f5ff';
-    ctx.beginPath(); ctx.arc(80, hintY, 18, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,80,hintY,18);
     ctx.restore();
   }
   // Right joystick (aim)
@@ -586,18 +596,18 @@ function drawTouchUI() {
     ctx.save();
     ctx.globalAlpha=0.35;
     ctx.strokeStyle='#ff00c8'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(bx,by,JR,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,bx,by,JR);
     ctx.fillStyle='#ff00c8';
-    ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,bx+dx*JR,by+dy*JR,18);
     ctx.restore();
   } else {
     // ghost aim joystick hint
     const hintY = layout.hudTop - 26;
     ctx.save(); ctx.globalAlpha=0.12;
     ctx.strokeStyle='#ff00c8'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(W/2+80, hintY, JR, 0, TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,W/2+80,hintY,JR);
     ctx.fillStyle='#ff00c8';
-    ctx.beginPath(); ctx.arc(W/2+80, hintY, 18, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,W/2+80,hintY,18);
     ctx.restore();
   }
   // Buttons
@@ -618,9 +628,9 @@ function drawTouchUI() {
     }
     ctx.shadowBlur=10; ctx.shadowColor=btn.colour;
     ctx.strokeStyle=btn.colour; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(btn.x,btn.y,btn.r,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,btn.x,btn.y,btn.r);
     ctx.fillStyle=btn.colour+'33';
-    ctx.beginPath(); ctx.arc(btn.x,btn.y,btn.r,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,btn.x,btn.y,btn.r);
     ctx.fillStyle=btn.colour; ctx.font=`bold ${key==='PAUSE'?11:14}px monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(btn.label,btn.x,btn.y);
@@ -637,9 +647,7 @@ function drawTouchUI() {
     ctx.fillStyle = '#0a0a12';
     ctx.strokeStyle = '#00f5ff';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.rect(px, py, pw, ph);
-    ctx.fill(); ctx.stroke();
+    NEON.draw.rectFillStroke(ctx, px, py, pw, ph);
     // text
     ctx.fillStyle = '#00f5ff';
     ctx.font = 'bold 12px monospace';
@@ -658,23 +666,14 @@ function drawTouchUI() {
 
 /** @param {string} code */
 function jp(code) { return justPressed.has(code); }
-function clearJust() { justPressed.clear(); justReleased.clear(); lastKey=''; nameEntryTap=null; }
+function clearJust() { _input.clearJust(); lastKey=''; nameEntryTap=null; }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
-/** @param {number} min @param {number} max */
-function rnd(min, max) { return min + Math.random() * (max - min); }
-/** @param {number} min @param {number} max */
-function rndInt(min, max) { return Math.floor(rnd(min, max + 1)); }
-/** @param {number} v @param {number} lo @param {number} hi */
-function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
-/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
-function dist(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx+dy*dy); }
-/** @param {number} ax @param {number} ay @param {number} bx @param {number} by */
-function dist2(ax, ay, bx, by) { const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
-/** @param {number} dx @param {number} dy @returns {[number, number]} */
-function norm(dx, dy) { const l=Math.sqrt(dx*dx+dy*dy)||1; return [dx/l, dy/l]; }
-/** @param {number} a @param {number} b @param {number} t */
-function lerp(a, b, t) { return a + (b-a)*t; }
+// Math/RNG primitives moved to engine/math.js (Phase C1a). They are mounted as
+// bare globals (rnd, rndInt, clamp, dist, dist2, norm, lerp) by that module's
+// UMD bootstrap, which loads before this file. Call sites here and across
+// src/* keep working without any rename. Do not redeclare them here — adding
+// a `function rnd(){}` etc. would shadow the engine version.
 /** @param {{x:number,y:number}} entity */
 function clampToBossRoom(entity) {
   if (!_G.bossSealed || !_G.bossRoom) return;
@@ -758,170 +757,34 @@ function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LO
 function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t===T.LOCKED_G?'gold':null; }
 
 // ─── Audio Engine ────────────────────────────────────────────────────────────
+// Engine primitives (AudioContext, busses, voices, noise buffer) live in
+// engine/audio.js — see Phase C1c. This IIFE wraps the engine and defines all
+// the NEON-specific named SFX (shoot, hit, menuSelect, etc.) as a content
+// layer on top of those primitives.
 const audio = (() => {
-  /** @type {any} */ let actx = null;
-  /** @type {any} */ let master = null;
-  /** @type {any} */ let compressor = null;
-  /** @type {any} */ let reverbNode = null;
-  /** @type {any} */ let reverbGain = null;
-  /** @type {any} */ let noiseBuf = null;
-  /** @type {any} */ let musicBus = null;
-
-  function getCtx() {
-    if (!actx) {
-      actx = new (window.AudioContext || /** @type {any} */ (window).webkitAudioContext)();
-      // Master bus: compressor → destination
-      compressor = actx.createDynamicsCompressor();
-      compressor.threshold.value = -12;
-      compressor.ratio.value = 4;
-      compressor.connect(actx.destination);
-      master = actx.createGain();
-      master.gain.value = 0.7 * settings.sfxVol;
-      master.connect(compressor);
-      // Reverb bus: ConvolverNode with procedural impulse response
-      reverbNode = actx.createConvolver();
-      const irLen = actx.sampleRate * 1.6;
-      const irBuf = actx.createBuffer(2, irLen, actx.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const d = irBuf.getChannelData(ch);
-        for (let i = 0; i < irLen; i++) {
-          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.5);
-        }
-      }
-      reverbNode.buffer = irBuf;
-      reverbGain = actx.createGain();
-      reverbGain.gain.value = 0.35;
-      reverbNode.connect(reverbGain);
-      reverbGain.connect(master);
-      // Cached noise buffer (2 seconds, reused by all noise calls)
-      const nLen = actx.sampleRate * 2;
-      noiseBuf = actx.createBuffer(1, nLen, actx.sampleRate);
-      const nd = noiseBuf.getChannelData(0);
-      for (let i = 0; i < nLen; i++) nd[i] = Math.random() * 2 - 1;
-    }
-    return actx;
-  }
-
-  function resume() {
-    const c = getCtx();
-    if (c.state !== 'running') {
-      try { c.resume().catch(() => {}); } catch (_) {}
-    }
-  }
-
-  /** @param {number} v @param {number} lo @param {number} hi */
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-  /** @param {any} target @param {number} pan @param {number} lifetime */
-  function panOut(target, pan, lifetime) {
-    const c = getCtx();
-    const out = target || master;
-    if (!c.createStereoPanner || Math.abs(pan || 0) < 0.01) return out;
-    const p = c.createStereoPanner();
-    p.pan.value = clamp(pan, -1, 1);
-    p.connect(out);
-    setTimeout(() => { try { p.disconnect(); } catch (e) {} }, Math.max(80, (lifetime || 0.2) * 1000));
-    return p;
-  }
-
-  // Core voice: oscillator → gain/filter → optional pan → target node
-  /** @param {OscillatorType} type @param {number} freq1 @param {number} freq2 @param {number} vol @param {number} start @param {number} dur @param {any} [target] @param {any} [opt] */
-  function osc(type, freq1, freq2, vol, start, dur, target, opt) {
-    const c = getCtx();
-    const o = c.createOscillator();
-    const g = c.createGain();
-    const opts = opt || {};
-    const attack = opts.attack == null ? 0.002 : opts.attack;
-    const releaseAt = start + (opts.release == null ? dur : opts.release);
-    o.type = type;
-    if (opts.detune) o.detune.value = opts.detune;
-    o.frequency.setValueAtTime(Math.max(1, freq1), start);
-    if (freq2 !== freq1) o.frequency.exponentialRampToValueAtTime(Math.max(freq2, 1), start + dur);
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
-    g.gain.exponentialRampToValueAtTime(0.001, releaseAt);
-
-    let tail = g;
-    if (opts.filterType) {
-      const flt = c.createBiquadFilter();
-      flt.type = opts.filterType;
-      const ff = Math.max(40, opts.filterFreq || Math.max(freq1, freq2, 300));
-      flt.frequency.setValueAtTime(ff, start);
-      if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
-      if (opts.q != null) flt.Q.value = opts.q;
-      g.connect(flt);
-      tail = flt;
-    }
-    o.connect(g);
-    tail.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
-    o.start(start);
-    o.stop(releaseAt + 0.04);
-  }
-
-  // Noise burst from cached buffer
-  /** @param {number} vol @param {number} start @param {number} dur @param {number} filterFreq @param {any} [target] @param {any} [opt] */
-  function noise(vol, start, dur, filterFreq, target, opt) {
-    const c = getCtx();
-    const src = c.createBufferSource();
-    src.buffer = noiseBuf;
-    const flt = c.createBiquadFilter();
-    const opts = opt || {};
-    flt.type = opts.filterType || 'lowpass';
-    const ff = Math.max(40, filterFreq || 800);
-    flt.frequency.setValueAtTime(ff, start);
-    if (opts.filterFreq2 && opts.filterFreq2 !== ff) flt.frequency.exponentialRampToValueAtTime(Math.max(40, opts.filterFreq2), start + dur);
-    if (opts.q != null) flt.Q.value = opts.q;
-    const g = c.createGain();
-    const attack = opts.attack == null ? 0.001 : opts.attack;
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(Math.max(0.001, vol), start + attack);
-    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-    src.connect(flt); flt.connect(g); g.connect(panOut(target || master, opts.pan || 0, dur + 0.35));
-    src.start(start); src.stop(start + dur + 0.03);
-  }
-
-  // Reverb send helper — routes signal to both dry and wet buses
-  // lifetime: seconds until all voices through this bus have finished (excludes reverb tail)
-  /** @param {number} vol @param {number} wetAmt @param {number} lifetime */
-  function wetDry(vol, wetAmt, lifetime) {
-    const c = getCtx();
-    const split = c.createGain();
-    split.gain.value = vol;
-    const dry = c.createGain();
-    dry.gain.value = 1;
-    const wet = c.createGain();
-    wet.gain.value = wetAmt;
-    split.connect(dry); dry.connect(master);
-    split.connect(wet); wet.connect(reverbNode);
-    // Schedule cleanup after voices + reverb tail finish
-    const cleanup = () => { split.disconnect(); dry.disconnect(); wet.disconnect(); };
-    setTimeout(cleanup, (lifetime + 2.0) * 1000);
-    return split;
-  }
+  const _eng = /** @type {any} */ (NEON).audio.createEngine({
+    getSfxVolume:   () => settings.sfxVol,
+    getMusicVolume: () => settings.musicVol,
+  });
+  const getCtx = _eng.getCtx;
+  const resume = _eng.resume;
+  const osc = _eng.osc;
+  const noise = _eng.noise;
+  const wetDry = _eng.wetDry;
+  const getNoiseBuffer = _eng.getNoiseBuffer;
 
   return {
     resume,
-    isRunning() { return actx && actx.state === 'running'; },
+    isRunning() { return _eng.isRunning(); },
     setSfxVolume(/** @type {number} */ v) {
       settings.sfxVol = v;
-      if (master) { const t = actx.currentTime; master.gain.cancelScheduledValues(t); master.gain.linearRampToValueAtTime(0.7 * v, t + 0.02); }
+      _eng.setSfxVolume(v);
     },
     setMusicVolume(/** @type {number} */ v) {
       settings.musicVol = v;
-      if (musicBus) { const t = actx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.linearRampToValueAtTime(0.20 * v, t + 0.02); }
+      _eng.setMusicVolume(v);
     },
-    getMusicBus() {
-      const c = getCtx();
-      if (!musicBus) {
-        const mc = c.createDynamicsCompressor();
-        mc.threshold.value = -18; mc.ratio.value = 2; mc.attack.value = 0.05;
-        mc.connect(c.destination);
-        musicBus = c.createGain();
-        musicBus.gain.value = 0.20 * settings.musicVol;
-        musicBus.connect(mc);
-      }
-      return { bus: musicBus, ctx: c };
-    },
+    getMusicBus() { return _eng.getMusicBus(); },
     shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon = null) {
       const c = getCtx(); const t = c.currentTime;
       if (!isPlayer) {
@@ -1138,7 +1001,7 @@ const audio = (() => {
       }
       // Filtered noise sweep (low → high, like data streaming)
       const nSrc = c.createBufferSource();
-      nSrc.buffer = noiseBuf;
+      nSrc.buffer = getNoiseBuffer();
       const flt = c.createBiquadFilter();
       flt.type = 'bandpass';
       flt.Q.value = 3;

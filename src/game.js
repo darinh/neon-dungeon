@@ -41,6 +41,7 @@ const game = {
   shopSelected: 0,    // keyboard selection index in shop
   shopClosing: false,  // true during auto-close delay after last purchase
   currentLore: null,   // lore text being displayed in READING state
+  _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
@@ -1095,8 +1096,6 @@ const game = {
   updatePlaying(dt) {
     const player=this.player;
     const dungeon=this.dungeon;
-    this.floorTime = (this.floorTime || 0) + dt;
-    this.runTime = (this.runTime || 0) + dt;
     // Telemetry: perf sample every ~10s
     this._perfSampleTimer = (this._perfSampleTimer || 0) + dt;
     if (this._perfSampleTimer >= 10 && typeof NEON !== 'undefined' && NEON.telemetry) {
@@ -1106,10 +1105,40 @@ const game = {
         fps: this.perf ? Math.round(this.perf.fps) : null,
         enemies: enemies.length,
         projectiles: projectiles.length,
-        particles: particles ? particles.length : 0,
+        particles: particleCount(),
       });
     }
     this.hint = null;
+
+    // Level-start text (modifier banner / biome intro card) — freeze gameplay
+    // while text is shown so the player can read it without taking damage.
+    // Mirrors the mapExpanded pause pattern below: tick text timers, accept
+    // any-key dismiss, return early.
+    //
+    // Both timers can be dismissed together with any NEW key press
+    // (justPressed, not held) — carry-over movement keys from prior floor /
+    // fade transitions don't insta-dismiss.
+    //
+    // CRITICAL: runs BEFORE floorTime/runTime accumulation so the Arc Grid
+    // hazard phase (Math.sin(floorTime * PI) at L1738) does NOT advance
+    // during the pause — otherwise the player could resume into a freshly-
+    // active arc tile that wasn't active when the text appeared. Same
+    // reasoning for runTime: pause time should not count against the run.
+    if (this.modBannerTimer > 0 || this.biomeCardTimer > 0) {
+      if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
+      if (this.biomeCardTimer > 0) this.biomeCardTimer -= dt;
+      if (typeof justPressed !== 'undefined' && justPressed && justPressed.size > 0) {
+        this.modBannerTimer = 0;
+        this.biomeCardTimer = 0;
+      }
+      if (this.modBannerTimer < 0) this.modBannerTimer = 0;
+      if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
+      justPressed.clear();
+      return;
+    }
+
+    this.floorTime = (this.floorTime || 0) + dt;
+    this.runTime = (this.runTime || 0) + dt;
 
     // Expanded map modal — freeze gameplay, only handle dismiss
     if (this.mapExpanded) {
@@ -1277,6 +1306,46 @@ const game = {
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
           continue;
         }
+        if (it.isWhisper) {
+          // Whispers subplot — picking up shows the body in a READING overlay
+          // so the discovery + reading moment feels earned (per stored
+          // 'game design' memory). The whisper is also marked found+read in
+          // save state so the ARCHIVE WHISPERS counter increments and the
+          // player can re-visit later via ARCHIVE > WHISPERS section
+          // (UI list ships in a follow-up). audio.logRead reused.
+          items.splice(i, 1);
+          let title = 'WHISPER';
+          let body = '';
+          let voice = '';
+          try {
+            if (typeof NEON !== 'undefined' && NEON.whispers) {
+              const w = NEON.whispers.findWhisper(it.whisperId) ||
+                        NEON.whispers.whisperById(it.whisperId);
+              NEON.whispers.readWhisper(it.whisperId);
+              if (w) {
+                title = String(w.title || title);
+                body  = String(w.body  || '');
+                voice = String(w.voice || '');
+              }
+            }
+          } catch (_) { /* meta unavailable; just toast generic */ }
+          try { audio.logRead(); } catch (_) {}
+          this.msg('★ WHISPER · ' + title, '#cc99ee');
+          if (typeof NEON !== 'undefined' && NEON.telemetry) {
+            NEON.telemetry.track('whisper_found', { id: it.whisperId, floor: this.floor });
+          }
+          // Show the reading overlay. _whisperMeta drives renderReading's
+          // violet styling branch; clearing currentLore is safe because the
+          // amber DATA TERMINAL path won't trigger when _whisperMeta is set.
+          if (body) {
+            this.currentLore = body;
+            this._whisperMeta = { title, voice };
+            this.readingInteractArmed = false;
+            this.setState('READING');
+            return;
+          }
+          continue;
+        }
         // Defer upgrade pickup if a perk/augment choice is pending
         if (this.pendingPerkChoices.length || this.perkChoice || this.augmentChoice) continue;
         audio.pickup();
@@ -1399,17 +1468,12 @@ const game = {
     updateShake(dt);
     updateCombo(dt);
     updateHackwareEffects(dt);
-    if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
-    if (this.biomeCardTimer > 0) {
-      this.biomeCardTimer -= dt;
-      // Any NEW key press skips the card. Use justPressed (per-frame) instead
-      // of keys (held) so carried-over movement keys from the previous floor
-      // don't instantly dismiss the card.
-      if (typeof justPressed !== 'undefined' && justPressed && justPressed.size > 0) {
-        this.biomeCardTimer = 0;
-      }
-      if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
-    }
+    // NOTE: modBannerTimer / biomeCardTimer are ticked in the level-text
+    // pause block at the top of updatePlaying (early-return). When this
+    // line runs, both timers are guaranteed to be 0 — leaving the
+    // bookkeeping nulls in place defensively.
+    if (this.modBannerTimer < 0) this.modBannerTimer = 0;
+    if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
@@ -2612,6 +2676,10 @@ const game = {
     const closeByInteract = this.readingInteractArmed && jp(km('interact'));
     if (closeByInteract || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
       audio.menuSelect();
+      // Clear whisper meta on close so the next READING entry (data terminal
+      // lore) renders with the amber styling, not whatever was set last.
+      this._whisperMeta = null;
+      this.currentLore = null;
       this.setState('PLAYING');
     }
   },
@@ -3239,8 +3307,8 @@ const game = {
     const titleFs = narrow ? 56 : 72;
     // grid lines
     ctx.save(); ctx.globalAlpha=0.05; ctx.strokeStyle='#00f5ff';
-    for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
+    for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.restore();
 
     // title — scale for portrait
@@ -3772,19 +3840,14 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? opt.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, cardY, cw, cardH, 8);
-      ctx.fill();
-      ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur=20; ctx.shadowColor=opt.colour;
         ctx.strokeStyle=opt.colour; ctx.lineWidth=2;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
       // Rarity border glow for affixed weapons
@@ -3792,9 +3855,7 @@ const game = {
         ctx.save();
         ctx.shadowBlur=12; ctx.shadowColor=opt._rarityColour;
         ctx.strokeStyle=opt._rarityColour; ctx.lineWidth=1.5;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -3869,10 +3930,7 @@ const game = {
     ctx.fillStyle='rgba(255,255,255,0.04)';
     ctx.strokeStyle='rgba(255,255,255,0.2)';
     ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.roundRect((W-skipW)/2, skipY, skipW, skipH, 6);
-    ctx.fill();
-    ctx.stroke();
+    NEON.draw.roundRectFillStroke(ctx, (W-skipW)/2, skipY, skipW, skipH, 6);
 
     ctx.fillStyle='#666688';
     ctx.font=`${narrow?13:15}px monospace`;
@@ -3933,18 +3991,14 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? perk.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, cardY, cw, cardH, 8);
-      ctx.fill(); ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur = 20; ctx.shadowColor = perk.colour;
         ctx.strokeStyle = perk.colour; ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -4040,7 +4094,7 @@ const game = {
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+        NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.fillStyle = '#333344';
         ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
         ctx.fillText('SOLD', cx + cw / 2, cardY + cardH / 2 + 6);
@@ -4051,13 +4105,13 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(57,255,20,0.06)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? item.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       if (sel) {
         ctx.save();
         ctx.shadowBlur = 16; ctx.shadowColor = item.colour;
         ctx.strokeStyle = item.colour; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -4116,7 +4170,7 @@ const game = {
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect((W - leaveW) / 2, leaveY, leaveW, leaveH, 6); ctx.fill(); ctx.stroke();
+    NEON.draw.roundRectFillStroke(ctx, (W - leaveW) / 2, leaveY, leaveW, leaveH, 6);
 
     ctx.fillStyle = '#666688';
     ctx.font = `${narrow ? 13 : 15}px monospace`;
@@ -4136,6 +4190,15 @@ const game = {
 
   renderReading() {
     if (!this.currentLore) return;
+    const isWhisper = !!this._whisperMeta;
+    const accent = isWhisper ? '#cc99ee' : '#ffb700';
+    const bgFill = isWhisper ? 'rgba(20,12,32,0.95)' : 'rgba(26,18,8,0.95)';
+    const scanFill = isWhisper ? 'rgba(204,153,238,0.04)' : 'rgba(255,183,0,0.03)';
+    const titleText = isWhisper
+      ? '⌬ WHISPER FRAGMENT'
+      : '◫ DATA TERMINAL';
+    const bodyColour = isWhisper ? '#e8d5ff' : '#ddc888';
+    const subtleColour = isWhisper ? '#7755aa' : '#886622';
     const narrow = layout.compact;
     const isTouch = isTouchDevice();
     ctx.save();
@@ -4152,38 +4215,45 @@ const game = {
 
     // Outer glow border
     ctx.save();
-    ctx.shadowBlur = 20; ctx.shadowColor = '#ffb700';
-    ctx.strokeStyle = '#ffb700';
+    ctx.shadowBlur = 20; ctx.shadowColor = accent;
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.stroke();
+    NEON.draw.roundRectStroke(ctx, fx, fy, fw, fh, 8);
     ctx.restore();
 
     // Inner background
-    ctx.fillStyle = 'rgba(26,18,8,0.95)';
-    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.fill();
+    ctx.fillStyle = bgFill;
+    NEON.draw.roundRect(ctx, fx, fy, fw, fh, 8);
 
     // Scanline effect
-    ctx.fillStyle = 'rgba(255,183,0,0.03)';
+    ctx.fillStyle = scanFill;
     for (let sy = fy; sy < fy + fh; sy += 3) {
       ctx.fillRect(fx, sy, fw, 1);
     }
 
     // Title
     ctx.textAlign = 'center';
-    ctx.shadowBlur = 12; ctx.shadowColor = '#ffb700';
-    ctx.fillStyle = '#ffb700';
+    ctx.shadowBlur = 12; ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
     ctx.font = `bold ${narrow ? 16 : 22}px monospace`;
-    ctx.fillText('◫ DATA TERMINAL', W / 2, fy + (narrow ? 28 : 36));
+    ctx.fillText(titleText, W / 2, fy + (narrow ? 28 : 36));
     ctx.shadowBlur = 0;
 
-    // Lore count
-    const count = this.player ? this.player.loreRead.size : 0;
-    ctx.fillStyle = '#886622';
+    // Subtitle: lore count for terminals, voice attribution for whispers
+    ctx.fillStyle = subtleColour;
     ctx.font = `${narrow ? 11 : 11}px monospace`;
-    ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
+    if (isWhisper) {
+      const meta = this._whisperMeta || {};
+      const sub = (meta.title ? meta.title + '   ·   ' : '') +
+                  (meta.voice || 'unknown');
+      ctx.fillText(sub, W / 2, fy + (narrow ? 44 : 56));
+    } else {
+      const count = this.player ? this.player.loreRead.size : 0;
+      ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
+    }
 
-    // Word-wrapped lore text
-    ctx.fillStyle = '#ddc888';
+    // Word-wrapped body text
+    ctx.fillStyle = bodyColour;
     const fontSize = narrow ? 11 : 14;
     ctx.font = `${fontSize}px monospace`;
     const maxTextW = fw - 40;
@@ -4212,7 +4282,7 @@ const game = {
 
     // Close hint
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#887744';
+    ctx.fillStyle = isWhisper ? '#7755aa' : '#887744';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     const closeText = isTouch
       ? 'TAP TO CLOSE'
@@ -4353,8 +4423,8 @@ const game = {
 
     // grid lines
     ctx.globalAlpha=0.03; ctx.strokeStyle='#ffb700';
-    for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
+    for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.globalAlpha=1;
 
     // Title
@@ -4741,7 +4811,7 @@ function renderPerfHUD() {
   const lines = [
     `FPS ${s.fps.toFixed(0)}  frame ${s.avgFrame.toFixed(1)}ms max ${s.maxFrame.toFixed(1)}`,
     `  upd ${s.avgUpdate.toFixed(2)}  render ${s.avgRender.toFixed(2)}`,
-    `enemies ${enemies.length}  proj ${projectiles.length}  part ${particles.length}`,
+    `enemies ${enemies.length}  proj ${projectiles.length}  part ${particleCount()}`,
     `ft ${floatingTexts.length}  vcore ${vcores.length}  beacon ${beacons.length}`,
     `mine ${mines.length}  cam ${cameras.length}  laser ${lasers.length}`,
     `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,

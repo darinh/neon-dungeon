@@ -33,54 +33,191 @@
 
   // ─── Terminals ────────────────────────────────────────────────────────────
 
-  // ARMORY — minimal stub: shows currently-equipped weapon name. Real weapon
-  // swap UI wire-up is deferred (noted in the PR); keeping the API identical
-  // so the upgrade is drop-in.
+  // ARMORY — view weapon belt + tap-to-equip (issue P1: hub backlog).
+  // Reads game.player.weapons[] (belt array) and game.player.weaponIdx
+  // (active slot). Selecting a weapon mirrors the runtime cycleWeapon()
+  // path in entities.js — sets weaponIdx + weapon, fires audio.menuSelect.
   const ArmoryTerminal = {
     id: 'armory',
     label: 'ARMORY',
     _accent: '#ffb700',
-    onOpen() {},
+    _sel: 0,
+    _t: 0,
+    onOpen() {
+      this._t = 0;
+      // Initialise selection to the active slot so opening the panel
+      // doesn't surprise the player by moving the cursor.
+      try {
+        const g = /** @type {any} */ (game);
+        this._sel = (g && g.player && typeof g.player.weaponIdx === 'number')
+          ? g.player.weaponIdx
+          : 0;
+      } catch (_) { this._sel = 0; }
+    },
     onClose() {},
-    update(/* dt, input */) {},
+    /** Returns the player.weapons array (belt) or [] if unavailable. */
+    _getBelt() {
+      try {
+        const g = /** @type {any} */ (game);
+        if (g && g.player && Array.isArray(g.player.weapons)) return g.player.weapons;
+      } catch (_) { /* ignore */ }
+      return [];
+    },
+    /** Equip slot index. Idempotent if already active. @param {number} idx */
+    _equip(idx) {
+      try {
+        const g = /** @type {any} */ (game);
+        if (!g || !g.player) return;
+        const belt = g.player.weapons;
+        if (!Array.isArray(belt) || idx < 0 || idx >= belt.length) return;
+        const next = belt[idx];
+        if (!next) return;
+        if (g.player.weaponIdx === idx && g.player.weapon === next) return;
+        g.player.weaponIdx = idx;
+        g.player.weapon = next;
+        // Mirror runtime cycleWeapon() / number-key swap (entities.js:6234-6239,
+        // 6704) — both reset shootCooldown so the newly-equipped weapon can fire
+        // immediately. Without this, a player who tapped to swap in Armory would
+        // descend with an arbitrarily-long cooldown carried over from the prior
+        // weapon's last shot.
+        g.player.shootCooldown = 0;
+        try { audio.menuSelect(); } catch (_) {}
+      } catch (_) { /* ignore */ }
+    },
+    /** @param {number} dt */
+    update(dt /* , input */) {
+      this._t += (dt || 0);
+      if (typeof jp !== 'function') return;
+      const km_ = (typeof km === 'function') ? km : () => null;
+      const belt = this._getBelt();
+      const n = belt.length;
+      if (n === 0) return;
+      if (this._sel >= n) this._sel = n - 1;
+      if (this._sel < 0) this._sel = 0;
+      if (jp('ArrowUp') || jp(km_('up'))) {
+        this._sel = (this._sel + n - 1) % n;
+        try { audio.menuSelect(); } catch (_) {}
+      }
+      if (jp('ArrowDown') || jp(km_('down'))) {
+        this._sel = (this._sel + 1) % n;
+        try { audio.menuSelect(); } catch (_) {}
+      }
+      if (jp('Enter') || jp(km_('interact'))) {
+        this._equip(this._sel);
+      }
+      // Number-key shortcuts mirror runtime weapon-belt hotkeys.
+      if (jp('Digit1') && n >= 1) { this._sel = 0; this._equip(0); }
+      if (jp('Digit2') && n >= 2) { this._sel = 1; this._equip(1); }
+      if (jp('Digit3') && n >= 3) { this._sel = 2; this._equip(2); }
+    },
+    // Touch hit-test. Layout mirrors draw() row positions; if either
+    // changes, update both.
+    /** @param {number} cx @param {number} cy @param {{x:number,y:number,w:number,h:number}} bounds @param {any} game */
+    onTap(cx, cy, bounds, game) {
+      void game;
+      const { x, y, w } = bounds;
+      const belt = this._getBelt();
+      if (belt.length === 0) return;
+      const headerH = 86;  // header + EQUIPPED line
+      const rowH = 26;
+      // Rows are drawn left-padded so the hit-test is row-band based on cy.
+      const k = Math.floor((cy - (y + headerH)) / rowH);
+      if (k < 0 || k >= belt.length) return;
+      // Optional horizontal sanity check — reject taps far outside the panel.
+      if (cx < x + 8 || cx > x + w - 8) return;
+      this._sel = k;
+      this._equip(k);
+    },
     /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     draw(ctx, x, y, w, h) {
+      const accent = this._accent;
       ctx.save();
       ctx.fillStyle = 'rgba(8,10,20,0.92)';
       ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = this._accent;
+      ctx.strokeStyle = accent;
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-      ctx.fillStyle = this._accent;
+
+      // Header
+      ctx.fillStyle = accent;
       ctx.font = '18px monospace';
       ctx.textAlign = 'center';
-      ctx.shadowBlur = 10; ctx.shadowColor = this._accent;
+      ctx.shadowBlur = 10; ctx.shadowColor = accent;
       ctx.fillText('ARMORY', x + w / 2, y + 32);
       ctx.shadowBlur = 0;
 
-      // Lookup current weapon from game global (browser only)
-      let weaponName = '—';
-      try {
-        const g = /** @type {any} */ (game);
-        if (g && g.player && g.player.weapon) {
-          weaponName = g.player.weapon.name || g.player.weapon.id || '—';
-        }
-      } catch (_) { /* ignore */ }
+      const belt = this._getBelt();
+      const activeIdx = (() => {
+        try {
+          const g = /** @type {any} */ (game);
+          return (g && g.player && typeof g.player.weaponIdx === 'number') ? g.player.weaponIdx : 0;
+        } catch (_) { return 0; }
+      })();
 
+      // EQUIPPED summary
       ctx.fillStyle = '#e0e0ff';
       ctx.font = '13px monospace';
-      ctx.fillText('EQUIPPED', x + w / 2, y + 64);
+      ctx.fillText('EQUIPPED', x + w / 2, y + 56);
       ctx.fillStyle = '#ffffff';
       ctx.font = '15px monospace';
-      ctx.fillText(String(weaponName).toUpperCase(), x + w / 2, y + 86);
+      const activeWeapon = belt[activeIdx];
+      const activeName = activeWeapon ? String(activeWeapon.name || activeWeapon.id || '—') : '—';
+      ctx.fillText(activeName.toUpperCase(), x + w / 2, y + 76);
 
-      ctx.fillStyle = '#888ab0';
-      ctx.font = '12px monospace';
-      ctx.fillText('Weapon swap UI — coming online', x + w / 2, y + 118);
+      // Belt rows. 3 max; empty slots render dim "EMPTY".
+      const headerH = 86;
+      const rowH = 26;
+      const MAX_BELT = 3;
+      ctx.textAlign = 'left';
+      ctx.font = '13px monospace';
+      for (let i = 0; i < MAX_BELT; i++) {
+        const ry = y + headerH + i * rowH;
+        const isActive = (i === activeIdx);
+        const isSel = (i === this._sel);
+        const w2 = belt[i];
 
+        // Selection hilite
+        if (isSel) {
+          ctx.fillStyle = 'rgba(255,183,0,0.16)';
+          ctx.fillRect(x + 8, ry - 2, w - 16, rowH - 4);
+          ctx.strokeStyle = accent;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x + 8.5, ry - 1.5, w - 17, rowH - 5);
+        }
+
+        // Slot number
+        ctx.fillStyle = isSel ? accent : '#888ab0';
+        ctx.fillText('[' + (i + 1) + ']', x + 16, ry + 14);
+
+        // Weapon name
+        if (w2) {
+          ctx.fillStyle = isActive ? '#ffffff' : (isSel ? '#ffe8a3' : '#c8c8e0');
+          const name = String(w2.name || w2.id || '—').toUpperCase();
+          ctx.fillText(name, x + 48, ry + 14);
+          if (isActive) {
+            ctx.fillStyle = accent;
+            ctx.textAlign = 'right';
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText('◀ ACTIVE', x + w - 16, ry + 14);
+            ctx.font = '13px monospace';
+            ctx.textAlign = 'left';
+          }
+        } else {
+          ctx.fillStyle = '#3a3a55';
+          ctx.font = 'italic 13px monospace';
+          ctx.fillText('— empty —', x + 48, ry + 14);
+          ctx.font = '13px monospace';
+        }
+      }
+
+      // Footer hint
       ctx.fillStyle = '#555577';
       ctx.font = '11px monospace';
-      ctx.fillText('[ESC] BACK', x + w / 2, y + h - 16);
+      ctx.textAlign = 'center';
+      const hint = (typeof isTouchDevice === 'function' && isTouchDevice())
+        ? 'TAP A SLOT TO EQUIP   ·   [ESC] BACK'
+        : '[↑↓] SELECT   [ENTER] EQUIP   [1-3] HOTKEYS   [ESC] BACK';
+      ctx.fillText(hint, x + w / 2, y + h - 16);
       ctx.restore();
     },
   };
@@ -159,7 +296,7 @@
       }
       const list = this._getFoundList();
       if (list.length === 0) return;
-      const headerH = 56, footerH = 24, rowH = 18;
+      const headerH = 72, footerH = 24, rowH = 18;  // headerH matches _drawList
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));
       // _drawList paints each row's hilite at (x+8, ry-12, w-16, rowH-2)
@@ -202,6 +339,17 @@
       ctx.font = '11px monospace';
       ctx.fillText('SIGNAL FRAGMENTS: ' + progress.read + '/' + progress.total, x + w / 2, y + 44);
 
+      // Whispers progress (secret-room subplot — see src/data/whispers.js).
+      // Shown as a separate counter so the player can tell at a glance there's
+      // a deeper layer to discover. Empty progress (0/0 or 0/N) renders dim.
+      let wprog = { read: 0, total: 0 };
+      try { if (NEON && NEON.whispers) wprog = NEON.whispers.progress(); } catch (_) {}
+      if (wprog.total > 0) {
+        ctx.fillStyle = wprog.read > 0 ? '#aa66cc' : '#444466';
+        ctx.font = '10px monospace';
+        ctx.fillText('WHISPERS: ' + wprog.read + '/' + wprog.total, x + w / 2, y + 58);
+      }
+
       // Body.
       if (this._reading) {
         this._drawReading(ctx, x, y, w, h);
@@ -238,7 +386,7 @@
 
       // Scroll window.
       const rowH = 18;
-      const headerH = 56;
+      const headerH = 72;  // 56 base + 16 for the WHISPERS counter line
       const footerH = 24;
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));

@@ -1081,7 +1081,7 @@ function drawHackwareEffects(camX, camY) {
       ctx.strokeStyle = '#00ddff';
       ctx.shadowBlur = 15; ctx.shadowColor = '#00ddff';
       ctx.lineWidth = 3 * (1 - progress);
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       ctx.restore();
     }
     if (fx.type === 'swarm') {
@@ -1090,7 +1090,7 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = 0.8;
       ctx.shadowBlur = 8; ctx.shadowColor = '#44ff88';
       ctx.fillStyle = '#44ff88';
-      ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3);
       ctx.restore();
     }
     if (fx.type === 'gravity') {
@@ -1103,19 +1103,18 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.25 * pulse;
       ctx.fillStyle = '#ff8800';
       ctx.shadowBlur = 20; ctx.shadowColor = '#ff8800';
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, r);
       // Core
       ctx.globalAlpha = fade * 0.7;
-      ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 6);
       // Rotating arms
       ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 2;
       ctx.globalAlpha = fade * 0.4;
       for (let arm = 0; arm < 3; arm++) {
         const a = fx.age * 4 + (TWO_PI / 3) * arm;
-        ctx.beginPath();
-        ctx.moveTo(sx + Math.cos(a) * 8, sy + Math.sin(a) * 8);
-        ctx.lineTo(sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
-        ctx.stroke();
+        NEON.draw.line(ctx,
+          sx + Math.cos(a) * 8, sy + Math.sin(a) * 8,
+          sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
       }
       ctx.restore();
     }
@@ -1129,24 +1128,22 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.15 * pulse;
       ctx.fillStyle = '#44ccff';
       ctx.shadowBlur = 25; ctx.shadowColor = '#44ccff';
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, r);
       // Outer ring stroke
       ctx.globalAlpha = fade * 0.5;
       ctx.strokeStyle = '#44ccff'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       // Rotating arc segments (3 arcs, 60° each)
       ctx.lineWidth = 3;
       ctx.globalAlpha = fade * 0.6;
       for (let seg = 0; seg < 3; seg++) {
         const a = fx.age * 3 + (TWO_PI / 3) * seg;
-        ctx.beginPath();
-        ctx.arc(sx, sy, r * 0.7, a, a + Math.PI / 3);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, r * 0.7, a, a + Math.PI / 3);
       }
       // Core spark
       ctx.globalAlpha = fade * 0.8;
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(sx, sy, 3 + Math.sin(fx.age * 15) * 1.5, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 15) * 1.5);
       ctx.restore();
     }
     if (fx.type === 'hologram') {
@@ -1360,29 +1357,19 @@ function installModule(slot, moduleId)          { return NEON.save.installModule
  */
 function sellModule(moduleId, refund)           { return NEON.save.sellModule(moduleId, refund); }
 
-// ─── Particles (pooled) ──────────────────────────────────────────────────────
-// particles[] holds ONLY alive slots. _particlePool is the free list of dead
-// slots ready for reuse. spawnParticles() pulls from the pool (or allocates
-// if empty, up to PARTICLE_CAP). updateParticles() uses compact-in-place so
-// splice() never runs in the hot path. Every reused slot has ALL fields
-// re-written in spawnParticles() — stale-field bleed-through is prevented by
-// exhaustive reset, not by the act of reuse.
+// ─── Particles (pooled via engine/particles.js) ─────────────────────────────
+// The pool mechanics + per-frame physics integration live in
+// NEON.particles.createSystem(). This file owns the gameplay vocabulary:
+// the type-keyed magic numbers (EXPLOSION/MUZZLE/SPARK/BLOOD speed, life,
+// size, gravity), the TILE-coordinate translation, and the draw style.
+// Engine handles: pool acquire/release, compact-in-place, vx*dt/vy*dt/grav,
+// life decay, burst scaling under load.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-/** @type {any[]} */ const particles = [];
-/** @type {any[]} */ const _particlePool = [];
-
-function _newParticleSlot() {
-  return { x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, colour:'#fff', type:'', grav:0, alive:false };
-}
-
-function _acquireParticle() {
-  // Prefer reused slots from the pool
-  if (_particlePool.length) return _particlePool.pop();
-  // Cap reached? Drop the spawn request.
-  if (particles.length >= PARTICLE_CAP) return null;
-  return _newParticleSlot();
-}
+const _particleSystem = NEON.particles.createSystem({
+  cap: PARTICLE_CAP,
+  burstScaleThreshold: PARTICLE_BURST_SCALE_THRESHOLD,
+});
 
 /**
  * @param {any} wx
@@ -1394,11 +1381,9 @@ function _acquireParticle() {
 function spawnParticles(wx, wy, type, colour, count) {
   // Burst cap — under extreme stacking, halve new burst sizes to protect the
   // frame budget. Gameplay-visible only in pathological scenarios.
-  if (particles.length > PARTICLE_BURST_SCALE_THRESHOLD) {
-    count = Math.max(1, (count * 0.5) | 0);
-  }
+  count = _particleSystem.scaleBurst(count);
   for (let i=0; i<count; i++) {
-    const p = _acquireParticle();
+    const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
     const a = Math.random()*TWO_PI;
     const spd = type==='EXPLOSION' ? rnd(1,4) : rnd(0.5,3);
@@ -1414,7 +1399,6 @@ function spawnParticles(wx, wy, type, colour, count) {
     p.type = type;
     p.grav = type==='BLOOD' ? 40 : 0;
     p.alive = true;
-    particles.push(p);
   }
 }
 
@@ -1422,23 +1406,29 @@ function spawnParticles(wx, wy, type, colour, count) {
  * @param {any} dt
  */
 function updateParticles(dt) {
-  // Compact-in-place: alive slots shift left, dead slots return to pool.
-  let w = 0;
-  for (let r = 0, n = particles.length; r < n; r++) {
-    const p = particles[r];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += p.grav * dt;
-    p.life -= dt / p.maxLife;
-    if (p.life <= 0) {
-      p.alive = false;
-      _particlePool.push(p);
-    } else {
-      if (w !== r) particles[w] = p;
-      w++;
-    }
+  _particleSystem.update(dt);
+}
+
+// Hoisted to module scope to avoid per-frame closure allocation in the
+// drawParticles hot path. drawParticles writes camera coords here, then
+// calls _particleSystem.forEach(_drawParticleCb) — the engine iterates,
+// the host owns zero per-call allocation.
+let _drawCamX = 0, _drawCamY = 0;
+/** @param {any} p */
+function _drawParticleCb(p) {
+  const sx = p.x - _drawCamX, sy = p.y - _drawCamY;
+  if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, p.life);
+  if (p.type === 'EXPLOSION') {
+    ctx.shadowBlur = 10; ctx.shadowColor = p.colour;
+    ctx.fillStyle = p.colour;
+    NEON.draw.circle(ctx, sx, sy, p.size * (1 - p.life * 0.5 + 0.5));
+  } else {
+    ctx.fillStyle = p.colour;
+    ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
   }
-  particles.length = w;
+  ctx.restore();
 }
 
 /**
@@ -1446,33 +1436,20 @@ function updateParticles(dt) {
  * @param {any} camY
  */
 function drawParticles(camX, camY) {
-  for (let i = 0, n = particles.length; i < n; i++) {
-    const p = particles[i];
-    const sx = p.x - camX, sy = p.y - camY;
-    if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, p.life);
-    if (p.type === 'EXPLOSION') {
-      ctx.shadowBlur = 10; ctx.shadowColor = p.colour;
-      ctx.fillStyle = p.colour;
-      ctx.beginPath();
-      ctx.arc(sx, sy, p.size * (1 - p.life * 0.5 + 0.5), 0, TWO_PI);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = p.colour;
-      ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
-    }
-    ctx.restore();
-  }
+  _drawCamX = camX;
+  _drawCamY = camY;
+  _particleSystem.forEach(_drawParticleCb);
 }
 
 // Release every live particle back to the pool (on floor change / game reset).
 function clearParticles() {
-  for (let i = 0, n = particles.length; i < n; i++) {
-    particles[i].alive = false;
-    _particlePool.push(particles[i]);
-  }
-  particles.length = 0;
+  _particleSystem.clear();
+}
+
+// Expose live particle count for telemetry + debug overlay (replaces the
+// pre-extraction `particles.length` global access from src/game.js).
+function particleCount() {
+  return _particleSystem.count;
 }
 
 // ─── Ambient Particles ───────────────────────────────────────────────────────
@@ -1639,9 +1616,7 @@ function drawAmbient(camX, camY) {
     } else if (p.kind === 'WISP') {
       ctx.shadowBlur = 8; ctx.shadowColor = p.colour;
       ctx.fillStyle = p.colour;
-      ctx.beginPath();
-      ctx.arc(sx, sy, p.size * (0.5 + 0.5 * p.life), 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, p.size * (0.5 + 0.5 * p.life));
     } else if (p.kind === 'EMBER') {
       ctx.fillStyle = p.colour;
       const flicker = 0.7 + 0.3 * Math.sin(lastTime / 60 + p.seed);
@@ -1811,6 +1786,19 @@ function drawModBanner() {
     ctx.font = '10px monospace';
     ctx.fillStyle = '#aaaacc';
     ctx.fillText(m.desc, W / 2, cy + 12);
+  }
+
+  // Dismiss hint — appears after the slide-in completes (per pause-on-level-text
+  // behaviour added in PR #106, any new keypress / tap dismisses the banner).
+  // Wait until elapsed > fadeIn so it doesn't flicker mid-slide.
+  if (elapsed > fadeIn) {
+    const hintAlpha = alpha * 0.5;
+    if (hintAlpha > 0.01) {
+      ctx.globalAlpha = hintAlpha;
+      ctx.fillStyle = '#666677';
+      ctx.font = `${narrow ? 8 : 9}px monospace`;
+      ctx.fillText('press any key to skip', W / 2, py + pillH + (narrow ? 10 : 12));
+    }
   }
 
   ctx.restore();
@@ -2424,6 +2412,7 @@ function generateFloor(floorNum) {
 
   // ── Secret room (every floor, one per floor) ─────────────────────────────
   const secretRooms = [];
+  /** @type {any[]} */ const whisperItems = [];
   {
     // Candidates: not spawn, not stair, not boss, not already special, decent size
     const secretEligible = rooms.filter((/** @type {any} */ r) =>
@@ -2448,6 +2437,22 @@ function generateFloor(floorNum) {
       // Place T.CRACKED at one narrow cluster (the "hidden entrance")
       const crackedCluster = /** @type {any} */ (narrow[rndInt(0, narrow.length - 1)]);
       for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
+
+      // Whispers subplot — narrative fragments found in secret rooms.
+      // Try to spawn one whisper item at the secret room's center. NEON.whispers
+      // returns null if no eligible unread whisper for this floor's biome, in
+      // which case the secret room still rewards the player with normal loot
+      // (the per-room loot pass at render.js handles that). Try/catch keeps
+      // gen resilient if the meta module isn't loaded yet (e.g. early Node
+      // tests of generateFloor).
+      try {
+        if (typeof NEON !== 'undefined' && NEON.whispers && NEON.whispers.pickWhisperForFloor) {
+          const w = NEON.whispers.pickWhisperForFloor(floorNum);
+          if (w && w.id) {
+            whisperItems.push({ x: r.cx + 0.5, y: r.cy + 0.5, whisperId: w.id });
+          }
+        }
+      } catch (_) { /* gen-time meta unavailable; skip whisper this floor */ }
 
       break; // only one secret room per floor
     }
@@ -2542,63 +2547,136 @@ function generateFloor(floorNum) {
     }
   }
 
-  // ── Key reachability gate ──────────────────────────────────────────────
-  // The per-lock BFS at line 2392 ensured each key was placed in a room
-  // reachable from spawn WITHOUT crossing locks at the moment of placement.
-  // But subsequent passes can later seal that key in:
-  //   - Secret room placement (line 2429-2453) walls a regular room's
-  //     entrances — including, possibly, a room a key was just placed in.
-  //   - Dead-end corridor pruning (line 2519-2542) converts dangling
-  //     corridor floor to wall; if a key was placed near such a tile, fine,
-  //     but the room-eligibility filter for secrets does NOT exclude key
-  //     rooms, so the key can end up behind T.CRACKED.
-  // Reported twice on floor 3 by users on develop: "the exit is behind a
-  // red key door and there is no red key" / "spawned with red door, no key".
+  // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
+  // Goal: from spawn, the player must be able to reach EVERY room — not just
+  // the stairs. Special rooms (vendor / lore / event terminal / shrine /
+  // challenge) host gameplay-critical interactions; if any becomes unreachable
+  // due to lock placement + later passes (secret rooms, dead-end pruning), the
+  // floor feels broken even when technically completable.
   //
-  // Fix: BFS from spawn through ACTUALLY passable tiles (no locks, no
-  // cracked, no walls). For each key item, if its tile is unreachable,
-  // downgrade every locked door of that colour to FLOOR. The player loses
-  // the gating gameplay but the floor remains completable. The orphaned
-  // key item is left in place (still rewards finding the secret).
+  // User reports on floor 3 (twice on 2026-04-25 / 6bc2e985):
+  //   "spawned into a room with the exit and a red key door, but no red key,
+  //    so I can't explore the floor or fight the miniboss"
+  //
+  // The previous fix only checked KEY-item reachability and missed the case
+  // where a key is reachable but the rooms it would unlock are still gated
+  // behind ANOTHER unreachable lock (multi-color cascades) or the key is
+  // simply absent for a placed lock (lockPriority/keyRoom empty edge cases).
+  //
+  // Algorithm:
+  //   1. BFS from spawn through `passable` tiles + locks of any colour for
+  //      which a reachable key exists. Iterate until fixed point (each pass
+  //      may discover new keys, which open new locks, exposing more keys).
+  //   2. If any room has zero reachable tiles after fixed point, downgrade
+  //      every locked door whose colour the player COULDN'T pick up. The
+  //      floor loses some gating gameplay but every room becomes reachable.
+  //   3. If rooms are still unreachable (e.g. structurally walled by gen),
+  //      the rescue-corridor pass below carves spawn→stairs as a last resort.
+  //
+  // Tile vocabulary kept in sync with src/platform.js isPassable() so this
+  // gen-time reachability matches what the player actually experiences. The
+  // notable additions over the prior fix are T.PLASMA, T.ARC (walkable
+  // hazards — runtime isPassable allows them, the prior gen-time check did
+  // not) and T.CRACKED (interact-breakable per game.js:663,1691 — secret
+  // rooms ARE reachable to the player without keys/upgrades, so they should
+  // count as reachable here too). T.DOOR (closed) stays passable because the
+  // player can open closed doors via interact; that diverges from runtime
+  // isPassable but is intentional (matches dungeon-gen connectivity intent).
   {
     const passable = (/** @type {any} */ t) =>
       t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+      t === T.PLASMA || t === T.ARC ||
+      t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
-      t === T.CHALLENGE_GATE; // walkable at runtime (isPassable in platform.js)
-    const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
-    /** @type {any} */ const reach = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    reach[sy0][sx0] = 1;
-    const q = [{x: sx0, y: sy0}];
-    while (q.length) {
-      const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
-      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-        if (reach[ny][nx]) continue;
-        if (!passable(map[ny][nx])) continue;
-        reach[ny][nx] = 1;
-        q.push({x: nx, y: ny});
+      t === T.CHALLENGE_GATE;
+
+    /** @param {Set<string>} haveColours @returns {Uint8Array[]} */
+    const computeReach = (haveColours) => {
+      /** @type {any} */ const r = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+      const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
+      r[sy0][sx0] = 1;
+      const q = [{x: sx0, y: sy0}];
+      while (q.length) {
+        const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
+        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+          if (r[ny][nx]) continue;
+          const t = map[ny][nx];
+          const open = passable(t) ||
+            (haveColours.has('red')  && t === T.LOCKED_R) ||
+            (haveColours.has('blue') && t === T.LOCKED_B) ||
+            (haveColours.has('gold') && t === T.LOCKED_G);
+          if (!open) continue;
+          r[ny][nx] = 1;
+          q.push({x: nx, y: ny});
+        }
+      }
+      return r;
+    };
+
+    /** @type {Set<string>} */ const haveColours = new Set();
+    /** @type {any} */ let reach = null;
+    let progressIter = true;
+    let safetyIter = 6; // hard cap (3 colours × 2 = 6 expansion rounds max)
+    while (progressIter && safetyIter-- > 0) {
+      progressIter = false;
+      reach = computeReach(haveColours);
+      for (const ki of keyItems) {
+        if (ki && ki.colour && reach[ki.y][ki.x] && !haveColours.has(ki.colour)) {
+          haveColours.add(/** @type {string} */ (ki.colour));
+          progressIter = true;
+        }
       }
     }
-    /** @type {Record<string, number>} */
-    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
-    /** @type {Set<string>} */ const orphaned = new Set();
-    for (const ki of keyItems) {
-      if (!reach[ki.y][ki.x] && ki.colour) orphaned.add(/** @type {string} */ (ki.colour));
-    }
-    if (orphaned.size > 0) {
-      for (const col of orphaned) {
-        const lt = lockTileForColour[col];
-        if (lt == null) continue;
+    // After fixed point, `reach` reflects max possible exploration with all
+    // collectible keys. Check every room for at least one reachable tile.
+    /** @param {{x:number,y:number,w:number,h:number,cx:number,cy:number}} room */
+    const roomTouchesReach = (room) => {
+      // Cheap-path: spot-check center first (most rooms).
+      if (reach[room.cy] && reach[room.cy][room.cx]) return true;
+      // Full-path: scan room rect (tiles set to special types may not be
+      // at center; e.g. vendor tile, lore terminal).
+      for (let yy = room.y; yy < room.y + room.h; yy++) {
+        const row = reach[yy];
+        if (!row) continue;
+        for (let xx = room.x; xx < room.x + room.w; xx++) {
+          if (row[xx]) return true;
+        }
+      }
+      return false;
+    };
+    // Cracked walls are now in passable() (interact-breakable). Secret rooms
+    // become naturally reachable through them, so no special exclusion is
+    // needed in the unreachable filter.
+    const unreachable = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
+    if (unreachable.length > 0) {
+      // Downgrade every locked door whose colour the player couldn't pick up.
+      // This includes colours with no key item placed at all (the
+      // lockPriority/keyRoom empty-fallback edge case in the lock-placement
+      // loop above).
+      const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
+      for (const colour of /** @type {const} */ (['red', 'blue', 'gold'])) {
+        if (haveColours.has(colour)) continue;
+        const lt = lockTileForColour[colour];
         for (let y = 0; y < MAP_H; y++) {
           for (let x = 0; x < MAP_W; x++) {
             if (map[y][x] === lt) map[y][x] = T.FLOOR;
           }
         }
       }
+      // After downgrading, recompute reach (no longer gated by missing keys).
+      reach = computeReach(new Set(['red', 'blue', 'gold']));
+      // Any rooms STILL unreachable are walled off structurally (secret room
+      // boundaries, dead-end pruning that nuked the only corridor). The
+      // rescue-corridor pass below handles spawn→stairs; non-stairs special
+      // rooms still unreachable here will be quietly orphaned (acceptable
+      // edge case; alternative would be to carve more rescue corridors,
+      // which risks visual oddities). Telemetry could surface this in a
+      // future pass.
     }
   }
 
@@ -2646,7 +2724,13 @@ function generateFloor(floorNum) {
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
-      if (r === spawnRoom || r === bossRoom) continue;
+      // Skip spawn (player needs safe arrival), boss (boss room is its own
+      // hazard), and special rooms — secret rooms in particular, because the
+      // whisper item spawns at the room center (see secret-room placement
+      // above) and a trap landing on that exact tile would visually replace
+      // the whisper. Special rooms (vendor/lore/event/shrine/challenge) host
+      // gameplay-critical interactions that traps would clutter.
+      if (r === spawnRoom || r === bossRoom || r.roomType) continue;
       const trapCount = rndInt(0, Math.min(3, Math.floor(floorNum/3)));
       for (let t=0; t<trapCount; t++) {
         const tx = r.x + rndInt(1, r.w-2);
@@ -2820,7 +2904,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -3335,36 +3419,30 @@ class Projectile {
         ctx.strokeStyle='#00ffff';
         ctx.shadowBlur=4; ctx.shadowColor='#00ffff';
         ctx.lineWidth=1.5;
-        ctx.beginPath();
-        ctx.moveTo(this.trail[a]-camX, this.trail[a+1]-camY);
-        ctx.lineTo(this.trail[b]-camX, this.trail[b+1]-camY);
-        ctx.stroke();
+        NEON.draw.line(ctx,
+          this.trail[a]-camX, this.trail[a+1]-camY,
+          this.trail[b]-camX, this.trail[b+1]-camY);
       }
       // Line from last trail point to current position
       ctx.globalAlpha=0.6;
       ctx.lineWidth=2;
-      ctx.beginPath();
-      ctx.moveTo(this.trail[tl-2]-camX, this.trail[tl-1]-camY);
-      ctx.lineTo(this.x*TILE-camX, this.y*TILE-camY);
-      ctx.stroke();
+      NEON.draw.line(ctx,
+        this.trail[tl-2]-camX, this.trail[tl-1]-camY,
+        this.x*TILE-camX, this.y*TILE-camY);
       ctx.restore();
     }
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     ctx.save();
     ctx.shadowBlur=8; ctx.shadowColor=this.colour;
     ctx.fillStyle=this.colour;
-    ctx.beginPath();
     const r = this.isGrenade ? 5 : 3;
-    ctx.arc(sx,sy,r,0,TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, r);
     if (this.isGrenade) {
       // Pulsing warning ring
       ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 80) * 0.3;
       ctx.strokeStyle = '#ffaa00';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 7, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, 7);
     }
     ctx.restore();
   }
@@ -3429,9 +3507,7 @@ function drawHazardZones(camX, camY) {
       ctx.strokeStyle = z.colour;
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       ctx.setLineDash([]);
     } else {
       ctx.globalAlpha = fade * 0.3 * pulse;
@@ -4140,12 +4216,52 @@ class KeyItem {
     ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
     ctx.fillStyle=this.tileColour;
     // Key shape: circle + teeth
-    ctx.beginPath();
-    ctx.arc(sx, sy-3, 5, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy-3, 5);
     ctx.fillRect(sx-1.5, sy, 3, 8);
     ctx.fillRect(sx, sy+3, 4, 2);
     ctx.fillRect(sx, sy+6, 3, 2);
+    ctx.restore();
+  }
+}
+
+// Whispers subplot — pickup that triggers the narrative fragment in the
+// ARCHIVE (src/data/whispers.js + src/meta/whispers.js). Visually distinct
+// from KeyItem: pulsing violet glyph (the cryptic-fragment colour echoes the
+// 'WHISPERS: N/M' counter in hub.js Archive). isWhisper flag drives the
+// pickup branch in src/game.js.
+class WhisperItem {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {string} whisperId
+   */
+  constructor(x, y, whisperId) {
+    this.x = x; this.y = y;
+    this.whisperId = whisperId;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isWhisper = true;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 1.6; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 2.5;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.55 + 0.45 * Math.sin(this.bob * 1.4);
+    ctx.save();
+    ctx.shadowBlur = 6 + 12 * pulse;
+    ctx.shadowColor = '#aa66cc';
+    ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    ctx.fillStyle = '#cc99ee';
+    // Hexagonal/diamond glyph — clearly NOT a key (no teeth) and NOT a
+    // generic Item diamond (slightly larger, vertical orientation).
+    NEON.draw.circle(ctx, sx, sy, 4 + 1.2 * pulse);
+    ctx.fillStyle = '#552277';
+    ctx.fillRect(sx - 0.8, sy - 5, 1.6, 10);
+    ctx.fillRect(sx - 5, sy - 0.8, 10, 1.6);
     ctx.restore();
   }
 }

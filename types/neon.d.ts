@@ -41,6 +41,26 @@ declare global {
   function km(action: string): string | null | undefined;
   function isTouchDevice(): boolean;
 
+  // Math primitives mounted as bare globals by engine/math.js (Phase C1a).
+  // engine/math.js's UMD bootstrap attaches each function to `window.NEON.math`
+  // AND to `window.<name>` for back-compat with existing call sites in
+  // src/platform.js, src/game.js, src/entities.js, src/content.js, src/render.js.
+  // Declared here so @ts-check'd files resolve the bare names. See engine/math.js.
+  function rnd(min: number, max: number): number;
+  function rndInt(min: number, max: number): number;
+  function clamp(v: number, lo: number, hi: number): number;
+  function dist(ax: number, ay: number, bx: number, by: number): number;
+  function dist2(ax: number, ay: number, bx: number, by: number): number;
+  function norm(dx: number, dy: number): [number, number];
+  function lerp(a: number, b: number, t: number): number;
+
+  // Viewport helpers live under window.NEON.viewport (engine/viewport.js,
+  // Phase C1d). NOT mounted as bare globals — src/platform.js wraps them in
+  // its existing resize()/updateLayout()/isLandscape() functions and keeps
+  // the W/H/scale/offX/offY/safe-area mutable state. NEON is already declared
+  // as `var NEON: any` above, so consumers reach the helpers via NEON.viewport
+  // with no extra ambient needed.
+
   // BIOME_PALETTES is declared via UMD attachment in src/data/palettes.js and
   // referenced by name in src/render.js. AREAS is similar but currently
   // unused in @ts-checked files. Keep loose until Phase 4 introduces
