@@ -6581,8 +6581,48 @@ class Player {
       if (!e.dead && !e._wrPhased && dist(this.x,this.y,e.x,e.y)<6) e.takeDamage(80, 'Void Cannon');
     }
     spawnParticles(this.x,this.y,'EXPLOSION','#aa00ff',30);
-    _EG.msg('VOID SHARD DETONATED!','#aa00ff');
     triggerShake(10, 0.3);
+    // Shatter any cracked walls in blast radius (alternative to interact-break
+    // at src/game.js:1718). Mirrors that path's side-effects: tile→FLOOR,
+    // markMapMutated, audio.wallBreak, gold burst particles, and reveal of any
+    // secret room the cracked tile borders.
+    const map = _EG.dungeon && _EG.dungeon.map;
+    let wallsBroken = 0;
+    if (map) {
+      const cx = Math.floor(this.x), cy = Math.floor(this.y);
+      const R = 6;
+      const x0 = Math.max(0, cx - R), x1 = Math.min(MAP_W - 1, cx + R);
+      const y0 = Math.max(0, cy - R), y1 = Math.min(MAP_H - 1, cy + R);
+      for (let ty = y0; ty <= y1; ty++) {
+        const row = map[ty]; if (!row) continue;
+        for (let tx = x0; tx <= x1; tx++) {
+          if (row[tx] !== T.CRACKED) continue;
+          // Tile-center distance check (matches enemy radius semantics).
+          if (dist(this.x, this.y, tx + 0.5, ty + 0.5) >= R) continue;
+          row[tx] = T.FLOOR;
+          wallsBroken++;
+          spawnParticles(tx + 0.5, ty + 0.5, 'EXPLOSION', '#ffb700', 12);
+          if (_EG.dungeon && Array.isArray(_EG.dungeon.secretRooms)) {
+            for (const sr of _EG.dungeon.secretRooms) {
+              if (sr.secretRevealed) continue;
+              if (tx >= sr.x - 1 && tx <= sr.x + sr.w && ty >= sr.y - 1 && ty <= sr.y + sr.h) {
+                if (typeof _EG.revealSecretRoom === 'function') _EG.revealSecretRoom(sr);
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (wallsBroken > 0) {
+        if (typeof _EG.markMapMutated === 'function') _EG.markMapMutated();
+        audio.wallBreak();
+      }
+    }
+    if (wallsBroken > 0) {
+      _EG.msg('VOID SHARD DETONATED — ' + wallsBroken + ' wall' + (wallsBroken > 1 ? 's' : '') + ' shattered!', '#ffb700');
+    } else {
+      _EG.msg('VOID SHARD DETONATED!', '#aa00ff');
+    }
   }
 
   /**
