@@ -1175,6 +1175,23 @@ const audio = (() => {
       osc('sine', 140, 50, 0.18, t, 0.22, bus);
       noise(0.16, t + 0.01, 0.14, 2400, bus);
     },
+    mirrorCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Glassy ascending shimmer — "your shot is coming back". Bright
+      // detuned sines so it reads as mimicry, not the resonator's chord.
+      const bus = wetDry(1, 0.45, 0.40);
+      osc('sine', 880, 1320, 0.06, t, 0.45, bus);
+      osc('triangle', 660, 990, 0.05, t + 0.06, 0.40, bus);
+      osc('sine', 1320, 1980, 0.04, t + 0.12, 0.35, bus);
+    },
+    mirrorFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Snappy reversed-shot pop — short, sharp, lime-bright register.
+      const bus = wetDry(1, 0.25, 0.35);
+      osc('square', 520, 220, 0.08, t, 0.18, bus);
+      osc('sine', 1100, 440, 0.06, t, 0.16, bus);
+      noise(0.05, t + 0.005, 0.06, 3200, bus);
+    },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Low rumble + rising whoosh
