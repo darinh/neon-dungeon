@@ -1161,9 +1161,39 @@ const game = {
       }
     }
 
-    // aim with mouse (or lock to walking direction if setting enabled)
+    // aim with mouse (or lock to walking direction / aim assist if enabled).
+    // Priority order:
+    //   1. aimAssist (accessibility) — auto-target nearest visible enemy in
+    //      LOS within visibility range. Falls through if no enemy found.
+    //   2. lockAimToMove — project a point in front of player's last walk
+    //      direction.
+    //   3. Mouse — direct aim at cursor world position.
     let worldAimX, worldAimY;
-    if (settings.lockAimToMove) {
+    let aimAssistTarget = null;
+    if (settings.aimAssist) {
+      // Find nearest enemy with LOS. Mirrors auto-laser target search at
+      // L1581-1590; kept inline to avoid coupling to that ability's range
+      // (auto-laser uses 8 tiles; aim assist uses visibility range).
+      let bestD = 16; // squared-tile range cap so distant off-screen enemies don't pull aim
+      for (const e of enemies) {
+        if (!e || e.dead) continue;
+        if (e.type === 'PHANTOM' && !e.visible) continue;
+        if (e._disguised) continue;
+        if (e._wrPhased) continue;
+        const ddx = e.x - player.x, ddy = e.y - player.y;
+        const d2 = ddx * ddx + ddy * ddy;
+        if (d2 < bestD && hasLOS(player.x, player.y, e.x, e.y, dungeon.map)) {
+          bestD = d2;
+          aimAssistTarget = e;
+        }
+      }
+    }
+    if (aimAssistTarget) {
+      worldAimX = aimAssistTarget.x;
+      worldAimY = aimAssistTarget.y;
+      const [afx, afy] = norm(worldAimX - player.x, worldAimY - player.y);
+      if (afx || afy) player.facing = { x: afx, y: afy };
+    } else if (settings.lockAimToMove) {
       // Use last walked direction (player.facing is updated only when moving,
       // so it stays sticky when stationary). Project a point in front of player.
       worldAimX = player.x + player.facing.x * 8;
@@ -2931,8 +2961,8 @@ const game = {
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 5;     // row index where key rebind rows begin (3 toggles)
-    // Total items: 2 sliders + 3 toggles + N rebind rows + 1 reset row + 1 back row
+    const CTRL_START = 6;     // row index where key rebind rows begin (4 toggles)
+    // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
 
     // Key capture mode — wait for next keydown
@@ -2998,7 +3028,7 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
@@ -3105,7 +3135,7 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 5;
+    const CTRL_START = 6;  // matches updateSettings — 4 toggles
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -3152,8 +3182,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE'];
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
