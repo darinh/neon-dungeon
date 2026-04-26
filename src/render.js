@@ -941,15 +941,18 @@ function drawHUD(player) {
       }
     }
 
-    if (player.shards > 0) {
+    if (player.bombCooldown > 0) {
+      ctx.fillStyle='#664488'; ctx.font=`${fs}px monospace`;
+      ctx.fillText(`B:${player.bombCooldown.toFixed(1)}s`, statsX + 74, r2 + 22);
+    } else {
       ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`V×${player.shards}`, statsX + 74, r2 + 22);
+      ctx.fillText(`B:RDY`, statsX + 74, r2 + 22);
     }
     // Hackware indicator (compact)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
       ctx.fillStyle=player.hackwareCooldown>0?'#665533':hw.colour; ctx.font=`${fs}px monospace`;
-      const hwX = player.shards > 0 ? statsX + 120 : statsX + 74;
+      const hwX = statsX + 130;
       ctx.fillText(`F:${hw.icon}`, hwX, r2 + 22);
     }
     // Energy shield recharge indicator
@@ -1018,8 +1021,10 @@ function drawHUD(player) {
       }
     }
 
-    if (player.shards > 0) {
-      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Void Shard ×${player.shards}`, colBase + 220, y + 22);
+    if (player.bombCooldown > 0) {
+      ctx.fillStyle='#664488'; ctx.fillText(`[V] Bomb ${player.bombCooldown.toFixed(1)}s`, colBase + 220, y + 22);
+    } else {
+      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Bomb RDY`, colBase + 220, y + 22);
     }
     // Hackware indicator (landscape)
     if (player.hackware) {
@@ -1029,7 +1034,7 @@ function drawHUD(player) {
       const hwLabel = player.hackwareCooldown > 0
         ? `[F] ${hw.icon}${hw.name} ${player.hackwareCooldown.toFixed(1)}s`
         : `[F] ${hw.icon}${hw.name} RDY`;
-      const hwX = player.shards > 0 ? colBase + 380 : colBase + 220;
+      const hwX = colBase + 380;
       ctx.fillText(hwLabel, hwX, y + 22);
     }
     // Energy shield recharge indicator
@@ -2019,6 +2024,7 @@ function populateFloor(dungeon, floorNum) {
   projectiles.length = 0;
   clearParticles();
   enemies.length=0; items.length=0; hazardZones.length=0; pendingEnemySpawns.length=0; floatingTexts.length=0; ambientParticles.length=0; hackwareEffects.length=0; vcores.length=0; crates.length=0; beacons.length=0; mines.length=0; shieldGens.length=0; cameras.length=0; lasers.length=0; wallTurrets.length=0; disruptionFields.length=0; gravityWells.length=0;
+  clearFuseShards();
   clearEnemiesByRoom();
   shake.intensity=0; shake.timer=0; shake.ox=0; shake.oy=0;
   combo.count=0; combo.timer=0; combo.flashTimer=0;

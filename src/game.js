@@ -1308,6 +1308,10 @@ const game = {
 
     // update items
     for (const it of items) it.update(dt);
+    // update fuse bombs (tap-tap V) — drawn between items and enemies in
+    // render loop so a planted bomb is visible above ground but obscured by
+    // mobs standing on it. Dead-bomb prune handled inside.
+    updateFuseShards(dt);
     if (_ptEnv) perfRecord('env', performance.now() - _ptEnv);
 
     // UNCHAINED #39: CORE drops (elite/boss/secret/challenge/rare-terminal).
@@ -3402,13 +3406,13 @@ const game = {
       ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
       if (narrow) {
         ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash', W/2, hintY + 18);
-        ctx.fillText(KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 34);
+        ctx.fillText(KEY_DISPLAY(km('voidshard'))+': Bomb  |  ‖: Pause', W/2, hintY + 34);
       } else {
-        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ‖: Pause', W/2, hintY + 16);
+        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Bomb  |  ‖: Pause', W/2, hintY + 16);
       }
     } else {
       ctx.fillText(KEY_DISPLAY(km('up'))+KEY_DISPLAY(km('left'))+KEY_DISPLAY(km('down'))+KEY_DISPLAY(km('right'))+': Move  |  Mouse: Aim  |  Click/'+KEY_DISPLAY(km('shoot'))+': Shoot', W/2, hintY);
-      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  '+KEY_DISPLAY(km('dash'))+': Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Void Shard  |  ESC: Pause', W/2, hintY + 16);
+      ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  '+KEY_DISPLAY(km('dash'))+': Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Bomb (tap-tap to detonate)  |  ESC: Pause', W/2, hintY + 16);
     }
     ctx.restore();
 
@@ -3569,6 +3573,10 @@ const game = {
 
     // items
     for (const it of items) it.draw(cam.x,cam.y);
+
+    // fuse bombs (tap-tap V) — above items, below enemies/cores so a mob
+    // standing on a planted bomb hides it visually (in-world feel).
+    drawFuseShards(cam.x, cam.y);
 
     // UNCHAINED #39: core drops — draw above items, below enemies.
     if (typeof NEON !== 'undefined' && NEON.cores && this.coreDrops && this.coreDrops.length) {
