@@ -3261,9 +3261,7 @@ class Enemy {
       ctx.strokeStyle = '#cc33ff';
       ctx.shadowBlur = 15; ctx.shadowColor = '#cc33ff';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(sx, sy, progress * TILE * 2, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, progress * TILE * 2);
       ctx.restore();
     }
 
@@ -3302,14 +3300,12 @@ class Enemy {
           ctx.fillStyle = '#aa00ff';
           ctx.shadowBlur = 20;
           ctx.shadowColor = '#aa00ff';
-          ctx.beginPath();
-          ctx.arc(ox, oy, r, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, ox, oy, r);
           // Ring edge
           ctx.globalAlpha = fade * 0.7;
           ctx.strokeStyle = '#ff00c8';
           ctx.lineWidth = 2;
-          ctx.stroke();
+          NEON.draw.circleStroke(ctx, ox, oy, r);
           ctx.restore();
         }
       }
@@ -3329,10 +3325,7 @@ class Enemy {
         ctx.shadowColor = '#ff8800';
         ctx.lineWidth = 2 + progress * 2;
         ctx.setLineDash([6, 4]);
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(ex, ey);
-        ctx.stroke();
+        NEON.draw.line(ctx, sx, sy, ex, ey);
         ctx.setLineDash([]);
         ctx.restore();
       }
@@ -3351,9 +3344,7 @@ class Enemy {
         for (let i = 0; i < arcSegs; i++) {
           const a1 = spin + (i / arcSegs) * TWO_PI;
           const a2 = a1 + 0.35;
-          ctx.beginPath();
-          ctx.arc(sx, sy, 24, a1, a2);
-          ctx.stroke();
+          NEON.draw.arcStroke(ctx, sx, sy, 24, a1, a2);
         }
         ctx.restore();
         // Discharge channel — pulsing glow during pull phase
@@ -3364,9 +3355,7 @@ class Enemy {
           ctx.fillStyle = '#00ccff';
           ctx.shadowBlur = 20 + chPulse * 15;
           ctx.shadowColor = '#00ccff';
-          ctx.beginPath();
-          ctx.arc(sx, sy, 30, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, 30);
           ctx.restore();
         }
       }
@@ -3407,19 +3396,14 @@ class Enemy {
           ctx.shadowColor = lanceColour;
           ctx.lineWidth = 1 + progress * 2;
           ctx.setLineDash([4, 4]);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(tx, ty);
-          ctx.stroke();
+          NEON.draw.line(ctx, sx, sy, tx, ty);
           ctx.setLineDash([]);
           ctx.restore();
         }
       }
 
       const sz=(this.type==='OMEGA'||this.type==='GENESIS')?22:18;
-      ctx.beginPath();
-      ctx.arc(sx,sy,sz,0,TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, sz);
       // boss HP shown in cinematic HUD bar (drawBossBar), not overhead
     } else {
       const baseSz = TILE * (this.isShard ? 0.25 : 0.4);
@@ -3444,7 +3428,7 @@ class Enemy {
       } else if (t === 'GRENADIER' || t === 'PULSER') {
         // Circle
         const r = TILE * 0.2;
-        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, r);
       } else if (t === 'SCORCHER') {
         // Diamond ember core
         const sz = TILE * 0.32;
@@ -3464,15 +3448,15 @@ class Enemy {
       } else if (t === 'SUMMONER' || t === 'HEALER' || t === 'NEXUS') {
         // Circle with outer ring
         const r = TILE * 0.22;
-        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, r);
         ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4;
-        ctx.beginPath(); ctx.arc(sx, sy, r * 1.6, 0, TWO_PI); ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, r * 1.6);
         ctx.restore();
       } else if (t === 'LEAPER') {
         // Small circle that pulses during windup
         const lpScale = this._lpState === 'windup' ? 1.0 + 0.3 * Math.sin(this.bobAngle * 8) : (this._lpState === 'airborne' ? 1.4 : 0.8);
         const r = TILE * 0.2 * lpScale;
-        ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, r);
       } else if (t === 'CRAWLER') {
         // Low wide rectangle
         const w = TILE * 0.48, h = TILE * 0.24;
@@ -3499,9 +3483,7 @@ class Enemy {
         ctx.shadowBlur = 12;
         ctx.shadowColor = '#ff5a22';
         ctx.fillStyle = '#ff5a22';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.25, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * 1.25);
         ctx.restore();
       }
       if (this.type === 'BRUTE') {
@@ -3520,9 +3502,7 @@ class Enemy {
         ctx.shadowColor = '#66eeff';
         ctx.globalAlpha = 0.7 + Math.sin(this.bobAngle * 2) * 0.15;
         const shieldR = sz * 1.2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, shieldR, this.shieldAngle - Math.PI / 3, this.shieldAngle + Math.PI / 3);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, shieldR, this.shieldAngle - Math.PI / 3, this.shieldAngle + Math.PI / 3);
         ctx.restore();
       }
       // Reflector: draw 90° mirror shield with inner highlight
@@ -3536,17 +3516,13 @@ class Enemy {
         ctx.shadowBlur = 14;
         ctx.shadowColor = '#88ddff';
         ctx.globalAlpha = pulse;
-        ctx.beginPath();
-        ctx.arc(sx, sy, rR, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, rR, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
         // Inner mirror highlight — white
         ctx.strokeStyle = 'rgba(255,255,255,0.6)';
         ctx.lineWidth = 1.5;
         ctx.shadowBlur = 6;
         ctx.shadowColor = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(sx, sy, rR - 2, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, rR - 2, this._rfAngle - Math.PI / 4, this._rfAngle + Math.PI / 4);
         // Edge ticks — segmented look
         for (let i = -2; i <= 2; i++) {
           const a = this._rfAngle + (i / 4) * (Math.PI / 2);
@@ -3565,9 +3541,7 @@ class Enemy {
         ctx.shadowBlur = 16;
         ctx.shadowColor = '#ff44aa';
         ctx.fillStyle = '#ff44aa';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.5, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * 1.5);
         ctx.restore();
       }
       // Wraith: emerging glow telegraph
@@ -3578,9 +3552,7 @@ class Enemy {
         ctx.shadowBlur = 12 + prog * 10;
         ctx.shadowColor = '#66ffcc';
         ctx.fillStyle = '#66ffcc';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * (1 + prog * 0.8), 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * (1 + prog * 0.8));
         ctx.restore();
       }
       // Wraith: fading flicker
@@ -3593,9 +3565,7 @@ class Enemy {
         ctx.strokeStyle = '#66ffcc';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 4]);
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * (1.2 + prog * 0.5), 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, sz * (1.2 + prog * 0.5));
         ctx.restore();
       }
       // NEXUS: orbital ring + link beams to buffed allies
@@ -3611,9 +3581,7 @@ class Enemy {
         ctx.setLineDash([5, 7]);
         ctx.lineDashOffset = this.bobAngle * 10;
         const ringR = sz * 1.5 + Math.sin(this.bobAngle * 3) * 2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, ringR, 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, ringR);
         ctx.setLineDash([]);
         // Inner diamond symbol
         ctx.globalAlpha = nPulse * 1.4;
@@ -3640,17 +3608,12 @@ class Enemy {
             ctx.lineWidth = 1.5 + Math.sin(this.bobAngle * 5) * 0.5;
             ctx.setLineDash([4, 5]);
             ctx.lineDashOffset = -this.bobAngle * 8;
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(lx, ly);
-            ctx.stroke();
+            NEON.draw.line(ctx, sx, sy, lx, ly);
             ctx.setLineDash([]);
             // Small teal glow on linked enemy
             ctx.globalAlpha = 0.15;
             ctx.fillStyle = '#00eedd';
-            ctx.beginPath();
-            ctx.arc(lx, ly, sz * 0.8, 0, TWO_PI);
-            ctx.fill();
+            NEON.draw.circle(ctx, lx, ly, sz * 0.8);
           }
         }
         ctx.restore();
@@ -3668,17 +3631,13 @@ class Enemy {
         ctx.shadowBlur = frenzy ? 18 : 10;
         ctx.shadowColor = '#dd2244';
         const auraR = sz * (frenzy ? 1.6 : 1.3) + Math.sin(this.bobAngle * pulseRate) * 2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, auraR, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, auraR);
         // Frenzy: inner heartbeat pulse
         if (frenzy) {
           const hb = Math.abs(Math.sin(this.bobAngle * 3.5));
           ctx.globalAlpha = hb * 0.3;
           ctx.fillStyle = '#ff4466';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 0.8 * (0.8 + hb * 0.4), 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * 0.8 * (0.8 + hb * 0.4));
         }
         // Drain beam (set on successful life steal in content.js)
         if (this._spDrainBeam && this._spDrainBeam.t > 0) {
@@ -3689,10 +3648,7 @@ class Enemy {
           ctx.shadowBlur = 10;
           ctx.shadowColor = '#ff4466';
           ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(db.px * TILE - camX, db.py * TILE - camY);
-          ctx.lineTo(sx, sy);
-          ctx.stroke();
+          NEON.draw.line(ctx, db.px * TILE - camX, db.py * TILE - camY, sx, sy);
           // Heal particles moving toward SIPHON
           const progress = 1 - db.t / 0.3;
           const mx = db.px + (this.x - db.px) * progress;
@@ -3701,9 +3657,7 @@ class Enemy {
           ctx.fillStyle = '#44ff88';
           ctx.shadowBlur = 6;
           ctx.shadowColor = '#44ff88';
-          ctx.beginPath();
-          ctx.arc(mx * TILE - camX, my * TILE - camY, 3, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, mx * TILE - camX, my * TILE - camY, 3);
         }
         ctx.restore();
       }
@@ -3717,27 +3671,21 @@ class Enemy {
         ctx.shadowBlur = 14;
         ctx.shadowColor = '#8833ff';
         const auraR = sz * 1.4 + Math.sin(this.bobAngle * 3) * 2;
-        ctx.beginPath();
-        ctx.arc(sx, sy, auraR, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, auraR);
         // Orbiting particles (3 dots)
         ctx.globalAlpha = 0.5 + 0.2 * Math.sin(this.bobAngle * 4);
         ctx.fillStyle = '#cc88ff';
         for (let p = 0; p < 3; p++) {
           const a = this.bobAngle * 2 + p * (TWO_PI / 3);
           const orbR = sz * 1.1;
-          ctx.beginPath();
-          ctx.arc(sx + Math.cos(a) * orbR, sy + Math.sin(a) * orbR, 2, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx + Math.cos(a) * orbR, sy + Math.sin(a) * orbR, 2);
         }
         // Inner gravity symbol (concentric circles)
         ctx.globalAlpha = gvPulse * 1.5;
         ctx.strokeStyle = '#cc88ff';
         ctx.lineWidth = 1;
         ctx.shadowBlur = 4;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3, 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, 3);
         ctx.restore();
       }
       // SEEKER: intensifying warning glow as it approaches player
@@ -3750,9 +3698,7 @@ class Enemy {
           ctx.fillStyle = '#ffdd00';
           ctx.shadowBlur = 10 + prox * 16;
           ctx.shadowColor = '#ff8800';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * (1.2 + prox * 0.6), 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * (1.2 + prox * 0.6));
           ctx.restore();
         }
       }
@@ -3782,17 +3728,12 @@ class Enemy {
           ctx.shadowColor = '#ff2266';
           ctx.lineWidth = 1 + progress * 1.5;
           ctx.setLineDash([4, 6 - progress * 4]);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(lx, ly);
-          ctx.stroke();
+          NEON.draw.line(ctx, sx, sy, lx, ly);
           // Target dot
           ctx.globalAlpha = 0.3 + progress * 0.5;
           ctx.setLineDash([]);
           ctx.fillStyle = '#ff2266';
-          ctx.beginPath();
-          ctx.arc(lx, ly, 3 + progress * 2, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, lx, ly, 3 + progress * 2);
           ctx.restore();
         } else {
           // Idle scope glint
@@ -3801,9 +3742,7 @@ class Enemy {
           ctx.fillStyle = '#ff2266';
           ctx.shadowBlur = 6;
           ctx.shadowColor = '#ff2266';
-          ctx.beginPath();
-          ctx.arc(sx, sy - sz * 0.6, 1.5, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy - sz * 0.6, 1.5);
           ctx.restore();
         }
       }
@@ -3821,19 +3760,14 @@ class Enemy {
           for (let i = 0; i < 2; i++) {
             const ringR = sz * (0.8 + progress * 1.2) * (0.5 + i * 0.5);
             ctx.globalAlpha = (0.15 + progress * 0.4) * pulse * (1 - i * 0.3);
-            ctx.beginPath();
-            ctx.arc(sx, sy, ringR, 0, TWO_PI);
-            ctx.stroke();
+            NEON.draw.circleStroke(ctx, sx, sy, ringR);
           }
           // Directional aim line (like SNIPER but shorter)
           const aimLen = 3 * TILE * progress;
           ctx.globalAlpha = (0.2 + progress * 0.5) * pulse;
           ctx.lineWidth = 1 + progress;
           ctx.setLineDash([3, 5 - progress * 3]);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(sx + this._plAimDx * aimLen, sy + this._plAimDy * aimLen);
-          ctx.stroke();
+          NEON.draw.line(ctx, sx, sy, sx + this._plAimDx * aimLen, sy + this._plAimDy * aimLen);
           ctx.setLineDash([]);
           ctx.restore();
         } else {
@@ -3843,9 +3777,7 @@ class Enemy {
           ctx.fillStyle = '#44ddff';
           ctx.shadowBlur = 6;
           ctx.shadowColor = '#44ddff';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 0.4, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * 0.4);
           ctx.restore();
         }
       }
@@ -3859,16 +3791,12 @@ class Enemy {
         ctx.shadowColor = '#bb44ff';
         ctx.lineWidth = 1.5;
         const ringR = sz * 1.6 + Math.sin(this.bobAngle * 3) * 3;
-        ctx.beginPath();
-        ctx.arc(sx, sy, ringR, 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, ringR);
         // Inner rotating dashes
         ctx.globalAlpha = sPulse * 1.2;
         ctx.setLineDash([6, 10]);
         ctx.lineDashOffset = this.bobAngle * 12;
-        ctx.beginPath();
-        ctx.arc(sx, sy, ringR * 0.7, 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, ringR * 0.7);
         ctx.setLineDash([]);
         ctx.restore();
       }
@@ -3899,10 +3827,7 @@ class Enemy {
           ctx.lineDashOffset = -this.bobAngle * 8;
           const bx = this._healBeam.tx * TILE - camX;
           const by = this._healBeam.ty * TILE - camY;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(bx, by);
-          ctx.stroke();
+          NEON.draw.line(ctx, sx, sy, bx, by);
           ctx.setLineDash([]);
         }
         ctx.restore();
@@ -3916,9 +3841,7 @@ class Enemy {
           ctx.shadowBlur = 14 + wPulse * 8;
           ctx.shadowColor = '#ff6600';
           ctx.fillStyle = '#ff6600';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 1.6, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * 1.6);
           // Direction indicator line
           ctx.globalAlpha = 0.6;
           ctx.strokeStyle = '#ff6600';
@@ -3937,9 +3860,7 @@ class Enemy {
           ctx.shadowBlur = 18;
           ctx.shadowColor = '#ff6600';
           ctx.fillStyle = '#ff4400';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 1.8, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * 1.8);
           ctx.restore();
         } else if (this.stunTimer > 0 && this._chgCooldown > 2.0) {
           // Post-charge daze: spinning stars
@@ -3953,9 +3874,7 @@ class Enemy {
             const a = this.bobAngle * 3 + (i / 3) * TWO_PI;
             const starX = sx + Math.cos(a) * 6;
             const starYi = starY + Math.sin(a) * 2;
-            ctx.beginPath();
-            ctx.arc(starX, starYi, 1.5, 0, TWO_PI);
-            ctx.fill();
+            NEON.draw.circle(ctx, starX, starYi, 1.5);
           }
           ctx.restore();
         }
@@ -3970,9 +3889,7 @@ class Enemy {
           ctx.shadowBlur = 14 + wPulse * 8;
           ctx.shadowColor = '#22ff88';
           ctx.fillStyle = '#22ff88';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 1.6, 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * 1.6);
           ctx.restore();
           // Targeting reticle at locked target position
           if (this._lpTargetX != null) {
@@ -3987,9 +3904,7 @@ class Enemy {
             ctx.lineWidth = 1.5;
             ctx.setLineDash([4, 4]);
             ctx.lineDashOffset = -this.bobAngle * 8;
-            ctx.beginPath();
-            ctx.arc(rtx, rty, TILE * 2, 0, TWO_PI);
-            ctx.stroke();
+            NEON.draw.circleStroke(ctx, rtx, rty, TILE * 2);
             // Inner crosshair
             ctx.setLineDash([]);
             ctx.globalAlpha = rPulse * 0.8;
@@ -4017,9 +3932,7 @@ class Enemy {
           ctx.strokeStyle = '#22ff88';
           ctx.lineWidth = 1;
           ctx.setLineDash([3, 5]);
-          ctx.beginPath();
-          ctx.arc(landSx, landSy, TILE * 2, 0, TWO_PI);
-          ctx.stroke();
+          NEON.draw.circleStroke(ctx, landSx, landSy, TILE * 2);
           ctx.setLineDash([]);
           ctx.restore();
         } else if (this._lpState === 'recovery') {
@@ -4034,9 +3947,7 @@ class Enemy {
             const a = this.bobAngle * 3 + (i / 3) * TWO_PI;
             const starX = sx + Math.cos(a) * 6;
             const starYi = starY + Math.sin(a) * 2;
-            ctx.beginPath();
-            ctx.arc(starX, starYi, 1.5, 0, TWO_PI);
-            ctx.fill();
+            NEON.draw.circle(ctx, starX, starYi, 1.5);
           }
           ctx.restore();
         }
@@ -4054,9 +3965,7 @@ class Enemy {
           ctx.lineWidth = 1;
           ctx.setLineDash([2, 3]);
           ctx.lineDashOffset = -this.bobAngle * 10;
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
-          ctx.stroke();
+          NEON.draw.circleStroke(ctx, sx, sy, sz * 1.4);
           ctx.setLineDash([]);
           ctx.restore();
         } else if (this._phState === 'telegraph') {
@@ -4069,9 +3978,7 @@ class Enemy {
           ctx.strokeStyle = this.colour;
           ctx.lineWidth = 2;
           const ringR = sz * (1.2 + 0.8 * (1 - Math.max(0, this._phTimer) / 0.4));
-          ctx.beginPath();
-          ctx.arc(sx, sy, ringR, 0, TWO_PI);
-          ctx.stroke();
+          NEON.draw.circleStroke(ctx, sx, sy, ringR);
           // Aim indicator
           ctx.globalAlpha = 0.5;
           ctx.setLineDash([3, 3]);
@@ -4092,9 +3999,7 @@ class Enemy {
         ctx.shadowBlur = 16 + Math.sin(this.bobAngle * 1.5) * 6;
         ctx.shadowColor = '#ffd700';
         ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * 1.4);
         ctx.restore();
         // Crown icon above head
         ctx.save();
@@ -4136,9 +4041,7 @@ class Enemy {
         ctx.shadowBlur = 8 + Math.sin(this.bobAngle * 3) * 4;
         ctx.shadowColor = '#4488ff';
         ctx.globalAlpha = 0.5 + sFrac * 0.4;
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.3, 0, TWO_PI * sFrac);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, sz * 1.3, 0, TWO_PI * sFrac);
         ctx.restore();
       }
       // BERSERKER affix: intensifying red aura
@@ -4150,9 +4053,7 @@ class Enemy {
           ctx.shadowBlur = 10 + rage * 12;
           ctx.shadowColor = '#ff2222';
           ctx.fillStyle = '#ff2222';
-          ctx.beginPath();
-          ctx.arc(sx, sy, sz * (1.0 + rage * 0.4), 0, TWO_PI);
-          ctx.fill();
+          NEON.draw.circle(ctx, sx, sy, sz * (1.0 + rage * 0.4));
           ctx.restore();
         }
       }
@@ -4169,9 +4070,7 @@ class Enemy {
         ctx.lineWidth = 1.5;
         ctx.shadowBlur = 6 + Math.sin(this.bobAngle * 4) * 3;
         ctx.shadowColor = '#ff6600';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.4, 0, TWO_PI);
-        ctx.stroke();
+        NEON.draw.circleStroke(ctx, sx, sy, sz * 1.4);
         ctx.restore();
       }
       // FRENZY affix: intensifying red-orange aura per stack
@@ -4182,9 +4081,7 @@ class Enemy {
         ctx.shadowBlur = 8 + this.frenzyStacks * 6;
         ctx.shadowColor = '#ff4466';
         ctx.fillStyle = '#ff4466';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * (1.1 + this.frenzyStacks * 0.15), 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * (1.1 + this.frenzyStacks * 0.15));
         ctx.restore();
       }
       // Shield Generator protection: subtle cyan glow
@@ -4193,9 +4090,7 @@ class Enemy {
         ctx.globalAlpha = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
         ctx.shadowBlur = 10; ctx.shadowColor = '#00ccff';
         ctx.fillStyle = '#00ccff';
-        ctx.beginPath();
-        ctx.arc(sx, sy, sz * 1.2, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, sx, sy, sz * 1.2);
         ctx.restore();
       }
       // small hp bar
@@ -4231,9 +4126,7 @@ class Enemy {
       ctx.shadowColor = '#ff6600';
       ctx.fillStyle = '#ff6600';
       const bsz = this.isBoss ? 24 : TILE * 0.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, bsz * 0.7, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, bsz * 0.7);
       ctx.restore();
     }
     // Frost indicator — cyan tint overlay
@@ -4244,9 +4137,7 @@ class Enemy {
       ctx.shadowBlur = 10;
       ctx.shadowColor = '#66ccff';
       const fsz = this.isBoss ? 24 : TILE * 0.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, fsz * 0.8, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, fsz * 0.8);
       ctx.restore();
     }
     ctx.restore();
@@ -4519,20 +4410,20 @@ function drawVCores(camX, camY) {
       ctx.globalAlpha = flash;
       ctx.shadowBlur = 16; ctx.shadowColor = '#ff2200';
       ctx.fillStyle = '#ff3311';
-      ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 6);
       ctx.fillStyle = '#ffcc00';
-      ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3);
     } else {
       // Pulsing amber/red glow
       ctx.globalAlpha = 0.6 + c.glow * 0.3;
       ctx.shadowBlur = 10; ctx.shadowColor = '#ff6622';
       ctx.fillStyle = '#ff6622';
-      ctx.beginPath(); ctx.arc(sx, sy, 5, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 5);
       // Inner bright core
       ctx.globalAlpha = 0.9;
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#ffaa44';
-      ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 2.5);
     }
     ctx.restore();
     // Hazard symbol
@@ -4756,7 +4647,7 @@ function drawBeacons(camX, camY) {
       ctx.save();
       ctx.globalAlpha = ringA * 0.4;
       ctx.strokeStyle = '#ff2222'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(sx, sy, ringR, 0, TWO_PI); ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, ringR);
       ctx.restore();
       // Core diamond
       ctx.save();
@@ -4789,9 +4680,9 @@ function drawBeacons(camX, camY) {
       ctx.save();
       ctx.globalAlpha = 0.5;
       ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx, sy - 12); ctx.stroke();
+      NEON.draw.line(ctx, sx, sy - 5, sx, sy - 12);
       ctx.fillStyle = '#ff6666';
-      ctx.beginPath(); ctx.arc(sx, sy - 12, 1.5, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy - 12, 1.5);
       ctx.restore();
       // Warning symbol
       ctx.save();
@@ -4956,17 +4847,13 @@ function drawMines(camX, camY) {
       ctx.fillStyle = '#ff2200';
       ctx.shadowBlur = 12;
       ctx.shadowColor = '#ff4400';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 6, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 6);
       // Expanding warning ring
       const ringR = 6 + (1 - m.fuse / MINE_FUSE_NORMAL) * 12;
       ctx.globalAlpha = Math.max(0, flashAlpha * 0.5);
       ctx.strokeStyle = '#ff4400';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, ringR, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, ringR);
     } else if (m.revealed) {
       // Revealed: visible orange hazard shimmer
       const pulse = 0.3 + 0.2 * Math.sin(m.bob * 1.5);
@@ -4974,24 +4861,18 @@ function drawMines(camX, camY) {
       ctx.fillStyle = '#ff8800';
       ctx.shadowBlur = 6;
       ctx.shadowColor = '#ff6600';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 4, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 4);
       // Small hazard indicator
       ctx.globalAlpha = pulse * 0.5;
       ctx.strokeStyle = '#ff8800';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 7, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, 7);
     } else {
       // Dormant: very subtle shimmer (attentive players can spot)
       const pulse = 0.08 + 0.05 * Math.sin(m.bob);
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#ff6600';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 3, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3);
     }
 
     ctx.restore();
@@ -5119,7 +5000,7 @@ function drawShieldGens(camX, camY) {
       ctx.strokeStyle = '#00ccff';
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 4]);
-      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+      NEON.draw.line(ctx, sx, sy, ex, ey);
       ctx.setLineDash([]);
       ctx.restore();
     }
@@ -5147,7 +5028,7 @@ function drawShieldGens(camX, camY) {
     ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 4);
     ctx.shadowBlur = 8; ctx.shadowColor = '#44eeff';
     ctx.fillStyle = '#44eeff';
-    ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, 3);
     ctx.restore();
 
     // HP bar when damaged
@@ -5419,9 +5300,7 @@ function drawCameras(camX, camY) {
     const lensPulse = c.state === 'alerted' ? 1.0 : 0.6 + 0.3 * Math.sin(c.bob * 2);
     ctx.globalAlpha = lensPulse;
     ctx.fillStyle = c.state === 'alerted' ? '#ff8866' : '#ff4400';
-    ctx.beginPath();
-    ctx.arc(2, 0, 2, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, 2, 0, 2);
 
     ctx.restore();
 
@@ -5706,19 +5585,13 @@ function drawLasers(camX, camY) {
         ctx.lineWidth = 2;
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#ff4422';
-        ctx.beginPath();
-        ctx.moveTo(s1x, s1y);
-        ctx.lineTo(s2x, s2y);
-        ctx.stroke();
+        NEON.draw.line(ctx, s1x, s1y, s2x, s2y);
         // Inner bright core
         ctx.globalAlpha = pulse * 0.8;
         ctx.strokeStyle = '#ff8866';
         ctx.lineWidth = 1;
         ctx.shadowBlur = 4;
-        ctx.beginPath();
-        ctx.moveTo(s1x, s1y);
-        ctx.lineTo(s2x, s2y);
-        ctx.stroke();
+        NEON.draw.line(ctx, s1x, s1y, s2x, s2y);
         ctx.restore();
       } else if (l.cycling && !l.active) {
         // Cycling off — dim dotted line
@@ -5727,10 +5600,7 @@ function drawLasers(camX, camY) {
         ctx.strokeStyle = '#ff4422';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 5]);
-        ctx.beginPath();
-        ctx.moveTo(s1x, s1y);
-        ctx.lineTo(s2x, s2y);
-        ctx.stroke();
+        NEON.draw.line(ctx, s1x, s1y, s2x, s2y);
         ctx.setLineDash([]);
         ctx.restore();
       }
@@ -5752,9 +5622,7 @@ function drawLasers(camX, camY) {
         const lp = l.active ? 0.8 + 0.2 * Math.sin(l.bob * 3) : 0.3;
         ctx.globalAlpha = lp;
         ctx.fillStyle = '#ffaa66';
-        ctx.beginPath();
-        ctx.arc(s1x, s1y, 1.5, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, s1x, s1y, 1.5);
       }
       ctx.restore();
       // HP bar when damaged
@@ -5785,9 +5653,7 @@ function drawLasers(camX, camY) {
         const lp = l.active ? 0.8 + 0.2 * Math.sin(l.bob * 3) : 0.3;
         ctx.globalAlpha = lp;
         ctx.fillStyle = '#ffaa66';
-        ctx.beginPath();
-        ctx.arc(s2x, s2y, 1.5, 0, TWO_PI);
-        ctx.fill();
+        NEON.draw.circle(ctx, s2x, s2y, 1.5);
       }
       ctx.restore();
       if (l.hpB < l.maxHp) {
@@ -6006,7 +5872,7 @@ function drawWallTurrets(camX, camY) {
       ctx.globalAlpha = t.hackFlash;
       ctx.fillStyle = '#00ffaa';
       ctx.shadowBlur = 20; ctx.shadowColor = '#00ffaa';
-      ctx.beginPath(); ctx.arc(sx, sy, 10, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 10);
       ctx.shadowBlur = 0;
     }
 
@@ -6034,7 +5900,7 @@ function drawWallTurrets(camX, camY) {
     ctx.shadowBlur = 0;
     // Base pivot
     ctx.fillStyle = '#556677';
-    ctx.beginPath(); ctx.arc(0, 0, 3, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx, 0, 0, 3);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // HP bar (when damaged)
@@ -6103,9 +5969,7 @@ function drawDisruptionFields(camX, camY) {
     grad.addColorStop(0.7, 'rgba(255,68,170,0.15)');
     grad.addColorStop(1, 'rgba(255,68,170,0)');
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, r);
 
     // Edge ring
     ctx.globalAlpha = fade * pulse * 0.5;
@@ -6115,9 +5979,7 @@ function drawDisruptionFields(camX, camY) {
     ctx.shadowColor = '#ff44aa';
     ctx.setLineDash([4, 4]);
     ctx.lineDashOffset = -f.age * 30;
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, TWO_PI);
-    ctx.stroke();
+    NEON.draw.circleStroke(ctx, sx, sy, r);
     ctx.setLineDash([]);
 
     // Inner interference lines (visual noise)
@@ -6176,9 +6038,7 @@ function drawGravityWells(camX, camY) {
     grad.addColorStop(0.6, 'rgba(136,51,255,0.2)');
     grad.addColorStop(1, 'rgba(136,51,255,0)');
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, r);
 
     // Concentric rings pulsing inward
     ctx.globalAlpha = life * pulse * 0.4;
@@ -6190,9 +6050,7 @@ function drawGravityWells(camX, camY) {
       const phase = (w.timer * 2 + ring * 0.33) % 1;
       const ringR = r * (1 - phase);
       ctx.globalAlpha = life * (1 - phase) * 0.35;
-      ctx.beginPath();
-      ctx.arc(sx, sy, ringR, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, ringR);
     }
 
     // Centre core glow
@@ -6200,9 +6058,7 @@ function drawGravityWells(camX, camY) {
     ctx.fillStyle = '#cc88ff';
     ctx.shadowBlur = 12;
     ctx.shadowColor = '#8833ff';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 3 + Math.sin(w.timer * 4) * 1.5, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(w.timer * 4) * 1.5);
 
     ctx.restore();
   }
@@ -6889,7 +6745,7 @@ class Player {
       ctx.globalAlpha=g.alpha*0.5;
       ctx.fillStyle='#ffb700';
       ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
-      ctx.beginPath(); ctx.arc(gx,gy,7,0,TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, gx, gy, 7);
       ctx.restore();
     }
 
@@ -6916,17 +6772,12 @@ class Player {
       ctx.shadowBlur = 8; ctx.shadowColor = lc;
       ctx.lineWidth = 1;
       ctx.setLineDash([4,4]);
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(ex, ey);
-      ctx.stroke();
+      NEON.draw.line(ctx, sx, sy, ex, ey);
       ctx.setLineDash([]);
       // Endpoint dot
       ctx.globalAlpha = 0.6;
       ctx.fillStyle = lc;
-      ctx.beginPath();
-      ctx.arc(ex, ey, 2.5, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, ex, ey, 2.5);
       ctx.restore();
     }
 
@@ -6940,19 +6791,13 @@ class Player {
       ctx.strokeStyle = '#ff2222';
       ctx.shadowBlur = 14; ctx.shadowColor = '#ff2222';
       ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(b.x1*TILE-camX, b.y1*TILE-camY);
-      ctx.lineTo(b.x2*TILE-camX, b.y2*TILE-camY);
-      ctx.stroke();
+      NEON.draw.line(ctx, b.x1*TILE-camX, b.y1*TILE-camY, b.x2*TILE-camX, b.y2*TILE-camY);
       // Bright core
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = '#ffffff';
       ctx.shadowBlur = 0;
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(b.x1*TILE-camX, b.y1*TILE-camY);
-      ctx.lineTo(b.x2*TILE-camX, b.y2*TILE-camY);
-      ctx.stroke();
+      NEON.draw.line(ctx, b.x1*TILE-camX, b.y1*TILE-camY, b.x2*TILE-camX, b.y2*TILE-camY);
       ctx.restore();
     }
 
@@ -6965,15 +6810,11 @@ class Player {
     // body
     ctx.shadowBlur=15; ctx.shadowColor=this.cloakTimer > 0 ? '#cc44ff' : col;
     ctx.fillStyle=this.cloakTimer > 0 ? '#cc44ff' : col;
-    ctx.beginPath();
-    ctx.arc(sx,sy,7,0,TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, 7);
     // direction pip
     ctx.shadowBlur=5;
     ctx.fillStyle='#ffffff';
-    ctx.beginPath();
-    ctx.arc(sx+this.facing.x*7,sy+this.facing.y*7,2.5,0,TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx+this.facing.x*7, sy+this.facing.y*7, 2.5);
     ctx.restore();
 
     // Energy shield bubble
@@ -6984,9 +6825,7 @@ class Player {
       ctx.strokeStyle='#4488ff';
       ctx.shadowBlur=12; ctx.shadowColor='#4488ff';
       ctx.lineWidth=1.5;
-      ctx.beginPath();
-      ctx.arc(sx,sy,12,0,TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, 12);
       ctx.restore();
     }
     // Burn indicator — flickering orange underglow
@@ -6995,9 +6834,7 @@ class Player {
       ctx.globalAlpha = 0.35 + Math.sin(performance.now() * 0.012) * 0.15;
       ctx.shadowBlur = 16; ctx.shadowColor = '#ff6600';
       ctx.fillStyle = '#ff6600';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 10, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 10);
       ctx.restore();
     }
     // Shock indicator — rapid yellow flash
@@ -7006,9 +6843,7 @@ class Player {
       ctx.globalAlpha = 0.5 + Math.sin(performance.now() * 0.04) * 0.3;
       ctx.shadowBlur = 18; ctx.shadowColor = '#ffee44';
       ctx.fillStyle = '#ffee44';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 9, 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 9);
       ctx.restore();
     }
   }
