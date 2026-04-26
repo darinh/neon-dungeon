@@ -1158,6 +1158,23 @@ const audio = (() => {
       noise(0.10, t + 0.02, 0.10, 1800, bus);
       osc('sine', 90, 55, 0.10, t, 0.12);
     },
+    resonatorCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising harmonic chord — the resonator winding up its cone. Two
+      // detuned sines + a soft bell, wet for spatial threat.
+      const bus = wetDry(1, 0.55, 0.35);
+      osc('sine', 320, 720, 0.08, t, 0.55, bus);
+      osc('sine', 480, 1080, 0.06, t + 0.05, 0.50, bus);
+      osc('triangle', 220, 540, 0.05, t + 0.10, 0.45, bus);
+    },
+    resonatorFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sonic-cone discharge — wet boom + descending whine + grit.
+      const bus = wetDry(1, 0.35, 0.5);
+      osc('sawtooth', 600, 90, 0.10, t, 0.20, bus);
+      osc('sine', 140, 50, 0.18, t, 0.22, bus);
+      noise(0.16, t + 0.01, 0.14, 2400, bus);
+    },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Low rumble + rising whoosh

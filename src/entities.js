@@ -66,7 +66,7 @@ function enemiesInRoomIter(room) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -76,6 +76,49 @@ const ECHOER_TELEGRAPH  = 0.8;  // ghost+lane visible duration before fire
 const ECHOER_COOLDOWN   = 2.5;  // seconds between aim attempts (post-fire)
 const ECHOER_RANGE      = 14;   // tiles — max lock distance (echoer→past-pos)
 const ECHOER_PROJ_SPD   = 9;    // tiles/sec — slow & dodgeable
+
+// RESONATOR tuning constants — exported on globalThis for cross-file test reads.
+// Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
+// Counter-play is dash-through (existing dash i-frames in isPlayerDamageImmune)
+// or stepping out of the wedge during the TELEGRAPH window. Tweak the
+// telegraph in particular with care — it's the entire fairness budget.
+const RESONATOR_CHARGE     = 2.2;            // silent windup before telegraph
+const RESONATOR_TELEGRAPH  = 0.8;            // wedge visible — fairness window
+const RESONATOR_RECOVERY   = 1.0;            // post-fire cooldown
+const RESONATOR_RANGE      = 6;              // tiles — cone depth
+const RESONATOR_CONE_DEG   = 60;             // full cone angular width (degrees)
+const RESONATOR_DMG_MUL    = 0.8;            // damage = atk * 0.8
+const RESONATOR_HALF_RAD   = (RESONATOR_CONE_DEG * 0.5) * Math.PI / 180; // precomputed
+
+/**
+ * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
+ * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
+ * half-angle `halfAngleRad` (radians). Apex itself counts as inside.
+ *
+ * Used by the RESONATOR fire step and tested directly. Keeping this
+ * pure (no LoS, no immunity) means the geometry is independently
+ * verifiable; LoS / immunity gates are layered on at the call site.
+ *
+ * @param {number} px
+ * @param {number} py
+ * @param {number} ox
+ * @param {number} oy
+ * @param {number} aimDx
+ * @param {number} aimDy
+ * @param {number} range
+ * @param {number} halfAngleRad
+ * @returns {boolean}
+ */
+function isInsideCone(px, py, ox, oy, aimDx, aimDy, range, halfAngleRad) {
+  const vx = px - ox, vy = py - oy;
+  const d2 = vx*vx + vy*vy;
+  if (d2 === 0) return true;          // point is at the apex
+  if (d2 > range * range) return false;
+  const len = Math.sqrt(d2);
+  // Dot of unit aim with unit (px-ox, py-oy) = cos(angle between them).
+  const cosA = (vx * aimDx + vy * aimDy) / len;
+  return cosA >= Math.cos(halfAngleRad);
+}
 
 /**
  * Pure helper: returns the entry from a {t,x,y} position history that is
@@ -109,7 +152,7 @@ function getPositionAgoFromHistory(history, seconds) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -135,7 +178,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -485,6 +528,12 @@ class Enemy {
   /** @type {any} */ _ecCooldown;
   /** @type {any} */ _ecLockX;
   /** @type {any} */ _ecLockY;
+  /** @type {any} */ _rsState;
+  /** @type {any} */ _rsCharge;
+  /** @type {any} */ _rsTele;
+  /** @type {any} */ _rsRec;
+  /** @type {any} */ _rsAimDx;
+  /** @type {any} */ _rsAimDy;
   /** @type {any} */ _tnState;
   /** @type {any} */ _tnTimer;
   /** @type {any} */ _tnTargetX;
@@ -916,6 +965,9 @@ class Enemy {
       if (this._plState === 'charging') { this._plState = 'idle'; this._plCooldown = 0.8; }
       // Cancel echoer aim on stun — don't fire after stun ends
       if (this._ecState === 'aiming') { this._ecState = 'idle'; this._ecAimTimer = 0; this._ecCooldown = 0.8; }
+      // Cancel resonator telegraph on stun — drop straight to recovery so the
+      // wedge doesn't fire after stun ends and the player can punish the stun.
+      if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -994,6 +1046,7 @@ class Enemy {
       case 'SEEKER':  this.aiSeeker(dt,player,map,d,los);  break;
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
+      case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
@@ -1829,6 +1882,104 @@ class Enemy {
       this.patrol(dt, map);
     }
     // else: hold position (menacing idle)
+  }
+
+  // ─── RESONATOR AI — Stationary Sonic-Cone Battery ──────────────────────
+  // Stationary mob (spd=0). Cycles silently, then commits to a 60° sonic
+  // cone telegraphed for RESONATOR_TELEGRAPH seconds before firing once.
+  // Fire is instant (no projectile) — damage applies the frame the
+  // telegraph timer hits 0 to any unit inside the locked cone arc that
+  // also has LoS and isn't damage-immune (dash i-frames pass through).
+  //
+  // Aim source is `_tx,_ty` (canonical taunt-aware target), so hologram
+  // decoys redirect the cone correctly with no special branch — unlike
+  // ECHOER which had to special-case taunt because it sampled player
+  // history directly.
+  //
+  // States:
+  //   idle:      _rsCharge ticks down. When 0 + inRoom + canTarget + LoS,
+  //              lock cone aim at (_tx,_ty) and enter telegraph.
+  //   telegraph: _rsTele ticks down; cone wedge rendered. On 0, fire,
+  //              transition to recovery.
+  //   recovery:  _rsRec ticks down; on 0, reset _rsCharge, return to idle.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiResonator(dt, player, map, d, los) {
+    void d; void los; // recomputed against the lock for fairness
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // Room-gated: only engage when target or player is inside this resonator's room.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Telegraph: lane visible, fire on completion ──
+    if (this._rsState === 'telegraph') {
+      this._rsTele -= dt; // fixed-rate countdown — fairness > tempo
+      if (this._rsTele <= 0) {
+        // FIRE: hit-test player against locked cone. LoS is rechecked at
+        // fire-time (defense in depth — though map is static during a
+        // telegraph window). Damage honors player damage immunity, so
+        // dash i-frames are the canonical pass-through counter.
+        const ax = this._rsAimDx, ay = this._rsAimDy;
+        const dx = player.x - this.x, dy = player.y - this.y;
+        const dPlayer2 = dx*dx + dy*dy;
+        if (dPlayer2 <= RESONATOR_RANGE * RESONATOR_RANGE) {
+          if (isInsideCone(player.x, player.y, this.x, this.y,
+                           ax, ay, RESONATOR_RANGE, RESONATOR_HALF_RAD)
+              && hasLOS(this.x, this.y, player.x, player.y, map)) {
+            const dmg = Math.round(this.atk * RESONATOR_DMG_MUL);
+            player.takeDamage(dmg, 'Resonator Cone');
+          }
+        }
+        if (audio.resonatorFire) audio.resonatorFire();
+        // Visual punch — pink shockwave at the apex along the aim line.
+        const tipX = this.x + ax * RESONATOR_RANGE * 0.6;
+        const tipY = this.y + ay * RESONATOR_RANGE * 0.6;
+        spawnParticles(tipX, tipY, 'EXPLOSION', '#ff66cc', 10);
+        triggerShake(2, 0.10);
+        this._rsState = 'recovery';
+        this._rsRec = RESONATOR_RECOVERY;
+        this._rsTele = 0;
+      }
+      return;
+    }
+
+    // ── Recovery: cooling down, no aim attempts ──
+    if (this._rsState === 'recovery') {
+      this._rsRec -= dt * ocMul * bm;
+      if (this._rsRec <= 0) {
+        this._rsState = 'idle';
+        this._rsCharge = RESONATOR_CHARGE;
+      }
+      return;
+    }
+
+    // ── Idle: silent charge, then try to commit ──
+    this._rsCharge = Math.max(0, (this._rsCharge || 0) - dt * ocMul * bm);
+    if (this._rsCharge <= 0 && inRoom && this._canTarget()) {
+      const dLock = dist(this.x, this.y, this._tx, this._ty);
+      // Range gate is INCLUSIVE to match isInsideCone / fire-time geometry.
+      // dLock > 0.1 prevents the zero-aim edge case (target sitting exactly
+      // on the apex would yield norm(0,0) = [0,0], producing an east-pointing
+      // visual that never hits — "phantom cone" bug).
+      if (dLock > 0.1 && dLock <= RESONATOR_RANGE && hasLOS(this.x, this.y, this._tx, this._ty, map)) {
+        const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
+        this._rsAimDx = dx; this._rsAimDy = dy;
+        this._rsState = 'telegraph';
+        this._rsTele = RESONATOR_TELEGRAPH;
+        if (audio.resonatorCharge) audio.resonatorCharge();
+      }
+    }
+    // Stationary: never patrol, never reposition. Sitting duck by design.
   }
 
   /**
@@ -4180,6 +4331,63 @@ class Enemy {
         }
         ctx.restore();
       }
+      // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
+      // core during idle/charge; brief flash on the recovery transition.
+      // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
+      // half-angle = RESONATOR_HALF_RAD, radius = RESONATOR_RANGE * TILE)
+      // so what the player SEES is exactly what the cone HITS.
+      if (this.type === 'RESONATOR') {
+        ctx.save();
+        if (this._rsState === 'telegraph' && this._rsTele > 0) {
+          // Drive every visual from the gameplay constants — single source of
+          // truth so any balance tweak to range/cone/telegraph stays in
+          // lock-step with the hit-test in aiResonator.
+          const progress = 1 - Math.max(0, Math.min(1, this._rsTele / RESONATOR_TELEGRAPH));
+          const ax = this._rsAimDx, ay = this._rsAimDy;
+          const aimAngle = Math.atan2(ay, ax);
+          const halfRad = RESONATOR_HALF_RAD;
+          const radPx = RESONATOR_RANGE * TILE;
+          // Filled wedge — translucent pink that intensifies as fire approaches.
+          ctx.fillStyle = '#ff66cc';
+          ctx.globalAlpha = 0.10 + progress * 0.30;
+          ctx.shadowBlur = 6 + progress * 14;
+          ctx.shadowColor = '#ff66cc';
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+          ctx.closePath();
+          ctx.fill();
+          // Edge lines for clarity
+          ctx.globalAlpha = 0.40 + progress * 0.50;
+          ctx.strokeStyle = '#ffaaee';
+          ctx.lineWidth = 1.2 + progress * 1.0;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle - halfRad) * radPx,
+                     sy + Math.sin(aimAngle - halfRad) * radPx);
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle + halfRad) * radPx,
+                     sy + Math.sin(aimAngle + halfRad) * radPx);
+          ctx.stroke();
+          // Pulsing arc rim
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 22);
+          ctx.globalAlpha = (0.25 + progress * 0.55) * pulse;
+          ctx.lineWidth = 1.5 + progress * 1.2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+          ctx.stroke();
+        } else {
+          // Idle/recovery: faint pink core pulse on the body — ambient threat.
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.18 + 0.12 * pulse;
+          ctx.strokeStyle = '#ff66cc';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ff66cc';
+          ctx.lineWidth = 1.2;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        }
+        ctx.restore();
+      }
       // SUMMONER: pulsing violet summon ring
       if (this.type === 'SUMMONER') {
         ctx.save();
@@ -4572,6 +4780,7 @@ const ENEMY_WEIGHTS = {
   PULSER:     { base: 5,  perFloor: 1, minFloor: 2 },  // telegraphed charge-up attacker
   TUNNELLER:  { base: 2,  perFloor: 2, minFloor: 4 },  // burrows underground, surfaces beneath player with AoE telegraph
   ECHOER:     { base: 2,  perFloor: 2, minFloor: 5 },  // sonar predictor — fires at where the player WAS (anti-pattern punisher)
+  RESONATOR:  { base: 2,  perFloor: 2, minFloor: 6 },  // stationary cone battery — telegraphed 60° wedge, dash-through counter
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -4641,6 +4850,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
     case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
+    case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -4718,12 +4928,22 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._ecCooldown=0.5+Math.random()*1.0;
     e._ecLockX=x; e._ecLockY=y;
   }
+  if (type==='RESONATOR') {
+    // Stationary cone battery. Stagger initial charge so a clustered
+    // spawn doesn't telegraph in unison. First charge completes ~1.5–3s
+    // after spawn (player gets a beat to read the room).
+    e._rsState='idle';
+    e._rsCharge=1.5+Math.random()*1.5;
+    e._rsTele=0;
+    e._rsRec=0;
+    e._rsAimDx=0; e._rsAimDy=0;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
