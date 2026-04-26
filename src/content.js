@@ -1081,7 +1081,7 @@ function drawHackwareEffects(camX, camY) {
       ctx.strokeStyle = '#00ddff';
       ctx.shadowBlur = 15; ctx.shadowColor = '#00ddff';
       ctx.lineWidth = 3 * (1 - progress);
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       ctx.restore();
     }
     if (fx.type === 'swarm') {
@@ -1090,7 +1090,7 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = 0.8;
       ctx.shadowBlur = 8; ctx.shadowColor = '#44ff88';
       ctx.fillStyle = '#44ff88';
-      ctx.beginPath(); ctx.arc(sx, sy, 3, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3);
       ctx.restore();
     }
     if (fx.type === 'gravity') {
@@ -1103,19 +1103,18 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.25 * pulse;
       ctx.fillStyle = '#ff8800';
       ctx.shadowBlur = 20; ctx.shadowColor = '#ff8800';
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, r);
       // Core
       ctx.globalAlpha = fade * 0.7;
-      ctx.beginPath(); ctx.arc(sx, sy, 6, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 6);
       // Rotating arms
       ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 2;
       ctx.globalAlpha = fade * 0.4;
       for (let arm = 0; arm < 3; arm++) {
         const a = fx.age * 4 + (TWO_PI / 3) * arm;
-        ctx.beginPath();
-        ctx.moveTo(sx + Math.cos(a) * 8, sy + Math.sin(a) * 8);
-        ctx.lineTo(sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
-        ctx.stroke();
+        NEON.draw.line(ctx,
+          sx + Math.cos(a) * 8, sy + Math.sin(a) * 8,
+          sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.6);
       }
       ctx.restore();
     }
@@ -1129,24 +1128,22 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.15 * pulse;
       ctx.fillStyle = '#44ccff';
       ctx.shadowBlur = 25; ctx.shadowColor = '#44ccff';
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, r);
       // Outer ring stroke
       ctx.globalAlpha = fade * 0.5;
       ctx.strokeStyle = '#44ccff'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, TWO_PI); ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       // Rotating arc segments (3 arcs, 60° each)
       ctx.lineWidth = 3;
       ctx.globalAlpha = fade * 0.6;
       for (let seg = 0; seg < 3; seg++) {
         const a = fx.age * 3 + (TWO_PI / 3) * seg;
-        ctx.beginPath();
-        ctx.arc(sx, sy, r * 0.7, a, a + Math.PI / 3);
-        ctx.stroke();
+        NEON.draw.arcStroke(ctx, sx, sy, r * 0.7, a, a + Math.PI / 3);
       }
       // Core spark
       ctx.globalAlpha = fade * 0.8;
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(sx, sy, 3 + Math.sin(fx.age * 15) * 1.5, 0, TWO_PI); ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 15) * 1.5);
       ctx.restore();
     }
     if (fx.type === 'hologram') {
@@ -1426,9 +1423,7 @@ function _drawParticleCb(p) {
   if (p.type === 'EXPLOSION') {
     ctx.shadowBlur = 10; ctx.shadowColor = p.colour;
     ctx.fillStyle = p.colour;
-    ctx.beginPath();
-    ctx.arc(sx, sy, p.size * (1 - p.life * 0.5 + 0.5), 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, p.size * (1 - p.life * 0.5 + 0.5));
   } else {
     ctx.fillStyle = p.colour;
     ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
@@ -1621,9 +1616,7 @@ function drawAmbient(camX, camY) {
     } else if (p.kind === 'WISP') {
       ctx.shadowBlur = 8; ctx.shadowColor = p.colour;
       ctx.fillStyle = p.colour;
-      ctx.beginPath();
-      ctx.arc(sx, sy, p.size * (0.5 + 0.5 * p.life), 0, TWO_PI);
-      ctx.fill();
+      NEON.draw.circle(ctx, sx, sy, p.size * (0.5 + 0.5 * p.life));
     } else if (p.kind === 'EMBER') {
       ctx.fillStyle = p.colour;
       const flicker = 0.7 + 0.3 * Math.sin(lastTime / 60 + p.seed);
@@ -3317,36 +3310,30 @@ class Projectile {
         ctx.strokeStyle='#00ffff';
         ctx.shadowBlur=4; ctx.shadowColor='#00ffff';
         ctx.lineWidth=1.5;
-        ctx.beginPath();
-        ctx.moveTo(this.trail[a]-camX, this.trail[a+1]-camY);
-        ctx.lineTo(this.trail[b]-camX, this.trail[b+1]-camY);
-        ctx.stroke();
+        NEON.draw.line(ctx,
+          this.trail[a]-camX, this.trail[a+1]-camY,
+          this.trail[b]-camX, this.trail[b+1]-camY);
       }
       // Line from last trail point to current position
       ctx.globalAlpha=0.6;
       ctx.lineWidth=2;
-      ctx.beginPath();
-      ctx.moveTo(this.trail[tl-2]-camX, this.trail[tl-1]-camY);
-      ctx.lineTo(this.x*TILE-camX, this.y*TILE-camY);
-      ctx.stroke();
+      NEON.draw.line(ctx,
+        this.trail[tl-2]-camX, this.trail[tl-1]-camY,
+        this.x*TILE-camX, this.y*TILE-camY);
       ctx.restore();
     }
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
     ctx.save();
     ctx.shadowBlur=8; ctx.shadowColor=this.colour;
     ctx.fillStyle=this.colour;
-    ctx.beginPath();
     const r = this.isGrenade ? 5 : 3;
-    ctx.arc(sx,sy,r,0,TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy, r);
     if (this.isGrenade) {
       // Pulsing warning ring
       ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 80) * 0.3;
       ctx.strokeStyle = '#ffaa00';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 7, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, 7);
     }
     ctx.restore();
   }
@@ -3411,9 +3398,7 @@ function drawHazardZones(camX, camY) {
       ctx.strokeStyle = z.colour;
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, TWO_PI);
-      ctx.stroke();
+      NEON.draw.circleStroke(ctx, sx, sy, r);
       ctx.setLineDash([]);
     } else {
       ctx.globalAlpha = fade * 0.3 * pulse;
@@ -4122,9 +4107,7 @@ class KeyItem {
     ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
     ctx.fillStyle=this.tileColour;
     // Key shape: circle + teeth
-    ctx.beginPath();
-    ctx.arc(sx, sy-3, 5, 0, TWO_PI);
-    ctx.fill();
+    NEON.draw.circle(ctx, sx, sy-3, 5);
     ctx.fillRect(sx-1.5, sy, 3, 8);
     ctx.fillRect(sx, sy+3, 4, 2);
     ctx.fillRect(sx, sy+6, 3, 2);
