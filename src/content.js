@@ -2412,6 +2412,7 @@ function generateFloor(floorNum) {
 
   // ── Secret room (every floor, one per floor) ─────────────────────────────
   const secretRooms = [];
+  /** @type {any[]} */ const whisperItems = [];
   {
     // Candidates: not spawn, not stair, not boss, not already special, decent size
     const secretEligible = rooms.filter((/** @type {any} */ r) =>
@@ -2436,6 +2437,22 @@ function generateFloor(floorNum) {
       // Place T.CRACKED at one narrow cluster (the "hidden entrance")
       const crackedCluster = /** @type {any} */ (narrow[rndInt(0, narrow.length - 1)]);
       for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
+
+      // Whispers subplot — narrative fragments found in secret rooms.
+      // Try to spawn one whisper item at the secret room's center. NEON.whispers
+      // returns null if no eligible unread whisper for this floor's biome, in
+      // which case the secret room still rewards the player with normal loot
+      // (the per-room loot pass at render.js handles that). Try/catch keeps
+      // gen resilient if the meta module isn't loaded yet (e.g. early Node
+      // tests of generateFloor).
+      try {
+        if (typeof NEON !== 'undefined' && NEON.whispers && NEON.whispers.pickWhisperForFloor) {
+          const w = NEON.whispers.pickWhisperForFloor(floorNum);
+          if (w && w.id) {
+            whisperItems.push({ x: r.cx + 0.5, y: r.cy + 0.5, whisperId: w.id });
+          }
+        }
+      } catch (_) { /* gen-time meta unavailable; skip whisper this floor */ }
 
       break; // only one secret room per floor
     }
@@ -2707,7 +2724,13 @@ function generateFloor(floorNum) {
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
-      if (r === spawnRoom || r === bossRoom) continue;
+      // Skip spawn (player needs safe arrival), boss (boss room is its own
+      // hazard), and special rooms — secret rooms in particular, because the
+      // whisper item spawns at the room center (see secret-room placement
+      // above) and a trap landing on that exact tile would visually replace
+      // the whisper. Special rooms (vendor/lore/event/shrine/challenge) host
+      // gameplay-critical interactions that traps would clutter.
+      if (r === spawnRoom || r === bossRoom || r.roomType) continue;
       const trapCount = rndInt(0, Math.min(3, Math.floor(floorNum/3)));
       for (let t=0; t<trapCount; t++) {
         const tx = r.x + rndInt(1, r.w-2);
@@ -2881,7 +2904,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────
@@ -4197,6 +4220,48 @@ class KeyItem {
     ctx.fillRect(sx-1.5, sy, 3, 8);
     ctx.fillRect(sx, sy+3, 4, 2);
     ctx.fillRect(sx, sy+6, 3, 2);
+    ctx.restore();
+  }
+}
+
+// Whispers subplot — pickup that triggers the narrative fragment in the
+// ARCHIVE (src/data/whispers.js + src/meta/whispers.js). Visually distinct
+// from KeyItem: pulsing violet glyph (the cryptic-fragment colour echoes the
+// 'WHISPERS: N/M' counter in hub.js Archive). isWhisper flag drives the
+// pickup branch in src/game.js.
+class WhisperItem {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {string} whisperId
+   */
+  constructor(x, y, whisperId) {
+    this.x = x; this.y = y;
+    this.whisperId = whisperId;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isWhisper = true;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 1.6; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 2.5;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.55 + 0.45 * Math.sin(this.bob * 1.4);
+    ctx.save();
+    ctx.shadowBlur = 6 + 12 * pulse;
+    ctx.shadowColor = '#aa66cc';
+    ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    ctx.fillStyle = '#cc99ee';
+    // Hexagonal/diamond glyph — clearly NOT a key (no teeth) and NOT a
+    // generic Item diamond (slightly larger, vertical orientation).
+    NEON.draw.circle(ctx, sx, sy, 4 + 1.2 * pulse);
+    ctx.fillStyle = '#552277';
+    ctx.fillRect(sx - 0.8, sy - 5, 1.6, 10);
+    ctx.fillRect(sx - 5, sy - 0.8, 10, 1.6);
     ctx.restore();
   }
 }
