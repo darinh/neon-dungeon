@@ -576,18 +576,18 @@ function drawTouchUI() {
     ctx.save();
     ctx.globalAlpha=0.35;
     ctx.strokeStyle='#00f5ff'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(bx,by,JR,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,bx,by,JR);
     ctx.fillStyle='#00f5ff';
-    ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,bx+dx*JR,by+dy*JR,18);
     ctx.restore();
   } else {
     // ghost move joystick hint
     const hintY = layout.hudTop - 26;
     ctx.save(); ctx.globalAlpha=0.12;
     ctx.strokeStyle='#00f5ff'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(80, hintY, JR, 0, TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,80,hintY,JR);
     ctx.fillStyle='#00f5ff';
-    ctx.beginPath(); ctx.arc(80, hintY, 18, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,80,hintY,18);
     ctx.restore();
   }
   // Right joystick (aim)
@@ -596,18 +596,18 @@ function drawTouchUI() {
     ctx.save();
     ctx.globalAlpha=0.35;
     ctx.strokeStyle='#ff00c8'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(bx,by,JR,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,bx,by,JR);
     ctx.fillStyle='#ff00c8';
-    ctx.beginPath(); ctx.arc(bx+dx*JR,by+dy*JR,18,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,bx+dx*JR,by+dy*JR,18);
     ctx.restore();
   } else {
     // ghost aim joystick hint
     const hintY = layout.hudTop - 26;
     ctx.save(); ctx.globalAlpha=0.12;
     ctx.strokeStyle='#ff00c8'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(W/2+80, hintY, JR, 0, TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,W/2+80,hintY,JR);
     ctx.fillStyle='#ff00c8';
-    ctx.beginPath(); ctx.arc(W/2+80, hintY, 18, 0, TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,W/2+80,hintY,18);
     ctx.restore();
   }
   // Buttons
@@ -628,9 +628,9 @@ function drawTouchUI() {
     }
     ctx.shadowBlur=10; ctx.shadowColor=btn.colour;
     ctx.strokeStyle=btn.colour; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(btn.x,btn.y,btn.r,0,TWO_PI); ctx.stroke();
+    NEON.draw.circleStroke(ctx,btn.x,btn.y,btn.r);
     ctx.fillStyle=btn.colour+'33';
-    ctx.beginPath(); ctx.arc(btn.x,btn.y,btn.r,0,TWO_PI); ctx.fill();
+    NEON.draw.circle(ctx,btn.x,btn.y,btn.r);
     ctx.fillStyle=btn.colour; ctx.font=`bold ${key==='PAUSE'?11:14}px monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(btn.label,btn.x,btn.y);
