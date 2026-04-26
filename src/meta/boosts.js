@@ -144,12 +144,19 @@
 
   // Remove permanent-stat entries from an UPGRADES-style list. Used by
   // content.js generateShopItems so vendors no longer sell persistent growth.
-  // Kept here (rather than inlined in content.js) so tests can lock the
-  // behaviour down without requiring the browser bundle.
+  // Also excludes currency drops (CREDIT_CACHE) — buying currency with
+  // currency would either be a no-op or, with floor scaling + multipliers, an
+  // arbitrage loop. Kept here (rather than inlined in content.js) so tests
+  // can lock the behaviour down without requiring the browser bundle.
   /** @param {any} upgrades */
   function filterVendorPool(upgrades) {
     if (!Array.isArray(upgrades)) return [];
-    return upgrades.filter(function (/** @type {any} */ u) { return u && u.persistent !== true; });
+    return upgrades.filter(function (/** @type {any} */ u) {
+      if (!u) return false;
+      if (u.persistent === true) return false;
+      if (u.id === 'CREDIT_CACHE') return false;
+      return true;
+    });
   }
 
   return {
