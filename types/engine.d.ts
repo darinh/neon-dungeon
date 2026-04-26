@@ -296,6 +296,12 @@ declare global {
     arcStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, r: number, a1: number, a2: number): void;
     /** Stroked line segment from `(x1, y1)` to `(x2, y2)`. */
     line(ctx: CanvasRenderingContext2D | any, x1: number, y1: number, x2: number, y2: number): void;
+    /** Filled rounded rect using current fillStyle. */
+    roundRect(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Stroked rounded rect using current strokeStyle + lineWidth. */
+    roundRectStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Fill THEN stroke a rounded rect on a single shared path. */
+    roundRectFillStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
     /** Sets `ctx.shadowColor` + `ctx.shadowBlur`. */
     setShadow(ctx: CanvasRenderingContext2D | any, color: string, blur: number): void;
     /** Resets `ctx.shadowBlur = 0` (cheaper than `setShadow` for the common reset). */

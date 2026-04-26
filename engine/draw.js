@@ -28,6 +28,17 @@
 //   line(ctx, x1, y1, x2, y2)
 //     → strokes a single line segment.
 //
+//   roundRect(ctx, x, y, w, h, r)
+//     → fills a rounded rect using current fillStyle.
+//
+//   roundRectStroke(ctx, x, y, w, h, r)
+//     → strokes a rounded rect using current strokeStyle + lineWidth.
+//
+//   roundRectFillStroke(ctx, x, y, w, h, r)
+//     → fills THEN strokes a rounded rect (one beginPath, two paint ops).
+//       Use when the same rect should both fill and stroke without
+//       re-tracing the path.
+//
 //   setShadow(ctx, color, blur)
 //     → sets ctx.shadowColor + ctx.shadowBlur. Use to enable a neon-style
 //       glow before a fill/stroke call.
@@ -41,6 +52,7 @@
 // pattern).
 //
 // Node: module.exports = { circle, circleStroke, arcStroke, line,
+//                          roundRect, roundRectStroke, roundRectFillStroke,
 //                          setShadow, clearShadow }.
 
 (function (root, factory) {
@@ -116,6 +128,57 @@
   }
 
   /**
+   * Fill a rounded rect. Uses current fillStyle. Allocation-free —
+   * delegates to the native ctx.roundRect (Canvas2D, broadly supported
+   * since 2023). For non-rounded rects use ctx.fillRect directly.
+   * @param {CanvasRenderingContext2D | any} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   * @param {number} r
+   */
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  }
+
+  /**
+   * Stroke a rounded rect. Uses current strokeStyle + lineWidth.
+   * @param {CanvasRenderingContext2D | any} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   * @param {number} r
+   */
+  function roundRectStroke(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.stroke();
+  }
+
+  /**
+   * Fill AND stroke a rounded rect in one call. Single beginPath + roundRect,
+   * then fill, then stroke (matches the common "card background" pattern in
+   * src/game.js menus where the same rect is both filled and outlined).
+   * Caller sets fillStyle, strokeStyle, lineWidth before invoking.
+   * @param {CanvasRenderingContext2D | any} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   * @param {number} r
+   */
+  function roundRectFillStroke(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /**
    * Enable a neon-style glow. Caller is responsible for clearing it
    * afterward (typically with clearShadow) — leaving shadowBlur set is a
    * common cause of bleed onto unrelated draws.
@@ -137,5 +200,9 @@
     ctx.shadowBlur = 0;
   }
 
-  return { circle, circleStroke, arcStroke, line, setShadow, clearShadow };
+  return {
+    circle, circleStroke, arcStroke, line,
+    roundRect, roundRectStroke, roundRectFillStroke,
+    setShadow, clearShadow,
+  };
 }));

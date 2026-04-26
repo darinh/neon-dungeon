@@ -9,7 +9,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 const draw = require('../engine/draw.js');
-const { circle, circleStroke, arcStroke, line, setShadow, clearShadow } = draw;
+const { circle, circleStroke, arcStroke, line, roundRect, roundRectStroke, roundRectFillStroke, setShadow, clearShadow } = draw;
 
 const TAU = Math.PI * 2;
 
@@ -174,7 +174,53 @@ test('module: exports the documented surface', () => {
   assert.equal(typeof draw.circleStroke, 'function');
   assert.equal(typeof draw.arcStroke, 'function');
   assert.equal(typeof draw.line, 'function');
+  assert.equal(typeof draw.roundRect, 'function');
+  assert.equal(typeof draw.roundRectStroke, 'function');
+  assert.equal(typeof draw.roundRectFillStroke, 'function');
   assert.equal(typeof draw.setShadow, 'function');
   assert.equal(typeof draw.clearShadow, 'function');
-  assert.equal(Object.keys(draw).length, 6);
+  assert.equal(Object.keys(draw).length, 9);
+});
+
+// ---------- roundRect ----------
+
+test('roundRect: beginPath → roundRect → fill', () => {
+  const { ctx, calls } = makeFakeCtx();
+  roundRect(ctx, 10, 20, 100, 40, 8);
+  assert.deepEqual(calls, [
+    ['beginPath'],
+    ['roundRect', 10, 20, 100, 40, 8],
+    ['fill'],
+  ]);
+});
+
+test('roundRectStroke: beginPath → roundRect → stroke', () => {
+  const { ctx, calls } = makeFakeCtx();
+  roundRectStroke(ctx, 5, 5, 50, 30, 4);
+  assert.deepEqual(calls, [
+    ['beginPath'],
+    ['roundRect', 5, 5, 50, 30, 4],
+    ['stroke'],
+  ]);
+});
+
+test('roundRectFillStroke: beginPath → roundRect → fill → stroke (single path)', () => {
+  const { ctx, calls } = makeFakeCtx();
+  roundRectFillStroke(ctx, 0, 0, 200, 100, 12);
+  assert.deepEqual(calls, [
+    ['beginPath'],
+    ['roundRect', 0, 0, 200, 100, 12],
+    ['fill'],
+    ['stroke'],
+  ]);
+  // Critically: ONE beginPath, not two — the whole point of the helper
+  // is to share the path between fill and stroke.
+  const beginPathCount = calls.filter((c) => c[0] === 'beginPath').length;
+  assert.equal(beginPathCount, 1);
+});
+
+test('roundRectFillStroke: passes radius through unchanged (zero allowed)', () => {
+  const { ctx, calls } = makeFakeCtx();
+  roundRectFillStroke(ctx, 1, 2, 3, 4, 0);
+  assert.deepEqual(calls[1], ['roundRect', 1, 2, 3, 4, 0]);
 });
