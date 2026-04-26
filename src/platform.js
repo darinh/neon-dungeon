@@ -1158,6 +1158,23 @@ const audio = (() => {
       noise(0.10, t + 0.02, 0.10, 1800, bus);
       osc('sine', 90, 55, 0.10, t, 0.12);
     },
+    prophetLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising sonar — a forward-leaning ascending sine pair signals
+      // "this one fires AHEAD", contrasting with echoerLock's descent.
+      const bus = wetDry(1, 0.5, 0.4);
+      osc('sine', 380, 760, 0.08, t, 0.18, bus);
+      osc('sine', 580, 1180, 0.04, t + 0.05, 0.14, bus);
+    },
+    prophetFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Bright forward snap — sharper than echoerFire (faster projectile,
+      // committed-strike timbre). Dry-leaning so it cuts through the lane.
+      const bus = wetDry(1, 0.25, 0.35);
+      osc('triangle', 520, 180, 0.12, t, 0.14, bus);
+      noise(0.08, t + 0.01, 0.08, 3200, bus);
+      osc('sine', 140, 70, 0.10, t, 0.10);
+    },
     resonatorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Rising harmonic chord — the resonator winding up its cone. Two
