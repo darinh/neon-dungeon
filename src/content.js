@@ -707,6 +707,7 @@ const HACKWARE = {
   GRAVITY_WELL: { name:'Gravity Well', desc:'Pull enemies to target for 3s',   colour:'#ff8800', icon:'◎', cooldown:16 },
   STATIC_FIELD: { name:'Static Field', desc:'Electric zone: 10 dps + slow',    colour:'#44ccff', icon:'⌁', cooldown:12 },
   HOLO_DECOY:   { name:'Holo Decoy',   desc:'Hologram taunts enemies for 4s',  colour:'#ff44ff', icon:'⬡', cooldown:12 },
+  DECOY_TURRET: { name:'Decoy Turret', desc:'6s allied turret auto-fires',     colour:'#00ffaa', icon:'⊞', cooldown:14 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -886,6 +887,36 @@ function activateHackware(player) {
       _CG.msg('⬡ HOLO DECOY DEPLOYED', '#ff44ff');
       break;
     }
+    case 'DECOY_TURRET': {
+      // Aim-place (matches GRAVITY_WELL/STATIC_FIELD/HOLO_DECOY UX).
+      // Fall back to player tile if aim lands in a wall — projectiles spawning
+      // inside walls would just collide instantly.
+      const cam6 = getCamera(player);
+      let dx = (mouse.x + cam6.x) / TILE;
+      let dy = (mouse.y + cam6.y) / TILE;
+      const txi = Math.floor(dx), tyi = Math.floor(dy);
+      const tile = (map && map[tyi] != null) ? map[tyi][txi] : null;
+      if (tile !== T.FLOOR && tile !== T.DOOR_OPEN) {
+        dx = player.x; dy = player.y;
+      }
+      // Max 1 active — replace existing decoy turret on recast.
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'decoy_turret') hackwareEffects.splice(j, 1);
+      }
+      const fl = _CG.floor || 1;
+      hackwareEffects.push({
+        type:'decoy_turret', x:dx, y:dy, age:0, maxAge:6,
+        shootTimer:0.4, shootCd:0.6,
+        dmg: Math.round(6 + fl * 1.5),
+        range:8, projSpd:7, projRange:10,
+        aimAngle:0, hp:1, // hp reserved for future damage interactions
+      });
+      audio.turretHack();
+      spawnParticles(dx, dy, 'EXPLOSION', '#00ffaa', 14);
+      triggerShake(2, 0.1);
+      _CG.msg('⊞ DECOY TURRET DEPLOYED', '#00ffaa');
+      break;
+    }
   }
 }
 
@@ -910,6 +941,11 @@ function updateHackwareEffects(dt) {
         }
         audio.holoDecoyExpire();
         spawnParticles(fx.x, fx.y, 'EXPLOSION', '#ff44ff', 15);
+      }
+      if (fx.type === 'decoy_turret') {
+        audio.turretDestroy();
+        spawnParticles(fx.x, fx.y, 'EXPLOSION', '#00ffaa', 12);
+        spawnParticles(fx.x, fx.y, 'SPARK', '#66ffcc', 6);
       }
       hackwareEffects.splice(i, 1); continue;
     }
@@ -1075,6 +1111,41 @@ function updateHackwareEffects(dt) {
         spawnParticles(fx.x + Math.cos(a) * 0.3, fx.y + Math.sin(a) * 0.3, 'MUZZLE', '#ff44ff', 1);
       }
     }
+    if (fx.type === 'decoy_turret') {
+      // Find nearest visible enemy within range (LOS-gated, mirrors hacked
+      // wall-turret targeting). Skip disguised mimics + phased intangibles
+      // (WRAITH/TUNNELLER share `_wrPhased`).
+      fx.shootTimer = Math.max(0, fx.shootTimer - dt);
+      let best = null, bestD = fx.range;
+      for (const e of enemies) {
+        if (e.dead || e.isBoss || e._disguised) continue;
+        if (e._wrPhased) continue;
+        const d = dist(fx.x, fx.y, e.x, e.y);
+        if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) {
+          best = e; bestD = d;
+        }
+      }
+      if (best) {
+        fx.aimAngle = Math.atan2(best.y - fx.y, best.x - fx.x);
+        if (fx.shootTimer <= 0) {
+          const [ndx, ndy] = norm(best.x - fx.x, best.y - fx.y);
+          const proj = new Projectile(fx.x, fx.y, ndx, ndy, fx.projSpd, fx.dmg, fx.projRange, '#00ffaa', false, false);
+          proj.isAllyTurret = true;
+          proj.ownerType = 'Decoy Turret';
+          projectiles.push(proj);
+          audio.turretFire();
+          spawnParticles(fx.x + Math.cos(fx.aimAngle) * 0.4, fx.y + Math.sin(fx.aimAngle) * 0.4, 'MUZZLE', '#00ffaa', 3);
+          fx.shootTimer = fx.shootCd;
+        }
+      } else {
+        // No target: idle slow-spin barrel
+        fx.aimAngle += dt * 1.2;
+      }
+      // Ambient ready-LED blink
+      if (Math.random() < dt * 3) {
+        spawnParticles(fx.x, fx.y - 0.2, 'MUZZLE', '#00ffaa', 1);
+      }
+    }
   }
 }
 
@@ -1189,6 +1260,37 @@ function drawHackwareEffects(camX, camY) {
       ctx.moveTo(sx - hs, sy - hs + scan);
       ctx.lineTo(sx + hs, sy - hs + scan);
       ctx.stroke();
+      ctx.restore();
+    }
+    if (fx.type === 'decoy_turret') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const remaining = fx.maxAge - fx.age;
+      // Final 1.5s — flash to telegraph expiry.
+      const flashing = remaining < 1.5;
+      const flashOn = flashing ? (Math.sin(fx.age * 22) > 0) : true;
+      const fade = flashing ? (flashOn ? 1 : 0.35) : 1;
+      ctx.save();
+      ctx.shadowBlur = 12; ctx.shadowColor = '#00ffaa';
+      // Base plate (square footprint)
+      const bs = TILE * 0.3;
+      ctx.globalAlpha = fade * 0.85;
+      ctx.fillStyle = '#003322';
+      ctx.fillRect(sx - bs, sy - bs, bs * 2, bs * 2);
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 2;
+      ctx.strokeRect(sx - bs, sy - bs, bs * 2, bs * 2);
+      // Rotating barrel
+      const bl = TILE * 0.45;
+      ctx.lineWidth = 3;
+      NEON.draw.line(ctx, sx, sy,
+        sx + Math.cos(fx.aimAngle) * bl,
+        sy + Math.sin(fx.aimAngle) * bl);
+      // Core ready-LED (pulses faster as expiry nears)
+      const pulseSpd = flashing ? 18 : 6;
+      const corePulse = 0.7 + Math.sin(fx.age * pulseSpd) * 0.3;
+      ctx.globalAlpha = fade * corePulse;
+      ctx.fillStyle = '#aaffdd';
+      NEON.draw.circle(ctx, sx, sy, 3);
       ctx.restore();
     }
   }
