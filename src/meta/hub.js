@@ -236,21 +236,42 @@
     onOpen() { this._sel = 0; this._scroll = 0; this._reading = null; this._t = 0; },
     onClose() { this._reading = null; },
     _getFoundList() {
-      // Returns [{axiom, log, read}, ...] for all FOUND logs, in (axiom asc,
-      // data order) — not all logs, so the terminal doesn't spoil unfound ones.
+      // Returns mixed list: AXIOM logs first (grouped by predecessor), then
+      // WHISPERS (the secret-room subplot — see src/data/whispers.js). Each
+      // entry is discriminated by `kind` so the row render + reading pane
+      // can switch on it. Only FOUND entries are included so unfound ones
+      // aren't spoiled.
+      /** @type {Array<{kind:'log',axiom:any,log:any,read:boolean}|{kind:'whisper',whisper:any,read:boolean}>} */
+      const out = [];
       try {
         const meta = NEON.save.loadMeta();
-        const found = new Set(meta.logsFound || []);
-        const read  = new Set(meta.logsRead  || []);
+        const foundLogs = new Set(meta.logsFound || []);
+        const readLogs  = new Set(meta.logsRead  || []);
         const all = NEON.logs.groupedByAxiom();
-        const out = [];
         for (const grp of all) {
           for (const log of grp.logs) {
-            if (found.has(log.id)) out.push({ axiom: grp.axiom, log, read: read.has(log.id) });
+            if (foundLogs.has(log.id)) {
+              out.push({ kind: 'log', axiom: grp.axiom, log, read: readLogs.has(log.id) });
+            }
           }
         }
-        return out;
-      } catch (_) { return []; }
+      } catch (_) { /* ignore */ }
+      try {
+        if (NEON && NEON.whispers) {
+          const meta = NEON.save.loadMeta();
+          const foundW = new Set(meta.whispersFound || []);
+          const readW  = new Set(meta.whispersRead  || []);
+          const all = NEON.whispers.groupedByBiome();
+          for (const grp of all) {
+            for (const w of grp.whispers) {
+              if (foundW.has(w.id)) {
+                out.push({ kind: 'whisper', whisper: w, read: readW.has(w.id) });
+              }
+            }
+          }
+        }
+      } catch (_) { /* ignore */ }
+      return out;
     },
     /** @param {number} dt */
     update(dt /* , input */) {
@@ -272,10 +293,16 @@
       if (jp('ArrowUp')   || jp(km_('up')))    { this._sel = (this._sel + n - 1) % n; try { audio.menuSelect(); } catch(_){} }
       if (jp('ArrowDown') || jp(km_('down')))  { this._sel = (this._sel + 1) % n;     try { audio.menuSelect(); } catch(_){} }
       if (jp('Enter') || jp(km_('interact'))) {
-        const entry = list[this._sel];
+        const entry = /** @type {any} */ (list[this._sel]);
         if (entry) {
-          try { NEON.logs.readLog(entry.log.id); } catch (_) {}
-          this._reading = entry.log;
+          try {
+            if (entry.kind === 'whisper' && NEON && NEON.whispers) {
+              NEON.whispers.readWhisper(entry.whisper.id);
+            } else if (entry.log) {
+              NEON.logs.readLog(entry.log.id);
+            }
+          } catch (_) {}
+          this._reading = entry;
           try { audio.logRead(); } catch (_) {}
         }
       }
@@ -307,10 +334,16 @@
       const idx = this._scroll + k;
       if (idx < 0 || idx >= list.length) return;
       this._sel = idx;
-      const entry = list[idx];
+      const entry = /** @type {any} */ (list[idx]);
       if (entry) {
-        try { NEON.logs.readLog(entry.log.id); } catch (_) {}
-        this._reading = entry.log;
+        try {
+          if (entry.kind === 'whisper' && NEON && NEON.whispers) {
+            NEON.whispers.readWhisper(entry.whisper.id);
+          } else if (entry.log) {
+            NEON.logs.readLog(entry.log.id);
+          }
+        } catch (_) {}
+        this._reading = entry;
         try { audio.logRead(); } catch (_) {}
       }
     },
@@ -399,22 +432,27 @@
       let ry = y + headerH;
       const endIdx = Math.min(list.length, this._scroll + rowsVisible);
       for (let i = this._scroll; i < endIdx; i++) {
-        const entry = /** @type {{axiom:any,log:any,read:boolean}} */ (list[i]);
+        const entry = /** @type {any} */ (list[i]);
         const sel = (i === this._sel);
+        const isWhisper = entry.kind === 'whisper';
+        // Whisper rows use the violet accent matching the WhisperItem render
+        // and the WHISPERS counter line above. Logs keep the green accent.
+        const rowAccent = isWhisper ? '#cc99ee' : accent;
         if (sel) {
-          ctx.fillStyle = 'rgba(57,255,20,0.12)';
+          ctx.fillStyle = isWhisper ? 'rgba(204,153,238,0.14)' : 'rgba(57,255,20,0.12)';
           ctx.fillRect(x + 8, ry - 12, w - 16, rowH - 2);
         }
-        // Axiom prefix.
-        ctx.fillStyle = sel ? accent : '#666688';
-        ctx.fillText('AXIOM-' + entry.axiom, x + 14, ry);
+        // Prefix: 'AXIOM-N' for logs, 'WHISPER' for the secret-room subplot.
+        ctx.fillStyle = sel ? rowAccent : (isWhisper ? '#7755aa' : '#666688');
+        ctx.fillText(isWhisper ? 'WHISPER' : ('AXIOM-' + entry.axiom), x + 14, ry);
         // Title.
-        ctx.fillStyle = sel ? '#ffffff' : (entry.read ? '#9999bb' : '#e0e0ff');
-        ctx.fillText(entry.log.title, x + 92, ry);
+        const title = isWhisper ? entry.whisper.title : entry.log.title;
+        ctx.fillStyle = sel ? '#ffffff' : (entry.read ? '#9999bb' : (isWhisper ? '#e8d5ff' : '#e0e0ff'));
+        ctx.fillText(title, x + 92, ry);
         // Unread marker — pulsing ● on right.
         if (!entry.read) {
           const a = 0.55 + 0.45 * Math.sin(this._t * 4 + i);
-          ctx.fillStyle = accent;
+          ctx.fillStyle = rowAccent;
           ctx.globalAlpha = a;
           ctx.fillText('●NEW', x + w - 48, ry);
           ctx.globalAlpha = 1;
@@ -432,21 +470,27 @@
     },
     /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h */
     _drawReading(ctx, x, y, w, h) {
-      const log = /** @type {any} */ (this._reading);
-      const accent = this._accent;
+      const entry = /** @type {any} */ (this._reading);
+      const isWhisper = entry && entry.kind === 'whisper';
+      const accent = isWhisper ? '#cc99ee' : this._accent;
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#666688';
+      ctx.fillStyle = isWhisper ? '#7755aa' : '#666688';
       ctx.font = '11px monospace';
-      ctx.fillText('AXIOM-' + log.axiom, x + 14, y + 64);
+      const prefix = isWhisper
+        ? ('WHISPER · ' + (entry.whisper.voice || 'unknown'))
+        : ('AXIOM-' + entry.axiom);
+      ctx.fillText(prefix, x + 14, y + 64);
       ctx.fillStyle = accent;
       ctx.font = '14px monospace';
-      ctx.fillText(log.title, x + 14, y + 82);
+      const title = isWhisper ? entry.whisper.title : entry.log.title;
+      ctx.fillText(title, x + 14, y + 82);
 
       // Wrap body.
-      ctx.fillStyle = '#c0c0e0';
+      ctx.fillStyle = isWhisper ? '#e8d5ff' : '#c0c0e0';
       ctx.font = '12px monospace';
       const maxW = w - 28;
-      const words = log.body.split(' ');
+      const body = isWhisper ? entry.whisper.body : entry.log.body;
+      const words = String(body || '').split(' ');
       let line = '';
       let yy = y + 108;
       for (const word of words) {
