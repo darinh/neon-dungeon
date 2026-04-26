@@ -252,6 +252,10 @@ const game = {
     this._exitPos = null;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
+    // Clear position history on floor transition so an ECHOER on the new
+    // floor cannot fire at a position the player held on the previous
+    // floor (locks need ECHOER_LOOKBACK seconds of fresh samples).
+    if (this.player._posHistory) this.player._posHistory.length = 0;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
