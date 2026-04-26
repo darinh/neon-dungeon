@@ -747,11 +747,17 @@ function activateHackware(player) {
         if (e.dead) continue;
         if (e._disguised) continue; // don't reveal mimics via stun text
         const d = dist(player.x, player.y, e.x, e.y);
-        // WRAITH: EMP bypasses LOS to force materialization (hard counter)
+        // WRAITH: EMP bypasses LOS to force materialization (hard counter).
+        // Also true for TUNNELLER (uses the same `_wrPhased` intangible flag)
+        // so EMP can stun-flush a burrowed Tunneller exactly like a Wraith.
         const losOk = e._wrPhased ? true : (map && hasLOS(player.x, player.y, e.x, e.y, map));
         if (d < radius && losOk) {
-          // Force WRAITH out of phased state before applying stun
-          if (e._wrPhased) {
+          // Force WRAITH out of phased state before applying stun.
+          // TUNNELLER intentionally NOT handled here — its own stun handler
+          // in entities.js (gated on type==='TUNNELLER') runs next frame and
+          // performs the proper _tnState→'surfaced' transition. Writing
+          // _wrState here would contaminate two state machines.
+          if (e._wrPhased && e.type === 'WRAITH') {
             const emerge = e._wrFindEmergeTile(map, player);
             if (emerge) {
               e.x = emerge.x; e.y = emerge.y;
