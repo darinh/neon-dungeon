@@ -267,12 +267,18 @@ function tickEnemyStatusEffects(enemy, dt) {
     // PHASING: burn timer ticks but deals no damage during immune window
     if (!enemy.phaseImmune && !enemy._wrPhased) {
       let dmg = enemy.burnDps * dt;
-      // SHIELDED: burn resets regen delay and damages shield first
-      if (enemy.eliteAffix === 'SHIELDED') enemy.shieldRegenDelay = 0;
-      if (enemy.shieldHp > 0) {
-        const absorbed = Math.min(enemy.shieldHp, dmg);
-        enemy.shieldHp -= absorbed;
-        dmg -= absorbed;
+      // SHIELDED: burn resets regen delay and damages shield first.
+      // Gated on the SHIELDED affix specifically — SHIELDER's directional
+      // shield (which also uses shieldHp) must NOT be drained from
+      // omnidirectional DoT (would bypass the front-arc-only design AND
+      // would leave shieldBrokenTimer unset → permanent shield-down bug).
+      if (enemy.eliteAffix === 'SHIELDED') {
+        enemy.shieldRegenDelay = 0;
+        if (enemy.shieldHp > 0) {
+          const absorbed = Math.min(enemy.shieldHp, dmg);
+          enemy.shieldHp -= absorbed;
+          dmg -= absorbed;
+        }
       }
       if (dmg > 0) enemy.hp -= dmg;
       if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
@@ -474,6 +480,7 @@ class Enemy {
   /** @type {any} */ shieldHp;
   /** @type {any} */ shieldMax;
   /** @type {any} */ shieldRegenDelay;
+  /** @type {any} */ shieldBrokenTimer;
   /** @type {any} */ shootTimer;
   /** @type {any} */ slowFactor;
   /** @type {any} */ slowTimer;
@@ -576,8 +583,11 @@ class Enemy {
     if (this._disguised) this.revealMimic(_EG.player);
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
-    // SHIELDED elite affix: absorb with shield first
-    if (this.shieldHp > 0) {
+    // SHIELDED elite affix: absorb with shield first. Gated on the affix
+    // explicitly so SHIELDER's directional shield (also uses shieldHp) is
+    // NOT triggered here — SHIELDER consumes its shield only via frontal
+    // projectile blocks at content.js, never from omnidirectional damage.
+    if (this.eliteAffix === 'SHIELDED' && this.shieldHp > 0) {
       const absorbed = Math.min(this.shieldHp, dmg);
       this.shieldHp -= absorbed;
       dmg -= absorbed;
@@ -1275,6 +1285,18 @@ class Enemy {
    * @param {any} [los]
    */
   aiShielder(dt,player,map,d,los) {
+    // Tick the broken-shield recovery timer.
+    //   shieldBrokenTimer === -1 → shield is up (or never broken yet)
+    //   0 ≤ t < 3                → shield down, no visual
+    //   3 ≤ t < 5                → shield blinking back into existence
+    //   t ≥ 5                    → restore shield to full + clear timer
+    if (this.shieldBrokenTimer >= 0) {
+      this.shieldBrokenTimer += dt;
+      if (this.shieldBrokenTimer >= 5) {
+        this.shieldHp = this.shieldMax || 25;
+        this.shieldBrokenTimer = -1;
+      }
+    }
     // Only update facing when player is visible (prevents wall-hack orientation)
     if (los) this.shieldAngle = Math.atan2(this._ty - this.y, this._tx - this.x);
     if (los && d < 12) {
@@ -1538,8 +1560,13 @@ class Enemy {
    * @param {any} [proj]
    */
   blocksProjectile(proj) {
-    // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/orbitals)
-    if (this.type === 'SHIELDER' && !this.dead) {
+    // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/
+    // orbitals). Shield is now BREAKABLE: each blocked hit deals damage to
+    // shieldHp at the call site (content.js). When shieldHp drops to 0 the
+    // shield disappears for ~3s, blinks back in over the next 2s, and is
+    // fully operational again at 5s. shieldBrokenTimer is the time elapsed
+    // since the shield broke (-1 means not broken).
+    if (this.type === 'SHIELDER' && !this.dead && this.shieldHp > 0) {
       const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
       let diff = incomingAngle - this.shieldAngle;
       while (diff > Math.PI) diff -= TWO_PI;
@@ -3493,17 +3520,32 @@ class Enemy {
         ctx.fillRect(sx - sz * 0.45, sy - sz * 0.55, sz * 0.9, sz * 0.18);
         ctx.restore();
       }
-      // Shielder: draw 120° shield arc facing the player
+      // Shielder: draw 120° shield arc facing the player. Shield is breakable
+      // (see blocksProjectile). When down (shieldHp <= 0) it doesn't render.
+      // During the 3..5s window after break it blinks back; full alpha at 5s.
       if (this.type === 'SHIELDER') {
-        ctx.save();
-        ctx.strokeStyle = '#66eeff';
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = '#66eeff';
-        ctx.globalAlpha = 0.7 + Math.sin(this.bobAngle * 2) * 0.15;
-        const shieldR = sz * 1.2;
-        NEON.draw.arcStroke(ctx, sx, sy, shieldR, this.shieldAngle - Math.PI / 3, this.shieldAngle + Math.PI / 3);
-        ctx.restore();
+        let shieldAlpha = 0;
+        if (this.shieldHp > 0) {
+          // Up: usual gentle pulse.
+          shieldAlpha = 0.7 + Math.sin(this.bobAngle * 2) * 0.15;
+        } else if (this.shieldBrokenTimer >= 3 && this.shieldBrokenTimer < 5) {
+          // Blink-back: alpha ramps from 0 → ~0.7 over the 2s window plus
+          // a fast strobe so the player can SEE the shield re-forming.
+          const t = (this.shieldBrokenTimer - 3) / 2; // 0..1
+          const strobe = 0.5 + 0.5 * Math.sin(this.bobAngle * 14);
+          shieldAlpha = 0.15 + 0.55 * t * strobe;
+        }
+        if (shieldAlpha > 0.01) {
+          ctx.save();
+          ctx.strokeStyle = '#66eeff';
+          ctx.lineWidth = 3;
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#66eeff';
+          ctx.globalAlpha = shieldAlpha;
+          const shieldR = sz * 1.2;
+          NEON.draw.arcStroke(ctx, sx, sy, shieldR, this.shieldAngle - Math.PI / 3, this.shieldAngle + Math.PI / 3);
+          ctx.restore();
+        }
       }
       // Reflector: draw 90° mirror shield with inner highlight
       if (this.type === 'REFLECTOR') {
@@ -4259,6 +4301,11 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._phAimDx=0; e._phAimDy=0;
   }
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
+  if (type==='SHIELDER') {
+    // Breakable directional shield — 25 HP, ~1-3 player shots to break.
+    // After break: 3s down + 2s blink-back, then restored to full.
+    e.shieldHp = 25; e.shieldMax = 25; e.shieldBrokenTimer = -1;
+  }
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
