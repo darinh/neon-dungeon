@@ -66,12 +66,50 @@ function enemiesInRoomIter(room) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+
+// ECHOER tuning constants — exported on globalThis for cross-file test reads
+// but kept as module-local for hot-path lookup. Tweak with caution: these
+// directly drive perceived fairness of the predictive shot.
+const ECHOER_LOOKBACK   = 1.0;  // seconds back to sample the player's position
+const ECHOER_TELEGRAPH  = 0.8;  // ghost+lane visible duration before fire
+const ECHOER_COOLDOWN   = 2.5;  // seconds between aim attempts (post-fire)
+const ECHOER_RANGE      = 14;   // tiles — max lock distance (echoer→past-pos)
+const ECHOER_PROJ_SPD   = 9;    // tiles/sec — slow & dodgeable
+
+/**
+ * Pure helper: returns the entry from a {t,x,y} position history that is
+ * AT LEAST `seconds` old, preferring the freshest such entry (i.e. the
+ * sample closest to the lookback target without going under it). Returns
+ * null if no entry is old enough yet (player hasn't been alive long
+ * enough or history was just cleared on floor transition).
+ *
+ * Extracted from Player.getPositionAgo so it's testable without
+ * instantiating the browser-bound Player class. The history array is
+ * ordered oldest-first (entries[0].t is the largest age).
+ *
+ * @param {Array<{t:number,x:number,y:number}> | null | undefined} history
+ * @param {number} seconds
+ * @returns {{x:number, y:number} | null}
+ */
+function getPositionAgoFromHistory(history, seconds) {
+  if (!history || history.length === 0) return null;
+  // Walk newest→oldest; first entry with age >= seconds is the freshest
+  // sample that still satisfies the lookback. This biases toward "just
+  // old enough" rather than "very old", giving more recent causality.
+  for (let i = history.length - 1; i >= 0; i--) {
+    const e = history[i];
+    if (e && e.t >= seconds) {
+      return { x: e.x, y: e.y };
+    }
+  }
+  return null; // history doesn't go back that far yet
+}
 /** @type {Record<string, any>} */
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -97,7 +135,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -442,6 +480,11 @@ class Enemy {
   /** @type {any} */ _summoned;
   /** @type {any} */ _summons;
   /** @type {any} */ _tauntTarget;
+  /** @type {any} */ _ecState;
+  /** @type {any} */ _ecAimTimer;
+  /** @type {any} */ _ecCooldown;
+  /** @type {any} */ _ecLockX;
+  /** @type {any} */ _ecLockY;
   /** @type {any} */ _tnState;
   /** @type {any} */ _tnTimer;
   /** @type {any} */ _tnTargetX;
@@ -871,6 +914,8 @@ class Enemy {
       if (this._lpState === 'windup') { this._lpState = 'idle'; this._lpCooldown = 1.5; this._lpHeight = 0; }
       // Cancel pulser charge on stun — don't let it resume after stun ends
       if (this._plState === 'charging') { this._plState = 'idle'; this._plCooldown = 0.8; }
+      // Cancel echoer aim on stun — don't fire after stun ends
+      if (this._ecState === 'aiming') { this._ecState = 'idle'; this._ecAimTimer = 0; this._ecCooldown = 0.8; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -948,6 +993,7 @@ class Enemy {
       case 'GRAVITON':this.aiGraviton(dt,player,map,d,los);break;
       case 'SEEKER':  this.aiSeeker(dt,player,map,d,los);  break;
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
+      case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
@@ -1677,6 +1723,112 @@ class Enemy {
       }
       return;
     }
+  }
+
+  // ─── ECHOER AI — Sonar Predictor ────────────────────────────────────────
+  // Punishes pattern movement: locks onto the player's position from
+  // ECHOER_LOOKBACK seconds ago, telegraphs a ghost + dashed lane for
+  // ECHOER_TELEGRAPH seconds, then fires a slow projectile that dissipates
+  // at the locked point. Counter-play: change direction unpredictably.
+  //
+  // States:
+  //   idle:   on cooldown OR scanning. When room-gated LoS is true and the
+  //           past-position is reachable (LoS to past-pos), lock and enter
+  //           aiming.
+  //   aiming: lock is fixed; ghost+lane render; brief backstep if rushed.
+  //           Cannot be interrupted by losing LoS to current player —
+  //           the lane is committed and visible. Stun cancels.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiEchoer(dt, player, map, d, los) {
+    void los; // we compute fresh LoS to the past-position below
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    this._ecCooldown = Math.max(0, (this._ecCooldown || 0) - dt * ocMul * bm);
+
+    // Room-gated: only engage when target or player is inside this echoer's room.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Aiming: telegraph window, then fire ──
+    if (this._ecState === 'aiming') {
+      this._ecAimTimer -= dt; // fixed-rate countdown — fairness > tempo
+
+      // Backstep if player has closed the distance during the telegraph.
+      if (d < 3 && this._canTarget()) {
+        const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
+        this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd * 1.1, dt, map);
+      }
+
+      if (this._ecAimTimer <= 0) {
+        // Fire toward the locked past-position. Dissipates at the locked
+        // point (small overshoot so a player standing exactly there still
+        // takes a hit at the lane endpoint).
+        const lx = this._ecLockX, ly = this._ecLockY;
+        const [dx, dy] = norm(lx - this.x, ly - this.y);
+        const range = Math.max(1, dist(this.x, this.y, lx, ly) + 0.5);
+        const p = new Projectile(this.x, this.y, dx, dy, ECHOER_PROJ_SPD, this.atk, range, '#aa66ff', false, false);
+        p.ownerType = this.type;
+        projectiles.push(p);
+        if (audio.echoerFire) audio.echoerFire();
+        this._ecState = 'idle';
+        this._ecAimTimer = 0;
+        this._ecCooldown = ECHOER_COOLDOWN;
+      }
+      return;
+    }
+
+    // ── Idle: try to lock when conditions allow ──
+    if (this._ecCooldown <= 0 && inRoom && this._canTarget()) {
+      // Taunt redirection: when a hologram-taunt is active (_tx/_ty point
+      // at the decoy), every other enemy targets the decoy. Mirror that
+      // behavior here — lock at the decoy's position rather than reading
+      // from the real player's history. Otherwise: use the predictive
+      // past-position from player history (the actual ECHOER mechanic).
+      let lockX = 0, lockY = 0, haveLock = false;
+      const taunt = this._tauntTarget;
+      const tauntActive = taunt && taunt.age < taunt.maxAge;
+      if (tauntActive) {
+        lockX = this._tx; lockY = this._ty; haveLock = true;
+      } else {
+        const past = _EG.player && _EG.player.getPositionAgo
+          ? _EG.player.getPositionAgo(ECHOER_LOOKBACK)
+          : null;
+        if (past) { lockX = past.x; lockY = past.y; haveLock = true; }
+      }
+      if (haveLock) {
+        // Need LoS from echoer to the lock point. Range gate uses
+        // straight-line distance to the lock.
+        const dLock = dist(this.x, this.y, lockX, lockY);
+        if (dLock < ECHOER_RANGE && hasLOS(this.x, this.y, lockX, lockY, map)) {
+          this._ecState = 'aiming';
+          this._ecAimTimer = ECHOER_TELEGRAPH;
+          this._ecLockX = lockX;
+          this._ecLockY = lockY;
+          if (audio.echoerLock) audio.echoerLock();
+          return;
+        }
+      }
+    }
+
+    // No lock available: hold position. If player rushes within 3 tiles,
+    // backstep gently to maintain niche identity (anti-orbit zoner, not
+    // a melee combatant).
+    if (d < 3 && this._canTarget()) {
+      const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
+      this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd, dt, map);
+    } else if (!inRoom) {
+      this.patrol(dt, map);
+    }
+    // else: hold position (menacing idle)
   }
 
   /**
@@ -3985,6 +4137,49 @@ class Enemy {
           ctx.restore();
         }
       }
+      // ECHOER: violet sonar — when aiming, draw the dashed lane to the
+      // locked past-position AND a translucent ghost of the player at
+      // that point. When idle, a quiet pulsing core. Lane + ghost are
+      // both telegraphed from lock time so the player has the full
+      // ECHOER_TELEGRAPH window to read them — fairness > drama.
+      if (this.type === 'ECHOER') {
+        ctx.save();
+        if (this._ecState === 'aiming' && this._ecAimTimer > 0) {
+          const total = 0.8; // ECHOER_TELEGRAPH — kept inline (host has TILE etc.)
+          const progress = 1 - Math.max(0, Math.min(1, this._ecAimTimer / total));
+          const lx = this._ecLockX * TILE - camX;
+          const ly = this._ecLockY * TILE - camY;
+          // Pulsing dashed lane from echoer to lock
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 18);
+          ctx.globalAlpha = (0.18 + progress * 0.5) * pulse;
+          ctx.strokeStyle = '#aa66ff';
+          ctx.shadowBlur = 6 + progress * 10;
+          ctx.shadowColor = '#aa66ff';
+          ctx.lineWidth = 1 + progress * 1.5;
+          ctx.setLineDash([4, 6 - progress * 4]);
+          NEON.draw.line(ctx, sx, sy, lx, ly);
+          ctx.setLineDash([]);
+          // Translucent ghost of the player at the past position — a
+          // small filled circle + ring, sized roughly like the player.
+          ctx.globalAlpha = 0.22 + progress * 0.4;
+          ctx.fillStyle = '#aa66ff';
+          NEON.draw.circle(ctx, lx, ly, TILE * 0.32);
+          ctx.globalAlpha = 0.35 + progress * 0.45;
+          ctx.strokeStyle = '#ddaaff';
+          ctx.lineWidth = 1.2 + progress * 0.8;
+          NEON.draw.circleStroke(ctx, lx, ly, TILE * 0.42 + progress * 2);
+        } else {
+          // Idle: faint sonar pulse on the body
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.15 + 0.1 * pulse;
+          ctx.strokeStyle = '#aa66ff';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#aa66ff';
+          ctx.lineWidth = 1;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        }
+        ctx.restore();
+      }
       // SUMMONER: pulsing violet summon ring
       if (this.type === 'SUMMONER') {
         ctx.save();
@@ -4376,6 +4571,7 @@ const ENEMY_WEIGHTS = {
   SEEKER:     { base: 2,  perFloor: 3, minFloor: 3 },  // kamikaze explosive drone
   PULSER:     { base: 5,  perFloor: 1, minFloor: 2 },  // telegraphed charge-up attacker
   TUNNELLER:  { base: 2,  perFloor: 2, minFloor: 4 },  // burrows underground, surfaces beneath player with AoE telegraph
+  ECHOER:     { base: 2,  perFloor: 2, minFloor: 5 },  // sonar predictor — fires at where the player WAS (anti-pattern punisher)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -4444,6 +4640,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'PULSER':  hp=40;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
     case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
+    case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -4513,12 +4710,20 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._tnTargetX=x; e._tnTargetY=y;
     e._wrPhased=true;
   }
+  if (type==='ECHOER') {
+    // Stagger initial aim attempts so a clustered spawn doesn't fire in
+    // unison. Cooldown range tuned so first lock is ~0.5–1.5s after spawn.
+    e._ecState='idle';
+    e._ecAimTimer=0;
+    e._ecCooldown=0.5+Math.random()*1.0;
+    e._ecLockX=x; e._ecLockY=y;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -6302,6 +6507,7 @@ class Player {
   /** @type {any} */ _outOfCombatTimer;
   /** @type {any} */ _prevX;
   /** @type {any} */ _prevY;
+  /** @type {any} */ _posHistory;
   /** @type {any} */ _shieldCharges;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
@@ -6434,6 +6640,11 @@ class Player {
     this.dashDx=0;              // dash direction x
     this.dashDy=0;              // dash direction y
     this.dashTrail=[];          // afterimage positions [{x,y,alpha}]
+    // Position history ring — used by ECHOER to fire at where the player
+    // WAS N seconds ago. Sampled every Player.update tick. Trimmed to
+    // ~PLAYER_HISTORY_WINDOW seconds of samples (see update()). Cleared
+    // on floor transitions so cross-floor lookbacks can't fire stale.
+    this._posHistory=[];
     // Death recap tracking
     this.damageLog={};          // source → total damage taken
     this.killedBy='';           // source of killing blow
@@ -6553,6 +6764,19 @@ class Player {
     if (_EG.pendingPerkChoices.length && _EG.state === 'PLAYING') {
       _EG.openNextPerkChoice();
     }
+  }
+
+  /**
+   * Returns the player's recorded position from `seconds` ago, or null
+   * if the history doesn't go back that far (e.g. just spawned, just
+   * crossed a floor). Used by ECHOER to fire predictively at where the
+   * player WAS, rewarding unpredictable movement and punishing patterns.
+   * Linear scan, history is small (<= ~96 entries @ 60fps over 1.6s).
+   * @param {number} seconds
+   * @returns {{x:number, y:number} | null}
+   */
+  getPositionAgo(seconds) {
+    return getPositionAgoFromHistory(this._posHistory, seconds);
   }
 
   /**
@@ -6772,6 +6996,24 @@ class Player {
    */
   update(dt,map) {
     this._prevX = this.x; this._prevY = this.y;
+    // Position history sample — append (t-elapsed accumulated, x, y). Used
+    // by ECHOER's predictive shot (entities.js aiEchoer). Trim entries
+    // older than PLAYER_HISTORY_WINDOW seconds (covers ECHOER_LOOKBACK
+    // with margin). Single shared ring per player; reads via
+    // getPositionAgo(seconds).
+    if (!this._posHistory) this._posHistory = [];
+    // Each entry stores age relative to "now" — we increment by dt every
+    // frame, then drop entries older than the window. New samples are
+    // pushed with age=0.
+    const PLAYER_HISTORY_WINDOW = 1.6; // seconds — must exceed ECHOER_LOOKBACK
+    for (let i = 0; i < this._posHistory.length; i++) this._posHistory[i].t += dt;
+    this._posHistory.push({ t: 0, x: this.x, y: this.y });
+    // Drop the oldest entries beyond the window. History is age-monotonic
+    // (oldest first after the per-frame age bump), so a single shift loop
+    // is correct and O(dropped).
+    while (this._posHistory.length > 1 && this._posHistory[0].t > PLAYER_HISTORY_WINDOW) {
+      this._posHistory.shift();
+    }
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
     this.shootCooldown=Math.max(0,this.shootCooldown-dt);
     this.bombCooldown=Math.max(0,this.bombCooldown-dt);

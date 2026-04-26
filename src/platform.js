@@ -1142,6 +1142,22 @@ const audio = (() => {
       osc('sawtooth', 1200, 200, 0.12, t, 0.08, bus);
       osc('sine', 60, 30, 0.10, t + 0.02, 0.15);
     },
+    echoerLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sonar ping — soft descending sine + faint reverb pip. Telegraphs
+      // the lock without the hard threat-alert of sniperCharge.
+      const bus = wetDry(1, 0.5, 0.4);
+      osc('sine', 700, 380, 0.08, t, 0.18, bus);
+      osc('sine', 1100, 550, 0.04, t + 0.05, 0.12, bus);
+    },
+    echoerFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hollow echo-chamber pop — short triangle thump + decay tail.
+      const bus = wetDry(1, 0.4, 0.5);
+      osc('triangle', 240, 90, 0.14, t, 0.16, bus);
+      noise(0.10, t + 0.02, 0.10, 1800, bus);
+      osc('sine', 90, 55, 0.10, t, 0.12);
+    },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Low rumble + rising whoosh
