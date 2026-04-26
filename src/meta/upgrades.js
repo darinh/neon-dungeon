@@ -160,7 +160,9 @@
     if (key === 'Enter' || key === ' ' || key === 'Space') {
       const node = _nodeAt(sel.col, sel.row);
       if (!node) return true;
-      const result = purchase((game && game.meta) || null, node.id);
+      // purchase() ignores its `meta` arg and reads via save.loadMeta() (L115),
+      // so passing `game.meta` is meaningless. Pass null for clarity.
+      const result = purchase(null, node.id);
       if (result.ok) {
         const audio = game && game.audio;
         if (audio && typeof audio.upgradePurchased === 'function') {
@@ -174,12 +176,23 @@
 
   // drawUpgradeMatrix — renders the 3×4 grid + tooltip on `ctx` within bounds.
   // Pure-ish: depends on canvas API only. Skips draw entirely when ctx is
-  // missing (Node tests). game.meta supplies cores + upgradeNodes.
-  /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} game @param {any} selectorState */
-  function drawUpgradeMatrix(ctx, x, y, w, h, game, selectorState) {
+  // missing (Node tests). Reads cores + upgradeNodes from save.loadMeta()
+  // directly — `game.meta` is never assigned anywhere in the codebase
+  // (verified by grep), so the previous `(game && game.meta)` path always
+  // fell through to the `{cores:0, upgradeNodes:{}}` defaults. Result:
+  // upgrade matrix showed CORES: 0 + every node appeared unaffordable +
+  // selection state didn't reflect actual purchases — even though the
+  // player had cores in their wallet (visible in The Gap's hub chrome).
+  // Reported by user 2026-04-25 (6bc2e985): 'in the gap, i have no way of
+  // upgrading anything (on mobile - havent rrie desktop) even though i
+  // have cores the upgrade matrix items dont respond to my touches'.
+  // Mirrors the modules.js pattern at L210 which also reads via save.
+  /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} _game @param {any} selectorState */
+  function drawUpgradeMatrix(ctx, x, y, w, h, _game, selectorState) {
     if (!ctx || typeof ctx.fillRect !== 'function') return;
+    void _game; // legacy param — meta is read from save directly now
     const sel = selectorState || defaultSelectorState();
-    const meta = (game && game.meta) || { cores: 0, upgradeNodes: {} };
+    const meta = save ? save.loadMeta() : { cores: 0, upgradeNodes: {} };
     const nodes = meta.upgradeNodes || {};
 
     // Responsive font sizes — scale down on narrow panels.
