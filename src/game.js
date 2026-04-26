@@ -3772,19 +3772,14 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? opt.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, cardY, cw, cardH, 8);
-      ctx.fill();
-      ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur=20; ctx.shadowColor=opt.colour;
         ctx.strokeStyle=opt.colour; ctx.lineWidth=2;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
       // Rarity border glow for affixed weapons
@@ -3792,9 +3787,7 @@ const game = {
         ctx.save();
         ctx.shadowBlur=12; ctx.shadowColor=opt._rarityColour;
         ctx.strokeStyle=opt._rarityColour; ctx.lineWidth=1.5;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -3869,10 +3862,7 @@ const game = {
     ctx.fillStyle='rgba(255,255,255,0.04)';
     ctx.strokeStyle='rgba(255,255,255,0.2)';
     ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.roundRect((W-skipW)/2, skipY, skipW, skipH, 6);
-    ctx.fill();
-    ctx.stroke();
+    NEON.draw.roundRectFillStroke(ctx, (W-skipW)/2, skipY, skipW, skipH, 6);
 
     ctx.fillStyle='#666688';
     ctx.font=`${narrow?13:15}px monospace`;
@@ -3933,18 +3923,14 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? perk.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath();
-      ctx.roundRect(cx, cardY, cw, cardH, 8);
-      ctx.fill(); ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur = 20; ctx.shadowColor = perk.colour;
         ctx.strokeStyle = perk.colour; ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(cx, cardY, cw, cardH, 8);
-        ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -4040,7 +4026,7 @@ const game = {
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+        NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.fillStyle = '#333344';
         ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
         ctx.fillText('SOLD', cx + cw / 2, cardY + cardH / 2 + 6);
@@ -4051,13 +4037,13 @@ const game = {
       ctx.fillStyle = sel ? 'rgba(57,255,20,0.06)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? item.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
-      ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.fill(); ctx.stroke();
+      NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
       if (sel) {
         ctx.save();
         ctx.shadowBlur = 16; ctx.shadowColor = item.colour;
         ctx.strokeStyle = item.colour; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.roundRect(cx, cardY, cw, cardH, 8); ctx.stroke();
+        NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
 
@@ -4116,7 +4102,7 @@ const game = {
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect((W - leaveW) / 2, leaveY, leaveW, leaveH, 6); ctx.fill(); ctx.stroke();
+    NEON.draw.roundRectFillStroke(ctx, (W - leaveW) / 2, leaveY, leaveW, leaveH, 6);
 
     ctx.fillStyle = '#666688';
     ctx.font = `${narrow ? 13 : 15}px monospace`;
@@ -4155,12 +4141,12 @@ const game = {
     ctx.shadowBlur = 20; ctx.shadowColor = '#ffb700';
     ctx.strokeStyle = '#ffb700';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.stroke();
+    NEON.draw.roundRectStroke(ctx, fx, fy, fw, fh, 8);
     ctx.restore();
 
     // Inner background
     ctx.fillStyle = 'rgba(26,18,8,0.95)';
-    ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, 8); ctx.fill();
+    NEON.draw.roundRect(ctx, fx, fy, fw, fh, 8);
 
     // Scanline effect
     ctx.fillStyle = 'rgba(255,183,0,0.03)';
