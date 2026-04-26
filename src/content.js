@@ -1788,6 +1788,19 @@ function drawModBanner() {
     ctx.fillText(m.desc, W / 2, cy + 12);
   }
 
+  // Dismiss hint — appears after the slide-in completes (per pause-on-level-text
+  // behaviour added in PR #106, any new keypress / tap dismisses the banner).
+  // Wait until elapsed > fadeIn so it doesn't flicker mid-slide.
+  if (elapsed > fadeIn) {
+    const hintAlpha = alpha * 0.5;
+    if (hintAlpha > 0.01) {
+      ctx.globalAlpha = hintAlpha;
+      ctx.fillStyle = '#666677';
+      ctx.font = `${narrow ? 8 : 9}px monospace`;
+      ctx.fillText('press any key to skip', W / 2, py + pillH + (narrow ? 10 : 12));
+    }
+  }
+
   ctx.restore();
 }
 
