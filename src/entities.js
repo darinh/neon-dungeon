@@ -442,6 +442,10 @@ class Enemy {
   /** @type {any} */ _summoned;
   /** @type {any} */ _summons;
   /** @type {any} */ _tauntTarget;
+  /** @type {any} */ _tnState;
+  /** @type {any} */ _tnTimer;
+  /** @type {any} */ _tnTargetX;
+  /** @type {any} */ _tnTargetY;
   /** @type {any} */ _tx;
   /** @type {any} */ _ty;
   /** @type {any} */ _unchainedPhase;
@@ -886,6 +890,20 @@ class Enemy {
           this.stunTimer = 0;
         }
       }
+      // TUNNELLER: stun forces surfacing — abort burrow/telegraph at a passable tile
+      if (this.type === 'TUNNELLER' && this._tnState && this._tnState !== 'surfaced') {
+        const emerge = this._wrFindEmergeTile(map, _EG.player);
+        if (emerge) {
+          this.x = emerge.x; this.y = emerge.y;
+          this._tnState = 'surfaced';
+          this._tnTimer = 3.0;
+          this._wrPhased = false;
+          audio.wraithPhaseIn();
+        } else {
+          // No valid tile — drop stun, stay buried
+          this.stunTimer = 0;
+        }
+      }
       // SIPHON: drain beam visual continues fading during stun
       if (this._spDrainBeam) { this._spDrainBeam.t -= dt; if (this._spDrainBeam.t <= 0) this._spDrainBeam = null; }
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
@@ -931,6 +949,7 @@ class Enemy {
       case 'SEEKER':  this.aiSeeker(dt,player,map,d,los);  break;
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
+      case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
       case 'SENTINEL': this.aiBossSentinel(dt,player,map,d,los); break;
       case 'WARDEN':   this.aiBossWarden(dt,player,map,d,los);   break;
@@ -1557,6 +1576,107 @@ class Enemy {
       }
     }
     return null;
+  }
+
+  // ─── TUNNELLER AI — Burrowing Ambusher ──────────────────────────────────
+  // States:
+  //   tunneling: intangible (`_wrPhased=true`), drifts toward player
+  //              ignoring walls. Only a dust mound is rendered at its tile.
+  //              Cannot be hit/healed/targeted thanks to existing _wrPhased
+  //              gates across the codebase.
+  //   surfacing: locked at a passable tile near the player. 1.0s expanding-
+  //              ring telegraph. Still intangible. AT END deals AoE damage
+  //              within 1.4 tiles, then becomes corporeal.
+  //   surfaced:  3s window of normal melee combat. Then re-burrow.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiTunneller(dt, player, map, d, los) {
+    void los;
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // ── Tunneling: intangible pursuit underground ──
+    if (this._tnState === 'tunneling') {
+      this._tnTimer -= dt * ocMul;
+      // Drift toward player ignoring walls; faster while burrowed.
+      const tspd = modSpeed(this.spd * 1.5) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
+      const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
+      const nx = this.x + dx * tspd * dt;
+      const ny = this.y + dy * tspd * dt;
+      this.x = Math.max(0.1, Math.min(MAP_W - 0.1, nx));
+      this.y = Math.max(0.1, Math.min(MAP_H - 0.1, ny));
+      // Dust trail particle puff at current tile (visible warning)
+      if (Math.random() < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
+
+      // Surface when close to player or timer expires — only on a passable tile.
+      const closeToTarget = d < 1.5 && this._canTarget();
+      if (this._tnTimer <= 0 || closeToTarget) {
+        const emerge = this._wrFindEmergeTile(map, player);
+        if (emerge) {
+          this.x = emerge.x; this.y = emerge.y;
+          this._tnTargetX = emerge.x; this._tnTargetY = emerge.y;
+          this._tnState = 'surfacing';
+          this._tnTimer = 1.0; // telegraph window
+          audio.wraithPhaseOut();
+        } else {
+          // No valid tile — keep burrowing briefly
+          this._tnTimer = 0.5;
+        }
+      }
+      return;
+    }
+
+    // ── Surfacing: locked telegraph + AoE on emerge ──
+    if (this._tnState === 'surfacing') {
+      this._tnTimer -= dt;
+      // Hold position while telegraphing
+      this.x = this._tnTargetX;
+      this.y = this._tnTargetY;
+      // Steady dust spurts during telegraph
+      if (Math.random() < dt * 14) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
+      if (this._tnTimer <= 0) {
+        // Emerge: AoE damage at 1.4 tile radius (telegraphed for ~1s, fair).
+        const aoeR = 1.4;
+        const aoeDmg = Math.round(this.atk * 1.0);
+        if (dist(this.x, this.y, player.x, player.y) < aoeR && this._canTarget()) {
+          player.takeDamage(aoeDmg, 'Tunneller Eruption');
+        }
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#cc8844', 16);
+        triggerShake(3, 0.18);
+        audio.wraithPhaseIn();
+        this._tnState = 'surfaced';
+        this._tnTimer = 3.0;
+        this._wrPhased = false;
+        this.attackTimer = 0.4; // brief pause before first melee swing
+      }
+      return;
+    }
+
+    // ── Surfaced: 3s window of normal melee combat ──
+    if (this._tnState === 'surfaced') {
+      this._tnTimer -= dt * ocMul;
+      if (los && d < 12) {
+        this.moveToward(this._tx, this._ty, this.spd, dt, map);
+      } else if (this._tx !== undefined) {
+        this.moveToward(this._tx, this._ty, this.spd * 0.7, dt, map);
+      } else {
+        this.patrol(dt, map);
+      }
+      if (d < 1.2) this.meleeAttack(player);
+      // Re-burrow when window expires
+      if (this._tnTimer <= 0) {
+        this._tnState = 'tunneling';
+        this._tnTimer = 1.5 + Math.random() * 1.0;
+        this._wrPhased = true;
+        audio.wraithPhaseOut();
+      }
+      return;
+    }
   }
 
   /**
@@ -3265,7 +3385,9 @@ class Enemy {
     // FOV gating: only draw enemies the player can currently see
     const etx = Math.floor(this.x), ety = Math.floor(this.y);
     // WRAITH emerging telegraph is always visible (warns player)
-    if (!_EG.dungeon?.visible?.[ety]?.[etx] && !(this.type === 'WRAITH' && this._wrState === 'emerging')) return;
+    if (!_EG.dungeon?.visible?.[ety]?.[etx] &&
+        !(this.type === 'WRAITH' && this._wrState === 'emerging') &&
+        !(this.type === 'TUNNELLER' && (this._tnState === 'tunneling' || this._tnState === 'surfacing'))) return;
     const sx=this.x*TILE-camX, syBase=this.y*TILE-camY;
     const sy = syBase - (this._lpHeight || 0) * TILE;
     if (sx<-40||sx>W+40||syBase<-40||syBase>H+40) return;
@@ -3310,6 +3432,40 @@ class Enemy {
       else alpha=0.85;
     }
     if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
+
+    // TUNNELLER: while underground or surfacing, draw a dust mound + telegraph
+    // ring instead of the body. Returns early so the regular sprite is hidden.
+    if (this.type === 'TUNNELLER' && (this._tnState === 'tunneling' || this._tnState === 'surfacing')) {
+      ctx.save();
+      const dustCol = '#cc8844';
+      ctx.shadowColor = dustCol;
+      if (this._tnState === 'tunneling') {
+        // Subtle moving dust pile
+        const wob = Math.sin(this.bobAngle * 3) * 1.5;
+        ctx.globalAlpha = 0.55;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = dustCol;
+        NEON.draw.circle(ctx, sx, sy + 2 + wob, 5);
+        ctx.globalAlpha = 0.25;
+        NEON.draw.circle(ctx, sx, sy + 2 + wob, 9);
+      } else {
+        // Surfacing telegraph: shaking mound + expanding warning ring.
+        const prog = 1 - this._tnTimer / 1.0; // 0 → 1
+        const shakeX = (Math.random() - 0.5) * 2 * prog;
+        const shakeY = (Math.random() - 0.5) * 2 * prog;
+        ctx.globalAlpha = 0.65 + prog * 0.3;
+        ctx.shadowBlur = 12 + prog * 10;
+        ctx.fillStyle = dustCol;
+        NEON.draw.circle(ctx, sx + shakeX, sy + 1 + shakeY, 6 + prog * 4);
+        // Expanding ring telegraph (shows AoE radius 1.4 tiles)
+        ctx.globalAlpha = 0.45 + 0.35 * Math.sin(prog * 18);
+        ctx.strokeStyle = dustCol;
+        ctx.lineWidth = 2;
+        NEON.draw.circleStroke(ctx, sx, sy, 1.4 * TILE * (0.4 + prog * 0.6));
+      }
+      ctx.restore();
+      return;
+    }
 
     ctx.save();
     ctx.globalAlpha=alpha;
@@ -4219,6 +4375,7 @@ const ENEMY_WEIGHTS = {
   GRAVITON:   { base: 1,  perFloor: 2, minFloor: 7 },  // gravity well deployer
   SEEKER:     { base: 2,  perFloor: 3, minFloor: 3 },  // kamikaze explosive drone
   PULSER:     { base: 5,  perFloor: 1, minFloor: 2 },  // telegraphed charge-up attacker
+  TUNNELLER:  { base: 2,  perFloor: 2, minFloor: 4 },  // burrows underground, surfaces beneath player with AoE telegraph
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -4286,6 +4443,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SEEKER':  hp=36;atk=12; spd=3.5; xpVal=12; colour='#ffdd00'; break;
     case 'PULSER':  hp=40;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
     case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
+    case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -4346,12 +4504,21 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._mimicColour=itemColours[Math.floor(Math.random()*itemColours.length)];
   }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
+  if (type==='TUNNELLER') {
+    // Spawn already underground — players see only a dust mound until the
+    // first surface. Reuses _wrPhased (the canonical "intangible" flag) so
+    // every existing hit/projectile/heal check keeps working unchanged.
+    e._tnState='tunneling';
+    e._tnTimer=1.5+Math.random()*0.8;   // initial burrow duration
+    e._tnTargetX=x; e._tnTargetY=y;
+    e._wrPhased=true;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
