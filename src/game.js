@@ -1095,8 +1095,6 @@ const game = {
   updatePlaying(dt) {
     const player=this.player;
     const dungeon=this.dungeon;
-    this.floorTime = (this.floorTime || 0) + dt;
-    this.runTime = (this.runTime || 0) + dt;
     // Telemetry: perf sample every ~10s
     this._perfSampleTimer = (this._perfSampleTimer || 0) + dt;
     if (this._perfSampleTimer >= 10 && typeof NEON !== 'undefined' && NEON.telemetry) {
@@ -1110,6 +1108,36 @@ const game = {
       });
     }
     this.hint = null;
+
+    // Level-start text (modifier banner / biome intro card) — freeze gameplay
+    // while text is shown so the player can read it without taking damage.
+    // Mirrors the mapExpanded pause pattern below: tick text timers, accept
+    // any-key dismiss, return early.
+    //
+    // Both timers can be dismissed together with any NEW key press
+    // (justPressed, not held) — carry-over movement keys from prior floor /
+    // fade transitions don't insta-dismiss.
+    //
+    // CRITICAL: runs BEFORE floorTime/runTime accumulation so the Arc Grid
+    // hazard phase (Math.sin(floorTime * PI) at L1738) does NOT advance
+    // during the pause — otherwise the player could resume into a freshly-
+    // active arc tile that wasn't active when the text appeared. Same
+    // reasoning for runTime: pause time should not count against the run.
+    if (this.modBannerTimer > 0 || this.biomeCardTimer > 0) {
+      if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
+      if (this.biomeCardTimer > 0) this.biomeCardTimer -= dt;
+      if (typeof justPressed !== 'undefined' && justPressed && justPressed.size > 0) {
+        this.modBannerTimer = 0;
+        this.biomeCardTimer = 0;
+      }
+      if (this.modBannerTimer < 0) this.modBannerTimer = 0;
+      if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
+      justPressed.clear();
+      return;
+    }
+
+    this.floorTime = (this.floorTime || 0) + dt;
+    this.runTime = (this.runTime || 0) + dt;
 
     // Expanded map modal — freeze gameplay, only handle dismiss
     if (this.mapExpanded) {
@@ -1399,17 +1427,12 @@ const game = {
     updateShake(dt);
     updateCombo(dt);
     updateHackwareEffects(dt);
-    if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
-    if (this.biomeCardTimer > 0) {
-      this.biomeCardTimer -= dt;
-      // Any NEW key press skips the card. Use justPressed (per-frame) instead
-      // of keys (held) so carried-over movement keys from the previous floor
-      // don't instantly dismiss the card.
-      if (typeof justPressed !== 'undefined' && justPressed && justPressed.size > 0) {
-        this.biomeCardTimer = 0;
-      }
-      if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
-    }
+    // NOTE: modBannerTimer / biomeCardTimer are ticked in the level-text
+    // pause block at the top of updatePlaying (early-return). When this
+    // line runs, both timers are guaranteed to be 0 — leaving the
+    // bookkeeping nulls in place defensively.
+    if (this.modBannerTimer < 0) this.modBannerTimer = 0;
+    if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
     // ── Upgrade effects ──────────────────────────────────────────────────
