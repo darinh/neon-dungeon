@@ -50,24 +50,14 @@ function getCamera(player) {
   return { x: camX, y: camY };
 }
 
-/**
- * @param {any} tx
- * @param {any} ty
- * @param {any} floor
- */
-function _labDecoHash(tx, ty, floor) {
-  let h = ((tx * 73856093) ^ (ty * 19349663) ^ ((floor | 0) * 83492791)) >>> 0;
-  h ^= h >>> 13;
-  return h >>> 0;
-}
-
-// Reused per-tile scratch context — avoids allocating a fresh object on
-// every decorated floor tile in the render hot path. Single-threaded
-// rendering means consumers never need to retain the reference.
+// Phase C2b: per-tile decor primitives moved to engine/decor.js
+// (NEON.decor.tileHash / NEIGHBOR_OFFSETS_4 / createContextScratch). The
+// shape and behaviour are identical to the previous _labDecoHash + local
+// constants — only the home address changed. Hot-path allocation rule
+// preserved: single _DECO_CX instance hoisted to module scope, neighbour
+// offsets read from the frozen engine table.
 /** @type {{ h: number, roll: number, wallSide: ('N'|'S'|'E'|'W'|null), flicker: number, alarmEligible: boolean, decorEligible: boolean }} */
-const _DECO_CX = { h: 0, roll: 0, wallSide: null, flicker: 0, alarmEligible: false, decorEligible: false };
-// Hoisted to module scope so _decoContext does not allocate per call.
-const _DECO_NEIGHBOR_OFFSETS = [[0,-1],[0,1],[-1,0],[1,0]];
+const _DECO_CX = NEON.decor.createContextScratch();
 /**
  * @param {any} t
  */
@@ -89,7 +79,7 @@ function _decoIsSolid(t) {
 function _decoContext(dungeon, tx, ty) {
   if (!game || _RG.floor < 2) return null;
   const map = dungeon.map;
-  const h = _labDecoHash(tx, ty, _RG.floor);
+  const h = NEON.decor.tileHash(tx, ty, _RG.floor);
   const roll = h % 100;
   // Tile must be eligible for SOMETHING — regular biome decor (roll<11)
   // or an alarm-light beacon (alarm-light's own gate, ~4.3% of tiles).
@@ -101,7 +91,7 @@ function _decoContext(dungeon, tx, ty) {
   if (!decorEligible && !alarmEligible) return null;
 
   for (let i = 0; i < 4; i++) {
-    const off = _DECO_NEIGHBOR_OFFSETS[i];
+    const off = NEON.decor.NEIGHBOR_OFFSETS_4[i];
     if (!off) continue;
     const dx = off[0];
     const dy = off[1];
