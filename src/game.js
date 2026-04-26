@@ -41,6 +41,7 @@ const game = {
   shopSelected: 0,    // keyboard selection index in shop
   shopClosing: false,  // true during auto-close delay after last purchase
   currentLore: null,   // lore text being displayed in READING state
+  _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
@@ -1303,6 +1304,46 @@ const game = {
           items.splice(i,1);
           player.keys[it.colour]++;
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
+          continue;
+        }
+        if (it.isWhisper) {
+          // Whispers subplot — picking up shows the body in a READING overlay
+          // so the discovery + reading moment feels earned (per stored
+          // 'game design' memory). The whisper is also marked found+read in
+          // save state so the ARCHIVE WHISPERS counter increments and the
+          // player can re-visit later via ARCHIVE > WHISPERS section
+          // (UI list ships in a follow-up). audio.logRead reused.
+          items.splice(i, 1);
+          let title = 'WHISPER';
+          let body = '';
+          let voice = '';
+          try {
+            if (typeof NEON !== 'undefined' && NEON.whispers) {
+              const w = NEON.whispers.findWhisper(it.whisperId) ||
+                        NEON.whispers.whisperById(it.whisperId);
+              NEON.whispers.readWhisper(it.whisperId);
+              if (w) {
+                title = String(w.title || title);
+                body  = String(w.body  || '');
+                voice = String(w.voice || '');
+              }
+            }
+          } catch (_) { /* meta unavailable; just toast generic */ }
+          try { audio.logRead(); } catch (_) {}
+          this.msg('★ WHISPER · ' + title, '#cc99ee');
+          if (typeof NEON !== 'undefined' && NEON.telemetry) {
+            NEON.telemetry.track('whisper_found', { id: it.whisperId, floor: this.floor });
+          }
+          // Show the reading overlay. _whisperMeta drives renderReading's
+          // violet styling branch; clearing currentLore is safe because the
+          // amber DATA TERMINAL path won't trigger when _whisperMeta is set.
+          if (body) {
+            this.currentLore = body;
+            this._whisperMeta = { title, voice };
+            this.readingInteractArmed = false;
+            this.setState('READING');
+            return;
+          }
           continue;
         }
         // Defer upgrade pickup if a perk/augment choice is pending
@@ -2635,6 +2676,10 @@ const game = {
     const closeByInteract = this.readingInteractArmed && jp(km('interact'));
     if (closeByInteract || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
       audio.menuSelect();
+      // Clear whisper meta on close so the next READING entry (data terminal
+      // lore) renders with the amber styling, not whatever was set last.
+      this._whisperMeta = null;
+      this.currentLore = null;
       this.setState('PLAYING');
     }
   },
@@ -4145,6 +4190,15 @@ const game = {
 
   renderReading() {
     if (!this.currentLore) return;
+    const isWhisper = !!this._whisperMeta;
+    const accent = isWhisper ? '#cc99ee' : '#ffb700';
+    const bgFill = isWhisper ? 'rgba(20,12,32,0.95)' : 'rgba(26,18,8,0.95)';
+    const scanFill = isWhisper ? 'rgba(204,153,238,0.04)' : 'rgba(255,183,0,0.03)';
+    const titleText = isWhisper
+      ? '⌬ WHISPER FRAGMENT'
+      : '◫ DATA TERMINAL';
+    const bodyColour = isWhisper ? '#e8d5ff' : '#ddc888';
+    const subtleColour = isWhisper ? '#7755aa' : '#886622';
     const narrow = layout.compact;
     const isTouch = isTouchDevice();
     ctx.save();
@@ -4161,38 +4215,45 @@ const game = {
 
     // Outer glow border
     ctx.save();
-    ctx.shadowBlur = 20; ctx.shadowColor = '#ffb700';
-    ctx.strokeStyle = '#ffb700';
+    ctx.shadowBlur = 20; ctx.shadowColor = accent;
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 2;
     NEON.draw.roundRectStroke(ctx, fx, fy, fw, fh, 8);
     ctx.restore();
 
     // Inner background
-    ctx.fillStyle = 'rgba(26,18,8,0.95)';
+    ctx.fillStyle = bgFill;
     NEON.draw.roundRect(ctx, fx, fy, fw, fh, 8);
 
     // Scanline effect
-    ctx.fillStyle = 'rgba(255,183,0,0.03)';
+    ctx.fillStyle = scanFill;
     for (let sy = fy; sy < fy + fh; sy += 3) {
       ctx.fillRect(fx, sy, fw, 1);
     }
 
     // Title
     ctx.textAlign = 'center';
-    ctx.shadowBlur = 12; ctx.shadowColor = '#ffb700';
-    ctx.fillStyle = '#ffb700';
+    ctx.shadowBlur = 12; ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
     ctx.font = `bold ${narrow ? 16 : 22}px monospace`;
-    ctx.fillText('◫ DATA TERMINAL', W / 2, fy + (narrow ? 28 : 36));
+    ctx.fillText(titleText, W / 2, fy + (narrow ? 28 : 36));
     ctx.shadowBlur = 0;
 
-    // Lore count
-    const count = this.player ? this.player.loreRead.size : 0;
-    ctx.fillStyle = '#886622';
+    // Subtitle: lore count for terminals, voice attribution for whispers
+    ctx.fillStyle = subtleColour;
     ctx.font = `${narrow ? 11 : 11}px monospace`;
-    ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
+    if (isWhisper) {
+      const meta = this._whisperMeta || {};
+      const sub = (meta.title ? meta.title + '   ·   ' : '') +
+                  (meta.voice || 'unknown');
+      ctx.fillText(sub, W / 2, fy + (narrow ? 44 : 56));
+    } else {
+      const count = this.player ? this.player.loreRead.size : 0;
+      ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
+    }
 
-    // Word-wrapped lore text
-    ctx.fillStyle = '#ddc888';
+    // Word-wrapped body text
+    ctx.fillStyle = bodyColour;
     const fontSize = narrow ? 11 : 14;
     ctx.font = `${fontSize}px monospace`;
     const maxTextW = fw - 40;
@@ -4221,7 +4282,7 @@ const game = {
 
     // Close hint
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#887744';
+    ctx.fillStyle = isWhisper ? '#7755aa' : '#887744';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     const closeText = isTouch
       ? 'TAP TO CLOSE'

@@ -2497,6 +2497,12 @@ function populateFloor(dungeon, floorNum) {
       items.push(new KeyItem(ki.x, ki.y, ki.colour, ki.tileColour));
     }
   }
+  // Place whisper items (secret-room subplot — see src/data/whispers.js).
+  if (dungeon.whisperItems) {
+    for (const wi of dungeon.whisperItems) {
+      items.push(new WhisperItem(wi.x, wi.y, wi.whisperId));
+    }
+  }
 }
 
 // ─── Game State Machine ───────────────────────────────────────────────────────
