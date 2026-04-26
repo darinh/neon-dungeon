@@ -150,7 +150,7 @@ function notifyGhostProjectors(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -160,6 +160,23 @@ const ECHOER_TELEGRAPH  = 0.8;  // ghost+lane visible duration before fire
 const ECHOER_COOLDOWN   = 2.5;  // seconds between aim attempts (post-fire)
 const ECHOER_RANGE      = 14;   // tiles — max lock distance (echoer→past-pos)
 const ECHOER_PROJ_SPD   = 9;    // tiles/sec — slow & dodgeable
+
+// PROPHET tuning constants — the inverse of ECHOER. PROPHET extrapolates the
+// player's velocity forward by PROPHET_LOOKAHEAD seconds and locks onto the
+// PREDICTED future position. Counter-play: stop, turn, or reverse direction
+// during the telegraph window — linear extrapolation misses any non-linear
+// motion. PROPHET will not lock if the player's velocity is below
+// PROPHET_MIN_VEL (a stationary player has nothing to predict from), giving
+// the niche a clean "stillness is safety" identity opposite to ECHOER's
+// "motion is safety". Tweak with care.
+const PROPHET_LOOKAHEAD  = 0.6;  // seconds ahead to extrapolate the player's position
+const PROPHET_VEL_SAMPLE = 0.2;  // seconds back to sample for velocity estimate
+const PROPHET_TELEGRAPH  = 0.7;  // ghost+lane visible duration before fire
+const PROPHET_COOLDOWN   = 2.8;  // seconds between aim attempts (post-fire)
+const PROPHET_RANGE      = 13;   // tiles — max lock distance (prophet→predicted)
+const PROPHET_PROJ_SPD   = 11;   // tiles/sec — fast (must arrive at the future point on time)
+const PROPHET_MIN_VEL    = 1.5;  // tiles/sec — minimum player velocity required to lock
+const PROPHET_VEL_CAP    = 10;   // tiles/sec — clamp velocity to avoid dash/teleport blowup
 
 // RESONATOR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
@@ -298,6 +315,57 @@ function getPositionAgoFromHistory(history, seconds) {
 }
 
 /**
+ * Pure helper: predict the player's position `lookahead` seconds in the
+ * future by linear extrapolation from velocity. Velocity is estimated by
+ * (current position − sample `sampleSec` seconds ago) / sampleSec, then
+ * clamped to `velCap` tiles/sec to neutralise dash/teleport blowups
+ * (a 0.2s dash that covers 4 tiles would otherwise project 12 tiles
+ * downrange and fire into a wall).
+ *
+ * Returns null if history doesn't reach back `sampleSec` (e.g. just
+ * spawned, just changed floors) — caller is expected to fall through
+ * to a no-lock branch in that case.
+ *
+ * Used by PROPHET (the inverse of ECHOER): rewards stillness, punishes
+ * straight-line motion. Extracted so it's testable without instantiating
+ * browser-bound classes.
+ *
+ * @param {Array<{t:number,x:number,y:number}> | null | undefined} history
+ * @param {number} curX
+ * @param {number} curY
+ * @param {number} lookahead seconds in the future to project
+ * @param {number} sampleSec seconds back to sample for velocity
+ * @param {number} velCap maximum |v| in tiles/sec (clamps dashes/teleports)
+ * @returns {{x:number, y:number, vx:number, vy:number, vmag:number} | null}
+ */
+function predictFromHistory(history, curX, curY, lookahead, sampleSec, velCap) {
+  if (!history || history.length === 0) return null;
+  // Walk newest→oldest; pick the freshest entry whose age >= sampleSec.
+  // Mirrors getPositionAgoFromHistory's selection rule, but we keep the
+  // entry's actual age so we can divide by it (not by the requested
+  // `sampleSec`). Using the requested seconds as the denominator inflates
+  // velocity whenever the chosen sample is older than requested — common
+  // under frame-time jitter / low FPS — and over-leads the shot.
+  // (Bug caught by gpt-5.3-codex review of PR #137.)
+  let past = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const e = history[i];
+    if (e && e.t >= sampleSec) { past = e; break; }
+  }
+  if (!past) return null;
+  const dtAge = past.t > 1e-6 ? past.t : sampleSec; // epsilon guard
+  const rawVx = (curX - past.x) / dtAge;
+  const rawVy = (curY - past.y) / dtAge;
+  const rawMag = Math.hypot(rawVx, rawVy);
+  let vx = rawVx, vy = rawVy, vmag = rawMag;
+  if (rawMag > velCap && rawMag > 0) {
+    const k = velCap / rawMag;
+    vx = rawVx * k; vy = rawVy * k; vmag = velCap;
+  }
+  return { x: curX + vx * lookahead, y: curY + vy * lookahead, vx, vy, vmag };
+}
+
+/**
  * Pure helper: pick safe projectile kinematics for a MIRROR shot from the
  * player's _shotHistory ring. Returns the most recent entry's speed and
  * colour, clamped into the fair band (MIRROR_PROJ_SPD_MIN..MAX) so a
@@ -326,7 +394,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -352,7 +420,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -702,6 +770,11 @@ class Enemy {
   /** @type {any} */ _ecCooldown;
   /** @type {any} */ _ecLockX;
   /** @type {any} */ _ecLockY;
+  /** @type {any} */ _prState;
+  /** @type {any} */ _prAimTimer;
+  /** @type {any} */ _prCooldown;
+  /** @type {any} */ _prLockX;
+  /** @type {any} */ _prLockY;
   /** @type {any} */ _rsState;
   /** @type {any} */ _rsCharge;
   /** @type {any} */ _rsTele;
@@ -1205,6 +1278,8 @@ class Enemy {
       if (this._plState === 'charging') { this._plState = 'idle'; this._plCooldown = 0.8; }
       // Cancel echoer aim on stun — don't fire after stun ends
       if (this._ecState === 'aiming') { this._ecState = 'idle'; this._ecAimTimer = 0; this._ecCooldown = 0.8; }
+      // Cancel prophet aim on stun — same fairness contract as echoer.
+      if (this._prState === 'aiming') { this._prState = 'idle'; this._prAimTimer = 0; this._prCooldown = 0.8; }
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
       if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
@@ -1304,6 +1379,7 @@ class Enemy {
       case 'SEEKER':  this.aiSeeker(dt,player,map,d,los);  break;
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
+      case 'PROPHET': this.aiProphet(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2136,6 +2212,132 @@ class Enemy {
     // No lock available: hold position. If player rushes within 3 tiles,
     // backstep gently to maintain niche identity (anti-orbit zoner, not
     // a melee combatant).
+    if (d < 3 && this._canTarget()) {
+      const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
+      this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd, dt, map);
+    } else if (!inRoom) {
+      this.patrol(dt, map);
+    }
+    // else: hold position (menacing idle)
+  }
+
+  // ─── PROPHET AI — Future-Sight Predictor ────────────────────────────────
+  // The inverse of ECHOER. Locks onto the player's PREDICTED position
+  // PROPHET_LOOKAHEAD seconds ahead by linearly extrapolating velocity
+  // from the shared _posHistory ring. Telegraphs a dashed lane + ghost at
+  // the future point for PROPHET_TELEGRAPH seconds, then fires a fast
+  // projectile timed to arrive at the lock.
+  //
+  // Counter-play: stop, turn, or reverse direction during the telegraph.
+  // Linear extrapolation cannot follow non-linear motion, so any
+  // direction change inside the telegraph window makes the shot miss.
+  // PROPHET refuses to lock on a near-stationary player (vmag <
+  // PROPHET_MIN_VEL) — there's nothing to predict from a still target,
+  // and locking on the current position would just be a basic delayed
+  // shot. Result: stillness is safe, motion is dangerous — opposite of
+  // ECHOER.
+  //
+  // Hologram-taunt: when a taunt is active, lock at the decoy's
+  // position directly (no prediction — the decoy doesn't move). Mirrors
+  // the same explicit branch ECHOER needed because both mobs sample
+  // player state outside the canonical _tx/_ty path.
+  //
+  // States:
+  //   idle:   on cooldown OR scanning. When room-gated LoS is true and
+  //           the predicted future point is reachable (LoS to predicted)
+  //           AND vmag >= MIN_VEL, lock and enter aiming.
+  //   aiming: lock is fixed; ghost+lane render; brief backstep if rushed.
+  //           Cannot be interrupted by losing LoS to the current player —
+  //           the lane is committed and visible. Stun cancels.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiProphet(dt, player, map, d, los) {
+    void los; // we compute fresh LoS to the predicted point below
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    this._prCooldown = Math.max(0, (this._prCooldown || 0) - dt * ocMul * bm);
+
+    // Room-gated: only engage when target or player is inside this prophet's room.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Aiming: telegraph window, then fire ──
+    if (this._prState === 'aiming') {
+      this._prAimTimer -= dt; // fixed-rate countdown — fairness > tempo
+
+      // Backstep if player has closed the distance during the telegraph.
+      if (d < 3 && this._canTarget()) {
+        const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
+        this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd * 1.1, dt, map);
+      }
+
+      if (this._prAimTimer <= 0) {
+        // Fire toward the locked future-position. Range is the straight
+        // line to the lock plus a small overshoot so a player standing
+        // exactly on the predicted point still takes the lane endpoint.
+        const lx = this._prLockX, ly = this._prLockY;
+        const [dx, dy] = norm(lx - this.x, ly - this.y);
+        const range = Math.max(1, dist(this.x, this.y, lx, ly) + 0.5);
+        const p = new Projectile(this.x, this.y, dx, dy, PROPHET_PROJ_SPD, this.atk, range, '#ffaa22', false, false);
+        p.ownerType = 'Prophet Shot';
+        projectiles.push(p);
+        if (audio.prophetFire) audio.prophetFire();
+        this._prState = 'idle';
+        this._prAimTimer = 0;
+        this._prCooldown = PROPHET_COOLDOWN;
+      }
+      return;
+    }
+
+    // ── Idle: try to lock when conditions allow ──
+    if (this._prCooldown <= 0 && inRoom && this._canTarget()) {
+      // Taunt redirection: when a hologram-taunt is active (_tx/_ty
+      // point at the decoy), lock the decoy directly — predicting from
+      // the decoy's velocity (zero) would otherwise trip the MIN_VEL
+      // gate and PROPHET would never engage the decoy. Mirrors
+      // aiEchoer's explicit taunt branch (lesson from PR #132 review).
+      let lockX = 0, lockY = 0, haveLock = false;
+      const taunt = this._tauntTarget;
+      const tauntActive = taunt && taunt.age < taunt.maxAge;
+      if (tauntActive) {
+        lockX = this._tx; lockY = this._ty; haveLock = true;
+      } else {
+        const pred = _EG.player && _EG.player.getPredictedPosition
+          ? _EG.player.getPredictedPosition(PROPHET_LOOKAHEAD)
+          : null;
+        // Stillness gate: refuse to lock on a near-stationary player.
+        // That's the niche. Without this check PROPHET degenerates into
+        // a slow-telegraph basic shooter.
+        if (pred && pred.vmag >= PROPHET_MIN_VEL) {
+          lockX = pred.x; lockY = pred.y; haveLock = true;
+        }
+      }
+      if (haveLock) {
+        // LoS + range gate to the predicted point. Range uses straight-
+        // line distance to the lock (so a future point behind a wall
+        // both fails LoS AND yields a sensible range cap).
+        const dLock = dist(this.x, this.y, lockX, lockY);
+        if (dLock < PROPHET_RANGE && hasLOS(this.x, this.y, lockX, lockY, map)) {
+          this._prState = 'aiming';
+          this._prAimTimer = PROPHET_TELEGRAPH;
+          this._prLockX = lockX;
+          this._prLockY = lockY;
+          if (audio.prophetLock) audio.prophetLock();
+          return;
+        }
+      }
+    }
+
+    // No lock available: hold position. If player rushes within 3 tiles,
+    // backstep gently to maintain niche identity (anti-orbit zoner).
     if (d < 3 && this._canTarget()) {
       const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
       this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd, dt, map);
@@ -4863,6 +5065,50 @@ class Enemy {
         }
         ctx.restore();
       }
+      // PROPHET: amber future-sight — when aiming, draw the dashed lane
+      // to the predicted future position AND a translucent ghost of the
+      // player at that point. Visually parallel to ECHOER (same lane +
+      // ghost vocabulary) but in warm amber to signal the inverse niche
+      // to the player ("this one fires AHEAD"). Both lane and ghost are
+      // telegraphed from lock-time so the player has the full
+      // PROPHET_TELEGRAPH window to read them — fairness > drama.
+      if (this.type === 'PROPHET') {
+        ctx.save();
+        if (this._prState === 'aiming' && this._prAimTimer > 0) {
+          const total = 0.7; // PROPHET_TELEGRAPH — kept inline (host has TILE etc.)
+          const progress = 1 - Math.max(0, Math.min(1, this._prAimTimer / total));
+          const lx = this._prLockX * TILE - camX;
+          const ly = this._prLockY * TILE - camY;
+          // Pulsing dashed lane from prophet to lock
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 18);
+          ctx.globalAlpha = (0.18 + progress * 0.5) * pulse;
+          ctx.strokeStyle = '#ffaa22';
+          ctx.shadowBlur = 6 + progress * 10;
+          ctx.shadowColor = '#ffaa22';
+          ctx.lineWidth = 1 + progress * 1.5;
+          ctx.setLineDash([4, 6 - progress * 4]);
+          NEON.draw.line(ctx, sx, sy, lx, ly);
+          ctx.setLineDash([]);
+          // Translucent ghost of the player at the future position.
+          ctx.globalAlpha = 0.22 + progress * 0.4;
+          ctx.fillStyle = '#ffaa22';
+          NEON.draw.circle(ctx, lx, ly, TILE * 0.32);
+          ctx.globalAlpha = 0.35 + progress * 0.45;
+          ctx.strokeStyle = '#ffd680';
+          ctx.lineWidth = 1.2 + progress * 0.8;
+          NEON.draw.circleStroke(ctx, lx, ly, TILE * 0.42 + progress * 2);
+        } else {
+          // Idle: faint amber pulse on the body
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.15 + 0.1 * pulse;
+          ctx.strokeStyle = '#ffaa22';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ffaa22';
+          ctx.lineWidth = 1;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        }
+        ctx.restore();
+      }
       // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
       // core during idle/charge; brief flash on the recovery transition.
       // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
@@ -5425,6 +5671,7 @@ const ENEMY_WEIGHTS = {
   PULSER:     { base: 5,  perFloor: 1, minFloor: 2 },  // telegraphed charge-up attacker
   TUNNELLER:  { base: 2,  perFloor: 2, minFloor: 4 },  // burrows underground, surfaces beneath player with AoE telegraph
   ECHOER:     { base: 2,  perFloor: 2, minFloor: 5 },  // sonar predictor — fires at where the player WAS (anti-pattern punisher)
+  PROPHET:    { base: 2,  perFloor: 2, minFloor: 6 },  // future-sight predictor — fires at where the player WILL BE (anti-motion punisher)
   RESONATOR:  { base: 2,  perFloor: 2, minFloor: 6 },  // stationary cone battery — telegraphed 60° wedge, dash-through counter
   MIRROR:     { base: 2,  perFloor: 1, minFloor: 8 },  // stationary mimic battery — fires single shot using player's last-fired kinematics
   REAPER:     { base: 2,  perFloor: 2, minFloor: 7 },  // aggression-punishing chaser — frenzy at 5 kills in current room
@@ -5531,6 +5778,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
     case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
     case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
+    case 'PROPHET': hp=55;atk=12; spd=1.3; xpVal=28; colour='#ffaa22'; break;
     case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
     case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
     case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
@@ -5612,6 +5860,16 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._ecCooldown=0.5+Math.random()*1.0;
     e._ecLockX=x; e._ecLockY=y;
   }
+  if (type==='PROPHET') {
+    // Stagger initial aim attempts so a clustered spawn doesn't fire in
+    // unison. Cooldown range tuned so first lock is ~0.6–1.6s after spawn
+    // (slightly slower than ECHOER — telegraph is shorter so we give the
+    // player a beat longer to walk into the room before the first shot).
+    e._prState='idle';
+    e._prAimTimer=0;
+    e._prCooldown=0.6+Math.random()*1.0;
+    e._prLockX=x; e._prLockY=y;
+  }
   if (type==='RESONATOR') {
     // Stationary cone battery. Stagger initial charge so a clustered
     // spawn doesn't telegraph in unison. First charge completes ~1.5–3s
@@ -5664,7 +5922,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -7729,6 +7987,24 @@ class Player {
    */
   getPositionAgo(seconds) {
     return getPositionAgoFromHistory(this._posHistory, seconds);
+  }
+
+  /**
+   * Returns the player's PREDICTED position `seconds` in the future,
+   * extrapolated linearly from velocity (current pos vs ~0.2s ago),
+   * with velocity clamped to PROPHET_VEL_CAP to neutralise dash/teleport
+   * blowups. Returns null if history doesn't reach back the velocity-
+   * sample window (e.g. just spawned, just changed floors). Used by
+   * PROPHET to fire at where the player WILL BE — the inverse of
+   * getPositionAgo (where the player WAS, used by ECHOER).
+   * @param {number} seconds lookahead in seconds
+   * @returns {{x:number, y:number, vx:number, vy:number, vmag:number} | null}
+   */
+  getPredictedPosition(seconds) {
+    return predictFromHistory(
+      this._posHistory, this.x, this.y,
+      seconds, PROPHET_VEL_SAMPLE, PROPHET_VEL_CAP
+    );
   }
 
   /**
