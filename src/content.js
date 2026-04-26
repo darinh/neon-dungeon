@@ -3706,23 +3706,30 @@ function makeHackwareOption(exclude) {
  * @returns {any}
  */
 function pickUpgradeOption(exclude) {
-  // Build eligible pool: exclude maxed persistent upgrades and the excluded id
+  // LOOT PHILOSOPHY (user rule, repeated 100+ times): NEVER drop permanent
+  // power-ups for free. Drops are heals + XP only. Persistent items (saws,
+  // sentries, regen, armor, ricochet, plasma orb, overclock) are filtered
+  // out of the run drop pool entirely — they live in meta-progression /
+  // shops / future weapon-terminal upgrades. Hackware + weapons removed
+  // from drops too: hackware is a permanent equip; weapons live in secret
+  // rooms only (per user). This collapses pickUpgradeOption to MED_PACK,
+  // NANO_REPAIR, XP_CHIP — all "simple" so the existing auto-apply path at
+  // src/game.js:1400-1409 handles them with no popup. Stored as repo
+  // memory: subject "loot philosophy".
   const pool = UPGRADES.filter(u => {
+    if (u.persistent) return false;
     if (exclude && u.id === exclude) return false;
-    if (u.persistent && _CG.player) {
-      const cur = _CG.player.upgrades[u.id] || 0;
-      if (cur >= (u.maxLevel ?? Infinity)) return false;
-    }
     return true;
   });
-  // 12% chance for a hackware option (floor 3+)
-  if (_CG.floor >= 3 && Math.random() < 0.12 && (!exclude || !exclude.startsWith('HACKWARE_'))) {
-    const hw = makeHackwareOption(exclude);
-    if (hw) return hw;
+  // Defensive fallback — should never trigger because MED_PACK/NANO_REPAIR/
+  // XP_CHIP are always present and non-persistent. If the table is ever
+  // edited to remove them all, fall back to a minimal heal so we don't
+  // crash the pickup path.
+  if (pool.length === 0) {
+    return { id:'MED_PACK', name:'Med-Pack', desc:'+40 HP', colour:'#00ff88',
+      rarity:1, persistent:false,
+      fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+40); } };
   }
-  // 20% chance for a weapon option (always eligible)
-  if (Math.random() < 0.2 && (!exclude || !exclude.startsWith('WEAPON_'))) return makeWeaponOption();
-  if (pool.length === 0) return makeWeaponOption();
   const total = pool.reduce((s,u) => s+u.rarity, 0);
   let r = Math.random() * total;
   for (const u of pool) { r -= u.rarity; if (r <= 0) return u; }
