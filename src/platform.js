@@ -1192,6 +1192,26 @@ const audio = (() => {
       osc('sine', 1100, 440, 0.06, t, 0.16, bus);
       noise(0.05, t + 0.005, 0.06, 3200, bus);
     },
+    reaperTelegraph() {
+      const c = getCtx(); const t = c.currentTime;
+      // Heartbeat-style descending pulse — "you've been marked". Two low
+      // detuned thumps with a thin metallic shimmer on top so it cuts
+      // through combat noise without overwhelming.
+      const bus = wetDry(1, 0.30, 0.50);
+      osc('sine', 220, 110, 0.09, t, 0.30, bus);
+      osc('sine', 240, 120, 0.09, t + 0.18, 0.28, bus);
+      osc('triangle', 880, 660, 0.05, t, 0.10, bus);
+    },
+    reaperFrenzy() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp red roar — frenzy commits. Detuned saws + noise burst, more
+      // aggressive than the telegraph pulse.
+      const bus = wetDry(1, 0.20, 0.45);
+      osc('sawtooth', 180, 90, 0.20, t, 0.30, bus);
+      osc('sawtooth', 195, 95, 0.20, t, 0.26, bus);
+      noise(0.10, t, 0.08, 2400, bus);
+      osc('square', 660, 220, 0.10, t + 0.04, 0.16, bus);
+    },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Low rumble + rising whoosh

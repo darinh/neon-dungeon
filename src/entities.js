@@ -54,6 +54,52 @@ function unregisterEnemyFromRoom(e) {
 }
 function clearEnemiesByRoom() { enemiesByRoom.clear(); }
 function getEnemiesInRoom(/** @type {any} */ room) { return enemiesByRoom.get(room) || null; }
+
+// REAPER player-ring telegraph render pass. Drawn from game.js BEFORE the
+// player sprite so the ring sits underneath the player. Iterates the global
+// `enemies` list — bypasses the per-enemy FOV/cull in Enemy.draw because
+// the on-player warning must remain visible even when the reaper itself
+// is off-screen (detect range 14 tiles can exceed the vertical half-screen
+// at default zoom, so a marked player could otherwise see no warning).
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
+function drawReaperPlayerRings(camX, camY) {
+  if (!_EG || !_EG.player || _EG.player.dead) return;
+  const pl = _EG.player;
+  const psx = pl.x * TILE - camX;
+  const psy = pl.y * TILE - camY;
+  for (const e of enemies) {
+    if (e.dead || e.type !== 'REAPER') continue;
+    if (e._reState === 'telegraph' && e._reTele > 0) {
+      const progress = 1 - Math.max(0, Math.min(1, e._reTele / REAPER_TELEGRAPH));
+      const ringPulse = 0.5 + 0.5 * Math.sin(progress * 28);
+      ctx.save();
+      ctx.globalAlpha = (0.45 + progress * 0.45) * ringPulse;
+      ctx.strokeStyle = '#ff2244';
+      ctx.shadowBlur = 10 + progress * 14;
+      ctx.shadowColor = '#ff2244';
+      ctx.lineWidth = 1.8 + progress * 2.2;
+      ctx.setLineDash([6, 5]);
+      ctx.lineDashOffset = -progress * 24;
+      NEON.draw.circleStroke(ctx, psx, psy, TILE * (0.7 + 0.3 * (1 - progress)));
+      ctx.setLineDash([]);
+      ctx.restore();
+    } else if (e._reFrenzied && e._reFrenzy > 0) {
+      const remain = Math.max(0, Math.min(1, e._reFrenzy / REAPER_FRENZY_DURATION));
+      const fp = 0.5 + 0.5 * Math.sin((e.bobAngle || 0) * 6);
+      ctx.save();
+      ctx.globalAlpha = 0.18 * remain * (0.6 + 0.4 * fp);
+      ctx.strokeStyle = '#cc1144';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#ff2244';
+      ctx.lineWidth = 1.4;
+      NEON.draw.circleStroke(ctx, psx, psy, TILE * 0.85);
+      ctx.restore();
+    }
+  }
+}
 // Phase 4 — convenience iterator. Safe when `room` is null/undefined or empty.
 // Callers still must guard for e.dead / e._disguised / e._wrPhased etc.
 const _EMPTY_ENEMY_SET = new Set();
@@ -66,7 +112,7 @@ function enemiesInRoomIter(room) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -109,6 +155,23 @@ const MIRROR_PROJ_SPD_MIN  = 4;              // clamp player kinematics into a f
 const MIRROR_PROJ_SPD_MAX  = 14;
 const MIRROR_PROJ_RANGE    = 16;             // tiles — projectile lifetime range
 const SHOT_HISTORY_LEN     = 4;              // ring cap on player._shotHistory
+
+// REAPER tuning constants — exported on globalThis for cross-file test reads.
+// REAPER is a melee chaser whose threat scales with PLAYER aggression rather
+// than floor number. Hits player.killsInCurrentRoom >= REAPER_FRENZY_THRESHOLD
+// → enters a visible 1.0s telegraph (red ring drawn ON THE PLAYER) → then a
+// 4.0s frenzy at +60% spd with stun-immunity. Triggers at most once per room
+// visit (per-instance _reHasFrenzied flag, cleared on player room change).
+// Telegraph and frenzy timers PAUSE while the player is outside this REAPER's
+// room — fairness rule, otherwise the punish ticks down off-screen and the
+// player escapes for free. Stun received during telegraph cancels it (matches
+// other telegraph mobs at the stun branch in update()) but _reHasFrenzied
+// stays true — EMP is a one-shot defuse, not a re-trigger reset.
+const REAPER_FRENZY_THRESHOLD = 5;            // kills in current room to arm
+const REAPER_TELEGRAPH        = 1.0;          // seconds — red ring on player
+const REAPER_FRENZY_DURATION  = 4.0;          // seconds — +60% spd window
+const REAPER_FRENZY_SPD_MUL   = 1.6;          // chase speed multiplier in frenzy
+const REAPER_DETECT_RANGE     = 14;           // tiles — chase pickup range
 
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
@@ -198,7 +261,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -224,7 +287,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -588,6 +651,11 @@ class Enemy {
   /** @type {any} */ _miAimDy;
   /** @type {any} */ _miShotSpd;
   /** @type {any} */ _miShotColour;
+  /** @type {any} */ _reState;
+  /** @type {any} */ _reTele;
+  /** @type {any} */ _reFrenzy;
+  /** @type {any} */ _reFrenzied;
+  /** @type {any} */ _reHasFrenzied;
   /** @type {any} */ _tnState;
   /** @type {any} */ _tnTimer;
   /** @type {any} */ _tnTargetX;
@@ -834,6 +902,21 @@ class Enemy {
     _EG.player.score += Math.round(this.xpValue * _EG.floor * mul);
     if (_EG.quest && _EG.quest.kills !== undefined) _EG.quest.kills++;
     if (!this.isShard && !isSummon) _EG.player.enemiesKilled++;
+    // REAPER aggression counter — only count kills in the player's current
+    // room. We compute room-at-death-time from player position (NOT the
+    // cached player._currentRoom) because player.update() can trigger
+    // kills mid-frame (e.g. bomb fuse detonation) BEFORE the per-frame
+    // room-change refresh in updatePlaying() has run. Excludes shards/
+    // summons via the same gate as enemiesKilled.
+    if (!this.isShard && !isSummon && this.room) {
+      const _pl = _EG.player;
+      const _pInRoom = _pl &&
+        _pl.x >= this.room.x && _pl.x < this.room.x + this.room.w &&
+        _pl.y >= this.room.y && _pl.y < this.room.y + this.room.h;
+      if (_pInRoom) {
+        _pl.killsInCurrentRoom = (_pl.killsInCurrentRoom || 0) + 1;
+      }
+    }
     const baseCr = isSummon ? 0 : (CREDIT_VALUES[this.type] || 5);
     const creditSiphonMul = hasAugment('CREDIT_SIPHON') ? 1.5 : 1;
     const corrosiveMul = _EG.modifier === 'CORROSIVE' ? 1.5 : 1;
@@ -1008,6 +1091,12 @@ class Enemy {
     else if (_t) { this._tauntTarget = null; }
 
     // Stun: freeze AI + cooldown timers while stunned
+    // REAPER frenzy: full stun immunity. Drop any incoming stun BEFORE the
+    // generic block so the reaper keeps chasing through EMP/Shock during the
+    // 4s frenzy window — the player must out-position, not stun-defuse.
+    if (this.stunTimer > 0 && this.type === 'REAPER' && this._reFrenzied) {
+      this.stunTimer = 0;
+    }
     if (this.stunTimer > 0) {
       this.stunTimer -= dt;
       // Cancel sniper charge on stun — don't let it resume after stun ends
@@ -1025,6 +1114,10 @@ class Enemy {
       // Cancel mirror telegraph on stun — drop straight to recovery so the
       // shot doesn't fire after stun ends and the player can punish the stun.
       if (this._miState === 'telegraph') { this._miState = 'recovery'; this._miRec = MIRROR_RECOVERY; this._miTele = 0; }
+      // Cancel REAPER telegraph on stun — return to idle so the frenzy
+      // doesn't trigger after stun ends. _reHasFrenzied stays true (one-shot
+      // defuse, not a re-trigger reset — re-arm only on player room change).
+      if (this._reState === 'telegraph') { this._reState = 'idle'; this._reTele = 0; }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -1105,6 +1198,7 @@ class Enemy {
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
+      case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
       case 'MIMIC':   this.aiMimic(dt,player,map,d,los);  break;
       case 'TUNNELLER':this.aiTunneller(dt,player,map,d,los); break;
       case 'SHARD':    this.aiShard(dt,player,map,d,los);   break;
@@ -2149,6 +2243,94 @@ class Enemy {
       }
     }
     // Stationary: never patrol, never reposition. Sitting duck by design.
+  }
+
+  // ─── REAPER AI — Aggression-Punishing Frenzy Chaser ────────────────────
+  // Floor 7+. Melee chaser whose threat scales with PLAYER aggression
+  // (player.killsInCurrentRoom) instead of with floor number. Reward
+  // careful pacing, punish spam-clearing.
+  //
+  // States:
+  //   idle:      chase player at base spd; melee on contact (d<1.2). Each
+  //              frame, if player is in this REAPER's room AND
+  //              killsInCurrentRoom >= REAPER_FRENZY_THRESHOLD AND we
+  //              haven't already frenzied this room visit, enter telegraph.
+  //   telegraph: _reTele ticks down (REAPER_TELEGRAPH s) ONLY while player
+  //              is in our room. Visible red ring drawn ON THE PLAYER.
+  //              Chase continues. On 0, enter frenzy and set _reHasFrenzied
+  //              so we don't re-trigger this room visit. Stun cancels (see
+  //              update() stun branch).
+  //   frenzy:    _reFrenzy ticks down (REAPER_FRENZY_DURATION s) ONLY while
+  //              player is in our room. Chase speed = base * 1.6.
+  //              Stun-immune (handled in update() stun branch).
+  //
+  // Reset: player room change clears killsInCurrentRoom AND _reHasFrenzied
+  // for every REAPER in the new room (handled in game.js updatePlaying).
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiReaper(dt, player, map, d, los) {
+    void los; // chase doesn't gate on LoS — the reaper hunts by sound
+    // Player-in-room test using THIS reaper's room (not player._currentRoom)
+    // because reapers in rooms the player is leaving still need to know to
+    // PAUSE rather than continue ticking off-screen.
+    const playerInRoom = !!(this.room &&
+      player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+      player.y >= this.room.y && player.y < this.room.y + this.room.h);
+
+    // Telegraph: pause while player is out of our room (fairness rule).
+    if (this._reState === 'telegraph') {
+      if (playerInRoom) {
+        this._reTele -= dt;
+        if (this._reTele <= 0) {
+          this._reState = 'frenzy';
+          this._reFrenzy = REAPER_FRENZY_DURATION;
+          this._reFrenzied = true;
+          // _reHasFrenzied was already latched on telegraph entry — leave it.
+          this._reTele = 0;
+          if (audio.reaperFrenzy) audio.reaperFrenzy();
+          spawnParticles(this.x, this.y, 'EXPLOSION', '#cc1144', 8);
+        }
+      }
+      // Continue chasing during telegraph (no movement freeze).
+    } else if (this._reState === 'frenzy') {
+      if (playerInRoom) {
+        this._reFrenzy -= dt;
+        if (this._reFrenzy <= 0) {
+          this._reState = 'idle';
+          this._reFrenzy = 0;
+          this._reFrenzied = false;
+        }
+      }
+    } else {
+      // idle: arm telegraph if conditions met
+      const kills = (player && player.killsInCurrentRoom) || 0;
+      if (playerInRoom && !this._reHasFrenzied && kills >= REAPER_FRENZY_THRESHOLD &&
+          this._canTarget()) {
+        this._reState = 'telegraph';
+        this._reTele = REAPER_TELEGRAPH;
+        // Consume the per-room latch IMMEDIATELY on telegraph entry (not
+        // on frenzy entry). That way a stun-cancel during telegraph still
+        // counts as the player's "one-shot defuse for this room visit"
+        // — re-arm only happens on player room change.
+        this._reHasFrenzied = true;
+        if (audio.reaperTelegraph) audio.reaperTelegraph();
+      }
+    }
+
+    // Chase logic — read frenzy via local multiplier (NEVER mutate this.spd
+    // or the buff leaks into save/restore and difficulty scaling).
+    if (d < REAPER_DETECT_RANGE && this._canTarget()) {
+      const chaseSpd = this.spd * (this._reFrenzied ? REAPER_FRENZY_SPD_MUL : 1);
+      this.moveToward(this._tx, this._ty, chaseSpd, dt, map);
+      if (d < 1.2) this.meleeAttack(player);
+    } else {
+      this.patrol(dt, map);
+    }
   }
 
   /**
@@ -4605,6 +4787,31 @@ class Enemy {
         }
         ctx.restore();
       }
+      // REAPER: blood-red ambient body aura (idle), brighter during
+      // telegraph/frenzy. The PLAYER-ring telegraph is drawn from a
+      // separate game-loop pass (game.js) so it remains visible even
+      // when the reaper itself is off-screen — culling here would
+      // suppress the warning for an active threat.
+      if (this.type === 'REAPER') {
+        ctx.save();
+        const auraIntensity = this._reFrenzied ? 1.0 : (this._reState === 'telegraph' ? 0.7 : 0.35);
+        const bodyPulse = 0.5 + 0.5 * Math.sin(this.bobAngle * (this._reFrenzied ? 8 : 3));
+        ctx.globalAlpha = (0.20 + 0.25 * bodyPulse) * auraIntensity;
+        ctx.strokeStyle = '#cc1144';
+        ctx.shadowBlur = 8 + bodyPulse * 8 * auraIntensity;
+        ctx.shadowColor = '#ff3366';
+        ctx.lineWidth = 1.4 + auraIntensity * 1.2;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * (1.1 + bodyPulse * 0.4));
+        if (this._reFrenzied || this._reState === 'telegraph') {
+          ctx.globalAlpha = 0.55 * auraIntensity;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          const a0 = this.bobAngle * 2;
+          ctx.arc(sx, sy, sz * 1.45, a0, a0 + Math.PI * 0.85);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       if (this.type === 'SUMMONER') {
         ctx.save();
         const sPulse = 0.15 + 0.1 * Math.sin(this.bobAngle * 2);
@@ -4998,6 +5205,7 @@ const ENEMY_WEIGHTS = {
   ECHOER:     { base: 2,  perFloor: 2, minFloor: 5 },  // sonar predictor — fires at where the player WAS (anti-pattern punisher)
   RESONATOR:  { base: 2,  perFloor: 2, minFloor: 6 },  // stationary cone battery — telegraphed 60° wedge, dash-through counter
   MIRROR:     { base: 2,  perFloor: 1, minFloor: 8 },  // stationary mimic battery — fires single shot using player's last-fired kinematics
+  REAPER:     { base: 2,  perFloor: 2, minFloor: 7 },  // aggression-punishing chaser — frenzy at 5 kills in current room
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -5069,6 +5277,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
     case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
     case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
+    case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -5170,12 +5379,23 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._miShotSpd=MIRROR_PROJ_SPD_DEF;
     e._miShotColour='#88ff44';
   }
+  if (type==='REAPER') {
+    // Per-instance frenzy state. _reHasFrenzied is the one-shot latch that
+    // gets cleared on player room change (game.js updatePlaying). _reFrenzied
+    // is the live "speed boost active" flag read by aiReaper for chase spd
+    // and by update() stun branch for stun immunity.
+    e._reState = 'idle';
+    e._reTele = 0;
+    e._reFrenzy = 0;
+    e._reFrenzied = false;
+    e._reHasFrenzied = false;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -7106,6 +7326,12 @@ class Player {
     this.damageLog={};          // source → total damage taken
     this.killedBy='';           // source of killing blow
     this.enemiesKilled=0;       // total enemies killed this run
+    // REAPER aggression counter: kills in the room the player is currently
+    // in. Reset when player changes rooms (game.js updatePlaying). NOT
+    // serialized — pure run-state. Drives REAPER frenzy trigger.
+    this.killsInCurrentRoom=0;
+    /** @type {any} */
+    this._currentRoom=null;     // cached reference; not serialized
     this.hitsBlocked=0;         // energy shield blocks
     this.roomsCleared=0;        // rooms fully cleared of enemies
     this.eventsResolved=0;      // floor events completed

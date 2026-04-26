@@ -260,6 +260,13 @@ const game = {
     // floor must not be able to mimic a shot the player fired on the
     // previous floor before they have fired anything on the current floor.
     if (this.player._shotHistory) this.player._shotHistory.length = 0;
+    // Reset per-room kill counter on floor transition: the new floor's room
+    // layout has nothing to do with the previous floor's kills, and the
+    // player's _currentRoom reference is stale (rooms array is new). The
+    // first frame of updatePlaying will re-detect the spawn room and
+    // re-arm any REAPERs there via the room-change path.
+    this.player.killsInCurrentRoom = 0;
+    this.player._currentRoom = null;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
@@ -1157,6 +1164,33 @@ const game = {
     if (jp('Tab')) { this.mapExpanded = true; justPressed.clear(); return; }
 
     player.update(dt,dungeon.map);
+
+    // ── REAPER aggression tracking: detect player room change BEFORE the
+    // enemy-update loop, so REAPERs read fresh state and Enemy.die() events
+    // this frame attribute kills to the correct room. Scope: per-frame
+    // single rooms.find scan (cheap — dungeon.rooms is small).
+    {
+      const px = player.x, py = player.y;
+      let nextRoom = null;
+      for (const r of dungeon.rooms) {
+        if (px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h) { nextRoom = r; break; }
+      }
+      if (nextRoom !== player._currentRoom) {
+        player.killsInCurrentRoom = 0;
+        player._currentRoom = nextRoom;
+        // Re-arm any REAPERs in the room the player just entered (if any).
+        // Reapers in the room they just LEFT keep _reHasFrenzied — re-entry
+        // will clear it via this same code path because that room then
+        // becomes the next nextRoom.
+        if (nextRoom) {
+          for (const e of enemies) {
+            if (!e.dead && e.type === 'REAPER' && e.room === nextRoom) {
+              e._reHasFrenzied = false;
+            }
+          }
+        }
+      }
+    }
 
     const cam=getCamera(player);
 
@@ -3631,6 +3665,12 @@ const game = {
     // particles
     drawParticles(cam.x,cam.y);
     drawFloatingTexts(cam.x,cam.y);
+
+    // REAPER on-player telegraph rings — drawn AFTER particles/floating
+    // text but BEFORE the player sprite so the ring sits beneath the
+    // player and is never suppressed by the per-enemy FOV/cull in
+    // Enemy.draw (an off-screen reaper must still warn the marked player).
+    drawReaperPlayerRings(cam.x, cam.y);
 
     // player
     player.draw(cam.x,cam.y);
