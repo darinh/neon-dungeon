@@ -311,15 +311,18 @@ function updateBtns() {
   BTNS.PAUSE.y = pt + 30;
 }
 
+// toCanvas / hitBtn are pure helpers extracted to engine/touch.js (Phase C1e).
+// Host keeps thin wrappers so the canvas + gameScale stay implicit at call
+// sites in this file.
+const _touchHelpers = NEON.touch;
+
 /**
  * @param {number} clientX
  * @param {number} clientY
  * @returns {[number, number]}
  */
 function toCanvas(clientX, clientY) {
-  const r = canvas.getBoundingClientRect();
-  return [(clientX - r.left) * canvas.width / r.width,
-          (clientY - r.top)  * canvas.height / r.height];
+  return _touchHelpers.toCanvas(clientX, clientY, canvas);
 }
 
 /**
@@ -328,10 +331,7 @@ function toCanvas(clientX, clientY) {
  * @param {TouchBtn} btn
  */
 function hitBtn(cx, cy, btn) {
-  const dx=cx-btn.x, dy=cy-btn.y;
-  // Expand hit area on small screens to meet minimum touch target
-  const hitR = Math.max(btn.r, 22 / gameScale);
-  return dx*dx+dy*dy <= hitR*hitR;
+  return _touchHelpers.hitBtn(cx, cy, btn, gameScale);
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -559,10 +559,7 @@ canvas.addEventListener('touchcancel', e => {
 }, {passive:false});
 
 function resetTouch() {
-  touch.joystick.active=false; touch.joystick.id=null; touch.joystick.dx=0; touch.joystick.dy=0;
-  touch.aim.active=false; touch.aim.id=null; touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=false;
-  touch.btnE=null; touch.btnF=null; touch.btnV=null; touch.btnDash=null; touch.btnPause=null;
-  mouse.down=false;
+  _touchHelpers.resetTouch(touch, mouse);
 }
 
 function drawTouchUI() {
