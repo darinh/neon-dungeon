@@ -3239,8 +3239,8 @@ const game = {
     const titleFs = narrow ? 56 : 72;
     // grid lines
     ctx.save(); ctx.globalAlpha=0.05; ctx.strokeStyle='#00f5ff';
-    for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
+    for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.restore();
 
     // title — scale for portrait
@@ -4353,8 +4353,8 @@ const game = {
 
     // grid lines
     ctx.globalAlpha=0.03; ctx.strokeStyle='#ffb700';
-    for (let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for (let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
+    for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.globalAlpha=1;
 
     // Title
