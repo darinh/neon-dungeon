@@ -1401,7 +1401,13 @@ const game = {
           const needsHp = player.hp < player.maxHp;
           const aIsHeal = optA.id === 'MED_PACK' || optA.id === 'NANO_REPAIR';
           const bIsHeal = optB.id === 'MED_PACK' || optB.id === 'NANO_REPAIR';
-          const pick = (needsHp && bIsHeal && !aIsHeal) ? optB : optA;
+          // Heal-priority when wounded: prefer the heal option.
+          // Waste-avoidance when full HP: prefer the non-heal option (a heal
+          // at max HP heals nothing, so the boost/currency/XP is strictly
+          // better). Default: keep optA.
+          let pick = optA;
+          if (needsHp && bIsHeal && !aIsHeal) pick = optB;
+          else if (!needsHp && aIsHeal && !bIsHeal) pick = optB;
           pick.fn(player);
           this.msg(pick.name, pick.colour);
           if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('auto_collect', { item: pick.id, floor: this.floor });

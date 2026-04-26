@@ -3648,6 +3648,30 @@ const UPGRADES = [
      // Mirror kill-credit telemetry: a floating "+N CR" so the player sees it.
      if (typeof spawnDmgText === 'function') spawnDmgText(p.x, p.y, '+' + amt + ' CR', '#ffd700');
    }},
+  // Tactical Drop — random temporary boost. Reuses NEON.boosts (the vendor
+  // boost system) so floor-duration buffs (COMBAT_STIM/REFLEX_BOOSTER/
+  // CRIT_MATRIX/RECON_PING) and instant grants (SHIELD_DRIVER) integrate
+  // automatically with combat math, HUD, save/load. Per "loot philosophy":
+  // temporary effects are explicitly OK as drops — only persistent power
+  // (saws/sentries/regen) is forbidden. Excluded from the vendor pool
+  // (filterVendorPool in src/meta/boosts.js) because vendors already sell
+  // each boost individually at known prices; a flat-priced random pick
+  // would be either strictly worse or an arbitrage loop. Rarity 25 sits
+  // below MED_PACK/CREDIT_CACHE so it stays a "treat" pickup.
+  {id:'TACTICAL_DROP', name:'Tactical Drop', desc:'Random combat boost', colour:'#ff8800', rarity:25, persistent:false,
+   fn: (/** @type {any} */ p)=>{
+     if (typeof NEON === 'undefined' || !NEON.boosts || !NEON.boosts.rollDropBoost) return;
+     const id = NEON.boosts.rollDropBoost();
+     if (!id) return;
+     const b = NEON.boosts.BOOSTS && NEON.boosts.BOOSTS[id];
+     NEON.boosts.applyBoost(p, id);
+     // Activation feedback — burst + audio + floating label so the player
+     // sees WHAT they got (random pick is opaque otherwise).
+     if (typeof spawnParticles === 'function') spawnParticles(p.x, p.y, 'EXPLOSION', (b && b.colour) || '#ff8800', 12);
+     if (typeof audio !== 'undefined' && audio.hackwareCloak) { try { audio.hackwareCloak(); } catch(_){} }
+     if (b && _CG && _CG.msg) _CG.msg(b.icon + ' ' + b.name + ' ACTIVE', b.colour);
+     if (typeof spawnDmgText === 'function' && b) spawnDmgText(p.x, p.y, b.icon + ' ' + b.name, b.colour);
+   }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
    levelDesc: (/** @type {any} */ l)=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
