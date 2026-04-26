@@ -3625,7 +3625,7 @@ const UPGRADES = [
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
   {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.gainXP(50); }},
-  {id:'VOID_SHARD',  name:'Void Shard',   desc:'+1 void bomb charge',  colour:'#aa00ff', rarity:4,  persistent:false,
+  {id:'VOID_SHARD',  name:'Void Shard',   desc:'+1 charge — AOE damage + breaks cracked walls',  colour:'#aa00ff', rarity:4,  persistent:false,
    fn: (/** @type {any} */ p)=>{ p.shards=(p.shards||0)+1; _CG.msg('Got Void Shard! ('+p.shards+')','#aa00ff'); }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
