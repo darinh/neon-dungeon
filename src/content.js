@@ -1939,9 +1939,10 @@ function getStatusEffects(player) {
   if (player.burnTimer > 0) {
     fx.push({ id: 'burn', icon: '🔥', label: player.burnTimer.toFixed(1)+'s', colour: '#ff6600' });
   }
-  // Shock debuff (from enemy attacks)
+  // Shock debuff (from enemy attacks). Show countdown so the player can
+  // anticipate when input control returns — matches the burn timer pattern.
   if (player.shockTimer > 0) {
-    fx.push({ id: 'shocked', icon: '⚡', label: 'SHOCK', colour: '#ffee44' });
+    fx.push({ id: 'shocked', icon: '⚡', label: player.shockTimer.toFixed(1)+'s', colour: '#ffee44' });
   }
   // Energy shield recharging
   if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -1998,6 +1999,15 @@ function getStatusEffects(player) {
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
+  }
+  // Toxic pool slow debuff — 30% movement penalty while standing in toxic.
+  // Mirrors the disruption-field treatment so both ground-hazard slows are
+  // visible to the player. Suppressed during dash since the slow is bypassed.
+  // Use the exact same predicate as the movement gate (entities.js:8362
+  // `dashTimer <= 0`) so the HUD never lies about whether the slow is live —
+  // `!(x > 0)` and `x <= 0` diverge for NaN/undefined dashTimer.
+  if (player.toxicSlowActive && player.dashTimer <= 0) {
+    fx.push({ id: 'toxic-slow', icon: '☣', label: 'TOXIC', colour: '#88ff44' });
   }
   // Holo Decoy active
   if (hackwareEffects.some(f => f.type === 'hologram')) {
