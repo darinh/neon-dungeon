@@ -1360,29 +1360,19 @@ function installModule(slot, moduleId)          { return NEON.save.installModule
  */
 function sellModule(moduleId, refund)           { return NEON.save.sellModule(moduleId, refund); }
 
-// ─── Particles (pooled) ──────────────────────────────────────────────────────
-// particles[] holds ONLY alive slots. _particlePool is the free list of dead
-// slots ready for reuse. spawnParticles() pulls from the pool (or allocates
-// if empty, up to PARTICLE_CAP). updateParticles() uses compact-in-place so
-// splice() never runs in the hot path. Every reused slot has ALL fields
-// re-written in spawnParticles() — stale-field bleed-through is prevented by
-// exhaustive reset, not by the act of reuse.
+// ─── Particles (pooled via engine/particles.js) ─────────────────────────────
+// The pool mechanics + per-frame physics integration live in
+// NEON.particles.createSystem(). This file owns the gameplay vocabulary:
+// the type-keyed magic numbers (EXPLOSION/MUZZLE/SPARK/BLOOD speed, life,
+// size, gravity), the TILE-coordinate translation, and the draw style.
+// Engine handles: pool acquire/release, compact-in-place, vx*dt/vy*dt/grav,
+// life decay, burst scaling under load.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-/** @type {any[]} */ const particles = [];
-/** @type {any[]} */ const _particlePool = [];
-
-function _newParticleSlot() {
-  return { x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, colour:'#fff', type:'', grav:0, alive:false };
-}
-
-function _acquireParticle() {
-  // Prefer reused slots from the pool
-  if (_particlePool.length) return _particlePool.pop();
-  // Cap reached? Drop the spawn request.
-  if (particles.length >= PARTICLE_CAP) return null;
-  return _newParticleSlot();
-}
+const _particleSystem = NEON.particles.createSystem({
+  cap: PARTICLE_CAP,
+  burstScaleThreshold: PARTICLE_BURST_SCALE_THRESHOLD,
+});
 
 /**
  * @param {any} wx
@@ -1394,11 +1384,9 @@ function _acquireParticle() {
 function spawnParticles(wx, wy, type, colour, count) {
   // Burst cap — under extreme stacking, halve new burst sizes to protect the
   // frame budget. Gameplay-visible only in pathological scenarios.
-  if (particles.length > PARTICLE_BURST_SCALE_THRESHOLD) {
-    count = Math.max(1, (count * 0.5) | 0);
-  }
+  count = _particleSystem.scaleBurst(count);
   for (let i=0; i<count; i++) {
-    const p = _acquireParticle();
+    const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
     const a = Math.random()*TWO_PI;
     const spd = type==='EXPLOSION' ? rnd(1,4) : rnd(0.5,3);
@@ -1414,7 +1402,6 @@ function spawnParticles(wx, wy, type, colour, count) {
     p.type = type;
     p.grav = type==='BLOOD' ? 40 : 0;
     p.alive = true;
-    particles.push(p);
   }
 }
 
@@ -1422,23 +1409,31 @@ function spawnParticles(wx, wy, type, colour, count) {
  * @param {any} dt
  */
 function updateParticles(dt) {
-  // Compact-in-place: alive slots shift left, dead slots return to pool.
-  let w = 0;
-  for (let r = 0, n = particles.length; r < n; r++) {
-    const p = particles[r];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += p.grav * dt;
-    p.life -= dt / p.maxLife;
-    if (p.life <= 0) {
-      p.alive = false;
-      _particlePool.push(p);
-    } else {
-      if (w !== r) particles[w] = p;
-      w++;
-    }
+  _particleSystem.update(dt);
+}
+
+// Hoisted to module scope to avoid per-frame closure allocation in the
+// drawParticles hot path. drawParticles writes camera coords here, then
+// calls _particleSystem.forEach(_drawParticleCb) — the engine iterates,
+// the host owns zero per-call allocation.
+let _drawCamX = 0, _drawCamY = 0;
+/** @param {any} p */
+function _drawParticleCb(p) {
+  const sx = p.x - _drawCamX, sy = p.y - _drawCamY;
+  if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, p.life);
+  if (p.type === 'EXPLOSION') {
+    ctx.shadowBlur = 10; ctx.shadowColor = p.colour;
+    ctx.fillStyle = p.colour;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size * (1 - p.life * 0.5 + 0.5), 0, TWO_PI);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = p.colour;
+    ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
   }
-  particles.length = w;
+  ctx.restore();
 }
 
 /**
@@ -1446,33 +1441,20 @@ function updateParticles(dt) {
  * @param {any} camY
  */
 function drawParticles(camX, camY) {
-  for (let i = 0, n = particles.length; i < n; i++) {
-    const p = particles[i];
-    const sx = p.x - camX, sy = p.y - camY;
-    if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, p.life);
-    if (p.type === 'EXPLOSION') {
-      ctx.shadowBlur = 10; ctx.shadowColor = p.colour;
-      ctx.fillStyle = p.colour;
-      ctx.beginPath();
-      ctx.arc(sx, sy, p.size * (1 - p.life * 0.5 + 0.5), 0, TWO_PI);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = p.colour;
-      ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
-    }
-    ctx.restore();
-  }
+  _drawCamX = camX;
+  _drawCamY = camY;
+  _particleSystem.forEach(_drawParticleCb);
 }
 
 // Release every live particle back to the pool (on floor change / game reset).
 function clearParticles() {
-  for (let i = 0, n = particles.length; i < n; i++) {
-    particles[i].alive = false;
-    _particlePool.push(particles[i]);
-  }
-  particles.length = 0;
+  _particleSystem.clear();
+}
+
+// Expose live particle count for telemetry + debug overlay (replaces the
+// pre-extraction `particles.length` global access from src/game.js).
+function particleCount() {
+  return _particleSystem.count;
 }
 
 // ─── Ambient Particles ───────────────────────────────────────────────────────

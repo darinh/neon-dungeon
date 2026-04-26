@@ -1106,7 +1106,7 @@ const game = {
         fps: this.perf ? Math.round(this.perf.fps) : null,
         enemies: enemies.length,
         projectiles: projectiles.length,
-        particles: particles ? particles.length : 0,
+        particles: particleCount(),
       });
     }
     this.hint = null;
@@ -4741,7 +4741,7 @@ function renderPerfHUD() {
   const lines = [
     `FPS ${s.fps.toFixed(0)}  frame ${s.avgFrame.toFixed(1)}ms max ${s.maxFrame.toFixed(1)}`,
     `  upd ${s.avgUpdate.toFixed(2)}  render ${s.avgRender.toFixed(2)}`,
-    `enemies ${enemies.length}  proj ${projectiles.length}  part ${particles.length}`,
+    `enemies ${enemies.length}  proj ${projectiles.length}  part ${particleCount()}`,
     `ft ${floatingTexts.length}  vcore ${vcores.length}  beacon ${beacons.length}`,
     `mine ${mines.length}  cam ${cameras.length}  laser ${lasers.length}`,
     `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,
