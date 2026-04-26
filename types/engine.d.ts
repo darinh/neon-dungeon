@@ -302,6 +302,8 @@ declare global {
     roundRectStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
     /** Fill THEN stroke a rounded rect on a single shared path. */
     roundRectFillStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number, r: number): void;
+    /** Fill THEN stroke a non-rounded rect on a single shared path. For fill-only / stroke-only use native `ctx.fillRect` / `ctx.strokeRect`. */
+    rectFillStroke(ctx: CanvasRenderingContext2D | any, x: number, y: number, w: number, h: number): void;
     /** Sets `ctx.shadowColor` + `ctx.shadowBlur`. */
     setShadow(ctx: CanvasRenderingContext2D | any, color: string, blur: number): void;
     /** Resets `ctx.shadowBlur = 0` (cheaper than `setShadow` for the common reset). */
