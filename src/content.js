@@ -687,6 +687,12 @@ function rollEliteAffix(enemyType) {
   const eligible = ELITE_AFFIX_KEYS.filter(k => {
     if (k === 'PHASING' && enemyType === 'PHANTOM') return false; // already phases
     if (k === 'VOLATILE' && enemyType === 'SEEKER') return false; // seeker already explodes
+    // SHIELDER's directional shield uses the shared shieldHp pool (entities.js
+    // takeDamage / aiShielder). The SHIELDED affix's regen at entities.js:306
+    // would beat the 5s broken-recovery contract by restoring shieldHp at
+    // 2s of no-hits. Disallow the combo to keep the directional shield's
+    // state machine deterministic.
+    if (k === 'SHIELDED' && enemyType === 'SHIELDER') return false;
     return true;
   });
   return eligible[rndInt(0, eligible.length - 1)];
@@ -3307,8 +3313,24 @@ class Projectile {
           }
           // Shield deflection check (skip for piercing weapons)
           if (e.blocksProjectile(this) && !this.piercing) {
-            spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
-            audio.shieldDeflect();
+            // SHIELDER directional shield: deplete shieldHp and start the
+            // broken-recovery timer when it drops to 0. The shield comes
+            // back over a 5s window per the aiShielder tick logic.
+            if (e.type === 'SHIELDER' && e.shieldHp > 0) {
+              e.shieldHp -= this.dmg;
+              if (e.shieldHp <= 0) {
+                e.shieldHp = 0;
+                e.shieldBrokenTimer = 0;
+                spawnParticles(e.x, e.y, 'EXPLOSION', '#66eeff', 12);
+                try { audio.shieldBreak(); } catch (_) { audio.shieldDeflect(); }
+              } else {
+                spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+                audio.shieldDeflect();
+              }
+            } else {
+              spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+              audio.shieldDeflect();
+            }
             this.dead = true; return;
           }
           e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[] });
@@ -3433,7 +3455,22 @@ class Projectile {
         if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x, this.y, e.x, e.y) < 0.6) {
           if (e.blocksProjectile(this) && !this.piercing) {
-            spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+            // Mirror the player-projectile path: SHIELDER takes shield damage
+            // and the shield breaks at 0 HP. (Hacked turrets don't get the
+            // satisfaction-of-breaking sound — keep the deflect for them.)
+            if (e.type === 'SHIELDER' && e.shieldHp > 0) {
+              e.shieldHp -= this.dmg;
+              if (e.shieldHp <= 0) {
+                e.shieldHp = 0;
+                e.shieldBrokenTimer = 0;
+                spawnParticles(e.x, e.y, 'EXPLOSION', '#66eeff', 12);
+                try { audio.shieldBreak(); } catch (_) {}
+              } else {
+                spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+              }
+            } else {
+              spawnParticles(this.x, this.y, 'SPARK', '#66eeff', 6);
+            }
             this.dead = true; return;
           }
           e.takeDamage(this.dmg, { name:'Wall Turret', effects:[], affixes:[] });
