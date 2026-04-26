@@ -146,8 +146,11 @@
   // content.js generateShopItems so vendors no longer sell persistent growth.
   // Also excludes currency drops (CREDIT_CACHE) — buying currency with
   // currency would either be a no-op or, with floor scaling + multipliers, an
-  // arbitrage loop. Kept here (rather than inlined in content.js) so tests
-  // can lock the behaviour down without requiring the browser bundle.
+  // arbitrage loop. TACTICAL_DROP is also vendor-excluded: it grants a random
+  // boost that vendors already sell individually for known prices, so a flat
+  // shopPrice would be either strictly worse (one boost vs choosing) or, at a
+  // discount, an arbitrage loop. Kept here (rather than inlined in content.js)
+  // so tests can lock the behaviour down without requiring the browser bundle.
   /** @param {any} upgrades */
   function filterVendorPool(upgrades) {
     if (!Array.isArray(upgrades)) return [];
@@ -155,8 +158,30 @@
       if (!u) return false;
       if (u.persistent === true) return false;
       if (u.id === 'CREDIT_CACHE') return false;
+      if (u.id === 'TACTICAL_DROP') return false;
       return true;
     });
+  }
+
+  // Curated subset of BOOSTS eligible for the TACTICAL_DROP random pickup.
+  // Excludes NANO_MEDIC (overlaps with the existing MED_PACK heal drop and
+  // would feel like a duplicate roll). Order is stable for testability and
+  // for deterministic rng-seeded weights if we ever add per-boost rarity.
+  const DROP_BOOST_POOL = ['COMBAT_STIM', 'REFLEX_BOOSTER', 'CRIT_MATRIX', 'SHIELD_DRIVER', 'RECON_PING'];
+
+  // Pick a random boost id from the drop pool. Deterministic via the supplied
+  // rng (defaults to Math.random) so tests can lock behaviour. Returns null if
+  // the pool is empty (defensive — shouldn't happen at runtime). Uses
+  // `Math.min(len-1, ...)` rather than `% len` so that a seeded rng emitting
+  // 1.0 (allowed by some PRNGs even though Math.random spec is [0,1)) maps
+  // to the last index, preserving a uniform distribution at the upper bound.
+  /** @param {() => number} [rng] */
+  function rollDropBoost(rng) {
+    const r = (typeof rng === 'function') ? rng : Math.random;
+    const len = DROP_BOOST_POOL.length;
+    if (!len) return null;
+    const idx = Math.min(len - 1, Math.max(0, Math.floor(r() * len)));
+    return DROP_BOOST_POOL[idx];
   }
 
   return {
@@ -170,6 +195,8 @@
     getBoostCritBonus: getBoostCritBonus,
     consumeShieldCharge: consumeShieldCharge,
     getActiveBoostList: getActiveBoostList,
-    filterVendorPool: filterVendorPool
+    filterVendorPool: filterVendorPool,
+    DROP_BOOST_POOL: DROP_BOOST_POOL,
+    rollDropBoost: rollDropBoost
   };
 });

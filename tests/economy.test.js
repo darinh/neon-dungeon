@@ -190,3 +190,74 @@ test('applyBoost with unknown id is a no-op returning false', () => {
 test('applyBoost with null player returns false', () => {
   assert.equal(boosts.applyBoost(null, 'COMBAT_STIM'), false);
 });
+
+// ─── TACTICAL_DROP / drop boost pool ───────────────────────────────────────
+
+test('DROP_BOOST_POOL is the curated subset (excludes NANO_MEDIC to avoid heal overlap)', () => {
+  // Drop pool excludes NANO_MEDIC: the run drop pool already has MED_PACK
+  // (40 HP) and NANO_REPAIR (15 HP). Granting a third heal flavour via
+  // TACTICAL_DROP would feel like a duplicate roll. Other 5 boosts are
+  // mechanically distinct from existing drops.
+  assert.deepEqual(
+    boosts.DROP_BOOST_POOL.slice().sort(),
+    ['COMBAT_STIM', 'CRIT_MATRIX', 'RECON_PING', 'REFLEX_BOOSTER', 'SHIELD_DRIVER']
+  );
+  assert.ok(!boosts.DROP_BOOST_POOL.includes('NANO_MEDIC'));
+});
+
+test('every DROP_BOOST_POOL id resolves to a real BOOSTS entry', () => {
+  // Defends against a typo in DROP_BOOST_POOL silently producing null
+  // pickups at runtime — the rollDropBoost path looks up BOOSTS[id] in the
+  // TACTICAL_DROP fn.
+  for (const id of boosts.DROP_BOOST_POOL) {
+    assert.ok(boosts.BOOSTS[id], `DROP_BOOST_POOL contains ${id} but BOOSTS has no entry for it`);
+    assert.ok(boosts.BOOSTS[id].apply, `BOOSTS.${id} must have an apply() function`);
+  }
+});
+
+test('rollDropBoost returns a member of the pool with default rng', () => {
+  for (let i = 0; i < 50; i++) {
+    const id = boosts.rollDropBoost();
+    assert.ok(boosts.DROP_BOOST_POOL.includes(id), `rolled ${id} not in pool`);
+  }
+});
+
+test('rollDropBoost is deterministic when given a seeded rng', () => {
+  // Lock the determinism contract: callers (tests + telemetry) can pass a
+  // seeded rng and get a reproducible roll. Index = min(len-1, floor(r*len))
+  // so r=1.0 (legal for some PRNGs) maps to the last entry, not the first.
+  assert.equal(boosts.rollDropBoost(() => 0), boosts.DROP_BOOST_POOL[0]);
+  assert.equal(boosts.rollDropBoost(() => 0.5), boosts.DROP_BOOST_POOL[2]);
+  assert.equal(boosts.rollDropBoost(() => 0.999), boosts.DROP_BOOST_POOL[4]);
+  // Edge case: rng emits 1.0 — must clamp to last index, not wrap to 0.
+  assert.equal(boosts.rollDropBoost(() => 1), boosts.DROP_BOOST_POOL[boosts.DROP_BOOST_POOL.length - 1]);
+  // Edge case: rng emits negative (defensive) — must clamp to first index.
+  assert.equal(boosts.rollDropBoost(() => -0.5), boosts.DROP_BOOST_POOL[0]);
+});
+
+test('rollDropBoost via applyBoost end-to-end grants the rolled buff', () => {
+  // Smoke test the full pickup → roll → apply path. Forcing rng=0 hits
+  // COMBAT_STIM which is floor-duration so we can assert the activeBoosts
+  // flag was set.
+  const id = boosts.rollDropBoost(() => 0);
+  assert.equal(id, 'COMBAT_STIM');
+  const p = { maxHp: 100, hp: 100 };
+  assert.equal(boosts.applyBoost(p, id), true);
+  assert.equal(boosts.hasBoost(p, 'COMBAT_STIM'), true);
+  assert.equal(boosts.getBoostDamageMul(p), boosts.BOOSTS.COMBAT_STIM.dmgMul);
+});
+
+test('filterVendorPool excludes TACTICAL_DROP (vendors sell each boost individually)', () => {
+  // Vendors must never sell TACTICAL_DROP: each underlying boost is already
+  // sold individually at a known price (e.g. COMBAT_STIM = 15). A flat-priced
+  // random pick would either be strictly worse than choosing OR, at a
+  // discount, an arbitrage loop ("buy random, hope for the 20-credit one").
+  const pool = [
+    { id: 'MED_PACK', persistent: false },
+    { id: 'TACTICAL_DROP', persistent: false },
+    { id: 'XP_CHIP', persistent: false },
+  ];
+  const filtered = boosts.filterVendorPool(pool);
+  assert.equal(filtered.length, 2);
+  assert.ok(!filtered.some(u => u.id === 'TACTICAL_DROP'));
+});
