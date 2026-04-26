@@ -9,7 +9,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
 const draw = require('../engine/draw.js');
-const { circle, circleStroke, arcStroke, line, roundRect, roundRectStroke, roundRectFillStroke, setShadow, clearShadow } = draw;
+const { circle, circleStroke, arcStroke, line, roundRect, roundRectStroke, roundRectFillStroke, rectFillStroke, setShadow, clearShadow } = draw;
 
 const TAU = Math.PI * 2;
 
@@ -177,9 +177,10 @@ test('module: exports the documented surface', () => {
   assert.equal(typeof draw.roundRect, 'function');
   assert.equal(typeof draw.roundRectStroke, 'function');
   assert.equal(typeof draw.roundRectFillStroke, 'function');
+  assert.equal(typeof draw.rectFillStroke, 'function');
   assert.equal(typeof draw.setShadow, 'function');
   assert.equal(typeof draw.clearShadow, 'function');
-  assert.equal(Object.keys(draw).length, 9);
+  assert.equal(Object.keys(draw).length, 10);
 });
 
 // ---------- roundRect ----------
@@ -223,4 +224,27 @@ test('roundRectFillStroke: passes radius through unchanged (zero allowed)', () =
   const { ctx, calls } = makeFakeCtx();
   roundRectFillStroke(ctx, 1, 2, 3, 4, 0);
   assert.deepEqual(calls[1], ['roundRect', 1, 2, 3, 4, 0]);
+});
+
+// ---------- rectFillStroke ----------
+
+test('rectFillStroke: beginPath → rect → fill → stroke (single path, non-rounded)', () => {
+  const { ctx, calls } = makeFakeCtx();
+  rectFillStroke(ctx, 10, 20, 100, 40);
+  assert.deepEqual(calls, [
+    ['beginPath'],
+    ['rect', 10, 20, 100, 40],
+    ['fill'],
+    ['stroke'],
+  ]);
+  // Single beginPath — fill and stroke share the path.
+  const beginPathCount = calls.filter((c) => c[0] === 'beginPath').length;
+  assert.equal(beginPathCount, 1);
+});
+
+test('rectFillStroke: does NOT call roundRect (uses non-rounded rect)', () => {
+  const { ctx, calls } = makeFakeCtx();
+  rectFillStroke(ctx, 0, 0, 50, 30);
+  const usesRoundRect = calls.some((c) => c[0] === 'roundRect');
+  assert.equal(usesRoundRect, false);
 });

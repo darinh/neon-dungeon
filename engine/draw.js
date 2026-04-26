@@ -39,6 +39,12 @@
 //       Use when the same rect should both fill and stroke without
 //       re-tracing the path.
 //
+//   rectFillStroke(ctx, x, y, w, h)
+//     → fills THEN strokes a non-rounded rect (one beginPath, two paint
+//       ops). Use only when you specifically need fill AND stroke; for
+//       fill-only or stroke-only, prefer the native ctx.fillRect /
+//       ctx.strokeRect (allocation-free and one line).
+//
 //   setShadow(ctx, color, blur)
 //     → sets ctx.shadowColor + ctx.shadowBlur. Use to enable a neon-style
 //       glow before a fill/stroke call.
@@ -53,6 +59,7 @@
 //
 // Node: module.exports = { circle, circleStroke, arcStroke, line,
 //                          roundRect, roundRectStroke, roundRectFillStroke,
+//                          rectFillStroke,
 //                          setShadow, clearShadow }.
 
 (function (root, factory) {
@@ -179,6 +186,26 @@
   }
 
   /**
+   * Fill AND stroke a non-rounded rect in one call. Single beginPath +
+   * rect, then fill, then stroke. Use only when you specifically need both
+   * fill AND stroke on the same rect — for fill-only or stroke-only, prefer
+   * native ctx.fillRect / ctx.strokeRect (one line, allocation-free, no
+   * beginPath needed). Caller sets fillStyle, strokeStyle, lineWidth before
+   * invoking.
+   * @param {CanvasRenderingContext2D | any} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   */
+  function rectFillStroke(ctx, x, y, w, h) {
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /**
    * Enable a neon-style glow. Caller is responsible for clearing it
    * afterward (typically with clearShadow) — leaving shadowBlur set is a
    * common cause of bleed onto unrelated draws.
@@ -203,6 +230,7 @@
   return {
     circle, circleStroke, arcStroke, line,
     roundRect, roundRectStroke, roundRectFillStroke,
+    rectFillStroke,
     setShadow, clearShadow,
   };
 }));
