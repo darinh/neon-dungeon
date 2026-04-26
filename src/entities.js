@@ -1913,7 +1913,10 @@ class Enemy {
       if (this._healTimer <= 0) {
         const target = this._findHealTarget();
         if (target) {
-          const healAmt = Math.round(target.maxHp * 0.15);
+          // 0.075 (was 0.15) so post-HP-double absolute heal output matches
+          // pre-double rates. Player DPS unchanged by HP buff, so leaving
+          // this at 0.15 doubled negation %; reviewers caught this.
+          const healAmt = Math.round(target.maxHp * 0.075);
           target.hp = Math.min(target.maxHp, target.hp + healAmt);
           this._healBeam = { tx: target.x, ty: target.y, t: 0.4 };
           this._healTimer = Math.max(2.0, 3.0 - (_EG.floor || 1) * 0.1) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
@@ -4247,32 +4250,40 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const d=getDiff();
   let /** @type {number} */ hp = 0, /** @type {number} */ atk = 0, /** @type {number} */ spd = 0, /** @type {number} */ xpVal = 0, /** @type {string} */ colour = '#ffffff';
   switch(type) {
-    case 'GUARD':   hp=40;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
-    case 'TURRET':  hp=25;  atk=12; spd=0;   xpVal=15; colour='#ffb700'; break;
-    case 'CRAWLER': hp=20;  atk=6;  spd=4;   xpVal=10; colour='#39ff14'; break;
-    case 'SCORCHER':hp=28;  atk=9;  spd=2.6; xpVal=24; colour='#ff5522'; break;
-    case 'BRUTE':   hp=70;  atk=16; spd=1.6; xpVal=30; colour='#cc3344'; break;
-    case 'PHANTOM': hp=35;  atk=10; spd=2.5; xpVal=30; colour='#cc00ff'; break;
-    case 'DRONE':   hp=15;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
-    case 'SHIELDER':hp=50;  atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
-    case 'GRENADIER':hp=30; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
-    case 'SPLITTER':hp=40;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
-    case 'TELEPORTER':hp=25;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
-    case 'SNIPER':   hp=20;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
-    case 'SUMMONER': hp=35;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
-    case 'HEALER':  hp=25;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
-    case 'CHARGER': hp=45;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
-    case 'LEAPER':  hp=30;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
-    case 'REFLECTOR':hp=40;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
-    case 'DISRUPTOR':hp=30;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
-    case 'WRAITH':  hp=35;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
-    case 'NEXUS':   hp=40;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
-    case 'SIPHON':  hp=30;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
-    case 'GRAVITON':hp=45;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
-    case 'SEEKER':  hp=18;atk=12; spd=3.5; xpVal=12; colour='#ffdd00'; break;
-    case 'PULSER':  hp=20;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
-    case 'MIMIC':   hp=30;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
-    case 'SHARD':   hp=15;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
+    // 2026-04-26: doubled all non-boss base HP per playtester feedback
+    // ("mobs feel like 1-shot kills since the beginning, every floor").
+    // Bosses (SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA/GENESIS) intentionally
+    // unchanged — phase transitions are HP-ratio based and current tuning
+    // makes those fights feel right; doubling would just stretch them.
+    // Difficulty multipliers in content.js DIFFICULTIES still apply on top
+    // (EASY 0.75 / NORMAL 1.0 / HARD 1.5 / NIGHTMARE 2.0), so NIGHTMARE
+    // players now effectively get 4x base. Watch for feedback.
+    case 'GUARD':   hp=80;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
+    case 'TURRET':  hp=50;  atk=12; spd=0;   xpVal=15; colour='#ffb700'; break;
+    case 'CRAWLER': hp=40;  atk=6;  spd=4;   xpVal=10; colour='#39ff14'; break;
+    case 'SCORCHER':hp=56;  atk=9;  spd=2.6; xpVal=24; colour='#ff5522'; break;
+    case 'BRUTE':   hp=140; atk=16; spd=1.6; xpVal=30; colour='#cc3344'; break;
+    case 'PHANTOM': hp=70;  atk=10; spd=2.5; xpVal=30; colour='#cc00ff'; break;
+    case 'DRONE':   hp=30;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
+    case 'SHIELDER':hp=100; atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
+    case 'GRENADIER':hp=60; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
+    case 'SPLITTER':hp=80;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
+    case 'TELEPORTER':hp=50;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
+    case 'SNIPER':   hp=40;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
+    case 'SUMMONER': hp=70;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
+    case 'HEALER':  hp=50;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
+    case 'CHARGER': hp=90;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
+    case 'LEAPER':  hp=60;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
+    case 'REFLECTOR':hp=80;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
+    case 'DISRUPTOR':hp=60;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
+    case 'WRAITH':  hp=70;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
+    case 'NEXUS':   hp=80;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
+    case 'SIPHON':  hp=60;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
+    case 'GRAVITON':hp=90;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
+    case 'SEEKER':  hp=36;atk=12; spd=3.5; xpVal=12; colour='#ffdd00'; break;
+    case 'PULSER':  hp=40;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
+    case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
+    case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
     case 'HIVE':    hp=650; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
@@ -4302,9 +4313,12 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   }
   if (type==='SHARD') { e.isShard=true; e.attackTimer=0.5; }
   if (type==='SHIELDER') {
-    // Breakable directional shield — 25 HP, ~1-3 player shots to break.
+    // Breakable directional shield — sized at 50% of post-scale body HP so
+    // the break-burst rhythm survives the 2026-04-26 mob HP doubling
+    // (previously a flat 25 — now ~50 at floor 1, scales with floor/diff).
     // After break: 3s down + 2s blink-back, then restored to full.
-    e.shieldHp = 25; e.shieldMax = 25; e.shieldBrokenTimer = -1;
+    const shieldHp = Math.max(15, Math.round(e.maxHp * 0.5));
+    e.shieldHp = shieldHp; e.shieldMax = shieldHp; e.shieldBrokenTimer = -1;
   }
   if (type==='TELEPORTER') { e.teleportTimer=0.5; e._materialize=0; e._burstLeft=0; e._warpFade=0; e._warpFromX=x; e._warpFromY=y; }
   if (type==='SNIPER') { e._laserTimer=0; e._laserTarget=null; e._sniperCooldown=1.0; e._repositionTimer=0; e._repositionTarget=null; }
