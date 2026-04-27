@@ -10462,6 +10462,17 @@ class Player {
     // mid-window preserves both timers.
     this.lastStandTimer=0;
     this.lastStandCD=0;
+    // RETRIBUTION perk: reactive ATK buff. retributionTimer counts down a 3s
+    // window of +50% outgoing dmg via effectiveAtk(). Triggered by takeDamage
+    // when actual > 0 (so shield-absorbed / i-frame / ignoreDefense=false-
+    // clamped hits that resolve to 0 don't trigger). dt-based decay alongside
+    // cloakTimer/lastStandTimer so 30/60/120fps expire identically. Self-
+    // clearing — no loadFloor reset needed (countdown is movement-independent,
+    // unlike STRIDE; descend-warp can't inflate the rate). Not serialized
+    // (transient short window, cloakTimer parity); a Continue mid-window
+    // simply forfeits the remainder. Named RETRIBUTION (not VENGEANCE) to
+    // avoid collision with the VENGEANCE retaliator mob (entities.js:303).
+    this.retributionTimer=0;
     this.bountiesCollected=0;   // bounty targets eliminated this run
     // Augments — passive cybernetic implants
     this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
@@ -10569,6 +10580,11 @@ class Player {
         a = Math.round(a * (1 + bonus));
       }
     }
+    // RETRIBUTION perk: +50% ATK while retributionTimer > 0. Multiplicative on
+    // top of any other ATK-mod perks (each gates on independent player state,
+    // so hit-trade builds can stack RETRIBUTION with BERSERKER/PRISTINE/
+    // STRIDE/OVERDRIVE/LAST_STAND for brief windows by design).
+    if (this.perks.RETRIBUTION && this.retributionTimer > 0) a = Math.round(a * 1.5);
     return a;
   }
 
@@ -10719,6 +10735,14 @@ class Player {
     }
     if (this.lastStandTimer > 0) actual = actual * 0.5;
     this.hp=Math.max(0,this.hp-actual);
+    // RETRIBUTION perk: arm/refresh the 3s ATK window on every hit that lands
+    // real damage. Refresh-on-tick is intentional — env DoTs (plasma/toxic/
+    // arc/disruption/frost) keep the window alive while the player is in a
+    // hazard, but the buff is still capped at +50% (no stacking). Placed
+    // AFTER LAST_STAND's ×0.5 so a clutch-window hit that mitigates to a
+    // fractional value still triggers (early-return at ~10699 already gates
+    // on actual <= 0, so absorbed/i-framed/zero-mitigated hits skip this).
+    if (this.perks.RETRIBUTION) this.retributionTimer = 3;
     // UNCHAINED #36 regenerator: took real damage → out of combat timer resets.
     NEON.behavior.resetOutOfCombat(this);
     const src = source || 'Unknown';
@@ -11000,6 +11024,7 @@ class Player {
     // all expire at the same wall-clock time.
     if (this.lastStandTimer > 0) this.lastStandTimer = Math.max(0, this.lastStandTimer - dt);
     if (this.lastStandCD > 0) this.lastStandCD = Math.max(0, this.lastStandCD - dt);
+    if (this.retributionTimer > 0) this.retributionTimer = Math.max(0, this.retributionTimer - dt);
     // UNCHAINED #36 momentum: countdown damage-bonus window.
     NEON.behavior.tickMomentum(this, dt);
     // Tick timed boost windows (HARVEST_SURGE, etc.) — clears the activeBoosts
