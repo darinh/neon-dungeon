@@ -1050,6 +1050,59 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
         audio.voltaicHit();
       }
     }
+    else if (eff === 'recoil') {
+      // "of Recoil" suffix: small wall-aware knockback away from the
+      // player, per-enemy ICD so rapid-fire weapons can't perma-shove
+      // a single target. Skip bosses (no knockback — same precedent as
+      // SHOCK_PULSE / KNOCK_PULSE — boss arenas are designed around
+      // pinned positions); skip disguised mimics (would leak the
+      // ambush via visible displacement before reveal trigger); skip
+      // phased WRAITH/TUNNELLER (defensive — projectile prefilters at
+      // src/content.js:3411 and src/entities.js:9588 already block
+      // them, but if a future damage path skips those filters the
+      // recoil shouldn't displace an intangible mob).
+      if (enemy.isBoss) continue;
+      if (enemy._disguised) continue;
+      if (enemy._wrPhased) continue;
+      const icd = enemy._recoilICD || 0;
+      if (icd > 0) continue;
+      const player = _EG.player;
+      const map = _EG.dungeon && _EG.dungeon.map;
+      if (!player || !map) continue;
+      const dx0 = enemy.x - player.x, dy0 = enemy.y - player.y;
+      const d0 = Math.hypot(dx0, dy0);
+      let nxv, nyv;
+      if (d0 > 0.0001) { nxv = dx0 / d0; nyv = dy0 / d0; }
+      else { nxv = 1; nyv = 0; }
+      // Wall-aware swept knockback. Mirrors triggerShockPulse's pattern
+      // (src/entities.js ~8753): step 0.1 tile, axis-independent
+      // isPassable per step, final combined-tile guard. Single-snap is
+      // unsafe for any displacement >1 tile, but even at 0.4 we sweep
+      // for consistency and to slide along walls instead of stopping
+      // dead at the first obstruction.
+      const KNOCK = 0.4;
+      const STEP = 0.1;
+      const steps = Math.ceil(KNOCK / STEP);
+      let curX = enemy.x, curY = enemy.y;
+      for (let s = 0; s < steps; s++) {
+        const tryX = curX + nxv * STEP;
+        const tryY = curY + nyv * STEP;
+        const fxK = Math.floor(tryX), fyK = Math.floor(curY);
+        const xfK = Math.floor(curX), yfK = Math.floor(tryY);
+        const xOk = fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK]);
+        const yOk = xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK]);
+        if (!xOk && !yOk) break;
+        if (xOk) curX = tryX;
+        if (yOk) curY = tryY;
+      }
+      const finalFx = Math.floor(curX), finalFy = Math.floor(curY);
+      if (finalFx >= 0 && finalFx < MAP_W && finalFy >= 0 && finalFy < MAP_H && isPassable(map[finalFy][finalFx])) {
+        enemy.x = curX;
+        enemy.y = curY;
+      }
+      enemy._recoilICD = 0.35;
+      spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffaa66', 4);
+    }
     // 'explode' is handled in applyOnKill
   }
 }
@@ -1137,6 +1190,8 @@ function tickEnemyStatusEffects(enemy, dt) {
   }
   // Voltaic shock ICD decay
   if (enemy._shockICD > 0) enemy._shockICD -= dt;
+  // Recoil-affix knockback ICD decay (per-enemy, prevents perma-shove)
+  if (enemy._recoilICD > 0) enemy._recoilICD -= dt;
 }
 
 // Tick elite affix behaviours (called per enemy per frame)
@@ -1265,6 +1320,7 @@ class Enemy {
   /** @type {any} */ _repositionTimer;
   /** @type {any} */ _revealTimer;
   /** @type {any} */ _rfAngle;
+  /** @type {any} */ _recoilICD;
   /** @type {any} */ _scStrafeSeed;
   /** @type {any} */ _scTrailTimer;
   /** @type {any} */ _shockICD;
