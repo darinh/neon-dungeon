@@ -155,8 +155,43 @@ function notifyGhostProjectors(deadEnemy) {
   }
 }
 
+// VENGEANCE retaliation hook — called from die() to increment _vgCharges
+// on every alive VENGEANCE in the dead enemy's room. Same exclusion
+// philosophy as PACIFIST quest counter: skip shards / summons / ghosts
+// / bosses / VENGEANCE itself, so only volitional kills count.
+//
+// Multiple VENGEANCEs in the same room each receive their own per-instance
+// charge increment — they're independent counters, not a shared pool.
+// This means a 2-VENGEANCE room presents a coordinated double-rush at
+// the same threshold, telegraphed simultaneously (the player gets two
+// committed dashes to dodge in one window).
+/**
+ * @param {any} deadEnemy
+ */
+function notifyVengeance(deadEnemy) {
+  if (!deadEnemy || !deadEnemy.room) return;
+  if (deadEnemy.type === 'VENGEANCE') return; // a vengeance kill doesn't charge other vengeances
+  if (deadEnemy._ghIsGhost) return;
+  if (deadEnemy.isShard) return;
+  if (deadEnemy._summoned) return;
+  if (deadEnemy.isBoss) return;
+  // Incidental chain deaths (VOLATILE modifier explosions, EXPLOSIVE_KILLS
+  // perk cascades) are not "volitional kills" — the player intended to
+  // kill the trigger, not every adjacent enemy. Same exclusion the combo
+  // counter uses (entities.js:1167). Caught by gpt-5.3-codex on initial
+  // VENGEANCE PR review.
+  if (deadEnemy._volatileKill) return;
+  const inRoom = enemiesByRoom.get(deadEnemy.room);
+  if (!inRoom) return;
+  for (const v of inRoom) {
+    if (!v || v.dead) continue;
+    if (v.type !== 'VENGEANCE') continue;
+    v._vgCharges = (v._vgCharges || 0) + 1;
+  }
+}
+
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -221,6 +256,36 @@ const CRYOPHAGE_DMG_MUL      = 0.45;  // damage = round(atk * 0.45) per tick
 const WARDLING_GUARD_DIST    = 1.0;   // tiles from ward toward player (interception offset)
 const WARDLING_REWARD_PERIOD = 0.5;   // seconds between ward re-acquisition scans (perf)
 const WARDLING_PANIC_MUL     = 1.4;   // speed multiplier when no ward available
+
+// VENGEANCE tuning constants — kill-charged retaliator (floor 7+).
+// Stationary turret (spd=0 base) that accumulates _vgCharges from kills
+// in its room (notifyVengeance hook fires from die()). On reaching
+// VENGEANCE_THRESHOLD charges, transitions to RUSH state: telegraphs
+// for VENGEANCE_TELEGRAPH seconds, then dashes at VENGEANCE_RUSH_SPD
+// toward the player for VENGEANCE_RUSH_DURATION seconds, dealing
+// melee damage on contact. After the rush ends (whether the player
+// was hit or dodged) the charges reset and the cycle restarts.
+//
+// Niche: punishes mass-clearing. The player who blasts through a room
+// triggers a VENGEANCE retaliation; the player who picks targets
+// carefully (or kills the VENGEANCE FIRST) avoids it entirely.
+//
+// Counter-play tiers:
+//   1. Defeat the VENGEANCE before clearing the room (priority kill)
+//   2. During telegraph: dash through (i-frames pass) or move out of
+//      the strike line — strike commits to the locked direction at
+//      telegraph end, so a fast lateral move dodges
+//   3. Don't mass-kill in VENGEANCE rooms (slow play)
+//
+// Charge gating: notifyVengeance skips shards / summons / ghosts / bosses
+// / VENGEANCE itself — only volitional kills count, mirroring the
+// PACIFIST quest exclusion philosophy. Cleared on player room change
+// (no carry-over from previous room's clears).
+const VENGEANCE_THRESHOLD     = 3;     // kills in room before rush triggers
+const VENGEANCE_TELEGRAPH     = 0.8;   // seconds of warning before strike
+const VENGEANCE_RUSH_DURATION = 0.6;   // seconds the strike dash lasts
+const VENGEANCE_RUSH_SPD      = 9;     // tiles/sec during the rush dash
+const VENGEANCE_RANGE         = 10;    // tiles — max LoS distance to commit a rush
 
 // RESONATOR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
@@ -438,7 +503,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -464,7 +529,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -827,6 +892,9 @@ class Enemy {
   /** @type {any} */ _cyTiles;
   /** @type {any} */ _wlWard;
   /** @type {any} */ _wlReacquireTimer;
+  /** @type {any} */ _vgState;
+  /** @type {any} */ _vgCharges;
+  /** @type {any} */ _vgRushTimer;
   /** @type {any} */ _rsState;
   /** @type {any} */ _rsCharge;
   /** @type {any} */ _rsTele;
@@ -1065,6 +1133,7 @@ class Enemy {
     // even if the kill came via cascade-adjacent paths. The hook itself
     // gates on _summoned/_ghIsGhost/isShard/isBoss/type.
     notifyGhostProjectors(this);
+    notifyVengeance(this);
     // SUMMONER cascade: despawn all active summons silently
     if (this._summons) {
       for (const s of this._summons) {
@@ -1336,6 +1405,11 @@ class Enemy {
       // telegraph commits drops the queued patches entirely. Same
       // contract as echoer/prophet/resonator: can't fire after stun ends.
       if (this._cyState === 'aiming') { this._cyState = 'idle'; this._cyAimTimer = 0; this._cyTiles = null; this._cyCooldown = 0.8; }
+      // Cancel VENGEANCE rush on stun — drop telegraph/strike, keep
+      // _vgCharges (one-shot defuse mirrors REAPER's _reHasFrenzied
+      // semantics: charges represent commitment to retaliate, you
+      // can interrupt the swing but not erase the grudge).
+      if (this._vgState === 'rush') { this._vgState = 'idle'; this._vgRushTimer = 0; }
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
       if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
@@ -1438,6 +1512,7 @@ class Enemy {
       case 'PROPHET': this.aiProphet(dt,player,map,d,los); break;
       case 'CRYOPHAGE':this.aiCryophage(dt,player,map,d,los); break;
       case 'WARDLING': this.aiWardling(dt,player,map,d,los); break;
+      case 'VENGEANCE':this.aiVengeance(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2663,6 +2738,85 @@ class Enemy {
       if (d < bestD) { bestD = d; best = e; }
     }
     return best;
+  }
+
+  // ─── VENGEANCE AI — Kill-Charged Retaliator ────────────────────────────
+  // Stationary turret (spd=0 base) that listens for in-room kills via the
+  // notifyVengeance hook and accumulates _vgCharges. On reaching
+  // VENGEANCE_THRESHOLD, transitions to RUSH state — telegraphs for
+  // VENGEANCE_TELEGRAPH seconds, then dashes at VENGEANCE_RUSH_SPD toward
+  // the player for VENGEANCE_RUSH_DURATION seconds, dealing melee damage
+  // on contact. After the rush ends (whether the player was hit or
+  // dodged) the charges and state reset.
+  //
+  // Niche: punishes mass-clearing. Slow play around a VENGEANCE is safe;
+  // hyperblasting a room triggers retaliation. Counter-play: priority-
+  // kill the VENGEANCE, dash through the strike (i-frames), or keep
+  // kills below the threshold by leaving VENGEANCE-adjacent enemies
+  // alive while you handle the rest.
+  //
+  // Hologram-taunt: rush commits to _tx/_ty (canonical, taunt-aware).
+  // A decoy throws the dash off-line — bait reward.
+  //
+  // States:
+  //   idle:  charges accumulate via notifyVengeance. When >= threshold
+  //          AND can target AND in LoS+range, enter rush.
+  //   rush:  _vgRushTimer ticks down. While > VENGEANCE_RUSH_DURATION,
+  //          we're in the TELEGRAPH sub-phase (render warning, hold
+  //          position). Once <= VENGEANCE_RUSH_DURATION, we're in the
+  //          STRIKE sub-phase (move toward _tx/_ty at VENGEANCE_RUSH_SPD,
+  //          melee on contact). On 0, reset.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiVengeance(dt, player, map, d, los) {
+    void los;
+
+    if (this._vgState === 'rush') {
+      this._vgRushTimer -= dt;
+      if (this._vgRushTimer <= 0) {
+        // Rush complete — reset.
+        this._vgState = 'idle';
+        this._vgRushTimer = 0;
+        this._vgCharges = 0;
+        return;
+      }
+      // STRIKE sub-phase: timer below the duration threshold means
+      // telegraph window has expired and we're now committed to moving
+      // toward the player (or decoy via _tx/_ty).
+      const inStrike = this._vgRushTimer <= VENGEANCE_RUSH_DURATION;
+      if (inStrike && this._canTarget()) {
+        // Pass the raw rush speed — moveToward applies modSpeed
+        // (OVERCLOCK +20%) + berserkerMul internally. Pre-multiplying
+        // here would DOUBLE-apply both modifiers (caught by gpt-5.5
+        // on initial PR review). VENGEANCE has spd=0 base so we use a
+        // constant rather than `this.spd * mul`.
+        this.moveToward(this._tx, this._ty, VENGEANCE_RUSH_SPD, dt, map);
+        if (d < 1.2) this.meleeAttack(player);
+      }
+      return;
+    }
+
+    // IDLE: arm rush when charged + can target + in range with LoS.
+    if (this._vgCharges >= VENGEANCE_THRESHOLD && this._canTarget()) {
+      const dLock = dist(this.x, this.y, this._tx, this._ty);
+      if (dLock <= VENGEANCE_RANGE && hasLOS(this.x, this.y, this._tx, this._ty, map)) {
+        this._vgState = 'rush';
+        // Combined timer: telegraph THEN strike. Sub-phase determined
+        // by remaining vs strike-duration in the rush handler above.
+        this._vgRushTimer = VENGEANCE_TELEGRAPH + VENGEANCE_RUSH_DURATION;
+        if (audio.vengeanceCharge) audio.vengeanceCharge();
+        return;
+      }
+    }
+    // No rush available: hold position. Body-contact melee for the
+    // player who runs INTO the turret (rare but consistent with how
+    // every other body-melee mob behaves).
+    if (d < 1.2) this.meleeAttack(player);
   }
 
   // ─── RESONATOR AI — Stationary Sonic-Cone Battery ──────────────────────
@@ -5507,6 +5661,66 @@ class Enemy {
           ctx.restore();
         }
       }
+      // VENGEANCE: charge dots around body (idle + accumulating), then
+      // crimson lock line + body flash during the telegraph sub-phase,
+      // then a streaking trail during the strike sub-phase. Telegraph
+      // direction commits at rush-arm time and is RE-EVALUATED each
+      // frame from _tx/_ty (the strike chases the player; the lock
+      // line just follows the same target so the player can read
+      // intent).
+      if (this.type === 'VENGEANCE') {
+        ctx.save();
+        const charges = this._vgCharges || 0;
+        // Idle: charge pip ring around body. Pips fill clockwise from N.
+        if (this._vgState !== 'rush' && charges > 0) {
+          const pips = Math.min(charges, VENGEANCE_THRESHOLD);
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 3);
+          ctx.shadowBlur = 6 + pulse * 4;
+          ctx.shadowColor = '#cc1166';
+          for (let i = 0; i < pips; i++) {
+            const a = -Math.PI / 2 + (i / VENGEANCE_THRESHOLD) * Math.PI * 2;
+            const px = sx + Math.cos(a) * (sz * 1.2);
+            const py = sy + Math.sin(a) * (sz * 1.2);
+            ctx.globalAlpha = 0.7 + pulse * 0.3;
+            ctx.fillStyle = '#ff3388';
+            NEON.draw.circle(ctx, px, py, 2.5);
+          }
+        }
+        if (this._vgState === 'rush') {
+          const inStrike = this._vgRushTimer <= VENGEANCE_RUSH_DURATION;
+          if (!inStrike) {
+            // TELEGRAPH sub-phase: crimson lock line to current target +
+            // pulsing aura on body. Progress from 0 (telegraph start) to
+            // 1 (telegraph end / strike start).
+            const teleRem = this._vgRushTimer - VENGEANCE_RUSH_DURATION;
+            const progress = 1 - Math.max(0, Math.min(1, teleRem / VENGEANCE_TELEGRAPH));
+            const pulse = 0.5 + 0.5 * Math.sin(progress * 22);
+            const lx = this._tx * TILE - camX;
+            const ly = this._ty * TILE - camY;
+            ctx.globalAlpha = (0.25 + progress * 0.55) * pulse;
+            ctx.strokeStyle = '#ff3388';
+            ctx.shadowBlur = 8 + progress * 14;
+            ctx.shadowColor = '#cc1166';
+            ctx.lineWidth = 1.5 + progress * 2.0;
+            ctx.setLineDash([5, 5 - progress * 4]);
+            NEON.draw.line(ctx, sx, sy, lx, ly);
+            ctx.setLineDash([]);
+            // Body aura
+            ctx.globalAlpha = 0.35 + progress * 0.45;
+            ctx.strokeStyle = '#ff3388';
+            ctx.lineWidth = 1.5 + progress * 1.5;
+            NEON.draw.circleStroke(ctx, sx, sy, sz * (1.2 + progress * 0.5));
+          } else {
+            // STRIKE sub-phase: bright crimson trail/flash on body.
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = '#ff3388';
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = '#cc1166';
+            NEON.draw.circle(ctx, sx, sy, sz * 0.6);
+          }
+        }
+        ctx.restore();
+      }
       // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
       // core during idle/charge; brief flash on the recovery transition.
       // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
@@ -6076,6 +6290,7 @@ const ENEMY_WEIGHTS = {
   GHOST_PROJECTOR: { base: 1, perFloor: 1, minFloor: 8 },  // stationary lens — replays a ghost of the last ghostable kill in its room
   CRYOPHAGE:  { base: 2,  perFloor: 1, minFloor: 6 },  // frost-patch layer — telegraphs a 5-tile + lattice on the player's CURRENT tile (anti-camping)
   WARDLING:   { base: 2,  perFloor: 1, minFloor: 5 },  // fragile bodyguard — physically intercepts player projectiles aimed at its ward (compositional)
+  VENGEANCE:  { base: 1,  perFloor: 1, minFloor: 7 },  // kill-charged retaliator — accumulates charges from in-room kills, commits one telegraphed power-rush at threshold
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6185,6 +6400,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'GHOST_PROJECTOR': hp=50; atk=0; spd=0; xpVal=24; colour='#cc99ff'; break;
     case 'CRYOPHAGE': hp=70; atk=14; spd=1.0; xpVal=28; colour='#88ddff'; break;
     case 'WARDLING':  hp=25; atk=4;  spd=2.5; xpVal=10; colour='#ffcc66'; break;
+    case 'VENGEANCE': hp=80; atk=18; spd=0;   xpVal=24; colour='#cc1166'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -6337,12 +6553,22 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._wlWard = null;
     e._wlReacquireTimer = 0; // forces immediate scan on first update
   }
+  if (type==='VENGEANCE') {
+    // Kill-charged retaliator. Charges accumulate via notifyVengeance
+    // (called from die()) so spawn state is just zeroes. _vgRushTimer
+    // is the COMBINED telegraph + strike timer, decremented in
+    // aiVengeance and used to determine which sub-phase the rush is in
+    // (telegraph if > VENGEANCE_RUSH_DURATION, strike otherwise).
+    e._vgState = 'idle';
+    e._vgCharges = 0;
+    e._vgRushTimer = 0;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
