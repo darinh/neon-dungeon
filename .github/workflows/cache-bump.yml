@@ -10,8 +10,16 @@ name: cache-version-bump
 #   - anything else (fix:, chore:, docs:, refactor:, test:, perf:)  → +1  (patch)
 #
 # Loop guard: skip if the head commit was made by github-actions[bot] OR if the
-# message contains [skip cache-bump]. The bumping commit itself includes
-# [skip cache-bump] so it cannot re-trigger.
+# commit message STARTS with the bot's auto-bump prefix. The two-condition
+# guard is intentional belt-and-suspenders: github.actor catches almost
+# every case, but the startsWith check is robust against a hypothetical
+# scenario where someone pushes the bot's chore branch under a different
+# actor (e.g. a manual recovery). startsWith() avoids the body-text false
+# positive that bit PR #179: an earlier form used contains() against the
+# whole message and silently skipped any merge whose body mentioned the
+# string '[skip cache-bump]' in prose. GHA expressions don't have a
+# split() / first-line function, so we anchor on the bot's commit
+# subject prefix instead.
 
 on:
   push:
@@ -31,7 +39,7 @@ permissions:
 jobs:
   bump:
     runs-on: ubuntu-latest
-    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip cache-bump]') }}
+    if: "${{ github.actor != 'github-actions[bot]' && !startsWith(github.event.head_commit.message, 'chore(cache): bump sw cache') }}"
     steps:
       - uses: actions/checkout@v4
         with:
