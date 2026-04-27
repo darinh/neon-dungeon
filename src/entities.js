@@ -29,6 +29,12 @@ const _EG = new Proxy({}, {
 /** @type {any[]} */ const wallTurrets = [];
 /** @type {any[]} */ const disruptionFields = [];
 /** @type {any[]} */ const gravityWells = [];
+// Frost patches: persistent area-denial tiles laid down by CRYOPHAGE after
+// its telegraph commits. Each patch is { x, y, age, maxAge, tickCd, dead }.
+// Patches survive the mob that placed them (committed denial) and are
+// cleared on floor transition (game.js loadFloor — same place _posHistory
+// is reset). Damage uses dash-through canonical immunity.
+/** @type {any[]} */ const frostPatches = [];
 
 // Phase 2c — room-scoped enemy index. Support structure for Phase 4 broadphase
 // (wall turret acquisition, NEXUS link candidates, room-clear detection, frenzy
@@ -150,7 +156,7 @@ function notifyGhostProjectors(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -177,6 +183,24 @@ const PROPHET_RANGE      = 13;   // tiles — max lock distance (prophet→predi
 const PROPHET_PROJ_SPD   = 11;   // tiles/sec — fast (must arrive at the future point on time)
 const PROPHET_MIN_VEL    = 1.5;  // tiles/sec — minimum player velocity required to lock
 const PROPHET_VEL_CAP    = 10;   // tiles/sec — clamp velocity to avoid dash/teleport blowup
+
+// CRYOPHAGE tuning constants — area-denial frost-patch layer (floor 6+).
+// Cycle: idle (cooldown) → aiming (telegraph 5-tile + pattern centred on the
+// player's CURRENT tile) → patches commit at telegraph end and persist for
+// PATCH_LIFE seconds, dealing damage on entry with per-patch ICD.
+//
+// Niche: punishes camping a position. Distinct from PROPHET (predicted point)
+// and ECHOER (historical position) — CRYOPHAGE freezes wherever you ARE the
+// moment it locks. Counter-play is to leave your tile during the telegraph
+// (1.0s window) and not return through the patches. If trapped, dash through
+// (canonical i-frame pass via isPlayerDamageImmune).
+const CRYOPHAGE_TELEGRAPH    = 1.0;   // seconds the cyan + glyph is visible before patches commit
+const CRYOPHAGE_COOLDOWN     = 3.5;   // seconds between aim attempts (post-commit)
+const CRYOPHAGE_RANGE        = 8;     // tiles — max LoS distance to attempt a lock
+const CRYOPHAGE_PATCH_LIFE   = 2.5;   // seconds each frost patch lingers after commit
+const CRYOPHAGE_PATCH_RADIUS = 0.6;   // tiles — damage radius from each patch centre
+const CRYOPHAGE_TICK_ICD     = 0.5;   // seconds between damage ticks per patch
+const CRYOPHAGE_DMG_MUL      = 0.45;  // damage = round(atk * 0.45) per tick
 
 // RESONATOR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
@@ -394,7 +418,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -420,7 +444,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -775,6 +799,12 @@ class Enemy {
   /** @type {any} */ _prCooldown;
   /** @type {any} */ _prLockX;
   /** @type {any} */ _prLockY;
+  /** @type {any} */ _cyState;
+  /** @type {any} */ _cyAimTimer;
+  /** @type {any} */ _cyCooldown;
+  /** @type {any} */ _cyLockX;
+  /** @type {any} */ _cyLockY;
+  /** @type {any} */ _cyTiles;
   /** @type {any} */ _rsState;
   /** @type {any} */ _rsCharge;
   /** @type {any} */ _rsTele;
@@ -1280,6 +1310,10 @@ class Enemy {
       if (this._ecState === 'aiming') { this._ecState = 'idle'; this._ecAimTimer = 0; this._ecCooldown = 0.8; }
       // Cancel prophet aim on stun — same fairness contract as echoer.
       if (this._prState === 'aiming') { this._prState = 'idle'; this._prAimTimer = 0; this._prCooldown = 0.8; }
+      // Cancel CRYOPHAGE aim on stun — defusing the layer before its
+      // telegraph commits drops the queued patches entirely. Same
+      // contract as echoer/prophet/resonator: can't fire after stun ends.
+      if (this._cyState === 'aiming') { this._cyState = 'idle'; this._cyAimTimer = 0; this._cyTiles = null; this._cyCooldown = 0.8; }
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
       if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
@@ -1380,6 +1414,7 @@ class Enemy {
       case 'PULSER':  this.aiPulser(dt,player,map,d,los); break;
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
       case 'PROPHET': this.aiProphet(dt,player,map,d,los); break;
+      case 'CRYOPHAGE':this.aiCryophage(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2345,6 +2380,150 @@ class Enemy {
       this.patrol(dt, map);
     }
     // else: hold position (menacing idle)
+  }
+
+  // ─── CRYOPHAGE AI — Frost-Patch Layer (area denial) ────────────────────
+  // Slow walker (spd=1.0) that periodically commits to a frost lattice
+  // anchored on the player's CURRENT tile at lock-time. Telegraphs a 5-tile
+  // cyan + glyph (centre tile + 4 cardinals) for CRYOPHAGE_TELEGRAPH
+  // seconds, then commits — patches persist for CRYOPHAGE_PATCH_LIFE
+  // seconds and damage the player on entry (per-patch ICD), with dash
+  // i-frames as the canonical pass-through.
+  //
+  // Niche: punishes camping / standing still. Distinct from PROPHET
+  // (predicted future point) and ECHOER (historical position) — CRYOPHAGE
+  // freezes wherever you ARE the moment it locks. Counter-play is to leave
+  // the centre tile during the telegraph window and route around the
+  // patches afterwards. If trapped, dash through (canonical answer).
+  //
+  // Patches are global (`frostPatches`) and survive the cryophage's death
+  // — committed denial. They are cleared on floor transition (game.js
+  // loadFloor — same place _posHistory resets).
+  //
+  // Hologram-taunt: when a taunt is active, lock the decoy's tile (the
+  // canonical _tx/_ty already reflects this). Patches commit at the
+  // decoy's location, denying the area the player was trying to lure
+  // the cryophage toward — the bait costs you positional control too.
+  //
+  // States:
+  //   idle:   _cyCooldown ticks. When room-gated, in range, and LoS holds,
+  //           snap to the target tile and enter aiming.
+  //   aiming: _cyAimTimer counts down; cyan + telegraph rendered. On 0,
+  //           commit 5 frostPatches and reset to idle with full cooldown.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiCryophage(dt, player, map, d, los) {
+    void d; void los; // recomputed against the lock for fairness
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+    this._cyCooldown = Math.max(0, (this._cyCooldown || 0) - dt * ocMul * bm);
+
+    // Room-gated: only engage when target or player is inside this cryophage's room.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Aiming: telegraph window, then commit patches ──
+    if (this._cyState === 'aiming') {
+      this._cyAimTimer -= dt; // fixed-rate countdown — fairness > tempo
+
+      if (this._cyAimTimer <= 0) {
+        // COMMIT: spawn patches on the pre-filtered tile list locked at
+        // the start of the telegraph window. Each patch is independent
+        // (its own ICD, life, dead flag) so a patch destroyed early
+        // doesn't affect the others. Geometry is FROZEN at lock time —
+        // the player's mid-telegraph movement does NOT relocate the
+        // lattice (that's the whole anti-camping niche).
+        const tiles = /** @type {{x:number,y:number}[]} */ (this._cyTiles || []);
+        for (const t of tiles) {
+          frostPatches.push({
+            x: t.x, y: t.y,
+            age: 0, maxAge: CRYOPHAGE_PATCH_LIFE,
+            tickCd: 0,
+            dmg: Math.max(1, Math.round(this.atk * CRYOPHAGE_DMG_MUL)),
+            dead: false,
+          });
+        }
+        if (audio.cryophageCommit) audio.cryophageCommit();
+        this._cyState = 'idle';
+        this._cyAimTimer = 0;
+        this._cyTiles = null;
+        this._cyCooldown = CRYOPHAGE_COOLDOWN;
+        return;
+      }
+
+      // While aiming, drift slightly toward the player so a kited cryophage
+      // doesn't get stuck on geometry. Half-speed during telegraph.
+      if (this._canTarget()) {
+        const [bx, by] = norm(this._tx - this.x, this._ty - this.y);
+        this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd * 0.5, dt, map);
+      }
+      return;
+    }
+
+    // ── Idle: try to lock when conditions allow ──
+    if (this._cyCooldown <= 0 && inRoom && this._canTarget()) {
+      // Lock onto the player's CURRENT tile (canonical _tx/_ty handles
+      // taunt redirection — the decoy's tile becomes the lock if active).
+      // Snap to tile centres so the + lattice aligns with the grid.
+      const lockX = Math.floor(this._tx) + 0.5;
+      const lockY = Math.floor(this._ty) + 0.5;
+      const dLock = dist(this.x, this.y, lockX, lockY);
+      if (dLock < CRYOPHAGE_RANGE && hasLOS(this.x, this.y, lockX, lockY, map)) {
+        // Pre-filter the lattice tiles ONCE at lock time. The same list
+        // is consumed by both the draw branch (telegraph glyphs) and the
+        // commit block (patch spawn) so the player's "what I see is what
+        // commits" contract holds — wall tiles never render a warning,
+        // and out-of-bounds coordinates never sneak past a missing
+        // map[ty] guard. (Both gaps caught by adversarial review.)
+        const candidates = [
+          { x: lockX,     y: lockY     },
+          { x: lockX + 1, y: lockY     },
+          { x: lockX - 1, y: lockY     },
+          { x: lockX,     y: lockY + 1 },
+          { x: lockX,     y: lockY - 1 },
+        ];
+        /** @type {{x:number,y:number}[]} */
+        const tiles = [];
+        for (const t of candidates) {
+          const tx = Math.floor(t.x), ty = Math.floor(t.y);
+          // Bounds check FIRST — rejects negative or beyond-extent tiles.
+          if (!map || ty < 0 || tx < 0 || !map[ty] || map[ty][tx] === undefined) continue;
+          if (typeof isPassable === 'function' && !isPassable(map[ty][tx])) continue;
+          tiles.push(t);
+        }
+        // If everything filtered (e.g. cryophage lined up against a wall
+        // corner with the player on a non-existent tile), abort the lock
+        // entirely — telegraphing zero patches just wastes the cooldown
+        // and confuses the player.
+        if (tiles.length === 0) {
+          this._cyCooldown = 0.6; // short retry — try again soon
+          return;
+        }
+        this._cyState = 'aiming';
+        this._cyAimTimer = CRYOPHAGE_TELEGRAPH;
+        this._cyLockX = lockX;
+        this._cyLockY = lockY;
+        this._cyTiles = tiles;
+        if (audio.cryophageLock) audio.cryophageLock();
+        return;
+      }
+    }
+
+    // No lock available: chase the player at base speed (out of range or
+    // no LoS — the slow walker has to close the gap before it can lock).
+    if (inRoom && this._canTarget()) {
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
+    } else if (!inRoom) {
+      this.patrol(dt, map);
+    }
   }
 
   // ─── RESONATOR AI — Stationary Sonic-Cone Battery ──────────────────────
@@ -5109,6 +5288,57 @@ class Enemy {
         }
         ctx.restore();
       }
+      // CRYOPHAGE: cyan + lattice telegraph during aiming; faint icy halo
+      // during idle. The 5-tile lattice geometry mirrors the patch commit
+      // in aiCryophage exactly (centre + 4 cardinals at the locked tile),
+      // so what the player SEES is exactly where the patches WILL spawn.
+      if (this.type === 'CRYOPHAGE') {
+        ctx.save();
+        if (this._cyState === 'aiming' && this._cyAimTimer > 0) {
+          const progress = 1 - Math.max(0, Math.min(1, this._cyAimTimer / CRYOPHAGE_TELEGRAPH));
+          // Render the SAME pre-filtered tile list the commit will use,
+          // so wall/OOB tiles never display a phantom warning that
+          // produces no patch. (Telegraph/commit parity caught by codex
+          // + opus on initial review.)
+          const tiles = /** @type {{x:number,y:number}[]} */ (this._cyTiles || []);
+          const cx = this._cyLockX, cy = this._cyLockY;
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 18);
+          // Per-tile cyan square + plus glyph
+          for (const t of tiles) {
+            const tx = t.x * TILE - camX;
+            const ty = t.y * TILE - camY;
+            const r = TILE * 0.42;
+            ctx.globalAlpha = (0.18 + progress * 0.45) * pulse;
+            ctx.fillStyle = '#88ddff';
+            ctx.shadowBlur = 4 + progress * 8;
+            ctx.shadowColor = '#88ddff';
+            ctx.fillRect(tx - r, ty - r, r * 2, r * 2);
+            ctx.globalAlpha = 0.4 + progress * 0.5;
+            ctx.strokeStyle = '#cceeff';
+            ctx.lineWidth = 1.2 + progress * 1.0;
+            ctx.strokeRect(tx - r, ty - r, r * 2, r * 2);
+          }
+          // Faint connecting lines from cryophage to centre tile so the
+          // player can trace which lock belongs to which mob (matters in
+          // crowded rooms with multiple cryophages telegraphing at once).
+          ctx.globalAlpha = 0.25 + progress * 0.4;
+          ctx.strokeStyle = '#88ddff';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 5]);
+          NEON.draw.line(ctx, sx, sy, cx * TILE - camX, cy * TILE - camY);
+          ctx.setLineDash([]);
+        } else {
+          // Idle: faint icy halo on the body
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.15 + 0.1 * pulse;
+          ctx.strokeStyle = '#88ddff';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#88ddff';
+          ctx.lineWidth = 1;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        }
+        ctx.restore();
+      }
       // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
       // core during idle/charge; brief flash on the recovery transition.
       // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
@@ -5676,6 +5906,7 @@ const ENEMY_WEIGHTS = {
   MIRROR:     { base: 2,  perFloor: 1, minFloor: 8 },  // stationary mimic battery — fires single shot using player's last-fired kinematics
   REAPER:     { base: 2,  perFloor: 2, minFloor: 7 },  // aggression-punishing chaser — frenzy at 5 kills in current room
   GHOST_PROJECTOR: { base: 1, perFloor: 1, minFloor: 8 },  // stationary lens — replays a ghost of the last ghostable kill in its room
+  CRYOPHAGE:  { base: 2,  perFloor: 1, minFloor: 6 },  // frost-patch layer — telegraphs a 5-tile + lattice on the player's CURRENT tile (anti-camping)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -5783,6 +6014,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
     case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
     case 'GHOST_PROJECTOR': hp=50; atk=0; spd=0; xpVal=24; colour='#cc99ff'; break;
+    case 'CRYOPHAGE': hp=70; atk=14; spd=1.0; xpVal=28; colour='#88ddff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -5917,12 +6149,23 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._gpPendingDelay = 0;
     e._gpActiveGhost  = null;
   }
+  if (type==='CRYOPHAGE') {
+    // Frost-patch layer. Stagger initial cooldown so a clustered spawn
+    // doesn't telegraph in unison. First lock attempt ~0.8–2.0s after
+    // spawn — slower than ECHOER/PROPHET because the patches commit a
+    // dense area-denial footprint and need a beat for the player to
+    // read the room.
+    e._cyState='idle';
+    e._cyAimTimer=0;
+    e._cyCooldown=0.8+Math.random()*1.2;
+    e._cyLockX=x; e._cyLockY=y;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -7629,6 +7872,86 @@ function drawDisruptionFields(camX, camY) {
       ctx.lineTo(sx + Math.cos(a) * lr, sy + Math.sin(a) * lr);
       ctx.stroke();
     }
+
+    ctx.restore();
+  }
+}
+
+// ─── Frost Patches (CRYOPHAGE area-denial tiles) ──────────────────────────────
+// Each patch is { x, y, age, maxAge, tickCd, dmg, dead }.
+// Lifecycle: spawned at telegraph commit in aiCryophage; ticks down per
+// frame; deals damage when the player overlaps and per-patch ICD is ready.
+// Dash i-frames pass through (canonical via isPlayerDamageImmune).
+// Cleared on floor transition by game.js loadFloor.
+/**
+ * @param {any} [dt]
+ * @param {any} [player]
+ */
+function updateFrostPatches(dt, player) {
+  for (let i = frostPatches.length - 1; i >= 0; i--) {
+    const f = frostPatches[i];
+    f.age += dt;
+    if (f.dead || f.age >= f.maxAge) {
+      f.dead = true;
+      frostPatches.splice(i, 1);
+      continue;
+    }
+    f.tickCd = Math.max(0, f.tickCd - dt);
+    if (dist(player.x, player.y, f.x, f.y) < CRYOPHAGE_PATCH_RADIUS && !isPlayerDamageImmune()) {
+      if (f.tickCd <= 0) {
+        player.takeDamage(f.dmg, 'Frost Patch', {
+          ignoreInvincible: true,
+          ignoreDefense: true,
+          skipHitInvincible: true,
+          skipHitEffects: true,
+          skipReactiveArmor: true,
+        });
+        f.tickCd = CRYOPHAGE_TICK_ICD;
+        spawnParticles(player.x, player.y, 'SPARK', '#88ddff', 3);
+      }
+    }
+  }
+}
+
+/**
+ * @param {any} [camX]
+ * @param {any} [camY]
+ */
+function drawFrostPatches(camX, camY) {
+  for (const f of frostPatches) {
+    if (f.dead) continue;
+    // FOV-cull per patch — frozen tiles outside the player's vision
+    // shouldn't render (they still tick if entered, but the player
+    // would never see the warning before stepping in).
+    const tx = Math.floor(f.x), ty = Math.floor(f.y);
+    if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
+    const sx = f.x * TILE - camX, sy = f.y * TILE - camY;
+    const life = 1 - (f.age / f.maxAge);
+    const pulse = 0.5 + 0.3 * Math.sin(f.age * 6);
+    const r = TILE * 0.42;
+
+    ctx.save();
+    // Frosted tile fill
+    ctx.globalAlpha = life * (0.20 + pulse * 0.10);
+    ctx.fillStyle = '#88ddff';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#cceeff';
+    ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+
+    // Crystalline edge ring
+    ctx.globalAlpha = life * (0.5 + pulse * 0.3);
+    ctx.strokeStyle = '#cceeff';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
+
+    // Inner crystal lattice (4 short spokes from centre)
+    ctx.globalAlpha = life * 0.4;
+    ctx.strokeStyle = '#aaeeff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(sx - r * 0.6, sy); ctx.lineTo(sx + r * 0.6, sy);
+    ctx.moveTo(sx, sy - r * 0.6); ctx.lineTo(sx, sy + r * 0.6);
+    ctx.stroke();
 
     ctx.restore();
   }

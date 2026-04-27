@@ -1175,6 +1175,23 @@ const audio = (() => {
       noise(0.08, t + 0.01, 0.08, 3200, bus);
       osc('sine', 140, 70, 0.10, t, 0.10);
     },
+    cryophageLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Crystalline ping — a glassy two-tone descending sine pair. Cooler
+      // and shorter than echoerLock so the player can distinguish lattice
+      // commits from sonar locks in mixed encounters.
+      const bus = wetDry(1, 0.6, 0.3);
+      osc('sine', 1100, 880, 0.06, t, 0.16, bus);
+      osc('sine', 1480, 1180, 0.04, t + 0.04, 0.12, bus);
+    },
+    cryophageCommit() {
+      const c = getCtx(); const t = c.currentTime;
+      // Frosted shatter — short noise burst + low triangle thunk so the
+      // commit cue is unmistakable even without the visual flash.
+      const bus = wetDry(1, 0.4, 0.4);
+      noise(0.10, t, 0.12, 4200, bus);
+      osc('triangle', 180, 120, 0.10, t + 0.02, 0.14);
+    },
     resonatorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Rising harmonic chord — the resonator winding up its cone. Two

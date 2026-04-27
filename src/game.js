@@ -260,6 +260,11 @@ const game = {
     // floor must not be able to mimic a shot the player fired on the
     // previous floor before they have fired anything on the current floor.
     if (this.player._shotHistory) this.player._shotHistory.length = 0;
+    // Clear frost patches on floor transition — patches from a CRYOPHAGE
+    // on the previous floor would otherwise persist as invisible damage
+    // tiles on the new floor's coordinates (same rationale as the
+    // history rings above: cross-floor leak of room-local state).
+    frostPatches.length = 0;
     // Reset per-room kill counter on floor transition: the new floor's room
     // layout has nothing to do with the previous floor's kills, and the
     // player's _currentRoom reference is stale (rooms array is new). The
@@ -1344,6 +1349,7 @@ const game = {
 
     // update disruption fields (must run before player.update next frame for flag)
     updateDisruptionFields(dt, player);
+    updateFrostPatches(dt, player);
 
     // update gravity wells
     updateGravityWells(dt);
@@ -3620,6 +3626,7 @@ const game = {
     // hazard zones (ground effects — below items/enemies)
     drawHazardZones(cam.x, cam.y);
     drawDisruptionFields(cam.x, cam.y);
+    drawFrostPatches(cam.x, cam.y);
     drawGravityWells(cam.x, cam.y);
     drawHackwareEffects(cam.x, cam.y);
 
@@ -4931,7 +4938,7 @@ function renderPerfHUD() {
     `enemies ${enemies.length}  proj ${projectiles.length}  part ${particleCount()}`,
     `ft ${floatingTexts.length}  vcore ${vcores.length}  beacon ${beacons.length}`,
     `mine ${mines.length}  cam ${cameras.length}  laser ${lasers.length}`,
-    `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,
+    `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}  fp ${frostPatches.length}`,
     `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
   ];
   // Subsystem timing — show each tracked label with avg/max ms over the last
