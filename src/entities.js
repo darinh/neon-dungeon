@@ -10899,6 +10899,29 @@ class Player {
       _EG.msg('⚔ LAST STAND', '#ffcc00');
     }
     if (this.lastStandTimer > 0) actual = actual * 0.5;
+    // BULWARK perk: passive −15% damage taken while at or above 75% HP. The
+    // defensive counterpart to PRISTINE (+25% ATK at >=90% HP). HP threshold
+    // is checked against pre-deduction HP (this.hp is still the value before
+    // we subtract `actual`), mirroring PRISTINE's effectiveAtk gate — so the
+    // hit that crosses BELOW 75% still gets the reduction. Pure multiplier
+    // with NO Math.max(1, …) clamp, mirroring LAST_STAND ×0.5 — env DoT
+    // (Plasma/Toxic/Arc/Disruption/Frost) passes fractional sub-1 ticks with
+    // ignoreDefense:true, and a max(1) clamp would inflate ~0.04-0.13/frame
+    // to ~1/frame ≈ 60 DPS instakill. Keeping it as a pure multiplier
+    // preserves the DoT shape AND lets BULWARK reduce all damage sources
+    // (direct + env) consistent with "high HP = tougher" intuition. Player
+    // hp is fractional throughout (game.js Math.floor at score calc, hp+dt
+    // regen accumulates fractions) so the clampless reduction is safe.
+    // Placed AFTER all amp blocks (CORROSIVE/FRAGILE/HUNTER/GLASS_CANNON)
+    // and AFTER LAST_STAND ×0.5 — order is mathematically commutative with
+    // LAST_STAND (both pure multipliers), but conceptually BULWARK applies
+    // last as the "final passive defense layer". With both active the
+    // combined factor is 0.5 × 0.85 = 0.425, but BULWARK gates at >=75% HP
+    // and LAST_STAND triggers at <=10% HP — mutually exclusive in normal
+    // play, so the simultaneity is theoretical only.
+    if (this.perks.BULWARK && this.maxHp > 0 && this.hp / this.maxHp >= 0.75) {
+      actual = actual * 0.85;
+    }
     this.hp=Math.max(0,this.hp-actual);
     // RETRIBUTION perk: arm/refresh the 3s ATK window on every hit that lands
     // real damage. Refresh-on-tick is intentional — env DoTs (plasma/toxic/
