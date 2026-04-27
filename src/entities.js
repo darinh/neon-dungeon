@@ -8008,6 +8008,13 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (!isBoss) {
     if (_EG.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
     if (_EG.modifier === 'FORTIFIED') hp = Math.round(hp * 1.4);
+    // FRAGILE: glass-cannon protocol — non-boss enemies have 0.55x HP but
+    // damage to player is amplified 1.3x in player.takeDamage. Both sides
+    // get more lethal: fast clears reward aggression, single mistakes cost
+    // more. Bosses are exempt (HP-ratio phase transitions are tuned tight;
+    // see GULPER stat-row comment ~7949 about boss HP being intentionally
+    // unscaled).
+    if (_EG.modifier === 'FRAGILE')   hp = Math.round(hp * 0.55);
   }
   const e=new Enemy(x,y,
     Math.round(hp*scale*d.enemyHp), Math.round(atk*scale*d.enemyAtk),
@@ -10532,6 +10539,20 @@ class Player {
       actual = Math.max(1, dmg - this.def - titaniumReduction);
     }
     if (_EG.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
+    // FRAGILE: glass-cannon protocol — incoming damage to player amplified.
+    // Mirrors the spawnEnemy 0.55x HP nerf for non-boss enemies (~line 8014):
+    // both sides become more lethal. Applied AFTER def/CORROSIVE so it
+    // multiplies post-mitigation damage. Gated on `!options.ignoreDefense`
+    // (mirrors CORROSIVE's gate above) so fractional environmental DoT
+    // ticks (Plasma burnDps*dt, Toxic Pool toxDps*dt, Arc Grid, Disruption
+    // Field, Frost Patch — all of which set ignoreDefense:true and pass
+    // sub-1 fractional damage per frame) are NOT routed through here.
+    // Without that gate, Math.max(1, ...) would round 0.13/frame burns up
+    // to 1/frame = ~60 DPS at 60 FPS instead of ~10 DPS. Caught in
+    // adversarial review by gpt-5.3-codex.
+    if (_EG.modifier === 'FRAGILE' && !options.ignoreDefense) {
+      actual = Math.max(1, Math.round(actual * 1.3));
+    }
     if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
     // UNCHAINED #36 regenerator: took real damage → out of combat timer resets.
