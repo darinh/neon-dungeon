@@ -3166,6 +3166,14 @@ const game = {
   _settingsSel: 0,
   _settingsCapture: null,  // action name being rebound, or null
   _settingsDrag: null,     // 'sfx' or 'music' while dragging a slider
+  // Two-tap confirmation for [RESET TO DEFAULTS]. First Enter/click on
+  // the row arms the timestamp (performance.now()); a second
+  // Enter/click within RESET_CONFIRM_WINDOW_MS commits the reset. Any
+  // other action — navigating to a different row, clicking elsewhere,
+  // pressing Escape, or just letting the window expire — clears it.
+  // Prevents a single fat-finger from wiping all keybinds + toggles
+  // (which `settings.resetAll()` does irreversibly).
+  _settingsResetConfirm: 0,
 
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
@@ -3173,6 +3181,14 @@ const game = {
     const CTRL_START = 8;     // row index where key rebind rows begin (6 toggles)
     // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
+    const RESET_CONFIRM_WINDOW_MS = 3000;
+    // Auto-expire a stale reset confirmation. Without this, a player who
+    // armed the confirmation 30 seconds ago and walks away returns to a
+    // settings menu where the very next Enter wipes their config.
+    if (this._settingsResetConfirm > 0
+        && (performance.now() - this._settingsResetConfirm) > RESET_CONFIRM_WINDOW_MS) {
+      this._settingsResetConfirm = 0;
+    }
 
     // Key capture mode — wait for next keydown
     if (this._settingsCapture) {
@@ -3215,9 +3231,12 @@ const game = {
     }
     if (this._settingsDrag && !mouse.down) { this._settingsDrag = null; }
 
-    // Navigation
+    // Navigation. Any move clears a pending reset confirmation — the
+    // user wandered off the row, so the arming intent is gone.
+    const prevSel = this._settingsSel;
     if (jp(ALT_KEYS.up) || jp(km('up')))     this._settingsSel = (this._settingsSel - 1 + totalRows) % totalRows;
     if (jp(ALT_KEYS.down) || jp(km('down')))  this._settingsSel = (this._settingsSel + 1) % totalRows;
+    if (this._settingsSel !== prevSel) this._settingsResetConfirm = 0;
 
     const sel = this._settingsSel;
 
@@ -3270,6 +3289,7 @@ const game = {
           else audio.setMusicVolume(val);
           this._settingsDrag = i === 0 ? 'sfx' : 'music';
           this._settingsSel = i;
+          this._settingsResetConfirm = 0;
           settings.save();
           audio.menuSelect();
           return;
@@ -3280,6 +3300,7 @@ const game = {
         const ry = startY + (TOGGLE_START + i) * rowH;
         if (my >= ry - 8 && my <= ry + 14) {
           this._settingsSel = TOGGLE_START + i;
+          this._settingsResetConfirm = 0;
           const tk = toggleKeys[i];
           if (tk) {
             /** @type {any} */
@@ -3296,38 +3317,61 @@ const game = {
         const ry = startY + (CTRL_START + i) * rowH;
         if (my >= ry - 8 && my <= ry + 14) {
           this._settingsSel = CTRL_START + i;
+          this._settingsResetConfirm = 0;
           this._settingsCapture = actions[i];
           audio.menuSelect();
           return;
         }
       }
-      // Reset defaults row
+      // Reset defaults row — two-tap confirmation. First click within
+      // the window arms; second click commits. Click anywhere else or
+      // wait the window out → cancelled.
       const resetY = startY + (CTRL_START + actions.length) * rowH;
       if (my >= resetY - 8 && my <= resetY + 14) {
-        settings.resetAll();
-        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+        this._settingsSel = CTRL_START + actions.length;
+        if (this._settingsResetConfirm > 0
+            && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
+          settings.resetAll();
+          audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+          this._settingsResetConfirm = 0;
+        } else {
+          this._settingsResetConfirm = performance.now();
+        }
         audio.menuSelect();
         return;
       }
       // Back row
       const backY = startY + (CTRL_START + actions.length + 1) * rowH;
       if (my >= backY - 8 && my <= backY + 14) {
+        this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
         return;
       }
+      // Click landed outside any actionable row — cancel a pending
+      // reset arming so the next stray click on the row won't commit.
+      this._settingsResetConfirm = 0;
     }
 
     // Enter on selected row (toggles handled above)
     if (jp('Enter') || jp(km('shoot'))) {
       if (sel >= CTRL_START && sel < CTRL_START + actions.length) {
+        this._settingsResetConfirm = 0;
         this._settingsCapture = actions[sel - CTRL_START];
         audio.menuSelect();
       } else if (sel === CTRL_START + actions.length) {
-        settings.resetAll();
-        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+        // Two-tap confirmation, keyboard path. Mirrors the mouse path.
+        if (this._settingsResetConfirm > 0
+            && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
+          settings.resetAll();
+          audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+          this._settingsResetConfirm = 0;
+        } else {
+          this._settingsResetConfirm = performance.now();
+        }
         audio.menuSelect();
       } else if (sel === totalRows - 1) {
+        this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
       }
@@ -3335,6 +3379,7 @@ const game = {
 
     // Escape goes back
     if (jp('Escape') || jp('KeyQ')) {
+      this._settingsResetConfirm = 0;
       audio.menuSelect();
       this.setState(this._settingsFrom || 'MENU');
     }
@@ -3441,12 +3486,26 @@ const game = {
       }
     }
 
-    // Reset defaults row
+    // Reset defaults row — when armed, switches to a red blinking
+    // "PRESS AGAIN TO CONFIRM" label so the player has unmistakable
+    // feedback that another tap will wipe their config.
     const resetIdx = CTRL_START + actions.length;
     const resetY = startY + resetIdx * rowH;
     ctx.textAlign = 'center';
-    ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
-    ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
+    const RESET_CONFIRM_WINDOW_MS = 3000;
+    const armed = this._settingsResetConfirm > 0
+      && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS;
+    if (armed) {
+      const blink = Math.sin(performance.now() / 120) > 0 ? 1 : 0.4;
+      ctx.save();
+      ctx.globalAlpha = blink;
+      ctx.fillStyle = '#ff4466';
+      ctx.fillText('[ PRESS AGAIN TO CONFIRM ]', W/2, resetY);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
+      ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
+    }
 
     // Back row
     const backIdx = resetIdx + 1;
