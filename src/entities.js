@@ -10748,6 +10748,21 @@ class Player {
     } else {
       const titaniumReduction = hasAugment('TITANIUM_PLATING') ? 1 : 0;
       actual = Math.max(1, dmg - this.def - titaniumReduction);
+      // KINETIC_DAMPER augment: −20% incoming direct-hit damage applied AFTER
+      // TITANIUM_PLATING flat reduction (so the two compose as a coherent
+      // armor stack: flat first, then % on the remainder), and BEFORE
+      // CORROSIVE/FRAGILE/HUNTER floor modifiers (so those still amplify
+      // post-mitigation damage as designed). Gated by the !options.ignoreDefense
+      // branch we're already in — env DoTs (Plasma burnDps*dt, Toxic toxDps*dt,
+      // Arc Grid, Disruption Field, Frost Patch, Proximity Mine ignoreDefense
+      // path, CRAWLER burn DoT) bypass this entirely; those are BIOFILTER's
+      // lane to keep the two defensive augments cleanly separated and avoid
+      // double-stacking on env tile damage. Math.max(1, ...) preserves the
+      // direct-hit minimum-1 contract (a 1-dmg hit stays 1 dmg). Round (not
+      // floor) keeps the rounding rule consistent with FRAGILE/HUNTER above.
+      if (hasAugment('KINETIC_DAMPER')) {
+        actual = Math.max(1, Math.round(actual * 0.8));
+      }
     }
     if (_EG.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
     if (_EG.modifier === 'FRAGILE' && !options.ignoreDefense) {
