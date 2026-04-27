@@ -1104,7 +1104,13 @@ function drawHUD(player) {
     }
     ctx.restore();
   }
-  if (player.levelFlash>0) {
+  // The cyan full-screen LEVEL UP flash is a high-contrast, high-area
+  // overlay that can be unpleasant for users with vestibular sensitivity
+  // or photosensitive epilepsy. The new `reducedMotion` setting (off by
+  // default) suppresses both the flash AND the centered "LEVEL UP!"
+  // text. The level-up still fires gameplay-wise (perks, audio, HUD
+  // counter) — only the screen-filling visual is gated.
+  if (player.levelFlash > 0 && !settings.reducedMotion) {
     ctx.save();
     ctx.globalAlpha=Math.min(0.5,player.levelFlash*0.35);
     ctx.fillStyle='#00f5ff';

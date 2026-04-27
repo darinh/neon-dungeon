@@ -3170,7 +3170,7 @@ const game = {
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 7;     // row index where key rebind rows begin (5 toggles)
+    const CTRL_START = 8;     // row index where key rebind rows begin (6 toggles)
     // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
 
@@ -3237,7 +3237,7 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
@@ -3344,7 +3344,7 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 7;  // matches updateSettings — 5 toggles
+    const CTRL_START = 8;  // matches updateSettings — 6 toggles
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -3391,8 +3391,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST', 'CRT MODE'];
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST', 'CRT MODE', 'REDUCED MOTION'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;

@@ -77,16 +77,17 @@ test('crtMode key wired in BOTH updateSettings and renderSettings', () => {
     `crtMode must appear in BOTH toggleKeys arrays (updateSettings + renderSettings); found ${occurrences ? occurrences.length : 0}`);
 });
 
-test('CTRL_START bumped to 7 to make room for the 5th toggle', () => {
+test('CTRL_START sits below the toggle rows (was 7 with 5 toggles, now 8 with 6 — REDUCED MOTION added)', () => {
   // CTRL_START is the row index where key-rebind rows begin. With 2
-  // sliders + 5 toggles it must be 7. If left at 6, the AIM ASSIST
-  // and CRT MODE rows would overlap the first control rebind row,
-  // making both unclickable on touch and producing visual stomping.
+  // sliders + N toggles it must equal 2 + N. Adding a toggle without
+  // bumping this constant overlaps the new row onto the first key-
+  // rebind row — both unclickable on touch and visually stomped.
   // It appears twice — updateSettings + renderSettings — and both
-  // must agree.
-  const matches = GAME.match(/CTRL_START\s*=\s*7/g);
+  // must agree. This test now floors the value at 8 (6 toggles); add
+  // 1 each time a new toggle is added.
+  const matches = GAME.match(/CTRL_START\s*=\s*8/g);
   assert.ok(matches && matches.length === 2,
-    `CTRL_START must be 7 in BOTH updateSettings and renderSettings; found ${matches ? matches.length : 0}`);
+    `CTRL_START must be 8 in BOTH updateSettings and renderSettings; found ${matches ? matches.length : 0}`);
 });
 
 // ─── Render pipeline integration ───────────────────────────────────────
