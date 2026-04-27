@@ -1103,6 +1103,20 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       enemy._recoilICD = 0.35;
       spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffaa66', 4);
     }
+    else if (eff === 'execute') {
+      // EXECUTE 'of Execution' suffix — finisher: any hit that leaves a
+      // non-boss enemy at or below 20% HP kills outright.
+      if (enemy.isBoss) continue;
+      if (enemy._disguised) continue;
+      if (enemy._wrPhased) continue;
+      if (enemy.dead || enemy.hp <= 0) continue;
+      if (!(enemy.maxHp > 0)) continue;
+      if ((enemy.hp / enemy.maxHp) > 0.20) continue;
+      spawnDmgText(enemy.x, enemy.y, 'EXECUTE', '#aa44ff');
+      spawnParticles(enemy.x, enemy.y, 'EXPLOSION', '#aa44ff', 12);
+      enemy.hp = 0;
+      enemy.die();
+    }
     // 'explode' is handled in applyOnKill
   }
 }
