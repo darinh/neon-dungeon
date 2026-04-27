@@ -4468,6 +4468,57 @@ class HarvestPickup {
   }
 }
 
+// MagpieHoard — hoard pickup dropped by MAGPIE on death. Grants the
+// total credit value the thief banked across all the items it consumed
+// during its life. Hand-rolled (instead of reusing CREDIT_CACHE)
+// because CREDIT_CACHE.fn() recomputes the amount from current floor +
+// meta multipliers — which would be wrong here: we want to refund the
+// EXACT value the thief banked. Auto-collected via an `isHoard` branch
+// in game.js's pickup loop (mirrors the isHarvest pattern). The pickup
+// sits on the floor visibly so the player has to actually walk to the
+// thief's death spot — a small "go fetch" beat that makes the kill
+// feel earned. No TTL: hoard pickups persist for the rest of the
+// floor (so a long detour to clear other enemies first doesn't lose
+// the recovery).
+class MagpieHoard {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {number} amt   credit value to grant on pickup
+   */
+  constructor(x, y, amt) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHoard = true;
+    this.amt = Math.max(0, Math.round(amt || 0));
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 3; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.5);
+    ctx.save();
+    ctx.shadowBlur = 10 + 12 * pulse;
+    ctx.shadowColor = '#ffd700';
+    ctx.globalAlpha = 0.75 + 0.25 * pulse;
+    // Outer ring — pale silver-blue (MAGPIE colour) so the player
+    // recognises it as "the thief's hoard" at a glance.
+    ctx.strokeStyle = '#cceeff';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    // Inner gold square — currency glyph.
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(sx - 3, sy - 3, 6, 6);
+    ctx.restore();
+  }
+}
+
 class Item {
   /**
    * @param {any} x
