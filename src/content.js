@@ -3560,6 +3560,33 @@ class Projectile {
       }
     } else if (!this.isGrenade && !this.isAllyTurret) {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
+      // PARRY perk: while dashing, enemy projectiles touching the player are
+      // reflected back at full damage (skill-tied — requires precise dash timing).
+      // Mirrors the REFLECTOR enemy-side reflect at line ~3418, but enemy→player.
+      // Gated on dashTimer specifically (not cloak / spawn-grace) so the perk
+      // only rewards active dash timing, not passive immunity windows.
+      if (player.perks.PARRY && player.dashTimer > 0 && dist(this.x,this.y,player.x,player.y)<0.5) {
+        this.dx = -this.dx;
+        this.dy = -this.dy;
+        this.fromPlayer = true;
+        this.ownerType = 'Parry';
+        this._owner = null;
+        this.weaponName = 'Parry';
+        this.hitEnemies = new Set();
+        this.maxPierces = 0;
+        this.piercing = false;
+        this.homing = null;
+        this.bouncesLeft = 0;
+        this._hasRicochet = false;
+        this.travelled = 0;
+        this._effects = /** @type {any[]} */ ([]);
+        this._affixes = /** @type {any[]} */ ([]);
+        this.isCrit = false;
+        this.colour = '#aaffee';
+        spawnParticles(this.x, this.y, 'SPARK', '#aaffee', 8);
+        audio.reflect();
+        return;
+      }
       // Cloaked player: projectiles pass through
       if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
         const dealt = player.takeDamage(this.dmg, this.ownerType || 'Projectile');
@@ -4024,6 +4051,7 @@ const PERK_POOL = {
   EXPLOSIVE_KILLS: { name:'Explosive Kills',  icon:'💥', desc:'Enemies explode on death',            colour:'#ff6600' },
   MULTI_SHOT:      { name:'Multi-Shot',       icon:'⫸', desc:'Fire an extra 60%-damage projectile', colour:'#cc44ff' },
   SECOND_WIND:     { name:'Second Wind',      icon:'↺', desc:'Revive once per floor at 30% HP',     colour:'#00ddff' },
+  PARRY:           { name:'Phase Parry',      icon:'⇄', desc:'Dash reflects enemy shots',           colour:'#aaffee' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
