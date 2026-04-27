@@ -10321,6 +10321,8 @@ class Player {
   /** @type {any} */ plasmaBurnTimer;
   /** @type {any} */ reactiveArmorCD;
   /** @type {any} */ regenTimer;
+  /** @type {any} */ _repairTicksLeft;
+  /** @type {any} */ _repairTickTimer;
   /** @type {any} */ roomsCleared;
   /** @type {any} */ score;
   /** @type {any} */ secondWindUsed;
@@ -10443,6 +10445,11 @@ class Player {
     this.hackwareCooldown=0;    // cooldown remaining
     this.cloakTimer=0;          // phase cloak duration remaining
     this.regenTimer=0;          // HP_REGEN perk timer
+    // REPAIR_PROTOCOL hackware HoT: 4 HP/s for 4s. Self-clearing —
+    // _repairTicksLeft decays to 0 with no external reset needed. Tick
+    // logic next to HP_REGEN block in update(); activation in content.js.
+    this._repairTicksLeft=0;
+    this._repairTickTimer=0;
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
     // LAST_STAND perk: clutch defensive window. lastStandTimer counts down
     // an active 5s buff (+75% outgoing dmg via effectiveAtk, ×0.5 incoming
@@ -11054,6 +11061,26 @@ class Player {
         this.hp = Math.min(this.maxHp, this.hp + 1);
         spawnDmgText(this.x, this.y, '+1', '#00ff88');
       }
+    }
+
+    // REPAIR_PROTOCOL hackware HoT: heal 4 HP every 1s, 4 ticks. Tick
+    // continues across floor descend (not gated on map state) so a
+    // pre-descend activation finishes on the new floor — matches
+    // hackwareCooldown which also persists across floors. Halts on death.
+    if (this._repairTicksLeft > 0 && this.hp > 0) {
+      this._repairTickTimer -= dt;
+      if (this._repairTickTimer <= 0) {
+        this._repairTickTimer += 1.0;
+        this._repairTicksLeft -= 1;
+        if (this.hp < this.maxHp) {
+          const heal = Math.min(4, this.maxHp - this.hp);
+          this.hp += heal;
+          spawnDmgText(this.x, this.y, '+'+heal, '#00ff88');
+          spawnParticles(this.x, this.y, 'SPARK', '#00ff88', 3);
+        }
+      }
+    } else if (this._repairTicksLeft <= 0 && this._repairTickTimer !== 0) {
+      this._repairTickTimer = 0;
     }
 
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
