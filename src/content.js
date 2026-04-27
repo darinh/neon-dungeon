@@ -2171,6 +2171,12 @@ function getStatusEffects(player) {
   if (player.perks.PRISTINE && player.hp > 0 && player.hp / player.maxHp >= 0.90) {
     fx.push({ id: 'pristine', icon: '✧', label: 'PRIME', colour: '#88ffee' });
   }
+  // STRIDE active (movement-built dmg stacks). Distinct from BERSERKER (HP gate)
+  // and PRISTINE (high-HP gate) — STRIDE is purely movement-gated and stacks
+  // additively with both via Player.effectiveAtk().
+  if (player.perks.STRIDE && (player._strideStacks || 0) > 0) {
+    fx.push({ id: 'stride', icon: '⇶', label: 'RUSH ×' + player._strideStacks, colour: '#00ffaa' });
+  }
   // Second Wind available
   if (player.perks.SECOND_WIND && !player.secondWindUsed) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
@@ -4146,6 +4152,7 @@ const PERK_POOL = {
   PARRY:           { name:'Phase Parry',      icon:'⇄', desc:'Dash reflects enemy shots',           colour:'#aaffee' },
   LAST_STAND:      { name:'Last Stand',       icon:'⚔', desc:'Hit to ≤10% HP: +75% dmg, −50% taken (5s, 60s CD)', colour:'#ffcc00' },
   PRISTINE:        { name:'Pristine',          icon:'✧', desc:'+25% damage at or above 90% HP',       colour:'#88ffee' },
+  STRIDE:          { name:'Stride',           icon:'⇶', desc:'Continuous movement: +5% ATK / sec (max 5)', colour:'#00ffaa' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice

@@ -218,6 +218,16 @@ const game = {
     }
     // Clear player debuffs on floor transition
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
+    // STRIDE perk: drop movement-built ATK stacks on floor transition. The
+    // player teleports to the new spawn between frames; without this reset
+    // the next-frame moved/dt rate would be enormous (huge displacement /
+    // tiny dt) and STRIDE would treat the warp as "continuous movement",
+    // letting full-RUSH stacks survive into the new floor for free.
+    if (this.player) {
+      this.player._strideStacks = 0;
+      this.player._strideMovingTime = 0;
+      this.player._strideStillTime = 0;
+    }
     // Reset teleport pad cooldown
     this.teleportCooldown = 0;
     // UNCHAINED #39: clear leftover core drops from previous floor.
