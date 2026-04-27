@@ -1192,6 +1192,15 @@ const audio = (() => {
       noise(0.10, t, 0.12, 4200, bus);
       osc('triangle', 180, 120, 0.10, t + 0.02, 0.14);
     },
+    vengeanceCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Low rumbling charge-up — descending sawtooth pair signals
+      // "something heavy is winding up to retaliate". Wet for menace.
+      const bus = wetDry(1, 0.55, 0.4);
+      osc('sawtooth', 220, 90, 0.10, t, 0.55, bus);
+      osc('sawtooth', 320, 130, 0.06, t + 0.10, 0.50, bus);
+      osc('sine', 60, 40, 0.12, t, 0.30);
+    },
     resonatorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Rising harmonic chord — the resonator winding up its cone. Two
