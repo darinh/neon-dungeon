@@ -234,7 +234,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -627,6 +627,70 @@ const VAULTMASTER_JACKPOT_AMT = 25;    // credits in the death-drop jackpot
 const VAULTMASTER_EJECT_DIST  = 0.7;   // tiles — coin ejection radius from body
 const VAULTMASTER_ENGAGE_RANGE = 14;   // tiles — los/proximity gate for chase
 
+// GULPER tuning constants. Projectile-eating mid-tank (floor 6+).
+//
+// Threat model: GULPER projects a forward-facing mouth-cone (range
+// GULPER_MOUTH_RANGE, half-angle GULPER_MOUTH_HALF_ANGLE) that EATS
+// any player projectile passing through it — destroyed, no damage, +1
+// stack on the gulper. At GULPER_MAX_STACKS the gulper STOPS, LOCKS
+// the mouth direction at the current perceived target (so the cone
+// becomes a STATIC telegraph the player can side-step out of),
+// telegraphs for GULPER_BELCH_TELEGRAPH seconds (visible mouth grow +
+// audio cue), then SPITS a slow heavy projectile along the LOCKED
+// direction with damage scaling by stacks consumed. Belch resets
+// stacks to 0 and enters a brief recovery (during which the cone is
+// drawn faded/spent — eat is OFF, so the visual reflects that).
+//
+// Stack cap: gameplay caps stacks at GULPER_MAX_STACKS (no hidden
+// over-cap damage scaling — what you see in the tooth count is what
+// you get in damage). Once full, the gulper IGNORES additional
+// projectiles (they pass through as if the mouth were closed) until
+// the belch fires and stacks reset.
+//
+// Counter-play (compositional pressure mob, like MAGNETON):
+//   - Shoot from BEHIND or SIDES (cone is directional, smooth-faces
+//     player but with tracking lag during chase).
+//   - When charging starts, the cone LOCKS — SIDESTEP out of the
+//     locked direction to make the belch miss.
+//   - MELEE the gulper (no projectile = no eat, no stack).
+//   - BURST kill before stacks max (90 hp, no shield — fragile to commits).
+//   - STUN cancels the belch and clears stacks (full defuse mirroring
+//     pulser/echoer/prophet/cryophage stun-cancel contract).
+//   - Homing player projectiles (PLASMA_ORB, SENTRY_DRONE) PIERCE the
+//     mouth — same fairness exclusion as MAGNETON's bend skip (homing
+//     re-steers every frame in Projectile.update which runs AFTER enemy
+//     AI; honouring the eat would feel inconsistent vs the ring tell).
+//   - Grenades pass through too — grenades are arc-tossed with explicit
+//     targetX/targetY; eating one is a fairness violation since the
+//     player can SEE the grenade's intended landing tile.
+//
+// The mouth-cone IS the telegraph (always rendered while alive — see
+// draw branch). No hidden state, like MAGNETON's field ring. Stack
+// count is rendered as growing maw glow + tooth count for legibility.
+//
+// No contact damage during the eat (gulper has melee atk for chase
+// adjacency, separate from belch). Belch projectile uses base atk + a
+// per-stack-consumed bonus so a fully-fed belch hits hard but a stunned
+// gulper that loses its stacks does no spit damage.
+//
+// Excluded from elite affix roll: same first-ship caution as the
+// recent additions (HARVESTER / MAGNETON / SPECTRE / SAPPER / MAGPIE /
+// TETHER / VAULTMASTER).
+//
+// Disguised-mimic AoE rule: N/A. Belch is a player-targeted projectile,
+// not an enemy-AoE that would touch other enemies (see stored memory
+// 'disguised mimic AoE' — applies to AoEs that affect mobs).
+// Knockback-sweeping rule: N/A. No displacement.
+const GULPER_MOUTH_RANGE       = 3.5;  // tiles — depth of eat-cone
+const GULPER_MOUTH_HALF_ANGLE  = Math.PI * (35 / 180); // 70° total arc
+const GULPER_MAX_STACKS        = 5;    // stacks → triggers belch
+const GULPER_FACE_LERP         = 4.0;  // rad/sec lerp rate for mouth aim
+const GULPER_BELCH_TELEGRAPH   = 0.9;  // seconds — telegraph window
+const GULPER_BELCH_RECOVERY    = 0.4;  // seconds — post-belch idle
+const GULPER_BELCH_SPD         = 5.5;  // tiles/sec — slow, dodgeable
+const GULPER_BELCH_RANGE       = 12;   // tiles — projectile range
+const GULPER_BELCH_DMG_PER_STACK = 4;  // bonus dmg per stack consumed
+
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
  * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
@@ -816,7 +880,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', GULPER:'Gulper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -842,7 +906,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', GULPER:'#bbdd33', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1820,6 +1884,21 @@ class Enemy {
       // semantics: charges represent commitment to retaliate, you
       // can interrupt the swing but not erase the grudge).
       if (this._vgState === 'rush') { this._vgState = 'idle'; this._vgRushTimer = 0; }
+      // Cancel GULPER belch on stun — full defuse: drop telegraph/recovery
+      // back to chase, clear stacks. Mirrors echoer/prophet/cryophage
+      // contract (stunned mob can't fire after stun ends). Stacks are
+      // erased (unlike VENGEANCE charges) because the mouth-cone hasn't
+      // committed yet — a stunned gulper visually "spits up" what it
+      // ate. Runs unconditionally for any GULPER (including chase
+      // state): a saturated chase-state gulper waiting for LOS must
+      // also lose stacks on stun, otherwise stun fails to defuse a
+      // primed mob — caught by round-2 codex review.
+      if (this.type === 'GULPER') {
+        this._glState = 'chase';
+        this._glChargeTimer = 0;
+        this._glRecoverTimer = 0;
+        this._glStacks = 0;
+      }
       // Stunned CONDUIT clears its per-link beam ICDs so it can't damage
       // the player while paralysed. ICDs would naturally pause (no AI
       // tick under stun) but a stale ICD could underflow on resume and
@@ -1949,6 +2028,7 @@ class Enemy {
       case 'MAGPIE':this.aiMagpie(dt,player,map,d,los); break;
       case 'TETHER':this.aiTether(dt,player,map,d,los); break;
       case 'VAULTMASTER':this.aiVaultmaster(dt,player,map,d,los); break;
+      case 'GULPER':this.aiGulper(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2500,6 +2580,138 @@ class Enemy {
       this.moveToward(this._tx, this._ty, this.spd, dt, map);
     } else {
       this.patrol(dt, map);
+    }
+  }
+
+  /**
+   * GULPER — projectile-eating mid-tank (floor 6+, hp=90, atk=14,
+   * spd=1.4). See GULPER_* tuning constants for design intent.
+   *
+   * State machine:
+   *   chase     → walk toward player; mouth smooth-tracks via _glAimAngle;
+   *               eat shots in mouth-cone, stack capped at MAX
+   *   charging  → frozen; LOCK direction at _glLockDx/Dy taken from the
+   *               smooth-tracked aim at lock-time; cone draws static at
+   *               that direction; eat is OFF (cone is "loaded", not
+   *               "open"); telegraph timer ticks down; on commit, fire
+   *               belch ALONG the locked direction (NOT toward _tx/_ty)
+   *               so visual telegraph and damage commit agree
+   *   recovery  → brief pause after belch; cone draws faded-spent;
+   *               eat OFF; melee still applies on adjacency
+   *
+   * Stun forces full defuse (handled in update() before AI dispatch —
+   * see stun block; clears state, timers, AND stacks).
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map]
+   * @param {any} [d]  @param {any} [los]
+   */
+  aiGulper(dt, player, map, d, los) {
+    if (typeof this._glStacks !== 'number') this._glStacks = 0;
+    if (typeof this._glState !== 'string') this._glState = 'chase';
+    if (typeof this._glChargeTimer !== 'number') this._glChargeTimer = 0;
+    if (typeof this._glRecoverTimer !== 'number') this._glRecoverTimer = 0;
+    if (typeof this._glAimAngle !== 'number') this._glAimAngle = 0;
+    if (typeof this._glPulse !== 'number') this._glPulse = 0;
+    this._glPulse += dt;
+
+    // ── Mouth-aim direction. During CHASE the aim smooth-lerps toward
+    // the TAUNT-AWARE perceived target (_tx/_ty — DECOY hologram during
+    // taunt, else player). During CHARGING the aim is LOCKED to the
+    // direction captured at charge-start so the cone is a static visual
+    // telegraph the player can side-step out of. During RECOVERY we
+    // also keep the aim locked (cone draws faded-spent in that frame).
+    if (this._glState === 'chase') {
+      const targetAng = Math.atan2(this._ty - this.y, this._tx - this.x);
+      let diff = targetAng - this._glAimAngle;
+      while (diff > Math.PI) diff -= TWO_PI;
+      while (diff < -Math.PI) diff += TWO_PI;
+      this._glAimAngle += diff * Math.min(1, GULPER_FACE_LERP * dt);
+    }
+    const aimDx = Math.cos(this._glAimAngle);
+    const aimDy = Math.sin(this._glAimAngle);
+
+    // ── Eat player projectiles in mouth-cone (CHASE only — cone is
+    // "open" only while pre-charge; charging cone is "loaded", recovery
+    // cone is "spent"). This gates draw/eat parity: the draw branch
+    // renders the cone differently in non-chase states so the player
+    // can read "no eating right now". Same exclusions as MAGNETON:
+    // skip non-player, dead, grenade, homing.
+    if (this._glState === 'chase' && this._glStacks < GULPER_MAX_STACKS) {
+      for (const p of projectiles) {
+        if (!p || p.dead) continue;
+        if (!p.fromPlayer) continue;
+        if (p.isGrenade) continue;
+        if (p.homing) continue;
+        if (!isInsideCone(p.x, p.y, this.x, this.y, aimDx, aimDy,
+                          GULPER_MOUTH_RANGE, GULPER_MOUTH_HALF_ANGLE)) continue;
+        // LOS gate AFTER cheap geometry reject — projectile behind a
+        // wall corner shouldn't be eaten through it.
+        if (!hasLOS(this.x, this.y, p.x, p.y, map)) continue;
+        p.dead = true;
+        // Hard cap at MAX — what you SEE in the tooth count is what
+        // you GET in damage. No hidden over-cap scaling.
+        this._glStacks = Math.min(GULPER_MAX_STACKS, this._glStacks + 1);
+        spawnParticles(p.x, p.y, 'SPARK', this.colour, 2);
+        if (this._glStacks >= GULPER_MAX_STACKS) break; // saturated
+      }
+    }
+
+    // ── State transitions.
+    if (this._glState === 'chase') {
+      // Threshold trigger needs LOS so the gulper doesn't telegraph at
+      // an unseen player (would be unfair: player can't react to a
+      // belch they can't see coming).
+      if (this._glStacks >= GULPER_MAX_STACKS && los && this._canTarget()) {
+        this._glState = 'charging';
+        this._glChargeTimer = GULPER_BELCH_TELEGRAPH;
+        // LOCK aim to current smooth-tracked direction. Cone draw and
+        // belch fire BOTH consume _glAimAngle from now until belch —
+        // single source of truth for telegraph/commit parity.
+        try { if (typeof audio !== 'undefined' && audio.gulperCharge) audio.gulperCharge(); }
+        catch (_) { /* test stub */ }
+      } else {
+        // Normal chase. Slow walker; melee on adjacency.
+        if (los && this._canTarget() && d < 14) this.state = 'CHASE';
+        else if (!los || d > 16) this.state = 'PATROL';
+        if (this.state === 'CHASE') {
+          this.moveToward(this._tx, this._ty, this.spd, dt, map);
+          if (d < 1.2) this.meleeAttack(player);
+        } else {
+          this.patrol(dt, map);
+        }
+      }
+    } else if (this._glState === 'charging') {
+      this._glChargeTimer -= dt;
+      // Frozen during charge — no movement, but melee still applies if
+      // player is in contact (gulper's body still hurts).
+      if (d < 1.2) this.meleeAttack(player);
+      if (this._glChargeTimer <= 0) {
+        // Belch: fire along the LOCKED _glAimAngle direction (NOT toward
+        // _tx/_ty). The cone the player saw IS the direction the spit
+        // travels — telegraph/commit parity. Pick a target point one
+        // tile out along the locked direction so fireAt's normalisation
+        // produces the locked unit vector exactly.
+        const stacksConsumed = this._glStacks;
+        const dmg = this.atk + GULPER_BELCH_DMG_PER_STACK * stacksConsumed;
+        const tx = this.x + aimDx;
+        const ty = this.y + aimDy;
+        this.fireAt(tx, ty, GULPER_BELCH_SPD, dmg,
+                    GULPER_BELCH_RANGE, this.colour);
+        try { if (typeof audio !== 'undefined' && audio.gulperBelch) audio.gulperBelch(); }
+        catch (_) { /* test stub */ }
+        spawnParticles(this.x + aimDx * 0.6, this.y + aimDy * 0.6,
+                       'SPARK', this.colour, 6);
+        this._glStacks = 0;
+        this._glChargeTimer = 0;
+        this._glRecoverTimer = GULPER_BELCH_RECOVERY;
+        this._glState = 'recovery';
+      }
+    } else if (this._glState === 'recovery') {
+      this._glRecoverTimer -= dt;
+      if (d < 1.2) this.meleeAttack(player);
+      if (this._glRecoverTimer <= 0) {
+        this._glState = 'chase';
+      }
     }
   }
 
@@ -7025,6 +7237,112 @@ class Enemy {
         NEON.draw.circleStroke(ctx, sx, sy, sz * 1.15);
         ctx.restore();
       }
+      // GULPER: state-aware mouth-cone visual (the cone IS the warning,
+      // mirroring MAGNETON's field-ring pattern). Render parity with
+      // gameplay:
+      //   - chase    → green/chartreuse "open mouth" (eat ON); intensity
+      //                grows with stack count
+      //   - charging → red-orange "loaded" bloom + STATIC locked cone
+      //                (eat OFF — direction won't track player anymore)
+      //   - recovery → faded grey "spent" cone (eat OFF)
+      //   - stunned  → faded grey (eat OFF, defused)
+      // The cone direction always uses _glAimAngle which the AI keeps
+      // STATIC during charging/recovery — telegraph/commit parity for
+      // the belch direction.
+      if (this.type === 'GULPER') {
+        ctx.save();
+        const stunned = (this.stunTimer && this.stunTimer > 0);
+        const aimDx = Math.cos(this._glAimAngle || 0);
+        const aimDy = Math.sin(this._glAimAngle || 0);
+        const aimAngle = this._glAimAngle || 0;
+        const halfRad = GULPER_MOUTH_HALF_ANGLE;
+        const radPx = GULPER_MOUTH_RANGE * TILE;
+        const stacks = Math.max(0, Math.min(GULPER_MAX_STACKS, this._glStacks || 0));
+        const stackT = stacks / GULPER_MAX_STACKS;
+        const glPulse = 0.5 + 0.5 * Math.sin((this._glPulse || 0) * 2.6);
+        const charging = (this._glState === 'charging') && !stunned;
+        const recovery = (this._glState === 'recovery') || stunned;
+        const chargeT = charging
+          ? 1 - Math.max(0, Math.min(1, (this._glChargeTimer || 0) / GULPER_BELCH_TELEGRAPH))
+          : 0;
+        // Pick wedge colour by state: spent grey for recovery/stun
+        // (eat OFF — clearly distinct from active mouth), red for
+        // charging (loaded — about to spit), chartreuse for chase.
+        const wedgeColour = recovery ? '#666666'
+                          : charging ? '#ff4422'
+                                     : '#bbdd33';
+        // Filled wedge — base intensity scales with stacks during chase
+        // (legibility: empty mouth is faint, full mouth is hungry-bright).
+        // Recovery cone is dim regardless of stacks (they were spent).
+        const baseAlpha = recovery ? 0.05
+                                   : 0.06 + stackT * 0.18 + chargeT * 0.30;
+        ctx.fillStyle = wedgeColour;
+        ctx.globalAlpha = baseAlpha;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+        ctx.closePath();
+        ctx.fill();
+        // Edge strokes — give the cone hard boundaries so the player
+        // can read where the eat-zone ends. Recovery edges are dim.
+        ctx.strokeStyle = wedgeColour;
+        ctx.shadowColor = wedgeColour;
+        ctx.shadowBlur = recovery ? 0 : 6 + chargeT * 14 + glPulse * 4;
+        ctx.lineWidth = 1.2 + chargeT * 1.4;
+        ctx.globalAlpha = recovery ? 0.18
+                                   : 0.40 + stackT * 0.30 + chargeT * 0.40;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(aimAngle - halfRad) * radPx,
+                   sy + Math.sin(aimAngle - halfRad) * radPx);
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(aimAngle + halfRad) * radPx,
+                   sy + Math.sin(aimAngle + halfRad) * radPx);
+        ctx.stroke();
+        // Tooth marks: small ticks along the arc. Only rendered during
+        // chase + charging (the gulper has stacks then). Recovery has
+        // 0 stacks (just spent), so no teeth — matches gameplay.
+        if (stacks > 0 && !recovery) {
+          const teeth = stacks;
+          ctx.lineWidth = 1.4;
+          ctx.globalAlpha = 0.45 + stackT * 0.45;
+          for (let i = 0; i < teeth; i++) {
+            const t = (i + 0.5) / teeth;
+            const a = (aimAngle - halfRad) + t * (halfRad * 2);
+            const r0 = radPx * 0.85;
+            const r1 = radPx * 0.95;
+            ctx.beginPath();
+            ctx.moveTo(sx + Math.cos(a) * r0, sy + Math.sin(a) * r0);
+            ctx.lineTo(sx + Math.cos(a) * r1, sy + Math.sin(a) * r1);
+            ctx.stroke();
+          }
+        }
+        // Charging telegraph: pulsing bloom at the mouth (apex) so the
+        // player gets a "spit incoming" tell even if the cone direction
+        // is hard to read against busy decor.
+        if (charging) {
+          const bloom = 0.5 + 0.5 * Math.sin((this._glPulse || 0) * 14);
+          ctx.globalAlpha = 0.40 + 0.45 * bloom;
+          ctx.fillStyle = '#ff4422';
+          ctx.shadowBlur = 16 + bloom * 12;
+          ctx.shadowColor = '#ff4422';
+          const bloomR = TILE * (0.20 + chargeT * 0.30 + bloom * 0.10);
+          ctx.beginPath();
+          ctx.arc(sx + aimDx * TILE * 0.35, sy + aimDy * TILE * 0.35,
+                  bloomR, 0, TWO_PI);
+          ctx.fill();
+        }
+        // Body ring — chartreuse so GULPER reads distinct from other
+        // mid-tanks at a glance (dimmed during recovery/stun).
+        ctx.globalAlpha = recovery ? 0.20
+                                   : 0.35 + 0.25 * glPulse;
+        ctx.strokeStyle = '#bbdd33';
+        ctx.shadowBlur = recovery ? 0 : 8 + glPulse * 4;
+        ctx.shadowColor = '#bbdd33';
+        ctx.lineWidth = 1.6;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * 1.10);
+        ctx.restore();
+      }
       if (this.type === 'SPECTRE' && this._spState === 'manifest') {
         // Vulnerability tell: bright pulsing ring around the manifested
         // orb. Strong contrast with the dim phase form so the player
@@ -7557,6 +7875,7 @@ const ENEMY_WEIGHTS = {
   MAGPIE:     { base: 2,  perFloor: 1, minFloor: 4 },  // loot-thief — fast fragile non-damaging mob that races to dropped Items, banks credits, drops a hoard pickup on death (currency-economy pressure)
   TETHER:     { base: 2,  perFloor: 1, minFloor: 5 },  // anti-kiting slow-aura — slow fragile chaser, NO contact damage; passive leash field slows player proportional to distance (closer = faster, inversion of normal kite-and-shoot instinct)
   VAULTMASTER:{ base: 2,  perFloor: 1, minFloor: 4 },  // economic-inverse — slow non-damaging chaser, ejects a small VaultCoin pickup on every hit (ICD-throttled), drops a jackpot pickup on death (risk/reward: kill fast for safety vs milk for credits, opposite verb of MAGPIE)
+  GULPER:     { base: 2,  perFloor: 1, minFloor: 6 },  // projectile-eating mid-tank — slow chaser with front-facing mouth-cone that destroys player shots and stacks; at max stacks belches a fat slow projectile (anti-spam, compositional — counter via flank/melee/burst, distinct from MAGNETON which only bends)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -7675,6 +7994,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'MAGPIE':    hp=28; atk=0;  spd=3.4; xpVal=12; colour='#cceeff'; break;
     case 'TETHER':    hp=24; atk=0;  spd=2.6; xpVal=14; colour='#ff8866'; break;
     case 'VAULTMASTER':hp=60;atk=0;  spd=2.0; xpVal=18; colour='#ffcc44'; break;
+    case 'GULPER':    hp=90; atk=14; spd=1.4; xpVal=28; colour='#bbdd33'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7892,12 +8212,27 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._vmHitICD = 0;
     e._vmPulse  = Math.random() * TWO_PI;
   }
+  if (type==='GULPER') {
+    // Projectile-eating mid-tank. State machine + per-instance
+    // tracking for the mouth-cone, stack count, and belch timing.
+    // Pulse drifts from a random seed so clustered spawns don't
+    // breathe in lock-step.
+    e._glState = 'chase';
+    e._glStacks = 0;
+    e._glChargeTimer = 0;
+    e._glRecoverTimer = 0;
+    // Initial aim: face origin. update() will smooth-lerp toward
+    // player on first frame with LOS, so any starting value works
+    // as long as it's a finite number.
+    e._glAimAngle = Math.random() * TWO_PI;
+    e._glPulse = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

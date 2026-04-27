@@ -1566,6 +1566,28 @@ const audio = (() => {
       noise(0.08, t,        0.05, 6000, bus);
       noise(0.04, t + 0.06, 0.10, 3000, bus);
     },
+    gulperCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Wet ascending swallow — distinct from mineArm (metallic click) and
+      // from beaconTrigger (klaxon). Rising pitch + low-band noise reads
+      // as "thing inhaling/loading" before the spit.
+      const bus = wetDry(0.7, 0.4, 0.35);
+      osc('triangle', 180, 320, 0.10, t,        0.20, bus);
+      osc('sine',      90, 160, 0.06, t,        0.30, bus);
+      noise(0.05, t,        0.18, 1200, bus);
+    },
+    gulperBelch() {
+      const c = getCtx(); const t = c.currentTime;
+      // Wet plosive — short sharp low-mid burst with descending tail.
+      // Distinct from mineExplode (no concussive boom) and from shockPulse
+      // (no bright high-end). Reads as "ugh, something thrown UP".
+      const bus = wetDry(0.85, 0.35, 0.30);
+      osc('square',   320, 80,  0.12, t,        0.16, bus);
+      osc('triangle', 240, 60,  0.08, t + 0.01, 0.20, bus);
+      osc('sine',     120, 50,  0.06, t,        0.28, bus);
+      noise(0.10, t,        0.06, 2200, bus);
+      noise(0.05, t + 0.05, 0.14, 800,  bus);
+    },
     mineArm() {
       const c = getCtx(); const t = c.currentTime;
       // Metallic click + ascending warning tone
