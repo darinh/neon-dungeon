@@ -2236,11 +2236,12 @@ class Enemy {
       const baseCd = _EG.modifier==='OVERCLOCK' ? 0.83 : 1.0;
       this.attackTimer = baseCd / this.berserkerMul();
       spawnParticles(player.x,player.y,'SPARK','#ff4444',5);
-      // CRAWLER inflicts burn on successful hit
+      // CRAWLER inflicts burn on successful hit. BIOFILTER halves duration AND DPS.
       if (dealt > 0 && this.type === 'CRAWLER') {
         const wasBurning = player.burnTimer > 0;
-        player.burnTimer = Math.max(player.burnTimer, 2);
-        player.burnDps = Math.max(player.burnDps, 2 + _EG.floor * 0.3);
+        const bioMul = hasAugment('BIOFILTER') ? 0.5 : 1;
+        player.burnTimer = Math.max(player.burnTimer, 2 * bioMul);
+        player.burnDps = Math.max(player.burnDps, (2 + _EG.floor * 0.3) * bioMul);
         if (!wasBurning) audio.playerBurn();
       }
       // SAPPER drains time from a random ACTIVE timed boost on a
@@ -10183,7 +10184,8 @@ function updateFrostPatches(dt, player) {
     f.tickCd = Math.max(0, f.tickCd - dt);
     if (dist(player.x, player.y, f.x, f.y) < CRYOPHAGE_PATCH_RADIUS && !isPlayerDamageImmune()) {
       if (f.tickCd <= 0) {
-        player.takeDamage(f.dmg, 'Frost Patch', {
+        const fdmg = f.dmg * (hasAugment('BIOFILTER') ? 0.5 : 1);
+        player.takeDamage(fdmg, 'Frost Patch', {
           ignoreInvincible: true,
           ignoreDefense: true,
           skipHitInvincible: true,

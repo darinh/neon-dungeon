@@ -2002,7 +2002,9 @@ const game = {
     // environmental hazards (separate from traps — own cooldowns, bypass armor)
     if (tile === T.PLASMA && !isPlayerDamageImmune()) {
       // Continuous burn: bypasses defense and hit i-frames, but still respects shield/SECOND_WIND.
-      const burnDps = (3 + this.floor) * getDiff().envDmg;
+      // BIOFILTER augment halves env-tile damage (status-resistance niche).
+      const bioMul = hasAugment('BIOFILTER') ? 0.5 : 1;
+      const burnDps = (3 + this.floor) * getDiff().envDmg * bioMul;
       player.takeDamage(burnDps * dt, 'Plasma', {
         ignoreInvincible: true,
         ignoreDefense: true,
@@ -2022,7 +2024,7 @@ const game = {
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && !isPlayerDamageImmune() && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
-      const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
+      const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1));
       player.takeDamage(zapDmg, 'Arc Grid', {
         ignoreInvincible: true,
         ignoreDefense: true,
@@ -2039,7 +2041,7 @@ const game = {
 
     // ── Toxic Pool (damages player + slows) ──
     if (tile === T.TOXIC && !isPlayerDamageImmune()) {
-      const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg;
+      const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1);
       player.takeDamage(toxDps * dt, 'Toxic Pool', {
         ignoreInvincible: true,
         ignoreDefense: true,
