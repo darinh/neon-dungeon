@@ -64,8 +64,12 @@ test('VAULTMASTER is excluded from elite affix roll', () => {
   // Same first-ship caution as MAGPIE/SAPPER/HARVESTER — easier to
   // add elite affixes later than to reason about SHIELDED/PHASING
   // interactions for an ICD-throttled coin printer.
+  // Match VAULTMASTER appearing in the elite-skip exclusion list.
+  // Pattern is permissive about following exclusions (a future mob
+  // added to the list shouldn't break this test — see magneton.test.js
+  // for the same relaxation pattern after SAPPER PR).
   assert.match(ENTITIES,
-    /type\s*!==\s*'VAULTMASTER'\s*&&\s*floorNum\s*>=\s*3/,
+    /type\s*!==\s*'VAULTMASTER'\s*&&[\s\S]{0,400}floorNum\s*>=\s*3/,
     'elite-skip list must include VAULTMASTER before the floorNum gate');
 });
 
