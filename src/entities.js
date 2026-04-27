@@ -10236,6 +10236,9 @@ class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
   /** @type {any} */ _outOfCombatTimer;
+  /** @type {any} */ _huntStill;
+  /** @type {any} */ _prevHuntX;
+  /** @type {any} */ _prevHuntY;
   /** @type {any} */ _prevX;
   /** @type {any} */ _prevY;
   /** @type {any} */ _posHistory;
@@ -10422,6 +10425,15 @@ class Player {
     this._surgeShotCount=0;       // surge: rolling shot counter (every 8th)
     this._metaSecondWindUsed=false; // meta second_wind: fired once per run
     this._outOfCombatTimer=0;     // regenerator: seconds since last hit
+    // HUNTER floor modifier: seconds the player has been ~stationary.
+    // Builds up while not moving (capped at HUNT_MAX_STILL); decays
+    // toward 0 quickly while moving. Player.takeDamage scales incoming
+    // damage by 1 + (still / HUNT_MAX_STILL) * HUNT_MAX_BONUS when the
+    // floor modifier is active. Reset on player.reset() so a fresh
+    // floor / continue / new run starts clean.
+    this._huntStill=0;
+    this._prevHuntX=null;
+    this._prevHuntY=null;
   }
 
   // ── Weapon Belt ──────────────────────────────────────────────────────
@@ -10595,19 +10607,29 @@ class Player {
       actual = Math.max(1, dmg - this.def - titaniumReduction);
     }
     if (_EG.modifier === 'CORROSIVE' && !options.ignoreDefense) actual += 2;
-    // FRAGILE: glass-cannon protocol — incoming damage to player amplified.
-    // Mirrors the spawnEnemy 0.55x HP nerf for non-boss enemies (~line 8014):
-    // both sides become more lethal. Applied AFTER def/CORROSIVE so it
-    // multiplies post-mitigation damage. Gated on `!options.ignoreDefense`
-    // (mirrors CORROSIVE's gate above) so fractional environmental DoT
-    // ticks (Plasma burnDps*dt, Toxic Pool toxDps*dt, Arc Grid, Disruption
-    // Field, Frost Patch — all of which set ignoreDefense:true and pass
-    // sub-1 fractional damage per frame) are NOT routed through here.
-    // Without that gate, Math.max(1, ...) would round 0.13/frame burns up
-    // to 1/frame = ~60 DPS at 60 FPS instead of ~10 DPS. Caught in
-    // adversarial review by gpt-5.3-codex.
     if (_EG.modifier === 'FRAGILE' && !options.ignoreDefense) {
       actual = Math.max(1, Math.round(actual * 1.3));
+    }
+    // HUNTER floor modifier: hostile sensors scale incoming damage with
+    // how long the player has been stationary. Mul = 1 + (still/MAX) *
+    // HUNT_MAX_BONUS, where still is updated in Player.update each
+    // frame. Applied AFTER def/CORROSIVE so it multiplies post-mitigation
+    // damage. Gated on `!options.ignoreDefense` per the env-DoT-damage-
+    // gate rule (Plasma burnDps*dt, Toxic toxDps*dt, Arc Grid, Disruption
+    // Field, Frost Patch all pass sub-1 fractional damage with
+    // ignoreDefense:true) — without the gate, Math.max(1, Math.round(...))
+    // would inflate ~0.13/frame env DoT to ~1/frame = ~60 DPS instakill
+    // at 60 FPS instead of intended ~10 DPS. Floor modifier is mutually
+    // exclusive with FRAGILE/CORROSIVE on a given floor, so ordering
+    // collisions are theoretical only — but the gate keeps the contract
+    // documented and ready for any future stacking design.
+    if (_EG.modifier === 'HUNTER' && !options.ignoreDefense) {
+      const still = (this._huntStill || 0);
+      const HUNT_MAX_STILL = 4.0;
+      const HUNT_MAX_BONUS = 0.5;
+      const mul = 1 + Math.min(1, still / HUNT_MAX_STILL) * HUNT_MAX_BONUS;
+      actual = Math.max(1, Math.round(actual * mul));
+    }
     }
     if (actual <= 0) return 0;
     this.hp=Math.max(0,this.hp-actual);
@@ -10795,6 +10817,34 @@ class Player {
    */
   update(dt,map) {
     this._prevX = this.x; this._prevY = this.y;
+    // HUNTER floor modifier: stillness accumulator. Compares this frame's
+    // start position to last frame's end position (i.e. how far the
+    // player ACTUALLY moved last frame, accounting for collisions, dash,
+    // knockback). Increments while motion rate is small, decays fast
+    // while moving. Capped at HUNT_MAX_STILL (matches the cap used by the
+    // damage hook in takeDamage). Always tracked, even when the modifier
+    // is inactive — keeps state consistent if a future hookup wants to
+    // visualize the meter outside HUNTER floors. Threshold is rate-based
+    // (tiles/sec, not tiles/frame) so the meter behaves identically at
+    // 30/60/120 fps. Runtime cost: one subtract + one Math.hypot per
+    // frame; trivial.
+    if (this._huntStill == null) this._huntStill = 0;
+    {
+      const HUNT_MAX_STILL = 4.0;
+      const HUNT_MOVE_RATE = 0.5;       // tiles/sec — anything slower counts as "still"
+      const HUNT_DECAY = 4.0;           // seconds-of-still removed per second-of-motion
+      const dx = this.x - (this._prevHuntX != null ? this._prevHuntX : this.x);
+      const dy = this.y - (this._prevHuntY != null ? this._prevHuntY : this.y);
+      const moved = Math.hypot(dx, dy);
+      const rate = dt > 0 ? moved / dt : 0;
+      if (rate < HUNT_MOVE_RATE) {
+        this._huntStill = Math.min(HUNT_MAX_STILL, this._huntStill + dt);
+      } else {
+        this._huntStill = Math.max(0, this._huntStill - dt * HUNT_DECAY);
+      }
+      this._prevHuntX = this.x;
+      this._prevHuntY = this.y;
+    }
     // Position history sample — append (t-elapsed accumulated, x, y). Used
     // by ECHOER's predictive shot (entities.js aiEchoer). Trim entries
     // older than PLAYER_HISTORY_WINDOW seconds (covers ECHOER_LOOKBACK
