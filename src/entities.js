@@ -234,7 +234,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -615,6 +615,17 @@ const MAGPIE_GRAB_RANGE   = 0.6;   // tiles — distance at which a grab "consum
 const MAGPIE_FLEE_RANGE   = 8;     // tiles — desired distance to keep from player when carrying
 const MAGPIE_STOLEN_BASE  = 15;    // base credit value granted per item stolen
 const MAGPIE_STOLEN_PERFL = 5;     // additional per-floor credit value per item stolen
+
+// VAULTMASTER tuning — economic-inverse mob (no atk, low xp, all reward
+// comes from coins ejected on hit + jackpot on death). Hit-ICD throttles
+// multi-hit weapons (PIERCE, ARC, multishot) so a single attack can't
+// money-print: at 0.18s a player with a 5-pellet shotgun ejects 1 coin
+// per shotgun pull, not 5.
+const VAULTMASTER_HIT_ICD     = 0.18;  // seconds between coin ejections
+const VAULTMASTER_COIN_AMT    = 5;     // credits per ejected coin
+const VAULTMASTER_JACKPOT_AMT = 25;    // credits in the death-drop jackpot
+const VAULTMASTER_EJECT_DIST  = 0.7;   // tiles — coin ejection radius from body
+const VAULTMASTER_ENGAGE_RANGE = 14;   // tiles — los/proximity gate for chase
 
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
@@ -1274,6 +1285,8 @@ class Enemy {
   /** @type {any} */ _spTimer;
   /** @type {any} */ _saPulse;
   /** @type {any} */ _teLashPhase;
+  /** @type {any} */ _vmHitICD;
+  /** @type {any} */ _vmPulse;
   /** @type {any} */ atk;
   /** @type {any} */ attackTimer;
   /** @type {any} */ bobAngle;
@@ -1467,6 +1480,22 @@ class Enemy {
     }
     if (this.hp<=0) { this.hp=0; this.die(); }
     else { const wn = ctx.name || null; audio.hit(false, wn); }
+    // VAULTMASTER coin ejection — economic verb. Every survived hit
+    // ejects one small VaultCoin pickup (ICD-throttled so multi-pellet
+    // weapons can't money-print on a single attack). Gated on
+    // `actual > 0` and `!this.dead` so cosmetic / 0-damage hits don't
+    // print currency, and the death-jackpot is the only drop on the
+    // killing blow (consistent with MAGPIE/HARVESTER drop-on-death).
+    // No coins from PHANTOM-cloak or PHASING absorb paths because both
+    // already returned 0 above before reaching this point.
+    if (this.type === 'VAULTMASTER' && actual > 0 && !this.dead && (this._vmHitICD || 0) <= 0) {
+      this._vmHitICD = VAULTMASTER_HIT_ICD;
+      const ang = Math.random() * TWO_PI;
+      const ex = this.x + Math.cos(ang) * VAULTMASTER_EJECT_DIST;
+      const ey = this.y + Math.sin(ang) * VAULTMASTER_EJECT_DIST;
+      items.push(new VaultCoin(ex, ey, VAULTMASTER_COIN_AMT));
+      spawnParticles(this.x, this.y, 'SPARK', '#ffcc44', 4);
+    }
     return actual;
   }
 
@@ -1538,6 +1567,16 @@ class Enemy {
       if (stolen > 0) {
         items.push(new MagpieHoard(this.x, this.y, stolen));
       }
+    }
+    // VAULTMASTER death jackpot — guaranteed flat-amount VaultCoin drop
+    // on death so milking-vs-kill is a real economic choice (small per-hit
+    // coins build up + jackpot on kill). Excludes summons / shards for
+    // the same defence-in-depth reason as MAGPIE / HARVESTER above; no
+    // current code path summons VAULTMASTER and it never splits, but the
+    // gate stays in sync with the design rule. The jackpot is auto-collected
+    // via the isHoard pickup branch in game.js (same as MagpieHoard).
+    if (this.type === 'VAULTMASTER' && !isSummon && !this.isShard) {
+      items.push(new VaultCoin(this.x, this.y, VAULTMASTER_JACKPOT_AMT));
     }
     _EG.player.gainXP(Math.round(this.xpValue*d.xpMul));
     // Combo: SHARDs, summons, and VOLATILE chain kills don't build streak
@@ -1865,6 +1904,7 @@ class Enemy {
     this.attackTimer=Math.max(0,this.attackTimer-dt);
     this.shootTimer =Math.max(0,this.shootTimer-dt);
     this.spawnCooldown=Math.max(0,this.spawnCooldown-dt);
+    if (this._vmHitICD) this._vmHitICD = Math.max(0, this._vmHitICD - dt);
 
     const d = dist(this.x,this.y,this._tx,this._ty);
     const targetable = (this._tauntTarget && this._tauntTarget.age < this._tauntTarget.maxAge) || canTargetPlayer();
@@ -1908,6 +1948,7 @@ class Enemy {
       case 'SAPPER':this.aiSapper(dt,player,map,d,los); break;
       case 'MAGPIE':this.aiMagpie(dt,player,map,d,los); break;
       case 'TETHER':this.aiTether(dt,player,map,d,los); break;
+      case 'VAULTMASTER':this.aiVaultmaster(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2417,6 +2458,49 @@ class Enemy {
     // across TETHERs but never below the per-mob floor (TETHER_MIN_FACTOR).
     const cur = (player._tetherSlowFactor == null) ? 1 : player._tetherSlowFactor;
     player._tetherSlowFactor = Math.max(TETHER_MIN_FACTOR * 0.6, cur * factor);
+  }
+
+  /**
+   * VAULTMASTER — economic-inverse mob (floor 4+, hp=60, atk=0, spd=2.0).
+   *
+   * Concept: the inverse of MAGPIE. MAGPIE STEALS credits (you race to
+   * recover them); VAULTMASTER GIVES credits (you choose to milk them
+   * before killing). No contact damage — the threat is OPPORTUNITY COST.
+   * Every survived hit ejects a small VaultCoin pickup (5 cr,
+   * VAULTMASTER_HIT_ICD-throttled so multi-pellet weapons can't money-
+   * print on a single attack), and the killing blow drops a jackpot
+   * VaultCoin (25 cr). Tradeoff: kill fast for safety (skip milking,
+   * the body crowds the room with no other threat) or milk slowly for
+   * raw credit upside (each hit adds VAULTMASTER_COIN_AMT to the floor's
+   * loot economy, and the hp pool of 60 supports ~12 pre-jackpot ejects
+   * at 1-dmg pinpricks).
+   *
+   * AI: just chase the player. No attack, no special movement, no
+   * fleeing. The mob has to PRESENT itself to be hit — that's the whole
+   * loop. Patrol when no LOS / out of engage range so it isn't a static
+   * blob; when los OR within VAULTMASTER_ENGAGE_RANGE of the perceived
+   * target (taunt-aware via _tx/_ty, like every other AI in this file),
+   * trundle toward it at base spd.
+   *
+   * Coin ejection lives in takeDamage (NOT in this method) because
+   * that's the only place we have hit-context (actual dmg dealt,
+   * hitCtx.isProc filter, post-shield/post-DR resolution). _vmHitICD
+   * is a per-mob throttle decremented in update() before AI dispatch.
+   *
+   * Excluded from the elite affix roll: same first-ship caution as the
+   * recently-introduced economic-mob siblings (MAGPIE / SAPPER) — easier
+   * to add elite affixes later than to reason about SHIELDED interactions
+   * for an ICD-throttled coin printer.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiVaultmaster(dt, player, map, d, los) {
+    void player;
+    if (los || (d < VAULTMASTER_ENGAGE_RANGE && this._canTarget())) {
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
   }
 
   /**
@@ -6175,6 +6259,35 @@ class Enemy {
           NEON.draw.line(ctx, sx0, sy0, ex, ey);
         }
         ctx.restore();
+      } else if (t === 'VAULTMASTER') {
+        // Treasure-vault — squat hexagon "chest" body + a gold coin-slot
+        // bar across the middle, pulsing with _vmPulse so clustered
+        // spawns don't sync. Visually distinct from every other mob:
+        // hexagon (no other mob is hex-shaped) reads as "container".
+        // The bright slot tells the player "hit me — there's stuff inside".
+        const bodyR = TILE * 0.24;
+        ctx.save();
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * TWO_PI + Math.PI / 6;
+          const px = sx + Math.cos(a) * bodyR;
+          const py = sy + Math.sin(a) * bodyR;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // Coin-slot bar — bright gold, pulses to draw the eye toward
+        // the "deposit me" affordance.
+        ctx.save();
+        const slotPulse = 0.65 + 0.35 * Math.sin((this._vmPulse || 0) + this.bobAngle * 3);
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * slotPulse;
+        ctx.fillStyle = '#ffe680';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ffe680';
+        const slotW = bodyR * 1.1, slotH = TILE * 0.06;
+        ctx.fillRect(sx - slotW / 2, sy - slotH / 2, slotW, slotH);
+        ctx.restore();
       } else if (t === 'SAPPER') {
         // Spindly leech — small triangular body + four short tendrils
         // that pulse with _saPulse so a clustered pack doesn't pulse
@@ -7443,6 +7556,7 @@ const ENEMY_WEIGHTS = {
   SAPPER:     { base: 2,  perFloor: 1, minFloor: 5 },  // boost-drain leech — fast fragile chaser, drains time from active timed boosts on contact (anti-buff-stacking, compositional)
   MAGPIE:     { base: 2,  perFloor: 1, minFloor: 4 },  // loot-thief — fast fragile non-damaging mob that races to dropped Items, banks credits, drops a hoard pickup on death (currency-economy pressure)
   TETHER:     { base: 2,  perFloor: 1, minFloor: 5 },  // anti-kiting slow-aura — slow fragile chaser, NO contact damage; passive leash field slows player proportional to distance (closer = faster, inversion of normal kite-and-shoot instinct)
+  VAULTMASTER:{ base: 2,  perFloor: 1, minFloor: 4 },  // economic-inverse — slow non-damaging chaser, ejects a small VaultCoin pickup on every hit (ICD-throttled), drops a jackpot pickup on death (risk/reward: kill fast for safety vs milk for credits, opposite verb of MAGPIE)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -7560,6 +7674,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SAPPER':    hp=22; atk=6;  spd=2.8; xpVal=14; colour='#ddff44'; break;
     case 'MAGPIE':    hp=28; atk=0;  spd=3.4; xpVal=12; colour='#cceeff'; break;
     case 'TETHER':    hp=24; atk=0;  spd=2.6; xpVal=14; colour='#ff8866'; break;
+    case 'VAULTMASTER':hp=60;atk=0;  spd=2.0; xpVal=18; colour='#ffcc44'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7768,12 +7883,21 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // pulse in lock-step.
     e._teLashPhase = Math.random() * TWO_PI;
   }
+  if (type==='VAULTMASTER') {
+    // Per-mob hit-throttle (decremented in update()): rate-limits coin
+    // ejection so multi-pellet weapons can't money-print on a single
+    // shotgun pull. Also a cosmetic pulse phase for the gold-vault
+    // draw — drift from a random seed so clustered spawns don't
+    // pulse in lock-step.
+    e._vmHitICD = 0;
+    e._vmPulse  = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

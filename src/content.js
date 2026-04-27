@@ -4524,6 +4524,69 @@ class MagpieHoard {
   }
 }
 
+// VaultCoin — credit pickup ejected by VAULTMASTER. Two flavours, both
+// constructed via `new VaultCoin(x, y, amt)`:
+//   - per-hit ejection (small): amt = VAULTMASTER_COIN_AMT (5)
+//   - on-death jackpot (large): amt = VAULTMASTER_JACKPOT_AMT (25)
+// Visual scales with amt so the player reads "small drop" vs "fat
+// jackpot" at a glance. Auto-collected via the `isHoard` branch in
+// game.js's pickup loop (mirrors MagpieHoard); also flagged isHoard so
+// MAGPIE's loot-scan filter excludes it (`if (it.isHoard) continue;`
+// at entities.js aiMagpie ~2315) — otherwise a passing thief could
+// vacuum the vault drops mid-fight, which would feel like a bug
+// rather than counterplay. Hand-rolled (instead of reusing CREDIT_CACHE
+// or the Item-with-CREDIT-type approach) for the same reason as
+// MagpieHoard: we want a fixed, exact amount granted on collection,
+// not a floor-recomputed value. No TTL — coins persist for the rest
+// of the floor so milking-then-clearing-the-room-first is a valid
+// economic play (matches MagpieHoard's no-TTL choice for the same
+// "earn the recovery" beat). Distinct visual from MagpieHoard:
+// pure gold ring + inner gold core (no MAGPIE silver-blue), so the
+// player reads vault-drops as a different economic source.
+class VaultCoin {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {number} amt   credit value to grant on pickup
+   */
+  constructor(x, y, amt) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHoard = true;
+    this.amt = Math.max(0, Math.round(amt || 0));
+    // Visual size hint — used to scale the ring radius. Coin (5cr) reads
+    // as small + abundant; jackpot (25cr) reads as fat + singular.
+    this._big = this.amt >= 15;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 3; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.5);
+    const ringR = (this._big ? 7 : 4.5) + (this._big ? 1.5 : 1) * pulse;
+    const coreSz = this._big ? 6 : 4;
+    ctx.save();
+    ctx.shadowBlur = (this._big ? 12 : 7) + 10 * pulse;
+    ctx.shadowColor = '#ffd700';
+    ctx.globalAlpha = 0.75 + 0.25 * pulse;
+    // Outer ring — pure gold (distinct from MagpieHoard's silver-blue
+    // ring, so the player reads "vault loot" not "thief loot").
+    ctx.strokeStyle = '#ffe680';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, ringR);
+    // Inner gold core.
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(sx - coreSz / 2, sy - coreSz / 2, coreSz, coreSz);
+    ctx.restore();
+  }
+}
+
 class Item {
   /**
    * @param {any} x
