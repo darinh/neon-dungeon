@@ -4275,6 +4275,7 @@ const PERK_POOL = {
   OVERDRIVE:       { name:'Overdrive',         icon:'❯', desc:'Score combo buffs damage (+3%/level, max +30%)', colour:'#ff00c8' },
   RETRIBUTION:     { name:'Retribution',       icon:'☄', desc:'Take damage: +50% ATK for 3s',          colour:'#ff2266' },
   GLASS_CANNON:    { name:'Glass Cannon',      icon:'⟁', desc:'+30% damage dealt, +25% damage taken',  colour:'#ff66aa' },
+  BULWARK:         { name:'Bulwark',           icon:'◈', desc:'−15% damage taken at or above 75% HP',   colour:'#88ccff' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
