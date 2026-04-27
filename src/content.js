@@ -725,6 +725,11 @@ function isPlayerDamageImmune() {
   if (!p) return false;
   if (p.dashTimer > 0) return true;
   if (p.cloakTimer > 0) return true;
+  // SPAWN GRACE: floor-entry invulnerability window. Set by loadFloor() in
+  // src/game.js on fresh transitions only (not save-resume). All env hazard
+  // checks (PLASMA/ARC/TOXIC/frost patches) and mob damage paths gate on
+  // this function, so a single OR here covers the whole damage surface.
+  if ((p._spawnGraceTimer || 0) > 0) return true;
   return false;
 }
 
