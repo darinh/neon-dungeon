@@ -11512,8 +11512,13 @@ class FuseShard {
    */
   draw(camX, camY) {
     if (this.dead) return;
-    const sx = (this.x - camX) * TILE;
-    const sy = (this.y - camY) * TILE;
+    // camX/camY are pixel-space (see getCamera in render.js); world->screen
+    // is `pos * TILE - cam`, matching every other draw* in this file
+    // (drawMines, drawCameras, drawWallTurrets, …). The earlier
+    // `(pos - cam) * TILE` form treated cam as tile-space, which placed the
+    // bomb thousands of pixels off-screen so it was never visible.
+    const sx = this.x * TILE - camX;
+    const sy = this.y * TILE - camY;
     const remaining = this.fuseTime;
     let period;
     if (remaining > FUSE_PHASE_FAST) period = FUSE_FLASH_SLOW;
