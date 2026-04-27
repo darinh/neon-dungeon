@@ -708,6 +708,7 @@ const HACKWARE = {
   STATIC_FIELD: { name:'Static Field', desc:'Electric zone: 10 dps + slow',    colour:'#44ccff', icon:'⌁', cooldown:12 },
   HOLO_DECOY:   { name:'Holo Decoy',   desc:'Hologram taunts enemies for 4s',  colour:'#ff44ff', icon:'⬡', cooldown:12 },
   DECOY_TURRET: { name:'Decoy Turret', desc:'6s allied turret auto-fires',     colour:'#00ffaa', icon:'⊞', cooldown:14 },
+  SCRAP_MAGNET: { name:'Scrap Magnet', desc:'Pulls coins & keys (10t) to you', colour:'#ffd700', icon:'◉', cooldown:12 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -922,6 +923,30 @@ function activateHackware(player) {
       _CG.msg('⊞ DECOY TURRET DEPLOYED', '#00ffaa');
       break;
     }
+    case 'SCRAP_MAGNET': {
+      // Loot-suction utility hackware. Pulls all currency-class items
+      // (VaultCoin + MagpieHoard, both flagged isHoard) and KeyItems
+      // (isKey) toward the player over ~1.2s. Skips upgrades (would force
+      // a perk-choice UI mid-cast), Whispers (would force READING overlay
+      // mid-fight), HARVESTER drops (TTL is generous + auto-trigger surge
+      // mid-pull is awkward), and ShockPulse pickups (would auto-discharge
+      // the panic-button at the player with no enemies near, wasting it).
+      // Centre tracks player each frame in updateHackwareEffects so the
+      // pull follows a sprinting/dashing/teleporting player. Cap 1 active
+      // — recasting refreshes (mirrors STATIC_FIELD/HOLO_DECOY/DECOY_TURRET
+      // dedup pattern).
+      audio.hackwareScrapMagnet();
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'scrap_magnet') hackwareEffects.splice(j, 1);
+      }
+      hackwareEffects.push({
+        type:'scrap_magnet', x:player.x, y:player.y, age:0, maxAge:1.2,
+        radius:10
+      });
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);
+      _CG.msg('◉ SCRAP MAGNET', '#ffd700');
+      break;
+    }
   }
 }
 
@@ -991,6 +1016,47 @@ function updateHackwareEffects(dt) {
       }
       // Trail particle
       if (Math.random() < dt * 10) spawnParticles(fx.x, fx.y, 'MUZZLE', '#44ff88', 1);
+    }
+
+    if (fx.type === 'scrap_magnet') {
+      // Centre tracks player so coins chase a moving target. Skip if
+      // player is gone (death) — items shouldn't lerp into a corpse and
+      // become unreachable for the post-death loot-recovery flow.
+      const p = _CG.player;
+      if (!p || p.hp <= 0) continue;
+      fx.x = p.x; fx.y = p.y;
+      // Per-frame fraction-lerp; pullStr=5 over 1.2s converges items to
+      // ~99.8% of distance covered. Items close enough trip the existing
+      // pickup-radius branch in game.js naturally — no manual collect.
+      const pullStr = 5;
+      const pct = Math.min(1, pullStr * dt);
+      // Secret-room sequence-break gate: keys are placed in vis2-reachable
+      // rooms at gen time (line ~2661 BFS-excluding-locks), but a keyRoom
+      // can subsequently be designated a secret room (the secretEligible
+      // filter at ~2684 doesn't exclude rooms-with-keys). Without this gate
+      // the magnet would yank keys out of unrevealed secret rooms,
+      // bypassing the cracked-tile discovery the secret is designed around.
+      // dungeon.secretMask[ty][tx] is cleared in game.js revealSecretRoom()
+      // when the player breaks in, so revealed-secret loot pulls normally.
+      const sMask = _CG.dungeon?.secretMask;
+      for (const it of items) {
+        if (it.dead) continue;
+        // Currency (isHoard: VaultCoin + MagpieHoard) and keys (isKey)
+        // only. See activation comment for the deliberate exclusion list.
+        if (!(it.isHoard || it.isKey)) continue;
+        const itx = Math.floor(it.x), ity = Math.floor(it.y);
+        if (sMask && sMask[ity]?.[itx]) continue;
+        const d = dist(it.x, it.y, fx.x, fx.y);
+        if (d > fx.radius) continue;
+        it.x += (fx.x - it.x) * pct;
+        it.y += (fx.y - it.y) * pct;
+      }
+      // Ambient gold sparkle in the pull radius.
+      if (Math.random() < dt * 14) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ffd700', 1);
+      }
     }
 
     if (fx.type === 'gravity') {
@@ -1181,6 +1247,35 @@ function drawHackwareEffects(camX, camY) {
       NEON.draw.circle(ctx, sx, sy, 3);
       ctx.restore();
     }
+    if (fx.type === 'scrap_magnet') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const fade = 1 - (fx.age / fx.maxAge);
+      const r = fx.radius * TILE;
+      ctx.save();
+      // Outer pulsing gold boundary ring.
+      const pulse = 0.55 + Math.sin(fx.age * 12) * 0.25;
+      ctx.globalAlpha = fade * 0.32 * pulse;
+      ctx.strokeStyle = '#ffd700';
+      ctx.shadowBlur = 18; ctx.shadowColor = '#ffd700';
+      ctx.lineWidth = 2;
+      NEON.draw.circleStroke(ctx, sx, sy, r);
+      // Counter-rotating spiral arms — read as "suction".
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = fade * 0.55;
+      ctx.strokeStyle = '#ffe680';
+      for (let arm = 0; arm < 3; arm++) {
+        const a = -fx.age * 6 + (TWO_PI / 3) * arm;
+        NEON.draw.line(ctx,
+          sx + Math.cos(a) * 6, sy + Math.sin(a) * 6,
+          sx + Math.cos(a) * r * 0.4, sy + Math.sin(a) * r * 0.4);
+      }
+      // Bright core spark.
+      ctx.globalAlpha = fade * 0.9;
+      ctx.fillStyle = '#fff5cc';
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 14) * 1.2);
+      ctx.restore();
+    }
+
     if (fx.type === 'gravity') {
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       const fade = 1 - (fx.age / fx.maxAge);

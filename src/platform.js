@@ -2004,6 +2004,18 @@ const audio = (() => {
       osc('square', 800, 200, 0.05, t + 0.03, 0.15, bus);
       noise(0.08, t, 0.12, 5000, bus);
     },
+    hackwareScrapMagnet() {
+      // SCRAP_MAGNET hackware deploy — bright ascending coin-shimmer, evokes
+      // a sucked-in hoard. Distinct from holoDecoyDeploy (mid-warble shimmer)
+      // and hackwareGravity (deep sub-implosion) so the player audibly maps
+      // the cast to the visual gold ring.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.35, 0.45);
+      osc('triangle', 880, 1760, 0.07, t, 0.14, bus, { attack:0.002 });
+      osc('sine',     1320, 2200, 0.05, t + 0.04, 0.12, bus, { attack:0.002 });
+      osc('sine',      660, 1100, 0.05, t + 0.08, 0.14, bus, { attack:0.002 });
+      noise(0.03, t, 0.08, 6500, bus, { filterType:'highpass' });
+    },
     upgradePurchased() {
       // UNCHAINED #36 — UPGRADE MATRIX node purchase confirmation
       const c = getCtx(); const t = c.currentTime;
