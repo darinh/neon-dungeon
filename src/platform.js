@@ -1771,6 +1771,16 @@ const audio = (() => {
       osc('sine', 1600, 600, 0.06, t, 0.2, bus);
       osc('triangle', 1200, 400, 0.04, t + 0.05, 0.15, bus);
     },
+    hackwareBlink() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.25, 0.35);
+      // Quick whoosh-zip: pitched-down departure + pitched-up arrival.
+      // Distinct from hackwareCloak (sustained shimmer) and hackwareEMP
+      // (electric burst) so the two cyan-coded abilities sound different.
+      osc('triangle', 1800, 300, 0.05, t,         0.18, bus);
+      osc('sine',     400, 1400, 0.04, t + 0.06,  0.15, bus);
+      noise(0.05, t, 0.08, 4000, bus);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone

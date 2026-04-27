@@ -710,6 +710,7 @@ const HACKWARE = {
   HOLO_DECOY:   { name:'Holo Decoy',   desc:'Hologram taunts enemies for 4s',  colour:'#ff44ff', icon:'⬡', cooldown:12 },
   DECOY_TURRET: { name:'Decoy Turret', desc:'6s allied turret auto-fires',     colour:'#00ffaa', icon:'⊞', cooldown:14 },
   SCRAP_MAGNET: { name:'Scrap Magnet', desc:'Pulls coins & keys (10t) to you', colour:'#ffd700', icon:'◉', cooldown:12 },
+  BLINK:        { name:'Blink',        desc:'Teleport 4 tiles in aim direction', colour:'#88ccff', icon:'⌖', cooldown:9 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -946,6 +947,87 @@ function activateHackware(player) {
       });
       spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);
       _CG.msg('◉ SCRAP MAGNET', '#ffd700');
+      break;
+    }
+    case 'BLINK': {
+      // Direction: mirror dash logic at entities.js:10933 — mouse aim with
+      // facing fallback, and respect lockAimToMove. norm() returns [0,0]
+      // for a zero vector, so the facing fallback covers click-on-self.
+      let bdx, bdy;
+      if (settings.lockAimToMove) {
+        bdx = player.facing.x; bdy = player.facing.y;
+      } else {
+        const cam7 = getCamera(player);
+        const ax = (mouse.x + cam7.x) / TILE - player.x;
+        const ay = (mouse.y + cam7.y) / TILE - player.y;
+        [bdx, bdy] = norm(ax, ay);
+        if (!bdx && !bdy) { bdx = player.facing.x; bdy = player.facing.y; }
+      }
+      // Wall-aware swept teleport, 4-tile range, 0.25-tile increments.
+      // Pattern lifted verbatim from triggerShockPulse() in entities.js
+      // (~line 8762): per-step axis-independent isPassable with the final
+      // combined-tile guard. This honours every existing impassable tile —
+      // sealed boss/challenge entrances become T.WALL on seal, locked
+      // doors are LOCKED_R/B/G, voids and cracked walls all read as
+      // !isPassable — so BLINK never bypasses the key economy nor the
+      // boss-room seal. The 0.25-tile step (16 sub-checks for a 4-tile
+      // range) prevents the single-snap tunneling failure mode the
+      // 'knockback sweeping' rule was written for.
+      const RANGE = 4, STEP = 0.25;
+      const STEPS = Math.ceil(RANGE / STEP);
+      const startBX = player.x, startBY = player.y;
+      let curBX = startBX, curBY = startBY;
+      if (map) {
+        for (let s = 0; s < STEPS; s++) {
+          const tryX = curBX + bdx * STEP;
+          const tryY = curBY + bdy * STEP;
+          const fxK = Math.floor(tryX), fyK = Math.floor(curBY);
+          const xfK = Math.floor(curBX), yfK = Math.floor(tryY);
+          const xOk = fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK]);
+          const yOk = xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK]);
+          if (!xOk && !yOk) break;
+          if (xOk) curBX = tryX;
+          if (yOk) curBY = tryY;
+        }
+        // Final combined-tile guard: rejects the diagonal-corner case
+        // where both axis-only checks pass but map[finalFy][finalFx] is
+        // itself a wall. On reject, snap back to the start (no teleport).
+        const finalFx = Math.floor(curBX), finalFy = Math.floor(curBY);
+        if (!(finalFx >= 0 && finalFx < MAP_W && finalFy >= 0 && finalFy < MAP_H && isPassable(map[finalFy][finalFx]))) {
+          curBX = startBX; curBY = startBY;
+        }
+      } else {
+        // No dungeon map (defensive): refuse the teleport rather than
+        // applying an unchecked translation that could land out-of-bounds.
+        curBX = startBX; curBY = startBY;
+      }
+      // No-op (faced into wall): suppress fanfare, but commit cooldown
+      // (matches HOLO_DECOY/STATIC_FIELD/DECOY_TURRET semantics — pressing
+      // the activation key spends the cycle regardless of placement).
+      if (Math.abs(curBX - startBX) < 0.01 && Math.abs(curBY - startBY) < 0.01) {
+        _CG.msg('⌖ BLINK BLOCKED', '#888888');
+        break;
+      }
+      player.x = curBX; player.y = curBY;
+      spawnParticles(startBX, startBY, 'EXPLOSION', '#88ccff', 14);
+      spawnParticles(curBX,   curBY,   'EXPLOSION', '#88ccff', 14);
+      // Path afterimage via the existing player.dashTrail array (already
+      // rendered by render.js for dash). Capped by dashTrail's natural
+      // 8-segment limit + per-frame alpha decay; reusing it avoids a new
+      // render path. Push from start→end so the trail reads as motion.
+      const segs = 5;
+      for (let si = 1; si <= segs; si++) {
+        if (player.dashTrail.length >= 8) break;
+        const t = si / segs;
+        player.dashTrail.push({
+          x: startBX + (curBX - startBX) * t,
+          y: startBY + (curBY - startBY) * t,
+          alpha: 0.7 - t * 0.3,
+        });
+      }
+      audio.hackwareBlink();
+      triggerShake(2, 0.1);
+      _CG.msg('⌖ BLINK', '#88ccff');
       break;
     }
   }
