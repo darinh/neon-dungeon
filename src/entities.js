@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -402,6 +402,36 @@ const GHOSTABLE_TYPES = new Set([
   'CHARGER', 'LEAPER', 'SCORCHER', 'SEEKER', 'REAPER'
 ]);
 
+// MAGNETON tuning constants. Stationary "magnetic lens" mob (floor 6+).
+// Emits a circular field that bends in-flight player projectiles toward
+// itself each frame. Has zero direct attacks (atk=0, spd=0) — its threat
+// is purely compositional: shots aimed at allies near a MAGNETON curve
+// off-target into the magneton's body (or worse, into nothing). Counter-
+// play: kill the MAGNETON first (it has no defense), or shoot at extreme
+// range so the field can't bend the shot enough to miss.
+//
+// Field math (pure, see magnetonBendDir):
+//   - Out of range (d >= MAGNETON_FIELD_R) or at apex (d <= 0): no bend.
+//   - Strength scales with proximity (1 at center → 0 at field edge).
+//   - Per-frame, projectile direction is lerped toward the magneton-
+//     pointing unit vector by alpha = MAGNETON_BEND_STRENGTH * proximity
+//     * dt, then renormalised. Multiple magnetons compose (each bend
+//     applies in iteration order, naturally creating funnel effects).
+//
+// LOS gate: bend requires hasLOS(magneton, projectile). Without LOS,
+// bending around walls feels physics-breaking (shots curving through
+// solid rock toward nothing visible). The gate keeps the visual coherent.
+//
+// Stun handling: stunTimer > 0 returns early in update() before AI
+// dispatch, so the field naturally disables under stun. No special
+// telegraph cancel needed — there is no telegraph state.
+const MAGNETON_FIELD_R       = 5.5;   // tiles — radius of magnetic field
+const MAGNETON_BEND_STRENGTH = 6.0;   // base lerp rate (1/sec) at field center
+// SAFE_RADIUS prevents the divide-by-zero at exact apex co-location and
+// also protects the player from stupid edge cases where they walk INTO
+// the magneton's body and their muzzle-flash sample produces NaN aim.
+const MAGNETON_SAFE_R        = 0.15;  // tiles — minimum distance for bend
+
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
  * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
@@ -537,11 +567,61 @@ function pickMirrorKinematics(shotHistory) {
   const colour = (typeof last.colour === 'string' && last.colour) ? last.colour : '#88ff44';
   return { spd, colour };
 }
+
+/**
+ * Pure helper: compute the new (dx,dy) direction for a projectile after
+ * one frame of MAGNETON pull. Inputs:
+ *   px, py     — projectile position (tile coords)
+ *   dx, dy     — current unit direction (caller guarantees normalised)
+ *   mx, my     — magneton position (tile coords)
+ *   fieldR     — field radius (tiles); no bend at or beyond
+ *   strength   — base lerp rate (1/sec) at field center; scales with proximity
+ *   dt         — frame delta (seconds)
+ *
+ * Returns [ndx, ndy] — new unit direction. Returns [dx, dy] unchanged when:
+ *   - distance to magneton >= fieldR (out of range), or
+ *   - distance to magneton <= MAGNETON_SAFE_R (apex / NaN guard), or
+ *   - the lerp produces a degenerate zero vector (defensive — should not
+ *     happen with strength*dt clamped to <= 1, but guards against a future
+ *     regression where the call sequence forgets to clamp).
+ *
+ * Used by aiMagneton and tested directly. Pure — no globals, no allocs
+ * beyond the [ndx,ndy] tuple. Keep this self-contained so the unit tests
+ * can vm-extract it without dragging in module state.
+ *
+ * @param {number} px
+ * @param {number} py
+ * @param {number} dx
+ * @param {number} dy
+ * @param {number} mx
+ * @param {number} my
+ * @param {number} fieldR
+ * @param {number} strength
+ * @param {number} dt
+ * @returns {[number, number]}
+ */
+function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
+  const vx = mx - px, vy = my - py;
+  const d2 = vx * vx + vy * vy;
+  const r2 = fieldR * fieldR;
+  if (d2 >= r2) return [dx, dy];
+  const dToMag = Math.sqrt(d2);
+  if (dToMag <= MAGNETON_SAFE_R) return [dx, dy];
+  const gx = vx / dToMag, gy = vy / dToMag;
+  const proximity = 1 - (dToMag / fieldR);
+  const alpha = Math.min(1, Math.max(0, strength * proximity * dt));
+  const ndx = dx + (gx - dx) * alpha;
+  const ndy = dy + (gy - dy) * alpha;
+  const len = Math.sqrt(ndx * ndx + ndy * ndy);
+  if (len <= 1e-9) return [dx, dy];
+  return [ndx / len, ndy / len];
+}
+
 /** @type {Record<string, any>} */
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -567,7 +647,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1571,6 +1651,7 @@ class Enemy {
       case 'VENGEANCE':this.aiVengeance(dt,player,map,d,los); break;
       case 'CONDUIT':this.aiConduit(dt,player,map,d,los); break;
       case 'HARVESTER':this.aiHarvester(dt,player,map,d,los); break;
+      case 'MAGNETON':this.aiMagneton(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -1740,6 +1821,75 @@ class Enemy {
       this.moveToward(this._tx,this._ty,this.spd,dt,map);
       if (d<1.2) this.meleeAttack(player);
     } else this.patrol(dt,map);
+  }
+
+  /**
+   * MAGNETON — stationary projectile-bender (floor 6+, hp=50, atk=0, spd=0).
+   *
+   * Threat model: emits a circular MAGNETON_FIELD_R-tile field that bends
+   * in-flight player projectiles toward itself per frame (see
+   * `magnetonBendDir`). Atk=0 → no contact damage, no fire. Pure
+   * compositional hazard — pairs with melee mobs (their bodyguards) and
+   * other ranged threats (your shots curve away from the threat into the
+   * magneton). Counter-play: kill the magneton (it has no defense), shoot
+   * from extreme range (less time in field = less bend), or lure threats
+   * out of the field.
+   *
+   * Rules:
+   *   - Iterate the global `projectiles` array each frame, bending only
+   *     `fromPlayer && !dead` projectiles. Enemy projectiles are
+   *     intentionally untouched — magnetons should not bend MIRROR/ECHOER
+   *     shots into the player.
+   *   - LOS gate: bend requires hasLOS(magneton, projectile). Without LOS,
+   *     bending around walls feels physics-breaking (shots curving through
+   *     solid rock toward an unseen pull source).
+   *   - dist^2 fast-reject before LOS to keep this cheap on floors with
+   *     many magnetons (LOS does its own raycast and is the expensive op).
+   *   - Stun handling: stunTimer > 0 returns early in update() before AI
+   *     dispatch — field naturally disables under stun. No telegraph
+   *     state to cancel.
+   *
+   * No room gating: a magneton tucked in a corridor still bends shots
+   * passing through the corridor (consistent with the "field is always
+   * on" mental model). The LOS gate keeps the influence local.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiMagneton(dt, player, map, d, los) {
+    void player; void d; void los;
+    // Visual pulse — used by draw branch. Drift so clustered spawns
+    // don't pulse in lock-step. Real dt (no berserker/OC mods) — purely
+    // cosmetic.
+    this._mgPulse = (this._mgPulse || 0) + dt;
+    // Field bend: iterate projectiles, apply pull to in-range player shots
+    // with LOS. Skip dead, non-player, and grenades (grenades are arc-
+    // tossed with explicit targetX/targetY — bending dx/dy would make them
+    // miss their target tile, which is a fairness violation since the
+    // player can see the grenade's intended landing spot).
+    const r2 = MAGNETON_FIELD_R * MAGNETON_FIELD_R;
+    const mx = this.x, my = this.y;
+    for (const p of projectiles) {
+      if (!p || p.dead) continue;
+      if (!p.fromPlayer) continue;
+      if (p.isGrenade) continue;
+      // Homing player projectiles (PLASMA_ORB upgrade, SENTRY_DRONE perk
+      // — see src/game.js callsites) re-steer toward their target every
+      // frame inside Projectile.update, which runs AFTER enemy AI in the
+      // game loop. A bend here would be partially undone every frame and
+      // the magneton's pull would feel inconsistent. Treat homing as the
+      // intentional counter: homing shots pierce the field cleanly.
+      if (p.homing) continue;
+      const vx = mx - p.x, vy = my - p.y;
+      const d2 = vx * vx + vy * vy;
+      if (d2 >= r2) continue;
+      // LOS gate AFTER cheap dist reject
+      if (!hasLOS(mx, my, p.x, p.y, map)) continue;
+      const [ndx, ndy] = magnetonBendDir(
+        p.x, p.y, p.dx, p.dy, mx, my,
+        MAGNETON_FIELD_R, MAGNETON_BEND_STRENGTH, dt
+      );
+      p.dx = ndx; p.dy = ndy;
+    }
   }
 
   /**
@@ -6077,6 +6227,44 @@ class Enemy {
       // Aim line/ring tinting drives the entire visual from the cached lock
       // (this._miAimDx/Dy + this._miShotColour), so what the player SEES is
       // exactly what the projectile WILL be.
+      if (this.type === 'MAGNETON') {
+        // Constant magnetic field visualisation — pulsing magenta ring at
+        // MAGNETON_FIELD_R plus an inner counter-rotating arc to give the
+        // field a "live" feel. No telegraph state — the field IS the
+        // telegraph (player learns "shots curve here" by observing once
+        // and then sees the ring as the warning).
+        ctx.save();
+        const mgT = this._mgPulse || 0;
+        const fieldPx = MAGNETON_FIELD_R * TILE;
+        const mgPulse = 0.5 + 0.5 * Math.sin(mgT * 2.2);
+        // Outer field boundary — dashed magenta ring, pulses gently.
+        ctx.globalAlpha = 0.18 + 0.18 * mgPulse;
+        ctx.strokeStyle = '#ff44dd';
+        ctx.shadowBlur = 8 + mgPulse * 6;
+        ctx.shadowColor = '#ff44dd';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 8]);
+        ctx.lineDashOffset = -mgT * 14;
+        NEON.draw.circleStroke(ctx, sx, sy, fieldPx);
+        ctx.setLineDash([]);
+        // Inner rotating arcs — give the field directional energy.
+        ctx.globalAlpha = 0.22 + 0.22 * mgPulse;
+        ctx.lineWidth = 1.6;
+        const mgA0 = mgT * 1.4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, fieldPx * 0.55, mgA0, mgA0 + Math.PI * 0.7);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sx, sy, fieldPx * 0.55, mgA0 + Math.PI, mgA0 + Math.PI * 1.7);
+        ctx.stroke();
+        // Body core ring — bright magenta so the magneton is unmistakable
+        // among other stationary mobs (MIRROR lime / RESONATOR pink).
+        ctx.globalAlpha = 0.40 + 0.20 * mgPulse;
+        ctx.lineWidth = 1.8;
+        ctx.shadowBlur = 12 + mgPulse * 8;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * 1.15);
+        ctx.restore();
+      }
       if (this.type === 'MIRROR') {
         ctx.save();
         if (this._miState === 'telegraph' && this._miTele > 0) {
@@ -6585,6 +6773,7 @@ const ENEMY_WEIGHTS = {
   VENGEANCE:  { base: 1,  perFloor: 1, minFloor: 7 },  // kill-charged retaliator — accumulates charges from in-room kills, commits one telegraphed power-rush at threshold
   CONDUIT:    { base: 1,  perFloor: 1, minFloor: 8 },  // paired-beam mob — solo: weak basic shots, paired: damaging beam between bodies (compositional anti-camping)
   HARVESTER:  { base: 4,  perFloor: 1, minFloor: 4 },  // fragile chaser — drops a temp damage-surge pickup on death (no permanent power)
+  MAGNETON:   { base: 2,  perFloor: 1, minFloor: 6 },  // stationary projectile-bender — pulls player shots toward itself (anti-spam, compositional)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6697,6 +6886,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'VENGEANCE': hp=80; atk=18; spd=0;   xpVal=24; colour='#cc1166'; break;
     case 'CONDUIT':   hp=60; atk=14; spd=0;   xpVal=20; colour='#44ffff'; break;
     case 'HARVESTER': hp=30; atk=8;  spd=1.8; xpVal=12; colour='#ff9933'; break;
+    case 'MAGNETON':  hp=50; atk=0;  spd=0;   xpVal=22; colour='#ff44dd'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -6868,12 +7058,18 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._cdSoloTimer = 0.5 + Math.random() * 1.5;
     e._cdLinkICD = new Map();
   }
+  if (type==='MAGNETON') {
+    // Stationary projectile-bender. Only state needed is a cosmetic
+    // pulse phase for the field-ring draw — drift it from a random seed
+    // so a clustered spawn doesn't pulse in lock-step.
+    e._mgPulse = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
