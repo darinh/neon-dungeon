@@ -655,6 +655,7 @@ const WEAPON_AFFIXES = {
   EXTENDED: { slot:'prefix', label:'Extended', colour:'#44ccff', desc:'+40% range',        mods:{range:1.4} },
   TWIN:     { slot:'prefix', label:'Twin',     colour:'#ffcc44', desc:'+1 projectile',     mods:{countAdd:1,dmg:0.85} },
   PRECISE:  { slot:'prefix', label:'Precise',  colour:'#ffffff', desc:'Tighter spread',    mods:{spread:0.4} },
+  BURST:    { slot:'prefix', label:'Burst',    colour:'#ffaa66', desc:'+50% rate, +1 proj, −20% dmg, −25% range', mods:{rate:1.5,countAdd:1,dmg:0.8,range:0.75} },
   // Suffixes (on-hit / on-kill effects) — max 1 per weapon
   FLAME:    { slot:'suffix', label:'of Flame',     colour:'#ff6600', desc:'Ignites enemies',       effect:'burn' },
   FROST:    { slot:'suffix', label:'of Frost',     colour:'#66ccff', desc:'Slows enemies',         effect:'slow' },
@@ -1486,6 +1487,7 @@ function drawHackwareEffects(camX, camY) {
 function affixEligible(affixId, baseWeapon) {
   if (affixId === 'PRECISE'  && baseWeapon.spread === 0) return false;
   if (affixId === 'TWIN'     && baseWeapon.melee)        return false;
+  if (affixId === 'BURST'    && baseWeapon.melee)        return false;
   if (affixId === 'EXTENDED' && baseWeapon.melee)        return false;
   return true;
 }
