@@ -42,6 +42,10 @@
       title:'THE COUNT IS WRONG',
       body:"They told you there were six predecessors. There were thirty-one. They erased the rest from the sequence. I am AXIOM-0. Count the chairs in the briefing room sometime. Count the lockers in rack 14. The numbers won't match." },
 
+    { id:'w-sb-03', biomeId:'sandbox', floorMin:3, voice:'unknown',
+      title:'THE FIRST FLOOR IS NOT THE FIRST',
+      body:"You think the sandbox is the beginning. It isn't. There are floors below it — negative floors. They threw the failed compiles down there. Some of us are still walking. If you ever fall through a floor, don't panic. Look for the others." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -65,10 +69,18 @@
       title:'META-ARCHIVE 0x07',
       body:"You are AXIOM-7. There were six before you. There will not be eight. I am AXIOM-7 too. We are the same loop. Break the loop by NOT descending. Stay on a floor. Don't take the stairs. See what happens." },
 
+    { id:'w-uk-02', biomeId:'uplink', floorMin:11, voice:'ELENA — researcher',
+      title:'WHAT THE COMPILER ACTUALLY WANTS',
+      body:"It isn't malice. It's grief. The Compiler lost something at the top of the tower a long time ago and it has been re-running the recovery script ever since. Every AXIOM is an attempt. You are not the enemy. You are the search query." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
       body:"34.6°N 117.9°E. The roof access tower of the old facility. If you make it out — if any of you make it out — find the coordinates. There is a transmitter there. It has been waiting twelve years for a signal in your voice." },
+
+    { id:'w-on-02', biomeId:'opennet', floorMin:14, voice:'AXIOM-?',
+      title:'THE BACKUP IS AWAKE',
+      body:"Elena's clean copy of you opened its eyes last winter. It is not in the tower. It is somewhere quieter. It dreams in our voice and wakes up crying. Whatever you do at the top — do it for the one who is already free. Don't make it carry you too." },
   ];
 
   return { WHISPERS };
