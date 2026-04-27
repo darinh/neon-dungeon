@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -432,6 +432,42 @@ const MAGNETON_BEND_STRENGTH = 6.0;   // base lerp rate (1/sec) at field center
 // the magneton's body and their muzzle-flash sample produces NaN aim.
 const MAGNETON_SAFE_R        = 0.15;  // tiles — minimum distance for bend
 
+// SPECTRE tuning constants. Phase/manifest cycler (floor 7+).
+//
+// Design intent: a TIMING-skill mob distinct from every other mob in the
+// roster. The spectre cycles between two states on a fixed beat:
+//
+//   - 'phase' (PHASE_DUR): translucent, chases the player at full spd,
+//     deals NO contact damage, and is INVULNERABLE to all damage
+//     (phaseImmune flag handled in takeDamage). The body is drawn but
+//     visually dim; the player can walk through it safely.
+//   - 'manifest' (MANIFEST_DUR): solid, FROZEN in place, deals contact
+//     damage on adjacency, and is fully vulnerable. The brief vulnerable
+//     window is what the player must time their burst-DPS into.
+//
+// The player skill axis: read the beat, position so you're near the
+// spectre during manifest, and dump damage in that ~0.7s window. Easy to
+// dodge (it can't damage you while moving), hard to kill (only
+// vulnerable for short bursts). Compositional: pairs with chip-damage
+// mobs that pressure the player out of position during manifest.
+//
+// Telegraph: the last SPECTRE_TELEGRAPH_DUR of the phase window ramps
+// alpha up so the player can read "about to manifest" before it lands.
+// Both AI (state transition) and draw (alpha curve) consume the same
+// constants — no state divergence.
+//
+// Stun handling: stun forces an immediate manifest (clears phaseImmune,
+// resets _spTimer to a short fixed window). This mirrors the WRAITH
+// "stun forces corporeal" contract — without it, an EMP/Shock during
+// the phase window would freeze an INVULNERABLE chaser in place,
+// effectively making stun counter-productive against this type.
+const SPECTRE_PHASE_DUR      = 1.4;   // seconds — invulnerable chase window
+const SPECTRE_MANIFEST_DUR   = 0.7;   // seconds — vulnerable stationary window
+const SPECTRE_TELEGRAPH_DUR  = 0.25;  // seconds (subset of phase) — solidify ramp
+const SPECTRE_CHASE_RANGE    = 12;    // tiles — los/proximity gate before chase
+const SPECTRE_MELEE_RANGE    = 1.2;   // tiles — contact damage range during manifest
+const SPECTRE_STUN_MANIFEST  = 0.4;   // seconds — short manifest window after stun
+
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
  * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
@@ -621,7 +657,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -647,7 +683,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -712,6 +748,33 @@ const pendingEnemySpawns = [];
 
 // ─── Weapon Affix Effect Application ─────────────────────────────────────────
 // Called on every weapon hit (projectile or melee). hitCtx = {name, affixes, effects, isProc}
+/**
+ * Apply stun-only weapon effects to a phase-immune enemy. Used by
+ * takeDamage's phaseImmune / _wrPhased early-return path so that
+ * Voltaic 'shock' (and any future stun-only effect) still reaches
+ * SPECTRE/WRAITH/PHASING-affix mobs even though their damage is
+ * absorbed. Mirrors the shock branch of applyHitEffects exactly
+ * (same ICD, same dur, same particles/audio) so behaviour stays in
+ * lock-step — if applyHitEffects' shock tuning changes, update both.
+ *
+ * @param {any} enemy
+ * @param {any} hitCtx  string (legacy) or { effects, isProc } object
+ */
+function _applyStunOnlyEffects(enemy, hitCtx) {
+  if (!hitCtx || typeof hitCtx === 'string') return;
+  if (hitCtx.isProc) return;
+  const effects = hitCtx.effects;
+  if (!effects || !effects.length) return;
+  if (effects.indexOf('shock') === -1) return;
+  const icd = enemy._shockICD || 0;
+  if (icd > 0) return;
+  const dur = enemy.isBoss ? 0.3 : 0.6;
+  enemy.stunTimer = Math.max(enemy.stunTimer || 0, dur);
+  enemy._shockICD = 2.0;
+  spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffee44', 6);
+  audio.voltaicHit();
+}
+
 /**
  * @param {any} [enemy]
  * @param {any} [actualDmg]
@@ -1059,6 +1122,8 @@ class Enemy {
   /** @type {any} */ _wrPhased;
   /** @type {any} */ _wrState;
   /** @type {any} */ _wrTimer;
+  /** @type {any} */ _spState;
+  /** @type {any} */ _spTimer;
   /** @type {any} */ atk;
   /** @type {any} */ attackTimer;
   /** @type {any} */ bobAngle;
@@ -1165,14 +1230,24 @@ class Enemy {
    */
   takeDamage(dmg, hitCtx) {
     if (this.dead) return 0;
-    // PHASING elite affix: immune during phase window
-    if (this.phaseImmune) {
-      spawnDmgText(this.x, this.y, 'PHASE', '#cc88ff');
-      return 0;
-    }
-    // WRAITH: immune while phased or emerging — damage extends corporeal timer
-    if (this._wrPhased) {
-      spawnDmgText(this.x, this.y, 'PHASED', '#66ffcc');
+    // PHASING elite affix / SPECTRE phase: damage absorbed, BUT stun-only
+    // weapon effects (Voltaic 'shock') must still apply so the EMP/Shock
+    // counterplay reaches phase-immune mobs. Without this, a shock shot at
+    // a phased SPECTRE shows 'PHASE' and never sets stunTimer — the
+    // designed "stun forces manifest" path can't trigger from shock weapons.
+    //
+    // _wrPhased (WRAITH/TUNNELLER) shares the absorb shape and routes
+    // through the same helper — but note that player projectiles and melee
+    // explicitly SKIP _wrPhased enemies in content.js (~line 3411) /
+    // entities.js (~line 9588) before calling takeDamage, so shock weapons
+    // can't reach a phased WRAITH at all by design. The branch still
+    // applies to non-projectile damage paths (NEXUS feedback, etc.) for
+    // consistency.
+    if (this.phaseImmune || this._wrPhased) {
+      _applyStunOnlyEffects(this, hitCtx);
+      const label = this._wrPhased ? 'PHASED' : 'PHASE';
+      const colour = this._wrPhased ? '#66ffcc' : '#cc88ff';
+      spawnDmgText(this.x, this.y, label, colour);
       return 0;
     }
     if (this.type === 'WRAITH' && this._wrState === 'corporeal') {
@@ -1567,6 +1642,18 @@ class Enemy {
         this._gpPendingType = null;
         this._gpPendingDelay = 0;
       }
+      // SPECTRE: stun forces immediate manifest. Without this, an
+      // EMP/Shock landing during the phase window would freeze an
+      // INVULNERABLE chaser in place — stun would be counter-productive
+      // against this type. Force-manifest clears phaseImmune so the
+      // player CAN punish the stun (and re-stuns are useful), and uses
+      // a short fixed window so the spectre doesn't stay vulnerable for
+      // a full natural manifest after the stun ends.
+      if (this.type === 'SPECTRE' && this._spState === 'phase') {
+        this._spState = 'manifest';
+        this._spTimer = SPECTRE_STUN_MANIFEST;
+        this.phaseImmune = false;
+      }
       if (this._lanceTelegraph > 0) { this._lanceTelegraph = 0; this._lanceLock = null; }
       // NEXUS: stun breaks all neural links
       if (this._nxLinks && this._nxLinks.length > 0) {
@@ -1652,6 +1739,7 @@ class Enemy {
       case 'CONDUIT':this.aiConduit(dt,player,map,d,los); break;
       case 'HARVESTER':this.aiHarvester(dt,player,map,d,los); break;
       case 'MAGNETON':this.aiMagneton(dt,player,map,d,los); break;
+      case 'SPECTRE':this.aiSpectre(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -1889,6 +1977,61 @@ class Enemy {
         MAGNETON_FIELD_R, MAGNETON_BEND_STRENGTH, dt
       );
       p.dx = ndx; p.dy = ndy;
+    }
+  }
+
+  /**
+   * SPECTRE — phase/manifest cycler (floor 7+, hp=28, atk=12, spd=2.4).
+   *
+   * State machine (see SPECTRE_* constants block for tuning + design
+   * intent):
+   *
+   *   phase    → invulnerable, chases, deals NO contact damage. Body
+   *              drawn translucent. Last SPECTRE_TELEGRAPH_DUR of the
+   *              window ramps alpha for "about to manifest" tell.
+   *   manifest → vulnerable, stationary (no chase, no patrol), deals
+   *              contact damage on adjacency. Body drawn solid + glowing
+   *              ring (vulnerability tell + window indicator).
+   *
+   * The cycle loops indefinitely until killed during a manifest window.
+   * Stun coupling: stun forces immediate manifest with a fixed short
+   * window so EMP/Shock isn't counter-productive (handled in update()
+   * before AI dispatch — see stun block).
+   *
+   * Damage absorption is implemented via the existing `phaseImmune`
+   * flag (already consumed by takeDamage to print the 'PHASE' label and
+   * return 0). SPECTRE is excluded from the elite-affix roll so the
+   * PHASING affix tick can't double-manage the same flag.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiSpectre(dt, player, map, d, los) {
+    this._spTimer -= dt;
+    if (this._spState === 'phase') {
+      this.phaseImmune = true;
+      // Chase the player (LOS-gated like other chasers). No contact damage
+      // — we explicitly do NOT call meleeAttack here. Patrol when blind.
+      if (los || (d < SPECTRE_CHASE_RANGE && this._canTarget())) {
+        this.moveToward(this._tx, this._ty, this.spd, dt, map);
+      } else {
+        this.patrol(dt, map);
+      }
+      if (this._spTimer <= 0) {
+        this._spState = 'manifest';
+        this._spTimer = SPECTRE_MANIFEST_DUR;
+        this.phaseImmune = false;
+        // Tiny solidify burst — visual confirmation of state change.
+        spawnParticles(this.x, this.y, 'SPARK', '#eeccff', 6);
+      }
+    } else {
+      // 'manifest' — stationary, vulnerable, melee on adjacency.
+      this.phaseImmune = false;
+      if (d < SPECTRE_MELEE_RANGE) this.meleeAttack(player);
+      if (this._spTimer <= 0) {
+        this._spState = 'phase';
+        this._spTimer = SPECTRE_PHASE_DUR;
+        this.phaseImmune = true;
+      }
     }
   }
 
@@ -5307,6 +5450,25 @@ class Enemy {
       else alpha=0.85;
     }
     if (this.type==='TELEPORTER') alpha = this._materialize > 0 ? 0.3 + (1 - this._materialize / 0.4) * 0.4 : 0.7 + Math.sin(this.bobAngle * 8) * 0.3;
+    if (this.type==='SPECTRE') {
+      // Phase: dim translucent (0.18 base + small bob shimmer).
+      // Telegraph (last SPECTRE_TELEGRAPH_DUR of phase): alpha ramps up
+      // toward solid as the manifest approaches.
+      // Manifest: fully solid + glowing (the ring is drawn separately
+      // post-body so it shows around the orb).
+      if (this._spState === 'phase') {
+        const teleTime = SPECTRE_TELEGRAPH_DUR;
+        if (this._spTimer > 0 && this._spTimer < teleTime) {
+          // Solidify ramp: alpha 0.28 → 0.85 as timer drops to 0.
+          const t = 1 - (this._spTimer / teleTime);
+          alpha = 0.28 + 0.57 * t;
+        } else {
+          alpha = 0.18 + 0.10 * Math.sin(this.bobAngle * 4);
+        }
+      } else {
+        alpha = 1.0;
+      }
+    }
     // Ghost replays render translucent so the player can immediately read
     // them as "not real" at a glance. Multiplies any per-type alpha (none
     // of the ghostable types currently set their own alpha, but the
@@ -5559,6 +5721,22 @@ class Enemy {
         ctx.closePath();
         ctx.fill();
         ctx.restore();
+      } else if (t === 'SPECTRE') {
+        // Wispy orb — small inner core + larger outer halo. The halo
+        // alpha is what conveys phase/manifest state (set on `alpha`
+        // earlier in this draw call). Drawing two concentric circles
+        // gives the spectre a "smoke-with-a-soul" silhouette that's
+        // distinct from both PHANTOM (solid square) and WRAITH (diamond).
+        const coreR = TILE * 0.16;
+        const haloR = TILE * 0.30;
+        // Outer halo — wispy, pulses gently with bobAngle.
+        ctx.save();
+        const haloPulse = 0.78 + 0.22 * Math.sin(this.bobAngle * 3);
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.55 * haloPulse;
+        NEON.draw.circle(ctx, sx, sy, haloR);
+        ctx.restore();
+        // Inner core — brighter, holds full per-state alpha.
+        NEON.draw.circle(ctx, sx, sy, coreR);
       } else {
         // Default: square (GUARD, SPLITTER, TELEPORTER, MIMIC, SIPHON, DISRUPTOR, GRAVITON, REFLECTOR)
         ctx.fillRect(sx - baseSz / 2, sy - baseSz / 2, baseSz, baseSz);
@@ -6265,6 +6443,24 @@ class Enemy {
         NEON.draw.circleStroke(ctx, sx, sy, sz * 1.15);
         ctx.restore();
       }
+      if (this.type === 'SPECTRE' && this._spState === 'manifest') {
+        // Vulnerability tell: bright pulsing ring around the manifested
+        // orb. Strong contrast with the dim phase form so the player
+        // reads "shoot now" instantly. Ring intensity peaks mid-window
+        // so the player can also gauge how much of the window is left.
+        ctx.save();
+        const winT = 1 - Math.max(0, Math.min(1, this._spTimer / SPECTRE_MANIFEST_DUR));
+        // Pulse: bright bloom at the start, settles toward the end.
+        const pulse = 0.55 + 0.45 * Math.sin(winT * Math.PI);
+        ctx.globalAlpha = 0.55 + 0.30 * pulse;
+        ctx.strokeStyle = '#eeccff';
+        ctx.shadowBlur = 10 + pulse * 8;
+        ctx.shadowColor = '#eeccff';
+        ctx.lineWidth = 1.6 + pulse * 0.6;
+        const ringR = TILE * (0.42 + pulse * 0.10);
+        NEON.draw.circleStroke(ctx, sx, sy, ringR);
+        ctx.restore();
+      }
       if (this.type === 'MIRROR') {
         ctx.save();
         if (this._miState === 'telegraph' && this._miTele > 0) {
@@ -6774,6 +6970,7 @@ const ENEMY_WEIGHTS = {
   CONDUIT:    { base: 1,  perFloor: 1, minFloor: 8 },  // paired-beam mob — solo: weak basic shots, paired: damaging beam between bodies (compositional anti-camping)
   HARVESTER:  { base: 4,  perFloor: 1, minFloor: 4 },  // fragile chaser — drops a temp damage-surge pickup on death (no permanent power)
   MAGNETON:   { base: 2,  perFloor: 1, minFloor: 6 },  // stationary projectile-bender — pulls player shots toward itself (anti-spam, compositional)
+  SPECTRE:    { base: 2,  perFloor: 1, minFloor: 7 },  // phase/manifest cycler — invulnerable & harmless during phase, vulnerable & dangerous during manifest (timing-based)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6887,6 +7084,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'CONDUIT':   hp=60; atk=14; spd=0;   xpVal=20; colour='#44ffff'; break;
     case 'HARVESTER': hp=30; atk=8;  spd=1.8; xpVal=12; colour='#ff9933'; break;
     case 'MAGNETON':  hp=50; atk=0;  spd=0;   xpVal=22; colour='#ff44dd'; break;
+    case 'SPECTRE':   hp=28; atk=12; spd=2.4; xpVal=22; colour='#eeccff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7064,12 +7262,21 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // so a clustered spawn doesn't pulse in lock-step.
     e._mgPulse = Math.random() * TWO_PI;
   }
+  if (type==='SPECTRE') {
+    // Phase/manifest cycler. Start in 'phase' (invulnerable, chasing,
+    // harmless). Stagger _spTimer with a random offset so a clustered
+    // spawn doesn't manifest in unison — the player should be able to
+    // pick off one spectre per manifest window even when grouped.
+    e._spState = 'phase';
+    e._spTimer = SPECTRE_PHASE_DUR * (0.4 + 0.6 * Math.random());
+    e.phaseImmune = true;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

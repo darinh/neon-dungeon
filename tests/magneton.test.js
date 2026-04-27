@@ -104,11 +104,11 @@ test('MAGNETON tuning constants are defined', () => {
   assert.match(ENTITIES, /const\s+MAGNETON_SAFE_R\s*=\s*[\d.]+/);
 });
 
-test('sw cache version bumped to v188 (MAGNETON ships in this build)', () => {
+test('sw cache version bumped to v189 (SPECTRE ships in this build)', () => {
   // Per AGENTS.md service-worker rule: sw.js cache key MUST be bumped on
   // any commit that changes a file in ASSETS. entities.js + sw.js are
   // in ASSETS so the bump is mandatory.
-  assert.match(SW, /neon-dungeon-v188/);
+  assert.match(SW, /neon-dungeon-v189/);
 });
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────
