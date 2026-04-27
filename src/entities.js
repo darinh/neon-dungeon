@@ -10296,6 +10296,8 @@ class Player {
   /** @type {any} */ roomsCleared;
   /** @type {any} */ score;
   /** @type {any} */ secondWindUsed;
+  /** @type {any} */ lastStandTimer;
+  /** @type {any} */ lastStandCD;
   /** @type {any} */ shards;
   /** @type {any} */ shieldBonus;
   /** @type {any} */ shockTimer;
@@ -10414,6 +10416,17 @@ class Player {
     this.cloakTimer=0;          // phase cloak duration remaining
     this.regenTimer=0;          // HP_REGEN perk timer
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
+    // LAST_STAND perk: clutch defensive window. lastStandTimer counts down
+    // an active 5s buff (+75% outgoing dmg via effectiveAtk, ×0.5 incoming
+    // dmg in takeDamage). lastStandCD is the post-trigger lockout (60s
+    // total, runs in parallel with the 5s active window). Triggered ONCE
+    // per cooldown by an incoming hit that would drop hp to ≤10% maxHp,
+    // BEFORE the hp deduction so the activating hit also benefits from
+    // the −50% DR. Persists across floors (timer keeps ticking) but is
+    // wiped on death/respawn (new Player()). Serialized so a Continue
+    // mid-window preserves both timers.
+    this.lastStandTimer=0;
+    this.lastStandCD=0;
     this.bountiesCollected=0;   // bounty targets eliminated this run
     // Augments — passive cybernetic implants
     this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
@@ -10503,6 +10516,12 @@ class Player {
   effectiveAtk() {
     let a = this.atk;
     if (this.perks.BERSERKER && this.hp / this.maxHp <= 0.25) a = Math.round(a * 1.4);
+    // LAST_STAND active window: +75% outgoing damage. Stacks multiplicatively
+    // with BERSERKER (1.4 × 1.75 = 2.45×) by design — both perks reward
+    // playing at the edge, and the trigger condition (hit to ≤10%) implies
+    // BERSERKER is already active. Applied at fire time via effectiveAtk,
+    // so projectiles already in flight when the buff drops keep the bonus.
+    if (this.lastStandTimer > 0) a = Math.round(a * 1.75);
     return a;
   }
 
@@ -10632,6 +10651,27 @@ class Player {
     }
     }
     if (actual <= 0) return 0;
+    // LAST_STAND perk: clutch trigger fires BEFORE the hp deduction, so the
+    // activating hit also gets the −50% DR (it's the moment-it-saves-you
+    // mechanic, not a delayed buff). Trigger condition: hp would drop to
+    // ≤10% maxHp (computed pre-mitigation). Cooldown gate prevents per-tick
+    // re-triggering from DoT (burn/toxic/arc) — once fired, the 60s lockout
+    // means a second trigger requires both the active 5s to expire AND the
+    // 55s recharge. Active window apply the ×0.5 multiplier WITHOUT a
+    // Math.max(1, …) clamp — env DoT (ignoreDefense:true) passes fractional
+    // sub-1 ticks (~0.04-0.13/frame at 60fps), and a max(1) clamp would
+    // inflate them to ~60 dps. Keeping it as a pure multiplier preserves
+    // the DoT shape (CORROSIVE pattern §10534).
+    if (this.perks.LAST_STAND && this.lastStandCD <= 0 && this.lastStandTimer <= 0
+        && this.hp > 0 && (this.hp - actual) <= this.maxHp * 0.10) {
+      this.lastStandTimer = 5;
+      this.lastStandCD = 60;
+      audio.secondWind();
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#ffcc00', 18);
+      triggerShake(6, 0.25);
+      _EG.msg('⚔ LAST STAND', '#ffcc00');
+    }
+    if (this.lastStandTimer > 0) actual = actual * 0.5;
     this.hp=Math.max(0,this.hp-actual);
     // UNCHAINED #36 regenerator: took real damage → out of combat timer resets.
     NEON.behavior.resetOutOfCombat(this);
@@ -10908,6 +10948,12 @@ class Player {
     // Augment timers
     if (this.adrenalineTimer > 0) this.adrenalineTimer = Math.max(0, this.adrenalineTimer - dt);
     if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
+    // LAST_STAND perk: tick active window + cooldown lockout. Cooldown is
+    // 60s total (5s active + 55s recharge); they tick in parallel so a new
+    // trigger is gated only on lastStandCD <= 0. dt-based, so 30/60/120fps
+    // all expire at the same wall-clock time.
+    if (this.lastStandTimer > 0) this.lastStandTimer = Math.max(0, this.lastStandTimer - dt);
+    if (this.lastStandCD > 0) this.lastStandCD = Math.max(0, this.lastStandCD - dt);
     // UNCHAINED #36 momentum: countdown damage-bonus window.
     NEON.behavior.tickMomentum(this, dt);
     // Tick timed boost windows (HARVEST_SURGE, etc.) — clears the activeBoosts

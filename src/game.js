@@ -923,6 +923,8 @@ const game = {
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
         secondWindUsed:p.secondWindUsed,
+        lastStandTimer:p.lastStandTimer || 0,
+        lastStandCD:p.lastStandCD || 0,
         augments:p.augments||{},
         // UNCHAINED #36: persist meta-node runtime state so Continue doesn't
         // drop behavioural hooks and stat carriers. Additive-to-base values
@@ -1026,6 +1028,8 @@ const game = {
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
+    p.lastStandTimer=s.lastStandTimer||0;
+    p.lastStandCD=s.lastStandCD||0;
     p.augments=s.augments||{};
     // UNCHAINED #36: restore meta runtime state (persisted since SAVE_VERSION 9.x).
     // Old saves predating this have these fields undefined → defaults kick in.
