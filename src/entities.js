@@ -156,7 +156,7 @@ function notifyGhostProjectors(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -201,6 +201,26 @@ const CRYOPHAGE_PATCH_LIFE   = 2.5;   // seconds each frost patch lingers after 
 const CRYOPHAGE_PATCH_RADIUS = 0.6;   // tiles — damage radius from each patch centre
 const CRYOPHAGE_TICK_ICD     = 0.5;   // seconds between damage ticks per patch
 const CRYOPHAGE_DMG_MUL      = 0.45;  // damage = round(atk * 0.45) per tick
+
+// WARDLING tuning constants — fragile bodyguard (floor 5+).
+// Each WARDLING bonds to a "ward" (the nearest non-WARDLING, non-shard,
+// non-boss enemy in its room). It physically positions itself between the
+// player and its ward, so player projectiles passing through the ward's
+// hitbox hit the WARDLING first. Forces target-priority decisions: kill
+// the bodyguard, dash flank to break line, or use bombs (AoE bypass).
+//
+// Niche: the only mob whose value is COMPOSITIONAL — solo it's a fragile
+// chaser, with a ward it converts every other enemy in the room into a
+// harder kill. Synergises with the entire roster.
+//
+// Counter-play tiers (in order of accessibility):
+//   1. Flank — orbit until ward and player are non-collinear with WARDLING
+//   2. Kill the WARDLING (it's fragile: hp=25 base)
+//   3. Bombs — area damage bypasses the line
+//   4. Wait for the WARDLING to lag in motion (it can't be in two places)
+const WARDLING_GUARD_DIST    = 1.0;   // tiles from ward toward player (interception offset)
+const WARDLING_REWARD_PERIOD = 0.5;   // seconds between ward re-acquisition scans (perf)
+const WARDLING_PANIC_MUL     = 1.4;   // speed multiplier when no ward available
 
 // RESONATOR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
@@ -418,7 +438,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -444,7 +464,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -805,6 +825,8 @@ class Enemy {
   /** @type {any} */ _cyLockX;
   /** @type {any} */ _cyLockY;
   /** @type {any} */ _cyTiles;
+  /** @type {any} */ _wlWard;
+  /** @type {any} */ _wlReacquireTimer;
   /** @type {any} */ _rsState;
   /** @type {any} */ _rsCharge;
   /** @type {any} */ _rsTele;
@@ -1415,6 +1437,7 @@ class Enemy {
       case 'ECHOER':  this.aiEchoer(dt,player,map,d,los); break;
       case 'PROPHET': this.aiProphet(dt,player,map,d,los); break;
       case 'CRYOPHAGE':this.aiCryophage(dt,player,map,d,los); break;
+      case 'WARDLING': this.aiWardling(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2524,6 +2547,122 @@ class Enemy {
     } else if (!inRoom) {
       this.patrol(dt, map);
     }
+  }
+
+  // ─── WARDLING AI — Fragile Bodyguard (positional intercept) ────────────
+  // The first compositional mob: WARDLING bonds to a "ward" (the nearest
+  // non-WARDLING, non-shard, non-boss enemy in its room) and physically
+  // positions itself between the player and the ward. Player projectiles
+  // travelling player→ward pass through WARDLING's hitbox FIRST, so the
+  // bodyguard naturally absorbs the shot — no special intercept logic
+  // required, just geometric positioning + the standard projectile-vs-
+  // enemy collision in content.js.
+  //
+  // No ranged attack. Damage is melee-only (atk=4, low). The threat is
+  // the buff to its ward, not its own DPS. A WARDLING in a room with a
+  // SHIELDER, REFLECTOR, RESONATOR, or any other "must-kill" target
+  // converts that target into a multi-step kill problem.
+  //
+  // Counter-play tiers:
+  //   1. Flank — orbit until WARDLING / ward / player are non-collinear
+  //   2. Kill the WARDLING (hp=25 base — fragile)
+  //   3. Bombs — area damage bypasses the line entirely
+  //   4. Wait for ward death by other means (fire trails, etc.)
+  //
+  // No-ward fallback: when ward dies or no ward exists in the room, the
+  // WARDLING enters PANIC — speeds up by WARDLING_PANIC_MUL and chases
+  // the player directly (basic melee). This keeps a solo WARDLING from
+  // becoming a free-XP statue.
+  //
+  // Hologram-taunt: the canonical _tx/_ty already redirects to the decoy.
+  // The interception line becomes ward → decoy, which means the WARDLING
+  // moves to a position the player isn't actually shooting at — the
+  // decoy bait costs the WARDLING its protective positioning. Working
+  // as intended (lesson from PROPHET / CRYOPHAGE: trust _tx/_ty).
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiWardling(dt, player, map, d, los) {
+    void los; // wardling doesn't shoot — no LoS check needed
+
+    // Re-acquire ward periodically (not every frame — O(n) scan; cheap
+    // but no need to do it 60 Hz). Also re-acquire IMMEDIATELY when the
+    // current ward dies so the panic branch can fire next frame.
+    //
+    // Bug-class guard: a previous version checked `!this._wlWard` in the
+    // re-acquire condition, which short-circuited past the timer when no
+    // ward was found — degrading to a per-frame scan in solo/orphan
+    // rooms. Caught by claude-opus-4.6 review. Now: timer ALWAYS gates
+    // the scan; only an alive ward dying triggers an extra scan.
+    this._wlReacquireTimer = Math.max(0, (this._wlReacquireTimer || 0) - dt);
+    if (this._wlReacquireTimer <= 0 || (this._wlWard && this._wlWard.dead)) {
+      this._wlWard = this._wlFindWard();
+      this._wlReacquireTimer = WARDLING_REWARD_PERIOD;
+    }
+
+    const ward = this._wlWard;
+    if (!ward || ward.dead) {
+      // Panic: no ward to guard. Chase the canonical target (player or
+      // taunt decoy via _tx/_ty) at boosted speed. A solo WARDLING is
+      // a fragile rusher — easy XP for the player who isolates it.
+      if (this._canTarget()) {
+        this.moveToward(this._tx, this._ty, this.spd * WARDLING_PANIC_MUL, dt, map);
+        // Melee on contact — without this, atk is decorative. meleeAttack
+        // does its own real-player distance check, so a hologram-taunted
+        // chase still whiffs (decoy bait works as expected).
+        if (d < 1.2) this.meleeAttack(player);
+      } else {
+        this.patrol(dt, map);
+      }
+      return;
+    }
+
+    // Compute the interception point: ward's position + unit-vector
+    // (toward _tx/_ty) * WARDLING_GUARD_DIST. _tx/_ty is canonical
+    // (taunt-aware), so a hologram redirects the WARDLING off-line —
+    // intentional bait reward, see banner comment.
+    const pdx = this._tx - ward.x;
+    const pdy = this._ty - ward.y;
+    const pmag = Math.hypot(pdx, pdy);
+    let tx, ty;
+    if (pmag < 0.001) {
+      // Player is ON the ward (melee range). Nothing to intercept —
+      // hold position adjacent to the ward so player projectiles in
+      // any direction still go through the WARDLING first.
+      tx = ward.x; ty = ward.y;
+    } else {
+      const ux = pdx / pmag, uy = pdy / pmag;
+      tx = ward.x + ux * WARDLING_GUARD_DIST;
+      ty = ward.y + uy * WARDLING_GUARD_DIST;
+    }
+    this.moveToward(tx, ty, this.spd, dt, map);
+    // Body-contact melee — even while guarding, if the player runs INTO
+    // the WARDLING (e.g. dashing past), the bodyguard scratches them.
+    // Real-player distance check inside meleeAttack handles taunt cases.
+    if (d < 1.2) this.meleeAttack(player);
+  }
+
+  /**
+   * Find the nearest non-WARDLING, non-shard, non-boss enemy in this
+   * wardling's room. Returns null if no such enemy exists.
+   * @returns {any}
+   */
+  _wlFindWard() {
+    let best = null;
+    let bestD = Infinity;
+    for (const e of enemies) {
+      if (e === this || e.dead) continue;
+      if (e.type === 'WARDLING') continue;   // wardlings don't guard each other (no infinite chains)
+      if (e.isShard || e.isBoss) continue;   // bosses have their own kit; shards are short-lived
+      if (e.room !== this.room) continue;    // room-scoped only
+      const d = dist(this.x, this.y, e.x, e.y);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
   }
 
   // ─── RESONATOR AI — Stationary Sonic-Cone Battery ──────────────────────
@@ -5339,6 +5478,35 @@ class Enemy {
         }
         ctx.restore();
       }
+      // WARDLING: amber link line connecting wardling to its ward (when
+      // bonded), and a faint amber halo around the body. The link line
+      // is the diegetic tell — players who see the line know which mob
+      // is being protected and can plan their target priority. No link
+      // = panic state, no halo (just the body sprite).
+      if (this.type === 'WARDLING') {
+        const ward = this._wlWard;
+        if (ward && !ward.dead) {
+          ctx.save();
+          // Faint amber halo on body — telegraphs "this is a special role"
+          const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+          ctx.globalAlpha = 0.25 + 0.15 * pulse;
+          ctx.strokeStyle = '#ffcc66';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ffcc66';
+          ctx.lineWidth = 1.2;
+          NEON.draw.circleStroke(ctx, sx, sy, sz * (1.05 + pulse * 0.25));
+          // Link line to the ward
+          const wx = ward.x * TILE - camX;
+          const wy = ward.y * TILE - camY;
+          ctx.globalAlpha = 0.35 + 0.20 * pulse;
+          ctx.strokeStyle = '#ffcc66';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          NEON.draw.line(ctx, sx, sy, wx, wy);
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
       // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
       // core during idle/charge; brief flash on the recovery transition.
       // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
@@ -5907,6 +6075,7 @@ const ENEMY_WEIGHTS = {
   REAPER:     { base: 2,  perFloor: 2, minFloor: 7 },  // aggression-punishing chaser — frenzy at 5 kills in current room
   GHOST_PROJECTOR: { base: 1, perFloor: 1, minFloor: 8 },  // stationary lens — replays a ghost of the last ghostable kill in its room
   CRYOPHAGE:  { base: 2,  perFloor: 1, minFloor: 6 },  // frost-patch layer — telegraphs a 5-tile + lattice on the player's CURRENT tile (anti-camping)
+  WARDLING:   { base: 2,  perFloor: 1, minFloor: 5 },  // fragile bodyguard — physically intercepts player projectiles aimed at its ward (compositional)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6015,6 +6184,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
     case 'GHOST_PROJECTOR': hp=50; atk=0; spd=0; xpVal=24; colour='#cc99ff'; break;
     case 'CRYOPHAGE': hp=70; atk=14; spd=1.0; xpVal=28; colour='#88ddff'; break;
+    case 'WARDLING':  hp=25; atk=4;  spd=2.5; xpVal=10; colour='#ffcc66'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -6160,12 +6330,19 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._cyCooldown=0.8+Math.random()*1.2;
     e._cyLockX=x; e._cyLockY=y;
   }
+  if (type==='WARDLING') {
+    // Bodyguard. _wlWard is resolved on first AI tick (no spawn-time
+    // scan — at spawn time the room may still be populating). Re-acquire
+    // every WARDLING_REWARD_PERIOD seconds (cheap O(n) scan, n ≤ ~15).
+    e._wlWard = null;
+    e._wlReacquireTimer = 0; // forces immediate scan on first update
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

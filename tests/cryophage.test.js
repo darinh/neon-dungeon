@@ -92,7 +92,9 @@ test('CRYOPHAGE telegraph commits on a 5-tile + lattice', () => {
   // cardinals). Filtering happens per-tile (bounds + isPassable) so the
   // ACTUAL committed count is <=5, but the candidate set is fixed. A
   // change here is gameplay-significant (changes the area-denial footprint).
-  const block = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\}\s*\n\s*\n\s*\/\/\s*─*\s*RESONATOR/);
+  // Boundary uses the AI section header (durable to method insertions
+  // between aiCryophage and aiResonator).
+  const block = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\/\/\s*─+\s*(WARDLING|RESONATOR) AI/);
   assert.ok(block, 'aiCryophage method block must be locatable');
   const candidatesMatch = block[0].match(/const\s+candidates\s*=\s*\[([\s\S]*?)\];/);
   assert.ok(candidatesMatch, 'aiCryophage lock must build a candidates array');
@@ -108,7 +110,7 @@ test('CRYOPHAGE filters lattice tiles at LOCK time, not commit time (parity guar
   // commit had isPassable filter, draw rendered all 5 unconditionally.
   // Fix: pre-filter into _cyTiles at lock time, both consumers read it.
   // Also guards against OOB tiles bypassing the passability check.
-  const aiBlock = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\}\s*\n\s*\n\s*\/\/\s*─*\s*RESONATOR/);
+  const aiBlock = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\/\/\s*─+\s*(WARDLING|RESONATOR) AI/);
   assert.ok(aiBlock, 'aiCryophage block must be locatable');
   // Lock branch must populate _cyTiles
   assert.match(aiBlock[0], /this\._cyTiles\s*=\s*tiles/, 'lock must store filtered tiles in _cyTiles');
@@ -187,9 +189,12 @@ test('game.js loadFloor clears frostPatches on floor transition', () => {
 
 // ─── Service worker cache bump ──────────────────────────────────────────
 
-test('sw.js cache version bumped to v183', () => {
+test('sw.js cache version bumped to v183 or later', () => {
   // sw.js must be bumped on any commit that changes a file listed in
   // ASSETS — otherwise users get stale code (old entities.js without
   // CRYOPHAGE wiring while server reports the new schema).
-  assert.match(SW, /neon-dungeon-v183/);
+  // Match v183 OR later (subsequent mob PRs re-bump on the same line).
+  const m = SW.match(/neon-dungeon-v(\d+)/);
+  assert.ok(m, 'sw.js must declare a versioned cache constant');
+  assert.ok(parseInt(m[1], 10) >= 183, `cache version must be >= v183 (CRYOPHAGE bump), got v${m[1]}`);
 });
