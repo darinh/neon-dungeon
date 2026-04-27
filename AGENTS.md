@@ -59,7 +59,19 @@ Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `s
 
 ## Service worker
 
-`sw.js` cache key (`neon-dungeon-vNNN`) MUST be bumped on any commit that changes a file listed in `ASSETS`. Otherwise users get stale code. v2 currently still serves at `v134` — bump when v2 first goes to production.
+`sw.js` cache key (`neon-dungeon-vNNN`) is **auto-bumped by CI** on every push to `develop` — see `.github/workflows/cache-bump.yml`. The bump size is derived from the merged commit message:
+
+| Commit prefix / marker | Bump |
+|---|---|
+| `BREAKING CHANGE` or `!:` | +10 |
+| `feat:` / `feat(scope):` | +2 |
+| anything else (`fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `perf:`, …) | +1 |
+
+**DO NOT bump `sw.js` manually in your PR.** Manual bumps create artificial merge conflicts on every parallel PR (the cascade pattern that bit us at v215→v218). The bot pushes the bump back to `develop` with `[skip cache-bump]` in the message to avoid loops.
+
+You also do **not** need to add `sw.js` cache-version assertions to new tests. The existing floor assertions (`>= vNNN`) in older tests will continue to hold — leave them alone — but new test files should not introduce new ones.
+
+If you add a brand-new file under `ASSETS`, you DO still need to add the path to the precache list in `sw.js` — that's a real code change. The version bump on top will then be handled by CI.
 
 ## Tests
 

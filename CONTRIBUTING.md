@@ -67,14 +67,26 @@ CI (`.github/workflows/test.yml`) runs `npm test` on every PR targeting `main` o
 
 ## Service Worker cache
 
-`sw.js` precaches the file list. **Every PR that adds or removes a source file
-must:**
+`sw.js` precaches the file list. **The `CACHE` version constant is auto-bumped
+by CI** on push to `develop` (see `.github/workflows/cache-bump.yml`) — derived
+from the conventional-commit prefix of the merged commit:
 
-1. Bump the `CACHE` constant at the top of `sw.js` (e.g. `v103` → `v104`).
-2. Add the new file path to the precache list.
-3. Remove any deleted paths.
+| Prefix / marker | Bump |
+|---|---|
+| `BREAKING CHANGE` / `!:` | +10 |
+| `feat:` | +2 |
+| anything else | +1 |
 
-If you forget, users get a mix of stale and fresh files on their next visit.
+You do **not** bump the `CACHE` constant in your PR. Doing so creates artificial
+merge conflicts on every parallel PR.
+
+You **do** still need to:
+
+1. Add any new source file path to the `ASSETS` precache list in `sw.js`.
+2. Remove any deleted paths from `ASSETS`.
+
+If a real `ASSETS` change conflicts with another PR (because both added paths
+in the same region of the array), resolve it normally — that's a real conflict.
 
 ## Conventional commits
 
