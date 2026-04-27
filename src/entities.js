@@ -1117,6 +1117,36 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       enemy.hp = 0;
       enemy.die();
     }
+    else if (eff === 'mark') {
+      // MARK 'of Marking' suffix — applies a 3s mark on every hit (refresh
+      // on re-hit). While marked, *follow-up* hits from a Marking weapon
+      // deal +30% damage (the bonus is applied at the top of takeDamage,
+      // gated on ctx.effects.includes('mark') AND enemy._markedTimer > 0,
+      // so the bonus only triggers from this affix's own subsequent hits
+      // — first hit gets no bonus, procs (THUNDER chain, RICOCHET) don't
+      // re-apply marks, and a non-Marking weapon never benefits from a
+      // mark left by a different weapon).
+      //
+      // Gates (defense in depth):
+      //   _disguised — per disguised-mimic-AoE rule. An on-apply particle
+      //     would leak the ambush before the reveal trigger; the per-hit
+      //     bonus is moot here because takeDamage's wasDisguised reveal
+      //     happens before applyHitEffects, but skipping keeps the contract
+      //     uniform with RECOIL/SHOCK_PULSE/EXECUTE.
+      //   _wrPhased — per weapon-affix-knockback-gates rule. Projectile
+      //     prefilters at content.js ~3411 and entities.js ~9588 already
+      //     drop intangible mobs before they reach takeDamage, but the
+      //     local re-check survives any future damage path that bypasses
+      //     those filters.
+      //   isBoss — NOT skipped. Damage-multiplier suffixes (FLAME/FROST/
+      //     CHAIN/THUNDER/VOLTAIC) all work on bosses; the design value
+      //     of MARK is precisely the focus-fire reward against tanks.
+      if (enemy._disguised) continue;
+      if (enemy._wrPhased) continue;
+      if (enemy.dead) continue;
+      enemy._markedTimer = 3;
+      spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff44aa', 3);
+    }
     // 'explode' is handled in applyOnKill
   }
 }
@@ -1206,6 +1236,13 @@ function tickEnemyStatusEffects(enemy, dt) {
   if (enemy._shockICD > 0) enemy._shockICD -= dt;
   // Recoil-affix knockback ICD decay (per-enemy, prevents perma-shove)
   if (enemy._recoilICD > 0) enemy._recoilICD -= dt;
+  // MARK 'of Marking' affix: per-enemy mark window decay (3s on apply).
+  // Unlike burn/slow, no per-tick effect — the timer is read at takeDamage
+  // entry. Self-clearing (no per-floor reset needed).
+  if (enemy._markedTimer > 0) {
+    enemy._markedTimer -= dt;
+    if (enemy._markedTimer <= 0) enemy._markedTimer = 0;
+  }
 }
 
 // Tick elite affix behaviours (called per enemy per frame)
@@ -1454,6 +1491,7 @@ class Enemy {
   /** @type {any} */ shootTimer;
   /** @type {any} */ slowFactor;
   /** @type {any} */ slowTimer;
+  /** @type {any} */ _markedTimer;
   /** @type {any} */ spawnCooldown;
   /** @type {any} */ spd;
   /** @type {any} */ state;
@@ -1515,6 +1553,7 @@ class Enemy {
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
     this.stunTimer=0;                     // hackware EMP stun duration
+    this._markedTimer=0;                  // MARK 'of Marking' affix: while >0, marking weapon hits +30%
     this._lastHitCtx=null;                // weapon context of last hit (for on-kill effects)
     // Holo Decoy taunt redirection
     this._tauntTarget=null;               // active hologram effect (or null)
@@ -1561,6 +1600,28 @@ class Enemy {
     // MIMIC: damage forces reveal (capture state first for shield gen DR check)
     const wasDisguised = this._disguised;
     if (this._disguised) this.revealMimic(_EG.player);
+    // MARK 'of Marking' affix: a Marking-weapon hit landing on an enemy
+    // that already carries a live mark deals +30%. Multiplier is applied
+    // here at the top of damage processing — BEFORE SHIELDED/shieldGen/
+    // NEXUS DR — so the bonus follows the same mitigation path as the base
+    // hit (no double-counting against shields, no rounding drift). Gates:
+    //   ctx.effects?.includes('mark') — only the affix's own weapon
+    //     benefits; a different weapon's hit on a marked enemy does not
+    //     get a free +30% (keeps the affix self-contained).
+    //   !ctx.isProc — chain/ricochet/explode procs don't double-dip the
+    //     bonus. Mark APPLICATION is also gated on !ctx.isProc one frame
+    //     later via the `if (!ctx.isProc) applyHitEffects(...)` line, so
+    //     procs neither apply nor benefit from marks.
+    //   enemy._markedTimer > 0 — the very first hit from a Marking weapon
+    //     gets no bonus (it's the one that *applies* the mark). Follow-up
+    //     hits within the 3s window get +30%.
+    {
+      const _mctx = typeof hitCtx === 'string' ? null : hitCtx;
+      if (_mctx && !_mctx.isProc && this._markedTimer > 0
+          && _mctx.effects && _mctx.effects.indexOf && _mctx.effects.indexOf('mark') !== -1) {
+        dmg = Math.round(dmg * 1.30);
+      }
+    }
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first. Gated on the affix
