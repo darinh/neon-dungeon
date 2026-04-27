@@ -10689,7 +10689,6 @@ class Player {
       const mul = 1 + Math.min(1, still / HUNT_MAX_STILL) * HUNT_MAX_BONUS;
       actual = Math.max(1, Math.round(actual * mul));
     }
-    }
     if (actual <= 0) return 0;
     // LAST_STAND perk: clutch trigger fires BEFORE the hp deduction, so the
     // activating hit also gets the −50% DR (it's the moment-it-saves-you
