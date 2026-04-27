@@ -1201,6 +1201,22 @@ const audio = (() => {
       osc('sawtooth', 320, 130, 0.06, t + 0.10, 0.50, bus);
       osc('sine', 60, 40, 0.12, t, 0.30);
     },
+    conduitFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Solo basic shot — short cyan zap. Lighter than the beam tick so
+      // a clustered solo-fire room doesn't sound like a beam-storm.
+      const bus = wetDry(1, 0.4, 0.3);
+      osc('square', 720, 480, 0.04, t, 0.10, bus);
+      osc('sine', 1100, 880, 0.03, t + 0.02, 0.08);
+    },
+    conduitBeam() {
+      const c = getCtx(); const t = c.currentTime;
+      // Per-tick beam zap — tight high-pass click + low body thunk so
+      // the player feels the damage tick over the ambient electrical hum.
+      const bus = wetDry(1, 0.35, 0.25);
+      noise(0.06, t, 0.05, 6000, bus);
+      osc('triangle', 320, 200, 0.06, t + 0.005, 0.10);
+    },
     resonatorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Rising harmonic chord — the resonator winding up its cone. Two
