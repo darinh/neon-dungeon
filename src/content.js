@@ -4300,6 +4300,7 @@ const AUGMENTS = {
   TEMPORAL_DILATION:{ name:'Temporal Dilation',     icon:'⏳', colour:'#88ccff', desc:'All enemies 15% slower' },
   REACTIVE_ARMOR:   { name:'Reactive Armor',        icon:'💥', colour:'#ff6644', desc:'When hit, emit damage pulse' },
   EMERGENCY_CACHE:  { name:'Emergency Cache',       icon:'🔋', colour:'#88ffaa', desc:'Enter floor <30% HP: heal to 50%' },
+  KINETIC_DAMPER:   { name:'Kinetic Damper',        icon:'⚙', colour:'#5588aa', desc:'−20% damage from direct hits' },
   BIOFILTER:        { name:'Biofilter',             icon:'🧪', colour:'#aaffcc', desc:'−50% burn DoT and hazard tile damage' },
 };
 const AUGMENT_KEYS = Object.keys(AUGMENTS);

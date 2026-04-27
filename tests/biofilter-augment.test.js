@@ -160,17 +160,18 @@ test('sw.js cache version bumped (>= v213) so deploy invalidates stale clients',
   assert.ok(v >= 213, `sw.js cache version must be >= v213 for BIOFILTER deploy, got v${v}`);
 });
 
-test('AUGMENTS object remains <=14 entries (roster sanity)', () => {
+test('AUGMENTS object remains <=15 entries (roster sanity)', () => {
   // The augment-choice modal, the implant-shrine UI, and the shop offer
-  // all assume a manageable roster. The handoff flagged the roster as
-  // "13 — gaps remain in defensive %DR and status-resistance" so this
-  // PR brings it to 14. Lock that ceiling so a future careless add
-  // doesn't bloat the modal silently.
+  // all assume a manageable roster. Original cap was 14 (BIOFILTER as #14).
+  // Bumped to 15 when KINETIC_DAMPER (#174) merged alongside BIOFILTER (#173).
+  // Roster pool only affects rollAugmentChoices availability — choice modal
+  // always shows 2 options regardless, so 15 is still UI-safe. Hold this
+  // ceiling: future adds must trim or escalate.
   const block = CONTENT.match(/const AUGMENTS = \{([\s\S]*?)\n\};/);
   assert.ok(block, 'AUGMENTS block must exist in content.js');
   const entries = block[1].split('\n').filter(l => /^\s*[A-Z_]+\s*:/.test(l));
-  assert.ok(entries.length <= 14,
-    `AUGMENTS roster must stay <=14 (got ${entries.length}). Trim or escalate before adding more.`);
+  assert.ok(entries.length <= 15,
+    `AUGMENTS roster must stay <=15 (got ${entries.length}). Trim or escalate before adding more.`);
   assert.ok(entries.length >= 14,
-    `AUGMENTS roster must include BIOFILTER (expected 14, got ${entries.length}).`);
+    `AUGMENTS roster must include BIOFILTER (expected >=14, got ${entries.length}).`);
 });
