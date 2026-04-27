@@ -225,21 +225,26 @@ test('reset-confirm: every non-reset actionable mouse-click row clears the arm',
   );
 });
 
-test('reset-confirm: armed label uses the same RESET_CONFIRM_WINDOW_MS constant', () => {
-  // Render and update both check the window. If they drift, the user
-  // could see "PRESS AGAIN" while the handler treats the arm as
-  // expired (or vice-versa). Pinning both to the same constant value
-  // (3000) keeps them in sync.
-  const updateStart = GAME_NC.indexOf('updateSettings()');
-  const renderStart = GAME_NC.indexOf('renderSettings()');
-  const updateBody = GAME_NC.slice(updateStart, renderStart);
-  const renderBody = GAME_NC.slice(renderStart, renderStart + 12000);
-  const updateMs = updateBody.match(/RESET_CONFIRM_WINDOW_MS\s*=\s*(\d+)/);
-  const renderMs = renderBody.match(/RESET_CONFIRM_WINDOW_MS\s*=\s*(\d+)/);
-  assert.ok(updateMs && renderMs, 'RESET_CONFIRM_WINDOW_MS must be declared in both updateSettings and renderSettings');
+test('reset-confirm: RESET_CONFIRM_WINDOW_MS is centralized at module scope', () => {
+  // Hoisted out of updateSettings/renderSettings into a single
+  // module-scope const so the two callers can no longer drift. The
+  // earlier per-method declarations were a known-limitation noted in
+  // PR #184; this assertion locks in the consolidation.
+  const moduleScopeDecl = GAME_NC.match(
+    /\nconst\s+RESET_CONFIRM_WINDOW_MS\s*=\s*(\d+)\s*;/
+  );
+  assert.ok(
+    moduleScopeDecl,
+    'RESET_CONFIRM_WINDOW_MS must be declared once at module scope'
+  );
+  // And there must be NO per-method `const RESET_CONFIRM_WINDOW_MS`
+  // shadow declaration left over inside updateSettings or
+  // renderSettings — that would silently mask the module-scope value
+  // and re-introduce drift.
+  const allDecls = GAME_NC.match(/const\s+RESET_CONFIRM_WINDOW_MS\s*=/g) || [];
   assert.equal(
-    updateMs[1],
-    renderMs[1],
-    `RESET_CONFIRM_WINDOW_MS must match in both copies (update=${updateMs[1]}, render=${renderMs[1]})`
+    allDecls.length,
+    1,
+    `RESET_CONFIRM_WINDOW_MS must be declared exactly once (found ${allDecls.length})`
   );
 });

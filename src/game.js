@@ -1,6 +1,14 @@
 // @ts-check
 'use strict';
 
+// Two-tap window for the destructive [RESET TO DEFAULTS] button in the
+// SETTINGS menu — first press arms a timestamp, second press within
+// this window commits, anything else (nav, click elsewhere, Escape,
+// timeout) cancels. Centralized here so both updateSettings and
+// renderSettings share the same source of truth (the prior split
+// constant is what the PR #184 known-limitation note flagged).
+const RESET_CONFIRM_WINDOW_MS = 3000;
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -3181,7 +3189,6 @@ const game = {
     const CTRL_START = 8;     // row index where key rebind rows begin (6 toggles)
     // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
-    const RESET_CONFIRM_WINDOW_MS = 3000;
     // Auto-expire a stale reset confirmation. Without this, a player who
     // armed the confirmation 30 seconds ago and walks away returns to a
     // settings menu where the very next Enter wipes their config.
@@ -3492,7 +3499,6 @@ const game = {
     const resetIdx = CTRL_START + actions.length;
     const resetY = startY + resetIdx * rowH;
     ctx.textAlign = 'center';
-    const RESET_CONFIRM_WINDOW_MS = 3000;
     const armed = this._settingsResetConfirm > 0
       && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS;
     if (armed) {
