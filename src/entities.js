@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -497,6 +497,45 @@ const SAPPER_DRAIN_SECS  = 4;     // seconds drained per successful contact hit
 const SAPPER_CHASE_RANGE = 11;    // tiles — los/proximity gate before chase
 const SAPPER_MELEE_RANGE = 1.2;   // tiles — contact damage range
 
+// MAGPIE tuning constants. Loot-thief mob (floor 4+).
+//
+// Design intent: a fast, fragile, NON-DAMAGING mob that races to dropped
+// items (the things the player would otherwise pick up — meds, currency,
+// tactical drops) and consumes them, banking their value. While carrying
+// stolen value it flees from the player. Killing it drops a hoard
+// pickup that returns the stolen value as credits.
+//
+// Why this exists in the new economy: the redesign at 17:35 made
+// dropped supplies the primary "carry-out" of a floor (heals + currency
+// + tactical drops; no permanent power-ups from drops). MAGPIE puts
+// a competing agent on the same loot table, creating a real mid-floor
+// decision: chase the thief, or top up first? Without it the dropped
+// pickups are inert background noise once the player learns to vacuum
+// them up reliably. Reinforces "credits matter" without being mean —
+// MAGPIE never deals damage, only steals reward.
+//
+// Counterplay: kill before grab (very fragile), block its path between
+// it and the item, or kill after the grab (the hoard pickup gives the
+// value back). Drops nothing if it never stole anything (so a kill on
+// an idle MAGPIE is just normal credits).
+//
+// Targeting rule: MAGPIE only targets generic Item drops — never
+// KeyItem (.isKey), HarvestPickup (.isHarvest), or WhisperItem
+// (.isWhisper). Keys are progression-critical, harvest pickups are
+// a closed loop with their source mob, whispers are story content.
+// Stealing those would feel like a bug, not a mechanic.
+//
+// Why floor 4+: matches HARVESTER (floor 4), the first floor where
+// drops are abundant enough that a thief reads as a meaningful
+// pressure. Earlier floors have so few drops that MAGPIE would
+// usually idle — boring.
+const MAGPIE_SCAN_RANGE   = 12;    // tiles — radius for nearest-Item scan
+const MAGPIE_SCAN_PERIOD  = 0.4;   // seconds — re-scan throttle (cheap)
+const MAGPIE_GRAB_RANGE   = 0.6;   // tiles — distance at which a grab "consumes" the item
+const MAGPIE_FLEE_RANGE   = 8;     // tiles — desired distance to keep from player when carrying
+const MAGPIE_STOLEN_BASE  = 15;    // base credit value granted per item stolen
+const MAGPIE_STOLEN_PERFL = 5;     // additional per-floor credit value per item stolen
+
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
  * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
@@ -686,7 +725,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -712,7 +751,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1404,6 +1443,21 @@ class Enemy {
     if (this.type === 'HARVESTER' && !isSummon && !this.isShard) {
       items.push(new HarvestPickup(this.x, this.y));
     }
+    // MAGPIE hoard drop. The thief mob bankss credit value from each
+    // generic Item it consumed during its life (`_mgStolenCr`); on
+    // death we hand that value back as a MagpieHoard pickup so killing
+    // the thief recovers what was stolen. Excludes summons / shards
+    // for the same reason as the generic Item drop above (defensive —
+    // no current code path summons MAGPIEs, but the gate stays in
+    // sync with the design rule). If MAGPIE never grabbed anything,
+    // _mgStolenCr stays 0 and we drop nothing extra (normal credit
+    // reward from CREDIT_VALUES still applies).
+    if (this.type === 'MAGPIE' && !isSummon && !this.isShard) {
+      const stolen = this._mgStolenCr || 0;
+      if (stolen > 0) {
+        items.push(new MagpieHoard(this.x, this.y, stolen));
+      }
+    }
     _EG.player.gainXP(Math.round(this.xpValue*d.xpMul));
     // Combo: SHARDs, summons, and VOLATILE chain kills don't build streak
     const comboEligible = !this.isShard && !isSummon && !this._volatileKill;
@@ -1771,6 +1825,7 @@ class Enemy {
       case 'MAGNETON':this.aiMagneton(dt,player,map,d,los); break;
       case 'SPECTRE':this.aiSpectre(dt,player,map,d,los); break;
       case 'SAPPER':this.aiSapper(dt,player,map,d,los); break;
+      case 'MAGPIE':this.aiMagpie(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2111,6 +2166,122 @@ class Enemy {
     // meleeAttack is taunt-aware internally; passing `player` is
     // correct even when the mob is targeting a hologram decoy.
     if (d < SAPPER_MELEE_RANGE) this.meleeAttack(player);
+  }
+
+  /**
+   * MAGPIE — loot-thief (floor 4+, hp=28, atk=0, spd=3.4).
+   *
+   * Non-damaging fast mob whose only mechanic is racing to dropped
+   * Items and "consuming" them. Each consumed item banks
+   * `MAGPIE_STOLEN_BASE + floor * MAGPIE_STOLEN_PERFL` credits onto
+   * `this._mgStolenCr`. On death, die() drops a MagpieHoard pickup
+   * worth the banked total — so the player can fully recover what
+   * was stolen by killing the thief.
+   *
+   * State machine:
+   *   1. No target + items in scan range → re-target nearest valid Item
+   *   2. Valid target → moveToward(target.x, target.y); on grab,
+   *      mark target.dead = true, increment _mgStolenCr, clear target
+   *   3. Carrying (_mgStolenCr > 0) AND no fresh target → flee from
+   *      player (move along the player→thief vector, away from
+   *      player), trying to keep at least MAGPIE_FLEE_RANGE distance.
+   *   4. Idle (no items, no carry) → low-key patrol so it isn't
+   *      a static blob.
+   *
+   * Targeting filter: only generic `Item` instances qualify. Keys
+   * (.isKey), HarvestPickup (.isHarvest), WhisperItem (.isWhisper)
+   * are explicitly excluded — stealing those would feel like a bug,
+   * not a mechanic. This list is exhaustive for the current items[]
+   * array (KeyItem / HarvestPickup / WhisperItem / Item / MagpieHoard);
+   * MagpieHoard pickups are also skipped (`.isHoard`) so a second
+   * MAGPIE can't infinite-loop a hoard from a dead sibling.
+   *
+   * Re-scan throttle: scanning items[] every frame would be wasteful
+   * (most frames items[] is unchanged). MAGPIE_SCAN_PERIOD = 0.4s
+   * gives ~2.5 scans/sec which is faster than a player's pickup
+   * cadence — the thief reads as "alert" without burning the loop.
+   * Re-scan also fires immediately after a successful grab and on
+   * any frame where the current target is gone (covers the case
+   * where the player pickups the targeted item between scans).
+   *
+   * Excluded from the elite affix roll: same first-ship caution as
+   * recently-introduced mobs (HARVESTER / MAGNETON / SPECTRE /
+   * SAPPER) — easier to add elite affixes later than to reason
+   * about SHIELDED / PHASING / FRENZY interactions for a brand-new
+   * non-damaging mechanic.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiMagpie(dt, player, map, d, los) {
+    void los; // LOS is irrelevant — MAGPIE pursues items, not the player
+    this._mgScanT = (this._mgScanT || 0) - dt;
+    // Drop stale targets early so the dispatch logic below doesn't
+    // chase a freshly-collected pickup. Item.dead is set by the player
+    // pickup path AND by a previous MAGPIE's grab.
+    if (this._mgTarget && (this._mgTarget.dead || items.indexOf(this._mgTarget) === -1)) {
+      this._mgTarget = null;
+    }
+    // Re-scan when throttle expired OR when we have no current target.
+    if (!this._mgTarget || this._mgScanT <= 0) {
+      this._mgScanT = MAGPIE_SCAN_PERIOD;
+      let best = null;
+      let bestD2 = MAGPIE_SCAN_RANGE * MAGPIE_SCAN_RANGE;
+      for (const it of items) {
+        if (!it || it.dead) continue;
+        // Filter: only generic Items. Keys / harvest / whispers /
+        // existing hoards are off-limits.
+        if (it.isKey || it.isHarvest || it.isWhisper || it.isHoard) continue;
+        const dx = it.x - this.x, dy = it.y - this.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = it;
+        }
+      }
+      if (best) this._mgTarget = best;
+    }
+    // 1) Have a target — race for it.
+    if (this._mgTarget) {
+      this.moveToward(this._mgTarget.x, this._mgTarget.y, this.spd, dt, map);
+      const gx = this._mgTarget.x - this.x, gy = this._mgTarget.y - this.y;
+      if (gx * gx + gy * gy <= MAGPIE_GRAB_RANGE * MAGPIE_GRAB_RANGE) {
+        // Consume the item. Mark dead so game.js's prune (after enemy
+        // updates) splices it from items[]. Cannot splice here
+        // because we're iterating items[] indirectly across multiple
+        // MAGPIEs in the same enemy update loop.
+        this._mgTarget.dead = true;
+        const floorNum = (_EG && _EG.floor) || 1;
+        const banked = MAGPIE_STOLEN_BASE + floorNum * MAGPIE_STOLEN_PERFL;
+        this._mgStolenCr = (this._mgStolenCr || 0) + banked;
+        spawnDmgText(this.x, this.y, '+' + banked + ' CR', '#cceeff');
+        spawnParticles(this.x, this.y, 'SPARK', '#cceeff', 8);
+        try { audio.pickup(); } catch (_) { /* audio optional */ }
+        this._mgTarget = null;
+        this._mgScanT = 0; // re-scan next frame in case more loot is in range
+      }
+      return;
+    }
+    // 2) Carrying — flee from the player. Aim at a point along the
+    //    player→thief vector, projected outward by MAGPIE_FLEE_RANGE,
+    //    so moveToward routes through the map walker (respecting walls).
+    //    If LOS is blocked the thief naturally seeks corners — fine.
+    //    Use the REAL player distance (pd), not the taunt-aware `d`
+    //    passed in by update() — `d` is computed from `_tx/_ty` which
+    //    can point at a hologram, so a carrying MAGPIE next to the
+    //    player would fail this gate during a DECOY taunt and fall
+    //    through to patrol. Flee always tracks the actual player.
+    const pd = dist(this.x, this.y, player.x, player.y);
+    if ((this._mgStolenCr || 0) > 0 && pd < MAGPIE_FLEE_RANGE) {
+      const dx = this.x - player.x, dy = this.y - player.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const fx = this.x + (dx / len) * MAGPIE_FLEE_RANGE;
+      const fy = this.y + (dy / len) * MAGPIE_FLEE_RANGE;
+      this.moveToward(fx, fy, this.spd, dt, map);
+      return;
+    }
+    // 3) Idle / patrol. Slow drift so a thief without targets reads
+    //    as alive, not a placeholder turret.
+    this.patrol(dt, map);
   }
 
   /**
@@ -5815,6 +5986,28 @@ class Enemy {
         ctx.restore();
         // Inner core — brighter, holds full per-state alpha.
         NEON.draw.circle(ctx, sx, sy, coreR);
+      } else if (t === 'MAGPIE') {
+        // Magpie — diamond body + small "carry pip" overlay when
+        // _mgStolenCr > 0. Visually distinct from every other mob:
+        // diamond (Item-shaped on purpose — it IS the loot-thief)
+        // with a pale silver-blue iridescent outline. Carrying pip
+        // is a tiny gold square inside the diamond — reads as
+        // "this one has my stuff" at a glance, mobile-friendly.
+        const bodyR = TILE * 0.22;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-bodyR, -bodyR, bodyR * 2, bodyR * 2);
+        ctx.restore();
+        if ((this._mgStolenCr || 0) > 0) {
+          ctx.save();
+          ctx.fillStyle = '#ffd700';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ffd700';
+          const pip = TILE * 0.10;
+          ctx.fillRect(sx - pip / 2, sy - pip / 2, pip, pip);
+          ctx.restore();
+        }
       } else if (t === 'SAPPER') {
         // Spindly leech — small triangular body + four short tendrils
         // that pulse with _saPulse so a clustered pack doesn't pulse
@@ -7081,6 +7274,7 @@ const ENEMY_WEIGHTS = {
   MAGNETON:   { base: 2,  perFloor: 1, minFloor: 6 },  // stationary projectile-bender — pulls player shots toward itself (anti-spam, compositional)
   SPECTRE:    { base: 2,  perFloor: 1, minFloor: 7 },  // phase/manifest cycler — invulnerable & harmless during phase, vulnerable & dangerous during manifest (timing-based)
   SAPPER:     { base: 2,  perFloor: 1, minFloor: 5 },  // boost-drain leech — fast fragile chaser, drains time from active timed boosts on contact (anti-buff-stacking, compositional)
+  MAGPIE:     { base: 2,  perFloor: 1, minFloor: 4 },  // loot-thief — fast fragile non-damaging mob that races to dropped Items, banks credits, drops a hoard pickup on death (currency-economy pressure)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -7196,6 +7390,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'MAGNETON':  hp=50; atk=0;  spd=0;   xpVal=22; colour='#ff44dd'; break;
     case 'SPECTRE':   hp=28; atk=12; spd=2.4; xpVal=22; colour='#eeccff'; break;
     case 'SAPPER':    hp=22; atk=6;  spd=2.8; xpVal=14; colour='#ddff44'; break;
+    case 'MAGPIE':    hp=28; atk=0;  spd=3.4; xpVal=12; colour='#cceeff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7387,12 +7582,23 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // a random seed so a clustered spawn doesn't pulse in lock-step.
     e._saPulse = Math.random() * TWO_PI;
   }
+  if (type==='MAGPIE') {
+    // Loot-thief state: scan throttle (re-scan items[] every
+    // MAGPIE_SCAN_PERIOD seconds), current target Item, and banked
+    // credit value (paid back via MagpieHoard pickup on death).
+    // Stagger initial scan with a small random offset so a clustered
+    // spawn doesn't all scan in lock-step — spreads the work across
+    // frames and reads as "independent agents" rather than a swarm.
+    e._mgScanT = Math.random() * MAGPIE_SCAN_PERIOD;
+    e._mgTarget = null;
+    e._mgStolenCr = 0;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

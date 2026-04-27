@@ -1434,6 +1434,23 @@ const game = {
           this.msg('HARVEST SURGE — +50% DMG (8s)', '#ff9933');
           continue;
         }
+        // MAGPIE hoard — thief returns banked credits on death pickup.
+        // The MagpieHoard.amt was set to the exact value the thief
+        // banked (sum of MAGPIE_STOLEN_BASE + floor * MAGPIE_STOLEN_PERFL
+        // per consumed Item) so this is always a clean refund of the
+        // stolen value. Floating "+N CR" + gold flash mirrors the
+        // CREDIT_CACHE pickup feedback so the player reads the recovery
+        // unambiguously.
+        if (it.isHoard) {
+          audio.pickup();
+          items.splice(i, 1);
+          const amt = Math.max(0, Math.round(it.amt || 0));
+          player.credits = (player.credits || 0) + amt;
+          if (typeof spawnDmgText === 'function') spawnDmgText(player.x, player.y, '+' + amt + ' CR', '#ffd700');
+          if (typeof spawnParticles === 'function') spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);
+          this.msg('HOARD RECOVERED  +' + amt + ' CR', '#ffd700');
+          continue;
+        }
         if (it.isWhisper) {
           // Whispers subplot — picking up shows the body in a READING overlay
           // so the discovery + reading moment feels earned (per stored
