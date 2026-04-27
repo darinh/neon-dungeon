@@ -1631,6 +1631,44 @@ class Enemy {
         dmg = Math.round(dmg * 1.30);
       }
     }
+    // EXPLOITER perk: +25% damage to enemies suffering ANY status effect
+    // (burning / slowed / stunned / marked). Applied at the top of damage
+    // processing — same chokepoint as the MARK affix above — BEFORE
+    // SHIELDED/shieldGen/NEXUS DR so the bonus follows the same mitigation
+    // path as the base hit (no double-counting against shields, no rounding
+    // drift). Multiplicative on top of MARK's +30% by design: a Marking
+    // build that lands a follow-up hit on a marked target with EXPLOITER
+    // gets both modifiers (each gates on independent state).
+    //
+    // Gates:
+    //   _EG.player.perks.EXPLOITER — only when player owns the perk.
+    //   !ctx.isProc — chain/ricochet/explode procs don't double-dip
+    //     (mirrors MARK and the broader on-hit chokepoint convention).
+    //     ctx may be a string (legacy) or undefined; both lack `.isProc`
+    //     so they pass the gate as direct hits, which is correct.
+    //   Status check — any of burnTimer/slowTimer/stunTimer/_markedTimer
+    //     > 0. enemy.shockTimer is intentionally NOT checked: shockTimer
+    //     is a player-only field (see entities.js:10515 Player.shockTimer);
+    //     enemies don't carry it. _wrPhased / phaseImmune already returned
+    //     early above, so they can't reach here regardless.
+    //
+    // Note: burn DoT at entities.js:1219 does direct `enemy.hp -= dmg` and
+    // BYPASSES takeDamage, so EXPLOITER does NOT amplify burn ticks — only
+    // the player's direct hits on burning enemies. This is by design (the
+    // perk rewards the player for pressing advantage on debuffed targets,
+    // not for stacking with environmental DoT).
+    {
+      const _ectx = typeof hitCtx === 'string' ? null : hitCtx;
+      const _isProc = !!(_ectx && _ectx.isProc);
+      if (!_isProc && _EG.player && _EG.player.perks && _EG.player.perks.EXPLOITER) {
+        if ((this.burnTimer && this.burnTimer > 0)
+            || (this.slowTimer && this.slowTimer > 0)
+            || (this.stunTimer && this.stunTimer > 0)
+            || (this._markedTimer && this._markedTimer > 0)) {
+          dmg = Math.round(dmg * 1.25);
+        }
+      }
+    }
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first. Gated on the affix
