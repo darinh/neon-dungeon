@@ -2032,6 +2032,14 @@ function populateFloor(dungeon, floorNum) {
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
 
+  // SHOCK_PULSE pickup — defensive panic-button consumable. Floor-gated to
+  // 3+ (matches mine floor gate — both are mid-run+ tools), 30% per floor,
+  // capped at 1 placement per floor (rare panic button, not a stack-and-
+  // spam consumable). Placement uses the same room-eligibility shape as
+  // mines (interior tile, not adjacent to other props).
+  const _shockPulseRoll = floorNum >= 3 && Math.random() < 0.30;
+  let _shockPulsePlaced = !_shockPulseRoll;
+
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
     if (room===spawnRoom) continue;
@@ -2128,6 +2136,27 @@ function populateFloor(dungeon, floorNum) {
         if (!tooClose) for (const v of vcores) { if (dist(mx, my, v.x, v.y) < 1.5) { tooClose = true; break; } }
         if (!tooClose) for (const c of crates) { if (dist(mx, my, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
         if (!tooClose) mines.push(createMine(mx, my, floorNum, room));
+      }
+    }
+
+    // SHOCK_PULSE pickup — once per floor (gated by _shockPulsePlaced
+    // flag declared above the room loop). 1/3 chance per eligible normal
+    // room until a successful placement caps the floor's allotment. Same
+    // tile-spacing checks as mines so two pickups don't visually stack.
+    if (!_shockPulsePlaced && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.34) {
+      const sx = room.x + rndInt(2, room.w - 3) + 0.5;
+      const sy = room.y + rndInt(2, room.h - 3) + 0.5;
+      const stx = Math.floor(sx), sty = Math.floor(sy);
+      if (dungeon.map[sty]?.[stx] === T.FLOOR) {
+        let tooClose = false;
+        for (const b of beacons) { if (dist(sx, sy, b.x, b.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const v of vcores) { if (dist(sx, sy, v.x, v.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const c of crates) { if (dist(sx, sy, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const m of mines) { if (dist(sx, sy, m.x, m.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) {
+          items.push(new ShockPulsePickup(sx, sy));
+          _shockPulsePlaced = true;
+        }
       }
     }
 

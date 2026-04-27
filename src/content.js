@@ -4587,6 +4587,70 @@ class VaultCoin {
   }
 }
 
+// SHOCK_PULSE pickup — defensive panic-button consumable. Auto-collected on
+// player contact (mirrors HealthPack-style pickup feedback). Discharges an
+// AoE knockback + brief stun centred on the player. NON-DAMAGING — the
+// payoff is positional / tempo (panic-eject a swarm, regain footing) rather
+// than DPS. Distinct from MAGPIE/VAULTMASTER pickups (currency) and
+// HARVESTER pickup (timed buff): this one has an immediate spatial/control
+// effect and no lingering boost.
+//
+// Design notes:
+//  - Floor-gated to floor 3+ via populateFloor placement (matches mines).
+//  - Spawn rate ~30% per floor with a once-per-floor cap (rare panic
+//    button, not a stack-and-spam consumable).
+//  - LOS-gated knockback so enemies behind walls aren't shoved around the
+//    geometry. Same gate other AoE helpers use (LEAPER shockwave, mine
+//    explode), keeps "what you can see is what you affect" parity.
+//  - Bosses: brief stun (boss stunTimer cap = 0.3s already enforced
+//    elsewhere) but NO knockback — boss positioning is a designed
+//    encounter constraint and shoving them breaks arena flow.
+//  - No TTL — sits on the floor until claimed (matches MagpieHoard /
+//    VaultCoin choice; the player decides when to use it).
+const SHOCK_PULSE_RADIUS = 5.0;       // tiles
+const SHOCK_PULSE_STUN   = 1.0;       // seconds (capped to 0.3 for bosses by takeDamage path; we apply directly)
+const SHOCK_PULSE_BOSS_STUN = 0.3;    // explicit shorter cap for bosses
+const SHOCK_PULSE_KNOCK  = 2.5;       // tiles of impulse displacement
+class ShockPulsePickup {
+  /**
+   * @param {any} x
+   * @param {any} y
+   */
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isShockPulse = true;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 4; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.5 + 0.5 * Math.sin(this.bob * 1.4);
+    ctx.save();
+    ctx.shadowBlur = 10 + 14 * pulse;
+    ctx.shadowColor = '#66e0ff';
+    ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    // Two concentric arc rings — "stored shockwave" silhouette, distinct
+    // from VaultCoin's solid gold ring + core and HarvestPickup's diamond.
+    ctx.strokeStyle = '#aaf0ff';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    ctx.strokeStyle = '#66e0ff';
+    ctx.lineWidth = 1;
+    NEON.draw.circleStroke(ctx, sx, sy, 3.5 + 0.8 * pulse);
+    // Central spark — small bright dot.
+    ctx.fillStyle = '#e8faff';
+    ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    ctx.restore();
+  }
+}
+
 class Item {
   /**
    * @param {any} x

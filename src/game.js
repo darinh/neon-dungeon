@@ -1463,6 +1463,19 @@ const game = {
           this.msg('HOARD RECOVERED  +' + amt + ' CR', '#ffd700');
           continue;
         }
+        // SHOCK_PULSE pickup — defensive panic-button consumable. Auto-
+        // triggers on contact (mirrors HARVEST_SURGE / HOARD recovery
+        // feedback shape). Discharges an AoE knockback + brief stun
+        // centred on the player. NON-DAMAGING — payoff is positional
+        // (panic-eject a swarm), not DPS. Detonation math + LOS gate
+        // + boss carve-out live in triggerShockPulse() in entities.js.
+        if (it.isShockPulse) {
+          items.splice(i, 1);
+          const hit = (typeof triggerShockPulse === 'function') ? triggerShockPulse() : 0;
+          try { audio.pickup(); } catch (_) {}
+          this.msg(hit > 0 ? ('SHOCK PULSE — ' + hit + ' STUNNED') : 'SHOCK PULSE', '#66e0ff');
+          continue;
+        }
         if (it.isWhisper) {
           // Whispers subplot — picking up shows the body in a READING overlay
           // so the discovery + reading moment feels earned (per stored
