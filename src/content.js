@@ -713,6 +713,7 @@ const HACKWARE = {
   DECOY_TURRET: { name:'Decoy Turret', desc:'6s allied turret auto-fires',     colour:'#00ffaa', icon:'⊞', cooldown:14 },
   SCRAP_MAGNET: { name:'Scrap Magnet', desc:'Pulls coins & keys (10t) to you', colour:'#ffd700', icon:'◉', cooldown:12 },
   BLINK:        { name:'Blink',        desc:'Teleport 4 tiles in aim direction', colour:'#88ccff', icon:'⌖', cooldown:9 },
+  REPAIR_PROTOCOL:{ name:'Repair Protocol', desc:'Heal 4 HP/s for 4s',           colour:'#00ff88', icon:'✚', cooldown:18 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1030,6 +1031,29 @@ function activateHackware(player) {
       audio.hackwareBlink();
       triggerShake(2, 0.1);
       _CG.msg('⌖ BLINK', '#88ccff');
+      break;
+    }
+    case 'REPAIR_PROTOCOL': {
+      // Heal-over-time: 4 HP every 1.0s for 4 ticks (16 HP total over 4s).
+      // Tick logic lives next to the HP_REGEN perk block in entities.js
+      // Player.update — reuses the same accumulator-vs-period pattern so
+      // there is no per-frame allocation in the hot tick path. Activation
+      // is idempotent under spam: gated by hackwareCooldown above.
+      // No-heal short-circuit: if already at full HP, refund cooldown so
+      // the player isn't punished for a misclick at full health.
+      if (player.hp >= player.maxHp) {
+        player.hackwareCooldown = 0;
+        _CG.msg('✚ REPAIR ABORT — FULL HP', '#888888');
+        break;
+      }
+      // Self-clearing state: _repairTicksLeft naturally decays to 0 each
+      // tick, mirroring the OVERDRIVE/combo "reuse self-clearing state"
+      // pattern. No loadFloor/death cleanup hook needed beyond Player.reset.
+      player._repairTicksLeft = 4;
+      player._repairTickTimer = 1.0;
+      audio.heal();
+      spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 10);
+      _CG.msg('✚ REPAIR PROTOCOL', '#00ff88');
       break;
     }
   }
