@@ -17,8 +17,16 @@ on:
   push:
     branches: [develop]
 
+# Serialize cache-bump runs per branch so two near-simultaneous develop
+# pushes don't race to create competing bump PRs against the same `current`
+# version (the second would fail because sw.js has already advanced).
+concurrency:
+  group: cache-bump-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   bump:
@@ -69,17 +77,52 @@ jobs:
           echo "current=$current" >> "$GITHUB_OUTPUT"
           echo "next=$next" >> "$GITHUB_OUTPUT"
 
-      - name: Commit and push
+      - name: Open and merge PR with the bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if git diff --quiet sw.js; then
             echo "no change to sw.js — skipping commit"
             exit 0
           fi
+          # The 'develop' branch ruleset requires every change to land via a
+          # PR (direct push is rejected with GH013). On a *personal* repo we
+          # can't add the GitHub Actions Integration as a bypass actor
+          # (org-only API), so the bot opens a tiny single-file PR with the
+          # bump and immediately squash-merges it. The ruleset has 0
+          # required reviews and no required checks, so the merge succeeds
+          # synchronously without human involvement.
+          #
+          # The squash commit's title carries the [skip cache-bump] marker
+          # so the resulting push to develop won't re-trigger this
+          # workflow (the if-condition above filters on it).
+          BRANCH="chore/cache-bump-${{ steps.bump.outputs.next }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          TITLE="chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]"
+          BODY=$(printf 'Auto-bumped from v%s → v%s in response to commit %s.\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>' \
+            '${{ steps.bump.outputs.current }}' '${{ steps.bump.outputs.next }}' '${{ github.event.head_commit.id }}')
+          # Clean up the chore branch + any open PR if anything past this
+          # point fails (gh pr create works but gh pr merge errors, etc.),
+          # so failed runs don't leave orphan branches and dangling PRs
+          # piling up in the repo. Idempotent: failure to find a PR or
+          # branch is silently ignored.
+          cleanup() {
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+              echo "::warning::cache-bump failed (exit $rc) — cleaning up branch/PR"
+              gh pr close "$BRANCH" --delete-branch 2>/dev/null || true
+              git push origin --delete "$BRANCH" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
           git add sw.js
-          git commit -m "chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]" \
-            -m "Auto-bumped from v${{ steps.bump.outputs.current }} → v${{ steps.bump.outputs.next }} in response to commit ${{ github.event.head_commit.id }}." \
-            -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
-          git push origin HEAD:develop
+          git commit -m "$TITLE" -m "$BODY"
+          git push origin "$BRANCH"
+          gh pr create --base develop --head "$BRANCH" --title "$TITLE" --body "$BODY"
+          # Squash-merge so develop's history stays linear and the [skip
+          # cache-bump] marker is preserved in the resulting commit
+          # message. --delete-branch keeps the branch list tidy.
+          gh pr merge "$BRANCH" --squash --delete-branch --subject "$TITLE" --body "$BODY"
