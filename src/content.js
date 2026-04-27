@@ -2281,6 +2281,13 @@ function getStatusEffects(player) {
   if (player.perks.STRIDE && (player._strideStacks || 0) > 0) {
     fx.push({ id: 'stride', icon: '⇶', label: 'RUSH ×' + player._strideStacks, colour: '#00ffaa' });
   }
+  // DEADEYE charged (stillness latch — next shot gets ×1.5). Stillness
+  // counterpart to STRIDE; both can be owned simultaneously, in which
+  // case the chip stacks with RUSH ×N (additive perk slots, distinct
+  // visual signals so the player can tell which is currently active).
+  if (player.perks.DEADEYE && player._steadyReady) {
+    fx.push({ id: 'deadeye', icon: '◎', label: 'AIM', colour: '#ffee88' });
+  }
   // Second Wind available
   if (player.perks.SECOND_WIND && !player.secondWindUsed) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
@@ -4257,6 +4264,7 @@ const PERK_POOL = {
   LAST_STAND:      { name:'Last Stand',       icon:'⚔', desc:'Hit to ≤10% HP: +75% dmg, −50% taken (5s, 60s CD)', colour:'#ffcc00' },
   PRISTINE:        { name:'Pristine',          icon:'✧', desc:'+25% damage at or above 90% HP',       colour:'#88ffee' },
   STRIDE:          { name:'Stride',           icon:'⇶', desc:'Continuous movement: +5% ATK / sec (max 5)', colour:'#00ffaa' },
+  DEADEYE:         { name:'Deadeye',          icon:'◎', desc:'Stand still 1s: next shot deals +50% damage', colour:'#ffee88' },
   OVERDRIVE:       { name:'Overdrive',         icon:'❯', desc:'Score combo buffs damage (+3%/level, max +30%)', colour:'#ff00c8' },
   RETRIBUTION:     { name:'Retribution',       icon:'☄', desc:'Take damage: +50% ATK for 3s',          colour:'#ff2266' },
 };
