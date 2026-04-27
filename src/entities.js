@@ -10246,9 +10246,23 @@ function drawGravityWells(camX, camY) {
 }
 
 // ─── Player ───────────────────────────────────────────────────────────────────
+
+// STRIDE perk constants. STRIDE_MOVE_RATE matches the HUNTER tiles/sec
+// threshold convention (per stored memory: any "moving vs not moving"
+// gate must use moved/dt, NOT a tiles/frame absolute) so behaviour is
+// identical at 30/60/120 fps.
+const STRIDE_MOVE_RATE = 0.5;     // tiles/sec — counts as "moving"
+const STRIDE_PER_STACK = 1.0;     // seconds of movement per stack
+const STRIDE_MAX_STACKS = 5;
+const STRIDE_DMG_PER_STACK = 0.05; // +5% ATK per stack
+const STRIDE_RESET_GRACE = 0.3;   // seconds of stillness before stacks drop
+
 class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
+  /** @type {any} */ _strideStacks;
+  /** @type {any} */ _strideMovingTime;
+  /** @type {any} */ _strideStillTime;
   /** @type {any} */ _outOfCombatTimer;
   /** @type {any} */ _huntStill;
   /** @type {any} */ _prevHuntX;
@@ -10453,14 +10467,13 @@ class Player {
     this._metaSecondWindUsed=false; // meta second_wind: fired once per run
     this._outOfCombatTimer=0;     // regenerator: seconds since last hit
     // HUNTER floor modifier: seconds the player has been ~stationary.
-    // Builds up while not moving (capped at HUNT_MAX_STILL); decays
-    // toward 0 quickly while moving. Player.takeDamage scales incoming
-    // damage by 1 + (still / HUNT_MAX_STILL) * HUNT_MAX_BONUS when the
-    // floor modifier is active. Reset on player.reset() so a fresh
-    // floor / continue / new run starts clean.
     this._huntStill=0;
     this._prevHuntX=null;
     this._prevHuntY=null;
+    // STRIDE perk: movement-built ATK stacks. Runtime-only state.
+    this._strideStacks=0;
+    this._strideMovingTime=0;
+    this._strideStillTime=0;
   }
 
   // ── Weapon Belt ──────────────────────────────────────────────────────
@@ -10531,8 +10544,13 @@ class Player {
     let a = this.atk;
     if (this.perks.BERSERKER && this.hp / this.maxHp <= 0.25) a = Math.round(a * 1.4);
     if (this.lastStandTimer > 0) a = Math.round(a * 1.75);
-    // PRISTINE: high-HP mirror of BERSERKER. +25% ATK at or above 90% HP.
     if (this.perks.PRISTINE && this.hp / this.maxHp >= 0.90) a = Math.round(a * 1.25);
+    // STRIDE: movement-built stacks. Multiplicative on top of any other
+    // ATK-mod perks — they each gate on independent player state.
+    const ss = this._strideStacks || 0;
+    if (this.perks.STRIDE && ss > 0) {
+      a = Math.round(a * (1 + STRIDE_DMG_PER_STACK * ss));
+    }
     return a;
   }
 
@@ -11135,6 +11153,39 @@ class Player {
       this.dashTrail.push({x:this.x,y:this.y,alpha:0.8});
       audio.dash();
       spawnParticles(this.x,this.y,'EXPLOSION','#ffb700',6);
+    }
+
+    // STRIDE perk: movement-built ATK stacks. Reads post-movement position
+    // vs _prevX/_prevY (set at the top of update) and gates on a
+    // tiles/sec rate threshold so frame-rate doesn't affect behaviour
+    // (per the stored "stillness/rate trackers" rule). Dash frames take
+    // the early `return` above and intentionally don't tick this — the
+    // dash burst isn't "continuous movement". Suppressed when shocked
+    // (movement is force-zeroed, so the rate test would already report
+    // not-moving; the explicit gate just makes the intent obvious).
+    // [tick:STRIDE]
+    if (this.perks.STRIDE && dt > 0) {
+      const moved = dist(this._prevX, this._prevY, this.x, this.y);
+      const rate = moved / dt;
+      if (rate >= STRIDE_MOVE_RATE && this.shockTimer <= 0) {
+        this._strideStillTime = 0;
+        if ((this._strideStacks || 0) < STRIDE_MAX_STACKS) {
+          this._strideMovingTime = (this._strideMovingTime || 0) + dt;
+          while (this._strideMovingTime >= STRIDE_PER_STACK && this._strideStacks < STRIDE_MAX_STACKS) {
+            this._strideStacks = (this._strideStacks || 0) + 1;
+            this._strideMovingTime -= STRIDE_PER_STACK;
+          }
+          if (this._strideStacks >= STRIDE_MAX_STACKS) this._strideMovingTime = 0;
+        } else {
+          this._strideMovingTime = 0;
+        }
+      } else {
+        this._strideStillTime = (this._strideStillTime || 0) + dt;
+        if (this._strideStillTime > STRIDE_RESET_GRACE) {
+          this._strideStacks = 0;
+          this._strideMovingTime = 0;
+        }
+      }
     }
   }
 
