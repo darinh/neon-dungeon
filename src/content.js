@@ -4137,6 +4137,7 @@ const PERK_POOL = {
   MULTI_SHOT:      { name:'Multi-Shot',       icon:'⫸', desc:'Fire an extra 60%-damage projectile', colour:'#cc44ff' },
   SECOND_WIND:     { name:'Second Wind',      icon:'↺', desc:'Revive once per floor at 30% HP',     colour:'#00ddff' },
   PARRY:           { name:'Phase Parry',      icon:'⇄', desc:'Dash reflects enemy shots',           colour:'#aaffee' },
+  LAST_STAND:      { name:'Last Stand',       icon:'⚔', desc:'Hit to ≤10% HP: +75% dmg, −50% taken (5s, 60s CD)', colour:'#ffcc00' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
