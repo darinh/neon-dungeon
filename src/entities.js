@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -468,6 +468,35 @@ const SPECTRE_CHASE_RANGE    = 12;    // tiles — los/proximity gate before cha
 const SPECTRE_MELEE_RANGE    = 1.2;   // tiles — contact damage range during manifest
 const SPECTRE_STUN_MANIFEST  = 0.4;   // seconds — short manifest window after stun
 
+// SAPPER tuning constants. Boost-drain leech (floor 5+).
+//
+// Design intent: a fast, fragile melee chaser whose contact hit drains
+// time from a random ACTIVE TIMED BOOST in addition to dealing normal
+// melee damage. Compositional with the existing temp-boost system
+// (HARVEST_SURGE today; auto-applies to future timed boosts) — sets up
+// an "anti-buff-stacking" axis without inventing new state.
+//
+// Counterplay: kill before contact (very fragile), dash away, time the
+// activation of timed boosts (don't pop a long surge with a SAPPER
+// nearby), or just eat the contact damage when no timed boost is
+// active (drain is a no-op in that case — never punishes empty
+// inventory, only the moments the player chose to activate something).
+//
+// Mobile-first: drain is shown as a "−4s" floating text in the SAPPER
+// colour so the player gets unambiguous feedback even on a small
+// screen. The leech effect is queued INSIDE meleeAttack alongside
+// CRAWLER's burn — using the existing `dealt > 0` hook so a parry /
+// shield-absorb correctly skips the drain.
+//
+// Why floor 5+: HARVEST_SURGE drops from HARVESTER (floor 4+), so a
+// floor 5 introduction guarantees the mechanic has at least one timed
+// boost in the world for SAPPER to interact with. Earlier than that
+// the player would never see the drain trigger and the leech would
+// feel like decorative flavour.
+const SAPPER_DRAIN_SECS  = 4;     // seconds drained per successful contact hit
+const SAPPER_CHASE_RANGE = 11;    // tiles — los/proximity gate before chase
+const SAPPER_MELEE_RANGE = 1.2;   // tiles — contact damage range
+
 /**
  * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
  * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
@@ -657,7 +686,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -683,7 +712,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1124,6 +1153,7 @@ class Enemy {
   /** @type {any} */ _wrTimer;
   /** @type {any} */ _spState;
   /** @type {any} */ _spTimer;
+  /** @type {any} */ _saPulse;
   /** @type {any} */ atk;
   /** @type {any} */ attackTimer;
   /** @type {any} */ bobAngle;
@@ -1740,6 +1770,7 @@ class Enemy {
       case 'HARVESTER':this.aiHarvester(dt,player,map,d,los); break;
       case 'MAGNETON':this.aiMagneton(dt,player,map,d,los); break;
       case 'SPECTRE':this.aiSpectre(dt,player,map,d,los); break;
+      case 'SAPPER':this.aiSapper(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -1822,6 +1853,21 @@ class Enemy {
         player.burnTimer = Math.max(player.burnTimer, 2);
         player.burnDps = Math.max(player.burnDps, 2 + _EG.floor * 0.3);
         if (!wasBurning) audio.playerBurn();
+      }
+      // SAPPER drains time from a random ACTIVE timed boost on a
+      // successful contact hit (gated on dealt > 0 so a parry / shield
+      // absorb correctly skips the drain). Falls through silently when
+      // the player has no timed boost active — never punishes empty
+      // inventory, only the moments the player chose to activate
+      // something. Visual: floating "−Ns" text in the SAPPER colour so
+      // the player gets unambiguous feedback even on a small screen.
+      if (dealt > 0 && this.type === 'SAPPER') {
+        if (NEON.boosts && NEON.boosts.drainTimedBoost) {
+          const drained = NEON.boosts.drainTimedBoost(player, SAPPER_DRAIN_SECS);
+          if (drained) {
+            spawnDmgText(player.x, player.y, '-' + SAPPER_DRAIN_SECS + 's', '#ddff44');
+          }
+        }
       }
     }
   }
@@ -2033,6 +2079,38 @@ class Enemy {
         this.phaseImmune = true;
       }
     }
+  }
+
+  /**
+   * SAPPER — boost-drain leech (floor 5+, hp=22, atk=6, spd=2.8).
+   *
+   * Pure melee chaser: pursues the player with LOS gating, patrols
+   * when blind, calls meleeAttack on adjacency. The leech-on-hit side
+   * effect lives INSIDE meleeAttack alongside CRAWLER's burn (gated
+   * on `dealt > 0` so a parry / shield-absorb correctly skips the
+   * drain). See SAPPER_* constants block for design intent.
+   *
+   * Excluded from the elite affix roll: while the affix flags don't
+   * directly conflict with anything SAPPER touches, the drain
+   * mechanic is novel enough that we keep the surface area minimal
+   * for the first ship — easier to add later than to reason about
+   * SHIELDED / PHASING / FRENZY interactions for a brand-new
+   * mechanic. Mirror the existing exclusion pattern for
+   * recently-introduced mobs (HARVESTER / MAGNETON / SPECTRE).
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiSapper(dt, player, map, d, los) {
+    if (los || (d < SAPPER_CHASE_RANGE && this._canTarget())) {
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+    // Explicit melee on contact — without this, atk is decorative
+    // (no generic enemy-body collision damage path exists).
+    // meleeAttack is taunt-aware internally; passing `player` is
+    // correct even when the mob is targeting a hologram decoy.
+    if (d < SAPPER_MELEE_RANGE) this.meleeAttack(player);
   }
 
   /**
@@ -5737,6 +5815,37 @@ class Enemy {
         ctx.restore();
         // Inner core — brighter, holds full per-state alpha.
         NEON.draw.circle(ctx, sx, sy, coreR);
+      } else if (t === 'SAPPER') {
+        // Spindly leech — small triangular body + four short tendrils
+        // that pulse with _saPulse so a clustered pack doesn't pulse
+        // in lock-step. Visually distinct from every other melee
+        // chaser (CRAWLER diamond, GUARD square, CHARGER bracket).
+        const bodyR = TILE * 0.20;
+        const tendrilLen = TILE * (0.18 + 0.06 * Math.sin((this._saPulse || 0) + this.bobAngle * 2));
+        // Body — triangle pointing toward player travel direction
+        // (use bobAngle as a stable proxy — no need to read player
+        // pos in the hot draw path).
+        const ang = this.bobAngle * 1.5;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sx + Math.cos(ang) * bodyR, sy + Math.sin(ang) * bodyR);
+        ctx.lineTo(sx + Math.cos(ang + 2.4) * bodyR, sy + Math.sin(ang + 2.4) * bodyR);
+        ctx.lineTo(sx + Math.cos(ang - 2.4) * bodyR, sy + Math.sin(ang - 2.4) * bodyR);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // Tendrils — four short radial lines, semi-transparent.
+        ctx.save();
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.55;
+        ctx.strokeStyle = '#ddff44';
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * TWO_PI + (this._saPulse || 0) * 0.5;
+          const ex = sx + Math.cos(a) * (bodyR + tendrilLen);
+          const ey = sy + Math.sin(a) * (bodyR + tendrilLen);
+          NEON.draw.line(ctx, sx + Math.cos(a) * bodyR, sy + Math.sin(a) * bodyR, ex, ey);
+        }
+        ctx.restore();
       } else {
         // Default: square (GUARD, SPLITTER, TELEPORTER, MIMIC, SIPHON, DISRUPTOR, GRAVITON, REFLECTOR)
         ctx.fillRect(sx - baseSz / 2, sy - baseSz / 2, baseSz, baseSz);
@@ -6971,6 +7080,7 @@ const ENEMY_WEIGHTS = {
   HARVESTER:  { base: 4,  perFloor: 1, minFloor: 4 },  // fragile chaser — drops a temp damage-surge pickup on death (no permanent power)
   MAGNETON:   { base: 2,  perFloor: 1, minFloor: 6 },  // stationary projectile-bender — pulls player shots toward itself (anti-spam, compositional)
   SPECTRE:    { base: 2,  perFloor: 1, minFloor: 7 },  // phase/manifest cycler — invulnerable & harmless during phase, vulnerable & dangerous during manifest (timing-based)
+  SAPPER:     { base: 2,  perFloor: 1, minFloor: 5 },  // boost-drain leech — fast fragile chaser, drains time from active timed boosts on contact (anti-buff-stacking, compositional)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -7085,6 +7195,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'HARVESTER': hp=30; atk=8;  spd=1.8; xpVal=12; colour='#ff9933'; break;
     case 'MAGNETON':  hp=50; atk=0;  spd=0;   xpVal=22; colour='#ff44dd'; break;
     case 'SPECTRE':   hp=28; atk=12; spd=2.4; xpVal=22; colour='#eeccff'; break;
+    case 'SAPPER':    hp=22; atk=6;  spd=2.8; xpVal=14; colour='#ddff44'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7271,12 +7382,17 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._spTimer = SPECTRE_PHASE_DUR * (0.4 + 0.6 * Math.random());
     e.phaseImmune = true;
   }
+  if (type==='SAPPER') {
+    // Cosmetic pulse phase for the leech-tendril draw — drift it from
+    // a random seed so a clustered spawn doesn't pulse in lock-step.
+    e._saPulse = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
