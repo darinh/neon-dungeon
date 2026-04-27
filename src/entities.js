@@ -1217,6 +1217,15 @@ function tickEnemyStatusEffects(enemy, dt) {
         }
       }
       if (dmg > 0) enemy.hp -= dmg;
+      // REGENERATIVE floor modifier: burn DoT bypasses takeDamage by
+      // direct hp subtraction, so it must reset _regenTimer here too —
+      // otherwise burn-and-retreat keeps the regen clock counting up
+      // while the enemy is actively losing HP. Gated on dmg > 0 (post-
+      // shield-absorb) to mirror the takeDamage `actual > 0` reset, and
+      // on the modifier so non-REGENERATIVE floors don't pay the
+      // hidden-class transition cost. Caught by gpt-5.3-codex review
+      // 2026-04-27.
+      if (dmg > 0 && _EG.modifier === 'REGENERATIVE') enemy._regenTimer = 0;
       if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
       if (enemy.hp <= 0 && !enemy.dead) {
         enemy.hp = 0;
@@ -1652,6 +1661,13 @@ class Enemy {
     const actual = Math.min(this.hp, dmg);
     this.hp -= dmg;
     this.flashTimer = 0.1;
+    // REGENERATIVE floor modifier: any actual damage resets the
+    // out-of-combat regen timer. Gated on `actual > 0` so 0-dmg glance
+    // hits, fully-shield-absorbed hits (which return early above), and
+    // phased absorbs (which also return early) don't reset the clock.
+    // Gated on the modifier so non-REGENERATIVE floors don't pay the
+    // hidden-class transition cost of writing _regenTimer on every hit.
+    if (actual > 0 && _EG.modifier === 'REGENERATIVE') this._regenTimer = 0;
     spawnDmgText(this.x, this.y, dmg, this.hp <= 0 ? '#ffcc00' : '#ffffff');
     // Normalize hitCtx — accept string (legacy) or object
     const ctx = typeof hitCtx === 'string' ? { name:hitCtx } : (hitCtx || {});
@@ -2115,6 +2131,33 @@ class Enemy {
     this.shootTimer =Math.max(0,this.shootTimer-dt);
     this.spawnCooldown=Math.max(0,this.spawnCooldown-dt);
     if (this._vmHitICD) this._vmHitICD = Math.max(0, this._vmHitICD - dt);
+
+    // REGENERATIVE floor modifier — non-elite, non-boss patrols self-repair
+    // when out of combat (no damage taken in last REGEN_DELAY=2.5s). Ticks
+    // AFTER the stun early-return above so stunning the mob freezes regen
+    // entirely (stun is a player-controlled neutralization, not "uncontested").
+    // Eligibility gates (defense-in-depth — most also short-circuit elsewhere):
+    //   !isBoss — bosses are HP-ratio-tuned for phase transitions; regen
+    //     would shift those thresholds mid-fight.
+    //   !elite  — elites already carry an affix; layering regen on top
+    //     pushes them into chip-impossible territory at NIGHTMARE.
+    //   !_summoned — summons are temporary by design (despawn on parent
+    //     death); regen would let SUMMONER farm a permanent escort.
+    //   !isShard  — shards are 1-tick splits; regen would let them survive.
+    //   !_disguised — mimic disguise pre-reveal must not heal (visual leak).
+    //   !_wrPhased — phased mobs return 0 actual via the phaseImmune branch
+    //     in takeDamage so the reset never fires; gating here too prevents
+    //     a phased WRAITH from ticking up regen while invulnerable.
+    //   !_ghIsGhost — ghosts have their own _ghLife despawn timer.
+    // Reset site: takeDamage `actual > 0` branch (any real damage resets).
+    if (_EG.modifier === 'REGENERATIVE'
+        && !this.isBoss && !this.elite && !this._summoned && !this.isShard
+        && !this._disguised && !this._wrPhased && !this._ghIsGhost) {
+      this._regenTimer = (this._regenTimer || 0) + dt;
+      if (this._regenTimer >= 2.5 && this.hp < this.maxHp) {
+        this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.08 * dt);
+      }
+    }
 
     const d = dist(this.x,this.y,this._tx,this._ty);
     const targetable = (this._tauntTarget && this._tauntTarget.age < this._tauntTarget.maxAge) || canTargetPlayer();
