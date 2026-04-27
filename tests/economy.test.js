@@ -7,9 +7,13 @@ const boosts = require(path.resolve(__dirname, '..', 'src', 'meta', 'boosts.js')
 
 // ─── BOOSTS catalogue ──────────────────────────────────────────────────────
 
-test('catalogue has exactly the 6 issue-spec boosts', () => {
+test('vendor catalogue has exactly the 6 issue-spec boosts (HARVEST_SURGE is mob-drop only, not vendor-sold)', () => {
+  // HARVEST_SURGE is granted by HARVESTER mob drops, not purchasable. The
+  // BOOST_KEYS list now includes it because the registry is shared, so we
+  // intersect with the vendor pool by excluding it explicitly.
+  const vendorKeys = boosts.BOOST_KEYS.filter(k => k !== 'HARVEST_SURGE').sort();
   assert.deepEqual(
-    boosts.BOOST_KEYS.sort(),
+    vendorKeys,
     ['COMBAT_STIM', 'CRIT_MATRIX', 'NANO_MEDIC', 'RECON_PING', 'REFLEX_BOOSTER', 'SHIELD_DRIVER']
   );
 });

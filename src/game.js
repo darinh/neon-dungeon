@@ -906,6 +906,13 @@ const game = {
         // UNCHAINED #38: persist current-floor temp-boost state so a Continue
         // preserves purchases (save-resume is not a fresh floor transition).
         activeBoosts: p.activeBoosts ? {...p.activeBoosts} : {},
+        // HARVESTER timed-boost remaining seconds. Persisted alongside
+        // activeBoosts so `HARVEST_SURGE` (and any future timed boost) does
+        // NOT become an unrevokeable floor-buff after save/resume — the timer
+        // would otherwise be lost while the activeBoosts flag survived,
+        // leaving tickBoosts with no way to expire it (3 reviewers caught
+        // this on PR #143 review).
+        _boostTimers: p._boostTimers ? {...p._boostTimers} : {},
         _shieldCharges: p._shieldCharges | 0
       }
     };
@@ -999,6 +1006,22 @@ const game = {
     p._metaSecondWindUsed = !!s.metaSecondWindUsed;
     // UNCHAINED #38: restore in-run temp boosts (defaults empty for old saves).
     p.activeBoosts = s.activeBoosts ? {...s.activeBoosts} : {};
+    // HARVESTER timed-boost remaining seconds (defaults empty for old saves
+    // without the field). Defensive sweep: any activeBoosts flag for a timed
+    // boost without a backing timer is dropped — without this, a save
+    // produced by a pre-fix build that lost _boostTimers would resume with
+    // a permanently-stuck HARVEST_SURGE flag (the bug the persistence fix
+    // resolves going forward).
+    p._boostTimers = s._boostTimers ? {...s._boostTimers} : {};
+    if (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.BOOSTS) {
+      const timers = /** @type {Record<string, number>} */ (p._boostTimers);
+      for (const id in p.activeBoosts) {
+        const def = NEON.boosts.BOOSTS[id];
+        if (def && def.duration === 'timed' && !((timers[id] || 0) > 0)) {
+          delete p.activeBoosts[id];
+        }
+      }
+    }
     p._shieldCharges = s._shieldCharges | 0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
@@ -1356,6 +1379,15 @@ const game = {
 
     // update items
     for (const it of items) it.update(dt);
+    // Prune items that ticked themselves dead (HarvestPickup TTL expiry).
+    // Plain Items / KeyItems / WhisperItems are always spliced at pickup
+    // time, so their `dead` flag never goes true here — but TTL-based
+    // pickups would otherwise stay in the items array, drawing forever
+    // and consuming hit-test loop work. (3 reviewers caught this on the
+    // HARVESTER PR — drawing-but-uncollectable ghost pickup.)
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].dead) items.splice(i, 1);
+    }
     // update fuse bombs (tap-tap V) — drawn between items and enemies in
     // render loop so a planted bomb is visible above ground but obscured by
     // mobs standing on it. Dead-bomb prune handled inside.
@@ -1386,6 +1418,20 @@ const game = {
           items.splice(i,1);
           player.keys[it.colour]++;
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
+          continue;
+        }
+        // HARVESTER drop — applies HARVEST_SURGE (+50% damage for 8s, see
+        // src/meta/boosts.js). Strict temp-only per design rule (no permanent
+        // power-ups from mob drops). Auto-collected on contact like other
+        // pickups; perk choice gating is irrelevant here (it's a buff, not
+        // an upgrade choice). Toast colour matches the pickup's surge-orange.
+        if (it.isHarvest) {
+          audio.pickup();
+          items.splice(i, 1);
+          if (typeof NEON !== 'undefined' && NEON.boosts) {
+            NEON.boosts.applyBoost(player, 'HARVEST_SURGE');
+          }
+          this.msg('HARVEST SURGE — +50% DMG (8s)', '#ff9933');
           continue;
         }
         if (it.isWhisper) {
