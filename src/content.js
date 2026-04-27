@@ -715,6 +715,7 @@ const HACKWARE = {
   SCRAP_MAGNET: { name:'Scrap Magnet', desc:'Pulls coins & keys (10t) to you', colour:'#ffd700', icon:'◉', cooldown:12 },
   BLINK:        { name:'Blink',        desc:'Teleport 4 tiles in aim direction', colour:'#88ccff', icon:'⌖', cooldown:9 },
   REPAIR_PROTOCOL:{ name:'Repair Protocol', desc:'Heal 4 HP/s for 4s',           colour:'#00ff88', icon:'✚', cooldown:18 },
+  REVERSE_POLARITY:{ name:'Reverse Polarity', desc:'Reflect enemy shots in 6t back at owners', colour:'#aaffee', icon:'⇄', cooldown:14 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1055,6 +1056,68 @@ function activateHackware(player) {
       audio.heal();
       spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 10);
       _CG.msg('✚ REPAIR PROTOCOL', '#00ff88');
+      break;
+    }
+    case 'REVERSE_POLARITY': {
+      // Active AoE projectile reflector. Single-shot burst at activation:
+      // every enemy projectile within RANGE tiles of the player gets its
+      // velocity flipped and is converted to a player-owned shot. Fills
+      // the gap between PHASE_CLOAK (passive immunity) and the PARRY perk
+      // (per-touch dash-tied) with an area-burst defense that costs no
+      // skill timing but fires on a long cooldown.
+      //
+      // Per the stored "player projectile parry" rule (PARRY perk @ ~3690
+      // and REFLECTOR enemy-side @ ~3418), flipping fromPlayer MUST clear
+      // ALL per-team state — otherwise SIPHON owner-back-references heal
+      // dead enemies, SNIPER shock retags, weapon affix DoTs leak onto
+      // player-owned shots, ricochet state carries over wall counts, and
+      // hitEnemies starts pre-populated. Mirror the PARRY block exactly.
+      const RANGE = 6;
+      const RANGE_SQ = RANGE * RANGE;
+      let reflected = 0;
+      for (const p of projectiles) {
+        if (!p || p.dead) continue;
+        if (p.fromPlayer) continue;
+        // Ally-turret shots (Decoy Turret hackware @ ~1366, hacked wall
+        // turrets @ entities.js ~9915) spawn with fromPlayer=false +
+        // isAllyTurret=true. They are aimed AT enemies — reflecting them
+        // would spin them 180° back toward the player. Caught by gpt-
+        // 5.3-codex review on PR. The PARRY perk reflect block does not
+        // need this skip because friendly turret shots cannot collide
+        // with the player anyway, but a 6-tile AoE sweep can.
+        if (p.isAllyTurret) continue;
+        const dx = p.x - player.x;
+        const dy = p.y - player.y;
+        if (dx*dx + dy*dy > RANGE_SQ) continue;
+        p.dx = -p.dx;
+        p.dy = -p.dy;
+        p.fromPlayer = true;
+        p.isAllyTurret = false;
+        p.ownerType = 'Reverse Polarity';
+        p._owner = null;
+        p.weaponName = 'Reverse Polarity';
+        p.hitEnemies = new Set();
+        p.maxPierces = 0;
+        p.piercing = false;
+        p.homing = null;
+        p.bouncesLeft = 0;
+        p._hasRicochet = false;
+        p.travelled = 0;
+        p._effects = /** @type {any[]} */ ([]);
+        p._affixes = /** @type {any[]} */ ([]);
+        p.isCrit = false;
+        p.colour = '#aaffee';
+        spawnParticles(p.x, p.y, 'SPARK', '#aaffee', 4);
+        reflected++;
+      }
+      audio.reflect();
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#aaffee', 16);
+      triggerShake(3, 0.15);
+      if (reflected > 0) {
+        _CG.msg('⇄ REVERSE POLARITY ×' + reflected, '#aaffee');
+      } else {
+        _CG.msg('⇄ REVERSE POLARITY', '#aaffee');
+      }
       break;
     }
   }
