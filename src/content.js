@@ -2118,8 +2118,15 @@ function drawDangerVignette(player) {
   const frac = player.hp / player.maxHp;
   if (frac > 0.25 || player.hp <= 0) return;
   // Intensity: 0 at 25% → 1 at 0%. Pulse synced with lowHpTimer (2s cycle).
+  // REDUCED MOTION accessibility umbrella: keep the vignette visible (it's a
+  // critical safety signal at low HP) but freeze the sin-pulse at its
+  // midpoint (0.5). The full-screen red flicker is precisely the photosensitive
+  // / vestibular trigger the setting exists to mitigate; the static red border
+  // still conveys "you're in danger" at the same average intensity without the
+  // throbbing motion. Audio cue (audio.lowHealth() in entities.js) and HP bar
+  // remain untouched as redundant signals.
   const severity = 1 - (frac / 0.25);
-  const pulse = 0.5 + 0.5 * Math.sin(player.lowHpTimer * Math.PI);
+  const pulse = settings.reducedMotion ? 0.5 : (0.5 + 0.5 * Math.sin(player.lowHpTimer * Math.PI));
   const alpha = severity * (0.12 + 0.14 * pulse);
   ctx.save();
   ctx.globalAlpha = alpha;
