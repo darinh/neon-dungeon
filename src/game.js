@@ -3766,6 +3766,7 @@ const game = {
     // player and is never suppressed by the per-enemy FOV/cull in
     // Enemy.draw (an off-screen reaper must still warn the marked player).
     drawReaperPlayerRings(cam.x, cam.y);
+    drawTetherLeashes(cam.x, cam.y);
 
     // player
     player.draw(cam.x,cam.y);

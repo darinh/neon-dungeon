@@ -106,6 +106,49 @@ function drawReaperPlayerRings(camX, camY) {
     }
   }
 }
+// TETHER leash render pass. Drawn from game.js BEFORE the player sprite
+// so the leash sits underneath the player. Iterates global `enemies`
+// — bypasses per-enemy FOV cull (drawn even if TETHER body is offscreen
+// at the edge of FIELD_RANGE, so the source of the slow is always
+// legible). Only renders for live TETHERs whose REAL distance to the
+// player is within TETHER_FIELD_RANGE — matches the slow trigger
+// exactly. Telegraph parity: the visual exists if and only if the slow
+// is being applied, so the player can never wonder "why am I slow".
+/**
+ * @param {any} camX
+ * @param {any} camY
+ */
+function drawTetherLeashes(camX, camY) {
+  if (!_EG || !_EG.player || _EG.player.dead) return;
+  const pl = _EG.player;
+  const psx = pl.x * TILE - camX;
+  const psy = pl.y * TILE - camY;
+  for (const e of enemies) {
+    if (e.dead || e.type !== 'TETHER') continue;
+    const pd = dist(e.x, e.y, pl.x, pl.y);
+    if (pd >= TETHER_FIELD_RANGE) continue;
+    const esx = e.x * TILE - camX;
+    const esy = e.y * TILE - camY;
+    // Slow strength normalised 0..1 for visual intensity. At melee
+    // range strength→0 (no leash needed since slow is 0); at field
+    // edge strength→1 (max leash drawn). Mirrors aiTether's lerp.
+    let t = (pd - TETHER_MELEE_RANGE) / (TETHER_FIELD_RANGE - TETHER_MELEE_RANGE);
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    if (t <= 0) continue; // factor==1 (pd<=MELEE_RANGE), no slow → no leash needed
+    const phase = (e._teLashPhase || 0);
+    ctx.save();
+    ctx.globalAlpha = 0.30 + 0.30 * t;
+    ctx.strokeStyle = '#ff8866';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#ff8866';
+    ctx.lineWidth = 1.2 + 1.0 * t;
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -((Date.now() / 30) % 1000) - phase * 4;
+    NEON.draw.line(ctx, esx, esy, psx, psy);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
 // Phase 4 — convenience iterator. Safe when `room` is null/undefined or empty.
 // Callers still must guard for e.dead / e._disguised / e._wrPhased etc.
 const _EMPTY_ENEMY_SET = new Set();
@@ -191,7 +234,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -529,6 +572,43 @@ const SAPPER_MELEE_RANGE = 1.2;   // tiles — contact damage range
 // drops are abundant enough that a thief reads as a meaningful
 // pressure. Earlier floors have so few drops that MAGPIE would
 // usually idle — boring.
+// TETHER tuning constants. Anti-kiting slow-aura mob (floor 5+).
+//
+// Design intent: a slow, fragile chaser that DEALS NO CONTACT DAMAGE.
+// Its only mechanic is a passive "leash field": while the player is
+// within TETHER_FIELD_RANGE tiles of a TETHER, the player is slowed
+// proportionally to distance. The trick is the inversion — most slow
+// effects punish you for being CLOSE (toxic puddles, CRYOPHAGE
+// patches). TETHER punishes you for being FAR. At zero distance the
+// slow is zero (so meleeing the TETHER is the natural counterplay);
+// at FIELD_RANGE it caps at TETHER_MIN_FACTOR.
+//
+// Counterplay:
+//   - Kill TETHER (very fragile, hp=24) — preferred
+//   - Close to melee range (slow vanishes on contact)
+//   - Dash through (dashTimer > 0 bypasses the slow, mirroring toxic
+//     and disruption-field bypass — see player.update)
+//   - Multiple TETHERs stack multiplicatively but each is bounded by
+//     TETHER_MIN_FACTOR, so the floor is real
+//
+// Why floor 5+: The "closer is faster" inversion only reads as a
+// MECHANIC if the player has met enough mobs to have an instinct to
+// kite. Floor 5 sits after CHARGER (3) and PHANTOM (5) so the player
+// has had a few rooms of "stay at range" reinforcement. It also
+// matches the cadence of recent additions (SAPPER 5+).
+//
+// No contact damage (atk=0) is deliberate — the slow IS the threat
+// (it makes you eat OTHER mobs' shots / charges). A TETHER alone in
+// a room is a non-event, just like MAGPIE alone. They are
+// compositional pressure mobs.
+//
+// Excluded from elite affix roll: same first-ship caution as the
+// recent additions (HARVESTER / MAGNETON / SPECTRE / SAPPER / MAGPIE).
+const TETHER_FIELD_RANGE = 5.0;   // tiles — radius within which slow is applied
+const TETHER_MIN_FACTOR  = 0.55;  // most-slow factor at edge of field (0=stop, 1=normal)
+const TETHER_CHASE_RANGE = 11;    // tiles — los/proximity gate before chase
+const TETHER_MELEE_RANGE = 1.0;   // tiles — body proximity at which the slow vanishes entirely
+
 const MAGPIE_SCAN_RANGE   = 12;    // tiles — radius for nearest-Item scan
 const MAGPIE_SCAN_PERIOD  = 0.4;   // seconds — re-scan throttle (cheap)
 const MAGPIE_GRAB_RANGE   = 0.6;   // tiles — distance at which a grab "consumes" the item
@@ -725,7 +805,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -751,7 +831,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1193,6 +1273,7 @@ class Enemy {
   /** @type {any} */ _spState;
   /** @type {any} */ _spTimer;
   /** @type {any} */ _saPulse;
+  /** @type {any} */ _teLashPhase;
   /** @type {any} */ atk;
   /** @type {any} */ attackTimer;
   /** @type {any} */ bobAngle;
@@ -1826,6 +1907,7 @@ class Enemy {
       case 'SPECTRE':this.aiSpectre(dt,player,map,d,los); break;
       case 'SAPPER':this.aiSapper(dt,player,map,d,los); break;
       case 'MAGPIE':this.aiMagpie(dt,player,map,d,los); break;
+      case 'TETHER':this.aiTether(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -2282,6 +2364,59 @@ class Enemy {
     // 3) Idle / patrol. Slow drift so a thief without targets reads
     //    as alive, not a placeholder turret.
     this.patrol(dt, map);
+  }
+
+  /**
+   * TETHER — anti-kiting slow-aura chaser (floor 5+, hp=24, atk=0, spd=2.6).
+   *
+   * Slowly chases the player with LOS gating, patrols when blind. Has
+   * NO contact damage and no projectiles — its sole mechanic is the
+   * passive leash field: every frame, if the player is within
+   * TETHER_FIELD_RANGE tiles, multiply player._tetherSlowFactor by a
+   * distance-proportional factor (1.0 at body contact, dropping
+   * linearly to TETHER_MIN_FACTOR at the field edge).
+   *
+   * Distance is computed against the REAL player (not the taunt-aware
+   * `_tx/_ty`). Per stored convention: any mechanic whose threat must
+   * track the real player must recompute dist(this.x,this.y,player.x,
+   * player.y) locally — `d` arg is taunt-distance and would let a
+   * hologram pull the slow off the player.
+   *
+   * The slow is APPLIED in player.update by reading
+   * `player._tetherSlowFactor`, then resetting it to 1 each frame
+   * (consume-and-clear pattern, mirroring how toxicSlowActive works
+   * but accumulator-style across multiple TETHERs).
+   *
+   * Excluded from the elite affix roll: same first-ship caution as
+   * recently-introduced mobs (HARVESTER / MAGNETON / SPECTRE /
+   * SAPPER / MAGPIE) — easier to add elite affixes later than to
+   * reason about SHIELDED / PHASING / FRENZY interactions for a
+   * brand-new aura mechanic.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiTether(dt, player, map, d, los) {
+    if (los || (d < TETHER_CHASE_RANGE && this._canTarget())) {
+      this.moveToward(this._tx, this._ty, this.spd, dt, map);
+    } else {
+      this.patrol(dt, map);
+    }
+    // Apply the leash slow. Use REAL player distance (not taunt `d`)
+    // so a hologram cannot drag the slow off the player. Skip when
+    // player is missing or already dead.
+    if (!player || player.dead) return;
+    const pd = dist(this.x, this.y, player.x, player.y);
+    if (pd >= TETHER_FIELD_RANGE) return;
+    // Linear interpolation: at pd <= TETHER_MELEE_RANGE → factor 1
+    // (no slow, you can melee me); at pd >= TETHER_FIELD_RANGE →
+    // factor TETHER_MIN_FACTOR (max slow). Between, lerp.
+    let t = (pd - TETHER_MELEE_RANGE) / (TETHER_FIELD_RANGE - TETHER_MELEE_RANGE);
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const factor = 1 - t * (1 - TETHER_MIN_FACTOR);
+    // Multiply onto the per-frame accumulator. Stack multiplicatively
+    // across TETHERs but never below the per-mob floor (TETHER_MIN_FACTOR).
+    const cur = (player._tetherSlowFactor == null) ? 1 : player._tetherSlowFactor;
+    player._tetherSlowFactor = Math.max(TETHER_MIN_FACTOR * 0.6, cur * factor);
   }
 
   /**
@@ -6008,6 +6143,38 @@ class Enemy {
           ctx.fillRect(sx - pip / 2, sy - pip / 2, pip, pip);
           ctx.restore();
         }
+      } else if (t === 'TETHER') {
+        // TETHER — squat trapezoidal anchor body + four short
+        // anchor-stake spurs. Visually "rooted" so the player reads
+        // it as the source of the leash slow. Distinct from MAGPIE's
+        // diamond and SAPPER's triangle.
+        const bodyR = TILE * 0.22;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sx - bodyR, sy + bodyR * 0.7);
+        ctx.lineTo(sx + bodyR, sy + bodyR * 0.7);
+        ctx.lineTo(sx + bodyR * 0.65, sy - bodyR * 0.7);
+        ctx.lineTo(sx - bodyR * 0.65, sy - bodyR * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // Anchor stakes — four short spurs poking down/out, alpha
+        // pulses gently with _teLashPhase so packs don't sync.
+        ctx.save();
+        const lashPulse = 0.55 + 0.30 * Math.sin((this._teLashPhase || 0) + this.bobAngle * 2);
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * lashPulse;
+        ctx.strokeStyle = '#ff8866';
+        ctx.lineWidth = 1.2;
+        const stakeLen = TILE * 0.10;
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * TWO_PI + Math.PI / 4;
+          const sx0 = sx + Math.cos(a) * bodyR * 0.85;
+          const sy0 = sy + Math.sin(a) * bodyR * 0.85;
+          const ex = sx + Math.cos(a) * (bodyR + stakeLen);
+          const ey = sy + Math.sin(a) * (bodyR + stakeLen);
+          NEON.draw.line(ctx, sx0, sy0, ex, ey);
+        }
+        ctx.restore();
       } else if (t === 'SAPPER') {
         // Spindly leech — small triangular body + four short tendrils
         // that pulse with _saPulse so a clustered pack doesn't pulse
@@ -7275,6 +7442,7 @@ const ENEMY_WEIGHTS = {
   SPECTRE:    { base: 2,  perFloor: 1, minFloor: 7 },  // phase/manifest cycler — invulnerable & harmless during phase, vulnerable & dangerous during manifest (timing-based)
   SAPPER:     { base: 2,  perFloor: 1, minFloor: 5 },  // boost-drain leech — fast fragile chaser, drains time from active timed boosts on contact (anti-buff-stacking, compositional)
   MAGPIE:     { base: 2,  perFloor: 1, minFloor: 4 },  // loot-thief — fast fragile non-damaging mob that races to dropped Items, banks credits, drops a hoard pickup on death (currency-economy pressure)
+  TETHER:     { base: 2,  perFloor: 1, minFloor: 5 },  // anti-kiting slow-aura — slow fragile chaser, NO contact damage; passive leash field slows player proportional to distance (closer = faster, inversion of normal kite-and-shoot instinct)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -7391,6 +7559,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'SPECTRE':   hp=28; atk=12; spd=2.4; xpVal=22; colour='#eeccff'; break;
     case 'SAPPER':    hp=22; atk=6;  spd=2.8; xpVal=14; colour='#ddff44'; break;
     case 'MAGPIE':    hp=28; atk=0;  spd=3.4; xpVal=12; colour='#cceeff'; break;
+    case 'TETHER':    hp=24; atk=0;  spd=2.6; xpVal=14; colour='#ff8866'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -7593,12 +7762,18 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._mgTarget = null;
     e._mgStolenCr = 0;
   }
+  if (type==='TETHER') {
+    // Cosmetic pulse phase for the leash-coil draw + tether-pulse
+    // halo — drift from a random seed so a clustered pack doesn't
+    // pulse in lock-step.
+    e._teLashPhase = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -9528,6 +9703,7 @@ class Player {
   /** @type {any} */ spellTimers;
   /** @type {any} */ toxicBurnTimer;
   /** @type {any} */ toxicSlowActive;
+  /** @type {any} */ _tetherSlowFactor;
   /** @type {any} */ trapCooldown;
   /** @type {any} */ upgrades;
   /** @type {any} */ weapon;
@@ -9569,6 +9745,10 @@ class Player {
     this.arcCooldown=0;      // separate cooldown for arc grid zaps
     this.toxicBurnTimer=0;   // cosmetic throttle for toxic pool damage messages
     this.toxicSlowActive=false; // true while standing on toxic tile
+    // TETHER leash field accumulator. Each TETHER aiTether() multiplies
+    // this down per frame (capped per mob); player.update consumes-and-
+    // resets it each frame. dashTimer bypasses (mirrors toxic/disruption).
+    this._tetherSlowFactor=1;
     this.disruptionFieldActive=false; // true while inside a disruption field
     this.gravityPullActive=false;     // true while being pulled by gravity well
     // Player status effect debuffs (applied by enemy attacks)
@@ -10125,6 +10305,14 @@ class Player {
     spd *= NEON.boosts.getBoostSpeedMul(this); // UNCHAINED #38: REFLEX BOOSTER
     if (this.toxicSlowActive && this.dashTimer <= 0) spd *= 0.7; // 30% slow while in toxic pool
     if (this.disruptionFieldActive && this.dashTimer <= 0) spd *= 0.8; // 20% slow in disruption field
+    // TETHER leash field: accumulator set by aiTether() the previous
+    // frame. Dash i-frames bypass (consistent with toxic/disruption).
+    // Consume-and-reset so a dead/destroyed TETHER stops slowing the
+    // player on the very next frame with no extra cleanup needed.
+    if (this.dashTimer <= 0 && this._tetherSlowFactor != null && this._tetherSlowFactor < 1) {
+      spd *= this._tetherSlowFactor;
+    }
+    this._tetherSlowFactor = 1;
     let mx=0,my=0;
     if (keys.has(km('up'))||keys.has(ALT_KEYS.up))       my=-1;
     if (keys.has(km('down'))||keys.has(ALT_KEYS.down))   my= 1;
