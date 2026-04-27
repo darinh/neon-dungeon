@@ -40,7 +40,7 @@ const KEY_DISPLAY = k => {
   return map[k] || k;
 };
 
-/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -48,6 +48,7 @@ const settings = {
   damageNumbers: true,
   lockAimToMove: false,
   aimAssist: false,  // accessibility — auto-aim at nearest visible enemy
+  crtMode: false,    // cosmetic — scanline + vignette retro CRT overlay
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -59,6 +60,7 @@ const settings = {
       if (typeof raw.damageNumbers === 'boolean') this.damageNumbers = raw.damageNumbers;
       if (typeof raw.lockAimToMove === 'boolean') this.lockAimToMove = raw.lockAimToMove;
       if (typeof raw.aimAssist === 'boolean') this.aimAssist = raw.aimAssist;
+      if (typeof raw.crtMode === 'boolean') this.crtMode = raw.crtMode;
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -73,6 +75,7 @@ const settings = {
         screenShake: this.screenShake, damageNumbers: this.damageNumbers,
         lockAimToMove: this.lockAimToMove,
         aimAssist: this.aimAssist,
+        crtMode: this.crtMode,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -82,6 +85,7 @@ const settings = {
     this.screenShake = true; this.damageNumbers = true;
     this.lockAimToMove = false;
     this.aimAssist = false;
+    this.crtMode = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };

@@ -3107,7 +3107,7 @@ const game = {
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 6;     // row index where key rebind rows begin (4 toggles)
+    const CTRL_START = 7;     // row index where key rebind rows begin (5 toggles)
     // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
 
@@ -3174,7 +3174,7 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode'];
     if (sel >= TOGGLE_START && sel < CTRL_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
@@ -3281,7 +3281,7 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 6;  // matches updateSettings — 4 toggles
+    const CTRL_START = 7;  // matches updateSettings — 5 toggles
     const startY = narrow ? 80 : 100;
     const rowH = narrow ? 28 : 34;
     const fs = narrow ? 13 : 16;
@@ -3328,8 +3328,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST'];
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST', 'CRT MODE'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
@@ -3428,6 +3428,8 @@ const game = {
       case 'VICTORY':   this.renderVictory();  break;
       case 'NAME_ENTRY': this.renderNameEntry(); break;
     }
+
+    if (settings.crtMode) drawCrtOverlay();
   },
 
   /**
@@ -4991,6 +4993,47 @@ const perf = {
     this.captureFrames = null;
   },
 };
+
+// ─── CRT mode overlay ─────────────────────────────────────────────────────
+// Cosmetic post-effect: scanlines + vignette. Toggleable in settings (default off).
+// Pattern + radial gradient cached and rebuilt on canvas resize.
+/** @type {{ w:number, h:number, pattern: CanvasPattern|null, vignette: CanvasGradient|null }} */
+const _crtCache = { w: 0, h: 0, pattern: null, vignette: null };
+function _rebuildCrtCache() {
+  // Scanline pattern: 2px tall — 1 transparent row + 1 dark row.
+  const pc = document.createElement('canvas');
+  pc.width = 1; pc.height = 2;
+  const pctx = pc.getContext('2d');
+  if (pctx) {
+    pctx.fillStyle = 'rgba(0,0,0,0.22)';
+    pctx.fillRect(0, 1, 1, 1);
+    _crtCache.pattern = ctx.createPattern(pc, 'repeat');
+  }
+  // Vignette: radial darkening from center → corners.
+  const cx = W / 2, cy = H / 2;
+  const r0 = Math.min(W, H) * 0.45;
+  const r1 = Math.hypot(cx, cy);
+  const g = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.55)');
+  _crtCache.vignette = g;
+  _crtCache.w = W; _crtCache.h = H;
+}
+function drawCrtOverlay() {
+  if (_crtCache.w !== W || _crtCache.h !== H || !_crtCache.pattern || !_crtCache.vignette) {
+    _rebuildCrtCache();
+  }
+  ctx.save();
+  if (_crtCache.pattern) {
+    ctx.fillStyle = _crtCache.pattern;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (_crtCache.vignette) {
+    ctx.fillStyle = _crtCache.vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+}
 
 function renderPerfHUD() {
   const s = perf.stats();
