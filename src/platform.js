@@ -40,7 +40,7 @@ const KEY_DISPLAY = k => {
   return map[k] || k;
 };
 
-/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -49,6 +49,14 @@ const settings = {
   lockAimToMove: false,
   aimAssist: false,  // accessibility — auto-aim at nearest visible enemy
   crtMode: false,    // cosmetic — scanline + vignette retro CRT overlay
+  // Accessibility — when ON, suppresses motion-sensitive overlays that
+  // aren't already covered by `screenShake` (currently: the cyan
+  // full-screen LEVEL UP flash). Designed as the umbrella setting that
+  // future motion-suppression code can hang off without adding more
+  // toggles. Default OFF so behavior is unchanged for existing users;
+  // users with vestibular sensitivity / low-vision flicker concerns can
+  // opt in.
+  reducedMotion: false,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -61,6 +69,7 @@ const settings = {
       if (typeof raw.lockAimToMove === 'boolean') this.lockAimToMove = raw.lockAimToMove;
       if (typeof raw.aimAssist === 'boolean') this.aimAssist = raw.aimAssist;
       if (typeof raw.crtMode === 'boolean') this.crtMode = raw.crtMode;
+      if (typeof raw.reducedMotion === 'boolean') this.reducedMotion = raw.reducedMotion;
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -76,6 +85,7 @@ const settings = {
         lockAimToMove: this.lockAimToMove,
         aimAssist: this.aimAssist,
         crtMode: this.crtMode,
+        reducedMotion: this.reducedMotion,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -86,6 +96,7 @@ const settings = {
     this.lockAimToMove = false;
     this.aimAssist = false;
     this.crtMode = false;
+    this.reducedMotion = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
