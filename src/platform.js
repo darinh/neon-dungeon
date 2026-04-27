@@ -1554,6 +1554,18 @@ const audio = (() => {
       osc('sine', 80, 60, 0.06, t, 0.3, bus);
       noise(0.04, t + 0.1, 0.15, 2000, bus);
     },
+    shockPulse() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp ionised whoosh — descending sine + bright noise burst.
+      // Recognisable as "energy release" but distinct from mineExplode
+      // (no low concussive thud) and from teleport (no high-end zwip).
+      const bus = wetDry(0.9, 0.25, 0.2);
+      osc('sine',     1600, 200, 0.10, t,        0.18, bus);
+      osc('triangle', 1200, 300, 0.06, t + 0.02, 0.14, bus);
+      osc('square',    600, 250, 0.04, t + 0.03, 0.10, bus);
+      noise(0.08, t,        0.05, 6000, bus);
+      noise(0.04, t + 0.06, 0.10, 3000, bus);
+    },
     mineArm() {
       const c = getCtx(); const t = c.currentTime;
       // Metallic click + ascending warning tone
