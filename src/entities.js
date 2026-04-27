@@ -10363,12 +10363,27 @@ const STRIDE_MAX_STACKS = 5;
 const STRIDE_DMG_PER_STACK = 0.05; // +5% ATK per stack
 const STRIDE_RESET_GRACE = 0.3;   // seconds of stillness before stacks drop
 
+// DEADEYE perk constants. Stillness counterpart to STRIDE — same tiles/sec
+// rate threshold convention so behaviour is identical at 30/60/120 fps.
+// While the player's movement rate stays BELOW DEADEYE_MOVE_RATE, charge
+// builds for DEADEYE_CHARGE_TIME seconds; at full charge the next outgoing
+// attack (ranged or melee) gets ×DEADEYE_DMG_MUL via the metaMul path in
+// shoot(). Once charged, the readiness flag persists across movement
+// (kite-and-snipe is intentional) until consumed by a single shot — see
+// the DEADEYE tick block in Player.update for the cancel-partial vs
+// preserve-ready split.
+const DEADEYE_MOVE_RATE = 0.5;    // tiles/sec — at/above counts as "moving"
+const DEADEYE_CHARGE_TIME = 1.0;  // seconds of stillness to fully charge
+const DEADEYE_DMG_MUL = 1.5;      // +50% damage on the charged attack
+
 class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
   /** @type {any} */ _strideStacks;
   /** @type {any} */ _strideMovingTime;
   /** @type {any} */ _strideStillTime;
+  /** @type {any} */ _steadyChargeTime;
+  /** @type {any} */ _steadyReady;
   /** @type {any} */ _outOfCombatTimer;
   /** @type {any} */ _huntStill;
   /** @type {any} */ _prevHuntX;
@@ -10598,6 +10613,12 @@ class Player {
     this._strideStacks=0;
     this._strideMovingTime=0;
     this._strideStillTime=0;
+    // DEADEYE perk: stillness-charged attack. Runtime-only state.
+    // _steadyChargeTime accumulates while stationary; once it crosses
+    // DEADEYE_CHARGE_TIME the _steadyReady flag latches and persists
+    // (across movement, dash, etc.) until consumed by the next shoot().
+    this._steadyChargeTime=0;
+    this._steadyReady=false;
   }
 
   // ── Weapon Belt ──────────────────────────────────────────────────────
@@ -10955,10 +10976,24 @@ class Player {
     const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus + (mf.critChanceBonus || 0);
     const critMul = 2 + (mf.critDamageBonus || 0);
 
+    // DEADEYE perk: stillness-charged attack. Apply ×DEADEYE_DMG_MUL to
+    // the entire shot intent (folded into metaMul so ranged + melee +
+    // MULTI_SHOT bonus projectile all benefit uniformly), then consume
+    // the readiness latch. AUTO_LASER, SENTRY_DRONE, PLASMA_ORB and
+    // SAW_BLADE auto-fire through their own paths and do NOT consume —
+    // by design only the player's intentional shoot() drains the charge.
+    let deadeyeMul = 1;
+    if (this.perks.DEADEYE && this._steadyReady) {
+      deadeyeMul = DEADEYE_DMG_MUL;
+      this._steadyReady = false;
+      this._steadyChargeTime = 0;
+    }
+    const finalMetaMul = metaMul * deadeyeMul;
+
     if (w.melee) {
       // plasma sword arc
       const meleeCrit = critChance > 0 && Math.random() < critChance;
-      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? critMul : 1) * metaMul;
+      const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? critMul : 1) * finalMetaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
         if (e.dead) continue;
@@ -10976,7 +11011,7 @@ class Player {
         const pdx=Math.cos(a), pdy=Math.sin(a);
         const isCrit = critChance > 0 && Math.random() < critChance;
         const proj=new Projectile(
-          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*metaMul,w.range,
+          this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*finalMetaMul,w.range,
           w.colour,!!w.piercing,true,w.name
         );
         proj.isCrit = isCrit;
@@ -10997,7 +11032,7 @@ class Player {
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
         const isCrit = critChance > 0 && Math.random() < critChance;
-        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? critMul : 1) * metaMul);
+        const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? critMul : 1) * finalMetaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
         proj._effects = w._effects || [];
@@ -11368,6 +11403,36 @@ class Player {
           this._strideStacks = 0;
           this._strideMovingTime = 0;
         }
+      }
+    }
+
+    // DEADEYE perk: stillness-charged attack. Mirrors STRIDE's moved/dt
+    // rate gate (per stored "stillness/rate trackers" rule — tiles/sec,
+    // never tiles/frame, so 30/60/120 fps behave identically). Dash
+    // frames take the early `return` above so they neither advance nor
+    // clear the charge — a brief dash mid-charge preserves what's been
+    // earned. shockTimer is checked because the player's movement is
+    // force-zeroed during shock; without the explicit gate the rate
+    // test would silently start charging during a stun lockdown.
+    // Once _steadyReady latches it is NOT cleared by movement — only by
+    // the next shoot() (or loadFloor reset). This is intentional: it
+    // enables kite-then-snipe play. The cancel-partial-on-move branch
+    // only zeroes _steadyChargeTime so the next still period restarts
+    // from 0, never granting a free re-charge from buffered stillness.
+    // [tick:DEADEYE]
+    if (this.perks.DEADEYE && dt > 0) {
+      const movedD = dist(this._prevX, this._prevY, this.x, this.y);
+      const rateD = movedD / dt;
+      if (rateD < DEADEYE_MOVE_RATE && this.shockTimer <= 0) {
+        if (!this._steadyReady) {
+          this._steadyChargeTime = (this._steadyChargeTime || 0) + dt;
+          if (this._steadyChargeTime >= DEADEYE_CHARGE_TIME) {
+            this._steadyReady = true;
+            this._steadyChargeTime = 0;
+          }
+        }
+      } else {
+        this._steadyChargeTime = 0;
       }
     }
   }

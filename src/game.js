@@ -248,6 +248,14 @@ const game = {
       this.player._strideStacks = 0;
       this.player._strideMovingTime = 0;
       this.player._strideStillTime = 0;
+      // DEADEYE perk: drop stillness charge + readiness latch on floor
+      // transition. Same rationale as the STRIDE reset above — the
+      // descend warp teleports player.x/y between frames, and without
+      // an explicit clear the stale _steadyReady=true would let the
+      // first shot on the new floor consume a free buffed hit. Also
+      // zero _steadyChargeTime so partial progress doesn't carry over.
+      this.player._steadyChargeTime = 0;
+      this.player._steadyReady = false;
     }
     // Reset teleport pad cooldown
     this.teleportCooldown = 0;
