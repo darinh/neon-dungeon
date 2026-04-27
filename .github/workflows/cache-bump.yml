@@ -1,0 +1,88 @@
+name: cache-version-bump
+
+# Auto-bumps the service worker cache key on push to develop. Eliminates the
+# artificial merge-conflict cascade that hand-edited `const CACHE = 'neon-
+# dungeon-vNNN'` was creating across parallel PRs.
+#
+# Conventional-commits → bump size:
+#   - "BREAKING CHANGE" or "!:" anywhere in the head commit message → +10 (major-ish)
+#   - leading "feat:" / "feat(scope):"                              → +2  (minor)
+#   - anything else (fix:, chore:, docs:, refactor:, test:, perf:)  → +1  (patch)
+#
+# Loop guard: skip if the head commit was made by github-actions[bot] OR if the
+# message contains [skip cache-bump]. The bumping commit itself includes
+# [skip cache-bump] so it cannot re-trigger.
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip cache-bump]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute bump size from commit message
+        id: size
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$MSG" | grep -qE 'BREAKING CHANGE|!:'; then
+            echo "delta=10" >> "$GITHUB_OUTPUT"
+            echo "kind=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -qE '^feat(\(.+\))?:'; then
+            echo "delta=2" >> "$GITHUB_OUTPUT"
+            echo "kind=feat" >> "$GITHUB_OUTPUT"
+          else
+            echo "delta=1" >> "$GITHUB_OUTPUT"
+            echo "kind=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump cache version in sw.js
+        id: bump
+        run: |
+          set -euo pipefail
+          current=$(grep -oE "neon-dungeon-v([0-9]+)" sw.js | head -1 | sed 's/neon-dungeon-v//')
+          if [ -z "$current" ]; then
+            echo "::error::could not parse current cache version from sw.js"
+            exit 1
+          fi
+          delta=${{ steps.size.outputs.delta }}
+          next=$((current + delta))
+          echo "current=$current next=$next delta=$delta kind=${{ steps.size.outputs.kind }}"
+          # In-place replace ONLY the CACHE = '...' line (single source of truth).
+          sed -i "s/const CACHE = 'neon-dungeon-v${current}';/const CACHE = 'neon-dungeon-v${next}';/" sw.js
+          # Verify exactly one occurrence changed.
+          if ! grep -q "const CACHE = 'neon-dungeon-v${next}';" sw.js; then
+            echo "::error::sw.js cache key did not update; current=$current next=$next"
+            grep -n "neon-dungeon-v" sw.js || true
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet sw.js; then
+            echo "no change to sw.js — skipping commit"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add sw.js
+          git commit -m "chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]
+
+Auto-bumped from v${{ steps.bump.outputs.current }} → v${{ steps.bump.outputs.next }}
+in response to commit ${{ github.event.head_commit.id }}.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git push origin HEAD:develop
