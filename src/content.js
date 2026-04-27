@@ -2167,6 +2167,10 @@ function getStatusEffects(player) {
   if (player.perks.BERSERKER && player.hp > 0 && player.hp / player.maxHp <= 0.25) {
     fx.push({ id: 'berserker', icon: '🔥', label: 'RAGE', colour: '#ff4400' });
   }
+  // Pristine active (at/above 90% HP) — high-HP mirror of Berserker.
+  if (player.perks.PRISTINE && player.hp > 0 && player.hp / player.maxHp >= 0.90) {
+    fx.push({ id: 'pristine', icon: '✧', label: 'PRIME', colour: '#88ffee' });
+  }
   // Second Wind available
   if (player.perks.SECOND_WIND && !player.secondWindUsed) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
@@ -4141,6 +4145,7 @@ const PERK_POOL = {
   SECOND_WIND:     { name:'Second Wind',      icon:'↺', desc:'Revive once per floor at 30% HP',     colour:'#00ddff' },
   PARRY:           { name:'Phase Parry',      icon:'⇄', desc:'Dash reflects enemy shots',           colour:'#aaffee' },
   LAST_STAND:      { name:'Last Stand',       icon:'⚔', desc:'Hit to ≤10% HP: +75% dmg, −50% taken (5s, 60s CD)', colour:'#ffcc00' },
+  PRISTINE:        { name:'Pristine',          icon:'✧', desc:'+25% damage at or above 90% HP',       colour:'#88ffee' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice

@@ -10530,12 +10530,9 @@ class Player {
   effectiveAtk() {
     let a = this.atk;
     if (this.perks.BERSERKER && this.hp / this.maxHp <= 0.25) a = Math.round(a * 1.4);
-    // LAST_STAND active window: +75% outgoing damage. Stacks multiplicatively
-    // with BERSERKER (1.4 × 1.75 = 2.45×) by design — both perks reward
-    // playing at the edge, and the trigger condition (hit to ≤10%) implies
-    // BERSERKER is already active. Applied at fire time via effectiveAtk,
-    // so projectiles already in flight when the buff drops keep the bonus.
     if (this.lastStandTimer > 0) a = Math.round(a * 1.75);
+    // PRISTINE: high-HP mirror of BERSERKER. +25% ATK at or above 90% HP.
+    if (this.perks.PRISTINE && this.hp / this.maxHp >= 0.90) a = Math.round(a * 1.25);
     return a;
   }
 
