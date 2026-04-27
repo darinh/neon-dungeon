@@ -1773,6 +1773,14 @@ function spawnParticles(wx, wy, type, colour, count) {
   // Burst cap — under extreme stacking, halve new burst sizes to protect the
   // frame budget. Gameplay-visible only in pathological scenarios.
   count = _particleSystem.scaleBurst(count);
+  // REDUCED MOTION accessibility umbrella (settings.reducedMotion):
+  // dampen burst sizes by ~half so EXPLOSION fountains, level-up
+  // sparks, hit splatters, etc. are less overwhelming for users with
+  // vestibular sensitivity / photosensitive epilepsy. Floored at 1
+  // because MUZZLE flashes are a critical gameplay tell (where my
+  // shot went, what direction the enemy is facing) and zero would
+  // hide them entirely.
+  if (settings.reducedMotion) count = Math.max(1, Math.floor(count * 0.5));
   for (let i=0; i<count; i++) {
     const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
