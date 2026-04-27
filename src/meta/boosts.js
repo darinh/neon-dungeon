@@ -137,6 +137,42 @@
     }
   }
 
+  // Drain `secs` seconds from a single, randomly-chosen ACTIVE timed boost.
+  // Used by SAPPER's leech-on-hit. Returns the boost id that was drained,
+  // or null when the player has no timed boost active (no-op — never
+  // punishes empty inventory). Mirrors tickBoosts's expiration semantics:
+  // if the drain takes the timer to 0 or below, both the timer entry AND
+  // the activeBoosts flag are cleared atomically (without this, multipliers
+  // would stay enabled with no remaining time, which tickBoosts only cleans
+  // up the next frame — safer to expire eagerly).
+  //
+  // Defensive on missing/empty maps. Random selection uses the standard
+  // Math.random() (no injection seam needed — drain order doesn't affect
+  // any of our deterministic test paths).
+  /** @param {any} player @param {number} secs @returns {string | null} */
+  function drainTimedBoost(player, secs) {
+    if (!player || !(secs > 0)) return null;
+    const timers = player._boostTimers;
+    if (!timers) return null;
+    /** @type {string[]} */
+    const ids = [];
+    for (const id in timers) {
+      if (!Object.prototype.hasOwnProperty.call(timers, id)) continue;
+      if ((timers[id] || 0) > 0) ids.push(id);
+    }
+    if (ids.length === 0) return null;
+    const pick = ids[Math.floor(Math.random() * ids.length)];
+    if (!pick) return null;
+    const remaining = (timers[pick] || 0) - secs;
+    if (remaining <= 0) {
+      delete timers[pick];
+      if (player.activeBoosts) delete player.activeBoosts[pick];
+    } else {
+      timers[pick] = remaining;
+    }
+    return pick;
+  }
+
   // Does the player have a floor-duration boost active right now?
   /** @param {any} player @param {string} id */
   function hasBoost(player, id) {
@@ -244,6 +280,7 @@
     getBoostCritBonus: getBoostCritBonus,
     consumeShieldCharge: consumeShieldCharge,
     tickBoosts: tickBoosts,
+    drainTimedBoost: drainTimedBoost,
     getActiveBoostList: getActiveBoostList,
     filterVendorPool: filterVendorPool,
     DROP_BOOST_POOL: DROP_BOOST_POOL,
