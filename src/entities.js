@@ -10551,6 +10551,17 @@ class Player {
     if (this.perks.STRIDE && ss > 0) {
       a = Math.round(a * (1 + STRIDE_DMG_PER_STACK * ss));
     }
+    if (this.perks.OVERDRIVE) {
+      // OVERDRIVE: piggybacks on the score-combo system (combo.count auto-clears
+      // via COMBO_WINDOW=3s, so no loadFloor reset needed). +3% ATK per combo
+      // level above 1, capped at +30% (combo 11+). Stacks multiplicatively with
+      // BERSERKER, mirroring the established additive-by-default chokepoint.
+      const c = (typeof combo !== 'undefined' && combo) ? combo.count : 0;
+      if (c >= 2) {
+        const bonus = Math.min(0.30, (c - 1) * 0.03);
+        a = Math.round(a * (1 + bonus));
+      }
+    }
     return a;
   }
 
