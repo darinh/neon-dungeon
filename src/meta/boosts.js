@@ -70,6 +70,23 @@
       desc: 'Reveal full minimap (this floor)', colour: '#44ccff', price: 15,
       duration: 'floor',
       apply: function (/** @type {any} */ player) { player.activeBoosts = player.activeBoosts || {}; player.activeBoosts.RECON_PING = true; }
+    },
+    // HARVESTER drop — short-window damage surge. `duration: 'timed'` triggers
+    // the _boostTimers path: applyBoost seeds the timer, tickBoosts ticks it
+    // down and clears the activeBoosts flag when it expires. Strictly temp
+    // per the design rule "no permanent power-ups from mob drops".
+    HARVEST_SURGE: {
+      id: 'HARVEST_SURGE', name: 'HARVEST SURGE', icon: '⚡',
+      desc: '+50% weapon dmg (8s)', colour: '#ff9933',
+      duration: 'timed', durationSec: 8, dmgMul: 1.5,
+      apply: function (/** @type {any} */ player) {
+        player.activeBoosts = player.activeBoosts || {};
+        player.activeBoosts.HARVEST_SURGE = true;
+        player._boostTimers = player._boostTimers || {};
+        // Refresh on stack — picking up a second pickup mid-buff resets the
+        // window rather than extending it (prevents pacifist-stack abuse).
+        player._boostTimers.HARVEST_SURGE = 8;
+      }
     }
   };
 
@@ -94,6 +111,30 @@
     if (!player) return;
     player.activeBoosts = {};
     player._shieldCharges = 0;
+    // Timed boosts (HARVESTER drop, future seconds-windowed buffs) are also
+    // reset on floor transition — short-window buffs that hadn't expired by
+    // the time you reach the stairs do not carry over.
+    player._boostTimers = {};
+  }
+
+  // Tick all timed-duration boosts. Removes the activeBoosts flag the moment
+  // a timer hits zero so multipliers (getBoostDamageMul/etc.) flip back to
+  // neutral on the very same frame. Defensive on missing _boostTimers map.
+  /** @param {any} player @param {number} dt */
+  function tickBoosts(player, dt) {
+    if (!player) return;
+    const timers = player._boostTimers;
+    if (!timers) return;
+    for (const id in timers) {
+      if (!Object.prototype.hasOwnProperty.call(timers, id)) continue;
+      const remaining = (timers[id] || 0) - dt;
+      if (remaining <= 0) {
+        delete timers[id];
+        if (player.activeBoosts) delete player.activeBoosts[id];
+      } else {
+        timers[id] = remaining;
+      }
+    }
   }
 
   // Does the player have a floor-duration boost active right now?
@@ -105,7 +146,9 @@
   // Aggregate multipliers/bonuses. All default to neutral when inactive.
   /** @param {any} player */
   function getBoostDamageMul(player) {
-    return hasBoost(player, 'COMBAT_STIM') ? BOOSTS.COMBAT_STIM.dmgMul : 1;
+    let mul = hasBoost(player, 'COMBAT_STIM') ? BOOSTS.COMBAT_STIM.dmgMul : 1;
+    if (hasBoost(player, 'HARVEST_SURGE')) mul *= BOOSTS.HARVEST_SURGE.dmgMul;
+    return mul;
   }
   /** @param {any} player */
   function getBoostSpeedMul(player) {
@@ -137,6 +180,12 @@
     if (hasBoost(player, 'REFLEX_BOOSTER')) out.push({ id: 'REFLEX_BOOSTER', name: BOOSTS.REFLEX_BOOSTER.name, icon: BOOSTS.REFLEX_BOOSTER.icon, colour: BOOSTS.REFLEX_BOOSTER.colour, detail: 'FLOOR' });
     if (hasBoost(player, 'CRIT_MATRIX'))    out.push({ id: 'CRIT_MATRIX',    name: BOOSTS.CRIT_MATRIX.name,    icon: BOOSTS.CRIT_MATRIX.icon,    colour: BOOSTS.CRIT_MATRIX.colour,    detail: 'FLOOR' });
     if (hasBoost(player, 'RECON_PING'))     out.push({ id: 'RECON_PING',     name: BOOSTS.RECON_PING.name,     icon: BOOSTS.RECON_PING.icon,     colour: BOOSTS.RECON_PING.colour,     detail: 'FLOOR' });
+    // Timed surge — show remaining seconds (rounded up) so the HUD ticks
+    // visibly and the player can decide whether to commit to a burst.
+    if (hasBoost(player, 'HARVEST_SURGE')) {
+      const remaining = (player._boostTimers && player._boostTimers.HARVEST_SURGE) || 0;
+      out.push({ id: 'HARVEST_SURGE', name: BOOSTS.HARVEST_SURGE.name, icon: BOOSTS.HARVEST_SURGE.icon, colour: BOOSTS.HARVEST_SURGE.colour, detail: Math.ceil(remaining) + 's' });
+    }
     const sc = player._shieldCharges | 0;
     if (sc > 0) out.push({ id: 'SHIELD_DRIVER', name: BOOSTS.SHIELD_DRIVER.name, icon: BOOSTS.SHIELD_DRIVER.icon, colour: BOOSTS.SHIELD_DRIVER.colour, detail: '×' + sc });
     return out;
@@ -194,6 +243,7 @@
     getBoostSpeedMul: getBoostSpeedMul,
     getBoostCritBonus: getBoostCritBonus,
     consumeShieldCharge: consumeShieldCharge,
+    tickBoosts: tickBoosts,
     getActiveBoostList: getActiveBoostList,
     filterVendorPool: filterVendorPool,
     DROP_BOOST_POOL: DROP_BOOST_POOL,

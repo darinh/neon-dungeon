@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -541,7 +541,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -567,7 +567,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1209,6 +1209,16 @@ class Enemy {
     } else if (!this.isShard && !isSummon && Math.random()<dropRate) {
       items.push(new Item(this.x,this.y));
     }
+    // HARVESTER guaranteed temp-buff drop. Standing rule: mob drops are temp
+    // or currency only, never permanent power-ups (HARVEST_SURGE = +50% dmg
+    // for 8s, decays after 5s if uncollected). Excludes summons (no add-table
+    // currently spawns HARVESTER, but the gate matches the generic drop rule
+    // for defence in depth) and shards (HARVESTER never splits, but same
+    // rationale). Spawned IN ADDITION TO the random Item roll above so the
+    // pickup does not crowd out the normal drop economy.
+    if (this.type === 'HARVESTER' && !isSummon && !this.isShard) {
+      items.push(new HarvestPickup(this.x, this.y));
+    }
     _EG.player.gainXP(Math.round(this.xpValue*d.xpMul));
     // Combo: SHARDs, summons, and VOLATILE chain kills don't build streak
     const comboEligible = !this.isShard && !isSummon && !this._volatileKill;
@@ -1560,6 +1570,7 @@ class Enemy {
       case 'WARDLING': this.aiWardling(dt,player,map,d,los); break;
       case 'VENGEANCE':this.aiVengeance(dt,player,map,d,los); break;
       case 'CONDUIT':this.aiConduit(dt,player,map,d,los); break;
+      case 'HARVESTER':this.aiHarvester(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -1711,6 +1722,22 @@ class Enemy {
       const tx=this._tx+perp.x*Math.sin(this.zigzag)*1.5;
       const ty=this._ty+perp.y*Math.sin(this.zigzag)*1.5;
       this.moveToward(tx,ty,this.spd,dt,map);
+      if (d<1.2) this.meleeAttack(player);
+    } else this.patrol(dt,map);
+  }
+
+  /**
+   * HARVESTER — fragile melee chaser (hp=30, atk=8, spd=1.8). Pursues the
+   * player in a direct line within an 8-tile detect range. No telegraph, no
+   * special tells — its identity comes from the on-death drop (see Enemy.die
+   * HARVESTER branch → HarvestPickup → HARVEST_SURGE +50% damage for 8s).
+   * Glass-cannon design: easy to kill, rewarding to hunt.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiHarvester(dt,player,map,d,los) {
+    if (los||(d<8 && this._canTarget())) {
+      this.moveToward(this._tx,this._ty,this.spd,dt,map);
       if (d<1.2) this.meleeAttack(player);
     } else this.patrol(dt,map);
   }
@@ -5365,6 +5392,23 @@ class Enemy {
         ctx.save(); ctx.translate(sx, sy); ctx.rotate(Math.PI / 4);
         ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
         ctx.restore();
+      } else if (t === 'HARVESTER') {
+        // Compact body + glowing surge-spike on top — visually telegraphs
+        // "drops a buff on death" (the spike echoes the HARVEST_SURGE icon).
+        // Distinct from CHARGER (square) and SCORCHER (rotated diamond).
+        const w = TILE * 0.36, h = TILE * 0.32;
+        ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+        // Spike — small triangle above the body, pulses with bobAngle so the
+        // mob reads as "energetic" even at rest.
+        const spikePulse = 0.85 + 0.15 * Math.sin(this.bobAngle * 5);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - h / 2 - TILE * 0.18 * spikePulse);
+        ctx.lineTo(sx - TILE * 0.08, sy - h / 2);
+        ctx.lineTo(sx + TILE * 0.08, sy - h / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       } else {
         // Default: square (GUARD, SPLITTER, TELEPORTER, MIMIC, SIPHON, DISRUPTOR, GRAVITON, REFLECTOR)
         ctx.fillRect(sx - baseSz / 2, sy - baseSz / 2, baseSz, baseSz);
@@ -6540,6 +6584,7 @@ const ENEMY_WEIGHTS = {
   WARDLING:   { base: 2,  perFloor: 1, minFloor: 5 },  // fragile bodyguard — physically intercepts player projectiles aimed at its ward (compositional)
   VENGEANCE:  { base: 1,  perFloor: 1, minFloor: 7 },  // kill-charged retaliator — accumulates charges from in-room kills, commits one telegraphed power-rush at threshold
   CONDUIT:    { base: 1,  perFloor: 1, minFloor: 8 },  // paired-beam mob — solo: weak basic shots, paired: damaging beam between bodies (compositional anti-camping)
+  HARVESTER:  { base: 4,  perFloor: 1, minFloor: 4 },  // fragile chaser — drops a temp damage-surge pickup on death (no permanent power)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6651,6 +6696,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'WARDLING':  hp=25; atk=4;  spd=2.5; xpVal=10; colour='#ffcc66'; break;
     case 'VENGEANCE': hp=80; atk=18; spd=0;   xpVal=24; colour='#cc1166'; break;
     case 'CONDUIT':   hp=60; atk=14; spd=0;   xpVal=20; colour='#44ffff'; break;
+    case 'HARVESTER': hp=30; atk=8;  spd=1.8; xpVal=12; colour='#ff9933'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -6827,7 +6873,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -8819,6 +8865,10 @@ class Player {
     // Cleared by _EG.loadFloor via NEON.boosts.clearFloorBoosts().
     this.activeBoosts={};
     this._shieldCharges=0;
+    // Timed boost remaining-seconds map ({HARVEST_SURGE: 8, ...}). Cleared
+    // by clearFloorBoosts on floor transition. Not serialised in saveGame —
+    // a 5-10s temp window is acceptable to lose on save/resume.
+    this._boostTimers={};
     this.loreRead=new Set();    // indices of lore entries read this run
     this.dashCooldown=0;        // cooldown remaining (1.5s max)
     this.dashTimer=0;           // time left in active dash
@@ -9283,6 +9333,10 @@ class Player {
     if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
     // UNCHAINED #36 momentum: countdown damage-bonus window.
     NEON.behavior.tickMomentum(this, dt);
+    // Tick timed boost windows (HARVEST_SURGE, etc.) — clears the activeBoosts
+    // flag exactly when the timer expires so multipliers flip back the same
+    // frame. Floor-duration boosts (COMBAT_STIM, etc.) are unaffected.
+    if (NEON.boosts && NEON.boosts.tickBoosts) NEON.boosts.tickBoosts(this, dt);
     // UNCHAINED #36 regenerator: passive HP regen when out of combat 3s+.
     // _outOfCombatTimer resets in takeDamage on real damage taken.
     NEON.behavior.tickOutOfCombatRegen(this, dt);

@@ -4370,6 +4370,10 @@ function generateShopItems(floor, player, dungeon) {
     const bid = 'BOOST_' + bk;
     if (usedIds.has(bid)) continue;
     const b = NEON.boosts.BOOSTS[bk];
+    // Skip non-vendor boosts (mob-drop only — e.g. HARVEST_SURGE has no
+    // price; selling it would NaN the cost and break the rule that mob
+    // drops are earned not purchased).
+    if (!b || typeof b.price !== 'number') continue;
     pool.push({
       id: bid, name: b.name, desc: b.desc, colour: b.colour,
       price: b.price + Math.floor(floor * 2), // mild floor scaling keeps late-game meaningful
@@ -4408,6 +4412,60 @@ function generateShopItems(floor, player, dungeon) {
     pool.push({ ...wo, price: 70 + floor * 6 });
   }
   return pool.slice(0, 3).map(item => ({ ...item, sold: false }));
+}
+
+// HARVESTER drop — pulses, decays after 5s if uncollected. Picking it up
+// applies HARVEST_SURGE (+50% damage for 8s — see src/meta/boosts.js). Shape
+// is a diamond core wrapped in a pulsing surge ring so it's distinguishable
+// at a glance from a plain Item or KeyItem; orange-amber palette matches the
+// HARVESTER mob's body colour for source attribution.
+class HarvestPickup {
+  /**
+   * @param {any} x
+   * @param {any} y
+   */
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHarvest = true;
+    // Decays after 5s if uncollected. Tracks remaining time so the draw
+    // branch can flash + alpha-fade in the last second to telegraph imminent
+    // expiry — the player decides whether the dash is worth it.
+    this.ttl = 5;
+  }
+  /** @param {any} dt */
+  update(dt) {
+    this.bob += dt * 3.5;
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.6);
+    // Last-second urgency: rapid alpha flicker once ttl < 1.0.
+    const urgent = this.ttl < 1.0;
+    const flick = urgent ? (0.3 + 0.7 * Math.abs(Math.sin(this.bob * 14))) : 1;
+    ctx.save();
+    ctx.shadowBlur = 10 + 12 * pulse;
+    ctx.shadowColor = '#ff9933';
+    ctx.globalAlpha = (0.7 + 0.3 * pulse) * flick;
+    // Outer surge ring — clearly different from Item's static diamond.
+    ctx.strokeStyle = '#ffcc66';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    // Inner diamond core
+    ctx.fillStyle = '#ff9933';
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-3.5, -3.5, 7, 7);
+    ctx.restore();
+  }
 }
 
 class Item {
