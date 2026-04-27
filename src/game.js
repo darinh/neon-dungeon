@@ -230,6 +230,28 @@ const game = {
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
       this.player._shieldCharges = (this.player._shieldCharges | 0) + this.player.metaFlags.floorStartShieldCharges;
     }
+    // EMERGENCY_CACHE augment: anti-snowball lifeline. On a FRESH floor entry
+    // (savedModifier === undefined — same gate as spawn grace, keys, boosts),
+    // if the player arrives below 30% HP, top them up to 50% HP. Once-per-
+    // floor by construction (only triggers at fresh entry). No effect when
+    // the player is already healthy. Save-resume is intentionally skipped so
+    // reloading a save mid-floor does not heal. Player.hp > 0 guard prevents
+    // a corner case where loadFloor is invoked on a dead player. The toast
+    // is deferred via setTimeout so it survives the `messages.length=0`
+    // floor-transition wipe further down in loadFloor (line ~305) — same
+    // deferral pattern used by applyPerk / makeAugmentShopOption install
+    // messages and by the BOSS DETECTED announcement.
+    if (savedModifier === undefined && hasAugment('EMERGENCY_CACHE') && this.player && this.player.hp > 0) {
+      const max = this.player.maxHp | 0;
+      if (max > 0 && (this.player.hp / max) < 0.30) {
+        const target = Math.ceil(max * 0.50);
+        if (this.player.hp < target) {
+          const healed = target - this.player.hp;
+          this.player.hp = target;
+          setTimeout(() => this.msg('🔋 EMERGENCY CACHE: +' + healed + ' HP', '#88ffaa'), 250);
+        }
+      }
+    }
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
     if (hasAugment('ECHO_MAPPER') || (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.hasBoost(this.player, 'RECON_PING'))) {
