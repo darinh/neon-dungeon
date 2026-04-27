@@ -191,7 +191,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -286,6 +286,44 @@ const VENGEANCE_TELEGRAPH     = 0.8;   // seconds of warning before strike
 const VENGEANCE_RUSH_DURATION = 0.6;   // seconds the strike dash lasts
 const VENGEANCE_RUSH_SPD      = 9;     // tiles/sec during the rush dash
 const VENGEANCE_RANGE         = 10;    // tiles — max LoS distance to commit a rush
+
+// CONDUIT tuning constants — paired-beam mob (floor 8+).
+//
+// CONDUIT spawns INDIVIDUALLY (single roll in pickEnemyType) but its threat
+// emerges from PAIRING: when 2+ alive in the same room, every pair spawns a
+// damaging beam connecting their bodies. Player perpendicular distance to
+// the segment < CONDUIT_BEAM_W AND projection within segment AND not damage-
+// immune (dash i-frames pass) → takes per-LINK ICD'd damage.
+//
+// Solo CONDUIT is intentionally weak — fires a slow basic shot every
+// CONDUIT_SOLO_FIRE_CD seconds so it isn't free XP, but yields easily.
+// The threat budget is in the pair, not the body.
+//
+// Counter-play (the design contract):
+//   1. Kill ONE conduit → all beams owned by the surviving partner go dark
+//      against that target → "break the link" reads cleanly.
+//   2. Dash THROUGH the beam — i-frames give clean passage.
+//   3. Position BEHIND a conduit so its beam doesn't intersect your path.
+//   4. Multi-CONDUIT rooms (3+) form a triangle — find the gap, dash, attack.
+//
+// Pair detection uses the same enemiesByRoom Map that VENGEANCE/REAPER use,
+// so cost is O(k²) over CONDUIT count k in this room (k ≤ ~3 typical).
+//
+// Beam ownership: to avoid double-damage, the LOWER-_cdEid conduit owns
+// each pair (deterministic dedup by spawn-order id). The higher-eid one
+// renders nothing for that pair (the line is already drawn by its partner).
+const CONDUIT_SOLO_FIRE_CD    = 3.0;   // seconds between solo basic shots
+const CONDUIT_SOLO_PROJ_SPD   = 4.5;   // tiles/sec for solo basic shot
+const CONDUIT_SOLO_DMG_MUL    = 0.6;   // basic-shot damage multiplier vs atk
+const CONDUIT_SOLO_RANGE      = 9;     // tiles — solo shot lifetime in tiles
+const CONDUIT_BEAM_W          = 0.4;   // tiles — perpendicular hit threshold
+const CONDUIT_BEAM_DMG_MUL    = 0.7;   // beam damage per ICD tick vs atk
+const CONDUIT_BEAM_ICD        = 0.5;   // seconds between beam ticks per link
+
+// Spawn-order id counter for CONDUIT link dedup. Module-scoped so it
+// survives across spawnEnemy calls; never reset (overflow is irrelevant
+// at JS Number precision for any plausible playthrough).
+let _cdEidCounter = 0;
 
 // RESONATOR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob: silent charge → telegraphed cone → instant fire → recovery.
@@ -503,7 +541,7 @@ function pickMirrorKinematics(shotHistory) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -529,7 +567,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -895,6 +933,9 @@ class Enemy {
   /** @type {any} */ _vgState;
   /** @type {any} */ _vgCharges;
   /** @type {any} */ _vgRushTimer;
+  /** @type {any} */ _cdEid;
+  /** @type {any} */ _cdSoloTimer;
+  /** @type {any} */ _cdLinkICD;
   /** @type {any} */ _rsState;
   /** @type {any} */ _rsCharge;
   /** @type {any} */ _rsTele;
@@ -1410,6 +1451,11 @@ class Enemy {
       // semantics: charges represent commitment to retaliate, you
       // can interrupt the swing but not erase the grudge).
       if (this._vgState === 'rush') { this._vgState = 'idle'; this._vgRushTimer = 0; }
+      // Stunned CONDUIT clears its per-link beam ICDs so it can't damage
+      // the player while paralysed. ICDs would naturally pause (no AI
+      // tick under stun) but a stale ICD could underflow on resume and
+      // damage immediately — clearing is the safe contract.
+      if (this.type === 'CONDUIT' && this._cdLinkICD) this._cdLinkICD.clear();
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
       if (this._rsState === 'telegraph') { this._rsState = 'recovery'; this._rsRec = RESONATOR_RECOVERY; this._rsTele = 0; }
@@ -1513,6 +1559,7 @@ class Enemy {
       case 'CRYOPHAGE':this.aiCryophage(dt,player,map,d,los); break;
       case 'WARDLING': this.aiWardling(dt,player,map,d,los); break;
       case 'VENGEANCE':this.aiVengeance(dt,player,map,d,los); break;
+      case 'CONDUIT':this.aiConduit(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -3180,6 +3227,154 @@ class Enemy {
         }
       }
     }
+  }
+
+  // ─── CONDUIT AI — Paired-Beam Mob ──────────────────────────────────────
+  // Stationary mob (spd=0). Threat budget is in PAIRING:
+  //   solo: weak basic shot every CONDUIT_SOLO_FIRE_CD seconds (anti-XP-camp).
+  //   paired: each ALIVE same-room CONDUIT pair forms a damaging beam line
+  //           between bodies. Player perpendicular distance to the segment
+  //           < CONDUIT_BEAM_W, projection within [0,L], and not damage-immune
+  //           → damage with per-LINK ICD (CONDUIT_BEAM_ICD).
+  //
+  // Pair ownership: deterministic by _cdEid. For any pair (A,B), the lower-
+  // _cdEid conduit OWNS the link — runs ICD + damage check + emits the draw
+  // line. The higher-eid one is silent for that pair. Prevents double-damage
+  // and double-draw without a global pass.
+  //
+  // LoS: pair link requires hasLOS between the two CONDUIT bodies. A wall
+  // segment between them breaks the beam. Solo fire requires LoS to player.
+  //
+  // Counter-play: dash through (i-frames), kill one conduit, or flank.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiConduit(dt, player, map, d, los) {
+    void d; void los;
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // Drain ICDs first (always — even when no partner present this frame,
+    // so a freshly-broken link doesn't carry a stale value into the next
+    // pairing). Use real dt (no mods) — ICD is a fairness contract, not a
+    // tempo knob.
+    if (this._cdLinkICD && this._cdLinkICD.size > 0) {
+      for (const k of this._cdLinkICD.keys()) {
+        const v = this._cdLinkICD.get(k) - dt;
+        if (v <= 0) this._cdLinkICD.delete(k);
+        else this._cdLinkICD.set(k, v);
+      }
+    }
+
+    // Pair scan: same-room CONDUITs only. enemiesByRoom is the canonical
+    // O(1)-lookup Set used by VENGEANCE/REAPER notifications. Skip dead,
+    // skip self, skip non-CONDUIT, skip stunned partners (stunned partners
+    // can't form a coherent beam — fairness contract: stun = beam off).
+    let pairCount = 0;
+    const inRoom = this.room ? enemiesByRoom.get(this.room) : null;
+    if (inRoom) {
+      const livePartnerEids = new Set();
+      for (const other of inRoom) {
+        if (other === this || !other || other.dead) continue;
+        if (other.type !== 'CONDUIT') continue;
+        if (typeof other._cdEid !== 'number') continue;
+        if (other.stunTimer && other.stunTimer > 0) continue;
+        livePartnerEids.add(other._cdEid);
+        pairCount++;
+        // Only the LOWER-_cdEid conduit handles damage for this pair.
+        if (this._cdEid >= other._cdEid) continue;
+        // LoS between bodies — wall breaks the beam.
+        if (!hasLOS(this.x, this.y, other.x, other.y, map)) continue;
+        // Per-link ICD gate.
+        const icd = this._cdLinkICD.get(other._cdEid) || 0;
+        if (icd > 0) continue;
+        // Hit-test player against segment (this) → (other).
+        if (this._cdHitsPlayer(player, other)) {
+          const dmg = Math.max(1, Math.round(this.atk * CONDUIT_BEAM_DMG_MUL));
+          player.takeDamage(dmg, 'Conduit Beam');
+          this._cdLinkICD.set(other._cdEid, CONDUIT_BEAM_ICD);
+          if (audio.conduitBeam) audio.conduitBeam();
+        }
+      }
+      // Garbage-collect ICD entries for partners that have died or left
+      // the room. Without this the Map grows unbounded across the run.
+      if (this._cdLinkICD.size > 0) {
+        for (const k of this._cdLinkICD.keys()) {
+          if (!livePartnerEids.has(k)) this._cdLinkICD.delete(k);
+        }
+      }
+    } else if (this._cdLinkICD && this._cdLinkICD.size > 0) {
+      // No room set — can happen if the conduit's room ref is cleared.
+      // Wipe ICDs to keep state clean.
+      this._cdLinkICD.clear();
+    }
+
+    // Solo fire: only when NO live same-room partners. Prevents
+    // double-pressure (beam + projectile) and gives the player a clean
+    // "kill one, fight one" decision after breaking the link.
+    //
+    // CRITICAL: drain the timer ONLY while solo. If we drained it during
+    // pairing, the survivor of a long-paired room would fire a solo shot
+    // the SAME FRAME the partner died (the timer would already be deeply
+    // negative) — instant unfair punishment for the player breaking the
+    // link. Caught by codex+gpt-5.5+opus on initial PR review.
+    if (pairCount === 0) {
+      this._cdSoloTimer -= dt * ocMul * bm;
+      if (this._cdSoloTimer <= 0) {
+        if (this._canTarget()) {
+          const tx = this._tx, ty = this._ty;
+          const ddx = tx - this.x, ddy = ty - this.y;
+          const dPlayer = Math.hypot(ddx, ddy);
+          if (dPlayer > 0.1 && dPlayer <= CONDUIT_SOLO_RANGE && hasLOS(this.x, this.y, tx, ty, map)) {
+            const dmg = Math.max(1, Math.round(this.atk * CONDUIT_SOLO_DMG_MUL));
+            this.fireAt(tx, ty, CONDUIT_SOLO_PROJ_SPD, dmg, CONDUIT_SOLO_RANGE, '#44ffff');
+            if (audio.conduitFire) audio.conduitFire();
+          }
+        }
+        this._cdSoloTimer = CONDUIT_SOLO_FIRE_CD;
+      }
+    } else {
+      // While paired: hold the solo timer at its initial-stagger value so
+      // that when the pair eventually breaks, the survivor still has a
+      // grace period before firing (matching the spawn-time stagger
+      // contract). Clamps to >= 0.5s.
+      if (this._cdSoloTimer < 0.5) this._cdSoloTimer = 0.5;
+    }
+
+    // Body contact melee — same body-touch fairness as every other
+    // stationary mob (RESONATOR/MIRROR/VENGEANCE). Walking INTO a
+    // turret should hurt.
+    const dPlayerLive = dist(this.x, this.y, player.x, player.y);
+    if (dPlayerLive < 1.2) this.meleeAttack(player);
+  }
+
+  // CONDUIT beam hit-test: returns true iff the player's center lies
+  // within CONDUIT_BEAM_W tiles perpendicular to the segment from
+  // (this.x,this.y) → (other.x,other.y) AND projects onto the segment
+  // (not the infinite line). Damage immunity (dash i-frames) is deferred
+  // to player.takeDamage — this returns geometric intersection only.
+  /**
+   * @param {any} player
+   * @param {any} other
+   * @returns {boolean}
+   */
+  _cdHitsPlayer(player, other) {
+    const ax = this.x, ay = this.y;
+    const bx = other.x, by = other.y;
+    const px = player.x, py = player.y;
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 0.0001) return false; // degenerate (overlapping conduits)
+    // Projection parameter t in [0,1] along segment.
+    const t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    if (t < 0 || t > 1) return false;
+    const cx = ax + t * dx, cy = ay + t * dy;
+    const ex = px - cx, ey = py - cy;
+    return (ex * ex + ey * ey) <= CONDUIT_BEAM_W * CONDUIT_BEAM_W;
   }
 
   /**
@@ -5721,6 +5916,59 @@ class Enemy {
         }
         ctx.restore();
       }
+      // CONDUIT: cyan body pulse + electric beam line to each partner alive
+      // in the same room with LoS clear. Beam geometry uses the same
+      // coordinates as the aiConduit hit-test (segment between bodies,
+      // perpendicular threshold = CONDUIT_BEAM_W) so what the player SEES
+      // is exactly what the beam HITS. Both endpoints render the beam (no
+      // dedup) so an FOV-culled lower-eid endpoint doesn't hide the line —
+      // the higher-eid partner picks up the render. Double-stroking when
+      // both are visible is intentional (slightly brighter, fine).
+      if (this.type === 'CONDUIT') {
+        ctx.save();
+        // Idle/ambient: cyan core pulse on body — passive presence.
+        const pulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 2);
+        ctx.globalAlpha = 0.20 + 0.15 * pulse;
+        ctx.strokeStyle = '#44ffff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#44ffff';
+        ctx.lineWidth = 1.2;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
+        // Beam pass — only if we have any partners. Null-safe map access:
+        // _EG.dungeon can be null briefly during floor transitions, and
+        // every other draw path that reads dungeon.map uses optional
+        // chaining (drawLasers/drawCameras pattern).
+        const room = this.room;
+        const inRoom = room ? enemiesByRoom.get(room) : null;
+        const dmap = _EG.dungeon && _EG.dungeon.map;
+        if (inRoom && dmap && typeof this._cdEid === 'number'
+            && !(this.stunTimer && this.stunTimer > 0)) {
+          for (const other of inRoom) {
+            if (other === this || !other || other.dead) continue;
+            if (other.type !== 'CONDUIT') continue;
+            if (typeof other._cdEid !== 'number') continue;
+            // Skip stunned partners — beam is geometrically gone
+            // (matches damage-side filter in aiConduit).
+            if (other.stunTimer && other.stunTimer > 0) continue;
+            if (!hasLOS(this.x, this.y, other.x, other.y, dmap)) continue;
+            const ox = other.x * TILE - camX;
+            const oy = other.y * TILE - camY;
+            const beamPulse = 0.5 + 0.5 * Math.sin(this.bobAngle * 6);
+            ctx.globalAlpha = 0.55 + 0.30 * beamPulse;
+            ctx.strokeStyle = '#88ffff';
+            ctx.shadowBlur = 12 + beamPulse * 6;
+            ctx.shadowColor = '#44ffff';
+            ctx.lineWidth = 2.0 + beamPulse * 1.0;
+            NEON.draw.line(ctx, sx, sy, ox, oy);
+            // Bright inner core for legibility against busy floors.
+            ctx.globalAlpha = 0.85;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 0.8;
+            NEON.draw.line(ctx, sx, sy, ox, oy);
+          }
+        }
+        ctx.restore();
+      }
       // RESONATOR: pink sonic cone wedge during telegraph; faint pulsing
       // core during idle/charge; brief flash on the recovery transition.
       // Wedge geometry mirrors the hit-test in aiResonator (apex at body,
@@ -6291,6 +6539,7 @@ const ENEMY_WEIGHTS = {
   CRYOPHAGE:  { base: 2,  perFloor: 1, minFloor: 6 },  // frost-patch layer — telegraphs a 5-tile + lattice on the player's CURRENT tile (anti-camping)
   WARDLING:   { base: 2,  perFloor: 1, minFloor: 5 },  // fragile bodyguard — physically intercepts player projectiles aimed at its ward (compositional)
   VENGEANCE:  { base: 1,  perFloor: 1, minFloor: 7 },  // kill-charged retaliator — accumulates charges from in-room kills, commits one telegraphed power-rush at threshold
+  CONDUIT:    { base: 1,  perFloor: 1, minFloor: 8 },  // paired-beam mob — solo: weak basic shots, paired: damaging beam between bodies (compositional anti-camping)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -6401,6 +6650,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'CRYOPHAGE': hp=70; atk=14; spd=1.0; xpVal=28; colour='#88ddff'; break;
     case 'WARDLING':  hp=25; atk=4;  spd=2.5; xpVal=10; colour='#ffcc66'; break;
     case 'VENGEANCE': hp=80; atk=18; spd=0;   xpVal=24; colour='#cc1166'; break;
+    case 'CONDUIT':   hp=60; atk=14; spd=0;   xpVal=20; colour='#44ffff'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -6563,12 +6813,21 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._vgCharges = 0;
     e._vgRushTimer = 0;
   }
+  if (type==='CONDUIT') {
+    // Paired-beam mob. _cdEid is a stable spawn-order id used to
+    // deterministically assign link OWNERSHIP for any pair (lower-eid
+    // owns). Stagger _cdSoloTimer so a clustered spawn doesn't telegraph
+    // its first solo shot in unison.
+    e._cdEid = ++_cdEidCounter;
+    e._cdSoloTimer = 0.5 + Math.random() * 1.5;
+    e._cdLinkICD = new Map();
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
