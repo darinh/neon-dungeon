@@ -79,10 +79,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add sw.js
-          git commit -m "chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]
-
-Auto-bumped from v${{ steps.bump.outputs.current }} → v${{ steps.bump.outputs.next }}
-in response to commit ${{ github.event.head_commit.id }}.
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git commit -m "chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]" \
+            -m "Auto-bumped from v${{ steps.bump.outputs.current }} → v${{ steps.bump.outputs.next }} in response to commit ${{ github.event.head_commit.id }}." \
+            -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
           git push origin HEAD:develop
