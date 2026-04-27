@@ -9704,6 +9704,7 @@ class Player {
   /** @type {any} */ toxicBurnTimer;
   /** @type {any} */ toxicSlowActive;
   /** @type {any} */ _tetherSlowFactor;
+  /** @type {any} */ _spawnGraceTimer;
   /** @type {any} */ trapCooldown;
   /** @type {any} */ upgrades;
   /** @type {any} */ weapon;
@@ -9730,6 +9731,7 @@ class Player {
     this.weaponIdx=0;              // active weapon index into weapons[]
     this.score=0;
     this.invincibleTimer=0;
+    this._spawnGraceTimer=0;
     this.shootCooldown=0;
     this.bombCooldown=0;
     this.facing={x:1,y:0};
@@ -10197,6 +10199,11 @@ class Player {
       this._posHistory.shift();
     }
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
+    // SPAWN GRACE: brief floor-entry invulnerability window (set by loadFloor
+    // on fresh transitions, value SPAWN_GRACE_DUR seconds). isPlayerDamageImmune()
+    // ORs this in so all damage paths — env hazards (PLASMA/ARC/TOXIC/Frost),
+    // mob contact, projectiles, AoE — are uniformly blocked while > 0.
+    this._spawnGraceTimer=Math.max(0,(this._spawnGraceTimer||0)-dt);
     this.shootCooldown=Math.max(0,this.shootCooldown-dt);
     this.bombCooldown=Math.max(0,this.bombCooldown-dt);
     this.flashTimer=Math.max(0,this.flashTimer-dt);
@@ -10523,6 +10530,22 @@ class Player {
       ctx.shadowBlur = 18; ctx.shadowColor = '#ffee44';
       ctx.fillStyle = '#ffee44';
       NEON.draw.circle(ctx, sx, sy, 9);
+      ctx.restore();
+    }
+    // SPAWN GRACE: pulsing cyan ring while grace timer is active.
+    // Telegraphs to the player that they're temporarily invulnerable on
+    // floor entry (matches isPlayerDamageImmune() spawn-grace branch in
+    // src/content.js — keep in sync).
+    if (this._spawnGraceTimer > 0) {
+      ctx.save();
+      const t = this._spawnGraceTimer;
+      const pulse = 0.35 + Math.sin(performance.now() * 0.012) * 0.2;
+      ctx.globalAlpha = Math.min(1, t / 0.4) * pulse;
+      ctx.strokeStyle = '#88ffff';
+      ctx.shadowBlur = 14; ctx.shadowColor = '#88ffff';
+      ctx.lineWidth = 1.5;
+      NEON.draw.circleStroke(ctx, sx, sy, 14);
+      NEON.draw.circleStroke(ctx, sx, sy, 17 + Math.sin(performance.now() * 0.008) * 1.5);
       ctx.restore();
     }
   }

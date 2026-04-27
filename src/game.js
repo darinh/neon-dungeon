@@ -204,6 +204,18 @@ const game = {
     this.challengeComplete=false;
     // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
+    // SPAWN GRACE: 1.5s of invulnerability on FRESH floor entry (not save-
+    // resume — they paused, they're not under threat). Covers chaos-on-spawn
+    // cases: arriving next to an arc grid, descending into an active mob
+    // pack, dropping into a boss room mid-fight after `descend()`. Gate is
+    // savedModifier === undefined (matches the existing pattern used for
+    // keys, boosts, telemetry, biome card, modifier banner). Damage path
+    // honours this via isPlayerDamageImmune() in src/content.js. The visual
+    // halo lives in Player.draw() in src/entities.js (cyan pulsing ring).
+    // Keep the literal in sync with the src/entities.js comment header.
+    if (this.player) {
+      this.player._spawnGraceTimer = (savedModifier === undefined) ? 1.5 : 0;
+    }
     // Clear player debuffs on floor transition
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
     // Reset teleport pad cooldown
