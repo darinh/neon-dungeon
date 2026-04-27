@@ -2065,6 +2065,12 @@ const audio = (() => {
 // Auto-pause when the browser hides the tab (iOS lock, tab switch, phone call)
 // and resume audio context when returning. Prevents the iOS freeze where an
 // interrupted AudioContext kills the rAF chain and the drone oscillator drones.
+//
+// `_autoPaused` is the in-flight flag (true between hide and visible).
+// `_G.wasAutoPaused` is the sticky indicator the pause renderer reads —
+// set on auto-pause, cleared by game.js when the player manually unpauses.
+// Without the sticky flag, a returning player sees "PAUSED" with no
+// explanation and may not realize the pause was automatic.
 let _autoPaused = false;
 let _preVisibilityState = null;
 
@@ -2080,6 +2086,12 @@ function _onVisibilityHidden() {
   if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(_G.state)) {
     _preVisibilityState = _G.state;
     _autoPaused = true;
+    // Sticky indicator the pause renderer reads. Cleared by game.js
+    // when the player resumes manually (Escape, "Resume", or any
+    // other transition out of PAUSED). Survives the
+    // hidden→visible→still-PAUSED window so the returning player
+    // sees "(auto-paused)" instead of an unexplained PAUSED screen.
+    _G.wasAutoPaused = true;
     _G.setState('PAUSED');
   }
 }
