@@ -10712,6 +10712,14 @@ class Player {
     // so hit-trade builds can stack RETRIBUTION with BERSERKER/PRISTINE/
     // STRIDE/OVERDRIVE/LAST_STAND for brief windows by design).
     if (this.perks.RETRIBUTION && this.retributionTimer > 0) a = Math.round(a * 1.5);
+    // GLASS_CANNON perk: passive +30% ATK with a paired +25% incoming damage
+    // amp in takeDamage. Multiplicative on top of every other ATK-mod perk
+    // (each gates on independent player state, by design — see RETRIBUTION
+    // note above). The defensive cost lives in takeDamage gated on
+    // !options.ignoreDefense so env DoT (Plasma/Toxic/Arc/Disruption/Frost)
+    // doesn't get amplified into instakill territory; that is the
+    // GLASS_CANNON safety contract — see takeDamage block.
+    if (this.perks.GLASS_CANNON) a = Math.round(a * 1.30);
     return a;
   }
 
@@ -10853,6 +10861,21 @@ class Player {
       const HUNT_MAX_BONUS = 0.5;
       const mul = 1 + Math.min(1, still / HUNT_MAX_STILL) * HUNT_MAX_BONUS;
       actual = Math.max(1, Math.round(actual * mul));
+    }
+    // GLASS_CANNON perk: paired defensive cost for the +30% ATK amp in
+    // effectiveAtk(). +25% incoming damage on direct hits; gated on
+    // !options.ignoreDefense per the env-DoT-damage-gate rule (Plasma
+    // burnDps*dt, Toxic toxDps*dt, Arc Grid, Disruption Field, Frost Patch
+    // all pass sub-1 fractional damage with ignoreDefense:true) — without the
+    // gate, Math.max(1, Math.round(...)) would inflate ~0.04-0.13/frame env
+    // DoT to ~1/frame = ~60 DPS instakill at 60 FPS. Same gate pattern as
+    // FRAGILE/HUNTER/CORROSIVE above. Applied AFTER floor modifiers so the
+    // trade-off composes multiplicatively on hard floors (intentional — the
+    // player chose GLASS_CANNON, the floor amp is independent), and BEFORE
+    // LAST_STAND so a clutch hit still gets the ×0.5 mitigation on the
+    // GLASS_CANNON-amplified value.
+    if (this.perks.GLASS_CANNON && !options.ignoreDefense) {
+      actual = Math.max(1, Math.round(actual * 1.25));
     }
     if (actual <= 0) return 0;
     // LAST_STAND perk: clutch trigger fires BEFORE the hp deduction, so the
