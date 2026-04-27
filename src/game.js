@@ -16,6 +16,13 @@ const game = {
   floor: 1,
   player: null,
   dungeon: null,
+  // Sticky indicator set by platform.js's visibilitychange handler
+  // when the game auto-pauses (tab switch, iOS lock, phone call) and
+  // cleared in setState() on any transition out of PAUSED. Read by
+  // renderPaused() to show a subtitle distinguishing automatic from
+  // manual pauses, so a returning player isn't confused by an
+  // unexplained PAUSED screen.
+  wasAutoPaused: false,
   fadeAlpha: 0,
   fadeDir: 0,
   fadeCallback: null,
@@ -109,6 +116,12 @@ const game = {
    * @param {any} callback
    */
   setState(s, callback) {
+    // Clear the auto-paused sticky indicator on any transition OUT of
+    // PAUSED — PLAYING (manual resume), MENU (quit), SETTINGS (open
+    // submenu), etc. The next auto-pause will set it again. Without
+    // this, a player who auto-pauses then manually unpauses then
+    // pauses again later by hand would still see "(auto-paused)".
+    if (this.state === 'PAUSED' && s !== 'PAUSED') this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; music.stop(); }
@@ -4049,6 +4062,17 @@ const game = {
     ctx.fillStyle='#ff00c8'; ctx.font=`bold ${narrow ? 36 : 48}px monospace`;
     ctx.fillText('PAUSED',W/2, narrow ? 200 : 240);
     ctx.shadowBlur=0;
+    // Subtitle if this pause was triggered automatically by the
+    // visibilitychange handler (tab switch, iOS lock, etc) — gives
+    // the returning player context for why they're paused. Cleared
+    // on resume in setState().
+    if (this.wasAutoPaused) {
+      ctx.font = `${narrow ? 11 : 14}px monospace`;
+      ctx.fillStyle = '#ffb700';
+      ctx.shadowBlur = 6; ctx.shadowColor = '#ffb700';
+      ctx.fillText('(auto-paused — focus lost)', W/2, narrow ? 222 : 268);
+      ctx.shadowBlur = 0;
+    }
     const fs = narrow ? 14 : 18;
     const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
     if (isTouch) {
