@@ -2031,6 +2031,13 @@ function drawAmbient(camX, camY) {
 function spawnDmgText(wx, wy, text, colour) {
   if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
+  // Player.shoot (entities.js) and several other damage paths produce
+  // float multiplications like (w.dmg + atk) * critMul * metaMul, which
+  // can land on values like 31.999999999999996 instead of 32. Round
+  // numeric callers here so every damage floater shows a clean integer
+  // without forcing every call site to remember Math.round. Non-numeric
+  // text ('CRIT!', '+5', 'EXECUTE', '+3 CR', etc.) is unaffected.
+  if (typeof text === 'number' && Number.isFinite(text)) text = Math.round(text);
   floatingTexts.push({
     x: wx * TILE + rnd(-6, 6), y: wy * TILE - 8,
     vy: -40, life: 1, text: String(text), colour
