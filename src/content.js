@@ -2341,6 +2341,29 @@ function getStatusEffects(player) {
   if (player.perks.PRISTINE && player.hp > 0 && player.hp / player.maxHp >= 0.90) {
     fx.push({ id: 'pristine', icon: '✧', label: 'PRIME', colour: '#88ffee' });
   }
+  // BULWARK active (at/above 75% HP) — defensive counterpart to PRISTINE.
+  // While the gate holds, Player.takeDamage() multiplies incoming damage by
+  // 0.85 (entities.js:11557 — same maxHp>0 divide-by-zero guard, same >=0.75
+  // threshold). Predicate is strict-equal to the multiplier gate (after
+  // stripping the defensive `player.perks &&` short-circuit), so a future
+  // re-tune to the threshold/multiplier on EITHER side will be caught by
+  // the strict-equality alignment test in tests/bulwark-hud.test.js.
+  //
+  // Defensive `player.perks &&` short-circuit: legacy player shapes (test
+  // sandboxes, save migrations) may bypass the ctor and lack a .perks
+  // object. The earlier ENERGY_SHIELD branch at content.js:2292 unguarded-
+  // derefs player.perks, so a real call without .perks already crashes
+  // before reaching this gate — the guard here is defense-in-depth (per
+  // PR #300/#302/#304 reviewer convention for new HUD badges).
+  //
+  // Icon ◈ matches the perk-card glyph at content.js:4669; colour #88ccff
+  // matches the perk-card colour exactly (cross-file desync defence per
+  // stored memory 'HUD status fx'). Label 'WARD' mirrors the action-word
+  // style of PRISTINE 'PRIME' / BERSERKER 'RAGE' (single short noun for
+  // the active passive state).
+  if (player.perks && player.perks.BULWARK && player.maxHp > 0 && player.hp / player.maxHp >= 0.75) {
+    fx.push({ id: 'bulwark', icon: '◈', label: 'WARD', colour: '#88ccff' });
+  }
   // STRIDE active (movement-built dmg stacks). Distinct from BERSERKER (HP gate)
   // and PRISTINE (high-HP gate) — STRIDE is purely movement-gated and stacks
   // additively with both via Player.effectiveAtk().
