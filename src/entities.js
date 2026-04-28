@@ -12385,6 +12385,41 @@ class Player {
       if (this._overchargeShots % 5 === 0) forceCrit = true;
     }
 
+    // PRIMED floor modifier — the FIRST shot in each room is a guaranteed
+    // crit. Per-room one-shot: the gate latches `room._primedFired = true`
+    // after the bonus fires, mirroring QUARTERMASTER's `room._qmHarvested`
+    // per-room one-shot pattern. Composes ADDITIVELY with OVERCHARGE
+    // (forceCrit |= primedCrit) so a PRIMED floor's first shot in a room
+    // simply forces a crit regardless of OVERCHARGE's 5-shot counter
+    // state — but floor modifiers are mutually exclusive per floor (only
+    // one rolls), so PRIMED + OVERCHARGE can't co-occur. The OR keeps
+    // forceCrit semantics clean if a future change relaxes mutex.
+    //
+    // Gates (mirror QUARTERMASTER — see entities.js Enemy.die L2429):
+    //   _EG.modifier === 'PRIMED' — modifier-roll only; off-floor and
+    //     other modifiers fall through. Boss floors / floor 1 are
+    //     modifier-free (game.js:184) so no isBoss gate needed.
+    //   this._currentRoom — room reference must exist (player firing
+    //     from a corridor with no room cached has _currentRoom === null
+    //     — skip the bonus rather than crash).
+    //   !this._currentRoom._primedFired — the per-room one-shot gate.
+    //
+    // State scope: per-ROOM (`room._primedFired`), NOT per-player and
+    // NOT serialized. Mirrors QUARTERMASTER's accepted save+resume
+    // re-prime behaviour: dungeon is regenerated from scratch on
+    // Continue (rooms array is rebuilt — `_currentRoom` reset to null
+    // per game.js:358), so `_primedFired` flags are auto-cleared. The
+    // forgiving behaviour matches the codebase's "Continue should not
+    // punish you" stance.
+    //
+    // Auto-fire boosts (AUTO_LASER, SENTRY_DRONE, PLASMA_ORB,
+    // SAW_BLADE) do NOT route through Player.shoot and are
+    // intentionally excluded — mirrors OVERCHARGE/REVERB/DEADEYE.
+    if (_EG.modifier === 'PRIMED' && this._currentRoom && !this._currentRoom._primedFired) {
+      this._currentRoom._primedFired = true;
+      forceCrit = true;
+    }
+
     // REVERB floor modifier — every 5th player shot fires a free echo of
     // the same shot intent (one extra projectile fan / one extra melee
     // arc) AFTER the main shot resolves. Counter is run-scoped, persisted

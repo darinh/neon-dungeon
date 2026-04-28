@@ -142,18 +142,14 @@ test('KINETIC desc does not collide with AUTONOMY (hackware) phrasing', () => {
     'KINETIC desc must not mention "hackware" — AUTONOMY already owns that domain.');
 });
 
-test('FLOOR_MODIFIERS pool size is exactly 23 (KINETIC added)', () => {
-  // Roll-probability invariant. Per stored memory 'positive floor modifiers'
-  // and 'modifier pool canary pattern', the EXPECTED_MODIFIER_POOL_SIZE
-  // constant in tests/_modifier-pool.js is the single source of truth for
-  // this assertion across all *-modifier.test.js files. Adding modifier
-  // #24 only requires bumping that constant + retiring this canary
-  // (replicating the overflow-modifier.test.js / hardened-modifier.test.js
-  // pattern: replace the literal `assert.equal(EXPECTED..., 23, ...)` with
-  // a comment that the canary role moved to the new modifier).
+test('FLOOR_MODIFIERS pool size invariant (KINETIC is registered)', () => {
+  // Roll-probability invariant. EXPECTED_MODIFIER_POOL_SIZE in
+  // tests/_modifier-pool.js is the single source of truth. The literal
+  // "23 (KINETIC added)" canary previously here was retired when
+  // PRIMED (the next modifier) took over the canary role — this
+  // assertion now just confirms the pool count matches whatever the
+  // helper says, which still detects accidental dict shrinkage.
   assertModifierPoolSize(CONTENT);
-  assert.equal(EXPECTED_MODIFIER_POOL_SIZE, 23,
-    'EXPECTED_MODIFIER_POOL_SIZE in tests/_modifier-pool.js must be 23 after KINETIC is added');
 });
 
 // ─── Player dash-activation wiring ───────────────────────────────────────

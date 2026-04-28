@@ -1725,6 +1725,7 @@ const FLOOR_MODIFIERS = {
   HARDENED:  { label:'HARDENED',  desc:'Reactive plating — incoming damage reduced 20%', colour:'#88aacc', icon:'⊞' },
   OVERFLOW:  { label:'OVERFLOW',  desc:'Surplus data — XP gain +25%', colour:'#66ffaa', icon:'▲' },
   KINETIC:   { label:'KINETIC',   desc:'Inertial primer — dash cooldown -30%', colour:'#88ddff', icon:'»' },
+  PRIMED:    { label:'PRIMED',    desc:'Smartlink — first shot in each room crits', colour:'#ffaa00', icon:'◎' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
