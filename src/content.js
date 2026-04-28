@@ -769,17 +769,25 @@ function activateHackware(player) {
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
   // Hackware cooldown set on activation. Stacks multiplicatively with
-  // OVERCLOCKER augment AND the AUTONOMY floor modifier (seventh positive
-  // modifier in the FLOOR_MODIFIERS pool, "hackware cooldowns reduced 25%
-  // on this floor"). Both are passive multiplicative reductions, so an
-  // AUTONOMY floor with OVERCLOCKER yields cooldown × 0.7 × 0.75 = 0.525
-  // — a strong synergy that rewards augment-first builds without being
-  // run-defining (the augment itself is rare). AUTONOMY uses _CG.modifier
-  // (the canonical content.js floor-modifier ref) so a typo would silently
-  // disable the bonus on every cooldown.
+  // OVERCLOCKER augment AND two opposing floor modifiers:
+  //   - AUTONOMY (positive)  — ×0.75 (hackware cooldowns reduced 25%)
+  //   - JAMMED   (negative)  — ×1.25 (hackware cooldowns increased 25%)
+  // All factors are passive multiplicative scalars so an AUTONOMY floor
+  // with OVERCLOCKER yields cooldown × 0.7 × 0.75 = 0.525 — a strong
+  // synergy that rewards augment-first builds without being run-defining
+  // (the augment itself is rare). A JAMMED floor with OVERCLOCKER yields
+  // ×0.7 × 1.25 = ×0.875 — OVERCLOCKER still helps but the floor's
+  // jamming bites first. AUTONOMY and JAMMED are mutually exclusive at
+  // floor-roll time (only one modifier rolls per floor) so the two
+  // ternaries can never both fire — the structure leaves room to relax
+  // that mutex later (the literal product would be ×0.9375, a no-op
+  // wash). Both gates use _CG.modifier (the canonical content.js
+  // floor-modifier ref) — a typo would silently disable the effect on
+  // every cooldown.
   player.hackwareCooldown = hw.cooldown
     * (hasAugment('OVERCLOCKER') ? 0.7 : 1)
-    * (_CG.modifier === 'AUTONOMY' ? 0.75 : 1);
+    * (_CG.modifier === 'AUTONOMY' ? 0.75 : 1)
+    * (_CG.modifier === 'JAMMED' ? 1.25 : 1);
   const map = _CG.dungeon ? _CG.dungeon.map : null;
 
   switch (player.hackware) {
@@ -1726,6 +1734,7 @@ const FLOOR_MODIFIERS = {
   OVERFLOW:  { label:'OVERFLOW',  desc:'Surplus data — XP gain +25%', colour:'#66ffaa', icon:'▲' },
   KINETIC:   { label:'KINETIC',   desc:'Inertial primer — dash cooldown -30%', colour:'#88ddff', icon:'»' },
   PRIMED:    { label:'PRIMED',    desc:'Smartlink — first shot in each room crits', colour:'#ffaa00', icon:'◎' },
+  JAMMED:    { label:'JAMMED',    desc:'Signal jammed — hackware cooldowns increased 25%', colour:'#cc6644', icon:'⊘' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
