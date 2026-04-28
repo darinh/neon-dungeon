@@ -2357,6 +2357,19 @@ function getStatusEffects(player) {
   if (hasAugment('REACTIVE_ARMOR') && player.reactiveArmorCD > 0) {
     fx.push({ id: 'reactive-cd', icon: '💥', label: Math.ceil(player.reactiveArmorCD)+'s', colour: '#993322' });
   }
+  // LAST_STAND clutch window active — perk has a 5s window where the player
+  // takes 50% damage AND deals 75% extra damage (entities.js:11326 + :11536).
+  // Without an HUD indicator the window fires invisibly: players see their
+  // HP survive a hit they expected to die from, then die on the next hit
+  // because they didn't know to press the advantage. Mirrors the
+  // adrenalineTimer pattern (timer-driven, seconds-remaining label, icon-
+  // and-colour signature). Only the ACTIVE window is surfaced in this PR
+  // — the 60s post-window cooldown could be added in a follow-up; this PR
+  // closes the immediate "invisible buff" UX gap. Defensive `player.perks`
+  // null-check matches the codebase pattern for nullable nested fields.
+  if (player.perks && player.perks.LAST_STAND && player.lastStandTimer > 0) {
+    fx.push({ id: 'last-stand', icon: '✦', label: player.lastStandTimer.toFixed(1)+'s', colour: '#ffaa00' });
+  }
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
