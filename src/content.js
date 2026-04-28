@@ -1692,6 +1692,7 @@ const FLOOR_MODIFIERS = {
   FRAGILE:   { label:'FRAGILE',   desc:'Glass-cannon protocol',       colour:'#ff88cc', icon:'❖' },
   HUNTER:    { label:'HUNTER',    desc:'Sensors lock stationary prey', colour:'#ff8844', icon:'◎' },
   REGENERATIVE: { label:'REGENERATIVE', desc:'Patrols self-repair when uncontested', colour:'#44ddaa', icon:'✚' },
+  CASCADE:   { label:'CASCADE',   desc:'Defeats nearby release medical pulse', colour:'#44ff88', icon:'♥' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
