@@ -2824,7 +2824,20 @@ function drawStatusBar(player) {
   if (ids.length === 0) return;
 
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
-  const y = layout.hudTop - (hasKeys ? 32 : 16);
+  // Vertical anchor for the badge row, sitting ABOVE the HUD bar.
+  // The hasKeys offset (32) and no-keys offset (16) both scale with
+  // `settings.textScale` so this row tracks the corresponding key
+  // indicator row in render.js drawHUD (which scales its font 12 +
+  // gap-above-HUD 18 + stride 55 by the same setting). Without this
+  // proportional scaling, at textScale 1.3× the larger key text
+  // baseline rises into the badge bottom edge — caught by gpt-5.3-codex
+  // adversarial review of this PR.
+  // Floors keep the no-keys case from collapsing into the HUD at 0.85×
+  // (12) and the hasKeys case from collapsing into the keys row (24).
+  const badgeYOffset = hasKeys
+    ? Math.max(24, Math.round(32 * settings.textScale))
+    : Math.max(12, Math.round(16 * settings.textScale));
+  const y = layout.hudTop - badgeYOffset;
   // Settings-scaled font size. `settings.textScale` is one of
   // TEXT_SCALE_STEPS (0.85 / 1.0 / 1.15 / 1.3); the badge height/width
   // both derive from `fs` (height = fs+6, width = measureText+8) so
