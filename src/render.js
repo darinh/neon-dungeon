@@ -116,6 +116,52 @@ function piercingHeartHudSuffix(player) {
   return ` ♥${capped}/20`;
 }
 
+/**
+ * Siphon weapon-affix HUD progress suffix — appended to the HUD weapon-name
+ * readout when the active weapon carries the SIPHON suffix affix
+ * ("of Siphoning"). Without this indicator the +1 credit drip every 3rd
+ * direct hit is barely noticeable — players see a single "+1 CR" floater
+ * spawn near themselves at unpredictable cadence with no sense of how
+ * close the next drip is. Same discoverability gap PR #258 closed for
+ * PIERCING_HEART (and PR #252 / #256 for OVERCHARGE / WINDFALL /
+ * SIGNAL_BOOST floor modifiers).
+ *
+ * Format: ` ◈N/3` where N = `player._siphonHits | 0` mod 3 (the counter
+ * resets to 0 at >= 3 in src/entities.js applyHitEffects so values
+ * displayed are 0..2 in normal gameplay; the % 3 guards against any
+ * future code path that leaves the counter > 2). The ◈ glyph mirrors
+ * the credit symbol used in the credit readout (`◈${player.credits}`
+ * at ~render.js:947) and the floater (`+N◈` floaters across
+ * entities.js) — the player reads it as "credit accumulator" at a glance.
+ *
+ * Counter scope: per-RUN, lives on `_EG.player._siphonHits`. NOT
+ * persisted across save/load (see src/entities.js:1182-1186 — losing
+ * 0–2 hits across a Continue is acceptable to keep the save schema
+ * lean). The `| 0` nucleation tolerates the post-Continue undefined
+ * case AND any NaN/Infinity from corrupted localStorage (defensive
+ * even though the field isn't currently saved — future-proofing).
+ *
+ * The threshold (3) is duplicated from src/entities.js applyHitEffects
+ * — when changing the threshold, update BOTH sites.
+ *
+ * Surfaces ONLY when a SIPHON weapon is currently equipped. Swapping
+ * to a non-SIPHON weapon hides the badge but the underlying counter
+ * persists (run-scoped) — re-equipping a SIPHON weapon resumes the
+ * count. Mirrors the piercingHeartHudSuffix swap-survival behavior.
+ *
+ * @param {any} player
+ * @returns {string}
+ */
+function siphonHudSuffix(player) {
+  if (!player) return '';
+  const w = player.weapon;
+  if (!w || !Array.isArray(w._affixes)) return '';
+  if (!w._affixes.includes('SIPHON')) return '';
+  const hits = player._siphonHits | 0;
+  const shown = hits < 0 ? 0 : (hits % 3);
+  return ` ◈${shown}/3`;
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 /**
  * @param {any} player
@@ -1029,20 +1075,42 @@ function drawHUD(player) {
     // the weapon name accounts for the trailing " ♥N/20" badge. Suffix is
     // rendered AFTER the (possibly truncated) name in the affix colour
     // (#ff4488) so it remains visible regardless of name length.
+    //
+    // PH and SIPHON are mutually exclusive on a single weapon (both are
+    // suffix-slot in WEAPON_AFFIXES — buildWeapon picks at most one
+    // suffix), so at most ONE of phSufC / spSufC is non-empty at a
+    // time. Combined width is reserved in the truncation budget so a
+    // future affix that bypasses the mutex would still render correctly.
     const phSufC = piercingHeartHudSuffix(player);
     const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
-    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC;
+    const spSufC = siphonHudSuffix(player);
+    const spSufWC = spSufC ? ctx.measureText(spSufC).width : 0;
+    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC - spSufWC;
     let weapName = player.weapon.displayName || player.weapon.name;
     if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
       while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
     ctx.fillText(weapName, statsX + 74, r2 + 10);
+    // Render any active weapon-affix suffixes side-by-side using a
+    // cumulative x-offset. Currently PH and SIPHON are mutually exclusive
+    // on a single weapon (both suffix-slot, buildWeapon picks at most one
+    // via `.find(slot==='suffix')`), so in practice ONE renders at a
+    // time — but if a future code path or corrupted save shape ever
+    // produces a multi-suffix weapon, the cumulative offset prevents
+    // overlap. Truncation budget above already reserves combined width.
+    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width;
     if (phSufC) {
-      const wNameW = ctx.measureText(weapName).width;
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufC, statsX + 74 + wNameW, r2 + 10);
+      ctx.fillText(phSufC, _sufX_C, r2 + 10);
+      _sufX_C += ctx.measureText(phSufC).width;
+    }
+    if (spSufC) {
+      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+      ctx.fillStyle='#88ff88';
+      ctx.fillText(spSufC, _sufX_C, r2 + 10);
+      _sufX_C += ctx.measureText(spSufC).width;
     }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
@@ -1135,20 +1203,36 @@ function drawHUD(player) {
     // Reserve width for the trailing " ♥N/20" badge so the truncation
     // budget is honest, then render the suffix in the affix colour
     // (#ff4488) after the (possibly truncated) weapon name.
+    //
+    // PH and SIPHON are mutually exclusive on a single weapon (both are
+    // suffix-slot in WEAPON_AFFIXES), so at most ONE of phSufL / spSufL
+    // is non-empty at a time. Combined width is reserved in the
+    // truncation budget defensively.
     const phSufL = piercingHeartHudSuffix(player);
     const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
+    const spSufL = siphonHudSuffix(player);
+    const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const wMaxL = W - (colBase + 230) - 10 - phSufWL;
+    const wMaxL = W - (colBase + 230) - 10 - phSufWL - spSufWL;
     if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
     ctx.fillText(wNameL, colBase + 220, y + 10);
+    // Cumulative x-offset for stacked affix suffixes — see compact
+    // branch comment for rationale (mutex defense + future-proofing).
+    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width;
     if (phSufL) {
-      const wNameWL = ctx.measureText(wNameL).width;
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufL, colBase + 220 + wNameWL, y + 10);
+      ctx.fillText(phSufL, _sufX_L, y + 10);
+      _sufX_L += ctx.measureText(phSufL).width;
+    }
+    if (spSufL) {
+      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+      ctx.fillStyle='#88ff88';
+      ctx.fillText(spSufL, _sufX_L, y + 10);
+      _sufX_L += ctx.measureText(spSufL).width;
     }
     ctx.shadowBlur=0;
     if (player.weapons && player.weapons.length > 1) {
