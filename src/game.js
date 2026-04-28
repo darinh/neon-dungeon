@@ -469,6 +469,20 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
+    // hacktool meta upgrade — pre-equip a random hackware module at run
+    // start (reinterpreted from "extra hackware slot" since the game has
+    // only one slot; see src/meta/save.js hacktool case for full history).
+    // Done HERE (not in save.applyMetaToPlayer) so the meta layer stays
+    // decoupled from entity data: HACKWARE is browser-side content, and
+    // applyMetaToPlayer is also exercised by node-runnable behavioural
+    // tests that don't load content.js. The !p.hackware guard makes the
+    // seed idempotent — re-entering startGame after a meta-only path
+    // (e.g. the new-game-confirm prompt loop) won't reroll the module.
+    if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
+      const _hwKey = HACKWARE_KEYS[Math.floor(Math.random() * HACKWARE_KEYS.length)];
+      this.player.hackware = _hwKey;
+      this.player.hackwareCooldown = 0;
+    }
     // UNCHAINED #37: transient pickup array. Modules dropped this run live
     // here until commit on floor clear / victory; discarded on death.
     this.runModules = [];

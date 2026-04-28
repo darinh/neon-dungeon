@@ -305,6 +305,17 @@
         f.ghostwalk = level;
         break;
       case 'hacktool':
+        // Reinterpreted from "Start with 1 extra hackware slot (3→4)"
+        // (the game has only ONE hackware slot — multi-slot would require
+        // extensive rewrites of render, input, and cooldown tracking) →
+        // pre-equip a RANDOM hackware module at run start. The seeding
+        // itself happens in src/game.js startGame after applyMetaToPlayer
+        // (HACKWARE lives in src/content.js; the meta layer must not hard-
+        // depend on entity data — same pattern as STARTING_GEAR which uses
+        // the buildWeaponFn injection). Here we only set the metaFlag so
+        // the seeding site can opt-in. The legacy hackwareSlots write is
+        // kept for save back-compat (field is persisted by saveGame and
+        // restored by continueGame; harmless when unread).
         player.hackwareSlots = (player.hackwareSlots || 3) + level;
         f.hacktool = level;
         break;
