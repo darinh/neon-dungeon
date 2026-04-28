@@ -28,7 +28,7 @@
     { id:'hull_plating', branch:'Vitality', tier:1, baseCost:3,  maxLevel:3, effect:'+10 max HP per level' },
     { id:'regenerator',  branch:'Vitality', tier:2, baseCost:6,  maxLevel:2, effect:'Regen 0.5 HP/s out of combat (per level)' },
     { id:'trauma_kit',   branch:'Vitality', tier:3, baseCost:10, maxLevel:2, effect:'Start each run with 1 nano-medic consumable (per level)' },
-    { id:'second_wind',  branch:'Vitality', tier:4, baseCost:18, maxLevel:1, effect:'Revive once per floor at 1 HP when lethally hit' },
+    { id:'second_wind',  branch:'Vitality', tier:4, baseCost:18, maxLevel:1, effect:'Revive once per floor at 25% HP when lethally hit' },
     // Damage
     { id:'overclock',     branch:'Damage', tier:1, baseCost:3,  maxLevel:3, effect:'+5% weapon damage per level' },
     { id:'critical_bias', branch:'Damage', tier:2, baseCost:6,  maxLevel:3, effect:'+4% crit chance per level' },
