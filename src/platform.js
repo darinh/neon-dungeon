@@ -1913,6 +1913,33 @@ const audio = (() => {
       noise(0.12, t, 0.12, 4500, bus);
       osc('sine',      80,   60, 0.10, t + 0.06,  0.25);
     },
+    hackwareChronoLure() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.35, 0.45);
+      // Arming chime — three rising clock-tick blips. Magenta-coded
+      // delay marker. Opens with a clean triangle ping at the cast,
+      // then two echo ticks at 0.25s + 0.5s to telegraph "1 second
+      // until detonation". Distinct from hackwareGravity (deep
+      // sub-implosion) — chrono lure is a setup tool, gravity well
+      // is the impact — so the audio reads "tick-tick-tick" not
+      // "BOOM".
+      osc('triangle', 1100, 1400, 0.08, t,         0.10, bus);
+      osc('triangle',  900, 1100, 0.06, t + 0.30,  0.10, bus);
+      osc('triangle',  700,  900, 0.05, t + 0.60,  0.10, bus);
+      osc('sine',      220,  180, 0.05, t,         0.20);
+    },
+    hackwareChronoLureBoom() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.45, 0.55);
+      // Detonation — collapsing magenta singularity. Pitched-down
+      // sub-bass sweep + bright noise crackle for the stun pop. Pairs
+      // with the visual transition from countdown clock → pull vortex
+      // so the player hears AND sees the arm-end transition.
+      osc('sine',     900,  60, 0.18, t,         0.35, bus);
+      osc('triangle', 600,  80, 0.12, t,         0.30, bus);
+      noise(0.10, t, 0.18, 3500, bus);
+      osc('sine',      40,  30, 0.18, t + 0.08,  0.45);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
