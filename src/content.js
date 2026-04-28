@@ -3436,18 +3436,35 @@ function generateFloor(floorNum) {
 function updateLighting(dungeon, px, py) {
   const map = dungeon.map;
   const mod = _CG.modifier;
-  const r = mod === 'BLACKOUT' ? 5 : 9;
+  const baseR = mod === 'BLACKOUT' ? 5 : 9;
+  // RECON meta upgrade (src/meta/save.js applyMetaToPlayer): sensorRadiusMult
+  // scales the player FOV radius. Same loop also writes dungeon.visited (line
+  // ~3468) so this widens both the lit area AND the minimap reveal — matching
+  // the upgrade contract '+20% sensor radius (minimap reveal) per level'.
+  // Set once at run start; constant for the run; included in the cache key
+  // (_fovSensor) defensively in case any future mechanic mutates it mid-run.
+  // Sanitize aggressively: corrupted/tampered save data can deliver NaN /
+  // Infinity / strings via _CG.player.sensorRadiusMult (the field flows through
+  // saveGame's explicit enum but localStorage is user-writable); without the
+  // isFinite + bounds check, NaN would blank the FOV and Infinity would hang
+  // the per-tile loop.
+  let sensorMult = (_CG.player && _CG.player.sensorRadiusMult) || 1;
+  if (!Number.isFinite(sensorMult) || sensorMult <= 0) sensorMult = 1;
+  if (sensorMult > 8) sensorMult = 8;
+  const r = Math.max(1, Math.round(baseR * sensorMult));
   const tx = Math.floor(px), ty = Math.floor(py);
   // Incremental FOV (Phase 2b): if the player is still on the same floor tile
   // and the modifier hasn't changed and no map mutation flagged dirty, the
   // previous frame's light/visible grids are still correct. Skip recompute.
   if (!dungeon._fovDirty &&
       dungeon._fovTx === tx && dungeon._fovTy === ty &&
-      dungeon._fovMod === mod) {
+      dungeon._fovMod === mod &&
+      dungeon._fovSensor === sensorMult) {
     return;
   }
   dungeon._fovDirty = false;
   dungeon._fovTx = tx; dungeon._fovTy = ty; dungeon._fovMod = mod;
+  dungeon._fovSensor = sensorMult;
   // Clear light and visible each frame (per-row typed-array fill)
   for (let y = 0; y < MAP_H; y++) {
     dungeon.light[y].fill(0);
