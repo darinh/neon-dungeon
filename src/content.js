@@ -675,6 +675,7 @@ const WEAPON_AFFIXES = {
   SIPHON:   { slot:'suffix', label:'of Siphoning', colour:'#88ff88', desc:'+1 credit per 3 hits',  effect:'siphon' },
   TOXIC:    { slot:'suffix', label:'of Toxin',    colour:'#88dd44', desc:'Stacks poison on hit (max 5)', effect:'poison' },
   STAGGER:  { slot:'suffix', label:'of Staggering',colour:'#88aaff', desc:'Brief slow on hit (per-hit cooldown)', effect:'stagger' },
+  PIERCING_HEART: { slot:'suffix', label:'of Piercing Heart', colour:'#ff4488', desc:'+1 Max HP per kill (cap +20)', effect:'pierceheart' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');

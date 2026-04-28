@@ -2160,6 +2160,43 @@ class Enemy {
       items.push(new Item(this.x, this.y));
       spawnParticles(this.x, this.y, 'MUZZLE', '#ffdd66', 4);
     }
+    // PIERCING_HEART 'of Piercing Heart' suffix — +1 Max HP per qualifying
+    // kill, hard-capped at +20 per run. Mirrors the on-kill model used by
+    // GREEDY/SALVAGE/LUCKY: gates on _lastHitCtx with !isProc so a non-
+    // PIERCING_HEART proc finishing the enemy (THUNDER chain, EXPLOSIVE_KILLS,
+    // RICOCHET) does NOT credit the buff. Burn-DoT and TOXIC-DoT kills DO
+    // credit if the prior direct hit was Piercing Heart (entities.js:1335
+    // and :1383 unmark isProc — same path GREEDY/SALVAGE/LUCKY rely on).
+    // Skips summons/shards (same defense-in-depth gate as the sibling
+    // on-kill suffixes — without it, a phantom-summon farm would let
+    // _piercingHearts cap in seconds).
+    //
+    // Cap rationale: 20 stacks = +25% effective HP for an 80-HP base, on
+    // par with a META_UPGRADE max-hp tier, NOT runaway. Without the cap
+    // a long bounty-rich floor would scale HP indefinitely. Counter
+    // (`_piercingHearts`) lives on the player and is persisted in
+    // saveGame's explicit field enumeration so save/resume preserves the
+    // cap (without persistence, a quit-and-resume mid-run would let the
+    // player re-earn the +20 from scratch).
+    //
+    // Heal +1 on the trigger so the gain is immediately usable AND
+    // visible (raising a maxHp ceiling without filling it leaves the
+    // player at the same HP, a non-feedback that obscures the proc).
+    // Min(maxHp, hp+1) is defensive — should never matter since maxHp
+    // was just bumped, but it keeps the invariant hp <= maxHp tight.
+    const _phctx = this._lastHitCtx;
+    if (_phctx && !_phctx.isProc && _phctx.effects && _phctx.effects.includes('pierceheart')
+        && !this.isShard && !isSummon) {
+      const _php = _EG.player;
+      const _phStacks = _php._piercingHearts || 0;
+      if (_phStacks < 20) {
+        _php._piercingHearts = _phStacks + 1;
+        _php.maxHp += 1;
+        _php.hp = Math.min(_php.maxHp, _php.hp + 1);
+        spawnDmgText(_php.x, _php.y - 0.4, '+1 HP', '#ff4488');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#ff4488', 4);
+      }
+    }
     // Vampiric perk: heal on kill
     if (_EG.player.perks.VAMPIRIC && !this.isShard) {
       const heal = 2;
@@ -10747,6 +10784,7 @@ class Player {
   /** @type {any} */ _posHistory;
   /** @type {any} */ _shotHistory;
   /** @type {any} */ _shieldCharges;
+  /** @type {any} */ _piercingHearts;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
   /** @type {any} */ adrenalineTimer;
