@@ -2344,6 +2344,31 @@ function getStatusEffects(player) {
   if (player.perks.SECOND_WIND && !player.secondWindUsed) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
   }
+  // HOT_HAND streak active — perk rewards consecutive hits on the SAME
+  // target with +5% damage per stack (capped at +30% / 6 stacks). The
+  // streak resets on target-switch or after HOT_HAND_WINDOW (3s) without
+  // a hit (entities.js:12017-12023). Without an HUD indicator the buff
+  // accumulates invisibly: players see damage numbers tick up but can't
+  // tell why or when they're "in the zone." Surfaces the multiplier the
+  // NEXT hit will receive (NOT the current stack count) so the readout
+  // is actionable without the player needing to mentally compute the
+  // formula.
+  //
+  // Display: ♨ ×1.05 ... ×1.30 (clamped at 6 stacks). The perk's icon ♨
+  // matches the perk-card glyph at content.js:4397.
+  //
+  // Gates: perk owned + active timer (mirrors the LAST_STAND pattern from
+  // PRs #276/#278). Defensive `player.perks &&` null-check matches the
+  // codebase pattern. Streak gate (> 0) is technically redundant given
+  // timer > 0 implies streak > 0 (both set together in takeDamage at
+  // entities.js:1898-1900), but defends against a future regression that
+  // sets the timer without incrementing the streak.
+  if (player.perks && player.perks.HOT_HAND && player._hotHandTimer > 0
+      && player._hotHandStreak > 0) {
+    const stacks = Math.min(player._hotHandStreak | 0, 6);
+    const mul = (1 + stacks * 0.05).toFixed(2);
+    fx.push({ id: 'hot-hand', icon: '♨', label: '×' + mul, colour: '#ff5522' });
+  }
   // Augment count
   const augCount = Object.keys(player.augments || {}).length;
   if (augCount > 0) {
