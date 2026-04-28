@@ -32,11 +32,22 @@ const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.
 const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
+// Strip JS comments before regex assertions so a `// this.retributionTimer = 3`
+// commented-out gate can't satisfy a presence check (mark-affix /
+// reverse-polarity / bulwark / hot-hand / glass-cannon precedent).
+/** @param {string} src */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+const ENTITIES_NC = stripComments(ENTITIES);
+const CONTENT_NC  = stripComments(CONTENT);
+
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
 
 test('RETRIBUTION is registered in PERK_POOL with name/icon/desc/colour', () => {
-  const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  const pool = CONTENT_NC.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
+  assert.ok(pool, 'PERK_POOL block must be locatable in content.js (post-strip)');
   assert.match(pool[0], /RETRIBUTION\s*:\s*\{[^}]*name\s*:\s*['"]Retribution['"]/,
     'PERK_POOL.RETRIBUTION must declare name "Retribution"');
   assert.match(pool[0], /RETRIBUTION\s*:\s*\{[^}]*icon\s*:/,
@@ -51,7 +62,8 @@ test('RETRIBUTION name does not collide with VENGEANCE mob', () => {
   // The VENGEANCE retaliator mob (entities.js:303) shares no code path but
   // shares the natural-language concept. Pin the rename so a future drift
   // back to "VENGEANCE" doesn't quietly create player-facing ambiguity.
-  const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
+  // Strip comments so a `// VENGEANCE: { ... }` reference doesn't trip the guard.
+  const pool = CONTENT_NC.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
   assert.ok(pool, 'PERK_POOL block must be locatable');
   assert.ok(!/VENGEANCE\s*:\s*\{/.test(pool[0]),
     'PERK_POOL must NOT declare a VENGEANCE entry (collides with mob name)');
@@ -63,21 +75,21 @@ test('Player constructor initialises this.retributionTimer = 0', () => {
   // Must be initialised in the Player constructor so save/load and reset
   // paths see a defined value (not undefined). Sibling timers (cloakTimer,
   // lastStandTimer) follow the same pattern.
-  assert.match(ENTITIES, /this\.retributionTimer\s*=\s*0\s*;/,
-    'Player constructor must initialise retributionTimer to 0');
+  assert.match(ENTITIES_NC, /this\.retributionTimer\s*=\s*0\s*;/,
+    'Player constructor must initialise retributionTimer to 0 in EXECUTABLE code');
 });
 
 // ─── effectiveAtk hook ────────────────────────────────────────────────────
 
 test('RETRIBUTION is wired into Player.effectiveAtk()', () => {
-  const m = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.effectiveAtk() block must be locatable in entities.js');
+  const m = ENTITIES_NC.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  assert.ok(m, 'Player.effectiveAtk() block must be locatable in entities.js (post-strip)');
   assert.match(m[0], /this\.perks\.RETRIBUTION/,
-    'effectiveAtk() must reference this.perks.RETRIBUTION');
+    'effectiveAtk() must reference this.perks.RETRIBUTION in EXECUTABLE code');
   assert.match(m[0], /this\.retributionTimer\s*>\s*0/,
-    'effectiveAtk() must gate RETRIBUTION on retributionTimer > 0');
+    'effectiveAtk() must gate RETRIBUTION on retributionTimer > 0 in EXECUTABLE code');
   assert.match(m[0], /\*\s*1\.5/,
-    'effectiveAtk() RETRIBUTION branch must apply *1.5 multiplier');
+    'effectiveAtk() RETRIBUTION branch must apply *1.5 multiplier in EXECUTABLE code');
 });
 
 // ─── takeDamage trigger ───────────────────────────────────────────────────
@@ -86,12 +98,12 @@ test('Player.takeDamage arms retributionTimer = 3 when perk owned', () => {
   // Locate the player takeDamage(dmg, source, opts) signature (NOT the
   // entity-side takeDamage(dmg, hitCtx) signature). Identify by the opts
   // parameter and the player-specific energyShield/lastStandTimer body.
-  const m = ENTITIES.match(/takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.takeDamage(dmg, source, opts) must be locatable');
+  const m = ENTITIES_NC.match(/takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  assert.ok(m, 'Player.takeDamage(dmg, source, opts) must be locatable (post-strip)');
   assert.match(m[0], /this\.perks\.RETRIBUTION/,
-    'Player.takeDamage must consult this.perks.RETRIBUTION');
+    'Player.takeDamage must consult this.perks.RETRIBUTION in EXECUTABLE code');
   assert.match(m[0], /this\.retributionTimer\s*=\s*3\b/,
-    'Player.takeDamage must set retributionTimer to 3 (seconds) on real hits');
+    'Player.takeDamage must set retributionTimer to 3 (seconds) on real hits in EXECUTABLE code');
 });
 
 test('RETRIBUTION trigger placed AFTER hp deduction (so absorbed hits do not arm)', () => {
@@ -104,13 +116,13 @@ test('RETRIBUTION trigger placed AFTER hp deduction (so absorbed hits do not arm
   // All return BEFORE the hp deduction. So gating the trigger on a position
   // after `this.hp = Math.max(0, this.hp - actual)` automatically inherits
   // the early-returns and only fires on real damage taken.
-  const m = ENTITIES.match(/takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.takeDamage block must be locatable');
+  const m = ENTITIES_NC.match(/takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  assert.ok(m, 'Player.takeDamage block must be locatable (post-strip)');
   const body = m[0];
   const hpDedIdx       = body.indexOf('this.hp=Math.max(0,this.hp-actual)');
   const retributionIdx = body.search(/this\.retributionTimer\s*=\s*3/);
-  assert.ok(hpDedIdx >= 0,       'hp deduction line must exist');
-  assert.ok(retributionIdx >= 0, 'RETRIBUTION trigger line must exist');
+  assert.ok(hpDedIdx >= 0,       'hp deduction line must exist in EXECUTABLE code');
+  assert.ok(retributionIdx >= 0, 'RETRIBUTION trigger line must exist in EXECUTABLE code');
   assert.ok(retributionIdx > hpDedIdx,
     'RETRIBUTION trigger must appear AFTER hp deduction so absorbed hits do not arm');
 });
@@ -122,9 +134,9 @@ test('Player.update decays retributionTimer by dt (movement-independent)', () =>
   // reactiveArmorCD — so 30/60/120 fps expire at the same wall-clock time.
   // Movement-independent dt-decay sidesteps the descend-warp inflation
   // class of bug (per stored player-movement-accumulator rule).
-  assert.match(ENTITIES,
+  assert.match(ENTITIES_NC,
     /this\.retributionTimer\s*=\s*Math\.max\s*\(\s*0\s*,\s*this\.retributionTimer\s*-\s*dt\s*\)/,
-    'Player.update must decay retributionTimer via Math.max(0, retributionTimer - dt)');
+    'Player.update must decay retributionTimer via Math.max(0, retributionTimer - dt) in EXECUTABLE code');
 });
 
 // ─── Numerical formula sanity ─────────────────────────────────────────────
@@ -163,10 +175,10 @@ test('RETRIBUTION is independent state — does not collide with lastStandTimer'
   // RETRIBUTION and LAST_STAND are deliberately separate timers. Sharing a
   // backing field would make a Retribution refresh accidentally also reset
   // the LAST_STAND clutch window, or vice-versa. Pin the field-name split.
-  assert.ok(/this\.lastStandTimer\s*=\s*0\s*;/.test(ENTITIES),
-    'lastStandTimer must remain its own field (regression guard)');
-  assert.ok(/this\.retributionTimer\s*=\s*0\s*;/.test(ENTITIES),
-    'retributionTimer must be its own field (regression guard)');
+  assert.ok(/this\.lastStandTimer\s*=\s*0\s*;/.test(ENTITIES_NC),
+    'lastStandTimer must remain its own field (regression guard) in EXECUTABLE code');
+  assert.ok(/this\.retributionTimer\s*=\s*0\s*;/.test(ENTITIES_NC),
+    'retributionTimer must be its own field (regression guard) in EXECUTABLE code');
 });
 
 // ─── No movement-rate accumulator was introduced ──────────────────────────
@@ -177,11 +189,11 @@ test('RETRIBUTION does not introduce a movement-rate accumulator (dt-decay only)
   // alongside burnTimer/shockTimer, otherwise descend-warp inflates the
   // rate. RETRIBUTION is a wall-clock countdown — it MUST NOT consult moved
   // or this.x/this.y deltas. Pin that decision.
-  const triggerIdx = ENTITIES.search(/this\.retributionTimer\s*=\s*3/);
-  const decayIdx   = ENTITIES.search(/this\.retributionTimer\s*=\s*Math\.max/);
-  assert.ok(triggerIdx >= 0 && decayIdx >= 0, 'both RETRIBUTION sites must exist');
-  const triggerSlice = ENTITIES.slice(Math.max(0, triggerIdx - 300), triggerIdx + 300);
-  const decaySlice   = ENTITIES.slice(Math.max(0, decayIdx   - 300), decayIdx   + 300);
+  const triggerIdx = ENTITIES_NC.search(/this\.retributionTimer\s*=\s*3/);
+  const decayIdx   = ENTITIES_NC.search(/this\.retributionTimer\s*=\s*Math\.max/);
+  assert.ok(triggerIdx >= 0 && decayIdx >= 0, 'both RETRIBUTION sites must exist (post-strip)');
+  const triggerSlice = ENTITIES_NC.slice(Math.max(0, triggerIdx - 300), triggerIdx + 300);
+  const decaySlice   = ENTITIES_NC.slice(Math.max(0, decayIdx   - 300), decayIdx   + 300);
   // Permissive — `moved` may legitimately appear elsewhere in update();
   // we only care that RETRIBUTION itself doesn't gate on movement rate.
   assert.ok(!/moved\s*\/\s*dt/.test(triggerSlice),
