@@ -768,7 +768,18 @@ function activateHackware(player) {
   if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
-  player.hackwareCooldown = hw.cooldown * (hasAugment('OVERCLOCKER') ? 0.7 : 1);
+  // Hackware cooldown set on activation. Stacks multiplicatively with
+  // OVERCLOCKER augment AND the AUTONOMY floor modifier (seventh positive
+  // modifier in the FLOOR_MODIFIERS pool, "hackware cooldowns reduced 25%
+  // on this floor"). Both are passive multiplicative reductions, so an
+  // AUTONOMY floor with OVERCLOCKER yields cooldown × 0.7 × 0.75 = 0.525
+  // — a strong synergy that rewards augment-first builds without being
+  // run-defining (the augment itself is rare). AUTONOMY uses _CG.modifier
+  // (the canonical content.js floor-modifier ref) so a typo would silently
+  // disable the bonus on every cooldown.
+  player.hackwareCooldown = hw.cooldown
+    * (hasAugment('OVERCLOCKER') ? 0.7 : 1)
+    * (_CG.modifier === 'AUTONOMY' ? 0.75 : 1);
   const map = _CG.dungeon ? _CG.dungeon.map : null;
 
   switch (player.hackware) {
@@ -1708,6 +1719,7 @@ const FLOOR_MODIFIERS = {
   SIGNAL_BOOST: { label:'SIGNAL_BOOST', desc:'Every 5th defeat resets hackware', colour:'#00ddff', icon:'↻' },
   REVERB:    { label:'REVERB',    desc:'Every 5th shot fires a free echo',     colour:'#ff66cc', icon:'♪' },
   QUARTERMASTER: { label:'QUARTERMASTER', desc:'First defeat in each room drops a bonus core', colour:'#ffaa44', icon:'▣' },
+  AUTONOMY:  { label:'AUTONOMY',  desc:'Hackware cooldowns reduced 25% on this floor', colour:'#88ff44', icon:'⚙' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
