@@ -33,7 +33,7 @@
     { id:'overclock',     branch:'Damage', tier:1, baseCost:3,  maxLevel:3, effect:'+5% weapon damage per level' },
     { id:'critical_bias', branch:'Damage', tier:2, baseCost:6,  maxLevel:3, effect:'+4% crit chance per level' },
     { id:'momentum',      branch:'Damage', tier:3, baseCost:10, maxLevel:2, effect:'+15% damage for 3s after a kill (per level)' },
-    { id:'surge',         branch:'Damage', tier:4, baseCost:18, maxLevel:1, effect:'Every 8th hit deals +100% damage' },
+    { id:'surge',         branch:'Damage', tier:4, baseCost:18, maxLevel:1, effect:'Every 8th shot deals +100% damage' },
     // Utility
     { id:'recon',     branch:'Utility', tier:1, baseCost:3,  maxLevel:3, effect:'+20% sensor radius (minimap reveal) per level' },
     { id:'scavenger', branch:'Utility', tier:2, baseCost:6,  maxLevel:3, effect:'+1 credit per pickup per level' },
