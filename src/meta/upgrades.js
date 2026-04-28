@@ -38,7 +38,7 @@
     { id:'recon',     branch:'Utility', tier:1, baseCost:3,  maxLevel:3, effect:'+20% sensor radius (minimap reveal) per level' },
     { id:'scavenger', branch:'Utility', tier:2, baseCost:6,  maxLevel:3, effect:'+1 credit per pickup per level' },
     { id:'ghostwalk', branch:'Utility', tier:3, baseCost:10, maxLevel:2, effect:'Dash has 0.2s extra i-frames (per level)' },
-    { id:'hacktool',  branch:'Utility', tier:4, baseCost:18, maxLevel:1, effect:'Start with 1 extra hackware slot (3→4)' },
+    { id:'hacktool',  branch:'Utility', tier:4, baseCost:18, maxLevel:1, effect:'Start each run with a random hackware module pre-installed' },
   ];
 
   const BRANCHES = ['Vitality', 'Damage', 'Utility'];
