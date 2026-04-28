@@ -999,7 +999,14 @@ const game = {
         // leaving tickBoosts with no way to expire it (3 reviewers caught
         // this on PR #143 review).
         _boostTimers: p._boostTimers ? {...p._boostTimers} : {},
-        _shieldCharges: p._shieldCharges | 0
+        _shieldCharges: p._shieldCharges | 0,
+        // PIERCING_HEART 'of Piercing Heart' suffix — per-run cap counter.
+        // Persisted so save/resume preserves the +20 cap (otherwise a
+        // quit-and-resume mid-run would let the player re-earn the cap
+        // from scratch, since maxHp survives but the counter wouldn't).
+        // Mirrors the explicit-enum pattern (no Object.keys) per
+        // stored memory 'on-hit weapon affixes'.
+        _piercingHearts: p._piercingHearts || 0
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -1111,6 +1118,10 @@ const game = {
       }
     }
     p._shieldCharges = s._shieldCharges | 0;
+    // PIERCING_HEART per-run cap counter — restore from save (defaults to
+    // 0 for older saves that predate the field; same `||0` nucleation
+    // pattern used elsewhere in continueGame).
+    p._piercingHearts = s._piercingHearts || 0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
