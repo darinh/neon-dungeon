@@ -1977,6 +1977,25 @@ class Enemy {
       NEON.cores.spawnCoreDrop(game, this.x, this.y, 1);
       spawnParticles(this.x, this.y, 'MUZZLE', '#44ffcc', 4);
     }
+    // LUCKY 'of Luck' suffix — 8% chance on kill to drop a bonus Item.
+    // Stacks ON TOP of the base random Item roll (line 1859) and the
+    // bounty guaranteed drop, so a Lucky roll on a regular grunt is the
+    // headline use case but a Lucky-bountied elite can yield 3 items.
+    // Mirrors the on-defeat model used by GREEDY/SALVAGE/DETONATE: gates
+    // on _lastHitCtx with !isProc so a non-Lucky proc finishing the
+    // enemy (THUNDER chain, EXPLOSIVE_KILLS, RICOCHET) does NOT roll for
+    // Luck. Burn-DoT kills DO credit if the prior direct hit was Lucky
+    // (entities.js:1232 unmarks isProc — same path DETONATE relies on).
+    // Skips summons/shards (same rule as the elite/boss core drop block
+    // and the base Item drop at line 1859). 8% chance — slightly under
+    // SALVAGE's 10% because Items (full pickups: weapons/armour/perks)
+    // are higher-value than a 1-CORE drop, so the curve self-balances.
+    const _lctx = this._lastHitCtx;
+    if (_lctx && !_lctx.isProc && _lctx.effects && _lctx.effects.includes('lucky')
+        && !this.isShard && !isSummon && Math.random() < 0.08) {
+      items.push(new Item(this.x, this.y));
+      spawnParticles(this.x, this.y, 'MUZZLE', '#ffdd66', 4);
+    }
     // Vampiric perk: heal on kill
     if (_EG.player.perks.VAMPIRIC && !this.isShard) {
       const heal = 2;
