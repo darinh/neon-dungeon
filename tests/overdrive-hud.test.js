@@ -38,89 +38,14 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const {
+  extractBranch,
+  extractIfCondition,
+  loadAlignmentSources,
+} = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-const ENTITIES = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-/**
- * Replace string-literal CONTENTS (single, double, backtick) with same-
- * length runs of spaces, preserving the QUOTE characters AND the overall
- * length of the source (so character indexes remain valid). Defends
- * brace-depth counters from being confused by `{` / `}` substrings inside
- * string literals — see test 11 (structural ancestor check).
- *
- * Naive: does not parse template-literal `${...}` interpolations (good
- * enough for content.js / entities.js which use template literals only
- * for plain HUD/dialogue text — none in the getStatusEffects hot path).
- * @param {string} src
- */
-function blankStringContents(src) {
-  return src
-    .replace(/('(?:\\.|[^'\\])*')|("(?:\\.|[^"\\])*")|(`(?:\\.|[^`\\])*`)/g,
-      (m) => m[0] + ' '.repeat(m.length - 2) + m[m.length - 1]);
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-const ENTITIES_CODE = stripComments(ENTITIES);
-// Brace-counting form: comments stripped AND string-literal contents
-// blanked to spaces (length preserved → positions stay valid). Used by
-// the structural-ancestor check (test 11) where braces inside string
-// literals would otherwise corrupt the brace-depth counter.
-const CONTENT_BRACES = blankStringContents(CONTENT_CODE);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
-
-/**
- * Extract the parenthesised condition of an if-statement starting at the
- * given character index of `(`. Walks parens to balance, returns the
- * inner text WITHOUT outer parens. Returns null on unbalanced input.
- * @param {string} src
- * @param {number} openIdx index of the opening `(`
- */
-function extractIfCondition(src, openIdx) {
-  if (src[openIdx] !== '(') return null;
-  let depth = 1;
-  for (let i = openIdx + 1; i < src.length; i++) {
-    const c = src[i];
-    if (c === '(') depth++;
-    else if (c === ')') {
-      depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return null;
-}
+const { CONTENT, ENTITIES, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
+  = loadAlignmentSources(__dirname);
 
 /**
  * Normalise a JS predicate string for cross-file comparison:
@@ -135,6 +60,21 @@ function extractIfCondition(src, openIdx) {
  *     `combo.count` introduced in entities.js:11339 to avoid repeating
  *     the dotted access) so the strict-equality comparison treats the
  *     two notations as one.
+ *
+ * NOTE: this is OVERDRIVE-specific (kept inline rather than moved to
+ * tests/_alignment-helpers.js) for two reasons:
+ *   (a) the bidirectional `(this|player).` strip is the OLDER pattern;
+ *       PRs #312/#318 deliberately moved to side-specific normalisers
+ *       (multiplier strips ONLY `this.`, badge strips ONLY `player.`)
+ *       which fail loudly on mixed-receiver bugs that bidirectional
+ *       stripping silently masks;
+ *   (b) the `c → combo.count` alias substitution is OVERDRIVE-specific.
+ *
+ * Upgrading this test to the side-specific pattern is a separate
+ * refactor (semantic change — could surface a real mixed-receiver bug)
+ * and is intentionally out of scope for the helper-extraction PR
+ * series.
+ *
  * @param {string} cond
  */
 function normalisePredicate(cond) {
