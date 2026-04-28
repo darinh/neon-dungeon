@@ -1012,7 +1012,16 @@ const game = {
         // floor preserves the rhythm (otherwise the counter would reset to
         // 0 mid-floor and the next 4 shots would lose their guaranteed
         // crit slot). Mirrors the PIERCING_HEART explicit-enum pattern.
-        _overchargeShots: p._overchargeShots || 0
+        _overchargeShots: p._overchargeShots || 0,
+        // trauma_kit panic-button charges — per-run counter seeded by
+        // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
+        // Continue mid-run preserves remaining charges (otherwise a
+        // quit-and-resume after a panic-heal would refund consumed
+        // charges since startingNanoMedics is stat-only and the live
+        // counter would default back to the upgrade level). Mirrors the
+        // explicit-enum pattern (no Object.keys) per stored memory
+        // 'on-hit weapon affixes'.
+        _nanoMedicCharges: p._nanoMedicCharges | 0
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -1132,6 +1141,22 @@ const game = {
     // for older saves that predate the field; mirrors PIERCING_HEART
     // restore pattern).
     p._overchargeShots = s._overchargeShots || 0;
+    // trauma_kit panic-button charges — restore from save when present.
+    // For saves produced BEFORE this PR shipped, the explicit field is
+    // absent (`s._nanoMedicCharges == null`); we fall back to the
+    // metaFlags-recorded upgrade level (which IS persisted in legacy
+    // saves via `metaFlags: ...` at saveGame:983) so that a player who
+    // owns trauma_kit and Continues from a pre-PR save gets the
+    // advertised charges instead of being silently zeroed. This refunds
+    // any charges they MIGHT have used pre-PR — but since trauma_kit
+    // produced no runtime charges before this PR, that's a vacuous case.
+    // Saves produced AFTER this PR always carry the explicit field and
+    // hit the first branch.
+    if (s._nanoMedicCharges != null) {
+      p._nanoMedicCharges = s._nanoMedicCharges | 0;
+    } else if (s.metaFlags && s.metaFlags.trauma_kit) {
+      p._nanoMedicCharges = s.metaFlags.trauma_kit | 0;
+    }
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;

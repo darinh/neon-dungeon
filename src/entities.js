@@ -11035,6 +11035,7 @@ class Player {
     this._surgeShotCount=0;       // surge: rolling shot counter (every 8th)
     this._metaSecondWindUsed=false; // meta second_wind: fired once per run
     this._outOfCombatTimer=0;     // regenerator: seconds since last hit
+    this._nanoMedicCharges=0;     // trauma_kit: panic-button auto-heal charges
     // HUNTER floor modifier: seconds the player has been ~stationary.
     this._huntStill=0;
     this._prevHuntX=null;
@@ -11437,6 +11438,18 @@ class Player {
         return actual;
       }
       this.killedBy=src; audio.gameOver(); _EG.endRun(false);
+    }
+    // UNCHAINED #36 trauma_kit panic-button auto-heal. Fires AFTER the
+    // hp<=0 block so second_wind owns lethal-hit revives — trauma_kit only
+    // consumes on chip damage that crosses the 25% threshold while the
+    // player remains alive. tryTraumaKit handles the charge counter, hp
+    // floor, and threshold gate; we just paint the fx on success. The
+    // 40% heal lifts hp well above 25% so consecutive small hits cannot
+    // burn through multiple charges in one frame.
+    if (this.hp > 0 && NEON.behavior.tryTraumaKit(this)) {
+      audio.heal();
+      spawnParticles(this.x, this.y, 'EXPLOSION', '#00ffaa', 14);
+      _EG.msg('✚ NANO-MEDIC!', '#00ffaa');
     }
     return actual;
   }
