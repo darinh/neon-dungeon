@@ -41,49 +41,13 @@ const assert = require('node:assert/strict');
 const {
   extractBranch,
   extractIfCondition,
+  normaliseMultiplierPredicate,
+  normaliseBadgePredicate,
   loadAlignmentSources,
 } = require('./_alignment-helpers.js');
 
 const { CONTENT, ENTITIES, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
   = loadAlignmentSources(__dirname);
-
-/**
- * Normalise a JS predicate string for cross-file comparison:
- *   - strip whitespace
- *   - strip receiver prefix (`this.` / `player.` → ``)
- *   - strip a leading defensive `player.perks &&` (or `this.perks &&`)
- *     guard since entities.js receivers never need it but content.js
- *     handles legacy player shapes (the guard is additive and does not
- *     change the truthy domain when perks IS defined — which it always
- *     is inside Player methods on the entities.js side).
- *   - normalise the OVERDRIVE-specific local alias `c` (a synonym for
- *     `combo.count` introduced in entities.js:11339 to avoid repeating
- *     the dotted access) so the strict-equality comparison treats the
- *     two notations as one.
- *
- * NOTE: this is OVERDRIVE-specific (kept inline rather than moved to
- * tests/_alignment-helpers.js) for two reasons:
- *   (a) the bidirectional `(this|player).` strip is the OLDER pattern;
- *       PRs #312/#318 deliberately moved to side-specific normalisers
- *       (multiplier strips ONLY `this.`, badge strips ONLY `player.`)
- *       which fail loudly on mixed-receiver bugs that bidirectional
- *       stripping silently masks;
- *   (b) the `c → combo.count` alias substitution is OVERDRIVE-specific.
- *
- * Upgrading this test to the side-specific pattern is a separate
- * refactor (semantic change — could surface a real mixed-receiver bug)
- * and is intentionally out of scope for the helper-extraction PR
- * series.
- *
- * @param {string} cond
- */
-function normalisePredicate(cond) {
-  return cond
-    .replace(/\s+/g, '')
-    .replace(/^(?:this|player)\.perks&&/, '')
-    .replace(/(?:this|player)\./g, '')
-    .replace(/\bc\b/g, 'combo.count');
-}
 
 // ─── getStatusEffects() OVERDRIVE fx entry ────────────────────────────
 
@@ -580,30 +544,55 @@ test('runtime: OVERDRIVE badge gate predicate matches the multiplier gate predic
   const badgeCond = extractIfCondition(CONTENT_CODE, badgeOpenParenIdx);
   assert.ok(badgeCond, 'failed to extract badge if-condition from content.js');
 
-  // ── Compare normalised predicates ──
-  // After normalisation:
-  //   entities outer: `this.perks.OVERDRIVE` → `perks.OVERDRIVE`
-  //   entities inner: `c >= 2` → `combo.count>=2` (via the `c` → combo.count
-  //                    alias rule in normalisePredicate)
-  //   combined:        `(perks.OVERDRIVE)&&(combo.count>=2)`
-  //   content badge:  `player.perks && player.perks.OVERDRIVE && combo.count >= 2`
-  //                  → strip leading `perks &&` → `perks.OVERDRIVE&&combo.count>=2`
+  // ── Compare normalised predicates (side-specific, per PR #312/#318 pattern) ──
+  // Multiplier side (entities.js): strips ONLY `this.`, then applies the
+  // OVERDRIVE-specific `c → combo.count` alias substitution.
+  // Badge side (content.js): strips ONLY `player.` (plus the leading
+  //   defensive `player.perks &&` short-circuit), then applies the SAME
+  //   `c → combo.count` substitution symmetrically. Symmetric application
+  //   preserves the older normaliser's tolerance for equivalent forms
+  //   (per gpt-5.3-codex review) — if a future refactor introduces a
+  //   local `c` alias in getStatusEffects(), the alignment compare still
+  //   succeeds. In current code the badge uses `combo.count` directly so
+  //   the substitution is a no-op.
+  // Side-specific RECEIVER stripping (NOT bidirectional) is the canonical
+  // pattern from PRs #312/#318 — fails loudly on mixed-receiver bugs that
+  // bidirectional stripping silently masks. Upgrades the OLDER pattern
+  // documented in PR #324 (deferred normaliser refactor).
   //
-  // To make these comparable we strip the outer parens and the leading
-  // defensive perks-guard from BOTH sides after running normalisePredicate.
-  const stripParensAndAnds = (s) => s.replace(/^\(/, '').replace(/\)$/, '')
+  // The `c → combo.count` substitution is applied AFTER receiver
+  // normalisation because `c` is an OVERDRIVE-local alias defined inside
+  // effectiveAtk() at entities.js (`const c = (typeof combo !== ...)
+  // ? combo.count : 0`). The alias has nothing to do with the receiver
+  // contract, so it stays here as overdrive-specific post-processing
+  // rather than going into the shared module.
+  const stripOuterParens = (s) => s.replace(/^\(/, '').replace(/\)$/, '')
     .replace(/\)&&\(/g, '&&');
-  const combinedNorm = stripParensAndAnds(normalisePredicate(combinedCond));
-  const badgeNorm = stripParensAndAnds(normalisePredicate(badgeCond));
+  // Negative lookbehind for `.` so the alias regex doesn't accidentally
+  // rewrite a property access like `obj.c` (per gpt-5.3-codex r2 review —
+  // tightens the pattern that existed in the older inline normaliser).
+  // `c` followed by `\b` still requires a non-word boundary after.
+  const normaliseAlias = (s) => s.replace(/(?<!\.)\bc\b/g, 'combo.count');
+  const mulNorm = stripOuterParens(normaliseAlias(normaliseMultiplierPredicate(combinedCond)));
+  const badgeNorm = stripOuterParens(normaliseAlias(normaliseBadgePredicate(badgeCond)));
 
-  assert.equal(badgeNorm, combinedNorm,
-    `badge gate predicate must match combined multiplier gate predicate after normalisation.\n  multiplier (entities.js, outer + inner combined): ${combinedCond}\n    → normalised:                                   ${combinedNorm}\n  badge      (content.js):                          ${badgeCond}\n    → normalised:                                   ${badgeNorm}\n  If you intentionally added/removed a conjunct on one side, update BOTH sides — the badge↔multiplier visual contract requires identical predicates.`);
+  // Side-specific leftover-token assertions (per PR #312/#318): mixing
+  // receivers is a real bug — bidirectional stripping would silently
+  // false-pass `player.perks && this.perks.OVERDRIVE` (this is undefined
+  // in the free function getStatusEffects(player)).
+  assert.ok(!/\bplayer\b/.test(mulNorm),
+    `multiplier predicate (entities.js) must not reference \`player\` — found leftover after normalisation: ${mulNorm}. The multiplier sits inside Player.effectiveAtk(); mixing receivers is a real bug.`);
+  assert.ok(!/\bthis\b/.test(badgeNorm),
+    `badge predicate (content.js) must not reference \`this\` — found leftover after normalisation: ${badgeNorm}. The badge sits inside the free function getStatusEffects(player); using \`this\` would resolve to undefined in strict mode (TypeError) or the global object (wrong receiver).`);
+
+  assert.equal(badgeNorm, mulNorm,
+    `badge gate predicate must match combined multiplier gate predicate after side-specific normalisation.\n  multiplier (entities.js, outer + inner combined): ${combinedCond}\n    → normalised:                                   ${mulNorm}\n  badge      (content.js):                          ${badgeCond}\n    → normalised:                                   ${badgeNorm}\n  If you intentionally added/removed a conjunct on one side, update BOTH sides — the badge↔multiplier visual contract requires identical predicates.`);
 
   // Sanity: the normalised predicate must contain BOTH the perk-ownership
   // gate AND the combo threshold (catches a normalisation bug that strips
   // too much).
-  assert.ok(/perks\.OVERDRIVE/.test(combinedNorm),
+  assert.ok(/perks\.OVERDRIVE/.test(mulNorm),
     'normalised predicate must retain perks.OVERDRIVE');
-  assert.ok(/combo\.count>=2/.test(combinedNorm),
+  assert.ok(/combo\.count>=2/.test(mulNorm),
     'normalised predicate must retain combo.count>=2');
 });
