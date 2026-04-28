@@ -658,6 +658,7 @@ const WEAPON_AFFIXES = {
   BURST:    { slot:'prefix', label:'Burst',    colour:'#ffaa66', desc:'+50% rate, +1 proj, −20% dmg, −25% range', mods:{rate:1.5,countAdd:1,dmg:0.8,range:0.75} },
   VOLATILE: { slot:'prefix', label:'Volatile', colour:'#ff44dd', desc:'+50% dmg, −20% rate, wider spread', mods:{dmg:1.5,rate:0.8,spreadAdd:0.25} },
   KEEN:     { slot:'prefix', label:'Keen',     colour:'#ffdd00', desc:'+12% crit chance',  mods:{critAdd:0.12} },
+  DEADLY:   { slot:'prefix', label:'Deadly',   colour:'#ff2244', desc:'+50% crit damage',  mods:{critMulAdd:0.5} },
   // Suffixes (on-hit / on-kill effects) — max 1 per weapon
   FLAME:    { slot:'suffix', label:'of Flame',     colour:'#ff6600', desc:'Ignites enemies',       effect:'burn' },
   FROST:    { slot:'suffix', label:'of Frost',     colour:'#66ccff', desc:'Slows enemies',         effect:'slow' },
@@ -1597,7 +1598,7 @@ function buildWeapon(baseKey, affixIds) {
   if (!base) return { ...WEAPONS.PULSE_PISTOL, _base:'PULSE_PISTOL', _affixes:[], _rarity:0, displayName:'Pulse Pistol' };
   const w = { ...base, _base:baseKey, _affixes:[...affixIds], _rarity:affixIds.length };
   // Apply prefix stat mods (multiplicative, except countAdd / spreadAdd /
-  // critAdd which are additive)
+  // critAdd / critMulAdd which are additive)
   for (const id of affixIds) {
     const af = WEAPON_AFFIXES[id];
     if (!af || !af.mods) continue;
@@ -1608,6 +1609,7 @@ function buildWeapon(baseKey, affixIds) {
     if (af.mods.spreadAdd) w.spread = +(w.spread + af.mods.spreadAdd).toFixed(3);
     if (af.mods.countAdd) w.count  = w.count + af.mods.countAdd;
     if (af.mods.critAdd)  w.critAdd = +((w.critAdd || 0) + af.mods.critAdd).toFixed(3);
+    if (af.mods.critMulAdd) w.critMulAdd = +((w.critMulAdd || 0) + af.mods.critMulAdd).toFixed(3);
   }
   // Build display name: "Rapid Pulse Pistol of Flame"
   const prefix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'prefix');
