@@ -1876,7 +1876,7 @@ CONTINUE menu item shows the save's difficulty.
 
 ### Floor Modifiers (floor 2+, non-boss)
 
-Each qualifying floor randomly receives one gameplay modifier from a pool of eight.
+Each qualifying floor randomly receives one gameplay modifier from a pool of twenty (8 listed below + FRAGILE, HUNTER, REGENERATIVE, CASCADE, OVERCHARGE, WINDFALL, SIGNAL_BOOST, REVERB, QUARTERMASTER, AUTONOMY, CHAINREACT, MAGNETISM — see `src/content.js` `FLOOR_MODIFIERS` for the full registry).
 Floor 1 (settle-in) and biome-final boss floors (3, 6, 9, 12, 15) never have modifiers. Modifier is
 rolled on floor entry, saved in the checkpoint, and restored on continue. No
 SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
