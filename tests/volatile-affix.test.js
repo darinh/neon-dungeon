@@ -104,3 +104,40 @@ test('VOLATILE listing follows the existing prefix block structure', () => {
   assert.ok(volatileIdx < flameIdx,
     'VOLATILE must come before FLAME (first suffix) — i.e. inside the prefix block');
 });
+
+test('VOLATILE does NOT carry a suffix-style effect keyword', () => {
+  // VOLATILE is purely a stat mod — it has no on-hit/on-kill effect.
+  // If a future refactor accidentally adds `effect:'volatile'` (or similar),
+  // the buildWeapon `_effects = ... .map(... .effect)` collector would
+  // push a bogus token into proj._effects, where applyHitEffects'
+  // `effects.includes('<eff>')` switch could route into an unimplemented
+  // branch (or — worse — collide with the EXISTING 'volatile' MODULE which
+  // already has a different on-death meaning at content.js:688). Lock this
+  // out at the registry level.
+  //
+  // NOTE: a naive `/VOLATILE:\s*\{[^}]*\}/` regex stops at the first
+  // close-brace (the inner `mods:{...}` close), so `effect:` inserted AFTER
+  // `mods` would false-pass. Walk braces instead — captures the WHOLE
+  // VOLATILE entry. Pattern from tests/deadly-affix.test.js test #7
+  // (canonical extractEntry).
+  function extractEntry(src, key) {
+    const i = src.indexOf(key + ':');
+    if (i < 0) return null;
+    const open = src.indexOf('{', i);
+    if (open < 0) return null;
+    let depth = 0;
+    for (let j = open; j < src.length; j++) {
+      const c = src[j];
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) return src.slice(i, j + 1);
+      }
+    }
+    return null;
+  }
+  const volatileBlock = extractEntry(CONTENT_CODE, 'VOLATILE');
+  assert.ok(volatileBlock, 'VOLATILE registry entry must be findable');
+  assert.ok(!/\beffect:/.test(volatileBlock),
+    'VOLATILE must NOT have an `effect:` keyword (it is a stat mod, not an on-hit suffix)');
+});
