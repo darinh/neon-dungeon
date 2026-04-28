@@ -65,6 +65,10 @@ function modifierProgressSuffix(modKey, player) {
     const cnt = player._windfallKills | 0;
     return ` ${cnt % 5}/5`;
   }
+  if (modKey === 'SIGNAL_BOOST') {
+    const cnt = player._signalBoostKills | 0;
+    return ` ${cnt % 5}/5`;
+  }
   return '';
 }
 

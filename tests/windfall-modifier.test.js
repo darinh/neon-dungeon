@@ -298,18 +298,18 @@ test('HUD badge in render.js reads getMod().colour/.icon/.label generically', ()
 
 // ─── modifier-pool count invariants ───────────────────────────────────
 
-test('FLOOR_MODIFIERS now contains 14 entries (12 prior + WINDFALL)', () => {
+test('FLOOR_MODIFIERS now contains 15 entries (14 prior + SIGNAL_BOOST)', () => {
   // Floor-modifier roll uses Object.keys — any addition shifts the
   // probability of every other modifier. Pin the pool size so an
   // accidental drop (or accidental duplicate) is an immediate failure.
-  // Pre-WINDFALL pool was 13 (from stored memory 'positive floor
-  // modifiers'); this PR brings it to 14 with 3 positive (CASCADE,
-  // OVERCHARGE, WINDFALL) and 11 negative-or-neutral.
+  // Pre-WINDFALL pool was 13; WINDFALL brought it to 14; SIGNAL_BOOST
+  // brings it to 15 with 4 positive (CASCADE, OVERCHARGE, WINDFALL,
+  // SIGNAL_BOOST) and 11 negative-or-neutral.
   const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
   const endIdx = CONTENT.indexOf('};', startIdx);
   const dictBody = CONTENT.slice(startIdx, endIdx);
   // Count top-level keys: lines matching `^\s*[A-Z_]+:\s*\{`.
   const keys = dictBody.match(/^\s*[A-Z_]+:\s*\{/gm) || [];
-  assert.equal(keys.length, 14,
-    `FLOOR_MODIFIERS must contain 14 entries after WINDFALL added; found ${keys.length}`);
+  assert.equal(keys.length, 15,
+    `FLOOR_MODIFIERS must contain 15 entries after SIGNAL_BOOST added; found ${keys.length}`);
 });
