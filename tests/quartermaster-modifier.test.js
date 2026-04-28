@@ -302,20 +302,21 @@ test('modifierProgressSuffix in render.js does NOT register a QUARTERMASTER coun
 
 // ─── modifier-pool count invariants ───────────────────────────────────
 
-test('FLOOR_MODIFIERS now contains 17 entries (16 prior + QUARTERMASTER)', () => {
+test('FLOOR_MODIFIERS now contains 18 entries (17 prior + AUTONOMY)', () => {
   // Floor-modifier roll uses Object.keys — any addition shifts the
   // probability of every other modifier. Pin the pool size so an
   // accidental drop (or accidental duplicate) is an immediate failure.
   // Pre-WINDFALL pool was 13; WINDFALL→14; SIGNAL_BOOST→15; REVERB→16;
-  // QUARTERMASTER→17 with 6 positive (CASCADE, OVERCHARGE, WINDFALL,
-  // SIGNAL_BOOST, REVERB, QUARTERMASTER) and 11 negative-or-neutral.
+  // QUARTERMASTER→17; AUTONOMY→18 with 7 positive (CASCADE, OVERCHARGE,
+  // WINDFALL, SIGNAL_BOOST, REVERB, QUARTERMASTER, AUTONOMY) and 11
+  // negative-or-neutral.
   const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
   const endIdx = CONTENT.indexOf('};', startIdx);
   const dictBody = CONTENT.slice(startIdx, endIdx);
   // Count top-level keys: lines matching `^\s*[A-Z_]+:\s*\{`.
   const keys = dictBody.match(/^\s*[A-Z_]+:\s*\{/gm) || [];
-  assert.equal(keys.length, 17,
-    `FLOOR_MODIFIERS must contain 17 entries after QUARTERMASTER added; found ${keys.length}`);
+  assert.equal(keys.length, 18,
+    `FLOOR_MODIFIERS must contain 18 entries after AUTONOMY added; found ${keys.length}`);
 });
 
 // ─── runtime simulation: per-room one-shot semantics ──────────────────
