@@ -33,82 +33,15 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const {
+  extractBranch,
+  extractIfCondition,
+  loadAlignmentSources,
+} = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-const ENTITIES = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-/**
- * Replace string-literal CONTENTS (single, double, backtick) with same-
- * length runs of spaces, preserving the QUOTE characters AND the overall
- * length of the source (so character indexes remain valid). Defends
- * brace-depth counters from being confused by `{` / `}` substrings inside
- * string literals — see the structural-ancestor check.
- * @param {string} src
- */
-function blankStringContents(src) {
-  return src
-    .replace(/('(?:\\.|[^'\\])*')|("(?:\\.|[^"\\])*")|(`(?:\\.|[^`\\])*`)/g,
-      (m) => m[0] + ' '.repeat(m.length - 2) + m[m.length - 1]);
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-const ENTITIES_CODE = stripComments(ENTITIES);
-const CONTENT_BRACES = blankStringContents(CONTENT_CODE);
+const { CONTENT, ENTITIES, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
+  = loadAlignmentSources(__dirname);
 void ENTITIES_CODE; // not currently used; reserved for future cross-file alignment
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
-
-/**
- * Extract the parenthesised condition of an if-statement starting at the
- * given character index of `(`. Walks parens to balance, returns the
- * inner text WITHOUT outer parens. Returns null on unbalanced input.
- * @param {string} src
- * @param {number} openIdx index of the opening `(`
- */
-function extractIfCondition(src, openIdx) {
-  if (src[openIdx] !== '(') return null;
-  let depth = 1;
-  for (let i = openIdx + 1; i < src.length; i++) {
-    const c = src[i];
-    if (c === '(') depth++;
-    else if (c === ')') {
-      depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return null;
-}
 
 /**
  * Find the offset (within `code`) of the first fx.push that satisfies the
