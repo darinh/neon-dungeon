@@ -727,6 +727,7 @@ const HACKWARE = {
   REPAIR_PROTOCOL:{ name:'Repair Protocol', desc:'Heal 4 HP/s for 4s',           colour:'#00ff88', icon:'✚', cooldown:18 },
   REVERSE_POLARITY:{ name:'Reverse Polarity', desc:'Reflect enemy shots in 6t back at owners', colour:'#aaffee', icon:'⇄', cooldown:14 },
   EMP_LINE:     { name:'EMP Line',     desc:'Stun beam: 8t pierce, disables electronics', colour:'#00eecc', icon:'═', cooldown:11 },
+  CHRONO_LURE:  { name:'Chrono Lure',  desc:'Marker pulls & stuns enemies after 1s arming', colour:'#ff22aa', icon:'◔', cooldown:13 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1417,6 +1418,42 @@ function activateHackware(player) {
       _CG.msg('═ EMP LINE', '#00eecc');
       break;
     }
+    case 'CHRONO_LURE': {
+      // Delayed-trigger pull marker — the timing-based counterpart to
+      // GRAVITY_WELL's continuous pull. Players drop the marker AHEAD
+      // of an enemy push, then 1.0s later the lure fires: enemies are
+      // pulled inward AND stunned. The arming delay is the trade — you
+      // give up immediate effect for a heavy CC payoff that rewards
+      // positional anticipation. Cooldown 13s reflects the stronger
+      // payoff (instant stun + pull) vs GRAVITY_WELL's pull-only at 16s.
+      // Niche distinct from EMP_BURST (instant radius stun, no pull) and
+      // GRAVITY_WELL (continuous 3s pull, no stun).
+      audio.hackwareChronoLure();
+      // Aim-place at cursor; fall back to player tile if aim lands in a
+      // wall (matches DECOY_TURRET — a marker spawned inside a wall is
+      // unreachable for enemies and wastes the cast).
+      const camCL = getCamera(player);
+      let lx = (mouse.x + camCL.x) / TILE;
+      let ly = (mouse.y + camCL.y) / TILE;
+      const ltxi = Math.floor(lx), ltyi = Math.floor(ly);
+      const ltile = (map && map[ltyi] != null) ? map[ltyi][ltxi] : null;
+      if (ltile !== T.FLOOR && ltile !== T.DOOR_OPEN) {
+        lx = player.x; ly = player.y;
+      }
+      // Max 1 active — recasting replaces the existing marker (mirrors
+      // STATIC_FIELD/HOLO_DECOY/DECOY_TURRET dedup pattern). Without
+      // dedup, spam-casting would chain detonations and trivialize CC.
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'chrono_lure') hackwareEffects.splice(j, 1);
+      }
+      hackwareEffects.push({
+        type:'chrono_lure', x:lx, y:ly, age:0, maxAge:1.6,
+        armDuration:1.0, radius:5, detonated:false
+      });
+      spawnParticles(lx, ly, 'SPARK', '#ff22aa', 8);
+      _CG.msg('◔ CHRONO LURE ARMED', '#ff22aa');
+      break;
+    }
   }
 }
 
@@ -1628,6 +1665,61 @@ function updateHackwareEffects(dt) {
         }
       }
     }
+    if (fx.type === 'chrono_lure') {
+      // Two-phase: arming (no effect, visible blinking ring) → detonation
+      // (single stun-application + continuous pull until maxAge). The
+      // `detonated` latch ensures the stun loop fires EXACTLY ONCE at the
+      // arm-end transition; without it, every frame in the pull window
+      // would re-stun and bosses would get permanent CC.
+      if (!fx.detonated && fx.age >= fx.armDuration) {
+        fx.detonated = true;
+        audio.hackwareChronoLureBoom();
+        spawnParticles(fx.x, fx.y, 'EXPLOSION', '#ff22aa', 18);
+        triggerShake(4, 0.18);
+        // One-shot stun on detonation. Mirrors EMP_BURST's bossHalf
+        // pattern (`isBoss ? halved : full`). Disguised mimics + phased
+        // wraiths skipped — same exclusions as gravity well's pull, for
+        // the same reasons (no mid-fight identity reveal; phased units
+        // are non-targetable).
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (e._disguised) continue;
+          if (e._wrPhased) continue;
+          const d = dist(e.x, e.y, fx.x, fx.y);
+          if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+            e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 0.5 : 1.0);
+            spawnParticles(e.x, e.y, 'SPARK', '#ff22aa', 3);
+            spawnDmgText(e.x, e.y, 'STUN', '#ff22aa');
+          }
+        }
+      }
+      // Continuous pull during detonation phase only. Bosses skip the
+      // pull (matches GRAVITY_WELL precedent — bosses are immune to
+      // forced movement). Pull strength 6 (vs GRAVITY_WELL's 4) is
+      // tuned for the SHORTER pull window: 0.6s × 6 ≈ 3.6 tiles of
+      // budget brings radius-edge enemies (5 tiles) to ~1.4 tiles —
+      // well inside follow-up melee range. GRAVITY_WELL's gentler 4
+      // works because it has 3.0s × 4 = 12 tiles of budget.
+      if (fx.detonated) {
+        const pullStr = 6;
+        for (const e of enemies) {
+          if (e.dead || e.isBoss) continue;
+          if (e._disguised) continue;
+          if (e._wrPhased) continue;
+          const d = dist(e.x, e.y, fx.x, fx.y);
+          if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+            e.moveToward(fx.x, fx.y, pullStr, dt, map);
+          }
+        }
+      }
+      // Ambient particles in arm + detonation (gentler during arming).
+      const sparkRate = fx.detonated ? 12 : 6;
+      if (Math.random() < dt * sparkRate) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.45 + Math.random() * fx.radius * 0.4;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff22aa', 1);
+      }
+    }
     // emp_ring is visual only, handled in draw
 
     if (fx.type === 'hologram') {
@@ -1822,6 +1914,54 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.8;
       ctx.fillStyle = '#ffffff';
       NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 15) * 1.5);
+      ctx.restore();
+    }
+    if (fx.type === 'chrono_lure') {
+      // Two-phase visual: arming = countdown clock (subtle, sweep arm
+      // shows time-to-fire), detonation = bright pull vortex. Distinct
+      // visual language from gravity well (orange/no countdown) so
+      // players can read the state at a glance.
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const r = fx.radius * TILE;
+      ctx.save();
+      if (!fx.detonated) {
+        const armProg = Math.min(1, fx.age / fx.armDuration);
+        const pulse = 0.5 + Math.sin(fx.age * 14) * 0.3;
+        // Outer boundary ring — telegraphs the eventual blast radius.
+        ctx.globalAlpha = 0.18 * pulse;
+        ctx.strokeStyle = '#ff22aa';
+        ctx.shadowBlur = 10; ctx.shadowColor = '#ff22aa';
+        ctx.lineWidth = 1.5;
+        NEON.draw.circleStroke(ctx, sx, sy, r);
+        // Inner core grows as arming progresses (visual countdown).
+        ctx.globalAlpha = 0.6 + 0.3 * armProg;
+        ctx.fillStyle = '#ff22aa';
+        NEON.draw.circle(ctx, sx, sy, 4 + armProg * 6);
+        // Sweep arm (clock hand) — sweeps once during arming.
+        ctx.strokeStyle = '#ffaaff';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.85;
+        const a = -Math.PI / 2 + armProg * TWO_PI;
+        NEON.draw.line(ctx, sx, sy, sx + Math.cos(a) * 12, sy + Math.sin(a) * 12);
+      } else {
+        const detProg = (fx.age - fx.armDuration) / (fx.maxAge - fx.armDuration);
+        const fade = 1 - detProg;
+        ctx.globalAlpha = fade * 0.3;
+        ctx.fillStyle = '#ff22aa';
+        ctx.shadowBlur = 25; ctx.shadowColor = '#ff22aa';
+        NEON.draw.circle(ctx, sx, sy, r);
+        ctx.globalAlpha = fade * 0.7;
+        NEON.draw.circle(ctx, sx, sy, 8);
+        // Counter-rotating pull arms — read as "suction inward".
+        ctx.strokeStyle = '#ffaaff'; ctx.lineWidth = 2;
+        ctx.globalAlpha = fade * 0.5;
+        for (let arm = 0; arm < 4; arm++) {
+          const aa = -fx.age * 8 + (TWO_PI / 4) * arm;
+          NEON.draw.line(ctx,
+            sx + Math.cos(aa) * 10, sy + Math.sin(aa) * 10,
+            sx + Math.cos(aa) * r * 0.7, sy + Math.sin(aa) * r * 0.7);
+        }
+      }
       ctx.restore();
     }
     if (fx.type === 'hologram') {
