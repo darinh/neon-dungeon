@@ -118,15 +118,20 @@ test('REGENERATIVE timer reset is wired in burn DoT path (anti-regression)', () 
   assert.ok(m, 'REGENERATIVE reset must be wired into the burn DoT path (tickEnemyStatusEffects) on dmg > 0');
 });
 
-test('REGENERATIVE has exactly three _EG.modifier references (anti-regression)', () => {
+test('REGENERATIVE has exactly four _EG.modifier references (anti-regression)', () => {
   // Mirrors the FRAGILE round-2 hardening: one tick site (Enemy.update),
-  // one takeDamage reset, one burn-DoT reset (tickEnemyStatusEffects).
-  // A future fourth ungated branch added alongside (e.g. copy-paste, or
-  // a different damage shape) would bypass the eligibility gates
-  // invisibly. Lock the count.
+  // one takeDamage reset, one burn-DoT reset (tickEnemyStatusEffects),
+  // and one poison-DoT reset (TOXIC affix, also in tickEnemyStatusEffects
+  // — added 2026-04-28). A future fifth ungated branch added alongside
+  // (e.g. copy-paste, or a different damage shape) would bypass the
+  // eligibility gates invisibly. Lock the count.
+  //
+  // When adding a NEW DoT path that bypasses takeDamage by direct hp
+  // subtraction, you MUST add a `_regenTimer = 0` reset gated on
+  // `dmg > 0 && _EG.modifier === 'REGENERATIVE'` AND bump this count.
   const all = ENTITIES_CODE.match(/_EG\.modifier === 'REGENERATIVE'/g) || [];
-  assert.equal(all.length, 3,
-    `entities.js must contain exactly 3 _EG.modifier === 'REGENERATIVE' references (Enemy.update tick + takeDamage reset + burn-DoT reset); got ${all.length}`);
+  assert.equal(all.length, 4,
+    `entities.js must contain exactly 4 _EG.modifier === 'REGENERATIVE' references (Enemy.update tick + takeDamage reset + burn-DoT reset + poison-DoT reset); got ${all.length}`);
 });
 
 test('REGENERATIVE has no overlap with existing modifiers (cross-check)', () => {

@@ -1190,6 +1190,36 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
         spawnDmgText(_splr.x, _splr.y - 0.4, '+1 CR', '#88ff88');
       }
     }
+    else if (eff === 'poison') {
+      // TOXIC 'of Toxin' suffix — stacking DoT: each direct hit adds
+      // 1 stack (cap 5) and refreshes the 4s decay window. While
+      // poisonTimer > 0, the per-tick damage in tickEnemyStatusEffects
+      // is `poisonStacks * 0.5 * dt` (so 5 stacks = 2.5 dps). When the
+      // timer expires, stacks reset to 0.
+      //
+      // Why stacks instead of a fixed DoT (FLAME = 3dps for 3s):
+      // rewards SUSTAINED DPS — single-shot weapons benefit minimally
+      // (1 stack = 0.5 dps) but rapid-fire / multi-projectile weapons
+      // ramp quickly to the cap (5 stacks = 2.5 dps for 4s = 10 dmg
+      // ceiling). Mechanically distinct from FLAME's burst-and-leave
+      // model.
+      //
+      // Routing: applyHitEffects is gated `if (!ctx.isProc)` at
+      // takeDamage ~1824, so procs (THUNDER chain, RICOCHET) DO NOT
+      // add stacks. Burn DoT bypasses takeDamage entirely (this very
+      // function isn't called from the DoT path) so DoT ticks of any
+      // kind never stack poison either — only direct player weapon
+      // hits stack.
+      //
+      // No isShard / isSummon / isBoss / _disguised / _wrPhased gates
+      // here — mirror burn/leech/slow which apply to all mob classes.
+      // The DoT tick itself (tickEnemyStatusEffects poison branch)
+      // re-checks phaseImmune + _wrPhased so phased mobs lose stacks
+      // to the timer without taking damage during the immune window.
+      enemy.poisonStacks = Math.min(5, (enemy.poisonStacks || 0) + 1);
+      enemy.poisonTimer = 4;
+      spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#88dd44', 2);
+    }
     // 'explode' is handled in applyOnKill
   }
 }
@@ -1278,6 +1308,54 @@ function tickEnemyStatusEffects(enemy, dt) {
       }
     }
     if (enemy.burnTimer <= 0) { enemy.burnTimer = 0; enemy.burnDps = 0; }
+  }
+  // Poison (TOXIC 'of Toxin' suffix) — stacking DoT, mirrors burn
+  // structure with the per-stack damage scale and a stacks-reset on
+  // timer expiry.
+  if (enemy.poisonTimer > 0) {
+    enemy.poisonTimer -= dt;
+    // PHASING / WRAITH-phase: poison timer ticks but deals no damage
+    // during the immune window. Mirrors burn's gate so a phasing mob
+    // can't be burst-killed mid-phase by accumulated poison ticks.
+    if (!enemy.phaseImmune && !enemy._wrPhased) {
+      let dmg = (enemy.poisonStacks || 0) * 0.5 * dt;
+      // SHIELDED elite affix: poison resets shield regen delay and
+      // damages the shield first, mirroring burn's handling. Gated
+      // on the SHIELDED affix specifically so SHIELDER's directional
+      // shield (also uses shieldHp) is NOT drained from omnidirectional
+      // DoT — same defense-in-depth rationale as burn.
+      if (enemy.eliteAffix === 'SHIELDED') {
+        enemy.shieldRegenDelay = 0;
+        if (enemy.shieldHp > 0) {
+          const absorbed = Math.min(enemy.shieldHp, dmg);
+          enemy.shieldHp -= absorbed;
+          dmg -= absorbed;
+        }
+      }
+      if (dmg > 0) enemy.hp -= dmg;
+      // REGENERATIVE floor modifier: poison DoT bypasses takeDamage
+      // by direct hp subtraction, so it must reset _regenTimer here
+      // too — otherwise poison-and-retreat keeps the regen clock
+      // counting up while the enemy actively loses HP. Mirrors the
+      // burn-DoT reset at line ~1271. Gated on dmg > 0 (post-shield-
+      // absorb) and on the modifier so non-REGENERATIVE floors don't
+      // pay the hidden-class transition cost.
+      if (dmg > 0 && _EG.modifier === 'REGENERATIVE') enemy._regenTimer = 0;
+      if (Math.random() < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#88dd44', 1);
+      if (enemy.hp <= 0 && !enemy.dead) {
+        enemy.hp = 0;
+        // _lastHitCtx attribution: mirror burn — if no prior ctx, set
+        // a Toxin-named proc; if a prior ctx exists (the player's
+        // direct hit that applied the poison), unmark isProc so on-
+        // kill affixes (GREEDY/LUCKY/SALVAGE/DETONATE) credit the
+        // poison-finished kill to the weapon that landed the last
+        // direct hit. Same path burn relies on.
+        if (!enemy._lastHitCtx) enemy._lastHitCtx = { name:'Toxin', isProc:true };
+        else enemy._lastHitCtx.isProc = false;
+        enemy.die();
+      }
+    }
+    if (enemy.poisonTimer <= 0) { enemy.poisonTimer = 0; enemy.poisonStacks = 0; }
   }
   // Slow decay
   if (enemy.slowTimer > 0) {
@@ -1544,6 +1622,8 @@ class Enemy {
   /** @type {any} */ slowFactor;
   /** @type {any} */ slowTimer;
   /** @type {any} */ _markedTimer;
+  /** @type {any} */ poisonStacks;
+  /** @type {any} */ poisonTimer;
   /** @type {any} */ spawnCooldown;
   /** @type {any} */ spd;
   /** @type {any} */ state;
@@ -1689,11 +1769,16 @@ class Enemy {
     //     (mirrors MARK and the broader on-hit chokepoint convention).
     //     ctx may be a string (legacy) or undefined; both lack `.isProc`
     //     so they pass the gate as direct hits, which is correct.
-    //   Status check — any of burnTimer/slowTimer/stunTimer/_markedTimer
-    //     > 0. enemy.shockTimer is intentionally NOT checked: shockTimer
-    //     is a player-only field (see entities.js:10515 Player.shockTimer);
-    //     enemies don't carry it. _wrPhased / phaseImmune already returned
-    //     early above, so they can't reach here regardless.
+    //   Status check — any of burnTimer/slowTimer/stunTimer/_markedTimer/
+    //     poisonTimer > 0. enemy.shockTimer is intentionally NOT checked:
+    //     shockTimer is a player-only field (see entities.js:10515
+    //     Player.shockTimer); enemies don't carry it. _wrPhased /
+    //     phaseImmune already returned early above, so they can't reach
+    //     here regardless. poisonTimer (TOXIC affix, added 2026-04-28)
+    //     mirrors burn's status semantics — both are DoT timers that
+    //     bypass takeDamage via direct hp -= so neither double-dips with
+    //     EXPLOITER on the DoT itself, only on the player's direct hits
+    //     against the debuffed target.
     //
     // Note: burn DoT at entities.js:1219 does direct `enemy.hp -= dmg` and
     // BYPASSES takeDamage, so EXPLOITER does NOT amplify burn ticks — only
@@ -1707,7 +1792,8 @@ class Enemy {
         if ((this.burnTimer && this.burnTimer > 0)
             || (this.slowTimer && this.slowTimer > 0)
             || (this.stunTimer && this.stunTimer > 0)
-            || (this._markedTimer && this._markedTimer > 0)) {
+            || (this._markedTimer && this._markedTimer > 0)
+            || (this.poisonTimer && this.poisonTimer > 0)) {
           dmg = Math.round(dmg * 1.25);
         }
       }
