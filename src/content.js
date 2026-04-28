@@ -4152,7 +4152,20 @@ const UPGRADES = [
      // entities.js:690 kill credits): scale by difficulty creditMul so
      // NIGHTMARE (0.85) and EASY (1.2) don't break the economy.
      const diffMul = (typeof getDiff === 'function') ? (getDiff().creditMul || 1) : 1;
-     const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul));
+     // SCAVENGER meta upgrade (src/meta/save.js applyMetaToPlayer):
+     // bonusCreditPerPickup is a flat per-pickup additive bonus (+1 CR per
+     // upgrade level). Added AFTER rounding/clamp so the bonus is always
+     // exactly the upgrade level value (not subject to metaMul / siphon /
+     // diffMul). This matches the upgrade contract '+1 credit per pickup
+     // per level' (src/meta/upgrades.js:39). Sanitize against corrupted
+     // localStorage: bonusCreditPerPickup must be a finite non-negative
+     // integer; clamp to a sane upper bound (32) to defend against
+     // tampered save data injecting Infinity / very large values.
+     let bonus = (p && p.bonusCreditPerPickup) || 0;
+     if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
+     if (bonus > 32) bonus = 32;
+     bonus = Math.floor(bonus);
+     const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul)) + bonus;
      p.credits = (p.credits || 0) + amt;
      // Mirror kill-credit telemetry: a floating "+N CR" so the player sees it.
      if (typeof spawnDmgText === 'function') spawnDmgText(p.x, p.y, '+' + amt + ' CR', '#ffd700');

@@ -1553,7 +1553,17 @@ const game = {
         if (it.isHoard) {
           audio.pickup();
           items.splice(i, 1);
-          const amt = Math.max(0, Math.round(it.amt || 0));
+          // SCAVENGER meta upgrade: same flat per-pickup bonus as
+          // CREDIT_CACHE.fn (src/content.js ~line 4145). MagpieHoard +
+          // VaultCoin both flow through this branch (both flag .isHoard
+          // = true), so this single wire covers all credit-item pickup
+          // paths. Sanitize identically — see the CREDIT_CACHE.fn
+          // comment for the corrupted-localStorage rationale.
+          let bonus = (player && player.bonusCreditPerPickup) || 0;
+          if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
+          if (bonus > 32) bonus = 32;
+          bonus = Math.floor(bonus);
+          const amt = Math.max(0, Math.round(it.amt || 0)) + bonus;
           player.credits = (player.credits || 0) + amt;
           if (typeof spawnDmgText === 'function') spawnDmgText(player.x, player.y, '+' + amt + ' CR', '#ffd700');
           if (typeof spawnParticles === 'function') spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);

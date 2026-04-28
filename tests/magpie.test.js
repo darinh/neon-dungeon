@@ -197,12 +197,15 @@ test('game.js pickup loop has an isHoard branch that grants credits', () => {
   // Without this branch a MagpieHoard would either fall through to
   // the upgrade-roll path (wrong outcome — random new option instead
   // of the banked value) or sit in items[] forever (dead never set).
-  const re = /it\.isHoard[\s\S]{0,400}player\.credits/;
+  // Window widened to 800 chars (anvil/scavenger-credit-bonus PR) to
+  // accommodate the SCAVENGER bonusCreditPerPickup sanitization +
+  // additive bonus inserted between `it.isHoard` and `player.credits`.
+  const re = /it\.isHoard[\s\S]{0,800}player\.credits/;
   assert.match(GAME, re,
     'game.js pickup loop must handle isHoard and grant player.credits');
   // Must splice out so it doesn't double-collect on subsequent frames.
   assert.match(GAME,
-    /it\.isHoard[\s\S]{0,400}items\.splice/,
+    /it\.isHoard[\s\S]{0,800}items\.splice/,
     'isHoard branch must splice the hoard out of items[]');
 });
 
