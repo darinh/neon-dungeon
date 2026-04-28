@@ -2369,6 +2369,41 @@ function getStatusEffects(player) {
     const mul = (1 + stacks * 0.05).toFixed(2);
     fx.push({ id: 'hot-hand', icon: '♨', label: '×' + mul, colour: '#ff5522' });
   }
+  // MOMENTUM meta-upgrade — damage-bonus window after any kill. Set to 3s
+  // on Enemy.die via NEON.behavior.onKillRefreshMomentum (entities.js
+  // ~L2016), ticks down via NEON.behavior.tickMomentum in Player.update
+  // (entities.js:12025). Bonus = +15% per level (max level 2 → +30%) and
+  // is applied through computeOutgoingDmgMul at meta/behavior.js:42.
+  //
+  // Without an HUD indicator the buff fires invisibly: players see bigger
+  // damage numbers right after a kill but have no signal that the bonus
+  // is active, no countdown, and no level readout. Mirrors the LAST_STAND
+  // and HOT_HAND patterns (timer-driven, .toFixed(1)+'s' label NOT used
+  // here — see below).
+  //
+  // Display: ▶ ×N.NN where N.NN = (1 + 0.15 * level).toFixed(2). At
+  // level 1: ×1.15. At level 2: ×1.30. Same multiplier-readout style as
+  // HOT_HAND (PR #280) so the player learns "this badge = damage buff
+  // multiplier" once and applies the convention everywhere.
+  //
+  // Gates (mirror HOT_HAND):
+  //   player.metaFlags && metaFlags.momentum > 0 — defensive null-check
+  //     on metaFlags (legacy player shapes may lack it) + level-owned
+  //     gate (zero-level players don't see the badge).
+  //   player._momentumTimer > 0 — the active-window gate.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx', PR
+  // #280): the +15% per-level rate (0.15) is defined in
+  // meta/behavior.js:42. The HUD label uses a literal 0.15 — a future
+  // re-tune in behavior.js would silently desync the readout. The
+  // companion test (tests/momentum-hud.test.js) parses behavior.js and
+  // asserts the literals match.
+  if (player.metaFlags && (player.metaFlags.momentum | 0) > 0
+      && (player._momentumTimer || 0) > 0) {
+    const lv = player.metaFlags.momentum | 0;
+    const mul = (1 + 0.15 * lv).toFixed(2);
+    fx.push({ id: 'momentum', icon: '▶', label: '×' + mul, colour: '#ff8844' });
+  }
   // Augment count
   const augCount = Object.keys(player.augments || {}).length;
   if (augCount > 0) {
