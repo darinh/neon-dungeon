@@ -2369,6 +2369,29 @@ function getStatusEffects(player) {
   // null-check matches the codebase pattern for nullable nested fields.
   if (player.perks && player.perks.LAST_STAND && player.lastStandTimer > 0) {
     fx.push({ id: 'last-stand', icon: '✦', label: player.lastStandTimer.toFixed(1)+'s', colour: '#ffaa00' });
+  } else if (player.perks && player.perks.LAST_STAND && player.lastStandCD > 0) {
+    // LAST_STAND post-window cooldown — perk owned but on the 60s recharge
+    // after a clutch trigger. Surfaces tactical info: at low HP, the player
+    // needs to know whether the safety-net will fire on the next near-death
+    // hit or not. Pre-this-PR (after PR #276) the active window was visible
+    // but the recharge was invisible — players couldn't tell "ready vs
+    // recharging" without remembering the last trigger time.
+    //
+    // ELSE-IF (not a second IF): mutually exclusive with the active-window
+    // branch above. When the perk just triggered, BOTH lastStandTimer > 0
+    // AND lastStandCD > 0 (entities.js:11529-11530 sets both simultaneously).
+    // Showing both badges would be HUD noise; the active window takes
+    // priority because it's the more actionable state.
+    //
+    // Math.ceil over toFixed(1): the 60s cooldown is too long for sub-second
+    // precision to feel meaningful (matches reactive-cd's pattern at
+    // content.js:2358). Players want a coarse "how long until ready"
+    // readout, not a 0.1s ticker.
+    //
+    // Dim amber colour (#886622) distinguishes from the bright #ffaa00
+    // active-window colour — same icon ✦ keeps the visual identity, the
+    // saturation tells the state.
+    fx.push({ id: 'last-stand-cd', icon: '✦', label: Math.ceil(player.lastStandCD)+'s', colour: '#886622' });
   }
   // Disruption field debuff
   if (player.disruptionFieldActive) {
