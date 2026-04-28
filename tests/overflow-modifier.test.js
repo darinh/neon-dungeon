@@ -121,15 +121,14 @@ test('OVERFLOW desc mentions XP (so the run-start card tells the player what the
     'OVERFLOW desc must mention XP so the player understands what the modifier does');
 });
 
-test('FLOOR_MODIFIERS pool size is exactly 22 (OVERFLOW added)', () => {
-  // Roll-probability invariant. Per stored memory 'positive floor modifiers',
-  // the EXPECTED_MODIFIER_POOL_SIZE constant in tests/_modifier-pool.js is
-  // the single source of truth for this assertion across all *-modifier.test.js
-  // files. Adding modifier #23 only requires bumping that constant + retiring
-  // this canary (replicating the hardened-modifier.test.js pattern).
+test('FLOOR_MODIFIERS pool size invariant (OVERFLOW is registered)', () => {
+  // Roll-probability invariant. EXPECTED_MODIFIER_POOL_SIZE in
+  // tests/_modifier-pool.js is the single source of truth. The literal
+  // "22 (OVERFLOW added)" canary previously here was retired when
+  // KINETIC (the next modifier) took over the canary role — this
+  // assertion now just confirms the pool count matches whatever the
+  // helper says, which still detects accidental dict shrinkage.
   assertModifierPoolSize(CONTENT);
-  assert.equal(EXPECTED_MODIFIER_POOL_SIZE, 22,
-    'EXPECTED_MODIFIER_POOL_SIZE in tests/_modifier-pool.js must be 22 after OVERFLOW is added');
 });
 
 // ─── Player.gainXP wiring ────────────────────────────────────────────────

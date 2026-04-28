@@ -12890,7 +12890,18 @@ class Player {
       // dashTimer's lifetime exactly when bonus is 0.
       this._dashIFrameTimer = 0.12 + (this.dashIFrameBonus || 0);
       const baseCd = this.perks.DASH_MASTER ? 0.75 : 1.5;
-      this.dashCooldown = baseCd * ((this.metaFlags && this.metaFlags.dashCooldownMul) || 1);
+      // KINETIC floor modifier: -30% dash cooldown on this floor.
+      // Composes multiplicatively with the DASH_MASTER perk (already
+      // baked into baseCd) and metaFlags.dashCooldownMul (cross-run
+      // meta-progression). Floor modifiers are mutually exclusive
+      // per floor (only one rolls), so KINETIC cannot stack with
+      // OVERFLOW or any other floor-level mobility buff. Mirrors the
+      // AUTONOMY (hackware) / HARDENED (defense) / OVERFLOW (XP)
+      // passive-multiplier pattern. Uses _EG.modifier — the canonical
+      // engine floor-modifier ref — so a typo would silently disable
+      // the bonus on every dash.
+      const kineticMul = (_EG.modifier === 'KINETIC') ? 0.7 : 1;
+      this.dashCooldown = baseCd * ((this.metaFlags && this.metaFlags.dashCooldownMul) || 1) * kineticMul;
       this.dashTrail.push({x:this.x,y:this.y,alpha:0.8});
       audio.dash();
       spawnParticles(this.x,this.y,'EXPLOSION','#ffb700',6);
