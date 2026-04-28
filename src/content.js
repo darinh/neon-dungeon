@@ -2435,6 +2435,61 @@ function getStatusEffects(player) {
     const mul = (1 + 0.15 * lv).toFixed(2);
     fx.push({ id: 'momentum', icon: '▶', label: '×' + mul, colour: '#ff8844' });
   }
+  // OVERDRIVE perk — score-combo-driven damage buff. Perk piggybacks on the
+  // existing combo system (combo.count auto-clears via COMBO_WINDOW=3s, so
+  // no per-frame accumulator is introduced — see tests/overdrive.test.js
+  // 'OVERDRIVE does not introduce a new player accumulator'). Bonus formula
+  // at entities.js:11339-11343:
+  //   if (c >= 2) bonus = Math.min(0.30, (c - 1) * 0.03)
+  //   atk *= 1 + bonus
+  // → +3% per combo level above 1, capped at +30% (combo 11+).
+  //
+  // Pre-PR there was NO HUD signal. The perk-card description ("Score combo
+  // buffs damage") tells the player the bonus EXISTS but never reveals its
+  // CURRENT magnitude — combo.count is HUD-visible (render.js:1041+1297) but
+  // the OVERDRIVE multiplier it implies is invisible. Players learn the
+  // formula by inference from damage numbers, which is the same UX gap that
+  // PRs #276 (LAST_STAND), #280 (HOT_HAND), #282 (MOMENTUM), #284 (REGEN),
+  // and #300 (RETRIBUTION) all closed for their respective buffs.
+  //
+  // Display: `❯ ×N.NN` — multiplier-readout style (matches HOT_HAND / MOMENTUM
+  // PRs #280/#282). Range: combo 2 → ×1.03, combo 11+ → ×1.30 (cap). Icon ❯
+  // and colour #ff00c8 match the perk-card glyph at content.js:4540 — so the
+  // badge is visually identifiable as "the OVERDRIVE buff" the player picked.
+  //
+  // Gates:
+  //   player.perks &&            — defensive null-check; legacy player shapes
+  //                                may lack a .perks object (mirrors HOT_HAND
+  //                                / MOMENTUM / RETRIBUTION pattern).
+  //   player.perks.OVERDRIVE &&  — perk-ownership; non-owners never see badge.
+  //   combo.count >= 2           — same active-bonus gate as the multiplier
+  //                                site at entities.js:11340 — the predicate
+  //                                MUST match the bonus site (a stale gate
+  //                                would surface a phantom badge without a
+  //                                live multiplier or vice versa). The
+  //                                tests/overdrive-hud.test.js alignment test
+  //                                strict-equals the badge gate against the
+  //                                multiplier gate after normalisation, so a
+  //                                future change on either side that breaks
+  //                                the contract fails loudly.
+  //
+  // No defensive `typeof combo` guard: combo is module-scope const at
+  // content.js:2626 (declared in this same file). entities.js needs the
+  // `typeof combo !== 'undefined'` guard because it runs in a separate
+  // script tag and combo is a cross-file global; here it is local.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx' + PR #280
+  // pattern): the per-step rate (0.03) and cap (0.30) are hard-coded in BOTH
+  // entities.js (the multiplier) and the HUD label below. The companion test
+  // tests/overdrive-hud.test.js extracts both literals from entities.js and
+  // asserts the content.js label uses the same numeric values, so a future
+  // re-tune (e.g. +5% per level, +50% cap) trips the test and forces both
+  // sites to be updated in lockstep.
+  if (player.perks && player.perks.OVERDRIVE && combo.count >= 2) {
+    const c = combo.count;
+    const mul = (1 + Math.min(0.30, (c - 1) * 0.03)).toFixed(2);
+    fx.push({ id: 'overdrive', icon: '❯', label: '×' + mul, colour: '#ff00c8' });
+  }
   // SURGE meta-upgrade — counter for "every 8th shot deals +100% damage"
   // (meta/upgrades.js:36, maxLevel 1). Counter mutated in
   // consumeSurgeShot at meta/behavior.js:51-59 — increments on EVERY
