@@ -2330,6 +2330,57 @@ class Enemy {
         spawnParticles(this.x, this.y, 'MUZZLE', '#00ddff', 5);
       }
     }
+    // QUARTERMASTER floor modifier — sixth positive modifier in the pool,
+    // a per-room economy variant of WINDFALL. The FIRST defeat in each
+    // room drops a bonus core (+1 value) at the kill location. Cores
+    // accelerate META progression (NEON.cores.spawnCoreDrop). Encourages
+    // exploration: every new room = guaranteed bonus core for clearing it,
+    // so the headline incentive is "visit every room on a QUARTERMASTER
+    // floor."
+    //
+    // Tempo: roughly 1 bonus core per room. With ~6-12 rooms per floor,
+    // that's 6-12 bonus cores per QUARTERMASTER floor — comparable
+    // total payout to WINDFALL's "every 5th defeat" on a 30-mob floor,
+    // but front-loaded (one per room rather than spread across kills).
+    //
+    // Gates (mirror WINDFALL):
+    //   _EG.modifier === 'QUARTERMASTER' — modifier-roll only; off-floor
+    //     and other modifiers fall through. Boss floors / floor 1 are
+    //     modifier-free (game.js:184) so no isBoss gate needed.
+    //   !this.isShard — SPLITTER shard chains would let one entry kill
+    //     trigger the per-room bonus; cap to one tick per top-level
+    //     enemy. Mirrors WINDFALL/SIGNAL_BOOST gating.
+    //   !isSummon — SUMMONER farming would otherwise give a bonus core
+    //     for the summon kill instead of the actual room-clear. Mirrors
+    //     CASCADE/WINDFALL/SIGNAL_BOOST.
+    //   this.room — room reference must exist (some special spawns lack
+    //     a room association; skip them rather than crash).
+    //   !this.room._qmHarvested — the per-room one-shot gate. Set to
+    //     true after the bonus drops so subsequent kills in the same
+    //     room don't trigger again.
+    //
+    // State scope: per-ROOM (`room._qmHarvested`), NOT per-player and
+    // NOT serialized in saveGame. Rationale: the dungeon is regenerated
+    // from scratch on Continue (game.js:354 comment confirms rooms array
+    // is rebuilt — player._currentRoom is reset to null because its
+    // reference would be stale). This means a save+resume on a
+    // QUARTERMASTER floor produces fresh rooms with no _qmHarvested
+    // flags, so the player can re-harvest. We accept this — exploiting
+    // it requires save-quit-resume per room, which is far slower than
+    // simply playing the floor. The forgiving behaviour matches the
+    // codebase's "Continue should not punish you" stance.
+    //
+    // NEON.cores guard mirrors WINDFALL (line 2284) so the path is
+    // browser-only and can't crash node:test.
+    if (_EG.modifier === 'QUARTERMASTER' && !this.isShard && !isSummon
+        && this.room && !this.room._qmHarvested) {
+      this.room._qmHarvested = true;
+      if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+        NEON.cores.spawnCoreDrop(game, this.x, this.y, 1);
+        spawnDmgText(this.x, this.y - 0.4, '+1◆ QM', '#ffaa44');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#ffaa44', 5);
+      }
+    }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       _EG.player.adrenalineTimer = 2;
