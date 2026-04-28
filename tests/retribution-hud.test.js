@@ -43,6 +43,8 @@ const assert = require('node:assert/strict');
 const {
   extractBranch,
   extractIfCondition,
+  normaliseMultiplierPredicate,
+  normaliseBadgePredicate,
   loadAlignmentSources,
 } = require('./_alignment-helpers.js');
 
@@ -257,36 +259,6 @@ test('runtime: RETRIBUTION fx-gate semantics — five-state truth table', () => 
 
 // ─── runtime simulation: trigger pipeline alignment ────────────────────
 
-/**
- * Normalise a JS predicate string for cross-file comparison:
- *   - strip whitespace
- *   - strip receiver prefix (`this.` / `player.` → ``)
- *   - strip a leading defensive `player.perks &&` (or `this.perks &&`)
- *     guard since entities.js receivers never need it but content.js
- *     handles legacy player shapes (the guard is additive and does not
- *     change the truthy domain when perks IS defined — which it always
- *     is inside Player methods on the entities.js side).
- *
- * NOTE: kept INLINE rather than moved to tests/_alignment-helpers.js
- * because this is the OLDER bidirectional `(this|player).` strip
- * pattern. PRs #312/#318 deliberately moved to side-specific
- * normalisers (multiplier strips ONLY `this.`, badge strips ONLY
- * `player.`) which fail loudly on mixed-receiver bugs that
- * bidirectional stripping silently masks. Upgrading this test to the
- * side-specific pattern is a separate semantic refactor (could
- * surface a real mixed-receiver bug) and is intentionally out of
- * scope for the helper-extraction PR series — same precedent as
- * tests/overdrive-hud.test.js (PR #324).
- *
- * @param {string} cond
- */
-function normalisePredicate(cond) {
-  return cond
-    .replace(/\s+/g, '')
-    .replace(/^(?:this|player)\.perks&&/, '')
-    .replace(/(?:this|player)\./g, '');
-}
-
 test('runtime: RETRIBUTION badge gate predicate matches the multiplier gate predicate EXACTLY', () => {
   // The badge gate (content.js getStatusEffects) MUST be predicate-equal
   // to the multiplier gate (entities.js effectiveAtk, line ~11349:
@@ -298,7 +270,8 @@ test('runtime: RETRIBUTION badge gate predicate matches the multiplier gate pred
   // (e.g. `&& !this._suppressed`, `|| forceBuff`) and a substring assertion
   // would silently false-pass while the badge↔multiplier contract breaks.
   // This test extracts the FULL if-condition from BOTH sides and asserts
-  // strict equality after normalisation.
+  // strict equality after side-specific normalisation (PR #312/#318 pattern,
+  // upgraded from older bidirectional pattern in PR #351 / this PR).
 
   // ── Extract entities.js multiplier-gate condition ──
   // Anchor on the multiplier statement `a = Math.round(a * 1.5)` (the
@@ -345,11 +318,26 @@ test('runtime: RETRIBUTION badge gate predicate matches the multiplier gate pred
   assert.ok(badgeCond,
     'failed to extract badge if-condition from content.js');
 
-  // ── Compare normalised predicates ──
-  const mulNorm = normalisePredicate(mulCond);
-  const badgeNorm = normalisePredicate(badgeCond);
+  // ── Compare normalised predicates (side-specific, per PR #312/#318/#351) ──
+  // Multiplier side: strips ONLY `this.`. Badge side: strips ONLY `player.`
+  // (plus leading defensive `player.perks &&`). Side-specific stripping
+  // (NOT bidirectional) fails loudly on mixed-receiver bugs that
+  // bidirectional stripping silently masks (e.g. `player.perks &&
+  // this.perks.RETRIBUTION` would crash at runtime since `this` is
+  // undefined inside getStatusEffects(player); bidirectional strip
+  // would silently false-pass).
+  const mulNorm = normaliseMultiplierPredicate(mulCond);
+  const badgeNorm = normaliseBadgePredicate(badgeCond);
+
+  // Side-specific leftover-token assertions (per PR #312/#318/#351):
+  // mixing receivers is a real bug.
+  assert.ok(!/\bplayer\b/.test(mulNorm),
+    `multiplier predicate (entities.js) must not reference \`player\` — found leftover after normalisation: ${mulNorm}. The multiplier sits inside Player.effectiveAtk(); mixing receivers is a real bug.`);
+  assert.ok(!/\bthis\b/.test(badgeNorm),
+    `badge predicate (content.js) must not reference \`this\` — found leftover after normalisation: ${badgeNorm}. The badge sits inside the free function getStatusEffects(player); using \`this\` would resolve to undefined in strict mode (TypeError) or the global object (wrong receiver).`);
+
   assert.equal(badgeNorm, mulNorm,
-    `badge gate predicate must match multiplier gate predicate after normalisation.\n  multiplier (entities.js):  ${mulCond}\n    → normalised:            ${mulNorm}\n  badge      (content.js):   ${badgeCond}\n    → normalised:            ${badgeNorm}\n  If you intentionally added/removed a conjunct on one side, update BOTH sides — the badge↔bonus visual contract requires identical predicates.`);
+    `badge gate predicate must match multiplier gate predicate after side-specific normalisation.\n  multiplier (entities.js):  ${mulCond}\n    → normalised:            ${mulNorm}\n  badge      (content.js):   ${badgeCond}\n    → normalised:            ${badgeNorm}\n  If you intentionally added/removed a conjunct on one side, update BOTH sides — the badge↔bonus visual contract requires identical predicates.`);
 
   // Sanity: the normalised predicate must contain BOTH the perk-ownership
   // gate AND the timer gate (catches a normalisation bug that strips too
