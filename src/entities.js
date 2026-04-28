@@ -1959,6 +1959,24 @@ class Enemy {
       }
       if (coreVal > 0) NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal);
     }
+    // SALVAGE 'of Salvage' suffix — 10% chance on kill to drop 1 CORE.
+    // Stacks ON TOP of the elite/boss core drop above (so a Salvage roll
+    // on a regular grunt is the headline use case, but a Salvage roll on
+    // an elite gets a 2nd drop). Mirrors GREEDY's on-kill model: gates on
+    // _lastHitCtx with !isProc so a non-Salvage proc finishing the enemy
+    // (THUNDER chain, EXPLOSIVE_KILLS, RICOCHET) does NOT roll for
+    // Salvage. Burn-DoT kills DO credit if the prior direct hit was
+    // Salvage (entities.js:1232 unmarks isProc — same path DETONATE
+    // relies on). Skips summons/shards (same rule as the elite/boss core
+    // drop block above). NEON.cores guard mirrors line 1953 so the path
+    // is browser-only and can't crash node:test.
+    const _sctx = this._lastHitCtx;
+    if (_sctx && !_sctx.isProc && _sctx.effects && _sctx.effects.includes('salvage')
+        && !this.isShard && !isSummon && Math.random() < 0.10
+        && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+      NEON.cores.spawnCoreDrop(game, this.x, this.y, 1);
+      spawnParticles(this.x, this.y, 'MUZZLE', '#44ffcc', 4);
+    }
     // Vampiric perk: heal on kill
     if (_EG.player.perks.VAMPIRIC && !this.isShard) {
       const heal = 2;
