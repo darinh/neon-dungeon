@@ -93,7 +93,7 @@ test('DEADLY listing follows the existing prefix block structure', () => {
   const keenIdx = CONTENT_CODE.indexOf('KEEN:');
   const deadlyIdx = CONTENT_CODE.indexOf('DEADLY:');
   const flameIdx = CONTENT_CODE.indexOf('FLAME:');
-  assert.ok(keenIdx > 0 && deadlyIdx > 0 && flameIdx > 0,
+  assert.ok(keenIdx !== -1 && deadlyIdx !== -1 && flameIdx !== -1,
     'KEEN, DEADLY, FLAME must all exist');
   assert.ok(deadlyIdx > keenIdx,
     'DEADLY must come after KEEN (last existing prefix at insertion time)');

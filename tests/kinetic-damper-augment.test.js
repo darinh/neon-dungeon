@@ -59,7 +59,7 @@ test('KINETIC_DAMPER applies 0.8x multiplier to actual damage', () => {
   // Min-1 clamp preserves the direct-hit minimum-damage contract.
   const stripped = stripComments(ENTITIES);
   const idx = stripped.indexOf('KINETIC_DAMPER');
-  assert.ok(idx > 0, 'KINETIC_DAMPER must appear in entities.js');
+  assert.ok(idx !== -1, 'KINETIC_DAMPER must appear in entities.js');
   const window = stripped.slice(idx, idx + 400);
   assert.ok(/Math\.max\(\s*1\s*,\s*Math\.round\(\s*actual\s*\*\s*0\.8\s*\)\s*\)/.test(window),
     'KINETIC_DAMPER branch must apply Math.max(1, Math.round(actual * 0.8))');
@@ -79,9 +79,9 @@ test('KINETIC_DAMPER lives in the !options.ignoreDefense branch', () => {
   // that contains TITANIUM_PLATING. KINETIC_DAMPER must be in the same
   // else-block (after TP, before the closing brace).
   const tpIdx = stripped.indexOf('TITANIUM_PLATING');
-  assert.ok(tpIdx > 0, 'TITANIUM_PLATING must be present in entities.js');
+  assert.ok(tpIdx !== -1, 'TITANIUM_PLATING must be present in entities.js');
   const elseStart = stripped.lastIndexOf('} else {', tpIdx);
-  assert.ok(elseStart > 0, 'TITANIUM_PLATING must be inside an `else` branch');
+  assert.ok(elseStart !== -1, 'TITANIUM_PLATING must be inside an `else` branch');
   // Find the matching close brace of the else block by scanning braces.
   let depth = 0;
   let elseEnd = -1;
@@ -110,8 +110,8 @@ test('KINETIC_DAMPER applies AFTER TITANIUM_PLATING flat reduction', () => {
   const stripped = stripComments(ENTITIES);
   const tpIdx = stripped.search(/actual\s*=\s*Math\.max\(\s*1\s*,\s*dmg\s*-\s*this\.def\s*-\s*titaniumReduction/);
   const kdIdx = stripped.search(/Math\.max\(\s*1\s*,\s*Math\.round\(\s*actual\s*\*\s*0\.8\s*\)\s*\)/);
-  assert.ok(tpIdx > 0, 'TITANIUM_PLATING flat-reduction line must exist');
-  assert.ok(kdIdx > 0, 'KINETIC_DAMPER multiplier line must exist');
+  assert.ok(tpIdx !== -1, 'TITANIUM_PLATING flat-reduction line must exist');
+  assert.ok(kdIdx !== -1, 'KINETIC_DAMPER multiplier line must exist');
   assert.ok(kdIdx > tpIdx, 'KINETIC_DAMPER must apply AFTER TITANIUM_PLATING flat reduction');
 });
 
@@ -125,16 +125,16 @@ test('KINETIC_DAMPER applies BEFORE CORROSIVE/FRAGILE/HUNTER modifiers', () => {
   // FRAGILE reference in enemy HP scaling that we must skip past.
   const stripped = stripComments(ENTITIES);
   const playerTakeDmgIdx = stripped.indexOf('takeDamage(dmg, source, opts)');
-  assert.ok(playerTakeDmgIdx > 0, 'Player.takeDamage(dmg, source, opts) signature must exist');
+  assert.ok(playerTakeDmgIdx !== -1, 'Player.takeDamage(dmg, source, opts) signature must exist');
   const playerScope = stripped.slice(playerTakeDmgIdx);
   const kdIdx = playerScope.search(/Math\.max\(\s*1\s*,\s*Math\.round\(\s*actual\s*\*\s*0\.8\s*\)\s*\)/);
   const corrosiveIdx = playerScope.indexOf("_EG.modifier === 'CORROSIVE'");
   const fragileIdx = playerScope.indexOf("_EG.modifier === 'FRAGILE'");
   const hunterIdx = playerScope.indexOf("_EG.modifier === 'HUNTER'");
-  assert.ok(kdIdx > 0, 'KINETIC_DAMPER multiplier must exist in Player.takeDamage');
-  assert.ok(corrosiveIdx > 0, 'CORROSIVE modifier branch must exist in Player.takeDamage');
-  assert.ok(fragileIdx > 0, 'FRAGILE modifier branch must exist in Player.takeDamage');
-  assert.ok(hunterIdx > 0, 'HUNTER modifier branch must exist in Player.takeDamage');
+  assert.ok(kdIdx !== -1, 'KINETIC_DAMPER multiplier must exist in Player.takeDamage');
+  assert.ok(corrosiveIdx !== -1, 'CORROSIVE modifier branch must exist in Player.takeDamage');
+  assert.ok(fragileIdx !== -1, 'FRAGILE modifier branch must exist in Player.takeDamage');
+  assert.ok(hunterIdx !== -1, 'HUNTER modifier branch must exist in Player.takeDamage');
   assert.ok(kdIdx < corrosiveIdx, 'KINETIC_DAMPER must apply BEFORE CORROSIVE modifier branch');
   assert.ok(kdIdx < fragileIdx, 'KINETIC_DAMPER must apply BEFORE FRAGILE modifier branch');
   assert.ok(kdIdx < hunterIdx, 'KINETIC_DAMPER must apply BEFORE HUNTER modifier branch');

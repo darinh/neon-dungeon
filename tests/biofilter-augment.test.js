@@ -60,7 +60,7 @@ test('PLASMA tile damage gated through hasAugment("BIOFILTER")', () => {
   // assertion does not pass on the explanatory comment that names the
   // augment.
   const idx = GAME.indexOf('tile === T.PLASMA');
-  assert.ok(idx > 0, 'PLASMA env-tile branch must exist in game.js');
+  assert.ok(idx !== -1, 'PLASMA env-tile branch must exist in game.js');
   const span = stripComments(GAME.slice(idx, idx + 800));
   assert.ok(/hasAugment\(\s*['"]BIOFILTER['"]\s*\)\s*\?\s*0\.5\s*:\s*1/.test(span),
     'PLASMA burnDps must be multiplied by hasAugment("BIOFILTER") ? 0.5 : 1');
@@ -71,7 +71,7 @@ test('ARC tile zap gated through hasAugment("BIOFILTER")', () => {
   // multiplier MUST be applied INSIDE the Math.round so the rounded
   // displayed value matches the actual damage dealt.
   const idx = GAME.indexOf('tile === T.ARC');
-  assert.ok(idx > 0, 'ARC env-tile branch must exist in game.js');
+  assert.ok(idx !== -1, 'ARC env-tile branch must exist in game.js');
   const span = stripComments(GAME.slice(idx, idx + 800));
   // Match the assignment line including the BIOFILTER ternary; allow
   // arbitrary characters inside Math.round (e.g. nested getDiff() call).
@@ -84,7 +84,7 @@ test('TOXIC tile damage gated through hasAugment("BIOFILTER")', () => {
   // BEFORE multiplication by dt to preserve the "halved" framing
   // independent of frame rate.
   const idx = GAME.indexOf('tile === T.TOXIC');
-  assert.ok(idx > 0, 'TOXIC env-tile branch must exist in game.js');
+  assert.ok(idx !== -1, 'TOXIC env-tile branch must exist in game.js');
   const span = stripComments(GAME.slice(idx, idx + 800));
   assert.ok(/toxDps\s*=[^;]*hasAugment\(\s*['"]BIOFILTER['"]\s*\)\s*\?\s*0\.5\s*:\s*1/.test(span),
     'TOXIC toxDps must be multiplied by hasAugment("BIOFILTER") ? 0.5 : 1');
@@ -97,7 +97,7 @@ test('FROST patch tick damage gated through hasAugment("BIOFILTER")', () => {
   // Anchor on the takeDamage call signature, not the bare 'Frost Patch'
   // label string (which also appears in a label dictionary at ~line 883).
   const idx = ENTITIES.indexOf("takeDamage(fdmg, 'Frost Patch'");
-  assert.ok(idx > 0, 'Frost Patch takeDamage(fdmg,...) call must exist in entities.js');
+  assert.ok(idx !== -1, 'Frost Patch takeDamage(fdmg,...) call must exist in entities.js');
   const span = stripComments(ENTITIES.slice(Math.max(0, idx - 300), idx + 100));
   assert.ok(/hasAugment\(\s*['"]BIOFILTER['"]\s*\)\s*\?\s*0\.5\s*:\s*1/.test(span),
     'Frost Patch dmg must be multiplied by hasAugment("BIOFILTER") ? 0.5 : 1');
@@ -109,7 +109,7 @@ test('CRAWLER burn duration AND DPS halved by BIOFILTER', () => {
   // and burnDps — halving only one would leave a long faint burn or
   // a brief intense burn, both surprising to the player.
   const idx = ENTITIES.indexOf("this.type === 'CRAWLER'");
-  assert.ok(idx > 0, 'CRAWLER burn-on-hit branch must exist in entities.js');
+  assert.ok(idx !== -1, 'CRAWLER burn-on-hit branch must exist in entities.js');
   const span = stripComments(ENTITIES.slice(idx, idx + 600));
   assert.ok(/hasAugment\(\s*['"]BIOFILTER['"]\s*\)/.test(span),
     'CRAWLER burn branch must check hasAugment("BIOFILTER")');

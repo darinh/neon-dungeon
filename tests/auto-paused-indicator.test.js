@@ -97,7 +97,7 @@ test('auto-paused: clear runs BEFORE state update in setState (so compare uses o
   assert.ok(setStateBody);
   const clearIdx = setStateBody[0].search(/this\.wasAutoPaused\s*=\s*false/);
   const stateAssignIdx = setStateBody[0].search(/this\.state\s*=\s*s\s*;/);
-  assert.ok(clearIdx > 0 && stateAssignIdx > 0,
+  assert.ok(clearIdx !== -1 && stateAssignIdx !== -1,
     'both the clear and the state assignment must exist in setState');
   assert.ok(
     clearIdx < stateAssignIdx,

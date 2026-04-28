@@ -64,7 +64,7 @@ test('EMERGENCY_CACHE heal guards player.hp > 0 (no resurrect)', () => {
   // anyway. The hp > 0 guard is defense-in-depth: any future code path
   // that calls loadFloor on a 0-HP player will not silently revive them.
   const idx = GAME.indexOf('EMERGENCY_CACHE');
-  assert.ok(idx > 0, 'EMERGENCY_CACHE must appear in game.js');
+  assert.ok(idx !== -1, 'EMERGENCY_CACHE must appear in game.js');
   const window = GAME.slice(idx, idx + 1200);
   assert.ok(/this\.player\.hp\s*>\s*0/.test(window),
     'EMERGENCY_CACHE branch must guard on this.player.hp > 0');

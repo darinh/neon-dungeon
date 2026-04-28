@@ -66,7 +66,7 @@ test('SALVAGE on-kill gates on !isProc (proc finishers do not roll Salvage)', ()
   // entities.js:1158-1162 and the GREEDY block.
   // Anchor on the salvage-includes match and walk back to find the gate.
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(idx > 0, 'salvage gate must exist');
+  assert.ok(idx !== -1, 'salvage gate must exist');
   // Search the preceding ~400 chars for !_sctx?.isProc or !ctx.isProc style.
   const head = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx);
   assert.match(head, /!\s*[\w.]*isProc/,
@@ -80,7 +80,7 @@ test('SALVAGE skips summons and shards (defense in depth)', () => {
   // a real ranged hit. Mirrors the !this.isShard && !isSummon gate used
   // by HARVESTER/MAGPIE/VAULTMASTER drops.
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(idx > 0, 'salvage gate must exist');
+  assert.ok(idx !== -1, 'salvage gate must exist');
   // Search a wider window because the gate spans multiple lines.
   const window = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx + 600);
   assert.match(window, /!\s*this\.isShard/,
@@ -95,7 +95,7 @@ test('SALVAGE rolls Math.random() < 0.10 (10% chance per qualifying kill)', () =
   // makes the suffix never feel rewarding over a 5-floor run. Pin the
   // value so an unintentional re-tune is caught in review.
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(idx > 0, 'salvage gate must exist');
+  assert.ok(idx !== -1, 'salvage gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /Math\.random\(\)\s*<\s*0\.10/,
     'SALVAGE must roll Math.random() < 0.10 (10% chance)');
@@ -109,7 +109,7 @@ test('SALVAGE calls NEON.cores.spawnCoreDrop with value=1 and emits cyan particl
   // burst is a tell that THIS kill triggered the suffix even before the
   // drop's magnet animation engages.
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(idx > 0, 'salvage gate must exist');
+  assert.ok(idx !== -1, 'salvage gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /NEON\.cores\.spawnCoreDrop\(\s*game\s*,\s*this\.x\s*,\s*this\.y\s*,\s*1\s*\)/,
     'SALVAGE must call NEON.cores.spawnCoreDrop(game, this.x, this.y, 1)');
@@ -124,7 +124,7 @@ test('SALVAGE block runs AFTER the elite/boss core drop (so it stacks, not repla
   // positions: the elite/boss drop must precede the salvage gate.
   const eliteDropIdx = ENTITIES_CODE.indexOf('NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal)');
   const salvageGateIdx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(eliteDropIdx > 0, 'elite/boss core drop line must exist');
+  assert.ok(eliteDropIdx !== -1, 'elite/boss core drop line must exist');
   assert.ok(salvageGateIdx > eliteDropIdx,
     'SALVAGE drop block must come AFTER the elite/boss core drop so it stacks');
 });
@@ -137,7 +137,7 @@ test('SALVAGE guards on typeof NEON !== "undefined" so node:test does not crash'
   // ever stubs NEON in tests, this guard prevents a TypeError on
   // NEON.cores when the cores module isn't loaded.
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
-  assert.ok(idx > 0, 'salvage gate must exist');
+  assert.ok(idx !== -1, 'salvage gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /typeof\s+NEON\s*!==\s*'undefined'/,
     'SALVAGE block must guard on typeof NEON !== "undefined"');

@@ -115,8 +115,8 @@ test('FRAGILE damage amp applied after CORROSIVE so the +2 is also amplified', (
   // CORROSIVE flat-add → FRAGILE multiplier → floor at 1.
   const idxC = ENTITIES.indexOf("_EG.modifier === 'CORROSIVE'");
   const idxF = ENTITIES.indexOf("_EG.modifier === 'FRAGILE' && !options.ignoreDefense");
-  assert.ok(idxC > 0, 'CORROSIVE branch must exist');
-  assert.ok(idxF > 0, 'FRAGILE branch must exist');
+  assert.ok(idxC !== -1, 'CORROSIVE branch must exist');
+  assert.ok(idxF !== -1, 'FRAGILE branch must exist');
   assert.ok(idxF > idxC, 'FRAGILE multiplier must run AFTER CORROSIVE flat-add');
 });
 

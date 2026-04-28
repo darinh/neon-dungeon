@@ -142,8 +142,8 @@ test('HUNTER damage amp applied AFTER def + CORROSIVE so the mitigation is multi
   // CORROSIVE flat-add → HUNTER multiplier → floor at 1.
   const idxC = ENTITIES.indexOf("_EG.modifier === 'CORROSIVE'");
   const idxH = ENTITIES.indexOf("_EG.modifier === 'HUNTER' && !options.ignoreDefense");
-  assert.ok(idxC > 0, 'CORROSIVE branch must exist');
-  assert.ok(idxH > 0, 'HUNTER branch must exist');
+  assert.ok(idxC !== -1, 'CORROSIVE branch must exist');
+  assert.ok(idxH !== -1, 'HUNTER branch must exist');
   assert.ok(idxH > idxC, 'HUNTER multiplier must run AFTER CORROSIVE flat-add');
 });
 
@@ -155,7 +155,7 @@ test('HUNTER stillness logic runs INSIDE Player.update (not enemy or projectile)
   // 'class Player {' marker.
   const playerStart = ENTITIES.indexOf('class Player {');
   const huntInPlayer = ENTITIES.indexOf('HUNT_MAX_STILL', playerStart);
-  assert.ok(playerStart > 0, 'class Player must exist');
+  assert.ok(playerStart !== -1, 'class Player must exist');
   assert.ok(huntInPlayer > playerStart, 'HUNT_MAX_STILL must be defined inside the Player class block');
 });
 

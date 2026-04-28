@@ -152,7 +152,7 @@ test('PROPHET projectile carries owner attribution', () => {
   // races the attribution).
   const ow = aiBody.indexOf('p.ownerType');
   const ph = aiBody.indexOf('projectiles.push');
-  assert.ok(ow > 0 && ph > 0 && ow < ph,
+  assert.ok(ow !== -1 && ph !== -1 && ow < ph,
     'ownerType must be set before projectiles.push');
 });
 
@@ -171,7 +171,7 @@ test('aiProphet honors hologram-taunt redirection', () => {
   // fallback so the decoy is never bypassed.
   const ti = aiBody.indexOf('_tauntTarget');
   const gi = aiBody.indexOf('getPredictedPosition');
-  assert.ok(ti > 0 && gi > 0 && ti < gi,
+  assert.ok(ti !== -1 && gi !== -1 && ti < gi,
     'taunt check must appear before getPredictedPosition fallback in aiProphet');
 });
 

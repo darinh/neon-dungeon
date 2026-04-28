@@ -240,7 +240,7 @@ test('CASCADE on-kill block is contained within Enemy.die() (not a stray top-lev
   // would compile but never execute on kill.
   const dieIdx = ENTITIES_CODE.indexOf("die() {");
   const cascadeIdx = ENTITIES_CODE.indexOf("_EG.modifier === 'CASCADE'");
-  assert.ok(dieIdx > 0, 'Enemy.die() must be locatable');
+  assert.ok(dieIdx !== -1, 'Enemy.die() must be locatable');
   assert.ok(cascadeIdx > dieIdx,
     'CASCADE on-kill block must appear AFTER Enemy.die() opening — ensures it lives inside die()');
 });

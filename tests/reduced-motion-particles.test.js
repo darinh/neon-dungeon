@@ -39,8 +39,8 @@ test('reduced-motion-particles: spawnParticles applies the reducedMotion gate AF
   assert.ok(body, 'spawnParticles function body must be findable');
   const scaleBurstIdx = body[0].indexOf('_particleSystem.scaleBurst');
   const reducedMotionIdx = body[0].indexOf('settings.reducedMotion');
-  assert.ok(scaleBurstIdx > 0, 'scaleBurst call must exist');
-  assert.ok(reducedMotionIdx > 0, 'reducedMotion gate must exist');
+  assert.ok(scaleBurstIdx !== -1, 'scaleBurst call must exist');
+  assert.ok(reducedMotionIdx !== -1, 'reducedMotion gate must exist');
   assert.ok(
     reducedMotionIdx > scaleBurstIdx,
     'reducedMotion gate must be applied AFTER scaleBurst (composes correctly)'

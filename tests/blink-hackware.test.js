@@ -61,7 +61,7 @@ test('BLINK cooldown is between EMP (10s) and STATIC_FIELD (12s)', () => {
 // slice forward until the next case-or-closing-brace.
 function blinkCaseBody() {
   const startIdx = CONTENT.indexOf("case 'BLINK':");
-  assert.ok(startIdx > 0, "activateHackware must contain a case 'BLINK': branch");
+  assert.ok(startIdx !== -1, "activateHackware must contain a case 'BLINK': branch");
   const tail = CONTENT.slice(startIdx);
   // End at the next sibling case label or the switch's closing brace.
   const next = tail.search(/\n\s{4}case\s+'[A-Z_]+'|\n\s{2}\}\s*\n\s*\}/);
@@ -134,7 +134,7 @@ test('BLINK is no-op safe (faced into wall) — suppresses fanfare and skips tel
   // before its `break;`.
   const noopStart = body.search(/Math\.abs\(curBX\s*-\s*startBX\)/);
   const noopEnd = body.indexOf('break;', noopStart);
-  assert.ok(noopStart > 0 && noopEnd > noopStart, 'no-op branch must be locatable');
+  assert.ok(noopStart !== -1 && noopEnd > noopStart, 'no-op branch must be locatable');
   const noopBody = body.slice(noopStart, noopEnd);
   assert.ok(!/audio\.hackwareBlink/.test(noopBody),
     'no-op branch must NOT play audio.hackwareBlink (audio spam on whiff)');
