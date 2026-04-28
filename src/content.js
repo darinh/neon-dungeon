@@ -2418,6 +2418,34 @@ function getStatusEffects(player) {
     const mul = (1 + 0.15 * lv).toFixed(2);
     fx.push({ id: 'momentum', icon: '▶', label: '×' + mul, colour: '#ff8844' });
   }
+  // SURGE meta-upgrade — counter for "every 8th shot deals +100% damage"
+  // (meta/upgrades.js:36, maxLevel 1). Counter mutated in
+  // consumeSurgeShot at meta/behavior.js:51-59 — increments on EVERY
+  // shot (not every hit), fires multiplier (1 + 1.0 * surgeLv) when
+  // count % 8 === 0. Pre-PR there was NO HUD signal — players had no
+  // way to anticipate the next surge shot, leading to wasted surges
+  // on weak/missed shots.
+  //
+  // Display: ⊙ N/8 where N = _surgeShotCount % 8. Same convention as
+  // floor-modifier counter HUD (OVERCHARGE/WINDFALL/SIGNAL_BOOST/REVERB
+  // all show N/5). After surge fires the count rolls to 0/8; at 7/8 the
+  // next shot will surge.
+  //
+  // Gates: metaFlags-ownership only. The counter ticks unconditionally
+  // (every shot, regardless of ownership), so a level-zero player has
+  // _surgeShotCount > 0 but no badge. This means the moment they pick
+  // up the surge upgrade mid-run, the badge appears immediately at the
+  // current count progress — no "warmup" required to display.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx', PRs
+  // #280/#282/#284): the modulo period (8) is hard-coded in BOTH the
+  // HUD label (content.js) AND the surge-firing gate (meta/behavior.js
+  // :55). The companion test parses behavior.js and asserts the
+  // content.js HUD literal matches.
+  if (player.metaFlags && (player.metaFlags.surge | 0) > 0) {
+    const cnt = (player._surgeShotCount | 0) % 8;
+    fx.push({ id: 'surge', icon: '⊙', label: cnt + '/8', colour: '#ffcc44' });
+  }
   // Augment count
   const augCount = Object.keys(player.augments || {}).length;
   if (augCount > 0) {
