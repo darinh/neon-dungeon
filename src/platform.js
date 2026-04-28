@@ -1899,6 +1899,20 @@ const audio = (() => {
       osc('sine',     400, 1400, 0.04, t + 0.06,  0.15, bus);
       noise(0.05, t, 0.08, 4000, bus);
     },
+    hackwareEMPLine() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.4);
+      // Sweeping zap: rising sweep + tight crackle. Distinct from
+      // hackwareEMP (which opens with a saw burst at 200→60Hz). Here we
+      // open with a rising sine sweep (300→1400Hz) to convey
+      // "directional projection", followed by a clipped noise burst to
+      // sell the pierce. Same wet/dry profile as hackwareEMP so both
+      // EMP variants share a tonal family without being identical.
+      osc('sine',     300, 1400, 0.10, t,         0.18, bus);
+      osc('sawtooth', 800, 1600, 0.08, t + 0.02,  0.15, bus);
+      noise(0.12, t, 0.12, 4500, bus);
+      osc('sine',      80,   60, 0.10, t + 0.06,  0.25);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
