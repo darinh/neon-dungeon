@@ -666,6 +666,7 @@ const WEAPON_AFFIXES = {
   RECOIL:   { slot:'suffix', label:'of Recoil',    colour:'#ffaa66', desc:'Knocks enemies back',    effect:'recoil' },
   EXECUTE:  { slot:'suffix', label:'of Execution', colour:'#aa44ff', desc:'Finishes enemies <20% HP', effect:'execute' },
   MARK:     { slot:'suffix', label:'of Marking',   colour:'#ff44aa', desc:'Marks enemies — follow-ups +30%', effect:'mark' },
+  GREEDY:   { slot:'suffix', label:'of Greed',     colour:'#ffd700', desc:'+50% credits on kill',   effect:'greedy' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');

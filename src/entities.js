@@ -1927,6 +1927,25 @@ class Enemy {
     const corrosiveMul = _EG.modifier === 'CORROSIVE' ? 1.5 : 1;
     const cr = Math.round(baseCr * (1 + _EG.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // UNCHAINED #38: -15% credit drops (credits are now consumable-only)
     _EG.player.credits += cr;
+    // GREEDY 'of Greed' suffix — bonus +50% credits on kill from a Greedy
+    // weapon. Mirrors DETONATE's on-kill model: gates on _lastHitCtx with
+    // !isProc so a non-Greedy proc finishing the enemy (THUNDER chain, etc.)
+    // does NOT credit Greedy. Burn-DoT kills DO credit if the prior direct
+    // hit was Greedy (entities.js:1232 unmarks isProc when there was a
+    // prior ctx — same path DETONATE relies on). Skips summons/shards
+    // (they already have cr=0 via baseCr=0 / no real owner) for defense
+    // in depth. Bonus is rounded; sub-1 floors to 0 (no message, no
+    // particle) so low-CR mobs don't show "+0 CR".
+    const _gctx = this._lastHitCtx;
+    if (_gctx && !_gctx.isProc && _gctx.effects && _gctx.effects.includes('greedy')
+        && !this.isShard && !isSummon) {
+      const bonusCr = Math.round(cr * 0.5);
+      if (bonusCr > 0) {
+        _EG.player.credits += bonusCr;
+        spawnDmgText(this.x, this.y - 0.4, '+' + bonusCr + ' CR', '#ffd700');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#ffd700', 4);
+      }
+    }
     if (this.isBoss) _EG.bossesCleared++;
     // UNCHAINED #39: CORES drops on elite/boss kills. Summons / shard-split
     // enemies don't drop cores (same rule as items/credits). isBoss takes
