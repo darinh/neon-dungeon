@@ -234,7 +234,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -380,6 +380,46 @@ const RESONATOR_RANGE      = 6;              // tiles — cone depth
 const RESONATOR_CONE_DEG   = 60;             // full cone angular width (degrees)
 const RESONATOR_DMG_MUL    = 0.8;            // damage = atk * 0.8
 const RESONATOR_HALF_RAD   = (RESONATOR_CONE_DEG * 0.5) * Math.PI / 180; // precomputed
+
+// WATCHER tuning constants. Stationary sweeping-cone lighthouse (floor 6+).
+//
+// Design intent: a stationary mob whose vision cone rotates CONTINUOUSLY
+// at WATCHER_SWEEP_RATE rad/s. The cone is always visible (faint) — not
+// a hidden trap — so the player can read the rotation rhythm and time
+// crossings perpendicular to the sweep. When the player enters the cone
+// AND has LOS AND the WATCHER is in the sweep state, the angle locks,
+// the cone intensifies (telegraph), and after WATCHER_TELEGRAPH seconds
+// it commits a hitscan beam (no projectile) for atk * WATCHER_DMG_MUL.
+//
+// Counterplay:
+//   - Cross perpendicular to the sweep (the cone passes over you in a
+//     fraction of a second — too fast to lock if you keep moving)
+//   - Dash through during telegraph (i-frames pass through cleanly)
+//   - Break LOS via cover (lock requires LOS at telegraph entry AND at
+//     fire — defense in depth, mirrors RESONATOR)
+//   - Stay out of WATCHER_RANGE (9 tiles)
+//   - Kill it (hp=70 — moderate; spd=0 makes it a sitting duck)
+//
+// Why floor 6+: this is a positioning-puzzle mob; players need a few
+// floors of basic combat literacy first. Sits in the same slot as
+// RESONATOR (floor 6) — RESONATOR is aimed (anti-dash), WATCHER is
+// continuous-sweep (anti-camping). Distinct verbs, same tier.
+//
+// Distinct from RESONATOR: RESONATOR aims at the player on commit,
+// WATCHER's cone moves regardless of player position. The player must
+// time their crossings against the rotation, not against a charge bar.
+//
+// State machine mirrors RESONATOR for stun/idle/telegraph/recovery
+// fairness — a stunned WATCHER drops a queued telegraph straight to
+// recovery so the player can safely punish the stun (see update()
+// stun branch alongside the RESONATOR/MIRROR/REAPER cancellations).
+const WATCHER_SWEEP_RATE = 0.55; // rad/s — full rotation ~11.4s
+const WATCHER_CONE_DEG   = 50;   // wedge angular width (degrees)
+const WATCHER_RANGE      = 9;    // tiles — cone depth and beam reach
+const WATCHER_TELEGRAPH  = 0.65; // seconds — fairness window after lock
+const WATCHER_RECOVERY   = 1.4;  // seconds — post-fire cooldown
+const WATCHER_DMG_MUL    = 1.0;  // damage = atk * 1.0
+const WATCHER_HALF_RAD   = (WATCHER_CONE_DEG * 0.5) * Math.PI / 180; // precomputed
 
 // MIRROR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob whose hook is mimicry: it fires a single projectile at the
@@ -880,7 +920,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', GULPER:'Gulper', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', GULPER:'Gulper', WATCHER:'Watcher', 'Watcher Beam':'Watcher Beam', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -906,7 +946,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', GULPER:'#bbdd33', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', GULPER:'#bbdd33', WATCHER:'#ffee66', 'Watcher Beam':'#ffee66', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -1588,6 +1628,12 @@ class Enemy {
   /** @type {any} */ _miAimDy;
   /** @type {any} */ _miShotSpd;
   /** @type {any} */ _miShotColour;
+  /** @type {any} */ _wState;
+  /** @type {any} */ _wAng;
+  /** @type {any} */ _wLockAng;
+  /** @type {any} */ _wTele;
+  /** @type {any} */ _wRec;
+  /** @type {any} */ _wFired;
   /** @type {any} */ _reState;
   /** @type {any} */ _reTele;
   /** @type {any} */ _reFrenzy;
@@ -2638,6 +2684,14 @@ class Enemy {
       // Cancel mirror telegraph on stun — drop straight to recovery so the
       // shot doesn't fire after stun ends and the player can punish the stun.
       if (this._miState === 'telegraph') { this._miState = 'recovery'; this._miRec = MIRROR_RECOVERY; this._miTele = 0; }
+      // Cancel watcher telegraph on stun — drop straight to recovery so the
+      // beam doesn't fire after stun ends. Mirrors RESONATOR/MIRROR pattern;
+      // the sweep itself is paused naturally by the early return below
+      // (no AI tick under stun, so _wAng won't advance). _wFired stays
+      // false so the render branch's beam-flash gate skips the visual —
+      // critical: without that gate, every stun-cancel would render a
+      // bright "beam fired" line even though no damage was dealt.
+      if (this._wState === 'telegraph') { this._wState = 'recovery'; this._wRec = WATCHER_RECOVERY; this._wTele = 0; this._wFired = false; }
       // Cancel REAPER telegraph on stun — return to idle so the frenzy
       // doesn't trigger after stun ends. _reHasFrenzied stays true (one-shot
       // defuse, not a re-trigger reset — re-arm only on player room change).
@@ -2784,6 +2838,7 @@ class Enemy {
       case 'TETHER':this.aiTether(dt,player,map,d,los); break;
       case 'VAULTMASTER':this.aiVaultmaster(dt,player,map,d,los); break;
       case 'GULPER':this.aiGulper(dt,player,map,d,los); break;
+      case 'WATCHER':this.aiWatcher(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -4717,6 +4772,149 @@ class Enemy {
         if (audio.resonatorCharge) audio.resonatorCharge();
       }
     }
+    // Stationary: never patrol, never reposition. Sitting duck by design.
+  }
+
+  // ─── WATCHER AI — Stationary Sweeping-Cone Lighthouse ──────────────────
+  // Stationary mob (spd=0). A faint vision cone rotates continuously at
+  // WATCHER_SWEEP_RATE rad/s — always visible, telegraphing the sweep
+  // rhythm so the player can plan crossings perpendicular to the cone.
+  // When the player crosses the cone (inside arc + range + LOS + canTarget)
+  // and the WATCHER is in the sweep state, the angle locks, the wedge
+  // intensifies (telegraph), and after WATCHER_TELEGRAPH seconds it fires
+  // a hitscan beam (no projectile) for atk * WATCHER_DMG_MUL.
+  //
+  // States:
+  //   sweep:     _wAng advances at WATCHER_SWEEP_RATE rad/s. Each frame,
+  //              hit-test player against current cone+range+LOS. On hit,
+  //              lock the aim, transition to telegraph.
+  //   telegraph: _wTele ticks down; cone wedge rendered intensely. On 0,
+  //              fire (re-test player against locked cone+range+LOS),
+  //              transition to recovery. Aim is FROZEN — sweep does not
+  //              advance, giving the player a clear dash window.
+  //   recovery:  _wRec ticks down; on 0, return to sweep (resume rotation
+  //              from the locked angle — no snap-back).
+  //
+  // Aim source for telegraph: the WATCHER's own _wAng (sweep), NOT _tx/_ty.
+  // The cone direction is mechanical — set by the sweep angle at the
+  // moment a perceived target (player or hologram) crosses the cone.
+  // Hologram decoys can TRIGGER a lock (the lock-test uses _tx/_ty so
+  // taunts pass through, mirroring RESONATOR/MIRROR convention) but the
+  // beam direction itself is the swept angle, not the decoy position —
+  // so the player can still dodge by moving out of the locked direction
+  // during telegraph, even when a hologram triggered the lock.
+  //
+  // Why floor 6+: this is a positioning-puzzle mob; players need basic
+  // combat literacy first. Sits in the same slot as RESONATOR but with
+  // a distinct verb (continuous sweep vs aimed cone).
+  //
+  // Excluded from elite affix roll: same first-ship caution as the other
+  // recently-introduced cone-style mobs (RESONATOR / MIRROR / GULPER) —
+  // easier to layer SHIELDED / FRENZY interactions later than to debug
+  // them simultaneously with a brand-new mechanic.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiWatcher(dt, player, map, d, los) {
+    void d; void los; // recomputed against the locked aim for fairness
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // Room-gated: only engage when target or player is inside this watcher's
+    // room. Mirrors the inRoom check in aiResonator/aiMirror.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Telegraph: cone locked, fire on completion ──
+    if (this._wState === 'telegraph') {
+      this._wTele -= dt; // fixed-rate countdown — fairness > tempo
+      if (this._wTele <= 0) {
+        // FIRE: hit-test player against the LOCKED cone (NOT the live sweep
+        // angle — telegraph freezes the aim). LOS rechecked at fire-time
+        // (defense in depth). Damage honors player damage immunity, so
+        // dash i-frames are the canonical pass-through counter.
+        const ax = Math.cos(this._wLockAng), ay = Math.sin(this._wLockAng);
+        const dx = player.x - this.x, dy = player.y - this.y;
+        const dPlayer2 = dx * dx + dy * dy;
+        if (dPlayer2 <= WATCHER_RANGE * WATCHER_RANGE) {
+          if (isInsideCone(player.x, player.y, this.x, this.y,
+                           ax, ay, WATCHER_RANGE, WATCHER_HALF_RAD)
+              && hasLOS(this.x, this.y, player.x, player.y, map)) {
+            const dmg = Math.round(this.atk * WATCHER_DMG_MUL);
+            player.takeDamage(dmg, 'Watcher Beam');
+          }
+        }
+        if (audio.resonatorFire) audio.resonatorFire();
+        // Visual punch — yellow shockwave at the apex along the locked aim.
+        const tipX = this.x + ax * WATCHER_RANGE * 0.5;
+        const tipY = this.y + ay * WATCHER_RANGE * 0.5;
+        spawnParticles(tipX, tipY, 'EXPLOSION', '#ffee66', 10);
+        triggerShake(2, 0.10);
+        this._wState = 'recovery';
+        this._wRec = WATCHER_RECOVERY;
+        this._wTele = 0;
+        // Mark the recovery as a REAL fire — the render branch keys its
+        // beam-flash visual on this flag (cleared on sweep resume and on
+        // stun-cancel) so a stunned/cancelled telegraph never renders a
+        // fake "beam fired" line.
+        this._wFired = true;
+      }
+      return;
+    }
+
+    // ── Recovery: cooling down, sweep paused ──
+    if (this._wState === 'recovery') {
+      this._wRec -= dt * ocMul * bm;
+      if (this._wRec <= 0) {
+        this._wState = 'sweep';
+        // Beam-flash visual is one-shot per fire — clear on sweep resume so
+        // the next telegraph can re-arm cleanly.
+        this._wFired = false;
+      }
+      return;
+    }
+
+    // ── Sweep: rotate cone, scan for perceived-target crossing ──
+    // Advance angle (modulo 2*PI to keep it bounded — JS floats are fine
+    // for thousands of rotations but the modulo keeps the value tidy for
+    // any future test asserts and is essentially free).
+    this._wAng = (this._wAng + dt * WATCHER_SWEEP_RATE * ocMul * bm) % (Math.PI * 2);
+
+    // Hit-test against current sweep angle using the TAUNT-AWARE perceived
+    // target (_tx/_ty — hologram during decoy, player otherwise). This is
+    // the same convention RESONATOR/MIRROR/etc. use: the lock-trigger
+    // honors holograms (a decoy inside a watcher's swept cone forces a
+    // telegraph commit — counterplay-relevant, lets the player BAIT
+    // wasted shots). The fire-time damage hit-test below uses the REAL
+    // player position, so a hologram trigger that fires while the real
+    // player is OUT of the locked beam deals no damage. Mismatched
+    // gates (inRoom on _tx/_ty + lock-test on player.x/y) would let a
+    // hologram inside the room redirect engagement onto the real player
+    // even when the real player is outside the room — the bug fixed here.
+    if (!inRoom || !this._canTarget()) return;
+    const dx = this._tx - this.x, dy = this._ty - this.y;
+    const dPerceived2 = dx * dx + dy * dy;
+    if (dPerceived2 > WATCHER_RANGE * WATCHER_RANGE) return;
+    const ax = Math.cos(this._wAng), ay = Math.sin(this._wAng);
+    if (!isInsideCone(this._tx, this._ty, this.x, this.y,
+                      ax, ay, WATCHER_RANGE, WATCHER_HALF_RAD)) return;
+    if (!hasLOS(this.x, this.y, this._tx, this._ty, map)) return;
+    // LOCK: freeze aim at current sweep angle, enter telegraph. Aim is
+    // FROZEN (not aimed at the perceived target) — the cone direction
+    // is mechanical, set by the sweep angle at the moment of trigger.
+    // The player can dodge by moving out of the locked beam direction
+    // during the telegraph window.
+    this._wLockAng = this._wAng;
+    this._wState = 'telegraph';
+    this._wTele = WATCHER_TELEGRAPH;
+    if (audio.resonatorCharge) audio.resonatorCharge();
     // Stationary: never patrol, never reposition. Sitting duck by design.
   }
 
@@ -7948,6 +8146,93 @@ class Enemy {
         }
         ctx.restore();
       }
+      // WATCHER: yellow lighthouse cone. ALWAYS visible (faint) during
+      // sweep so the player can read the rotation rhythm. On lock the
+      // wedge intensifies dramatically (telegraph), on fire a brief
+      // beam flash extends to the cone tip. Geometry mirrors the hit-
+      // test in aiWatcher (apex at body, half-angle = WATCHER_HALF_RAD,
+      // radius = WATCHER_RANGE * TILE) so what the player SEES is
+      // exactly what the cone HITS.
+      if (this.type === 'WATCHER') {
+        ctx.save();
+        const halfRad = WATCHER_HALF_RAD;
+        const radPx = WATCHER_RANGE * TILE;
+        // Aim direction: live sweep angle during 'sweep'; locked angle
+        // during 'telegraph' / 'recovery' (sweep paused).
+        const aimAngle = (this._wState === 'sweep') ? this._wAng : this._wLockAng;
+        if (this._wState === 'telegraph' && this._wTele > 0) {
+          // TELEGRAPH: intensified yellow wedge, brightens as fire approaches.
+          const progress = 1 - Math.max(0, Math.min(1, this._wTele / WATCHER_TELEGRAPH));
+          ctx.fillStyle = '#ffee66';
+          ctx.globalAlpha = 0.14 + progress * 0.34;
+          ctx.shadowBlur = 6 + progress * 14;
+          ctx.shadowColor = '#ffee66';
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+          ctx.closePath();
+          ctx.fill();
+          // Edge lines — bright yellow, intensifying.
+          ctx.globalAlpha = 0.45 + progress * 0.50;
+          ctx.strokeStyle = '#ffffaa';
+          ctx.lineWidth = 1.2 + progress * 1.2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle - halfRad) * radPx,
+                     sy + Math.sin(aimAngle - halfRad) * radPx);
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle + halfRad) * radPx,
+                     sy + Math.sin(aimAngle + halfRad) * radPx);
+          ctx.stroke();
+          // Pulsing arc rim
+          const pulse = 0.5 + 0.5 * Math.sin(progress * 22);
+          ctx.globalAlpha = (0.30 + progress * 0.55) * pulse;
+          ctx.lineWidth = 1.5 + progress * 1.2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+          ctx.stroke();
+        } else if (this._wState === 'recovery' && this._wFired && this._wRec > WATCHER_RECOVERY * 0.7) {
+          // BEAM FLASH on commit — brief bright line along the locked aim
+          // for the first ~30% of recovery, then fades. Doubles as the
+          // "this is the angle that hit you" feedback frame. Gated on
+          // _wFired so a stunned/cancelled telegraph (which also enters
+          // recovery with _wRec=full) does NOT flash a phantom beam.
+          const flashT = (this._wRec - WATCHER_RECOVERY * 0.7) / (WATCHER_RECOVERY * 0.3);
+          ctx.globalAlpha = 0.85 * flashT;
+          ctx.strokeStyle = '#ffffcc';
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = '#ffee66';
+          ctx.lineWidth = 3.0 * flashT + 1.0;
+          NEON.draw.line(ctx, sx, sy,
+                         sx + Math.cos(aimAngle) * radPx,
+                         sy + Math.sin(aimAngle) * radPx);
+        } else {
+          // SWEEP (or late recovery): faint always-visible cone — the
+          // passive rhythm telegraph. Thin lines + low-alpha fill so the
+          // player can SEE the rotation but it doesn't visually dominate.
+          ctx.fillStyle = '#ffee66';
+          ctx.globalAlpha = 0.06;
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#ffee66';
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.arc(sx, sy, radPx, aimAngle - halfRad, aimAngle + halfRad);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 0.28;
+          ctx.strokeStyle = '#ffee66';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle - halfRad) * radPx,
+                     sy + Math.sin(aimAngle - halfRad) * radPx);
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(aimAngle + halfRad) * radPx,
+                     sy + Math.sin(aimAngle + halfRad) * radPx);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       // MIRROR: lime-green ambient pulse during idle/recovery; during the
       // telegraph window, draw a dashed aim line from the body to the locked
       // target plus a colour-tinted ring on the body in the player's last
@@ -8632,6 +8917,7 @@ const ENEMY_WEIGHTS = {
   TETHER:     { base: 2,  perFloor: 1, minFloor: 5 },  // anti-kiting slow-aura — slow fragile chaser, NO contact damage; passive leash field slows player proportional to distance (closer = faster, inversion of normal kite-and-shoot instinct)
   VAULTMASTER:{ base: 2,  perFloor: 1, minFloor: 4 },  // economic-inverse — slow non-damaging chaser, ejects a small VaultCoin pickup on every hit (ICD-throttled), drops a jackpot pickup on death (risk/reward: kill fast for safety vs milk for credits, opposite verb of MAGPIE)
   GULPER:     { base: 2,  perFloor: 1, minFloor: 6 },  // projectile-eating mid-tank — slow chaser with front-facing mouth-cone that destroys player shots and stacks; at max stacks belches a fat slow projectile (anti-spam, compositional — counter via flank/melee/burst, distinct from MAGNETON which only bends)
+  WATCHER:    { base: 2,  perFloor: 1, minFloor: 6 },  // sweeping vision-cone lighthouse — stationary, cone rotates continuously at WATCHER_SWEEP_RATE; on player-cross it locks+telegraphs+fires a hitscan beam (anti-camping, anti-static-positioning — counter by perpendicular crossings, dash through telegraph, or LOS break, distinct from RESONATOR which AIMS the cone)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -8751,6 +9037,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'TETHER':    hp=24; atk=0;  spd=2.6; xpVal=14; colour='#ff8866'; break;
     case 'VAULTMASTER':hp=60;atk=0;  spd=2.0; xpVal=18; colour='#ffcc44'; break;
     case 'GULPER':    hp=90; atk=14; spd=1.4; xpVal=28; colour='#bbdd33'; break;
+    case 'WATCHER':   hp=70; atk=12; spd=0;   xpVal=26; colour='#ffee66'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -8990,12 +9277,29 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     e._glAimAngle = Math.random() * TWO_PI;
     e._glPulse = Math.random() * TWO_PI;
   }
+  if (type==='WATCHER') {
+    // Stationary sweeping-cone lighthouse. Random initial sweep angle so
+    // a clustered spawn doesn't telegraph in unison — players see each
+    // watcher independently sweeping at the same rate but with offset
+    // phase. _wState starts in 'sweep' so the cone is immediately visible
+    // (it's a passive telegraph by design — never hidden).
+    e._wState = 'sweep';
+    e._wAng = Math.random() * Math.PI * 2;
+    e._wLockAng = 0;
+    e._wTele = 0;
+    e._wRec = 0;
+    // Beam-flash gate: render-side flash is keyed on this AND _wRec — set
+    // true only when a real beam commits in aiWatcher's fire block.
+    // Without this gate, the stun-cancel path (which forces _wRec = full
+    // WATCHER_RECOVERY) would visually flash a beam that never fired.
+    e._wFired = false;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
