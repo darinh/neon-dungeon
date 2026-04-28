@@ -2351,8 +2351,79 @@ function getStatusEffects(player) {
   // counterpart to STRIDE; both can be owned simultaneously, in which
   // case the chip stacks with RUSH ×N (additive perk slots, distinct
   // visual signals so the player can tell which is currently active).
-  if (player.perks.DEADEYE && player._steadyReady) {
+  if (player.perks && player.perks.DEADEYE && player._steadyReady) {
     fx.push({ id: 'deadeye', icon: '◎', label: 'AIM', colour: '#ffee88' });
+  }
+  // DEADEYE charging — extends the AIM badge above with a countdown of how
+  // much stillness remains until the ×1.5 charge latches. Pre-this-PR the
+  // charge ramp (0 → DEADEYE_CHARGE_TIME = 1.0s, entities.js:10957) was
+  // invisible: players saw the AIM badge appear out of nowhere and could
+  // not tell that pausing for 0.7 more seconds would arm the bonus, nor
+  // that an incoming hit (shockTimer) silently froze the ramp.
+  //
+  // Mutual-exclusion strategy — explicit `!_steadyReady` gate, NOT an
+  // else-if chain. Per the structural-ancestor lesson from PR #302
+  // (gpt-5.5 review), an else-if branch's effective runtime predicate
+  // includes the negation of the previous gate, which the alignment
+  // tests do NOT capture. Two top-level sibling if-blocks with explicit
+  // mutual-exclusion conjuncts let each badge be a structural sibling
+  // and align cleanly against its source-of-truth gate.
+  //
+  // SHARED statusFx ID with the AIM badge above (`id: 'deadeye'`) — NOT
+  // a sibling id like 'deadeye-cd'. Per the gpt-5.5 review of this PR:
+  // drawStatusBar() at content.js:2680-2693 keeps inactive ids alive
+  // while fading them out (~200ms / ~12 frames at 60fps). With separate
+  // ids, the ramp→ready transition would render BOTH the fading
+  // 'deadeye-cd' badge AND the rising 'deadeye' badge simultaneously
+  // for the duration of the crossfade. DEADEYE transitions FAST (latch
+  // every 1.0s while still, consumed every shot, re-ramp from 0), so
+  // this dual-render artifact would flicker repeatedly in active play.
+  // Using the SAME id makes statusFx keep ONE entry whose label and
+  // colour mutate instantly on state transition — alpha stays high
+  // across the boundary, no crossfade overlap. The icon ◎ is the same
+  // in both states (perk identity), so visually the badge "morphs" from
+  // countdown to AIM with no flicker.
+  //
+  // Gate composition:
+  //   1. player.perks — defensive null-check (legacy player shapes).
+  //   2. player.perks.DEADEYE — perk-ownership.
+  //   3. !player._steadyReady — mutually exclusive with the AIM badge
+  //      above (when ready=true the entities.js tick sets chargeTime=0,
+  //      so this is double-defence: if a future regression decoupled
+  //      them, the HUD still shows exactly one badge).
+  //   4. player._steadyChargeTime > 0 — only show while actually
+  //      charging (between full reset at 0 and ready latch at >=1s).
+  //      The cancel-partial-on-move branch at entities.js:12284 zeroes
+  //      _steadyChargeTime instantly on movement, so this gate ALSO
+  //      hides the badge during shockTimer (which zeroes via the same
+  //      else-branch) — matches the runtime invariant that the ramp
+  //      can't progress while shocked.
+  //
+  // Display: ◎ N.Ns countdown (DEADEYE_CHARGE_TIME - elapsed). Same
+  // .toFixed(1)+'s' format as dash-cd / hw-cd / cloak (sub-5s timers
+  // get one decimal of precision). Icon ◎ matches the AIM badge above
+  // and the perk-card glyph at content.js:4594. Colour #887744 is the
+  // dimmed half-saturation pair of the active #ffee88 (mirrors
+  // LAST_STAND's #886622-vs-#ffaa00 active-vs-cooldown saturation
+  // contrast); the shared icon carries the buff identity and the
+  // saturation tells the state.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx'): the
+  // 1.0s charge time is hard-coded in BOTH the HUD label (literal `1`
+  // below) AND the entities.js DEADEYE_CHARGE_TIME constant. The
+  // companion test parses entities.js and asserts the content.js
+  // literal matches, so a future re-tune (e.g. 0.75s charge) trips the
+  // test and forces both sites to be updated in lockstep.
+  //
+  // NaN defence: although the gate's `(player._steadyChargeTime || 0) > 0`
+  // short-circuits when chargeTime is undefined/0, the countdown formula
+  // also wraps the input in `(... || 0)` so a future refactor that
+  // moved the gate or split the predicate cannot leak NaN into the
+  // toFixed call (which would render the literal string "NaNs").
+  if (player.perks && player.perks.DEADEYE && !player._steadyReady
+      && (player._steadyChargeTime || 0) > 0) {
+    const remaining = Math.max(0, 1 - (player._steadyChargeTime || 0));
+    fx.push({ id: 'deadeye', icon: '◎', label: remaining.toFixed(1)+'s', colour: '#887744' });
   }
   // Second Wind available — extended in PR (after PR #286) to also
   // surface the META second_wind upgrade (meta/upgrades.js:31, "Revive
