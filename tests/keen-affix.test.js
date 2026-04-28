@@ -133,8 +133,32 @@ test('KEEN does NOT carry a suffix-style effect keyword', () => {
   // content.js:1617 would push a bogus token into proj._effects, where
   // applyHitEffects' `effects.includes('<eff>')` switch could route into
   // an unimplemented branch. Lock this out at the registry level.
-  const keenBlock = CONTENT_CODE.match(/KEEN:\s*\{[^}]*\}/);
+  //
+  // NOTE: a naive `/KEEN:\s*\{[^}]*\}/` regex stops at the first close-brace
+  // (the inner `mods:{...}` close), so `effect:` inserted AFTER `mods` would
+  // false-pass. Walk braces instead — captures the WHOLE KEEN entry.
+  // Pattern from tests/deadly-affix.test.js test #7 (canonical extractEntry).
+  // Bug class flagged by gpt-5.3-codex review of DEADLY PR 2026-04-28; KEEN
+  // had the same flaw and is fixed here per stored memory 'test source-text
+  // extraction'.
+  function extractEntry(src, key) {
+    const i = src.indexOf(key + ':');
+    if (i < 0) return null;
+    const open = src.indexOf('{', i);
+    if (open < 0) return null;
+    let depth = 0;
+    for (let j = open; j < src.length; j++) {
+      const c = src[j];
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) return src.slice(i, j + 1);
+      }
+    }
+    return null;
+  }
+  const keenBlock = extractEntry(CONTENT_CODE, 'KEEN');
   assert.ok(keenBlock, 'KEEN registry entry must be findable');
-  assert.ok(!/effect:/.test(keenBlock[0]),
+  assert.ok(!/\beffect:/.test(keenBlock),
     'KEEN must NOT have an `effect:` keyword (it is a stat mod, not an on-hit suffix)');
 });
