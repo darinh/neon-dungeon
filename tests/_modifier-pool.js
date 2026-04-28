@@ -28,7 +28,7 @@
 
 const assert = require('node:assert/strict');
 
-const EXPECTED_MODIFIER_POOL_SIZE = 21;
+const EXPECTED_MODIFIER_POOL_SIZE = 22;
 
 /**
  * Assert that FLOOR_MODIFIERS in src/content.js contains exactly the

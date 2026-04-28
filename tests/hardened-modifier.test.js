@@ -129,14 +129,14 @@ test('HARDENED desc avoids "Reinforced" wording (FORTIFIED already owns it)', ()
     'HARDENED desc must avoid "Reinforced" — FORTIFIED already owns that wording. Use "Reactive plating" or similar protective-armor language.');
 });
 
-test('FLOOR_MODIFIERS pool size is exactly 21 (HARDENED added)', () => {
-  // Roll-probability invariant. Per stored memory 'positive floor modifiers',
-  // the EXPECTED_MODIFIER_POOL_SIZE constant in tests/_modifier-pool.js is
-  // the single source of truth for this assertion across all *-modifier.test.js
-  // files. Adding modifier #22 only requires bumping that constant.
+test('FLOOR_MODIFIERS pool size invariant (HARDENED is registered)', () => {
+  // Roll-probability invariant. EXPECTED_MODIFIER_POOL_SIZE in
+  // tests/_modifier-pool.js is the single source of truth. The literal
+  // "21 (HARDENED added)" canary previously here was retired when
+  // OVERFLOW (the next modifier) took over the canary role — this
+  // assertion now just confirms the pool count matches whatever the
+  // helper says, which still detects accidental dict shrinkage.
   assertModifierPoolSize(CONTENT);
-  assert.equal(EXPECTED_MODIFIER_POOL_SIZE, 21,
-    'EXPECTED_MODIFIER_POOL_SIZE in tests/_modifier-pool.js must be 21 after HARDENED is added');
 });
 
 // ─── Player.takeDamage wiring ────────────────────────────────────────────
