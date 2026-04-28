@@ -52,112 +52,16 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const {
+  extractBranch,
+  extractIfCondition,
+  normaliseMultiplierPredicate,
+  normaliseBadgePredicate,
+  loadAlignmentSources,
+} = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-const ENTITIES = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-/**
- * Replace string-literal CONTENTS (single, double, backtick) with same-
- * length runs of spaces, preserving the QUOTE characters AND the overall
- * length of the source (so character indexes remain valid). Defends
- * brace-depth counters from being confused by `{` / `}` substrings inside
- * string literals — see the structural-ancestor test below.
- * @param {string} src
- */
-function blankStringContents(src) {
-  return src
-    .replace(/('(?:\\.|[^'\\])*')|("(?:\\.|[^"\\])*")|(`(?:\\.|[^`\\])*`)/g,
-      (m) => m[0] + ' '.repeat(m.length - 2) + m[m.length - 1]);
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-const ENTITIES_CODE = stripComments(ENTITIES);
-const CONTENT_BRACES = blankStringContents(CONTENT_CODE);
-const ENTITIES_BRACES = blankStringContents(ENTITIES_CODE);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
-
-/**
- * Extract the parenthesised condition of an if-statement starting at the
- * given character index of `(`. Walks parens to balance, returns the
- * inner text WITHOUT outer parens. Returns null on unbalanced input.
- * @param {string} src
- * @param {number} openIdx index of the opening `(`
- */
-function extractIfCondition(src, openIdx) {
-  if (src[openIdx] !== '(') return null;
-  let depth = 1;
-  for (let i = openIdx + 1; i < src.length; i++) {
-    const c = src[i];
-    if (c === '(') depth++;
-    else if (c === ')') {
-      depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return null;
-}
-
-/**
- * Normalise the entities.js multiplier predicate for cross-file comparison.
- * Strips ONLY `this.` (the multiplier sits inside a Player method so the
- * receiver is always `this`). Mixing receivers (e.g. `player.maxHp` inside
- * Player.takeDamage) would be a real bug — assert none remain afterwards.
- * @param {string} cond
- */
-function normaliseMultiplierPredicate(cond) {
-  return cond
-    .replace(/\s+/g, '')
-    .replace(/this\./g, '');
-}
-
-/**
- * Normalise the content.js badge predicate for cross-file comparison.
- * Strips ONLY `player.` (the badge sits inside the free function
- * getStatusEffects(player) so the receiver is always `player` — using
- * `this.` here would resolve to undefined in strict mode and crash).
- * Also strips the leading defensive `player.perks &&` short-circuit
- * since entities.js side has no such guard (receivers always have .perks
- * inside Player methods).
- * @param {string} cond
- */
-function normaliseBadgePredicate(cond) {
-  return cond
-    .replace(/\s+/g, '')
-    .replace(/^player\.perks&&/, '')
-    .replace(/player\./g, '');
-}
+const { CONTENT, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES, ENTITIES_BRACES }
+  = loadAlignmentSources(__dirname);
 
 // ─── getStatusEffects() BULWARK fx entry ──────────────────────────
 
