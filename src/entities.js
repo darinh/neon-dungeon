@@ -11220,7 +11220,18 @@ class Player {
     // CRITICAL_HIT perk gate — any player with an active matrix can crit.
     const critBonus = NEON.boosts.getBoostCritBonus(this);
     const mf = this.metaFlags || {};
-    const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus + (mf.critChanceBonus || 0);
+    // KEEN weapon prefix (+12% per stack via mods.critAdd, stored on w.critAdd
+    // by buildWeapon). Single-prefix-per-weapon constraint means stacks=1 in
+    // practice, but the additive form keeps the stack-math correct if a
+    // future change relaxes that. Applies uniformly to melee, ranged main,
+    // and the MULTI_SHOT bonus projectile (all share `critChance`).
+    //
+    // (this.critChance || 0) restores the `critical_bias` meta upgrade to
+    // the crit gate. save.js:281 writes `player.critChance += 0.04 * level`
+    // for `critical_bias`, but the field had been dropped from this
+    // computation pre-KEEN — co-located fix surfaced by adversarial review
+    // when wiring KEEN into the same expression.
+    const critChance = (this.perks.CRITICAL_HIT ? 0.15 : 0) + critBonus + (mf.critChanceBonus || 0) + (w.critAdd || 0) + (this.critChance || 0);
     const critMul = 2 + (mf.critDamageBonus || 0);
 
     // DEADEYE perk: stillness-charged attack. Apply ×DEADEYE_DMG_MUL to
