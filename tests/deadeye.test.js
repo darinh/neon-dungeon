@@ -35,6 +35,40 @@ function stripComments(src) {
     .replace(/\/\/[^\n]*/g, '');
 }
 
+// Canonical brace-walked branch extractor (mirrors execute-affix.test.js,
+// recoil-affix.test.js, mark-affix.test.js, hackware.test.js). Required
+// for absence-checks (`assert.doesNotMatch`) inside any branch that may
+// later contain nested `{...}` (an `if (x) { y; }`, an inline object
+// literal, etc.). A naive `else\s*\{[^}]*FORBIDDEN[^}]*\}` would FALSE-PASS
+// on `else { if (x) { y; } FORBIDDEN; }` because `[^}]*` cannot span the
+// inner block — the regex never matches and the absence assertion silently
+// holds. The brace walker isolates exactly one branch by counting depth.
+//
+// LIMITATION: naive depth counter — does NOT understand string/template/
+// regex literals. A `'{KO}'` inside the branch would drift the count and
+// `extractBranch` would return null, caught loudly by the
+// `assert.ok(branch, …)` guard at every call site.
+/**
+ * @param {string} src
+ * @param {RegExp} openerRe
+ */
+function extractBranch(src, openerRe) {
+  const i = src.search(openerRe);
+  if (i < 0) return null;
+  const open = src.indexOf('{', i);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(i, j + 1);
+    }
+  }
+  return null;
+}
+
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
 
 test('DEADEYE is registered in PERK_POOL with name/icon/desc/colour', () => {
@@ -179,7 +213,58 @@ test('DEADEYE moving branch cancels partial charge but does NOT clear an existin
     'DEADEYE tick moving branch must reset _steadyChargeTime to 0');
   // The moving branch must NOT clear _steadyReady — kite-then-snipe is
   // a supported play pattern and the latch persists once set.
-  assert.doesNotMatch(stripped, /else\s*\{[^}]*this\._steadyReady\s*=\s*false[^}]*\}/,
+  //
+  // Anchor on the SPECIFIC controlling if: `if (rateD < DEADEYE_MOVE_RATE
+  // && this.shockTimer <= 0) { ... } else { ... }`. Walk past the still
+  // branch, then brace-walk the matching else. A naive
+  // `assert.doesNotMatch(stripped, /else\s*\{[^}]*FORBIDDEN[^}]*\}/)`
+  // FALSE-PASSES if FORBIDDEN sits after an inner `{...}` (the KEEN
+  // affix audit failure class). Searching for the first generic
+  // `} else {` is also unsafe — a future refactor that adds an inner
+  // else (e.g. inside `if (!this._steadyReady)`) would mis-target.
+  // Pinning on the FULL controlling condition (both rateD AND shockTimer
+  // predicates, in either order) is robust to all three classes — and
+  // also forces the anchor to track the design contract that DEADEYE
+  // must NOT charge while shocked (asserted independently in test #9).
+  // We allow the two predicates in either order so a `&&` reorder
+  // doesn't break the test gratuitously.
+  const stillIfReA =
+    /if\s*\(\s*rateD\s*<\s*DEADEYE_MOVE_RATE\s*&&\s*this\.shockTimer\s*<=\s*0\s*\)\s*\{/g;
+  const stillIfReB =
+    /if\s*\(\s*this\.shockTimer\s*<=\s*0\s*&&\s*rateD\s*<\s*DEADEYE_MOVE_RATE\s*\)\s*\{/g;
+  const matchesA = stripped.match(stillIfReA) || [];
+  const matchesB = stripped.match(stillIfReB) || [];
+  const totalControllers = matchesA.length + matchesB.length;
+  // Require the controlling if to be UNIQUE in the DEADEYE tick. A
+  // duplicate would itself be a bug (dead code or inadvertent re-entry)
+  // AND would let an absence-check on the wrong copy's else false-pass.
+  // Failing loudly here is preferable to silently picking the first.
+  assert.equal(totalControllers, 1,
+    `DEADEYE controlling if must appear exactly once in the tick block (found ${totalControllers}). ` +
+    'Either the if is missing entirely (regression) or duplicated (would let the moving-branch absence check target the wrong copy).');
+  let stillStart = stripped.search(stillIfReA);
+  if (stillStart < 0) stillStart = stripped.search(stillIfReB);
+  assert.ok(stillStart >= 0,
+    'DEADEYE controlling if (rateD < DEADEYE_MOVE_RATE && this.shockTimer <= 0) must be locatable — both predicates required so an unrelated `if (rateD < DEADEYE_MOVE_RATE)` elsewhere cannot mis-target the moving-branch absence check');
+  const stillOpen = stripped.indexOf('{', stillStart);
+  let depth = 0;
+  let stillEnd = -1;
+  for (let j = stillOpen; j < stripped.length; j++) {
+    if (stripped[j] === '{') depth++;
+    else if (stripped[j] === '}') {
+      depth--;
+      if (depth === 0) { stillEnd = j; break; }
+    }
+  }
+  assert.ok(stillEnd > 0, 'controlling if body must brace-balance');
+  const afterStill = stripped.slice(stillEnd + 1);
+  const elseMatch = afterStill.match(/^\s*else\s*\{/);
+  assert.ok(elseMatch,
+    'controlling if must be paired with `else {` (no intervening else-if)');
+  const elseBranch = extractBranch(afterStill, /else\s*\{/);
+  assert.ok(elseBranch,
+    'DEADEYE moving branch (paired `else {…}`) must be locatable');
+  assert.doesNotMatch(elseBranch, /this\._steadyReady\s*=\s*false/,
     'DEADEYE tick moving branch must NOT clear _steadyReady (kite-then-snipe is intentional)');
 });
 
