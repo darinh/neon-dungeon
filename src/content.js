@@ -673,6 +673,7 @@ const WEAPON_AFFIXES = {
   SALVAGE:  { slot:'suffix', label:'of Salvage',   colour:'#44ffcc', desc:'10% chance to drop a CORE on kill', effect:'salvage' },
   LUCKY:    { slot:'suffix', label:'of Luck',      colour:'#ffdd66', desc:'8% chance to drop a bonus item on kill', effect:'lucky' },
   SIPHON:   { slot:'suffix', label:'of Siphoning', colour:'#88ff88', desc:'+1 credit per 3 hits',  effect:'siphon' },
+  TOXIC:    { slot:'suffix', label:'of Toxin',    colour:'#88dd44', desc:'Stacks poison on hit (max 5)', effect:'poison' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');
