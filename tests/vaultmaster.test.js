@@ -194,9 +194,11 @@ test('isHoard branch in game.js handles VaultCoin (same path as MagpieHoard)', (
   // exact code shape (already covered by magpie.test.js). The class-
   // of-bug here is "VaultCoin gets added but the branch silently
   // grants 0 credits because the branch doesn't read amt".
-  assert.match(GAME, /it\.isHoard[\s\S]{0,400}player\.credits\s*[+]?=/,
+  // Window widened to 800 chars (anvil/scavenger-credit-bonus PR) to
+  // accommodate the SCAVENGER bonusCreditPerPickup sanitization.
+  assert.match(GAME, /it\.isHoard[\s\S]{0,800}player\.credits\s*[+]?=/,
     'game.js pickup loop must credit player.credits from .amt on isHoard');
-  assert.match(GAME, /it\.isHoard[\s\S]{0,400}items\.splice/,
+  assert.match(GAME, /it\.isHoard[\s\S]{0,800}items\.splice/,
     'isHoard branch must splice the pickup out of items[]');
 });
 
