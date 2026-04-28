@@ -853,6 +853,22 @@ function drawHUD(player) {
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 2, r1 + 10);
 
+    // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
+    // it groups visually with the HP it protects. Gated on charges>0 — when
+    // the upgrade isn't owned (or last charge has been spent) the slot is
+    // empty. `|0` nucleation matches the saveGame/Player ctor pattern and
+    // tolerates undefined on legacy data shapes that bypassed the ctor.
+    const _nmcCompact = player._nanoMedicCharges | 0;
+    if (_nmcCompact > 0) {
+      ctx.save();
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff88aa'; ctx.font=`${fs}px monospace`;
+      ctx.textAlign='right';
+      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
+      ctx.textAlign='left';
+      ctx.restore();
+    }
+
     const mid = lx + hpW + 10;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`FLR:${_RG.floor}`, mid, r1 + 10);
@@ -976,6 +992,19 @@ function drawHUD(player) {
 
     ctx.fillStyle='#e0e0ff'; ctx.font='13px monospace';
     ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 4, y + 15);
+
+    // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
+    // it groups visually with the HP it protects. Mirrors the compact branch.
+    const _nmcLand = player._nanoMedicCharges | 0;
+    if (_nmcLand > 0) {
+      ctx.save();
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff88aa'; ctx.font='13px monospace';
+      ctx.textAlign='right';
+      ctx.fillText(`✚${_nmcLand}`, lx + 130 - 4, y + 15);
+      ctx.textAlign='left';
+      ctx.restore();
+    }
 
     const colBase = lx + 141;
     ctx.fillStyle='#aaaacc'; ctx.font='13px monospace';

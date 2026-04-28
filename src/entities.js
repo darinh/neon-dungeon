@@ -11449,6 +11449,12 @@ class Player {
     if (this.hp > 0 && NEON.behavior.tryTraumaKit(this)) {
       audio.heal();
       spawnParticles(this.x, this.y, 'EXPLOSION', '#00ffaa', 14);
+      // Mirror the +heal floater shown by second_wind / PIERCING_HEART so
+      // players see WHY their HP jumped. The heal amount is duplicated from
+      // tryTraumaKit's formula (40% maxHp, rounded) — keep the two in sync.
+      // tryTraumaKit guarantees maxHp is finite & > 0 before returning true,
+      // so the rounded value is always a safe integer here.
+      spawnDmgText(this.x, this.y, '+' + Math.round(this.maxHp * 0.4), '#ff88aa');
       _EG.msg('✚ NANO-MEDIC!', '#00ffaa');
     }
     return actual;
