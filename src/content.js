@@ -1721,6 +1721,7 @@ const FLOOR_MODIFIERS = {
   QUARTERMASTER: { label:'QUARTERMASTER', desc:'First defeat in each room drops a bonus core', colour:'#ffaa44', icon:'▣' },
   AUTONOMY:  { label:'AUTONOMY',  desc:'Hackware cooldowns reduced 25% on this floor', colour:'#88ff44', icon:'⚙' },
   CHAINREACT:{ label:'CHAINREACT',desc:'Chained defeats within 1.5s award bonus credits', colour:'#ff8866', icon:'⚡' },
+  MAGNETISM: { label:'MAGNETISM', desc:'Item pickup radius increased 50% on this floor', colour:'#bb88ff', icon:'⊛' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
