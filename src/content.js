@@ -1720,6 +1720,7 @@ const FLOOR_MODIFIERS = {
   REVERB:    { label:'REVERB',    desc:'Every 5th shot fires a free echo',     colour:'#ff66cc', icon:'♪' },
   QUARTERMASTER: { label:'QUARTERMASTER', desc:'First defeat in each room drops a bonus core', colour:'#ffaa44', icon:'▣' },
   AUTONOMY:  { label:'AUTONOMY',  desc:'Hackware cooldowns reduced 25% on this floor', colour:'#88ff44', icon:'⚙' },
+  CHAINREACT:{ label:'CHAINREACT',desc:'Chained defeats within 1.5s award bonus credits', colour:'#ff8866', icon:'⚡' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }

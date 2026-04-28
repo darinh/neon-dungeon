@@ -440,20 +440,20 @@ test('modifierProgressSuffix has a REVERB branch reading _reverbShots', () => {
 
 // ─── modifier-pool count invariants ───────────────────────────────────
 
-test('FLOOR_MODIFIERS now contains 18 entries (17 prior + AUTONOMY)', () => {
+test('FLOOR_MODIFIERS now contains 19 entries (18 prior + CHAINREACT)', () => {
   // Floor-modifier roll uses Object.keys — any addition shifts the
   // probability of every other modifier. Pin the pool size so an
   // accidental drop (or accidental duplicate) is an immediate failure.
   // Pre-WINDFALL was 13; WINDFALL→14; SIGNAL_BOOST→15; REVERB→16;
-  // QUARTERMASTER→17; AUTONOMY→18 with 7 positive (CASCADE, OVERCHARGE,
+  // QUARTERMASTER→17; AUTONOMY→18 with 8 positive (CASCADE, OVERCHARGE,
   // WINDFALL, SIGNAL_BOOST, REVERB, QUARTERMASTER, AUTONOMY) and 11
   // negative-or-neutral.
   const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
   const endIdx = CONTENT.indexOf('};', startIdx);
   const dictBody = CONTENT.slice(startIdx, endIdx);
   const keys = dictBody.match(/^\s*[A-Z_]+:\s*\{/gm) || [];
-  assert.equal(keys.length, 18,
-    `FLOOR_MODIFIERS must contain 18 entries after AUTONOMY added; found ${keys.length}`);
+  assert.equal(keys.length, 19,
+    `FLOOR_MODIFIERS must contain 19 entries after CHAINREACT added; found ${keys.length}`);
 });
 
 // ─── runtime simulation: extracted REVERB block exhibits gating ──────
