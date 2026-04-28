@@ -2208,6 +2208,42 @@ class Enemy {
       _EG.player.hp = Math.min(_EG.player.maxHp, _EG.player.hp + 5);
       spawnDmgText(_EG.player.x, _EG.player.y, '+5', '#88ff44');
     }
+    // CASCADE floor modifier — first POSITIVE floor modifier in the pool.
+    // Each qualifying defeat within 4 tiles of the player releases a
+    // medical pulse that heals +5 HP. Encourages aggressive engagement
+    // (the heal is positional — camping at long range earns nothing).
+    //
+    // Gates:
+    //   _EG.modifier === 'CASCADE' — modifier-roll only; off-floor
+    //     (boss floors, floor 1) and other modifiers fall through.
+    //   !this.isShard — SPLITTER shard chains would let one entry kill
+    //     produce 2-4 heals from a single engagement; cap to one.
+    //   !isSummon — summoned phantoms / GHOST_PROJECTOR replays would
+    //     turn a SUMMONER farm into a permanent regen aura. Mirrors
+    //     the elite/boss-core-drop and PIERCING_HEART/LUCKY/SALVAGE
+    //     gates upstream.
+    //   dist(player, this) < 4 — the positional condition. 4-tile
+    //     radius (~half a small room) keeps the heal coupled to the
+    //     player's actual engagement, not floor-wide passive regen.
+    //
+    // Heal value 5 = ~6% of an 80-HP base; comparable to SCAVENGER_NANITES
+    // (5 @ 10% chance) but unconditional within radius. Strong floor
+    // modifier — comparable to FORTIFIED's challenge — but RNG-rolled
+    // 1/12 per non-boss floor so it's a treat, not a baseline.
+    //
+    // No combat-suppression gate (e.g. !isBoss) — the design intent is
+    // that finishing a boss within melee range IS rewarded with a
+    // pulse, mirroring how VAMPIRIC and PIERCING_HEART have no boss
+    // gates.
+    if (_EG.modifier === 'CASCADE' && !this.isShard && !isSummon
+        && dist(_EG.player.x, _EG.player.y, this.x, this.y) < 4) {
+      const _csp = _EG.player;
+      if (_csp.hp < _csp.maxHp) {
+        _csp.hp = Math.min(_csp.maxHp, _csp.hp + 5);
+        spawnDmgText(_csp.x, _csp.y - 0.4, '+5', '#44ff88');
+      }
+      spawnParticles(this.x, this.y, 'MUZZLE', '#44ff88', 5);
+    }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       _EG.player.adrenalineTimer = 2;
