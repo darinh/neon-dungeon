@@ -2287,6 +2287,49 @@ class Enemy {
         spawnParticles(this.x, this.y, 'MUZZLE', '#a866ff', 5);
       }
     }
+    // SIGNAL_BOOST floor modifier — fourth positive modifier in the pool,
+    // opening a "tactical/utility" lane (CASCADE=heal, OVERCHARGE=damage,
+    // WINDFALL=economy, SIGNAL_BOOST=ability uptime). Every 5th qualifying
+    // defeat instantly clears the player's hackware cooldown, so hackware-
+    // using builds get a "free" extra activation roughly every 5 kills.
+    //
+    // Tempo: every 5th kill mirrors OVERCHARGE/WINDFALL so players already
+    // attuned to that cadence recognise the rhythm.
+    //
+    // Gates (mirror WINDFALL):
+    //   _EG.modifier === 'SIGNAL_BOOST' — modifier-roll only; off-floor and
+    //     other modifiers fall through. Boss floors / floor 1 are
+    //     modifier-free (game.js:184) so no isBoss gate needed.
+    //   !this.isShard — SPLITTER shard chains would let one entry kill
+    //     accelerate the counter unfairly; cap to one tick per top-level
+    //     enemy.
+    //   !isSummon — SUMMONER farming would otherwise turn the floor into
+    //     a free-cooldown fountain. Mirrors CASCADE/SALVAGE/PIERCING_HEART
+    //     gating upstream.
+    //
+    // Counter-vs-effect split: counter ticks UNCONDITIONALLY (so the HUD
+    // progress suffix stays consistent and players see the rhythm even
+    // without hackware), but the cooldown reset + floater are gated on
+    // `player.hackware` being truthy. A player who PICKS UP hackware mid-
+    // floor at counter=4 thus gets the next reset immediately, instead
+    // of having to re-build the rhythm from scratch.
+    //
+    // Counter scope: per-RUN (`player._signalBoostKills`), persisted in
+    // saveGame's explicit-enum block + restored in continueGame so a
+    // quit-and-resume on a SIGNAL_BOOST floor preserves the rhythm.
+    // Increment ONLY on SIGNAL_BOOST floors so the counter doesn't drift
+    // on non-SIGNAL_BOOST floors and produce a surprise instant-reset on
+    // the next SIGNAL_BOOST floor (per stored memory 'positive floor
+    // modifiers').
+    if (_EG.modifier === 'SIGNAL_BOOST' && !this.isShard && !isSummon) {
+      const _sbp = _EG.player;
+      _sbp._signalBoostKills = (_sbp._signalBoostKills || 0) + 1;
+      if (_sbp._signalBoostKills % 5 === 0 && _sbp.hackware) {
+        _sbp.hackwareCooldown = 0;
+        spawnDmgText(this.x, this.y - 0.4, '↻ HACKWARE', '#00ddff');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#00ddff', 5);
+      }
+    }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       _EG.player.adrenalineTimer = 2;
@@ -10866,6 +10909,7 @@ class Player {
   /** @type {any} */ _piercingHearts;
   /** @type {any} */ _overchargeShots;
   /** @type {any} */ _windfallKills;
+  /** @type {any} */ _signalBoostKills;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
   /** @type {any} */ adrenalineTimer;

@@ -1705,6 +1705,7 @@ const FLOOR_MODIFIERS = {
   CASCADE:   { label:'CASCADE',   desc:'Defeats nearby release medical pulse', colour:'#44ff88', icon:'♥' },
   OVERCHARGE:{ label:'OVERCHARGE',desc:'Every 5th shot guaranteed crit',        colour:'#ffee66', icon:'⚡' },
   WINDFALL:  { label:'WINDFALL',  desc:'Every 5th defeat drops a bonus core',   colour:'#a866ff', icon:'◆' },
+  SIGNAL_BOOST: { label:'SIGNAL_BOOST', desc:'Every 5th defeat resets hackware', colour:'#00ddff', icon:'↻' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }

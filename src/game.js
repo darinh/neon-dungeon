@@ -1033,6 +1033,13 @@ const game = {
         // mid-floor and the next 4 kills would lose their bonus slot).
         // Mirrors the OVERCHARGE explicit-enum pattern.
         _windfallKills: p._windfallKills || 0,
+        // SIGNAL_BOOST floor modifier — per-run kill counter, every 5th
+        // defeat instantly clears the player's hackware cooldown (effect
+        // gated on player.hackware; counter ticks unconditionally so the
+        // HUD progress suffix stays consistent). Persisted so save/resume
+        // on a SIGNAL_BOOST floor preserves the rhythm. Mirrors the
+        // WINDFALL explicit-enum pattern.
+        _signalBoostKills: p._signalBoostKills || 0,
         // trauma_kit panic-button charges — per-run counter seeded by
         // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
         // Continue mid-run preserves remaining charges (otherwise a
@@ -1164,6 +1171,9 @@ const game = {
     // WINDFALL per-run kill counter — restore from save (defaults to 0
     // for older saves that predate the field; mirrors OVERCHARGE).
     p._windfallKills = s._windfallKills || 0;
+    // SIGNAL_BOOST per-run kill counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors WINDFALL).
+    p._signalBoostKills = s._signalBoostKills || 0;
     // trauma_kit panic-button charges — restore from save when present.
     // For saves produced BEFORE this PR shipped, the explicit field is
     // absent (`s._nanoMedicCharges == null`); we fall back to the

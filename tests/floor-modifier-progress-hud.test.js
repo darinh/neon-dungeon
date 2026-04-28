@@ -125,6 +125,21 @@ test('helper handles WINDFALL — reads _windfallKills with |0 and returns N/5',
     'WINDFALL branch must format as " N/5" using cnt % 5');
 });
 
+test('helper handles SIGNAL_BOOST — reads _signalBoostKills with |0 and returns N/5', () => {
+  const body = extractHelperBody();
+  // SIGNAL_BOOST branch must read the canonical per-RUN counter from
+  // src/entities.js (Enemy.die increments `_signalBoostKills`). The
+  // counter ticks unconditionally (effect gating is on `player.hackware`,
+  // not on the counter) so the HUD progress suffix surfaces the rhythm
+  // even for builds without hackware equipped.
+  assert.match(body,
+    /SIGNAL_BOOST[\s\S]*?_signalBoostKills\s*\|\s*0/,
+    'SIGNAL_BOOST branch must read player._signalBoostKills with |0 nucleation');
+  assert.match(body,
+    /SIGNAL_BOOST[\s\S]*?%\s*5[\s\S]*?\/5/,
+    'SIGNAL_BOOST branch must format as " N/5" using cnt % 5');
+});
+
 test('helper guards against null/undefined modKey and player', () => {
   const body = extractHelperBody();
   // A defensive early-return prevents a stray HUD call during boot or
@@ -246,6 +261,15 @@ test('runtime: helper sandbox produces correct N/5 for OVERCHARGE counter values
   assert.equal(fn('WINDFALL', { _windfallKills: 4 }), ' 4/5');
   assert.equal(fn('WINDFALL', { _windfallKills: 5 }), ' 0/5');
   assert.equal(fn('WINDFALL', {}), ' 0/5');
+
+  // SIGNAL_BOOST mirrors OVERCHARGE/WINDFALL — counter ticks unconditionally
+  // so HUD progress is consistent even on hackware-less builds.
+  assert.equal(fn('SIGNAL_BOOST', { _signalBoostKills: 0 }), ' 0/5');
+  assert.equal(fn('SIGNAL_BOOST', { _signalBoostKills: 3 }), ' 3/5');
+  assert.equal(fn('SIGNAL_BOOST', { _signalBoostKills: 5 }), ' 0/5');
+  assert.equal(fn('SIGNAL_BOOST', { _signalBoostKills: 11 }), ' 1/5');
+  assert.equal(fn('SIGNAL_BOOST', {}), ' 0/5');
+  assert.equal(fn('SIGNAL_BOOST', { _signalBoostKills: NaN }), ' 0/5');
 
   // Non-counter modifiers return '' (badge unchanged)
   assert.equal(fn('CASCADE', { _overchargeShots: 4, _windfallKills: 4 }), '');
