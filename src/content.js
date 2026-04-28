@@ -2296,8 +2296,22 @@ function getStatusEffects(player) {
   if (player.perks.ENERGY_SHIELD && player.energyShield) {
     fx.push({ id: 'shield-up', icon: '🛡', label: 'UP', colour: '#4488ff' });
   }
-  // Nano Regen (only show when actively healing)
-  if ((player.upgrades.NANO_REGEN || 0) > 0 && player.hp < player.maxHp) {
+  // Nano Regen — extended in PR (after PR #282) to also surface the
+  // regenerator meta-upgrade's active heal window (player.regenPerSec
+  // controlled by metaFlags.regenerator; tickOutOfCombatRegen at
+  // meta/behavior.js:85-90 actually heals when _outOfCombatTimer > 3).
+  // Both systems heal HP-while-low and feel identical to the player, so
+  // a single ♻ REGEN badge unifies them. NANO_REGEN heals always while
+  // hp<maxHp; regenerator heals only after the 3s out-of-combat grace
+  // period — the badge reflects the actual healing state, not just
+  // ownership, so players see when regen is genuinely ticking and not
+  // before. The 3s OOC grace itself is intentionally NOT surfaced as a
+  // separate "waiting" state in this PR (would be HUD noise across most
+  // engagements); could be added in a follow-up if needed.
+  const _nanoRegen = (player.upgrades.NANO_REGEN || 0) > 0;
+  const _metaRegen = (player.regenPerSec || 0) > 0
+    && (player._outOfCombatTimer || 0) > 3;
+  if ((_nanoRegen || _metaRegen) && player.hp < player.maxHp) {
     fx.push({ id: 'regen', icon: '♻', label: 'REGEN', colour: '#00ff88' });
   }
   // Dash cooldown
