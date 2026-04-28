@@ -11801,6 +11801,28 @@ class Player {
       const mul = 1 + Math.min(1, still / HUNT_MAX_STILL) * HUNT_MAX_BONUS;
       actual = Math.max(1, Math.round(actual * mul));
     }
+    // HARDENED floor modifier: reactive plating — passive 20% damage
+    // reduction on this floor. Defensive positive mirror to FRAGILE
+    // (×1.3 above) and the only floor-modifier-side defensive bonus
+    // in the pool (the other 9 positive modifiers are offensive /
+    // economy / uptime). Applied AFTER the offensive amps
+    // (CORROSIVE / FRAGILE / HUNTER above) so the reduction composes
+    // on the post-amp value — mathematically irrelevant in practice
+    // because floor modifiers are mutually exclusive per floor (only
+    // one rolls), but the order keeps the contract documented and
+    // ready for any future stacking design. Gated on `!options.ignoreDefense`
+    // per the env-DoT-damage-gate rule (Plasma burnDps*dt, Toxic
+    // toxDps*dt, Arc Grid, Disruption Field, Frost Patch, Proximity
+    // Mine ignoreDefense path, CRAWLER burn DoT) — without the gate,
+    // Math.max(1, Math.round(...)) would inflate ~0.13/frame env DoT
+    // to ~1/frame = ~60 DPS instakill at 60 FPS. Same gate pattern as
+    // CORROSIVE / FRAGILE / HUNTER above. Math.max(1, ...) preserves
+    // the direct-hit minimum-1 contract (a 1-dmg hit stays 1 dmg —
+    // HARDENED never trivialises a hit to 0 even in the rounding
+    // edge case where 1 * 0.8 = 0.8 → round → 1).
+    if (_EG.modifier === 'HARDENED' && !options.ignoreDefense) {
+      actual = Math.max(1, Math.round(actual * 0.8));
+    }
     // GLASS_CANNON perk: paired defensive cost for the +30% ATK amp in
     // effectiveAtk(). +25% incoming damage on direct hits; gated on
     // !options.ignoreDefense per the env-DoT-damage-gate rule (Plasma
