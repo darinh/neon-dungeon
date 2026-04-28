@@ -21,6 +21,50 @@ const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
+// Strip JS comments before regex assertions so a `// if (enemy.isBoss) continue;`
+// commented-out guard can't satisfy a gate-presence check (mark-affix /
+// reverse-polarity / bulwark / hot-hand / glass-cannon precedent).
+/** @param {string} src */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+// Brace-balanced extraction of a block opened by `openerRe`. Returns the
+// substring from the opener through its matching `}`, exclusive of trailing
+// content. Critical for the recoil branch tests: the previous regex-only
+// extraction over-captured into the EXECUTE / MARK branches that follow,
+// so a refactor that removed a gate from recoil but kept it in execute
+// would silently pass. The brace walker isolates the recoil branch only.
+//
+// LIMITATION: this is a naive depth counter — it does NOT understand string
+// literals, template literals, or regex literals. A future addition like
+// `spawnDmgText(x, y, '{KO}', '#fff')` inside the recoil branch would drift
+// the brace count and `extractBranch` would return null. That failure is
+// caught loudly by the `assert.ok(recoilBranch, ...)` guard at every call
+// site — it fails fast with a clear message rather than silently passing.
+// If the source ever needs braces inside string literals here, upgrade this
+// helper to a real lexer.
+/**
+ * @param {string} src
+ * @param {RegExp} openerRe
+ */
+function extractBranch(src, openerRe) {
+  const i = src.search(openerRe);
+  if (i < 0) return null;
+  const open = src.indexOf('{', i);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(i, j + 1);
+    }
+  }
+  return null;
+}
+
 test('RECOIL registered in WEAPON_AFFIXES with slot/label/colour/desc/effect', () => {
   // The single source of truth for the affix table — drives display
   // name composition (content.js:1338), effect routing
@@ -43,19 +87,21 @@ test('recoil branch wired in applyHitEffects', () => {
   // shock so it processes through the same hitCtx path. The non-proc
   // gate is on the caller side (entities.js ~1529: `if (!ctx.isProc)
   // applyHitEffects(...)`) so chain procs don't recoil — same as the
-  // other suffixes.
-  assert.ok(/else if \(eff === 'recoil'\)/.test(ENTITIES),
-    'applyHitEffects must contain an `eff === \'recoil\'` branch');
+  // other suffixes. Strip comments first so a `// else if (eff === 'recoil')`
+  // line commented out can't satisfy the gate.
+  assert.ok(/else if \(eff === 'recoil'\)/.test(stripComments(ENTITIES)),
+    'applyHitEffects must contain an `eff === \'recoil\'` branch in EXECUTABLE code');
 });
 
 test('RECOIL skips bosses (designed-arena protection)', () => {
   // Mirrors SHOCK_PULSE (entities.js:8748) and KNOCK_PULSE — bosses
   // are stationary by design (SENTINEL Phase 2 stand, OMEGA platform)
   // and their phase tuning assumes positional invariants.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  assert.ok(/if \(enemy\.isBoss\)\s*continue;/.test(block[0]),
-    'recoil branch must skip bosses with `if (enemy.isBoss) continue;`');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  assert.ok(/if \(enemy\.isBoss\)\s*continue;/.test(body),
+    'recoil branch must skip bosses with `if (enemy.isBoss) continue;` in EXECUTABLE code');
 });
 
 test('RECOIL skips disguised mimics (no ambush leak)', () => {
@@ -63,10 +109,11 @@ test('RECOIL skips disguised mimics (no ambush leak)', () => {
   // (entities.js ~8584), and SHOCK_PULSE (entities.js ~8742). Visible
   // displacement of a disguised mimic would betray its position before
   // the proximity-reveal trigger fires.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  assert.ok(/if \(enemy\._disguised\)\s*continue;/.test(block[0]),
-    'recoil branch must skip _disguised mimics');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  assert.ok(/if \(enemy\._disguised\)\s*continue;/.test(body),
+    'recoil branch must skip _disguised mimics in EXECUTABLE code');
 });
 
 test('RECOIL skips phased WRAITH/TUNNELLER (intangible mob defensive guard)', () => {
@@ -75,10 +122,11 @@ test('RECOIL skips phased WRAITH/TUNNELLER (intangible mob defensive guard)', ()
   // practice applyHitEffects never sees them. But a future damage
   // path could bypass those filters; recoil must independently
   // defend against displacing an intangible mob.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  assert.ok(/if \(enemy\._wrPhased\)\s*continue;/.test(block[0]),
-    'recoil branch must skip _wrPhased mobs');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  assert.ok(/if \(enemy\._wrPhased\)\s*continue;/.test(body),
+    'recoil branch must skip _wrPhased mobs in EXECUTABLE code');
 });
 
 test('RECOIL has per-enemy ICD with positive duration (prevents perma-shove from rapid-fire)', () => {
@@ -86,14 +134,15 @@ test('RECOIL has per-enemy ICD with positive duration (prevents perma-shove from
   // perma-shove a single enemy across the room. Pattern mirrors
   // _shockICD (entities.js ~1192). ICD should be ≥ 0.2s (2-3 hits/sec
   // ceiling on per-target recoil) to avoid trivializing kiting.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  const icdRead = /const icd = enemy\._recoilICD \|\| 0;/.test(block[0]);
-  const icdGate = /if \(icd > 0\)\s*continue;/.test(block[0]);
-  const icdSet = block[0].match(/enemy\._recoilICD = (\d*\.?\d+);/);
-  assert.ok(icdRead, 'recoil must read enemy._recoilICD');
-  assert.ok(icdGate, 'recoil must early-return when ICD > 0');
-  assert.ok(icdSet, 'recoil must SET enemy._recoilICD after applying');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  const icdRead = /const icd = enemy\._recoilICD \|\| 0;/.test(body);
+  const icdGate = /if \(icd > 0\)\s*continue;/.test(body);
+  const icdSet = body.match(/enemy\._recoilICD = (\d*\.?\d+);/);
+  assert.ok(icdRead, 'recoil must read enemy._recoilICD in EXECUTABLE code');
+  assert.ok(icdGate, 'recoil must early-return when ICD > 0 in EXECUTABLE code');
+  assert.ok(icdSet, 'recoil must SET enemy._recoilICD after applying in EXECUTABLE code');
   const dur = parseFloat(icdSet[1]);
   assert.ok(dur >= 0.2, `recoil ICD must be >= 0.2s to prevent perma-shove (got ${dur}s)`);
   assert.ok(dur <= 1.0, `recoil ICD should stay <= 1.0s to feel responsive (got ${dur}s)`);
@@ -103,8 +152,8 @@ test('RECOIL ICD ticks down per frame in tickStatusEffects', () => {
   // Without a tick-down the ICD would never decay and a single hit
   // would lock the enemy out of recoil forever. Same pattern as the
   // adjacent _shockICD decay.
-  assert.ok(/if \(enemy\._recoilICD > 0\) enemy\._recoilICD -= dt;/.test(ENTITIES),
-    'enemy._recoilICD must decay per frame alongside _shockICD');
+  assert.ok(/if \(enemy\._recoilICD > 0\) enemy\._recoilICD -= dt;/.test(stripComments(ENTITIES)),
+    'enemy._recoilICD must decay per frame alongside _shockICD in EXECUTABLE code');
 });
 
 test('RECOIL knockback uses wall-aware swept-step pattern (not single-snap)', () => {
@@ -113,18 +162,19 @@ test('RECOIL knockback uses wall-aware swept-step pattern (not single-snap)', ()
   // ~0.4 tile so single-snap would technically be safe — but we use
   // the swept pattern anyway for consistency with SHOCK_PULSE and to
   // get free wall-sliding (axis-independent isPassable per step).
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
   // Look for the swept-step signature: STEP loop with two axis flags
   // and per-axis isPassable checks.
-  assert.ok(/const STEP = 0\.\d+;/.test(block[0]),
-    'recoil must define a STEP increment (swept-step pattern)');
-  assert.ok(/for \(let s = 0; s < steps; s\+\+\)/.test(block[0]),
-    'recoil must loop in steps for the sweep');
-  assert.ok(/isPassable\(map\[fyK\]\[fxK\]\)/.test(block[0]) && /isPassable\(map\[yfK\]\[xfK\]\)/.test(block[0]),
-    'recoil must check x and y axes independently against isPassable');
-  assert.ok(/if \(!xOk && !yOk\) break;/.test(block[0]),
-    'recoil must break when both axes are blocked');
+  assert.ok(/const STEP = 0\.\d+;/.test(body),
+    'recoil must define a STEP increment (swept-step pattern) in EXECUTABLE code');
+  assert.ok(/for \(let s = 0; s < steps; s\+\+\)/.test(body),
+    'recoil must loop in steps for the sweep in EXECUTABLE code');
+  assert.ok(/isPassable\(map\[fyK\]\[fxK\]\)/.test(body) && /isPassable\(map\[yfK\]\[xfK\]\)/.test(body),
+    'recoil must check x and y axes independently against isPassable in EXECUTABLE code');
+  assert.ok(/if \(!xOk && !yOk\) break;/.test(body),
+    'recoil must break when both axes are blocked in EXECUTABLE code');
 });
 
 test('RECOIL knockback distance is small (≤ 1 tile per hit)', () => {
@@ -132,10 +182,11 @@ test('RECOIL knockback distance is small (≤ 1 tile per hit)', () => {
   // push would chain-shove enemies off-screen on rapid weapons. Keep
   // it cosmetic/utility — useful for canceling a melee swing, not
   // for trivializing positioning.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  const m = block[0].match(/const KNOCK = (\d*\.?\d+);/);
-  assert.ok(m, 'recoil must define a KNOCK distance constant');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  const m = body.match(/const KNOCK = (\d*\.?\d+);/);
+  assert.ok(m, 'recoil must define a KNOCK distance constant in EXECUTABLE code');
   const knock = parseFloat(m[1]);
   assert.ok(knock > 0, `recoil KNOCK must be > 0 (got ${knock})`);
   assert.ok(knock <= 1.0, `recoil KNOCK must be <= 1.0 tile per hit to avoid trivializing positioning (got ${knock})`);
@@ -145,12 +196,13 @@ test('RECOIL has a final combined-tile guard (anti-corner-tunnel)', () => {
   // Per stored memory `knockback sweeping`: even with axis-independent
   // checks, a diagonal-corner case can land in a wall tile. The final
   // combined-tile guard re-verifies the resting tile.
-  const block = ENTITIES.match(/else if \(eff === 'recoil'\)[\s\S]*?\/\/ 'explode' is handled in applyOnKill/);
-  assert.ok(block, 'recoil branch must be parseable');
-  assert.ok(/const finalFx = Math\.floor\(curX\), finalFy = Math\.floor\(curY\);/.test(block[0]),
-    'recoil must compute final tile floor coords');
-  assert.ok(/isPassable\(map\[finalFy\]\[finalFx\]\)/.test(block[0]),
-    'recoil must verify final tile is passable before committing the displacement');
+  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
+  const body = stripComments(recoilBranch);
+  assert.ok(/const finalFx = Math\.floor\(curX\), finalFy = Math\.floor\(curY\);/.test(body),
+    'recoil must compute final tile floor coords in EXECUTABLE code');
+  assert.ok(/isPassable\(map\[finalFy\]\[finalFx\]\)/.test(body),
+    'recoil must verify final tile is passable before committing the displacement in EXECUTABLE code');
 });
 
 test('RECOIL is non-proc-gated by caller (chain/explode procs do not stack-shove)', () => {
@@ -159,8 +211,8 @@ test('RECOIL is non-proc-gated by caller (chain/explode procs do not stack-shove
   // ctx);`). Chain lightning and detonate explosions call back into
   // takeDamage with isProc:true so the recoil branch is never reached
   // for procs — preventing chain-shove cascades.
-  assert.ok(/if \(!ctx\.isProc\) applyHitEffects\(this, actual, ctx\);/.test(ENTITIES),
-    'applyHitEffects must remain gated on !ctx.isProc at the call site');
+  assert.ok(/if \(!ctx\.isProc\) applyHitEffects\(this, actual, ctx\);/.test(stripComments(ENTITIES)),
+    'applyHitEffects must remain gated on !ctx.isProc at the call site in EXECUTABLE code');
 });
 
 test('sw.js cache version >= v201 (RECOIL adds runtime behavior)', () => {

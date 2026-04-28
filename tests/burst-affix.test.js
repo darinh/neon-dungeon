@@ -22,20 +22,32 @@ const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
 
+// Strip JS comments before regex assertions so a `// BURST: { ... }` block
+// comment or a `// if (affixId === 'BURST' && baseWeapon.melee) return false`
+// commented-out gate can't satisfy a presence check (mark-affix /
+// reverse-polarity / bulwark / hot-hand / glass-cannon / execute / recoil
+// precedent).
+/** @param {string} src */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+const CONTENT_NC = stripComments(CONTENT);
+
 test('BURST is registered in WEAPON_AFFIXES as a prefix with all five required fields', () => {
   // slot:'prefix' is critical — slot is what gates name placement, the prefix
   // mod-application loop, and AFFIX_PREFIXES filtering. A typo to 'suffix'
   // would silently route BURST through the on-hit-effect path instead.
   const re = /BURST:\s*\{\s*slot:\s*'prefix'\s*,\s*label:\s*'[^']+'\s*,\s*colour:\s*'#[0-9a-fA-F]+'\s*,\s*desc:\s*'[^']+'\s*,\s*mods:\s*\{/;
-  assert.match(CONTENT, re, "BURST must be a prefix with label/colour/desc/mods declared");
+  assert.match(CONTENT_NC, re, "BURST must be a prefix with label/colour/desc/mods declared in EXECUTABLE code");
 });
 
 test('BURST mods set rate>1, countAdd:1, dmg<1, range<1 (close-range-shotgun trade)', () => {
   // The whole point of BURST is the trade: gain rate + extra projectile,
   // pay with damage and range. If any of these flips sign the affix becomes
   // either a free upgrade (no penalty) or unplayable (no benefit).
-  const m = CONTENT.match(/BURST:\s*\{[^}]*mods:\s*\{([^}]+)\}/);
-  assert.ok(m, 'BURST mods block must be parseable');
+  const m = CONTENT_NC.match(/BURST:\s*\{[^}]*mods:\s*\{([^}]+)\}/);
+  assert.ok(m, 'BURST mods block must be parseable in EXECUTABLE code');
   const mods = m[1];
   const rate = parseFloat((mods.match(/rate:\s*([0-9.]+)/) || [])[1]);
   const countAdd = parseInt((mods.match(/countAdd:\s*(\d+)/) || [])[1], 10);
@@ -52,7 +64,7 @@ test('affixEligible excludes BURST on melee weapons (mirrors TWIN — countAdd i
   // no-op while the dmg/range nerfs still applied — strictly worse than no
   // affix. TWIN already carries this exclusion; BURST must too.
   const re = /if\s*\(\s*affixId\s*===\s*'BURST'\s*&&\s*baseWeapon\.melee\s*\)\s*return\s+false/;
-  assert.match(CONTENT, re, 'affixEligible must reject BURST when baseWeapon.melee is true');
+  assert.match(CONTENT_NC, re, 'affixEligible must reject BURST when baseWeapon.melee is true in EXECUTABLE code');
 });
 
 test('sw.js cache version bumped to v207 or later (BURST adds new content.js code)', () => {
