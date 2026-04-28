@@ -1103,6 +1103,35 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       enemy._recoilICD = 0.35;
       spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffaa66', 4);
     }
+    else if (eff === 'stagger') {
+      // STAGGER 'of Staggering' suffix — brief slow on hit gated by a
+      // per-enemy ICD. Distinct from FROST: FROST is one strong slow
+      // pulse (factor 0.7, duration 2s, no ICD) so rapid-fire weapons
+      // keep refreshing the same flat slow. STAGGER is short bursts
+      // (factor 0.5, duration 0.4s) gated by a 0.5s ICD so the effective
+      // speed ceiling under sustained DPS is ~80% (0.4s @ 0.5x + 0.1s @
+      // 1.0x per cycle) — a different rhythm: more responsive micro-
+      // stutter on every successful hit, less raw uptime than FROST.
+      // Per-enemy _staggerICD prevents single-enemy perma-slow from
+      // chain-fire weapons; the ICD ticks down in Enemy.update.
+      // Skip phased mobs (defensive — projectile prefilters at
+      // src/content.js:3411 + src/entities.js:9588 already block them,
+      // but if a future damage path skips those filters the stagger
+      // shouldn't visibly stutter an intangible mob).
+      if (enemy._wrPhased) continue;
+      const icd = enemy._staggerICD || 0;
+      if (icd > 0) continue;
+      // Stronger-wins overlap (matches STATIC_FIELD pattern at
+      // src/content.js:1273): never truncate a longer/stronger existing
+      // slow, but apply STAGGER's stronger factor if it beats the
+      // current one. Bosses get the full effect — bosses have no
+      // movement-based defensive design that 0.5x speed bypasses, and
+      // the ICD already rate-limits the impact.
+      enemy.slowTimer = Math.max(enemy.slowTimer || 0, 0.4);
+      enemy.slowFactor = Math.min(enemy.slowFactor || 1, 0.5);
+      enemy._staggerICD = 0.5;
+      spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#88aaff', 3);
+    }
     else if (eff === 'execute') {
       // EXECUTE 'of Execution' suffix — finisher: any hit that leaves a
       // non-boss enemy at or below 20% HP kills outright.
@@ -1366,6 +1395,11 @@ function tickEnemyStatusEffects(enemy, dt) {
   if (enemy._shockICD > 0) enemy._shockICD -= dt;
   // Recoil-affix knockback ICD decay (per-enemy, prevents perma-shove)
   if (enemy._recoilICD > 0) enemy._recoilICD -= dt;
+  // STAGGER 'of Staggering' affix: per-enemy hit cooldown decay (prevents
+  // rapid-fire weapons from chaining 0.4s slows into a permanent 0.5x
+  // cripple — the 0.5s ICD ensures a sustained ~80% effective speed
+  // ceiling under uninterrupted DPS, vs FROST's flat 0.7x for 2s).
+  if (enemy._staggerICD > 0) enemy._staggerICD -= dt;
   // MARK 'of Marking' affix: per-enemy mark window decay (3s on apply).
   // Unlike burn/slow, no per-tick effect — the timer is read at takeDamage
   // entry. Self-clearing (no per-floor reset needed).
@@ -1511,6 +1545,7 @@ class Enemy {
   /** @type {any} */ _spFireTimer;
   /** @type {any} */ _spFrenzy;
   /** @type {any} */ _spiralSpin;
+  /** @type {any} */ _staggerICD;
   /** @type {any} */ _summonTimer;
   /** @type {any} */ _summoned;
   /** @type {any} */ _summons;
