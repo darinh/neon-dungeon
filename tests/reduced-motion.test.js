@@ -118,23 +118,37 @@ test('REDUCED_MOTION: settings menu toggleLabels includes "REDUCED MOTION"', () 
   );
 });
 
-test('REDUCED_MOTION: CTRL_START bumped from 7 to 8 (six toggles, not five)', () => {
+test('REDUCED_MOTION: CTRL_START bumped from 7 to 10 (six toggles + two scale steppers)', () => {
   // CTRL_START is the row index where key-rebind rows begin — must equal
-  // TOGGLE_START (2) + number-of-toggles. Adding a 6th toggle without
-  // bumping this constant pushes rebind rows under the toggle row,
-  // making the last toggle invisible / unclickable.
-  // Count occurrences of CTRL_START = 8; both updateSettings and
-  // renderSettings declare it.
-  const matches = GAME_NC.match(/const\s+CTRL_START\s*=\s*8\b/g);
+  // TOGGLE_START (2) + number-of-toggles + number-of-steppers. Adding a
+  // toggle/stepper without bumping this constant pushes rebind rows
+  // under the toggle row, making the last toggle invisible / unclickable.
+  // The MINIMAP SIZE + TEXT SIZE scale-stepper rows live between toggles
+  // and rebinds, so the layout is now 6 toggles + 2 steppers and
+  // CTRL_START = STEPPER_START + STEPPER_COUNT = 8 + 2 = 10. Pinned
+  // structurally + numerically below.
+  const structural = GAME_NC.match(/const\s+CTRL_START\s*=\s*STEPPER_START\s*\+\s*STEPPER_COUNT\b/g);
   assert.ok(
-    matches && matches.length >= 2,
-    `CTRL_START must be 8 in BOTH updateSettings and renderSettings (found ${matches ? matches.length : 0} occurrences of '= 8')`
+    structural && structural.length >= 2,
+    `CTRL_START must be defined as STEPPER_START + STEPPER_COUNT in BOTH updateSettings and renderSettings (found ${structural ? structural.length : 0})`
   );
-  // And no leftover CTRL_START = 7 occurrences.
+  // Underlying constants must equal 8 and 2 in both copies.
+  const stepperStart = GAME_NC.match(/const\s+STEPPER_START\s*=\s*8\b/g);
+  const stepperCount = GAME_NC.match(/const\s+STEPPER_COUNT\s*=\s*2\b/g);
+  assert.ok(stepperStart && stepperStart.length >= 2,
+    'STEPPER_START must equal 8 in both updateSettings and renderSettings');
+  assert.ok(stepperCount && stepperCount.length >= 2,
+    'STEPPER_COUNT must equal 2 in both updateSettings and renderSettings');
+  // And no leftover CTRL_START = 7 or = 8 numeric assignments remain.
   assert.doesNotMatch(
     GAME_NC,
     /const\s+CTRL_START\s*=\s*7\b/,
     'no CTRL_START = 7 may remain — both copies must be bumped'
+  );
+  assert.doesNotMatch(
+    GAME_NC,
+    /const\s+CTRL_START\s*=\s*8\b/,
+    'no CTRL_START = 8 numeric literal may remain — both copies must use STEPPER_START + STEPPER_COUNT'
   );
 });
 

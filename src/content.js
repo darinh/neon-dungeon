@@ -2115,6 +2115,16 @@ function updateFloatingTexts(dt) {
  * @param {any} camY
  */
 function drawFloatingTexts(camX, camY) {
+  // Settings-scaled bold font for floating damage / pickup numbers.
+  // Base 15px multiplied by `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3).
+  // Both the integer fontPx AND the assembled font string are computed
+  // ONCE per call (not per text) — the loop just assigns the cached
+  // string to ctx.font. Heavy combat can have 10+ floating texts at
+  // once and this runs every frame; per-iteration template-literal
+  // allocation here would churn GC for no functional benefit.
+  // Per gpt-5.3-codex r1 review of this file.
+  const fontPx = Math.max(8, Math.round(15 * settings.textScale));
+  const fontStr = `bold ${fontPx}px monospace`;
   for (const f of floatingTexts) {
     const sx = f.x - camX, sy = f.y - camY;
     if (sx < -40 || sx > W + 40 || sy < -20 || sy > H + 20) continue;
@@ -2122,7 +2132,7 @@ function drawFloatingTexts(camX, camY) {
     ctx.globalAlpha = Math.max(0, f.life);
     ctx.shadowBlur = 6; ctx.shadowColor = f.colour;
     ctx.fillStyle = f.colour;
-    ctx.font = 'bold 15px monospace';
+    ctx.font = fontStr;
     ctx.textAlign = 'center';
     ctx.fillText(f.text, sx, sy);
     ctx.restore();
@@ -2803,8 +2813,17 @@ function drawStatusBar(player) {
 
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
   const y = layout.hudTop - (hasKeys ? 32 : 16);
-  const fs = layout.compact ? 8 : 9;
-  const maxX = W - 130 - safeRight; // stop before minimap area
+  // Settings-scaled font size. `settings.textScale` is one of
+  // TEXT_SCALE_STEPS (0.85 / 1.0 / 1.15 / 1.3); the badge height/width
+  // both derive from `fs` (height = fs+6, width = measureText+8) so
+  // scaling the font naturally rescales the whole badge box.
+  const fs = Math.max(6, Math.round((layout.compact ? 8 : 9) * settings.textScale));
+  // Reserve room for the corner minimap. The minimap is also
+  // settings-scaled (`settings.minimapScale`); `Math.round(120 * scale)`
+  // matches the MW formula in render.js drawMinimap so the badge strip
+  // never overlaps the bigger minimap when the player scales it up.
+  const minimapReserve = Math.round(120 * settings.minimapScale) + 10;
+  const maxX = W - minimapReserve - safeRight; // stop before minimap area
   let x = 14 + safeLeft;
 
   ctx.save();

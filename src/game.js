@@ -3344,12 +3344,45 @@ const game = {
   // (which `settings.resetAll()` does irreversibly).
   _settingsResetConfirm: 0,
 
+  /**
+   * Settings menu row metrics — single source of truth for both
+   * updateSettings (hit-testing) and renderSettings (drawing). The
+   * row height SHRINKS dynamically to fit `totalRows` inside the
+   * current viewport `H` so the back / reset rows don't fall off-
+   * screen on common 720-logical-pixel landscape windows. Capped at
+   * the historical defaults (28 narrow / 34 wide) so taller windows
+   * keep the legacy spacing.
+   *
+   * @param {number} totalRows
+   * @returns {{ startY:number, rowH:number }}
+   */
+  _settingsLayout(totalRows) {
+    const narrow = layout.compact;
+    const startY = narrow ? 80 : 80;        // narrow: unchanged; wide: was 100, reduced for row count
+    const desiredRowH = narrow ? 28 : 34;
+    const navHintMargin = 30;               // bottom hint sits at H - 20 + 10 padding
+    const span = Math.max(1, totalRows - 1); // last row index = totalRows - 1
+    const fitRowH = Math.floor((H - startY - navHintMargin) / span);
+    const rowH = Math.max(16, Math.min(desiredRowH, fitRowH));
+    return { startY, rowH };
+  },
+
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 8;     // row index where key rebind rows begin (6 toggles)
-    // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
+    const STEPPER_START = 8;  // row index where scale steppers begin (after 6 toggles)
+    const STEPPER_COUNT = 2;  // MINIMAP SIZE + TEXT SIZE
+    const CTRL_START = STEPPER_START + STEPPER_COUNT;  // row index where key rebind rows begin
+    // Total items: 2 sliders + 6 toggles + 2 steppers + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
+    // Compute the row metrics once. The dynamic rowH shrinks the menu
+    // to fit the current viewport H (capped at the desired default), so
+    // the back/reset rows don't fall off-screen on common 720-logical-px
+    // landscape windows after the layout grew past 21 rows. See
+    // game._settingsLayout for the formula.
+    const layoutM = this._settingsLayout(totalRows);
+    const startY = layoutM.startY;
+    const rowH = layoutM.rowH;
     // Auto-expire a stale reset confirmation. Without this, a player who
     // armed the confirmation 30 seconds ago and walks away returns to a
     // settings menu where the very next Enter wipes their config.
@@ -3425,7 +3458,7 @@ const game = {
 
     // Left/right or Enter toggles display options
     const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
-    if (sel >= TOGGLE_START && sel < CTRL_START) {
+    if (sel >= TOGGLE_START && sel < STEPPER_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
         if (key) {
@@ -3438,19 +3471,60 @@ const game = {
       }
     }
 
+    // Left/right or Enter cycles scale steppers (MINIMAP SIZE / TEXT SIZE).
+    // Steppers walk through a discrete value list in `MINIMAP_SCALE_STEPS`
+    // and `TEXT_SCALE_STEPS` (defined in platform.js); right wraps to start,
+    // left wraps to end, Enter advances forward (matches toggles UX).
+    /** @type {Array<{ key:'minimapScale'|'textScale', steps:number[] }>} */
+    const stepperRows = [
+      { key: 'minimapScale', steps: MINIMAP_SCALE_STEPS },
+      { key: 'textScale',    steps: TEXT_SCALE_STEPS },
+    ];
+    if (sel >= STEPPER_START && sel < CTRL_START) {
+      const row = stepperRows[sel - STEPPER_START];
+      if (row) {
+        /** @type {any} */
+        const s = settings;
+        const cur = row.steps.indexOf(snapToSteps(s[row.key], row.steps));
+        const safe = cur < 0 ? 0 : cur;
+        if (jp(ALT_KEYS.left) || jp(km('left'))) {
+          s[row.key] = row.steps[(safe - 1 + row.steps.length) % row.steps.length];
+          if (row.key === 'minimapScale') _RG._minimapDirty = true;
+          settings.save();
+          audio.menuSelect();
+        } else if (jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
+          s[row.key] = row.steps[(safe + 1) % row.steps.length];
+          if (row.key === 'minimapScale') _RG._minimapDirty = true;
+          settings.save();
+          audio.menuSelect();
+        }
+      }
+    }
+
     // Mouse click hit-testing
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
-      const startY = narrow ? 80 : 100;
-      const rowH = narrow ? 28 : 34;
+      // Use the SAME dynamic row metrics as renderSettings — declared
+      // at the top of updateSettings (startY/rowH locals). Re-computing
+      // here would risk silent drift if one path is updated and the
+      // other isn't.
       const sliderX = narrow ? 120 : 200;
       const sliderW = narrow ? (W - 240) : 400;
       const mx = mouse.x, my = mouse.y;
+      // Hit-test band, capped at rowH-1 so adjacent rows can never
+      // produce overlapping click regions on shrunk-rowH viewports
+      // (per gpt-5.3-codex r2 review). Default band is `[ry-8, ry+14]`
+      // (22 px tall, asymmetric to favour the text below the baseline);
+      // when rowH < 22 the band shrinks proportionally so row N+1
+      // can't poach a strip of row N.
+      const hitH = Math.min(22, Math.max(2, rowH - 1));
+      const hitTop = Math.min(8, Math.floor(hitH * 8 / 22));
+      const hitBot = hitH - hitTop;
 
       // Slider click
       for (let i = 0; i < 2; i++) {
         const ry = startY + i * rowH;
-        if (my >= ry - 8 && my <= ry + 14 && mx >= sliderX && mx <= sliderX + sliderW) {
+        if (my >= ry - hitTop && my <= ry + hitBot && mx >= sliderX && mx <= sliderX + sliderW) {
           let val = (mx - sliderX) / sliderW;
           val = Math.max(0, Math.min(1, val));
           if (i === 0) audio.setSfxVolume(val);
@@ -3466,7 +3540,7 @@ const game = {
       // Toggle rows click
       for (let i = 0; i < toggleKeys.length; i++) {
         const ry = startY + (TOGGLE_START + i) * rowH;
-        if (my >= ry - 8 && my <= ry + 14) {
+        if (my >= ry - hitTop && my <= ry + hitBot) {
           this._settingsSel = TOGGLE_START + i;
           this._settingsResetConfirm = 0;
           const tk = toggleKeys[i];
@@ -3480,10 +3554,33 @@ const game = {
           return;
         }
       }
+      // Stepper rows click — left half steps backward, right half steps
+      // forward. Mirrors the keyboard ◀/▶ semantics (with Enter = forward).
+      for (let i = 0; i < stepperRows.length; i++) {
+        const ry = startY + (STEPPER_START + i) * rowH;
+        if (my >= ry - hitTop && my <= ry + hitBot) {
+          this._settingsSel = STEPPER_START + i;
+          this._settingsResetConfirm = 0;
+          const row = stepperRows[i];
+          if (row) {
+            /** @type {any} */
+            const s = settings;
+            const cur = row.steps.indexOf(snapToSteps(s[row.key], row.steps));
+            const safe = cur < 0 ? 0 : cur;
+            const dir = (mx < W / 2) ? -1 : 1;
+            const next = (safe + dir + row.steps.length) % row.steps.length;
+            s[row.key] = row.steps[next];
+            if (row.key === 'minimapScale') _RG._minimapDirty = true;
+            settings.save();
+            audio.menuSelect();
+          }
+          return;
+        }
+      }
       // Rebind rows click
       for (let i = 0; i < actions.length; i++) {
         const ry = startY + (CTRL_START + i) * rowH;
-        if (my >= ry - 8 && my <= ry + 14) {
+        if (my >= ry - hitTop && my <= ry + hitBot) {
           this._settingsSel = CTRL_START + i;
           this._settingsResetConfirm = 0;
           this._settingsCapture = actions[i];
@@ -3495,7 +3592,7 @@ const game = {
       // the window arms; second click commits. Click anywhere else or
       // wait the window out → cancelled.
       const resetY = startY + (CTRL_START + actions.length) * rowH;
-      if (my >= resetY - 8 && my <= resetY + 14) {
+      if (my >= resetY - hitTop && my <= resetY + hitBot) {
         this._settingsSel = CTRL_START + actions.length;
         if (this._settingsResetConfirm > 0
             && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
@@ -3510,7 +3607,7 @@ const game = {
       }
       // Back row
       const backY = startY + (CTRL_START + actions.length + 1) * rowH;
-      if (my >= backY - 8 && my <= backY + 14) {
+      if (my >= backY - hitTop && my <= backY + hitBot) {
         this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
@@ -3557,9 +3654,14 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 8;  // matches updateSettings — 6 toggles
-    const startY = narrow ? 80 : 100;
-    const rowH = narrow ? 28 : 34;
+    const STEPPER_START = 8;        // 6 toggles before steppers
+    const STEPPER_COUNT = 2;        // MINIMAP SIZE + TEXT SIZE
+    const CTRL_START = STEPPER_START + STEPPER_COUNT;  // matches updateSettings
+    const totalRows = CTRL_START + actions.length + 2;
+    // Dynamic row metrics shared with updateSettings — see _settingsLayout.
+    const layoutM = this._settingsLayout(totalRows);
+    const startY = layoutM.startY;
+    const rowH = layoutM.rowH;
     const fs = narrow ? 13 : 16;
     const labelX = narrow ? 20 : 40;
     const sliderX = narrow ? 120 : 200;
@@ -3617,6 +3719,25 @@ const game = {
       ctx.textAlign = 'center';
       ctx.fillStyle = on ? (isSel ? '#00ff88' : '#22aa66') : (isSel ? '#ff4466' : '#884444');
       ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
+    }
+
+    // ── Scale steppers (MINIMAP SIZE + TEXT SIZE) ──
+    // Discrete-value rows rendered identically to toggles, but the centre
+    // shows the numeric multiplier (e.g. "◀ 1.00× ▶") instead of ON/OFF.
+    // The keyboard ◀/▶ + Enter handling lives in updateSettings.
+    const stepperLabels = ['MINIMAP SIZE', 'TEXT SIZE'];
+    const stepperKeys = ['minimapScale', 'textScale'];
+    for (let i = 0; i < stepperLabels.length; i++) {
+      const ry = startY + (STEPPER_START + i) * rowH;
+      const isSel = sel === STEPPER_START + i;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
+      ctx.fillText(stepperLabels[i] || '', labelX, ry);
+      ctx.textAlign = 'center';
+      const k = stepperKeys[i];
+      const v = k ? /** @type {any} */ (settings)[k] : 1;
+      ctx.fillStyle = isSel ? '#ffcc00' : '#aaaacc';
+      ctx.fillText(`◀ ${Number(v).toFixed(2)}× ▶`, W/2, ry);
     }
 
     // ── Controls section ──

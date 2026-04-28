@@ -1556,9 +1556,23 @@ function drawBiomeCard() {
  * @param {any} echoMap
  */
 function rebuildMinimapBase(dungeon, echoMap) {
-  const MW = 120, MH = 80;
+  // Corner minimap dimensions are settings-scaled. The base 120×80
+  // multiplied by `settings.minimapScale` (0.75 / 1.0 / 1.25 / 1.5).
+  // `drawMinimap` uses the SAME formula so the cache canvas size and
+  // the on-screen blit size always match.
+  const MW = Math.round(120 * settings.minimapScale);
+  const MH = Math.round(80 * settings.minimapScale);
   const pal = currentBiomePalette();
   let off = _RG._minimapCanvas;
+  // Cache invalidation: if the existing offscreen canvas was sized for
+  // a different `minimapScale` (player toggled the setting between
+  // floors), recreate at the new size. Without this, the cached canvas
+  // would be blitted at a different size than it was drawn for, causing
+  // stretched/aliased pixels.
+  if (off && (off.width !== MW || off.height !== MH)) {
+    off = null;
+    _RG._minimapCanvas = null;
+  }
   if (!off) {
     off = NEON.minimap.createOffscreenMinimap(MW, MH);
     _RG._minimapCanvas = off;
@@ -1612,7 +1626,13 @@ function rebuildMinimapBase(dungeon, echoMap) {
  * @param {any} player
  */
 function drawMinimap(dungeon, player) {
-  const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
+  // Settings-scaled corner minimap: base 120×80 multiplied by
+  // `settings.minimapScale`. Both axes scale together so aspect ratio
+  // is preserved. Same formula as `rebuildMinimapBase` so the cached
+  // canvas size matches the blit destination size exactly.
+  const MW = Math.round(120 * settings.minimapScale);
+  const MH = Math.round(80 * settings.minimapScale);
+  const MX = W - MW - 8 - safeRight, MY = 8 + safeTop;
   ctx.save();
   // Border + background frame (engine helper). The defaults here match the
   // values previously inlined; an opts object would override them if a
@@ -1622,8 +1642,12 @@ function drawMinimap(dungeon, player) {
   const sx=MW/MAP_W, sy=MH/MAP_H;
   const echoMap = _RG.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
 
-  // Rebuild cache on demand. echoMap flip also forces rebuild.
-  if (_RG._minimapDirty || !_RG._minimapCanvas || _RG._minimapEchoMap !== echoMap) {
+  // Rebuild cache on demand. echoMap flip OR a settings.minimapScale
+  // change (detected via canvas size mismatch in rebuildMinimapBase)
+  // also forces rebuild.
+  const sizeMismatch = _RG._minimapCanvas
+    && (_RG._minimapCanvas.width !== MW || _RG._minimapCanvas.height !== MH);
+  if (_RG._minimapDirty || !_RG._minimapCanvas || _RG._minimapEchoMap !== echoMap || sizeMismatch) {
     rebuildMinimapBase(dungeon, echoMap);
     _RG._minimapDirty = false;
   }
@@ -1871,7 +1895,11 @@ function drawBoostStrip(player) {
   if (!player || typeof NEON === 'undefined' || !NEON.boosts) return;
   const list = NEON.boosts.getActiveBoostList(player);
   if (!list.length) return;
-  const MH=80;
+  // Anchor below the corner minimap. The minimap is settings-scaled
+  // (`settings.minimapScale`) so this MH must use the same formula as
+  // rebuildMinimapBase / drawMinimap, otherwise the boost pills overlap
+  // the minimap (small scale) or float in space (large scale).
+  const MH = Math.round(80 * settings.minimapScale);
   const MY=8+safeTop;
   const pillH = 18;
   const startY = MY + MH + 8; // 8px gap below minimap
