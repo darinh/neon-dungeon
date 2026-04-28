@@ -43,6 +43,12 @@
 //     AND its controlling `if (` is preceded by a sibling-statement
 //     boundary (`}` or `;`), never by `else` (else-if) or `)`
 //     (braceless control ancestor).
+//   - Multiplier-side brace-depth check (per PR #306 r4 known-gap):
+//     mirrors the badge-side depth==1 check anchored to the
+//     Player.takeDamage() body opener — closes the
+//     `if (outer) { foo; if (BULWARK) {} }` bypass that the
+//     predecessor-token check alone permits (predecessor=`;` after the
+//     intervening sibling stmt).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -79,6 +85,7 @@ function blankStringContents(src) {
 const CONTENT_CODE = stripComments(CONTENT);
 const ENTITIES_CODE = stripComments(ENTITIES);
 const CONTENT_BRACES = blankStringContents(CONTENT_CODE);
+const ENTITIES_BRACES = blankStringContents(ENTITIES_CODE);
 
 /**
  * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
@@ -566,6 +573,137 @@ test('runtime: BULWARK badge gate predicate matches the multiplier gate predicat
     mulPrevChar === '}' || mulPrevChar === ';',
     `BULWARK multiplier if-block must be preceded by a sibling-statement boundary ('}' or ';') in entities.js Player.takeDamage(). Found '${mulPrevChar}' at position ${mulIfPrev}. Ensure the BULWARK gate is a top-level branch with no implicit ancestor predicate.`
   );
+
+  // ── True brace-depth check vs Player.takeDamage() body opener ──────
+  // KNOWN GAP from PR #306 r4: the predecessor-token check above is
+  // bypassed by an outer-if with an intervening sibling stmt:
+  //   if (someOuter) {
+  //     foo;                                     // intervening stmt
+  //     if (this.perks.BULWARK && ...) {         // predecessor=`;` → passes!
+  //       actual = actual * 0.85;
+  //     }
+  //   }
+  // Effective runtime predicate: `someOuter && perks.BULWARK && ...` —
+  // strictly stronger than the badge gate, breaking the contract.
+  //
+  // Defence: extract the FULL Player.takeDamage() body via brace-walk,
+  // then count `{` minus `}` from start of body to the BULWARK multiplier
+  // statement position. Depth must be EXACTLY 1 — meaning ONLY the
+  // immediate BULWARK if-block enclosing the multiplier is open
+  // (no outer if/while/try). This mirrors the badge-side check (a) at
+  // line ~440-447 (depth==1 inside getStatusEffects).
+  //
+  // Brace-counting source uses ENTITIES_BRACES (string literals blanked)
+  // so a future code change containing `{` or `}` inside a string can't
+  // fool the counter — same defence as CONTENT_BRACES on the badge side.
+  //
+  // Anchor on Player.takeDamage()'s 3-arg signature `(dmg, source, opts)`
+  // — uniquely distinguishes it from Enemy.takeDamage(dmg, hitCtx) at
+  // entities.js:1780. Assert match-count == 1 to fail loudly if a future
+  // refactor adds a third Player method with the same arglist.
+  const takeDamageReG = /takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{/g;
+  const takeDamageMatches = ENTITIES_BRACES.match(takeDamageReG) || [];
+  assert.equal(takeDamageMatches.length, 1,
+    `Player.takeDamage(dmg, source, opts) signature must be unique in entities.js (found ${takeDamageMatches.length}); brace-depth anchor would be ambiguous — re-anchor or rename the duplicate.`);
+
+  const tdBranch = extractBranch(ENTITIES_BRACES, /takeDamage\s*\(\s*dmg\s*,\s*source\s*,\s*opts\s*\)\s*\{/);
+  assert.ok(tdBranch,
+    'failed to extract Player.takeDamage() body via brace-walk — anchor regex may be stale.');
+  // Position of the takeDamage body opener `{` in ENTITIES_BRACES. The
+  // BULWARK multiplier sits inside this body; convert mulIdx (absolute
+  // ENTITIES_CODE position, which equals ENTITIES_BRACES position because
+  // blankStringContents preserves length) into a body-relative offset.
+  const tdBranchAbsIdx = ENTITIES_BRACES.indexOf(tdBranch);
+  assert.notEqual(tdBranchAbsIdx, -1,
+    'extractBranch returned a slice not located in ENTITIES_BRACES — internal regression.');
+  const tdBodyStart = tdBranchAbsIdx + tdBranch.indexOf('{') + 1;
+  const tdBodyEnd = tdBranchAbsIdx + tdBranch.lastIndexOf('}');
+  assert.ok(mulIdx > tdBodyStart && mulIdx < tdBodyEnd,
+    `BULWARK multiplier (pos=${mulIdx}) must sit inside Player.takeDamage() body (${tdBodyStart}..${tdBodyEnd}). It moved out of takeDamage — re-anchor the alignment test on its new home.`);
+
+  // Count braces from body start to the multiplier statement position
+  // (use ENTITIES_BRACES so string-literal braces don't perturb the count).
+  let mulBodyDepth = 0;
+  for (let k = tdBodyStart; k < mulIdx; k++) {
+    const ch = ENTITIES_BRACES[k];
+    if (ch === '{') mulBodyDepth++;
+    else if (ch === '}') mulBodyDepth--;
+  }
+  assert.equal(mulBodyDepth, 1,
+    `BULWARK multiplier must sit at brace-depth EXACTLY 1 inside Player.takeDamage() body (only the immediate BULWARK if-block enclosing it). Found depth=${mulBodyDepth} — an enclosing block was added (e.g. \`if (outer) { ...; if (BULWARK) { actual = actual * 0.85; } }\`). The effective runtime predicate is now the conjunction of all enclosing conditions, which the alignment compare does NOT capture. NOTE: this assertion also implicitly requires BULWARK to be a BRACED if-block — a refactor to the braceless form \`if (BULWARK) actual = actual * 0.85;\` would produce depth=0 and trip this assertion, since the ancestor-bypass scenario \`if (outer) { foo; if (BULWARK) actual = actual * 0.85; }\` would silently pass at depth=1. Keep the BULWARK gate braced. Hoist back to a top-level sibling statement inside takeDamage(), OR extend the alignment combinator to fold in every enclosing if-condition, then update this assertion to allow the new depth.`);
+
+  // ── BULWARK if-block body content check (per gpt-5.3-codex review) ─
+  // Catches a bypass class the depth check alone misses: a runtime gate
+  // ADDED INSIDE the BULWARK if-block, e.g.
+  //   if (this.perks.BULWARK && ...) {
+  //     this._outer && (actual = actual * 0.85);   // hidden && gate
+  //   }
+  // or a subsequent undo statement:
+  //   if (this.perks.BULWARK && ...) {
+  //     actual = actual * 0.85;
+  //     this._outer || (actual = -1);              // hidden override
+  //   }
+  // Both pass the alignment compare (BULWARK predicate intact), the
+  // predecessor-token check, AND the depth==1 check (the multiplier
+  // statement still sits at depth 1 inside the BULWARK if-block). But
+  // the EFFECTIVE multiplier predicate is now BULWARK ∧ extra-gate ≠
+  // the badge predicate.
+  //
+  // Defence: extract the BULWARK if-block BODY via brace-walk from its
+  // opening `{` (immediately after the controlling `if (...)` cond),
+  // strip whitespace, and assert it is EXACTLY `actual = actual * 0.85;`.
+  // No additional statements, no inline guards, no destructuring, no
+  // function calls. The check is intentionally strict — if a future
+  // change legitimately needs more logic inside the BULWARK block (e.g.
+  // logging, telemetry, particle spawn), the developer MUST update this
+  // assertion AND update the badge predicate accordingly.
+  //
+  // Body anchor: walk forward from the controlling `if (` (ifIdx) to
+  // find the closing `)` of the predicate, then the next `{`.
+  let condDepth = 0;
+  let condEndIdx = -1;
+  for (let k = ifIdx; k < ENTITIES_BRACES.length; k++) {
+    const ch = ENTITIES_BRACES[k];
+    if (ch === '(') condDepth++;
+    else if (ch === ')') {
+      condDepth--;
+      if (condDepth === 0) { condEndIdx = k; break; }
+    }
+  }
+  assert.notEqual(condEndIdx, -1,
+    'failed to find closing `)` of BULWARK controlling if-predicate — anchor regression?');
+  let bodyOpenIdx = -1;
+  for (let k = condEndIdx + 1; k < ENTITIES_BRACES.length; k++) {
+    const ch = ENTITIES_BRACES[k];
+    if (ch === '{') { bodyOpenIdx = k; break; }
+    if (!/\s/.test(ch)) {
+      // First non-whitespace after `)` is not `{` — BULWARK is braceless,
+      // which the depth==1 check above also rejects (depth would be 0).
+      // Fail loudly here so the message is unambiguous.
+      assert.fail(`BULWARK if-block must be braced — first non-whitespace char after the controlling \`if (...)\` predicate is '${ch}', not '{'. The body-content alignment defence requires a braced if-block. If you intentionally moved to the braceless form, also remove the depth==1 assertion above.`);
+    }
+  }
+  assert.notEqual(bodyOpenIdx, -1,
+    'failed to find opening `{` of BULWARK if-block body — anchor regression?');
+  // Brace-walk forward from bodyOpenIdx+1 to find the matching `}`.
+  let bodyDepth = 1;
+  let bodyCloseIdx = -1;
+  for (let k = bodyOpenIdx + 1; k < ENTITIES_BRACES.length; k++) {
+    const ch = ENTITIES_BRACES[k];
+    if (ch === '{') bodyDepth++;
+    else if (ch === '}') {
+      bodyDepth--;
+      if (bodyDepth === 0) { bodyCloseIdx = k; break; }
+    }
+  }
+  assert.notEqual(bodyCloseIdx, -1,
+    'failed to find matching closing `}` of BULWARK if-block body — anchor regression?');
+  // Use ENTITIES_CODE (NOT ENTITIES_BRACES) for the body slice so the
+  // assertion error message shows the real source. blankStringContents
+  // preserves length, so positions are interchangeable.
+  const bulwarkBody = ENTITIES_CODE.slice(bodyOpenIdx + 1, bodyCloseIdx).trim();
+  assert.equal(bulwarkBody, 'actual = actual * 0.85;',
+    `BULWARK if-block body must be EXACTLY \`actual = actual * 0.85;\` (whitespace-trimmed). Found:\n  ${bulwarkBody}\n\nA runtime gate was added inside the block (e.g. \`this._outer && (actual = actual * 0.85);\`), or extra statements were introduced. Either form silently breaks the badge↔reduction contract: the badge fires on the BULWARK predicate alone, but the multiplier now requires BULWARK ∧ extra-gate. Hoist any extra logic OUTSIDE the if-block, OR update both this assertion AND the badge predicate to reflect the new gate.`);
 
   // ── Pre-normalisation receiver-qualification check (per gpt-5.5 r2) ──
   // The normaliser strips `player.` from valid predicates — but it would
