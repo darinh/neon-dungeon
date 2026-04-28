@@ -29,6 +29,14 @@ const _EG = new Proxy({}, {
 /** @type {any[]} */ const wallTurrets = [];
 /** @type {any[]} */ const disruptionFields = [];
 /** @type {any[]} */ const gravityWells = [];
+// ARCHITECT-placed walls (PR ARCHITECT). Each entry tracks a tile that the
+// ARCHITECT mob has converted from FLOOR/etc. to T.WALL — preserves the
+// origTile so the wall can decay back to its original state, and the
+// owner reference so each ARCHITECT can replace its own wall without
+// stacking. Each entry: { tx, ty, origTile, decayTimer, owner }.
+// Cleared on floor transition (game.js loadFloor — same place
+// placedWalls.length=0 alongside other transient arrays).
+/** @type {any[]} */ const placedWalls = [];
 // Frost patches: persistent area-denial tiles laid down by CRYOPHAGE after
 // its telegraph commits. Each patch is { x, y, age, maxAge, tickCd, dead }.
 // Patches survive the mob that placed them (committed denial) and are
@@ -234,7 +242,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, ARCHITECT:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -420,6 +428,42 @@ const WATCHER_TELEGRAPH  = 0.65; // seconds — fairness window after lock
 const WATCHER_RECOVERY   = 1.4;  // seconds — post-fire cooldown
 const WATCHER_DMG_MUL    = 1.0;  // damage = atk * 1.0
 const WATCHER_HALF_RAD   = (WATCHER_CONE_DEG * 0.5) * Math.PI / 180; // precomputed
+
+// ─── ARCHITECT tuning constants ──────────────────────────────────────────
+// Stationary fortifier mob (spd=0, atk=0). Periodically converts a FLOOR
+// tile into a temporary WALL between itself and the perceived target,
+// creating cover. Player-counterplay: kill the architect, break LOS, or
+// move into the targeted tile during the telegraph to cancel the build.
+//
+// State machine: idle → target → commit → recovery → idle.
+//   idle:     _aIdle ticks down; when ≤ 0 AND inRoom AND canTarget AND LOS,
+//             pick a target tile via pickArchitectTarget() and enter target.
+//   target:   _aTele ticks down. Player can: (a) kill the mob,
+//             (b) break LOS to the mob, (c) move ONTO the target tile to
+//             cancel (the mob refuses to wall an occupied tile — counterplay
+//             promised in the design pass).
+//   commit:   instant — convert tile to T.WALL via placedWalls, replacing
+//             the mob's previous wall (one wall per architect maximum).
+//             Enter recovery.
+//   recovery: _aRec ticks down; on 0, reset _aIdle, return to idle.
+//
+// ARCHITECT_DECAY_TIME (12s) is the only safety net — placed walls are
+// NOT player-breakable in v1 (per rubber-duck "decay OR breakable, not
+// both unless very weak"). Decay AND tile-replace-via-new-build happen
+// in updatePlacedWalls() each tick. Wall outlives the architect — that
+// persistence is the cost the player pays for letting it build.
+//
+// Counterplay summary:
+//   - Stay out of ARCHITECT_RANGE (8 tiles)
+//   - Break LOS during the 1.5s target window
+//   - Move ONTO the target tile to cancel
+//   - Kill the architect (atk=0 makes it a sitting duck — but it has
+//     hp=80 and you have to find its room)
+const ARCHITECT_RANGE        = 8;     // tiles — perceived-target lock distance
+const ARCHITECT_TARGET_TIME  = 1.5;   // seconds — telegraph window before commit
+const ARCHITECT_RECOVERY     = 2.0;   // seconds — post-commit cooldown
+const ARCHITECT_IDLE_BASE    = 8.0;   // seconds — between commits when conditions hold
+const ARCHITECT_DECAY_TIME   = 12.0;  // seconds — placed wall lifetime
 
 // MIRROR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob whose hook is mimicry: it fires a single projectile at the
@@ -1508,6 +1552,12 @@ function notifyFrenzyElites(deathX, deathY) {
 
 
 class Enemy {
+  /** @type {any} */ _aCommitted;
+  /** @type {any} */ _aIdle;
+  /** @type {any} */ _aRec;
+  /** @type {any} */ _aState;
+  /** @type {any} */ _aTarget;
+  /** @type {any} */ _aTele;
   /** @type {any} */ _arcSpin;
   /** @type {any} */ _burstLeft;
   /** @type {any} */ _challengeWave;
@@ -2692,6 +2742,19 @@ class Enemy {
       // critical: without that gate, every stun-cancel would render a
       // bright "beam fired" line even though no damage was dealt.
       if (this._wState === 'telegraph') { this._wState = 'recovery'; this._wRec = WATCHER_RECOVERY; this._wTele = 0; this._wFired = false; }
+      // Cancel ARCHITECT target on stun — drop to recovery, clear the
+      // pending target. Mirrors WATCHER/RESONATOR/MIRROR cancel pattern.
+      // _aCommitted stays false so the render branch's commit-flash gate
+      // skips the visual — critical: without that gate, every stun-cancel
+      // would briefly render a "wall built" flash even though no wall
+      // was placed.
+      if (this.type === 'ARCHITECT' && this._aState === 'target') {
+        this._aState = 'recovery';
+        this._aRec = ARCHITECT_RECOVERY;
+        this._aTele = 0;
+        this._aTarget = null;
+        this._aCommitted = false;
+      }
       // Cancel REAPER telegraph on stun — return to idle so the frenzy
       // doesn't trigger after stun ends. _reHasFrenzied stays true (one-shot
       // defuse, not a re-trigger reset — re-arm only on player room change).
@@ -2839,6 +2902,7 @@ class Enemy {
       case 'VAULTMASTER':this.aiVaultmaster(dt,player,map,d,los); break;
       case 'GULPER':this.aiGulper(dt,player,map,d,los); break;
       case 'WATCHER':this.aiWatcher(dt,player,map,d,los); break;
+      case 'ARCHITECT':this.aiArchitect(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -4916,6 +4980,163 @@ class Enemy {
     this._wTele = WATCHER_TELEGRAPH;
     if (audio.watcherCharge) audio.watcherCharge();
     // Stationary: never patrol, never reposition. Sitting duck by design.
+  }
+
+  // ─── ARCHITECT AI — Stationary Fortifier ───────────────────────────────
+  // Stationary mob (spd=0, atk=0). Periodically converts a FLOOR tile into
+  // a temporary T.WALL placed BETWEEN the architect and the perceived
+  // target — creating cover. Wall auto-decays in ARCHITECT_DECAY_TIME.
+  //
+  // Counterplay (per design pass):
+  //   - Move ONTO the targeted tile during the 1.5s telegraph to cancel
+  //     (the architect refuses to wall an occupied tile).
+  //   - Break LOS to the architect during target.
+  //   - Kill the architect (atk=0 makes it a sitting duck once found).
+  //
+  // Tile selection rules (pickArchitectTarget below):
+  //   - BETWEEN architect and target (NOT adjacent to player — prevents
+  //     telefrag-class griefing per rubber-duck blocking issue #1).
+  //   - Must be currently T.FLOOR (no overwriting walls, doors, traps).
+  //   - Must NOT be the architect's own tile.
+  //   - Must NOT be currently occupied by the player or an enemy.
+  //
+  // States: idle → target → recovery → idle.
+  /**
+   * @param {any} [dt]
+   * @param {any} [player]
+   * @param {any} [map]
+   * @param {any} [d]
+   * @param {any} [los]
+   */
+  aiArchitect(dt, player, map, d, los) {
+    void d; void los; // recomputed against perceived target for fairness
+    const bm = this.berserkerMul();
+    const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
+
+    // Room-gated: only engage when target or player is inside this mob's
+    // room. Mirrors the inRoom check in aiResonator/aiMirror/aiWatcher.
+    const inRoom = this.room && (
+      (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
+       this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
+      (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
+       player.y >= this.room.y && player.y < this.room.y + this.room.h));
+
+    // ── Recovery: cooling down ──
+    if (this._aState === 'recovery') {
+      this._aRec -= dt * ocMul * bm;
+      if (this._aRec <= 0) {
+        this._aState = 'idle';
+        this._aIdle = ARCHITECT_IDLE_BASE;
+        this._aCommitted = false;
+      }
+      return;
+    }
+
+    // ── Target: telegraphing the build ──
+    if (this._aState === 'target') {
+      this._aTele -= dt; // fixed-rate countdown — fairness > tempo
+      // Visual telegraph (per gpt-5.5 r1 finding — the tile-cancel
+      // counterplay is impossible without a visible target indicator).
+      // Spawn an earth-tone spark on the target tile each tick. Density
+      // is low (1 per ~3 frames) so the visual is readable but not a
+      // particle storm. The pre-commit telegraph is the canonical
+      // counterplay surface — players need to SEE which tile to occupy.
+      if (this._aTarget && Math.random() < 0.33) {
+        spawnParticles(this._aTarget.tx + 0.5, this._aTarget.ty + 0.5,
+                       'SPARK', '#aa6633', 1);
+      }
+      // Mid-telegraph cancellation triggers (per design pass + reviews):
+      //   1. LOS lost to perceived target.
+      //   2. Target tile became occupied (player moved onto it — the
+      //      promised counterplay vector).
+      //   3. Target tile is no longer T.FLOOR (e.g. a CRACKED reveal,
+      //      another architect placed a wall there, etc.).
+      //   4. Player moved ADJACENT to the target tile (Chebyshev < 2
+      //      from target). Per gpt-5.3-codex r2: the adjacency rule
+      //      from pickArchitectTarget is only enforced at PICK time —
+      //      without revalidation during target, the player could
+      //      sidestep INTO an adjacent tile during the 1.5s telegraph
+      //      and the wall would still commit adjacent (creating the
+      //      forced-shove / cheap-prison state the rule exists to
+      //      prevent).
+      // ANY of these returns the architect to recovery without committing.
+      const t = this._aTarget;
+      const cancelledLOS = !hasLOS(this.x, this.y, this._tx, this._ty, map);
+      const cancelledOccupied = t && _isTileOccupiedByActor(t.tx, t.ty, player);
+      const cancelledTileType = t && map[t.ty]?.[t.tx] !== T.FLOOR;
+      const cancelledAdjacent = t && Math.max(
+        Math.abs(t.tx - Math.floor(player.x)),
+        Math.abs(t.ty - Math.floor(player.y))
+      ) < 2;
+      if (!t || cancelledLOS || cancelledOccupied || cancelledTileType || cancelledAdjacent) {
+        this._aState = 'recovery';
+        this._aRec = ARCHITECT_RECOVERY;
+        this._aTele = 0;
+        this._aTarget = null;
+        return;
+      }
+      // Commit when telegraph timer hits zero.
+      if (this._aTele <= 0) {
+        // Replace any prior wall this architect placed (one per architect
+        // max — per rubber-duck blocking issue #3). Find by `owner === this`.
+        for (let i = placedWalls.length - 1; i >= 0; i--) {
+          const w = placedWalls[i];
+          if (w.owner === this) {
+            map[w.ty][w.tx] = w.origTile;
+            placedWalls.splice(i, 1);
+          }
+        }
+        // Place the new wall. Store origTile so decay can restore it.
+        const origTile = map[t.ty][t.tx];
+        map[t.ty][t.tx] = T.WALL;
+        placedWalls.push({
+          tx: t.tx, ty: t.ty, origTile,
+          decayTimer: ARCHITECT_DECAY_TIME, owner: this,
+        });
+        if (typeof _EG.markMapMutated === 'function') _EG.markMapMutated();
+        if (audio.architectCommit) audio.architectCommit();
+        spawnParticles(t.tx + 0.5, t.ty + 0.5, 'EXPLOSION', '#aa6633', 8);
+        this._aState = 'recovery';
+        this._aRec = ARCHITECT_RECOVERY;
+        this._aTele = 0;
+        this._aTarget = null;
+        this._aCommitted = true;
+      }
+      return;
+    }
+
+    // ── Idle: ticking down to next build attempt ──
+    this._aIdle -= dt * ocMul * bm;
+    if (this._aIdle > 0) return;
+    if (!inRoom || !this._canTarget()) {
+      // Reset idle so we don't hammer-attempt every tick when conditions
+      // can't be met. Half-base buy-in so the architect re-evaluates
+      // promptly when conditions return.
+      this._aIdle = ARCHITECT_IDLE_BASE * 0.5;
+      return;
+    }
+    const dx = this._tx - this.x, dy = this._ty - this.y;
+    const dPerceived2 = dx * dx + dy * dy;
+    if (dPerceived2 > ARCHITECT_RANGE * ARCHITECT_RANGE) {
+      this._aIdle = ARCHITECT_IDLE_BASE * 0.5;
+      return;
+    }
+    if (!hasLOS(this.x, this.y, this._tx, this._ty, map)) {
+      this._aIdle = ARCHITECT_IDLE_BASE * 0.5;
+      return;
+    }
+    // Pick a target tile BETWEEN the architect and perceived target.
+    const targetTile = pickArchitectTarget(this.x, this.y, this._tx, this._ty, map, player);
+    if (!targetTile) {
+      // No valid placement (e.g. line is solid wall, player is in the
+      // tile we'd pick). Brief retry interval.
+      this._aIdle = ARCHITECT_IDLE_BASE * 0.4;
+      return;
+    }
+    this._aTarget = targetTile;
+    this._aState = 'target';
+    this._aTele = ARCHITECT_TARGET_TIME;
+    if (audio.architectTarget) audio.architectTarget();
   }
 
   // ─── MIRROR AI — Stationary Mimic Battery ──────────────────────────────
@@ -8918,6 +9139,7 @@ const ENEMY_WEIGHTS = {
   VAULTMASTER:{ base: 2,  perFloor: 1, minFloor: 4 },  // economic-inverse — slow non-damaging chaser, ejects a small VaultCoin pickup on every hit (ICD-throttled), drops a jackpot pickup on death (risk/reward: kill fast for safety vs milk for credits, opposite verb of MAGPIE)
   GULPER:     { base: 2,  perFloor: 1, minFloor: 6 },  // projectile-eating mid-tank — slow chaser with front-facing mouth-cone that destroys player shots and stacks; at max stacks belches a fat slow projectile (anti-spam, compositional — counter via flank/melee/burst, distinct from MAGNETON which only bends)
   WATCHER:    { base: 2,  perFloor: 1, minFloor: 6 },  // sweeping vision-cone lighthouse — stationary, cone rotates continuously at WATCHER_SWEEP_RATE; on player-cross it locks+telegraphs+fires a hitscan beam (anti-camping, anti-static-positioning — counter by perpendicular crossings, dash through telegraph, or LOS break, distinct from RESONATOR which AIMS the cone)
+  ARCHITECT:  { base: 2,  perFloor: 1, minFloor: 7 },  // stationary fortifier — atk=0, periodically converts a FLOOR tile BETWEEN itself and the perceived target into a temporary T.WALL (auto-decays in 12s), creating cover. Counterplay: kill the architect, break LOS, or move ONTO the targeted tile to cancel the build (between-geometry rule prevents telefrag-class griefing)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -9038,6 +9260,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'VAULTMASTER':hp=60;atk=0;  spd=2.0; xpVal=18; colour='#ffcc44'; break;
     case 'GULPER':    hp=90; atk=14; spd=1.4; xpVal=28; colour='#bbdd33'; break;
     case 'WATCHER':   hp=70; atk=12; spd=0;   xpVal=26; colour='#ffee66'; break;
+    case 'ARCHITECT': hp=80; atk=0;  spd=0;   xpVal=30; colour='#aa6633'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -9294,12 +9517,30 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // WATCHER_RECOVERY) would visually flash a beam that never fired.
     e._wFired = false;
   }
+  if (type==='ARCHITECT') {
+    // Stationary fortifier mob. Idle timer randomised on spawn so a
+    // clustered spawn doesn't telegraph in unison. _aIdle starts in
+    // [0.5*BASE, 1.0*BASE] so the first commit happens within ~4-8s of
+    // the player entering range — fast enough to be a real threat,
+    // slow enough that the player gets a free shot to learn what it does.
+    e._aState = 'idle';
+    e._aIdle  = ARCHITECT_IDLE_BASE * (0.5 + Math.random() * 0.5);
+    e._aTele  = 0;
+    e._aRec   = 0;
+    // Currently targeted tile (during 'target' state). null otherwise.
+    /** @type {{tx:number, ty:number} | null} */
+    e._aTarget = null;
+    // Per-instance commit flag — keeps render branch from showing a
+    // commit-flash on a target that was cancelled (LOS lost, occupied,
+    // mob died, etc.). Same defensive pattern as WATCHER's _wFired.
+    e._aCommitted = false;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -9522,6 +9763,108 @@ function damageCratesInRadius(wx, wy, radius, dmg, map) {
     const cx = c.tx + 0.5, cy = c.ty + 0.5;
     if (dist(wx, wy, cx, cy) < radius && hasLOS(wx, wy, cx, cy, map)) {
       damageCrate(c, dmg);
+    }
+  }
+}
+
+// ─── ARCHITECT placed walls ───────────────────────────────────────────────
+// Helpers + tick for the ARCHITECT mob's placed walls.
+
+/**
+ * Pick a tile BETWEEN (ax,ay) [architect] and (px,py) [perceived target]
+ * that is currently T.FLOOR, not occupied by player or any enemy. The
+ * "between" rule is THE design constraint (per rubber-duck blocking
+ * issue #1) — placing adjacent to the player would create cheap prison
+ * states. Walks integer tiles along the line at 0.4..0.7 of the
+ * between-distance and returns the first valid candidate.
+ *
+ * Returns null if no valid placement found (e.g. line is solid wall,
+ * player blocks every interpolated tile, etc.).
+ *
+ * @param {number} ax architect world x
+ * @param {number} ay architect world y
+ * @param {number} px perceived target world x
+ * @param {number} py perceived target world y
+ * @param {any} map dungeon.map 2D array
+ * @param {any} player player entity
+ * @returns {{tx:number, ty:number} | null}
+ */
+function pickArchitectTarget(ax, ay, px, py, map, player) {
+  // Try fractions 0.5, 0.4, 0.6, 0.3, 0.7 — biased toward the midpoint
+  // (between architect and target) to maximise cover utility, with
+  // fallbacks closer to either end if midpoint is blocked.
+  const fractions = [0.5, 0.4, 0.6, 0.3, 0.7];
+  // Player tile for adjacency rejection (per gpt-5.5 r1 finding —
+  // rubber-duck blocking #1 said "between, NOT adjacent to player";
+  // exact-tile rejection alone allowed Chebyshev-1 placements which
+  // are still telefrag-class griefing).
+  const ptx = Math.floor(player.x), pty = Math.floor(player.y);
+  for (const f of fractions) {
+    const wx = ax + (px - ax) * f;
+    const wy = ay + (py - ay) * f;
+    const tx = Math.floor(wx);
+    const ty = Math.floor(wy);
+    if (ty < 0 || ty >= map.length || tx < 0 || tx >= (map[0]?.length || 0)) continue;
+    if (map[ty][tx] !== T.FLOOR) continue; // only convert FLOOR tiles
+    // Skip the architect's own tile (paranoia — architect should never
+    // wall itself in)
+    if (Math.floor(ax) === tx && Math.floor(ay) === ty) continue;
+    // Reject tiles adjacent to (or on) the player — Chebyshev distance ≥ 2
+    // from the player tile required. This is the canonical rule from the
+    // rubber-duck design pass: walling adjacent to the player creates
+    // forced-shove / cheap-prison states even if the player isn't ON
+    // the target tile at commit time.
+    if (Math.max(Math.abs(tx - ptx), Math.abs(ty - pty)) < 2) continue;
+    if (_isTileOccupiedByActor(tx, ty, player)) continue;
+    return { tx, ty };
+  }
+  return null;
+}
+
+/**
+ * Is the integer tile (tx,ty) currently occupied by the player or any
+ * non-dead enemy? Used by ARCHITECT both at picking time (skip occupied
+ * candidates) and at commit time (refuse to wall an occupied tile —
+ * the canonical counterplay vector).
+ *
+ * @param {number} tx
+ * @param {number} ty
+ * @param {any} player
+ */
+function _isTileOccupiedByActor(tx, ty, player) {
+  if (Math.floor(player.x) === tx && Math.floor(player.y) === ty) return true;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    if (Math.floor(e.x) === tx && Math.floor(e.y) === ty) return true;
+  }
+  return false;
+}
+
+/**
+ * Tick all placed walls. Decay timer counts down; on expiry, restore
+ * origTile and remove from the list. Called from the main update loop
+ * each frame. ALSO removes orphan walls if their owner architect died
+ * — wait, NO: per design, walls outlive the architect (persistence is
+ * the cost of letting the architect live too long). Walls only decay
+ * via timer.
+ *
+ * @param {number} dt
+ * @param {any} map
+ */
+function updatePlacedWalls(dt, map) {
+  for (let i = placedWalls.length - 1; i >= 0; i--) {
+    const w = placedWalls[i];
+    w.decayTimer -= dt;
+    if (w.decayTimer <= 0) {
+      // Defensive: only restore if the tile is still T.WALL. If something
+      // else mutated it (e.g. another architect overwrote, or some future
+      // mechanic cleared the wall), leave the current state alone.
+      if (map[w.ty]?.[w.tx] === T.WALL) {
+        map[w.ty][w.tx] = w.origTile;
+        if (typeof _EG.markMapMutated === 'function') _EG.markMapMutated();
+        spawnParticles(w.tx + 0.5, w.ty + 0.5, 'SPARK', '#aa6633', 4);
+      }
+      placedWalls.splice(i, 1);
     }
   }
 }

@@ -356,6 +356,11 @@ const game = {
     // re-arm any REAPERs there via the room-change path.
     this.player.killsInCurrentRoom = 0;
     this.player._currentRoom = null;
+    // Clear ARCHITECT-placed walls on floor transition — the dungeon.map
+    // is regenerated, so the placed-wall list referencing old tile
+    // coordinates is invalid. Walls were applied to the old map; not
+    // restored here because the old map is being thrown away anyway.
+    placedWalls.length = 0;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
@@ -1561,6 +1566,9 @@ const game = {
     // update disruption fields (must run before player.update next frame for flag)
     updateDisruptionFields(dt, player);
     updateFrostPatches(dt, player);
+    // Tick ARCHITECT-placed walls — auto-decay back to origTile after
+    // ARCHITECT_DECAY_TIME. Pass dungeon.map so the helper can mutate it.
+    updatePlacedWalls(dt, dungeon.map);
 
     // update gravity wells
     updateGravityWells(dt);
