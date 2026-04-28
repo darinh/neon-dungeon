@@ -29,6 +29,45 @@ function currentBiomePalette() {
            minimapWall:'#1a1a2e', minimapFloor:'#252545', dust:['#66ddff','#aabbcc'], ambient:'#66ddff' };
 }
 
+/**
+ * Floor modifier progress suffix — appended to the HUD modifier badge for
+ * counter-driven positive modifiers. Without this indicator, OVERCHARGE
+ * ("every 5th shot guaranteed crit") and WINDFALL ("every 5th defeat drops
+ * a bonus core") tick invisibly — players only see the trigger payoff
+ * (crit floater, +1◆ floater) with no sense of when the next one is due.
+ * Same discoverability gap PR #248 closed for trauma_kit charges.
+ *
+ * Format: ` N/5` where N = (counter % 5). At floor start or just after a
+ * trigger N=0 ("just rolled over"); at N=4 the next event triggers; then
+ * the counter wraps back to 0. Matches the increment-then-mod path in
+ * Player.shoot (OVERCHARGE) and Enemy.die (WINDFALL): the counter is
+ * incremented BEFORE the % 5 === 0 check, so the displayed value reflects
+ * the count AFTER the most recent qualifying event. Defensive `|0`
+ * nucleation tolerates undefined on legacy player shapes that bypassed
+ * the ctor (mirrors the trauma_kit `_nanoMedicCharges | 0` pattern at
+ * ~render.js:861).
+ *
+ * Returns '' for non-counter modifiers (CASCADE — procs every kill within
+ * radius, no count to show; all negative modifiers — no progress) so the
+ * badge layout for those is unchanged.
+ *
+ * @param {string|null|undefined} modKey
+ * @param {any} player
+ * @returns {string}
+ */
+function modifierProgressSuffix(modKey, player) {
+  if (!modKey || !player) return '';
+  if (modKey === 'OVERCHARGE') {
+    const cnt = player._overchargeShots | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  if (modKey === 'WINDFALL') {
+    const cnt = player._windfallKills | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  return '';
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 /**
  * @param {any} player
@@ -879,7 +918,7 @@ function drawHUD(player) {
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour; ctx.font=`${fs-1}px monospace`;
-      ctx.fillText(`${m.icon}${m.label}`, mid, r1 + 22);
+      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, mid, r1 + 22);
       ctx.restore();
     }
 
@@ -1024,7 +1063,7 @@ function drawHUD(player) {
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour;
-      ctx.fillText(`${m.icon}${m.label}`, colBase + 160, y + 22);
+      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, colBase + 160, y + 22);
       ctx.restore();
     }
 
