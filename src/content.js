@@ -1707,6 +1707,7 @@ const FLOOR_MODIFIERS = {
   WINDFALL:  { label:'WINDFALL',  desc:'Every 5th defeat drops a bonus core',   colour:'#a866ff', icon:'◆' },
   SIGNAL_BOOST: { label:'SIGNAL_BOOST', desc:'Every 5th defeat resets hackware', colour:'#00ddff', icon:'↻' },
   REVERB:    { label:'REVERB',    desc:'Every 5th shot fires a free echo',     colour:'#ff66cc', icon:'♪' },
+  QUARTERMASTER: { label:'QUARTERMASTER', desc:'First defeat in each room drops a bonus core', colour:'#ffaa44', icon:'▣' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
