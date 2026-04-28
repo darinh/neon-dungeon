@@ -1326,15 +1326,28 @@ function drawHUD(player) {
    */
   if (hasKeys) {
     ctx.save();
-    const keyY = layout.hudTop - 18;
+    // Base 12px font + 18px gap-above-HUD + 55px stride scale with
+    // `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors keep things
+    // legible at 0.85×; gap + stride scale together so the row never
+    // collides with status badges (which sit at hudTop-32 and grow
+    // upward via their own textScale-derived height) and adjacent key
+    // tokens never overlap horizontally at 1.3×.
+    const keyFs = Math.max(9, Math.round(12 * settings.textScale));
+    const keyGap = Math.max(14, Math.round(18 * settings.textScale));
+    const keyStride = Math.max(40, Math.round(55 * settings.textScale));
+    const keyY = layout.hudTop - keyGap;
     let kx = 14 + safeLeft;
     const keyData = [['red','#ff3333'],['blue','#3388ff'],['gold','#ffcc00']];
+    // Hoist font string outside the loop (per "hot path discipline"
+    // memory) — drawHUD runs every frame and assigning ctx.font from a
+    // fresh template literal per key would churn GC for no benefit.
+    const keyFontStr = `bold ${keyFs}px monospace`;
     for (const [col, hex] of keyData) {
       if (col != null && hex != null && player.keys[col] > 0) {
         ctx.shadowBlur=6; ctx.shadowColor=hex;
-        ctx.fillStyle=hex; ctx.font='bold 12px monospace';
+        ctx.fillStyle=hex; ctx.font=keyFontStr;
         ctx.fillText('🔑×'+player.keys[col], kx, keyY);
-        kx += 55;
+        kx += keyStride;
       }
     }
     ctx.restore();
@@ -1386,15 +1399,22 @@ function drawBossBar() {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // Boss name
+  // Boss name. Base 10px font + 3px gap-above-bar scale with
+  // `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors keep the
+  // name readable at 0.85×; gap scales proportionally so a 1.3× name
+  // stays clear of the bar at every text size. The bar geometry itself
+  // (barW/barH/barX/barY) is intentionally NOT text-scaled — it's a
+  // graphical HP indicator anchored to top-of-screen, not a text box.
   const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
   const barCx = barX + barW / 2;
+  const nameFs = Math.max(8, Math.round(10 * settings.textScale));
+  const nameGap = Math.max(2, Math.round(3 * settings.textScale));
   ctx.textAlign = 'center';
-  ctx.font = 'bold 10px monospace';
+  ctx.font = `bold ${nameFs}px monospace`;
   const col = boss ? boss.colour : '#ff3333';
   ctx.shadowBlur = 8; ctx.shadowColor = col;
   ctx.fillStyle = col;
-  ctx.fillText(name, barCx, barY - 3);
+  ctx.fillText(name, barCx, barY - nameGap);
 
   if (!boss) { ctx.restore(); return; }
 
@@ -1446,13 +1466,19 @@ function drawBossBar() {
     }
   }
 
-  // HP text + phase label
-  ctx.font = '8px monospace';
+  // HP text + phase label. Base 8px font + 9px gap-below-bar scale
+  // with `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Both scale
+  // together so the text stays clear of the bar at 1.3× (when 8→11px
+  // would otherwise crowd the 9px gap). Floor keeps the readout
+  // legible at 0.85×.
+  const hpFs = Math.max(7, Math.round(8 * settings.textScale));
+  const hpGap = Math.max(7, Math.round(9 * settings.textScale));
+  ctx.font = `${hpFs}px monospace`;
   ctx.fillStyle = '#8888aa';
   ctx.textAlign = 'center';
   const hpText = `${Math.ceil(boss.hp)}/${boss.maxHp}`;
   const phaseText = boss.phase > 1 ? `  P${boss.phase}` : '';
-  ctx.fillText(hpText + phaseText, barCx, barY + barH + 9);
+  ctx.fillText(hpText + phaseText, barCx, barY + barH + hpGap);
 
   ctx.restore();
 }

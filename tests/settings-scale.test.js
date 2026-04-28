@@ -522,6 +522,189 @@ test('expanded-minimap title + close-hint scale with settings.textScale', () => 
     'expanded minimap title must not hard-code "my - 22" — the gap must use the textScale-derived local');
 });
 
+// ─── HUD-float text scaling: key indicators + boss-bar ─────────────────
+// Follow-up coverage: extend settings.textScale to the three remaining
+// HUD-text floats — the key indicators row above the HUD bar, the boss
+// name above the boss HP bar, and the HP/phase readout below it. None
+// of them drive layout boxes (the HP bar geometry is intentionally NOT
+// text-scaled — it's a graphical indicator), so they're safe to scale
+// without an HUD overhaul.
+
+test('key indicator font + gap-above-HUD + horizontal stride scale with settings.textScale', () => {
+  // Found above the HUD bar when the player carries any keys. The font
+  // (12), the y-gap above the HUD (18), AND the per-token x-stride
+  // (55) all need to scale together — otherwise the row either
+  // overlaps the HUD/status badges (large font + small gap) or
+  // adjacent key tokens collide (large font + small stride).
+  // Match a generous slice around the 'Key indicators' comment so we
+  // pin the right block (drawHUD has multiple `if (hasKeys)` siblings).
+  const block = RENDER.match(/Key indicators[\s\S]{0,2000}?ctx\.restore\(\);\s*\}/);
+  assert.ok(block, 'must locate the Key indicators block in drawHUD');
+  // Producer-side: pin EACH scale formula bound to its EXACT canonical
+  // identifier. Per gpt-5.3-codex r1: independent formula+consumer
+  // assertions can be bypassed by declaring a real scaled local AND a
+  // decoy literal local, then wiring the literal to the sink. Binding
+  // each producer to its named identifier closes that bypass class.
+  assert.match(block[0],
+    /const\s+keyFs\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*12\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'keyFs must be assigned the canonical Math.max(N, Math.round(12 * settings.textScale)) formula');
+  assert.match(block[0],
+    /const\s+keyGap\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*18\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'keyGap must be assigned the canonical Math.max(N, Math.round(18 * settings.textScale)) formula');
+  assert.match(block[0],
+    /const\s+keyStride\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*55\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'keyStride must be assigned the canonical Math.max(N, Math.round(55 * settings.textScale)) formula');
+  // Consumer-side: pin each sink to its EXACT producer identifier.
+  // Decoy locals (e.g. `const keyFsBypass = 12; ctx.font = ...keyFsBypass...`)
+  // cannot satisfy these assertions because the identifier must match.
+  assert.match(block[0],
+    /const\s+keyFontStr\s*=\s*`bold\s*\$\{keyFs\}px\s+monospace`/,
+    'keyFontStr template must interpolate keyFs by exact name (bypass-resistant)');
+  assert.match(block[0],
+    /ctx\.font\s*=\s*keyFontStr\s*;/,
+    'ctx.font must be assigned the keyFontStr identifier (no decoy local)');
+  assert.match(block[0],
+    /const\s+keyY\s*=\s*layout\.hudTop\s*-\s*keyGap\s*;/,
+    'keyY must subtract keyGap (the scaled gap) from layout.hudTop');
+  assert.match(block[0],
+    /kx\s*\+=\s*keyStride\s*;/,
+    'kx must increment by keyStride (the scaled stride)');
+  // Sink-binding: pin that fillText actually uses keyY (the scaled
+  // baseline) — closes the "decoy keyY2" bypass class identified by
+  // gpt-5.3-codex r2 (a regression could keep keyY correct but render
+  // with a different y derived from a literal gap).
+  assert.match(block[0],
+    /ctx\.fillText\s*\(\s*['"`]🔑×['"`]\s*\+\s*player\.keys\[col\]\s*,\s*kx\s*,\s*keyY\s*\)/,
+    'ctx.fillText for the key indicator must render at keyY (the scaled baseline) — no decoy y-coord allowed');
+  // Bare-literal regression bans (would silently ignore textScale).
+  assert.doesNotMatch(block[0],
+    /ctx\.font\s*=\s*['"]bold\s+12px/,
+    'key indicator must not hard-code "bold 12px monospace"');
+  assert.doesNotMatch(block[0],
+    /layout\.hudTop\s*-\s*18\b/,
+    'key indicator must not hard-code "layout.hudTop - 18" — the gap must use the textScale-derived local');
+  assert.doesNotMatch(block[0],
+    /kx\s*\+=\s*55\b/,
+    'key indicator must not hard-code "kx += 55" — the stride must use the textScale-derived local');
+});
+
+test('key indicator hoists font string out of the for-loop (hot path discipline)', () => {
+  // drawHUD runs every frame; the for-loop iterates up to 3 times
+  // (red/blue/gold). Per stored "hot path discipline" memory, every
+  // per-iteration template-literal alloc is GC churn. Pin: the bold
+  // font string is cached in a const BEFORE the for-loop, and the
+  // body assigns ctx.font = <identifier> — never a fresh template.
+  const block = RENDER.match(/Key indicators[\s\S]{0,2000}?ctx\.restore\(\);\s*\}/);
+  assert.ok(block, 'must locate the Key indicators block');
+  assert.match(block[0],
+    /const\s+keyFontStr\s*=\s*`bold\s*\$\{keyFs\}px\s+monospace`[\s\S]{0,200}for\s*\(/,
+    'key indicator must declare const keyFontStr = `bold ${keyFs}px monospace` BEFORE the for-loop');
+  // Loop body must not re-build a template.
+  const forIdx = block[0].indexOf('for (');
+  const loopBody = forIdx >= 0 ? block[0].slice(forIdx) : block[0];
+  assert.doesNotMatch(loopBody,
+    /ctx\.font\s*=\s*`/,
+    'key indicator loop body must NOT assign ctx.font from a fresh template literal — that allocates per-iteration');
+});
+
+test('boss-bar name font + gap-above-bar scale with settings.textScale', () => {
+  // Boss name floats above the slim 8px-tall HP bar. Bar geometry
+  // (barW/barH/barX/barY) is intentionally NOT text-scaled — it's a
+  // graphical indicator, not a text box. But the name (10px) and its
+  // gap above the bar (3) must scale together so a 1.3× name stays
+  // clear of the bar at every text size.
+  const fn = RENDER.match(/function\s+drawBossBar[\s\S]{0,5000}^\}/m);
+  assert.ok(fn, 'must locate drawBossBar');
+  // Producer-side: pin each scaled local to its EXACT canonical name
+  // and formula (bypass-resistant per gpt-5.3-codex r1).
+  assert.match(fn[0],
+    /const\s+nameFs\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*10\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'nameFs must be assigned Math.max(N, Math.round(10 * settings.textScale))');
+  assert.match(fn[0],
+    /const\s+nameGap\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*3\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'nameGap must be assigned Math.max(N, Math.round(3 * settings.textScale))');
+  // Consumer-side: pin each sink to its EXACT producer identifier.
+  assert.match(fn[0],
+    /ctx\.font\s*=\s*`bold\s*\$\{nameFs\}px\s+monospace`/,
+    'boss-bar name ctx.font template must interpolate nameFs by name (no decoy)');
+  assert.match(fn[0],
+    /fillText\s*\(\s*name\s*,\s*barCx\s*,\s*barY\s*-\s*nameGap\s*\)/,
+    'boss-bar name fillText must subtract nameGap from barY (no decoy)');
+  // Bare-literal regression bans.
+  assert.doesNotMatch(fn[0],
+    /ctx\.font\s*=\s*['"]bold\s+10px/,
+    'boss-bar name must not hard-code "bold 10px monospace"');
+  assert.doesNotMatch(fn[0],
+    /barY\s*-\s*3\b/,
+    'boss-bar name must not hard-code "barY - 3"');
+});
+
+test('boss-bar HP text font + gap-below-bar scale with settings.textScale', () => {
+  // HP/phase readout floats below the bar. Both font (8) and gap (9)
+  // must scale together — at 1.3× the 8→11px text would otherwise
+  // crowd the unchanged 9px gap.
+  const fn = RENDER.match(/function\s+drawBossBar[\s\S]{0,5000}^\}/m);
+  assert.ok(fn, 'must locate drawBossBar');
+  // Producer-side bind to canonical identifiers.
+  assert.match(fn[0],
+    /const\s+hpFs\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*8\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'hpFs must be assigned Math.max(N, Math.round(8 * settings.textScale))');
+  assert.match(fn[0],
+    /const\s+hpGap\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*9\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'hpGap must be assigned Math.max(N, Math.round(9 * settings.textScale))');
+  // Consumer-side bind.
+  assert.match(fn[0],
+    /ctx\.font\s*=\s*`\$\{hpFs\}px\s+monospace`/,
+    'boss-bar HP ctx.font template must interpolate hpFs by name');
+  assert.match(fn[0],
+    /fillText\s*\([^)]*barY\s*\+\s*barH\s*\+\s*hpGap\s*\)/,
+    'boss-bar HP fillText must add hpGap to barY+barH (no decoy)');
+  // Bare-literal regression bans.
+  assert.doesNotMatch(fn[0],
+    /ctx\.font\s*=\s*['"]8px/,
+    'boss-bar HP text must not hard-code "8px monospace"');
+  assert.doesNotMatch(fn[0],
+    /barY\s*\+\s*barH\s*\+\s*9\b/,
+    'boss-bar HP text must not hard-code "barY + barH + 9"');
+});
+
+test('drawStatusBar badge Y-offset scales with settings.textScale to track the scaled key indicator row', () => {
+  // Per gpt-5.3-codex r1 review of this PR: scaling the key indicator
+  // row in render.js without scaling drawStatusBar's badge anchor
+  // produces a vertical collision at textScale 1.3× — the larger key
+  // text top creeps into the badge row's bottom edge.
+  // Both branches of the (hasKeys ? 32 : 16) ternary must scale so the
+  // badge row tracks the key indicator row that drawHUD now scales.
+  // Floors prevent collapse into the HUD at 0.85× (12) or into the
+  // larger key row at 0.85× (24).
+  const fn = CONTENT.match(/function\s+drawStatusBar[\s\S]{0,3500}^\}/m);
+  assert.ok(fn, 'must locate drawStatusBar');
+  // Producer-side: pin the WHOLE assignment to its EXACT canonical name
+  // `badgeYOffset` so a decoy `const _u1 = scaledFormula1; const _u2 =
+  // scaledFormula2; const badgeYOffset = hasKeys ? 32 : 16;` cannot
+  // bypass — the decoy would satisfy independent formula assertions
+  // but the bound assignment requires the formula to be the actual RHS
+  // of `badgeYOffset`. Closes the bypass class identified by claude-
+  // opus-4.7 r2 (which proved the unparenthesized-ternary loophole).
+  assert.match(fn[0],
+    /const\s+badgeYOffset\s*=\s*hasKeys\s*\?\s*Math\.max\s*\(\s*24\s*,\s*Math\.round\s*\(\s*32\s*\*\s*settings\.textScale\s*\)\s*\)\s*:\s*Math\.max\s*\(\s*12\s*,\s*Math\.round\s*\(\s*16\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'badgeYOffset must be the scaled ternary expression bound to its canonical name (bypass-resistant)');
+  // Consumer-side: pin y to subtract the EXACT badgeYOffset identifier.
+  assert.match(fn[0],
+    /const\s+y\s*=\s*layout\.hudTop\s*-\s*badgeYOffset\s*;/,
+    'y must subtract badgeYOffset by exact name (no decoy local)');
+  // Bare-literal regression bans (catches a partial revert that drops
+  // ONE branch of the ternary back to a literal — the bound producer
+  // assertion above catches the WHOLE-ternary revert; these catch
+  // partial reverts where someone refactors back via inline math).
+  assert.doesNotMatch(fn[0],
+    /\(\s*hasKeys\s*\?\s*32\s*:\s*16\s*\)/,
+    'drawStatusBar must not retain the bare-literal (hasKeys ? 32 : 16) ternary');
+  assert.doesNotMatch(fn[0],
+    /hasKeys\s*\?\s*32\s*:\s*16/,
+    'drawStatusBar must not contain ANY hasKeys?32:16 ternary form (parens or no parens)');
+});
+
 // ─── Helper: execute platform.js text and capture `settings` ────────────
 
 /**
