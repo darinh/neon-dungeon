@@ -1006,7 +1006,13 @@ const game = {
         // from scratch, since maxHp survives but the counter wouldn't).
         // Mirrors the explicit-enum pattern (no Object.keys) per
         // stored memory 'on-hit weapon affixes'.
-        _piercingHearts: p._piercingHearts || 0
+        _piercingHearts: p._piercingHearts || 0,
+        // OVERCHARGE floor modifier — per-run shot counter, every 5th shot
+        // is a guaranteed crit. Persisted so save/resume on an OVERCHARGE
+        // floor preserves the rhythm (otherwise the counter would reset to
+        // 0 mid-floor and the next 4 shots would lose their guaranteed
+        // crit slot). Mirrors the PIERCING_HEART explicit-enum pattern.
+        _overchargeShots: p._overchargeShots || 0
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -1122,6 +1128,10 @@ const game = {
     // 0 for older saves that predate the field; same `||0` nucleation
     // pattern used elsewhere in continueGame).
     p._piercingHearts = s._piercingHearts || 0;
+    // OVERCHARGE per-run shot counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors PIERCING_HEART
+    // restore pattern).
+    p._overchargeShots = s._overchargeShots || 0;
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
