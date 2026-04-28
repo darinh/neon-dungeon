@@ -107,6 +107,42 @@
     return true;
   }
 
+  // trauma_kit panic-button auto-heal. Reinterpreted from the upgrade matrix
+  // contract "Start each run with N nano-medic consumables" because the game
+  // has no boost-inventory system to honour the literal reading. Mechanic:
+  // when the player drops below 25% maxHp from a non-lethal hit and at least
+  // one charge is available, consume one charge and heal 40% maxHp (matching
+  // the NANO_MEDIC vendor boost). Distinct from second_wind (which fires on
+  // LETHAL damage) — this fires on chip damage that crosses the panic
+  // threshold while the player is still alive. Returns true on consumption
+  // so callers can apply visual/audio fx. Charges seeded by
+  // applyMetaToPlayer(trauma_kit) and persisted on save/resume so a Continue
+  // mid-run preserves remaining charges. Defensive on missing fields. The
+  // 40% heal is large enough to bump the player well above 25%, so a single
+  // hit cannot consume two charges in a row — re-arming requires the player
+  // to be ground back down across the 25% line again.
+  /** @param {any} player */
+  function tryTraumaKit(player) {
+    if (!player) return false;
+    const charges = player._nanoMedicCharges | 0;
+    if (charges <= 0) return false;
+    const maxHp = player.maxHp || 0;
+    if (!Number.isFinite(maxHp) || maxHp <= 0) return false;
+    // Reject non-finite hp explicitly — without this, NaN bypasses both
+    // the lethal-hit gate (NaN <= 0 is false) AND the threshold gate
+    // (NaN >= ... is false), so a corrupted save with hp=NaN would
+    // silently drain every charge while hp stayed NaN. Same defence as
+    // the sensorRadiusMult sanitization in src/content.js updateLighting
+    // (per stored memory 'FOV cache key').
+    if (!Number.isFinite(player.hp)) return false;
+    if (player.hp <= 0) return false; // leave revives to second_wind
+    if (player.hp >= maxHp * 0.25) return false;
+    player._nanoMedicCharges = charges - 1;
+    const heal = Math.round(maxHp * 0.4);
+    player.hp = Math.min(maxHp, player.hp + heal);
+    return true;
+  }
+
   return {
     computeOutgoingDmgMul,
     consumeSurgeShot,
@@ -115,5 +151,6 @@
     tickOutOfCombatRegen,
     resetOutOfCombat,
     tryMetaSecondWind,
+    tryTraumaKit,
   };
 });

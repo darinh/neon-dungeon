@@ -266,8 +266,15 @@
         f.regenerator = level;
         break;
       case 'trauma_kit':
-        // Start each run with `level` nano-medic consumables.
+        // Reinterpreted from "start each run with N nano-medic consumables"
+        // (no boost-inventory system exists) → seed `level` panic-button
+        // auto-heal charges. NEON.behavior.tryTraumaKit consumes one
+        // charge each time the player drops below 25% maxHp from a
+        // non-lethal hit, healing 40% maxHp. startingNanoMedics is kept
+        // for stat-readout / save-back-compat; _nanoMedicCharges is the
+        // live runtime counter.
         player.startingNanoMedics = (player.startingNanoMedics || 0) + level;
+        player._nanoMedicCharges = (player._nanoMedicCharges || 0) + level;
         f.trauma_kit = level;
         break;
       case 'second_wind':
