@@ -50,4 +50,41 @@ function assertModifierPoolSize(content) {
     `FLOOR_MODIFIERS must contain ${EXPECTED_MODIFIER_POOL_SIZE} entries (Object.keys-driven roll probability invariant); found ${keys.length}`);
 }
 
-module.exports = { assertModifierPoolSize, EXPECTED_MODIFIER_POOL_SIZE };
+/**
+ * Assert that a specific modifier name is registered as a top-level key
+ * inside FLOOR_MODIFIERS. This is the second invariant every per-modifier
+ * test suite verifies — the modifier dict can be present and valid but
+ * the modifier's own entry can be nested inside another field (typo) or
+ * missing entirely. MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS) is what
+ * game.js's floor-roll consults at line ~190; if a modifier ends up
+ * nested somewhere other than the dict, it would be defined but never
+ * rolled.
+ *
+ * Centralised because the prior per-file implementation duplicated
+ * this 6-line check across 9 *-modifier.test.js files (cascade,
+ * overcharge, windfall, signal-boost, reverb, quartermaster, autonomy,
+ * chainreact, magnetism). Centralising also fixes the latent
+ * `startIdx > 0` boundary bug (carried into the per-file copies before
+ * being caught in adversarial review of PR #270).
+ *
+ * @param {string} content - Raw text of src/content.js.
+ * @param {string} modifierName - Modifier key (e.g. 'CHAINREACT').
+ * @returns {void} - Throws via assert.ok on missing dict, missing
+ *   terminator, or modifier-key not present at top level.
+ */
+function assertModifierIsTopLevelKey(content, modifierName) {
+  assert.ok(typeof modifierName === 'string' && /^[A-Z_]+$/.test(modifierName),
+    `modifierName must be an UPPERCASE_UNDERSCORE string; got ${modifierName}`);
+  const startIdx = content.indexOf('const FLOOR_MODIFIERS');
+  assert.ok(startIdx !== -1, 'FLOOR_MODIFIERS dict must exist in content.js');
+  const endIdx = content.indexOf('};', startIdx);
+  assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate with };');
+  const dictBody = content.slice(startIdx, endIdx);
+  // Match `^\s*MODIFIER_NAME:` to scope to a top-level key in the dict
+  // (won't match nested object-literal fields with the same name).
+  const keyRe = new RegExp(`^\\s*${modifierName}:`, 'm');
+  assert.ok(keyRe.test(dictBody),
+    `${modifierName} must be a top-level key inside FLOOR_MODIFIERS so MODIFIER_KEYS includes it`);
+}
+
+module.exports = { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE };

@@ -28,6 +28,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { assertModifierIsTopLevelKey } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
@@ -123,13 +124,7 @@ test('CASCADE is a top-level key inside FLOOR_MODIFIERS (so MODIFIER_KEYS picks 
   // floor-roll consults at line ~190. If CASCADE somehow ends up
   // outside the dict (e.g., a nested field of another modifier or in
   // a different namespace), it would be defined but never rolled.
-  const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx > 0, 'FLOOR_MODIFIERS dict must exist');
-  const endIdx = CONTENT.indexOf('};', startIdx);
-  assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate');
-  const dictBody = CONTENT.slice(startIdx, endIdx);
-  assert.ok(/^\s*CASCADE:/m.test(dictBody),
-    'CASCADE must be a top-level key inside FLOOR_MODIFIERS so MODIFIER_KEYS includes it');
+  assertModifierIsTopLevelKey(CONTENT, 'CASCADE');
 });
 
 test('Enemy.die() reads _EG.modifier === "CASCADE" as the top-level gate', () => {
