@@ -29,42 +29,15 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { extractBranch, loadAlignmentSources } = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
+const { CONTENT, CONTENT_CODE } = loadAlignmentSources(__dirname);
+// momentum is unique: also reads src/meta/behavior.js for the helper that
+// computes the multiplier (BEHAVIOR.computeMomentumMultiplier). Not yet
+// generalised in _alignment-helpers.js — keep this load inline.
 const BEHAVIOR = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'meta', 'behavior.js'), 'utf8'
 );
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
 
 // ─── getStatusEffects() momentum fx entry ──────────────────────────────
 
