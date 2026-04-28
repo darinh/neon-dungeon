@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const PLATFORM = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
+);
 
 // ─── Wiring assertions ──────────────────────────────────────────────────
 
@@ -378,4 +381,61 @@ test('WATCHER recovery sweep-resume clears _wFired so flash re-arms cleanly', ()
   const recoveryToSweep = aiBody.match(/_wState\s*=\s*'sweep'[\s\S]{0,200}_wFired\s*=\s*false/);
   assert.ok(recoveryToSweep,
     'recovery-to-sweep transition must clear _wFired');
+});
+
+// ─── Bespoke audio wiring ────────────────────────────────────────────────
+// WATCHER originally piggybacked on audio.resonatorCharge / audio.resonatorFire
+// as a v1 placeholder. The two mobs now have distinct lock-on / fire SFX so
+// the player can disambiguate them by ear in a room containing both
+// (RESONATOR floor 6+, WATCHER floor 6+ — they co-occur). These tests pin:
+//   1. platform.js exposes audio.watcherCharge() and audio.watcherFire().
+//   2. aiWatcher calls them (and does NOT call the resonator equivalents).
+// Cross-file desync defence per stored memory 'HUD status fx' / similar:
+// without this test, a future refactor of the audio object could rename or
+// drop these methods and the WATCHER would silently fall back to the
+// `if (audio.watcherCharge) audio.watcherCharge();` no-op guard.
+
+test('platform.js exposes audio.watcherCharge and audio.watcherFire', () => {
+  assert.match(PLATFORM, /watcherCharge\s*\(\s*\)\s*\{/,
+    'platform.js audio object must define watcherCharge() method');
+  assert.match(PLATFORM, /watcherFire\s*\(\s*\)\s*\{/,
+    'platform.js audio object must define watcherFire() method');
+});
+
+test('aiWatcher uses bespoke watcher SFX, not resonator placeholder SFX', () => {
+  // Scope the assertion to the FULL aiWatcher method body (signature →
+  // next `aiX(` method signature, exclusive). The 6000-char window other
+  // tests in this file use is sufficient for matching positive patterns
+  // near the start of the method, but `doesNotMatch` requires the FULL
+  // body — a stale resonator call near the end of aiWatcher would
+  // false-pass otherwise (per gpt-5.3-codex review of this PR).
+  const sigRe = /^\s*aiWatcher\s*\(/m;
+  const sigMatch = ENTITIES.match(sigRe);
+  assert.ok(sigMatch, 'aiWatcher signature not found');
+  const aiStart = sigMatch.index || 0;
+  // Find the next method-ish signature in the same class to bound the slice.
+  // Pattern: optional whitespace, an identifier starting with `ai` followed
+  // by an upper-case letter (e.g. aiMirror, aiResonator, aiPhantom), then
+  // `(`. Anchored AFTER aiStart so we skip aiWatcher's own signature.
+  const nextSigRe = /^\s*ai[A-Z]\w*\s*\(/m;
+  const tail = ENTITIES.slice(aiStart + sigMatch[0].length);
+  const nextMatch = tail.match(nextSigRe);
+  assert.ok(nextMatch,
+    'no following ai*(...) method found after aiWatcher — extraction anchor regression?');
+  const aiBody = tail.slice(0, nextMatch.index);
+  // Sanity: extracted body should contain telltale aiWatcher symbols.
+  assert.match(aiBody, /_wState/,
+    'extracted aiWatcher body must contain _wState — extraction anchor regression?');
+
+  // Must call the bespoke watcher methods.
+  assert.match(aiBody, /audio\.watcherCharge\s*\(/,
+    'aiWatcher must call audio.watcherCharge() at the lock/telegraph site');
+  assert.match(aiBody, /audio\.watcherFire\s*\(/,
+    'aiWatcher must call audio.watcherFire() at the fire site');
+
+  // Must NOT fall back to the resonator placeholder methods.
+  assert.doesNotMatch(aiBody, /audio\.resonatorCharge\s*\(/,
+    'aiWatcher must NOT call audio.resonatorCharge — the v1 placeholder was replaced by the bespoke watcherCharge SFX. Cross-mob audio coupling masks per-mob threat ID.');
+  assert.doesNotMatch(aiBody, /audio\.resonatorFire\s*\(/,
+    'aiWatcher must NOT call audio.resonatorFire — the v1 placeholder was replaced by the bespoke watcherFire SFX. Cross-mob audio coupling masks per-mob threat ID.');
 });

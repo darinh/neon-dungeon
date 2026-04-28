@@ -1249,6 +1249,32 @@ const audio = (() => {
       osc('sine', 140, 50, 0.18, t, 0.22, bus);
       noise(0.16, t + 0.01, 0.14, 2400, bus);
     },
+    watcherCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Scanner radar lock-on — bright ascending ping + soft sub pulse.
+      // Distinct from resonator's harmonic chord (320-720Hz, three layers,
+      // wet/diffuse): higher fundamental, narrower spectrum, dryer envelope
+      // so the player reads "lighthouse caught me" not "cone winding up".
+      // Drier mix (less reverb tail) keeps multiple watchers in a room from
+      // mudding into one wash.
+      const bus = wetDry(1, 0.30, 0.20);
+      osc('sine', 1500, 3500, 0.06, t, 0.32, bus);
+      osc('triangle', 2400, 4200, 0.04, t + 0.02, 0.18, bus);
+      osc('sine', 220, 180, 0.08, t, 0.18, bus);
+    },
+    watcherFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hitscan beam discharge — bright laser snap + thin sine glide + a
+      // crisp noise burst. Distinct from resonator's bass-heavy sonic boom
+      // (140Hz sine, 600→90Hz saw, 2.4kHz noise): higher register, no sub,
+      // shorter tail. Reads as "beam fired" not "cone roared". Same dry
+      // envelope as watcherCharge so a fire-on-stun cancellation isn't
+      // flooded by reverb from the canceled charge.
+      const bus = wetDry(1, 0.20, 0.30);
+      osc('square', 880, 440, 0.05, t, 0.16, bus);
+      osc('sine', 2200, 1100, 0.07, t, 0.14, bus);
+      noise(0.06, t + 0.005, 0.06, 4000, bus);
+    },
     mirrorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Glassy ascending shimmer — "your shot is coming back". Bright
