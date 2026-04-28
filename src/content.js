@@ -726,6 +726,7 @@ const HACKWARE = {
   BLINK:        { name:'Blink',        desc:'Teleport 4 tiles in aim direction', colour:'#88ccff', icon:'⌖', cooldown:9 },
   REPAIR_PROTOCOL:{ name:'Repair Protocol', desc:'Heal 4 HP/s for 4s',           colour:'#00ff88', icon:'✚', cooldown:18 },
   REVERSE_POLARITY:{ name:'Reverse Polarity', desc:'Reflect enemy shots in 6t back at owners', colour:'#aaffee', icon:'⇄', cooldown:14 },
+  EMP_LINE:     { name:'EMP Line',     desc:'Stun beam: 8t pierce, disables electronics', colour:'#00eecc', icon:'═', cooldown:11 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1160,6 +1161,262 @@ function activateHackware(player) {
       }
       break;
     }
+    case 'EMP_LINE': {
+      // Directional piercing stun beam — the LINE counterpart to
+      // EMP_BURST's RADIUS. Trades EMP_BURST's 4-tile radius (~50 tile
+      // area, all-around) for an 8-tile reach in one direction (~8 tile
+      // area, narrow). Niche: long-range crowd control + electronics
+      // disable on a clean lane (corridor sweeps, distant-shooter
+      // suppression). Cooldown 11s sits between EMP_BURST (10s) and
+      // STATIC_FIELD (12s) — slightly slower than the burst so the
+      // burst stays the panic-button.
+      audio.hackwareEMPLine();
+      // Aim direction: mirror BLINK pattern. Mouse aim → norm() →
+      // player.facing fallback → respect lockAimToMove. Without the
+      // facing fallback, click-on-self produces a no-op even when the
+      // player is clearly facing somewhere; without the setting gate,
+      // lock-aim users get a mouse-aimed beam that ignores their
+      // explicit "use movement direction" preference.
+      let edx, edy;
+      if (settings.lockAimToMove) {
+        edx = player.facing.x; edy = player.facing.y;
+      } else {
+        const camE = getCamera(player);
+        const ax = (mouse.x + camE.x) / TILE - player.x;
+        const ay = (mouse.y + camE.y) / TILE - player.y;
+        [edx, edy] = norm(ax, ay);
+        if (!edx && !edy) { edx = player.facing.x; edy = player.facing.y; }
+      }
+      // Sweep to find the TRUE endpoint. The beam stops at the first
+      // non-isPassable tile (T.WALL, LOCKED_R/B/G, sealed boss/challenge
+      // entrances which flip to T.WALL on seal). Step 0.25 matches the
+      // BLINK / SHOCK_PULSE precedent — fine enough that a 1-tile-thick
+      // wall can't be tunneled by the sweep granularity. Without the
+      // wall-stop the beam would clip through interior walls and
+      // produce wraparound stuns.
+      const MAX_LEN = 8, STEP_E = 0.25;
+      const STEPS_E = Math.ceil(MAX_LEN / STEP_E);
+      let endX = player.x, endY = player.y;
+      if (map) {
+        for (let s = 1; s <= STEPS_E; s++) {
+          const tx = player.x + edx * s * STEP_E;
+          const ty = player.y + edy * s * STEP_E;
+          const fx = Math.floor(tx), fy = Math.floor(ty);
+          if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) break;
+          if (!isPassable(map[fy][fx])) break;
+          endX = tx; endY = ty;
+        }
+      }
+      // Point-to-segment squared distance from (px,py) to segment
+      // (player.{x,y}) → (endX,endY). Inlined so the hot path stays
+      // allocation-free (no temp vector objects per enemy / per laser).
+      // Returns Infinity for "behind the player" — the unclamped t is
+      // negative there, and clamping it to 0 alone would create a
+      // backwards stun bubble equal to WIDTH at the start endpoint
+      // (enemies 0.5t behind the player → segDist = 0.5 < WIDTH 0.7 →
+      // stun). EMP_LINE is documented as directional; the bubble
+      // contradicts that intent and would let players "stun behind me
+      // for free". The Infinity return here closes that hole.
+      const ex = endX - player.x, ey = endY - player.y;
+      const segLen2 = ex * ex + ey * ey;
+      /** @param {number} px @param {number} py */
+      const segDist2 = (px, py) => {
+        if (segLen2 < 1e-6) {
+          const ddx = px - player.x, ddy = py - player.y;
+          return ddx * ddx + ddy * ddy;
+        }
+        const apx = px - player.x, apy = py - player.y;
+        const tRaw = (apx * ex + apy * ey) / segLen2;
+        if (tRaw < 0) return Infinity;
+        const t = Math.min(1, tRaw);
+        const cx = player.x + ex * t, cy = player.y + ey * t;
+        const ddx = px - cx, ddy = py - cy;
+        return ddx * ddx + ddy * ddy;
+      };
+      // Minimum squared distance between two segments (P1→P2) and
+      // (P3→P4). Replaces an earlier 3-sample heuristic that missed
+      // 53–83% of laser-beam crossings (a long laser can cross our
+      // beam at an interior point while both endpoints AND the laser
+      // midpoint sit far from our segment). Standard
+      // closest-distance-between-two-segments formula — clamped
+      // parametric solve in O(1). Used only for laser handling below;
+      // enemies/turrets/cameras are points and use segDist2 directly.
+      /**
+       * @param {number} ax @param {number} ay
+       * @param {number} bx @param {number} by
+       * @param {number} cx @param {number} cy
+       * @param {number} dx @param {number} dy
+       */
+      const segSegDist2 = (ax, ay, bx, by, cx, cy, dx, dy) => {
+        const ux = bx - ax, uy = by - ay;
+        const vx = dx - cx, vy = dy - cy;
+        const a = ux * ux + uy * uy;
+        const c = vx * vx + vy * vy;
+        // Degenerate-segment short-circuits. The canonical
+        // closest-distance-between-two-segments algorithm divides by
+        // segment lengths and produces wrong answers when either
+        // segment is a point (sN/tN ratios collapse to 0/0). For our
+        // call site the beam is degenerate when the player faces a
+        // wall directly (sweep didn't advance) — we still need a
+        // sensible answer so the laser-disable logic doesn't silently
+        // misfire. Smoke-tested: a horizontal 8t beam from (0,0) and
+        // a degenerate "laser" at (4,0.6) returns 0.36 (correct
+        // point-to-segment squared distance), not 16.36 (the
+        // canonical algorithm's wrong default).
+        if (a < 1e-9 && c < 1e-9) {
+          const ddx = ax - cx, ddy = ay - cy;
+          return ddx * ddx + ddy * ddy;
+        }
+        if (c < 1e-9) {
+          const t = Math.max(0, Math.min(1, (ux * (cx - ax) + uy * (cy - ay)) / a));
+          const closeX = ax + ux * t, closeY = ay + uy * t;
+          const ddx = closeX - cx, ddy = closeY - cy;
+          return ddx * ddx + ddy * ddy;
+        }
+        if (a < 1e-9) {
+          const t = Math.max(0, Math.min(1, (vx * (ax - cx) + vy * (ay - cy)) / c));
+          const closeX = cx + vx * t, closeY = cy + vy * t;
+          const ddx = closeX - ax, ddy = closeY - ay;
+          return ddx * ddx + ddy * ddy;
+        }
+        const wx = ax - cx, wy = ay - cy;
+        const b = ux * vx + uy * vy;
+        const d = ux * wx + uy * wy;
+        const eDot = vx * wx + vy * wy;
+        const D = a * c - b * b;
+        let sN, sD = D, tN, tD = D;
+        if (D < 1e-9) {
+          sN = 0; sD = 1;
+          tN = eDot; tD = c;
+        } else {
+          sN = b * eDot - c * d;
+          tN = a * eDot - b * d;
+          if (sN < 0)      { sN = 0;  tN = eDot;     tD = c; }
+          else if (sN > sD){ sN = sD; tN = eDot + b; tD = c; }
+        }
+        if (tN < 0) {
+          tN = 0;
+          if (-d < 0) sN = 0;
+          else if (-d > a) sN = sD;
+          else { sN = -d; sD = a; }
+        } else if (tN > tD) {
+          tN = tD;
+          if (-d + b < 0) sN = 0;
+          else if (-d + b > a) sN = sD;
+          else { sN = -d + b; sD = a; }
+        }
+        const sc = Math.abs(sN) < 1e-9 ? 0 : sN / sD;
+        const tc = Math.abs(tN) < 1e-9 ? 0 : tN / tD;
+        const px = wx + sc * ux - tc * vx;
+        const py = wy + sc * uy - tc * vy;
+        return px * px + py * py;
+      };
+      const WIDTH = 0.7;
+      const WIDTH_SQ = WIDTH * WIDTH;
+      // Stun every enemy whose centre is within WIDTH of the beam segment.
+      // LOS gate is mandatory because segDist2 alone admits enemies on
+      // the far side of a thin wall the beam BARELY missed (e.g. enemy
+      // at 0.6 perpendicular dist, but a wall sits between player and
+      // enemy). _wrPhased mobs (WRAITH/TUNNELLER while burrowed) bypass
+      // LOS to match EMP_BURST's hard-counter contract — phase doesn't
+      // protect from EMP. WRAITH-emerge logic mirrors the BURST handler
+      // exactly so phase-stun sequencing is identical between the two
+      // EMP variants. TUNNELLER intentionally NOT handled here — its
+      // own stun handler runs next frame and performs the proper
+      // _tnState→'surfaced' transition (writing _wrState here would
+      // contaminate two state machines, same caveat as EMP_BURST).
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (e._disguised) continue;
+        if (segDist2(e.x, e.y) > WIDTH_SQ) continue;
+        const losOk = e._wrPhased ? true : (map && hasLOS(player.x, player.y, e.x, e.y, map));
+        if (!losOk) continue;
+        if (e._wrPhased && e.type === 'WRAITH') {
+          const emerge = e._wrFindEmergeTile(map, player);
+          if (emerge) {
+            e.x = emerge.x; e.y = emerge.y;
+            e._wrState = 'corporeal'; e._wrTimer = 2.0; e._wrPhased = false;
+            audio.wraithPhaseIn();
+          }
+        }
+        // Stun durations slightly shorter than EMP_BURST (2s/1s) — the
+        // tradeoff for the line's longer reach. Bosses still get the
+        // halved duration as in BURST. Inlined into Math.max so the
+        // boss ternary IS the duration arg — without the inline, a
+        // contributor can declare `const dur = e.isBoss ? 0.75 : 1.5;`
+        // as a decoy and use a flat `dur = 1.5` for the actual stun
+        // (opus-4.7 r1 finding 5).
+        e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 0.75 : 1.5);
+        spawnParticles(e.x, e.y, 'SPARK', '#00eecc', 4);
+        spawnDmgText(e.x, e.y, 'STUN', '#00eecc');
+      }
+      // Electronics along the beam. Same target list as EMP_BURST so
+      // the LINE reads as a true EMP — a player who memorised "EMP
+      // disables turrets/lasers" doesn't have to remember a second
+      // exception list for the LINE variant. Only the geometry
+      // changes (segment-distance vs radius).
+      if (map) {
+        for (const l of lasers) {
+          if (l.dead) continue;
+          // Proper segment-to-segment minimum distance. The earlier
+          // 3-sample heuristic (endpoints + midpoint) missed any laser
+          // crossing the EMP beam at an interior position — a 6-tile
+          // laser at perpendicular y=4 could cross our vertical beam
+          // at (0,4) with all three samples landing 1.5+ tiles away.
+          // Reviewers measured ~53–83% miss rate on typical lasers.
+          // segSegDist2 catches every crossing in O(1) and matches
+          // the precision EMP_BURST achieves via point-to-segment
+          // math against each laser beam.
+          if (segSegDist2(player.x, player.y, endX, endY, l.x1, l.y1, l.x2, l.y2) < WIDTH_SQ) {
+            l.disabled = true; l.disableTimer = LASER_DISABLE_DUR; audio.laserDisable();
+          }
+        }
+        for (const wt of wallTurrets) {
+          if (wt.dead || wt.hacked) continue;
+          if (segDist2(wt.x, wt.y) < WIDTH_SQ && hasLOS(player.x, player.y, wt.x, wt.y, map)) {
+            hackWallTurret(wt);
+          }
+        }
+        for (const g of shieldGens) {
+          if (g.dead) continue;
+          if (segDist2(g.x, g.y) < WIDTH_SQ && hasLOS(player.x, player.y, g.x, g.y, map)) {
+            damageShieldGen(g, 15);
+          }
+        }
+        for (const cam of cameras) {
+          if (cam.dead) continue;
+          if (segDist2(cam.x, cam.y) < WIDTH_SQ && hasLOS(player.x, player.y, cam.x, cam.y, map)) {
+            damageCamera(cam, 15);
+          }
+        }
+        for (const f of disruptionFields) {
+          if (f.dead) continue;
+          if (segDist2(f.x, f.y) < WIDTH_SQ) {
+            f.dead = true;
+            spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
+          }
+        }
+        for (const w of gravityWells) {
+          if (w.dead) continue;
+          if (segDist2(w.x, w.y) < WIDTH_SQ) {
+            w.dead = true;
+            spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
+            audio.gravitonCollapse();
+          }
+        }
+      }
+      // Visual: emp_line is purely a draw-side effect (no per-frame
+      // logic in updateHackwareEffects beyond the age tick + maxAge
+      // splice — same shape as emp_ring). Endpoints frozen at cast.
+      hackwareEffects.push({ type:'emp_line', x1:player.x, y1:player.y, x2:endX, y2:endY, age:0, maxAge:0.45 });
+      // Muzzle bursts at the player AND the impact point — gives the
+      // beam a clear start/end read even at low alpha.
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#00eecc', 12);
+      spawnParticles(endX, endY, 'SPARK', '#00eecc', 8);
+      triggerShake(3, 0.15);
+      _CG.msg('═ EMP LINE', '#00eecc');
+      break;
+    }
   }
 }
 
@@ -1449,6 +1706,31 @@ function drawHackwareEffects(camX, camY) {
       ctx.shadowBlur = 15; ctx.shadowColor = '#00ddff';
       ctx.lineWidth = 3 * (1 - progress);
       NEON.draw.circleStroke(ctx, sx, sy, r);
+      ctx.restore();
+    }
+    if (fx.type === 'emp_line') {
+      // Twin-stroke beam: bright inner + soft outer halo. Both fade
+      // together so the beam reads as a single energy lance, not two
+      // overlapping primitives. Mirrors the RESONATOR/MIRROR enemy beam
+      // visual language so players who already learned "teal/cyan beam =
+      // EMP/electric" don't have to re-decode this one. The post-flash
+      // particles spawned at cast handle the impact-point pop; the beam
+      // itself is just the in-flight lance.
+      const fade = 1 - (fx.age / fx.maxAge);
+      const x1 = fx.x1 * TILE - camX, y1 = fx.y1 * TILE - camY;
+      const x2 = fx.x2 * TILE - camX, y2 = fx.y2 * TILE - camY;
+      ctx.save();
+      // Outer halo (wide, low alpha)
+      ctx.globalAlpha = fade * 0.35;
+      ctx.strokeStyle = '#00eecc';
+      ctx.shadowBlur = 20; ctx.shadowColor = '#00eecc';
+      ctx.lineWidth = 8 * fade;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
+      // Inner core (narrow, bright)
+      ctx.globalAlpha = fade * 0.95;
+      ctx.strokeStyle = '#ccfff0';
+      ctx.lineWidth = 2.5 * fade + 0.5;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
       ctx.restore();
     }
     if (fx.type === 'swarm') {
