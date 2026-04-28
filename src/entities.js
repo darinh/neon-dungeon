@@ -2244,6 +2244,49 @@ class Enemy {
       }
       spawnParticles(this.x, this.y, 'MUZZLE', '#44ff88', 5);
     }
+    // WINDFALL floor modifier — third positive modifier in the pool, paired
+    // economically with CASCADE (sustain) and OVERCHARGE (damage). Every 5th
+    // qualifying defeat drops a single bonus core (+1 value) at the kill
+    // location. Cores are post-run currency (NEON.save.addCores) so this
+    // accelerates META progression rather than the current run — the
+    // headline incentive is "clear the WINDFALL floor thoroughly."
+    //
+    // Tempo: every 5th kill mirrors OVERCHARGE's rhythm so players already
+    // attuned to the OVERCHARGE counter recognise the cadence. ~6 bonus
+    // cores per 30-mob floor. Comparable in value to a SALVAGE-affixed
+    // weapon (~3 cores/floor, 10% rate) plus a couple of elites — strong
+    // but not run-defining.
+    //
+    // Gates (mirror CASCADE):
+    //   _EG.modifier === 'WINDFALL' — modifier-roll only; off-floor and
+    //     other modifiers fall through. Boss floors / floor 1 are
+    //     modifier-free (game.js:184) so no isBoss gate needed.
+    //   !this.isShard — SPLITTER shard chains would let one entry kill
+    //     accelerate the counter unfairly; cap to one tick per top-level
+    //     enemy.
+    //   !isSummon — SUMMONER farming would otherwise turn the floor into
+    //     a free-core fountain. Mirrors CASCADE/SALVAGE/PIERCING_HEART
+    //     gating upstream.
+    //
+    // Counter scope: per-RUN (`player._windfallKills`), persisted in
+    // saveGame's explicit-enum block + restored in continueGame so a
+    // quit-and-resume on a WINDFALL floor preserves the rhythm. Increment
+    // ONLY on WINDFALL floors so the counter doesn't drift on non-WINDFALL
+    // floors and produce a surprise instant-bonus on the next WINDFALL
+    // floor (per stored memory 'positive floor modifiers').
+    //
+    // NEON.cores guard mirrors line 2117 so the path is browser-only and
+    // can't crash node:test.
+    if (_EG.modifier === 'WINDFALL' && !this.isShard && !isSummon) {
+      const _wfp = _EG.player;
+      _wfp._windfallKills = (_wfp._windfallKills || 0) + 1;
+      if (_wfp._windfallKills % 5 === 0
+          && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+        NEON.cores.spawnCoreDrop(game, this.x, this.y, 1);
+        spawnDmgText(this.x, this.y - 0.4, '+1◆', '#a866ff');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#a866ff', 5);
+      }
+    }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       _EG.player.adrenalineTimer = 2;
@@ -10822,6 +10865,7 @@ class Player {
   /** @type {any} */ _shieldCharges;
   /** @type {any} */ _piercingHearts;
   /** @type {any} */ _overchargeShots;
+  /** @type {any} */ _windfallKills;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
   /** @type {any} */ adrenalineTimer;

@@ -1027,6 +1027,12 @@ const game = {
         // 0 mid-floor and the next 4 shots would lose their guaranteed
         // crit slot). Mirrors the PIERCING_HEART explicit-enum pattern.
         _overchargeShots: p._overchargeShots || 0,
+        // WINDFALL floor modifier — per-run kill counter, every 5th defeat
+        // drops a bonus core. Persisted so save/resume on a WINDFALL floor
+        // preserves the rhythm (otherwise the counter would reset to 0
+        // mid-floor and the next 4 kills would lose their bonus slot).
+        // Mirrors the OVERCHARGE explicit-enum pattern.
+        _windfallKills: p._windfallKills || 0,
         // trauma_kit panic-button charges — per-run counter seeded by
         // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
         // Continue mid-run preserves remaining charges (otherwise a
@@ -1155,6 +1161,9 @@ const game = {
     // for older saves that predate the field; mirrors PIERCING_HEART
     // restore pattern).
     p._overchargeShots = s._overchargeShots || 0;
+    // WINDFALL per-run kill counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors OVERCHARGE).
+    p._windfallKills = s._windfallKills || 0;
     // trauma_kit panic-button charges — restore from save when present.
     // For saves produced BEFORE this PR shipped, the explicit field is
     // absent (`s._nanoMedicCharges == null`); we fall back to the
