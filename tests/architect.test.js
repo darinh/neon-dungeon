@@ -88,6 +88,23 @@ test('ARCHITECT is registered in CREDIT_VALUES (per opus r1)', () => {
     'ARCHITECT must appear in CREDIT_VALUES with a non-default credit drop');
 });
 
+test('ARCHITECT appears in SOURCE_LABELS and SOURCE_COLOURS (per registry-completeness audit)', () => {
+  // Convention: every mob in ENEMIES gets entries in SOURCE_LABELS +
+  // SOURCE_COLOURS, even atk=0 mobs (e.g. MAGPIE has 'Magpie' / '#cceeff'
+  // despite never dealing damage). ARCHITECT atk=0 means it never
+  // appears as a death source, but the convention is followed for
+  // registry-uniformity. Caught by post-merge audit driven by the
+  // field-notes 2026-04-28-arc-shape-determines-review-yield insight:
+  // "the seams between systems are where the bugs live — when adding
+  // a new entity to a system that has registries, audit ALL the
+  // registries". The 3-reviewer pass on PR #355 caught ENEMY_WEIGHTS
+  // and CREDIT_VALUES omissions but missed these two.
+  assert.match(ENTITIES, /ARCHITECT:\s*'Architect'/,
+    "SOURCE_LABELS must contain ARCHITECT:'Architect'");
+  assert.match(ENTITIES, /ARCHITECT:\s*'#aa6633'/,
+    "SOURCE_COLOURS must contain ARCHITECT:'#aa6633' (matches mob colour)");
+});
+
 // ─── Constants block ────────────────────────────────────────────────────
 
 test('ARCHITECT tuning constants are declared with documented values', () => {
