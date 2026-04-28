@@ -1599,7 +1599,18 @@ const game = {
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
-      const pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
+      // Pickup-radius composition. Stacks multiplicatively with the
+      // MAGNETIC_FIELD augment ("Double item pickup radius") AND the
+      // MAGNETISM floor modifier (ninth positive modifier, "Item pickup
+      // radius increased 50% on this floor"). Both are passive
+      // multiplicative reductions, so an MAGNETISM floor with
+      // MAGNETIC_FIELD yields radius × 2 × 1.5 = ×3 (0.7 → 2.1 tiles).
+      // Mirrors the AUTONOMY×OVERCLOCKER pattern at content.js
+      // activateHackware (PR #266). Uses this.modifier (the canonical
+      // game.js floor-modifier ref) so a typo would silently disable
+      // the bonus on every pickup tick.
+      let pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
+      if (this.modifier === 'MAGNETISM') pickupRadius *= 1.5;
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<pickupRadius) {
         if (it.isKey) {
           audio.pickup();
