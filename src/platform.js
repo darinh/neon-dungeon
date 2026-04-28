@@ -1275,6 +1275,29 @@ const audio = (() => {
       osc('sine', 2200, 1100, 0.07, t, 0.14, bus);
       noise(0.06, t + 0.005, 0.06, 4000, bus);
     },
+    architectTarget() {
+      const c = getCtx(); const t = c.currentTime;
+      // ARCHITECT target telegraph — earthy mid-low rumble with metallic
+      // punctuation. Distinct from watcherCharge (bright high register)
+      // and resonator (harmonic chord) so the player can identify the
+      // mob by sound alone in a multi-mob room. Read: "something is
+      // about to drop" — geological, mechanical, not laser.
+      const bus = wetDry(1, 0.35, 0.30);
+      osc('sine', 130, 95, 0.08, t, 0.22, bus);          // sub thump
+      osc('triangle', 320, 240, 0.06, t + 0.05, 0.14, bus); // metallic ring
+      noise(0.04, t + 0.10, 0.05, 1800, bus);             // grit tail
+    },
+    architectCommit() {
+      const c = getCtx(); const t = c.currentTime;
+      // ARCHITECT commit — heavy brick-thud with concrete impact. Single
+      // sharp drop that reads as "wall slammed into existence". Drier
+      // than the target telegraph so the commit feels SOLID and
+      // immediate even when multiple architects fire in quick succession.
+      const bus = wetDry(1, 0.20, 0.20);
+      osc('sine', 90, 55, 0.10, t, 0.32, bus);          // body of the thud
+      osc('square', 280, 120, 0.05, t + 0.005, 0.10, bus); // impact crack
+      noise(0.07, t + 0.01, 0.05, 800, bus);              // dust crunch
+    },
     mirrorCharge() {
       const c = getCtx(); const t = c.currentTime;
       // Glassy ascending shimmer — "your shot is coming back". Bright
