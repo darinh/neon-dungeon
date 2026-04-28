@@ -34,7 +34,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { assertModifierPoolSize, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
+const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
@@ -119,13 +119,7 @@ test('CHAINREACT is registered in FLOOR_MODIFIERS with label/desc/colour/icon', 
 });
 
 test('CHAINREACT is a top-level key inside FLOOR_MODIFIERS (so MODIFIER_KEYS picks it up)', () => {
-  const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx > 0, 'FLOOR_MODIFIERS dict must exist');
-  const endIdx = CONTENT.indexOf('};', startIdx);
-  assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate');
-  const dictBody = CONTENT.slice(startIdx, endIdx);
-  assert.ok(/^\s*CHAINREACT:/m.test(dictBody),
-    'CHAINREACT must be a top-level key inside FLOOR_MODIFIERS so MODIFIER_KEYS includes it');
+  assertModifierIsTopLevelKey(CONTENT, 'CHAINREACT');
 });
 
 test('CHAINREACT desc advertises the chain-window credit-bonus contract', () => {

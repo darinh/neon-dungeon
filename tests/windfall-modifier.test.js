@@ -32,7 +32,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { assertModifierPoolSize, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
+const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
@@ -123,13 +123,7 @@ test('WINDFALL is a top-level key inside FLOOR_MODIFIERS (so MODIFIER_KEYS picks
   // MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS) is what game.js's
   // floor-roll consults at line ~190. If WINDFALL ends up nested
   // somewhere other than the dict, it would be defined but never rolled.
-  const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx > 0, 'FLOOR_MODIFIERS dict must exist');
-  const endIdx = CONTENT.indexOf('};', startIdx);
-  assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate');
-  const dictBody = CONTENT.slice(startIdx, endIdx);
-  assert.ok(/^\s*WINDFALL:/m.test(dictBody),
-    'WINDFALL must be a top-level key inside FLOOR_MODIFIERS so MODIFIER_KEYS includes it');
+  assertModifierIsTopLevelKey(CONTENT, 'WINDFALL');
 });
 
 test('WINDFALL desc advertises the every-5th-defeat bonus-core contract', () => {

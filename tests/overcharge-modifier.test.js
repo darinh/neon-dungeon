@@ -33,6 +33,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { assertModifierIsTopLevelKey } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
@@ -130,13 +131,7 @@ test('OVERCHARGE is a top-level key inside FLOOR_MODIFIERS (so MODIFIER_KEYS pic
   // floor-roll consults at line ~190. If OVERCHARGE somehow ends up
   // outside the dict (e.g., a nested field of another modifier or in
   // a different namespace), it would be defined but never rolled.
-  const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx > 0, 'FLOOR_MODIFIERS dict must exist');
-  const endIdx = CONTENT.indexOf('};', startIdx);
-  assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate');
-  const dictBody = CONTENT.slice(startIdx, endIdx);
-  assert.ok(/^\s*OVERCHARGE\b\s*:/m.test(dictBody),
-    'OVERCHARGE must be a top-level key inside FLOOR_MODIFIERS so MODIFIER_KEYS includes it');
+  assertModifierIsTopLevelKey(CONTENT, 'OVERCHARGE');
 });
 
 test('OVERCHARGE colour is distinct from OVERCLOCK (#ffcc00) so the HUD palette stays unambiguous', () => {
