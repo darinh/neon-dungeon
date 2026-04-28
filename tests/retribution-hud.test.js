@@ -40,41 +40,13 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const {
+  extractBranch,
+  extractIfCondition,
+  loadAlignmentSources,
+} = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
+const { CONTENT, ENTITIES_CODE, CONTENT_CODE } = loadAlignmentSources(__dirname);
 
 // ─── getStatusEffects() RETRIBUTION fx entry ──────────────────────────
 
@@ -286,27 +258,6 @@ test('runtime: RETRIBUTION fx-gate semantics — five-state truth table', () => 
 // ─── runtime simulation: trigger pipeline alignment ────────────────────
 
 /**
- * Extract the parenthesised condition of an if-statement starting at the
- * given character index of `(`. Walks parens to balance, returns the
- * inner text WITHOUT outer parens. Returns null on unbalanced input.
- * @param {string} src
- * @param {number} openIdx index of the opening `(`
- */
-function extractIfCondition(src, openIdx) {
-  if (src[openIdx] !== '(') return null;
-  let depth = 1;
-  for (let i = openIdx + 1; i < src.length; i++) {
-    const c = src[i];
-    if (c === '(') depth++;
-    else if (c === ')') {
-      depth--;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return null;
-}
-
-/**
  * Normalise a JS predicate string for cross-file comparison:
  *   - strip whitespace
  *   - strip receiver prefix (`this.` / `player.` → ``)
@@ -315,6 +266,18 @@ function extractIfCondition(src, openIdx) {
  *     handles legacy player shapes (the guard is additive and does not
  *     change the truthy domain when perks IS defined — which it always
  *     is inside Player methods on the entities.js side).
+ *
+ * NOTE: kept INLINE rather than moved to tests/_alignment-helpers.js
+ * because this is the OLDER bidirectional `(this|player).` strip
+ * pattern. PRs #312/#318 deliberately moved to side-specific
+ * normalisers (multiplier strips ONLY `this.`, badge strips ONLY
+ * `player.`) which fail loudly on mixed-receiver bugs that
+ * bidirectional stripping silently masks. Upgrading this test to the
+ * side-specific pattern is a separate semantic refactor (could
+ * surface a real mixed-receiver bug) and is intentionally out of
+ * scope for the helper-extraction PR series — same precedent as
+ * tests/overdrive-hud.test.js (PR #324).
+ *
  * @param {string} cond
  */
 function normalisePredicate(cond) {
@@ -336,10 +299,6 @@ test('runtime: RETRIBUTION badge gate predicate matches the multiplier gate pred
   // would silently false-pass while the badge↔multiplier contract breaks.
   // This test extracts the FULL if-condition from BOTH sides and asserts
   // strict equality after normalisation.
-  const ENTITIES = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-  );
-  const ENTITIES_CODE = stripComments(ENTITIES);
 
   // ── Extract entities.js multiplier-gate condition ──
   // Anchor on the multiplier statement `a = Math.round(a * 1.5)` (the
