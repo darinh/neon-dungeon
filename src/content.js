@@ -2366,9 +2366,35 @@ function getStatusEffects(player) {
   }
   // STRIDE active (movement-built dmg stacks). Distinct from BERSERKER (HP gate)
   // and PRISTINE (high-HP gate) — STRIDE is purely movement-gated and stacks
-  // additively with both via Player.effectiveAtk().
-  if (player.perks.STRIDE && (player._strideStacks || 0) > 0) {
-    fx.push({ id: 'stride', icon: '⇶', label: 'RUSH ×' + player._strideStacks, colour: '#00ffaa' });
+  // multiplicatively with both via Player.effectiveAtk() at entities.js:11331.
+  //
+  // Display: ⇶ RUSH ×1.05 ... ×1.25 — multiplier-readout style mirroring
+  // HOT_HAND (PR #280), MOMENTUM (PR #282), OVERDRIVE (PR #302). Pre-PR
+  // the label was `RUSH ×N` (a STACK COUNT, 1..5), which collided
+  // visually with the multiplier-readout convention (`×N.NN`) used by
+  // every other ATK-buff badge — players had to mentally compute the
+  // 5%-per-stack multiplier from the count. Replacing the count with the
+  // multiplier surfaces the actual ATK boost directly. The action-word
+  // "RUSH" prefix is preserved (matches WARD/RAGE/PRIME/AIM single-noun
+  // identity style for HP/state-gated buff badges) so the badge remains
+  // visually identifiable as STRIDE-the-perk, not just "another ×N".
+  //
+  // Local alias `ss` mirrors the entities.js:11330 alias of the same
+  // name — keeps the badge gate predicate STRUCTURALLY IDENTICAL to the
+  // multiplier gate after `this.`/`player.` receiver normalisation, so
+  // the cross-file alignment test (tests/stride-hud.test.js) can compare
+  // them directly via strict equality (no alias-substitution rule needed).
+  //
+  // Defensive `player.perks &&` null-check matches the codebase pattern
+  // (legacy player shapes that bypass the ctor may lack .perks). Cross-
+  // file desync defence (per stored memory 'HUD status fx'): the per-
+  // stack rate (0.05) is a literal in BOTH the HUD label here AND the
+  // STRIDE_DMG_PER_STACK constant at entities.js:10944. The companion
+  // test parses entities.js and asserts the literals match.
+  const ss = (player._strideStacks || 0);
+  if (player.perks && player.perks.STRIDE && ss > 0) {
+    const mul = (1 + 0.05 * ss).toFixed(2);
+    fx.push({ id: 'stride', icon: '⇶', label: 'RUSH ×' + mul, colour: '#00ffaa' });
   }
   // DEADEYE charged (stillness latch — next shot gets ×1.5). Stillness
   // counterpart to STRIDE; both can be owned simultaneously, in which
