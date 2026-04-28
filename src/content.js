@@ -2717,6 +2717,44 @@ function getStatusEffects(player) {
   if (player.perks && player.perks.RETRIBUTION && player.retributionTimer > 0) {
     fx.push({ id: 'retribution', icon: '☄', label: player.retributionTimer.toFixed(1)+'s', colour: '#ff2266' });
   }
+  // GLASS_CANNON active — passive +30% ATK / +25% incoming damage trade.
+  // Pre-PR there was NO HUD signal of the trade. Players took 25% extra
+  // direct damage with no visual cue that GLASS_CANNON was the cause —
+  // same "invisible always-on perk" UX gap that PRs #276 (LAST_STAND),
+  // #280 (HOT_HAND), #282 (MOMENTUM), #284 (REGEN), #300 (RETRIBUTION),
+  // #302 (OVERDRIVE), #304 (DEADEYE charging), and #318 (BULWARK) all
+  // closed for their respective buffs/debuffs.
+  //
+  // Gate predicate is pure perk-ownership: GLASS_CANNON has no state
+  // (no timer, no stacks, no HP threshold) — owning the perk IS the
+  // active condition. The gate matches the offensive multiplier site
+  // at entities.js:11661 EXACTLY (after defensive `player.perks &&`
+  // short-circuit + receiver normalisation). The defensive-cost site
+  // at entities.js:11838 has an additional `!options.ignoreDefense`
+  // conjunct (env-DoT-damage-gate, see that block's comment) — that
+  // is intentionally NOT mirrored in the badge gate because the
+  // badge represents "you OWN the perk", not "you are CURRENTLY
+  // taking direct damage". The cross-file alignment test asserts
+  // both: (a) badge ≡ offensive site, (b) defensive-site delta is
+  // exactly the env-DoT exemption clause.
+  //
+  // Defensive `player.perks &&` short-circuit: legacy player shapes
+  // (test sandboxes, save migrations) may bypass the ctor and lack
+  // a .perks object. The earlier ENERGY_SHIELD branch at
+  // content.js:2292 unguarded-derefs player.perks, so a real call
+  // without .perks already crashes before reaching this gate — the
+  // guard here is defense-in-depth (per PR #300/#302/#304/#318
+  // reviewer convention for new HUD badges).
+  //
+  // Icon ⟁ matches the perk-card glyph at content.js:4718; colour
+  // #ff66aa matches the perk-card colour exactly (cross-file desync
+  // defence per stored memory 'HUD status fx'). Label 'GLASS' mirrors
+  // the action-word style of PRISTINE 'PRIME' / BERSERKER 'RAGE' /
+  // BULWARK 'WARD' (single short noun) and echoes the perk name so
+  // the badge is visually identifiable as GLASS_CANNON-the-perk.
+  if (player.perks && player.perks.GLASS_CANNON) {
+    fx.push({ id: 'glass-cannon', icon: '⟁', label: 'GLASS', colour: '#ff66aa' });
+  }
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
