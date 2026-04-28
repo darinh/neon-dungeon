@@ -672,6 +672,7 @@ const WEAPON_AFFIXES = {
   GREEDY:   { slot:'suffix', label:'of Greed',     colour:'#ffd700', desc:'+50% credits on kill',   effect:'greedy' },
   SALVAGE:  { slot:'suffix', label:'of Salvage',   colour:'#44ffcc', desc:'10% chance to drop a CORE on kill', effect:'salvage' },
   LUCKY:    { slot:'suffix', label:'of Luck',      colour:'#ffdd66', desc:'8% chance to drop a bonus item on kill', effect:'lucky' },
+  SIPHON:   { slot:'suffix', label:'of Siphoning', colour:'#88ff88', desc:'+1 credit per 3 hits',  effect:'siphon' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');

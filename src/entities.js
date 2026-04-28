@@ -1147,6 +1147,49 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       enemy._markedTimer = 3;
       spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff44aa', 3);
     }
+    else if (eff === 'siphon') {
+      // SIPHON 'of Siphoning' suffix — drip economy: every 3rd direct
+      // hit awards +1 credit to the player. Counter lives on the player
+      // (`_siphonHits`) so it accumulates across enemies, weapon swaps,
+      // and floor transitions within a run. Not persisted across
+      // save/load — losing 0–2 hits of accumulation is acceptable
+      // (saves complexity in src/game.js's save schema).
+      //
+      // Why this is on-hit rather than on-kill: complements GREEDY
+      // (on-kill, scales with floor) by rewarding sustained DPS instead
+      // of finishers — strong early-game when 1 CR matters, falls off
+      // late-game by design (no floor multiplier).
+      //
+      // Routing: applyHitEffects is only called from takeDamage at
+      // entities.js ~1781 with `if (!ctx.isProc)`, so procs (THUNDER
+      // chain, RICOCHET) DO NOT tick the counter. Burn DoT bypasses
+      // takeDamage entirely (entities.js:1219 direct hp -=) so DoT
+      // ticks DO NOT tick the counter either — only the player's
+      // direct weapon hits drip credits, which is the design intent.
+      //
+      // Gates (defense in depth — mirrors LEECH which fires on every
+      // enemy type without further filtering):
+      //   No isShard / isSummon gate — hitting a shard or summoned
+      //     ghost is still a real player attack action; consistent
+      //     with LEECH healing on hits to those mob classes. The
+      //     economic ceiling on summon farming is bounded by the
+      //     summoner's spawn rate (PROJECTOR caps at ~1 ghost/2.5s).
+      //   No isBoss gate — bosses ARE the high-DPS-target use case.
+      //     Comparable to MARK, which also has no boss gate (the
+      //     focus-fire reward against tanks is the design point).
+      //   No _disguised gate needed — applyHitEffects fires only
+      //     after takeDamage's reveal, but adding noise here would
+      //     require an extra check; LEECH/FLAME/FROST all skip the
+      //     gate too without leaking the ambush.
+      const _splr = _EG.player;
+      if (!_splr) continue;
+      _splr._siphonHits = (_splr._siphonHits || 0) + 1;
+      if (_splr._siphonHits >= 3) {
+        _splr._siphonHits = 0;
+        _splr.credits += 1;
+        spawnDmgText(_splr.x, _splr.y - 0.4, '+1 CR', '#88ff88');
+      }
+    }
     // 'explode' is handled in applyOnKill
   }
 }
