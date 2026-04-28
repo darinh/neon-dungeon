@@ -359,6 +359,169 @@ test('updateSettings minimapScale change forces a minimap cache rebuild', () => 
     'updateSettings must set _RG._minimapDirty = true when minimapScale changes');
 });
 
+// ─── Overlay-text scaling in render.js ──────────────────────────────────
+// Follow-up coverage: PR #361 scaled drawStatusBar + drawFloatingTexts.
+// This block extends settings.textScale to the four layout-safe overlay
+// surfaces: LEVEL UP! flash, drawMessages stack, drawHint above the HUD,
+// and the expanded-minimap title + close-hint.
+
+test('LEVEL UP! flash text scales with settings.textScale', () => {
+  // Centered overlay above the cyan flash. Layout-free (just centered
+  // text), so direct font scaling is safe. Floor at 20px so 0.85× still
+  // reads as a celebratory shout. Per "hot path discipline" memory the
+  // assignment site is a one-shot per level-up so no hoist needed.
+  const block = RENDER.match(/player\.levelFlash>0\.5[\s\S]{0,500}LEVEL UP![\s\S]{0,200}/);
+  assert.ok(block, 'must locate the LEVEL UP! text branch');
+  assert.match(block[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*36\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'LEVEL UP! must compute font px via Math.max(N, Math.round(36 * settings.textScale))');
+  // Pin: the assigned font string must reference the computed local,
+  // not a hard-coded literal. A hard-coded "bold 36px" would silently
+  // ignore the textScale setting.
+  assert.match(block[0],
+    /ctx\.font\s*=\s*`bold\s*\$\{[A-Za-z_$][\w$]*\}px\s+monospace`/,
+    'LEVEL UP! ctx.font must reference the computed font-px local');
+  assert.doesNotMatch(block[0],
+    /ctx\.font\s*=\s*['"]bold\s+36px/,
+    'LEVEL UP! must NOT use the hard-coded "bold 36px monospace" string — that ignores textScale');
+});
+
+test('drawHint font + gap-above-HUD both scale with settings.textScale', () => {
+  // Centered single-line tooltip pinned above the HUD bar. Both the
+  // font size AND the y-gap above the HUD must scale; otherwise the
+  // hint either overlaps the HUD (large text + small gap) or floats
+  // mid-air (small text + large gap).
+  const fn = RENDER.match(/function\s+drawHint[\s\S]{0,800}/);
+  assert.ok(fn, 'must locate drawHint');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*15\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawHint font px must scale via Math.max(N, Math.round(15 * settings.textScale))');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*14\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawHint gap must scale via Math.max(N, Math.round(14 * settings.textScale))');
+  // Pin: the y-position for fillText subtracts the SCALED gap, not the
+  // bare literal 14. A regression that hard-codes "- 14" while keeping
+  // the scaled-gap local around would silently leak.
+  assert.doesNotMatch(fn[0],
+    /layout\.hudTop\s*-\s*14\b/,
+    'drawHint must not hard-code "layout.hudTop - 14" — the gap must use the textScale-derived local');
+  // Decoy-local defence (per gpt-5.3-codex review): a regression could
+  // declare the scaled-font local but never assign it to ctx.font, or
+  // declare the scaled-gap local but never subtract it in fillText.
+  // Pin BOTH consumption sites so the locals can't be dead code.
+  assert.match(fn[0],
+    /ctx\.font\s*=\s*`\$\{[A-Za-z_$][\w$]*\}px\s+monospace`/,
+    'drawHint ctx.font must reference a computed font-px local (template literal with bare identifier)');
+  assert.match(fn[0],
+    /fillText\s*\([^)]*layout\.hudTop\s*-\s*[A-Za-z_$][\w$]*\s*\)/,
+    'drawHint fillText must subtract a computed gap local from layout.hudTop (not a bare literal)');
+});
+
+test('drawMessages msgFs + msgLh both scale with settings.textScale', () => {
+  // Both font height AND line-height must scale together. Scaling only
+  // the font would let larger text overflow into the previous message
+  // row at textScale 1.3×; scaling only the line-height would leave
+  // permanent gaps at 0.85×. Pin both formulas.
+  const fn = RENDER.match(/function\s+drawMessages[\s\S]{0,1200}/);
+  assert.ok(fn, 'must locate drawMessages');
+  assert.match(fn[0],
+    /msgFs\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*16\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawMessages msgFs must scale via Math.max(N, Math.round(16 * settings.textScale))');
+  assert.match(fn[0],
+    /msgLh\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*22\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawMessages msgLh must scale via Math.max(N, Math.round(22 * settings.textScale))');
+  // Decoy-local defence (per gpt-5.3-codex review): pin that msgLh is
+  // actually CONSUMED in the per-message Y-offset math. A regression
+  // that keeps the formula but hard-codes "* 22" in the position would
+  // satisfy the formula assertion and silently leak.
+  assert.match(fn[0],
+    /\(\s*messages\.length\s*-\s*1\s*-\s*i\s*\)\s*\*\s*msgLh/,
+    'drawMessages per-message Y-offset must multiply by msgLh (not a bare literal)');
+  assert.doesNotMatch(fn[0],
+    /\(\s*messages\.length\s*-\s*1\s*-\s*i\s*\)\s*\*\s*22\b/,
+    'drawMessages must not hard-code "* 22" in the Y-offset — that bypasses textScale');
+});
+
+test('drawMessages hoists the bold font string out of the loop', () => {
+  // Hot-path discipline (per stored memory): drawMessages runs every
+  // frame and, in heavy combat / pickup floods, can render multiple
+  // active messages per frame. A per-iteration template literal would
+  // churn GC. Pin: const fontStr = `bold ${...}px monospace` lives
+  // BEFORE the for-loop, and the loop body assigns ctx.font = fontStr
+  // (a bare identifier) — never `ctx.font = \`...\`` inside the loop.
+  const fn = RENDER.match(/function\s+drawMessages[\s\S]{0,1500}/);
+  assert.ok(fn, 'must locate drawMessages');
+  assert.match(fn[0],
+    /const\s+fontStr\s*=\s*`bold\s*\$\{msgFs\}px\s+monospace`[\s\S]{0,200}for\s*\(/,
+    'drawMessages must declare const fontStr = `bold ${msgFs}px monospace` BEFORE the for-loop');
+  assert.match(fn[0],
+    /ctx\.font\s*=\s*fontStr\s*;/,
+    'drawMessages loop body must assign ctx.font = fontStr (the cached identifier)');
+  // The body must NOT contain a fresh template literal assigned to ctx.font.
+  // Slice from the for-loop opener to the function close to scope the check
+  // to the loop body only (the const declaration BEFORE the loop is allowed
+  // to be a template literal — it's the per-iteration assignment that's banned).
+  const forIdx = fn[0].indexOf('for (');
+  const loopBody = forIdx >= 0 ? fn[0].slice(forIdx) : fn[0];
+  assert.doesNotMatch(loopBody,
+    /ctx\.font\s*=\s*`/,
+    'drawMessages loop body must NOT assign ctx.font from a fresh template literal — that allocates per-iteration');
+});
+
+test('drawHint font + gap-above-HUD both scale with settings.textScale', () => {
+  // Centered single-line tooltip pinned above the HUD bar. Both the
+  // font size AND the y-gap above the HUD must scale; otherwise the
+  // hint either overlaps the HUD (large text + small gap) or floats
+  // mid-air (small text + large gap).
+  const fn = RENDER.match(/function\s+drawHint[\s\S]{0,800}/);
+  assert.ok(fn, 'must locate drawHint');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*15\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawHint font px must scale via Math.max(N, Math.round(15 * settings.textScale))');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*14\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'drawHint gap must scale via Math.max(N, Math.round(14 * settings.textScale))');
+  // Pin: the y-position for fillText subtracts the SCALED gap, not the
+  // bare literal 14. A regression that hard-codes "- 14" while keeping
+  // the scaled-gap local around would silently leak.
+  assert.doesNotMatch(fn[0],
+    /layout\.hudTop\s*-\s*14\b/,
+    'drawHint must not hard-code "layout.hudTop - 14" — the gap must use the textScale-derived local');
+});
+
+test('expanded-minimap title + close-hint scale with settings.textScale', () => {
+  // The expanded minimap is a centered overlay; title sits ABOVE the
+  // map card, close-hint sits BELOW. Both fonts scale with textScale.
+  // The title's gap-above-card (22) also scales so a 1.3× title can
+  // never collide with the map frame.
+  const fn = RENDER.match(/function\s+drawExpandedMinimap[\s\S]{0,15000}\n\}/);
+  assert.ok(fn, 'must locate drawExpandedMinimap');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*14\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'expanded minimap title font must scale via Math.max(N, Math.round(14 * settings.textScale))');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*22\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'expanded minimap title gap must scale via Math.max(N, Math.round(22 * settings.textScale))');
+  assert.match(fn[0],
+    /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*11\s*\*\s*settings\.textScale\s*\)\s*\)/,
+    'expanded minimap close-hint font must scale via Math.max(N, Math.round(11 * settings.textScale))');
+  // Pin: bare-literal "bold 14px" + "11px" + "my - 22" must be gone in
+  // the title/hint section — those would silently ignore textScale.
+  // We scope to the title block to avoid flagging similar strings used
+  // elsewhere in the function (room labels etc).
+  const titleBlock = fn[0].match(/Title \+ hint[\s\S]{0,800}/);
+  assert.ok(titleBlock, 'must locate the Title + hint block in drawExpandedMinimap');
+  assert.doesNotMatch(titleBlock[0],
+    /ctx\.font\s*=\s*['"]bold\s+14px/,
+    'expanded minimap title must not hard-code "bold 14px monospace"');
+  assert.doesNotMatch(titleBlock[0],
+    /ctx\.font\s*=\s*['"]11px/,
+    'expanded minimap close-hint must not hard-code "11px monospace"');
+  assert.doesNotMatch(titleBlock[0],
+    /my\s*-\s*22\b/,
+    'expanded minimap title must not hard-code "my - 22" — the gap must use the textScale-derived local');
+});
+
 // ─── Helper: execute platform.js text and capture `settings` ────────────
 
 /**

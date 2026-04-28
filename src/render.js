@@ -1354,7 +1354,11 @@ function drawHUD(player) {
     if (player.levelFlash>0.5) {
       ctx.save();
       ctx.shadowBlur=20; ctx.shadowColor='#00f5ff';
-      ctx.fillStyle='#00f5ff'; ctx.font='bold 36px monospace';
+      // Base 36px multiplied by `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3).
+      // Floor at 20px so a tiny textScale stays legible. Single-call site,
+      // no hoist needed.
+      const luFs = Math.max(20, Math.round(36 * settings.textScale));
+      ctx.fillStyle='#00f5ff'; ctx.font=`bold ${luFs}px monospace`;
       ctx.textAlign='center'; ctx.fillText('LEVEL UP!',W/2,H/2-40);
       ctx.textAlign='left'; ctx.restore();
     }
@@ -2170,13 +2174,19 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillRect(mx + player.x * sx - pDot / 2, my + player.y * sy - pDot / 2, pDot, pDot);
   ctx.shadowBlur = 0;
 
-  // Title + hint
+  // Title + hint. Base sizes (14 / 11) and the title gap-above-map (22)
+  // scale with `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors
+  // keep things readable at 0.85×; gap scales proportionally so the
+  // title never collides with the map frame even at 1.3×.
+  const tFs = Math.max(10, Math.round(14 * settings.textScale));
+  const tGap = Math.max(16, Math.round(22 * settings.textScale));
+  const hFs = Math.max(8, Math.round(11 * settings.textScale));
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.shadowBlur = 8; ctx.shadowColor = '#00f5ff';
-  ctx.fillStyle = '#00f5ff'; ctx.font = 'bold 14px monospace';
-  ctx.fillText(`FLOOR ${_RG.floor} MAP`, W / 2, my - 22);
+  ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${tFs}px monospace`;
+  ctx.fillText(`FLOOR ${_RG.floor} MAP`, W / 2, my - tGap);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#666688'; ctx.font = '11px monospace';
+  ctx.fillStyle = '#666688'; ctx.font = `${hFs}px monospace`;
   const hint = isTouchDevice() ? 'TAP TO CLOSE' : 'TAB / ESC TO CLOSE';
   ctx.fillText(hint, W / 2, my + mh + 8);
 
@@ -2206,7 +2216,15 @@ function drawExpandedMinimap(dungeon, player) {
 /** @type {any[]} */
 const messages=[];
 function drawMessages() {
-  const msgFs = 16, msgLh = 22;
+  // Base 16px font + 22px line-height multiplied by `settings.textScale`
+  // (0.85 / 1.0 / 1.15 / 1.3). Floors keep things legible at 0.85×. Both
+  // values scale together so multi-message stacks don't overlap.
+  // Hot-path: the assembled font string is hoisted ONCE per call (per
+  // `hot path discipline` memory) — drawMessages can render N messages
+  // per frame, so per-iteration template-literal alloc would churn GC.
+  const msgFs = Math.max(10, Math.round(16 * settings.textScale));
+  const msgLh = Math.max(14, Math.round(22 * settings.textScale));
+  const fontStr = `bold ${msgFs}px monospace`;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
@@ -2215,7 +2233,7 @@ function drawMessages() {
     const my = layout.msgBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
-    ctx.font=`bold ${msgFs}px monospace`;
+    ctx.font = fontStr;
     const tw = ctx.measureText(m.text).width;
     ctx.fillStyle='rgba(10,10,18,0.7)';
     ctx.fillRect(mx-4, my-msgFs+1, tw+8, msgFs+4);
@@ -2230,12 +2248,17 @@ function drawHint() {
   const h = _RG.hint;
   if (!h) return;
   const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 300);
+  // Base 15px font + 14px gap-above-HUD multiplied by `settings.textScale`
+  // (0.85 / 1.0 / 1.15 / 1.3). Scaling the gap proportionally preserves
+  // the visual breathing room above the HUD bar at every text size.
+  const hFs = Math.max(10, Math.round(15 * settings.textScale));
+  const hGap = Math.max(8, Math.round(14 * settings.textScale));
   ctx.save();
   ctx.globalAlpha = pulse;
   ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
   ctx.fillStyle = h.colour;
-  ctx.font = '15px monospace'; ctx.textAlign = 'center';
-  ctx.fillText(h.text, W / 2, layout.hudTop - 14);
+  ctx.font = `${hFs}px monospace`; ctx.textAlign = 'center';
+  ctx.fillText(h.text, W / 2, layout.hudTop - hGap);
   ctx.restore();
 }
 
