@@ -73,6 +73,13 @@ function modifierProgressSuffix(modKey, player) {
     const cnt = player._reverbShots | 0;
     return ` ${cnt % 5}/5`;
   }
+  if (modKey === 'CHAINREACT') {
+    // CHAINREACT shows a flat ⚡ glyph while the chain window is alive
+    // (player._chainBuffTimer > 0), nothing when the chain has lapsed.
+    // No N/M counter — the modifier's relevant state is "is a chain in
+    // flight RIGHT NOW", not how many defeats accumulated.
+    return (player._chainBuffTimer > 0) ? ' ⚡' : '';
+  }
   return '';
 }
 

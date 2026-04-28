@@ -1047,6 +1047,14 @@ const game = {
         // would lose their free-echo slot). Mirrors the OVERCHARGE
         // explicit-enum pattern.
         _reverbShots: p._reverbShots || 0,
+        // CHAINREACT floor modifier — per-run countdown timer for the
+        // chain-window. Persisted so save/resume on a CHAINREACT floor
+        // mid-chain doesn't drop the rhythm. A timer (not a counter)
+        // because the modifier's gameplay is "is the chain still alive
+        // right now", not "how many defeats are stacked". Saves under
+        // a number 0-1.5; legacy saves predating this PR get 0 via the
+        // `|| 0` nucleation pattern.
+        _chainBuffTimer: p._chainBuffTimer || 0,
         // trauma_kit panic-button charges — per-run counter seeded by
         // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
         // Continue mid-run preserves remaining charges (otherwise a
@@ -1184,6 +1192,9 @@ const game = {
     // REVERB per-run shot counter — restore from save (defaults to 0 for
     // older saves that predate the field; mirrors OVERCHARGE restore).
     p._reverbShots = s._reverbShots || 0;
+    // CHAINREACT chain-window timer — restore from save (defaults to 0
+    // for legacy saves that predate the field; mirrors REVERB restore).
+    p._chainBuffTimer = s._chainBuffTimer || 0;
     // trauma_kit panic-button charges — restore from save when present.
     // For saves produced BEFORE this PR shipped, the explicit field is
     // absent (`s._nanoMedicCharges == null`); we fall back to the

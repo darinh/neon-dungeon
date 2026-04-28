@@ -2381,6 +2381,52 @@ class Enemy {
         spawnParticles(this.x, this.y, 'MUZZLE', '#ffaa44', 5);
       }
     }
+    // CHAINREACT floor modifier — eighth positive modifier in the pool,
+    // a combo-window economy variant. Chained defeats within 1.5s of the
+    // last qualifying defeat award a +15 bonus credits floater. Counter
+    // is a countdown timer (`player._chainBuffTimer`, ticks down via
+    // dt in Player.update) — chain extends every qualifying defeat,
+    // breaks when the timer expires.
+    //
+    // Tempo: rewards aggressive room-clearing. The first defeat in a
+    // chain seeds the window with NO bonus (you can't chain a single
+    // defeat); subsequent defeats inside the window each award bonus
+    // credits. So a 5-defeat sustained chain awards 4 bonuses (+60 CR);
+    // a long 10-defeat sustained chain awards 9 bonuses (+135 CR).
+    // Comparable to a Greedy weapon's cumulative bonus over a floor,
+    // but rewards combat tempo specifically.
+    //
+    // Gates (mirror WINDFALL):
+    //   _EG.modifier === 'CHAINREACT' — modifier-roll only; off-floor
+    //     and other modifiers fall through. Boss floors / floor 1 are
+    //     modifier-free (game.js:184).
+    //   !this.isShard — SPLITTER shard chains would let one entry kill
+    //     trickle multiple chain extensions; cap to one tick per top-
+    //     level enemy. Mirrors WINDFALL/SIGNAL_BOOST/QUARTERMASTER.
+    //   !isSummon — SUMMONER farming would otherwise let a player camp
+    //     a summoner for an infinite chain.
+    //
+    // Counter scope: per-RUN (`player._chainBuffTimer`), persisted in
+    // saveGame's explicit-enum block + restored in continueGame so a
+    // quit-and-resume mid-chain doesn't drop the rhythm. Window
+    // refresh happens UNCONDITIONALLY (every qualifying defeat extends
+    // the window) — only the BONUS payout is gated on the prior
+    // window being still active.
+    //
+    // creditSiphonMul / corrosiveMul are NOT applied to the chain
+    // bonus — keeps the +15 a flat, predictable reward (mirrors the
+    // spawnDmgText literal). The base credit drop above (line 2092)
+    // already applies those multipliers.
+    if (_EG.modifier === 'CHAINREACT' && !this.isShard && !isSummon) {
+      const _crp = _EG.player;
+      if (_crp._chainBuffTimer > 0) {
+        const chainBonus = 15;
+        _crp.credits += chainBonus;
+        spawnDmgText(this.x, this.y - 0.4, '+' + chainBonus + ' CR', '#ff8866');
+        spawnParticles(this.x, this.y, 'MUZZLE', '#ff8866', 4);
+      }
+      _crp._chainBuffTimer = 1.5;
+    }
     // ADRENALINE_INJECTOR augment: +30% speed for 2s on kill
     if (hasAugment('ADRENALINE_INJECTOR') && !this.isShard) {
       _EG.player.adrenalineTimer = 2;
@@ -11169,6 +11215,13 @@ class Player {
     this.augments={};           // owned augments: {NEURAL_LINK: true, ...}
     this.adrenalineTimer=0;     // ADRENALINE_INJECTOR speed buff timer
     this.reactiveArmorCD=0;     // REACTIVE_ARMOR cooldown
+    // CHAINREACT floor modifier: countdown timer (default 1.5s) refreshed
+    // on every qualifying defeat on a CHAINREACT floor. While > 0, the
+    // next qualifying defeat awards +15 bonus credits. Self-decrementing
+    // via dt in Player.update so 30/60/120fps expire identically. Per-
+    // RUN scope (persisted in saveGame so quit-and-resume mid-chain
+    // preserves the rhythm).
+    this._chainBuffTimer=0;
     // UNCHAINED Phase 2 (#36) — persistent upgrade-node runtime state.
     // Behavioural listeners read player.metaFlags set by save.applyMetaToPlayer().
     this._momentumTimer=0;        // momentum: damage bonus countdown after kill
@@ -11941,6 +11994,11 @@ class Player {
     // Augment timers
     if (this.adrenalineTimer > 0) this.adrenalineTimer = Math.max(0, this.adrenalineTimer - dt);
     if (this.reactiveArmorCD > 0) this.reactiveArmorCD = Math.max(0, this.reactiveArmorCD - dt);
+    // CHAINREACT floor modifier: tick down the chain-window timer. Once
+    // it hits 0 the chain breaks — the next qualifying defeat seeds a
+    // fresh window (no bonus on the seed) but doesn't award the chain
+    // bonus. dt-based so 30/60/120fps expire identically.
+    if (this._chainBuffTimer > 0) this._chainBuffTimer = Math.max(0, this._chainBuffTimer - dt);
     // LAST_STAND perk: tick active window + cooldown lockout. Cooldown is
     // 60s total (5s active + 55s recharge); they tick in parallel so a new
     // trigger is gated only on lastStandCD <= 0. dt-based, so 30/60/120fps
