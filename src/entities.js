@@ -10821,6 +10821,7 @@ class Player {
   /** @type {any} */ _shotHistory;
   /** @type {any} */ _shieldCharges;
   /** @type {any} */ _piercingHearts;
+  /** @type {any} */ _overchargeShots;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
   /** @type {any} */ adrenalineTimer;
@@ -11480,6 +11481,23 @@ class Player {
     // addition would NaN-poison every crit roll's damage.
     const critMul = 2 + (mf.critDamageBonus || 0) + (w.critMulAdd || 0);
 
+    // OVERCHARGE floor modifier — every 5th player shot is a guaranteed crit.
+    // Counter is run-scoped, persisted in saveGame's explicit enum (mirrors
+    // PIERCING_HEART) so save/resume preserves rhythm. Increment ONLY on
+    // OVERCHARGE floors so the counter doesn't drift on non-OVERCHARGE
+    // floors and produce an instant free crit when the player steps onto
+    // the next OVERCHARGE floor (counter would already sit at 5+). Single-
+    // trigger semantic: forceCrit applies to melee + ranged main + the
+    // MULTI_SHOT bonus projectile uniformly within ONE trigger pull. Auto-
+    // fire boosts (AUTO_LASER, SENTRY_DRONE, PLASMA_ORB, SAW_BLADE) do NOT
+    // route through Player.shoot and are intentionally excluded — mirrors
+    // the DEADEYE perk's intentional-shoot-only scope.
+    let forceCrit = false;
+    if (_EG.modifier === 'OVERCHARGE') {
+      this._overchargeShots = (this._overchargeShots || 0) + 1;
+      if (this._overchargeShots % 5 === 0) forceCrit = true;
+    }
+
     // DEADEYE perk: stillness-charged attack. Apply ×DEADEYE_DMG_MUL to
     // the entire shot intent (folded into metaMul so ranged + melee +
     // MULTI_SHOT bonus projectile all benefit uniformly), then consume
@@ -11496,7 +11514,7 @@ class Player {
 
     if (w.melee) {
       // plasma sword arc
-      const meleeCrit = critChance > 0 && Math.random() < critChance;
+      const meleeCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
       const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? critMul : 1) * finalMetaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
@@ -11513,7 +11531,7 @@ class Player {
         const spread=(Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
-        const isCrit = critChance > 0 && Math.random() < critChance;
+        const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
         const proj=new Projectile(
           this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*finalMetaMul,w.range,
           w.colour,!!w.piercing,true,w.name
@@ -11536,7 +11554,7 @@ class Player {
         const offAngle = (Math.random() < 0.5 ? -1 : 1) * 0.14; // ~8°
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
-        const isCrit = critChance > 0 && Math.random() < critChance;
+        const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
         const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? critMul : 1) * finalMetaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
