@@ -28,41 +28,9 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const { extractBranch, loadAlignmentSources } = require('./_alignment-helpers.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-const CONTENT_CODE = stripComments(CONTENT);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
+const { CONTENT, ENTITIES, CONTENT_CODE } = loadAlignmentSources(__dirname);
 
 // ─── getStatusEffects() hot-hand fx entry ─────────────────────────────
 
@@ -169,9 +137,6 @@ test('hot-hand HUD literals match HOT_HAND_PER_STACK and HOT_HAND_MAX_STACKS in 
   // constants and asserts the content.js HUD branch uses the same
   // numeric values, so a future re-tune fails loudly here and forces
   // the HUD to be updated in sync.
-  const ENTITIES = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-  );
   const perStackMatch = ENTITIES.match(/const\s+HOT_HAND_PER_STACK\s*=\s*([\d.]+)/);
   const maxStacksMatch = ENTITIES.match(/const\s+HOT_HAND_MAX_STACKS\s*=\s*(\d+)/);
   assert.ok(perStackMatch, 'HOT_HAND_PER_STACK constant must be locatable in entities.js');
