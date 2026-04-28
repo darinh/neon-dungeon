@@ -10905,6 +10905,7 @@ class Player {
   /** @type {any} */ sensorRadiusMult;
   /** @type {any} */ hackwareSlots;
   /** @type {any} */ dashIFrameBonus;
+  /** @type {any} */ _dashIFrameTimer;
   /** @type {any} */ bonusCreditPerPickup;
   constructor() { this.reset(); }
   reset() {
@@ -11664,6 +11665,16 @@ class Player {
     this.flashTimer=Math.max(0,this.flashTimer-dt);
     this.levelFlash=Math.max(0,this.levelFlash-dt);
     this.dashCooldown=Math.max(0,this.dashCooldown-dt);
+    // GHOSTWALK meta upgrade: tick the bonus i-frame window AFTER dash
+    // movement ends (dashTimer drives movement at line ~11740 and ends
+    // at 0.12s; _dashIFrameTimer is set to 0.12 + dashIFrameBonus at
+    // dash start so it persists for the bonus window after movement
+    // ends). isPlayerDamageImmune reads this so env hazards (toxic,
+    // plasma, arc, frost patches) AND mob damage (via takeDamage's
+    // options.ignoreImmunity gate) both honour the extension. Without
+    // this tick the timer would never expire and the immunity would
+    // be permanent after the first dash.
+    this._dashIFrameTimer = Math.max(0, (this._dashIFrameTimer || 0) - dt);
     // Hackware cooldown + cloak timer (frozen by disruption fields)
     if (!this.disruptionFieldActive) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
     if (this.cloakTimer > 0) {
@@ -11905,6 +11916,15 @@ class Player {
       }
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
+      // GHOSTWALK meta upgrade: extend i-frame window past dash movement.
+      // Movement still ends at dashTimer === 0 (0.12s); _dashIFrameTimer
+      // keeps isPlayerDamageImmune true for the bonus window so the
+      // player can still phase through env hazards / mob hits AFTER the
+      // dash visually ends. Always set (not gated on bonus > 0) so the
+      // base 0.12s window also flows through this gate — no behaviour
+      // change for players without ghostwalk because the value matches
+      // dashTimer's lifetime exactly when bonus is 0.
+      this._dashIFrameTimer = 0.12 + (this.dashIFrameBonus || 0);
       const baseCd = this.perks.DASH_MASTER ? 0.75 : 1.5;
       this.dashCooldown = baseCd * ((this.metaFlags && this.metaFlags.dashCooldownMul) || 1);
       this.dashTrail.push({x:this.x,y:this.y,alpha:0.8});

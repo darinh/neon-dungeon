@@ -748,6 +748,16 @@ function isPlayerDamageImmune() {
   // checks (PLASMA/ARC/TOXIC/frost patches) and mob damage paths gate on
   // this function, so a single OR here covers the whole damage surface.
   if ((p._spawnGraceTimer || 0) > 0) return true;
+  // GHOSTWALK meta upgrade: extends dash i-frames past the dash MOVEMENT
+  // window. Player.shoot's dash block sets dashTimer to 0.12s (movement
+  // duration) AND _dashIFrameTimer to 0.12 + dashIFrameBonus (0.2 per
+  // ghostwalk level, max +0.4). This gate keeps the player invulnerable
+  // for the bonus-extended window AFTER dashTimer hits 0 — without it
+  // the meta upgrade was wired through save/load but never read, so
+  // players paying shards for ghostwalk got nothing. Mirrors the
+  // dashTimer gate above (same single-OR pattern across env hazards
+  // and mob damage paths via takeDamage's options.ignoreImmunity gate).
+  if ((p._dashIFrameTimer || 0) > 0) return true;
   return false;
 }
 
