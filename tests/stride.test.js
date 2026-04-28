@@ -163,12 +163,17 @@ test('STRIDE tick is suppressed during shock (movement is force-zeroed anyway)',
 
 test('HUD computeStatusFx pushes a stride chip when stacks > 0', () => {
   // Anchor the chip push so a future rename of label/icon is caught.
+  // Post-multiplier-readout (stride-multiplier-readout PR): the label is
+  // the readout `'RUSH ×' + mul` (mul = (1 + 0.05 * ss).toFixed(2))
+  // rather than the raw stack count. The cross-file alignment of the
+  // formula is exhaustively tested in tests/stride-hud.test.js — this
+  // test just pins the broad chip-shape (id, label-prefix, gate).
   assert.match(CONTENT, /id:\s*['"]stride['"]/,
     'HUD chip must use id "stride"');
-  assert.match(CONTENT, /label:\s*['"]RUSH ×['"]\s*\+\s*player\._strideStacks/,
-    'HUD chip label must surface the live _strideStacks count');
-  assert.match(CONTENT, /player\.perks\.STRIDE\s*&&\s*\(player\._strideStacks/,
-    'HUD chip must gate on perks.STRIDE && _strideStacks > 0');
+  assert.match(CONTENT, /label:\s*['"]RUSH ×['"]\s*\+\s*mul/,
+    'HUD chip label must use the multiplier-readout form `RUSH ×` + mul');
+  assert.match(CONTENT, /player\.perks\s*&&\s*player\.perks\.STRIDE\s*&&\s*ss\s*>\s*0/,
+    'HUD chip must gate on player.perks && player.perks.STRIDE && ss > 0 (defensive null-check + entities.js alias mirror)');
 });
 
 // ─── Service worker cache version ─────────────────────────────────────────
