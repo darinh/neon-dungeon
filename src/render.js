@@ -1560,8 +1560,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
   const pal = currentBiomePalette();
   let off = _RG._minimapCanvas;
   if (!off) {
-    off = document.createElement('canvas');
-    off.width = MW; off.height = MH;
+    off = NEON.minimap.createOffscreenMinimap(MW, MH);
     _RG._minimapCanvas = off;
   }
   const o = off.getContext('2d');
@@ -1615,9 +1614,10 @@ function rebuildMinimapBase(dungeon, echoMap) {
 function drawMinimap(dungeon, player) {
   const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
   ctx.save();
-  ctx.fillStyle='rgba(0,0,0,0.75)';
-  ctx.fillRect(MX-2,MY-2,MW+4,MH+4);
-  ctx.strokeStyle='#2d2d5e'; ctx.lineWidth=1; ctx.strokeRect(MX-2,MY-2,MW+4,MH+4);
+  // Border + background frame (engine helper). The defaults here match the
+  // values previously inlined; an opts object would override them if a
+  // future biome/state needed a different look.
+  NEON.minimap.drawMinimapFrame(ctx, MX, MY, MW, MH);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
   const echoMap = _RG.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
@@ -1916,17 +1916,15 @@ const ROOM_LABEL_COLOURS = {
 function drawExpandedMinimap(dungeon, player) {
   const pad = 20;
   const pal = currentBiomePalette();
-  const ratio = MAP_W / MAP_H; // 80/50 = 1.6
-  // Fit to ~85% of screen, respecting safe areas
-  const maxW = (W - 2 * pad - safeLeft - safeRight) * 0.85;
-  const maxH = (H - 2 * pad - safeTop - safeBottom) * 0.85;
-  let mw, mh;
-  if (maxW / ratio <= maxH) { mw = maxW; mh = maxW / ratio; }
-  else { mh = maxH; mw = maxH * ratio; }
-  mw = Math.round(mw); mh = Math.round(mh);
-  const mx = Math.round((W - mw) / 2);
-  const my = Math.round((H - mh) / 2);
-  const sx = mw / MAP_W, sy = mh / MAP_H;
+  // Layout via engine helper: fits MAP_W/MAP_H aspect ratio inside the
+  // viewport less safe insets, capping at 85% of the inset area.
+  const layout = NEON.minimap.fitExpandedMinimap(
+    W, H, MAP_W, MAP_H,
+    { left: safeLeft, right: safeRight, top: safeTop, bottom: safeBottom },
+    pad
+  );
+  const mw = layout.mw, mh = layout.mh, mx = layout.mx, my = layout.my;
+  const sx = layout.sx, sy = layout.sy;
 
   ctx.save();
 
@@ -1934,11 +1932,20 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillStyle = 'rgba(0,0,10,0.82)';
   ctx.fillRect(0, 0, W, H);
 
-  // Map border
-  ctx.strokeStyle = '#2d2d5e'; ctx.lineWidth = 2;
-  ctx.strokeRect(mx - 2, my - 2, mw + 4, mh + 4);
-  ctx.fillStyle = 'rgba(8,8,20,0.92)';
-  ctx.fillRect(mx, my, mw, mh);
+  // Map border + background frame (engine helper). Expanded view uses
+  // a 2-px border (vs 1-px for the corner minimap) and a darker
+  // backing tint that nearly hides the dim backdrop behind it.
+  // fillInner:true preserves pre-extraction stroke-outer + fill-inner
+  // geometry (per gpt-5.5 + opus r1 visual-equivalence findings — the
+  // older fill-outer path painted over a 2-px ring of the dim backdrop
+  // that should remain visible).
+  NEON.minimap.drawMinimapFrame(ctx, mx, my, mw, mh, {
+    borderColor: '#2d2d5e',
+    borderWidth: 2,
+    borderInset: 2,
+    backgroundColor: 'rgba(8,8,20,0.92)',
+    fillInner: true,
+  });
 
   const echoMap = _RG.mapRevealed;
   const thermalOptics = hasAugment('THERMAL_OPTICS');

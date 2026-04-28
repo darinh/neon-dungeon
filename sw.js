@@ -15,6 +15,7 @@ const ASSETS = [
   './engine/draw.js',
   './engine/decor.js',
   './engine/particles.js',
+  './engine/minimap.js',
   './src/platform.js',
   './engine/biomes.js',
   './src/data/biomes.js',
