@@ -4851,7 +4851,7 @@ class Enemy {
             player.takeDamage(dmg, 'Watcher Beam');
           }
         }
-        if (audio.resonatorFire) audio.resonatorFire();
+        if (audio.watcherFire) audio.watcherFire();
         // Visual punch — yellow shockwave at the apex along the locked aim.
         const tipX = this.x + ax * WATCHER_RANGE * 0.5;
         const tipY = this.y + ay * WATCHER_RANGE * 0.5;
@@ -4914,7 +4914,7 @@ class Enemy {
     this._wLockAng = this._wAng;
     this._wState = 'telegraph';
     this._wTele = WATCHER_TELEGRAPH;
-    if (audio.resonatorCharge) audio.resonatorCharge();
+    if (audio.watcherCharge) audio.watcherCharge();
     // Stationary: never patrol, never reposition. Sitting duck by design.
   }
 
