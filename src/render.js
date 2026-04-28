@@ -72,6 +72,50 @@ function modifierProgressSuffix(modKey, player) {
   return '';
 }
 
+/**
+ * Piercing Heart weapon-affix HUD progress suffix — appended to the HUD
+ * weapon-name readout when the active weapon carries the PIERCING_HEART
+ * suffix affix ("of Piercing Heart"). Without this indicator, players
+ * have no visibility into the +1 Max HP per kill cap (hardcoded at 20 in
+ * src/entities.js Enemy.die `_phStacks < 20` gate) — they only see the
+ * +heal floater on a qualifying kill, with no sense of how close they
+ * are to the cap. This is the same discoverability gap modifierProgressSuffix
+ * closed for floor modifiers (PR #252 / #256) and that the trauma_kit
+ * HUD indicator closed for that meta upgrade (PR #248).
+ *
+ * Format: ` ♥N/20` where N = `player._piercingHearts | 0` clamped to the
+ * cap. The ♥ glyph mirrors HP semantics (the affix grants +Max HP).
+ * Defensive `| 0` nucleation tolerates undefined on legacy player shapes
+ * that bypassed the ctor (mirrors the trauma_kit `_nanoMedicCharges | 0`
+ * pattern at ~render.js:861 and the modifier-suffix counter pattern).
+ *
+ * The cap (20) is duplicated from src/entities.js Enemy.die — when
+ * changing the cap, update BOTH sites.
+ *
+ * Counter scope: per-RUN (lives on `_EG.player._piercingHearts`,
+ * persisted in saveGame's explicit-enum block at src/game.js:1023).
+ * Stacks are NOT weapon-scoped — they persist across weapon swaps
+ * within a run. The HUD indicator surfaces ONLY when a PIERCING_HEART
+ * weapon is currently equipped (so a swap-away hides the badge but
+ * preserves the underlying stack count for when a PH weapon is
+ * re-equipped). Returns '' when no PH weapon is equipped, when the
+ * weapon has no _affixes array, or when player/weapon is missing —
+ * defensive against boot/teardown frames where the HUD may be drawn
+ * before weapon initialization.
+ *
+ * @param {any} player
+ * @returns {string}
+ */
+function piercingHeartHudSuffix(player) {
+  if (!player) return '';
+  const w = player.weapon;
+  if (!w || !Array.isArray(w._affixes)) return '';
+  if (!w._affixes.includes('PIERCING_HEART')) return '';
+  const stacks = player._piercingHearts | 0;
+  const capped = stacks < 0 ? 0 : (stacks > 20 ? 20 : stacks);
+  return ` ♥${capped}/20`;
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 /**
  * @param {any} player
@@ -981,13 +1025,25 @@ function drawHUD(player) {
     const wColour = /** @type {string} */ (wRarity > 0 ? RARITY_COLOURS[wRarity] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColour;
     ctx.fillStyle=wColour; ctx.font=`${fs}px monospace`;
-    const weapMaxW = W - (statsX + 80) - safeRight - 10;
+    // PIERCING_HEART HUD progress suffix — reserve width so truncation of
+    // the weapon name accounts for the trailing " ♥N/20" badge. Suffix is
+    // rendered AFTER the (possibly truncated) name in the affix colour
+    // (#ff4488) so it remains visible regardless of name length.
+    const phSufC = piercingHeartHudSuffix(player);
+    const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
+    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC;
     let weapName = player.weapon.displayName || player.weapon.name;
     if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
       while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
     ctx.fillText(weapName, statsX + 74, r2 + 10);
+    if (phSufC) {
+      const wNameW = ctx.measureText(weapName).width;
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff4488';
+      ctx.fillText(phSufC, statsX + 74 + wNameW, r2 + 10);
+    }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
     if (player.weapons && player.weapons.length > 1) {
@@ -1075,13 +1131,25 @@ function drawHUD(player) {
     const wColL = /** @type {string} */ (wRarL > 0 ? RARITY_COLOURS[wRarL] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColL;
     ctx.fillStyle=wColL;
+    // PIERCING_HEART HUD progress suffix — same pattern as compact branch.
+    // Reserve width for the trailing " ♥N/20" badge so the truncation
+    // budget is honest, then render the suffix in the affix colour
+    // (#ff4488) after the (possibly truncated) weapon name.
+    const phSufL = piercingHeartHudSuffix(player);
+    const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const wMaxL = W - (colBase + 230) - 10;
+    const wMaxL = W - (colBase + 230) - 10 - phSufWL;
     if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
     ctx.fillText(wNameL, colBase + 220, y + 10);
+    if (phSufL) {
+      const wNameWL = ctx.measureText(wNameL).width;
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff4488';
+      ctx.fillText(phSufL, colBase + 220 + wNameWL, y + 10);
+    }
     ctx.shadowBlur=0;
     if (player.weapons && player.weapons.length > 1) {
       const pipXL = colBase + 220;
