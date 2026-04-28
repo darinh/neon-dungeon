@@ -12010,7 +12010,12 @@ class Player {
    */
   gainXP(amount) {
     const augMul = hasAugment('NEURAL_LINK') ? 1.25 : 1;
-    this.xp+=Math.round(amount * getMetaXPMultiplier() * augMul);
+    // OVERFLOW floor modifier: +25% XP gain on this floor. Composes
+    // multiplicatively with NEURAL_LINK aug and getMetaXPMultiplier()
+    // (meta-progression buff). Floor modifiers are mutually exclusive
+    // per floor (only one rolls), so OVERFLOW + HARDENED can't co-occur.
+    const overflowMul = (_EG.modifier === 'OVERFLOW') ? 1.25 : 1;
+    this.xp+=Math.round(amount * getMetaXPMultiplier() * augMul * overflowMul);
     while (this.xp>=this.xpNeeded() && this.level<10) {
       this.xp-=this.xpNeeded();
       this.level++;
