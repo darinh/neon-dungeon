@@ -154,14 +154,13 @@ test('FLOOR_MODIFIERS pool size is exactly 24 (PRIMED added)', () => {
   // Roll-probability invariant. Per stored memory 'positive floor modifiers'
   // and 'modifier pool canary pattern', the EXPECTED_MODIFIER_POOL_SIZE
   // constant in tests/_modifier-pool.js is the single source of truth for
-  // this assertion across all *-modifier.test.js files. Adding modifier
-  // #25 only requires bumping that constant + retiring this canary
-  // (replicating the kinetic-modifier.test.js / overflow-modifier.test.js
-  // pattern: replace the literal `assert.equal(EXPECTED..., 24, ...)` with
-  // a comment that the canary role moved to the new modifier).
+  // this assertion across all *-modifier.test.js files. The canary role
+  // for the next-modifier-added literal moved on to tests/jammed-modifier.test.js
+  // when JAMMED bumped the pool from 24 → 25 — the literal `assert.equal(
+  // EXPECTED_MODIFIER_POOL_SIZE, 24, ...)` that used to live here was
+  // retired then to avoid two stale literals chasing the constant
+  // (per the 'modifier pool canary pattern' stored memory).
   assertModifierPoolSize(CONTENT);
-  assert.equal(EXPECTED_MODIFIER_POOL_SIZE, 24,
-    'EXPECTED_MODIFIER_POOL_SIZE in tests/_modifier-pool.js must be 24 after PRIMED is added');
 });
 
 // ─── Player.shoot wiring ─────────────────────────────────────────────────
