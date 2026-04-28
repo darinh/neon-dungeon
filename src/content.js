@@ -2354,8 +2354,25 @@ function getStatusEffects(player) {
   if (player.perks.DEADEYE && player._steadyReady) {
     fx.push({ id: 'deadeye', icon: '◎', label: 'AIM', colour: '#ffee88' });
   }
-  // Second Wind available
-  if (player.perks.SECOND_WIND && !player.secondWindUsed) {
+  // Second Wind available — extended in PR (after PR #286) to also
+  // surface the META second_wind upgrade (meta/upgrades.js:31, "Revive
+  // once per floor at 1 HP when lethally hit"). The PERK version
+  // (player.perks.SECOND_WIND, tracked via player.secondWindUsed) and
+  // the META version (player.metaFlags.second_wind, tracked via
+  // player._metaSecondWindUsed) fire independently per
+  // meta/behavior.js:99 ("Parallel to the legacy SECOND_WIND perk —
+  // they fire independently."). Both feel identical to the player as
+  // an "I have one revive available" indicator. Pre-this-PR the badge
+  // ONLY surfaced the perk version — META owners saw NO HUD signal
+  // that the safety net was armed. Mirrors the PR #284 regenerator
+  // gate extension: OR-compose ownership-and-not-yet-used predicates
+  // for each independent system; share a single badge id since the
+  // player only cares about "do I have a revive ready or not."
+  const _perkSW = player.perks.SECOND_WIND && !player.secondWindUsed;
+  const _metaSW = player.metaFlags
+    && (player.metaFlags.second_wind | 0) > 0
+    && !player._metaSecondWindUsed;
+  if (_perkSW || _metaSW) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
   }
   // HOT_HAND streak active — perk rewards consecutive hits on the SAME
