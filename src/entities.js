@@ -10910,6 +10910,7 @@ class Player {
   /** @type {any} */ _overchargeShots;
   /** @type {any} */ _windfallKills;
   /** @type {any} */ _signalBoostKills;
+  /** @type {any} */ _reverbShots;
   /** @type {any} */ _surgeShotCount;
   /** @type {any} */ activeBoosts;
   /** @type {any} */ adrenalineTimer;
@@ -11606,6 +11607,28 @@ class Player {
       if (this._overchargeShots % 5 === 0) forceCrit = true;
     }
 
+    // REVERB floor modifier — every 5th player shot fires a free echo of
+    // the same shot intent (one extra projectile fan / one extra melee
+    // arc) AFTER the main shot resolves. Counter is run-scoped, persisted
+    // in saveGame's explicit enum (mirrors OVERCHARGE) so save/resume
+    // preserves rhythm. Increment ONLY on REVERB floors so the counter
+    // doesn't drift on non-REVERB floors and produce an instant free
+    // echo when the player steps onto the next REVERB floor (counter
+    // would already sit at 5+). Single-trigger semantic: the echo
+    // INHERITS forceCrit and finalMetaMul from the main shoot() call —
+    // it's "the same shot fired twice", not a fresh trigger. The echo
+    // does NOT recurse into shoot() (would double-tick OVERCHARGE,
+    // double-fire MULTI_SHOT, re-roll DEADEYE) and does NOT itself tick
+    // the REVERB counter (each trigger pull = 1 increment, not 2).
+    // Auto-fire boosts (AUTO_LASER, SENTRY_DRONE, PLASMA_ORB, SAW_BLADE)
+    // do NOT route through Player.shoot and are intentionally excluded —
+    // mirrors OVERCHARGE / DEADEYE intentional-shoot-only scope.
+    let echoOnThisShot = false;
+    if (_EG.modifier === 'REVERB') {
+      this._reverbShots = (this._reverbShots || 0) + 1;
+      if (this._reverbShots % 5 === 0) echoOnThisShot = true;
+    }
+
     // DEADEYE perk: stillness-charged attack. Apply ×DEADEYE_DMG_MUL to
     // the entire shot intent (folded into metaMul so ranged + melee +
     // MULTI_SHOT bonus projectile all benefit uniformly), then consume
@@ -11686,6 +11709,57 @@ class Player {
       while (this._shotHistory.length > SHOT_HISTORY_LEN) this._shotHistory.shift();
     }
     audio.shoot(true, w);
+    // REVERB echo — fire one duplicate of the SAME shot intent. Inherits
+    // forceCrit + finalMetaMul (the captured deadeyeMul / metaMul of this
+    // shoot() call), so REVERB+OVERCHARGE on the 5th shot lands a free
+    // crit echo and DEADEYE's stillness bonus also propagates. The echo
+    // does NOT include the MULTI_SHOT bonus projectile (that perk's bonus
+    // is itself a "free shot"; doubling via REVERB would compound), does
+    // NOT push to _shotHistory (otherwise MIRROR mobs would mimic the
+    // echo as a separate shot), does NOT consume DEADEYE again (already
+    // consumed by the main shot above), and tags echoed projectiles with
+    // _isReverbEcho for debug / future detection. Audio fires a second
+    // time so the player gets the audible "double-tap" cue that matches
+    // the visual ♪ floater. Echo emits AFTER the main shot's audio so
+    // the cue arrives slightly delayed (mirrors a literal echo).
+    if (echoOnThisShot) {
+      if (w.melee) {
+        const echoCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+        const echoDmg = (w.dmg+this.effectiveAtk()) * (echoCrit ? critMul : 1) * finalMetaMul;
+        spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (e._wrPhased) continue;
+          if (dist(this.x,this.y,e.x,e.y)<w.range) {
+            e.takeDamage(echoDmg, hitCtx);
+            if (echoCrit) spawnDmgText(e.x, e.y, 'CRIT!', '#ffdd00');
+          }
+        }
+      } else {
+        for (let i = 0; i < w.count; i++) {
+          const spread = (Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
+          const a = Math.atan2(dy,dx) + spread;
+          const pdx = Math.cos(a), pdy = Math.sin(a);
+          const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+          const proj = new Projectile(
+            this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*finalMetaMul,w.range,
+            w.colour,!!w.piercing,true,w.name
+          );
+          proj.isCrit = isCrit;
+          proj._effects = w._effects || [];
+          proj._affixes = w._affixes || [];
+          proj.fromPlayerShot = true;
+          proj._isReverbEcho = true;
+          if (this.perks.PIERCING_ROUNDS) proj.maxPierces += 1;
+          proj.bouncesLeft = this.upgrades.RICOCHET || 0;
+          if (proj.bouncesLeft) proj._hasRicochet = true;
+          projectiles.push(proj);
+        }
+        spawnParticles(this.x+dx*0.8, this.y+dy*0.8, 'MUZZLE', w.colour, 3);
+      }
+      audio.shoot(true, w);
+      spawnDmgText(this.x, this.y, '♪', '#ff66cc');
+    }
     this.shootCooldown = (1/w.rate) * (this.perks.RAPID_FIRE ? 0.85 : 1);
   }
 

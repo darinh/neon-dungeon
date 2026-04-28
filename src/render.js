@@ -69,6 +69,10 @@ function modifierProgressSuffix(modKey, player) {
     const cnt = player._signalBoostKills | 0;
     return ` ${cnt % 5}/5`;
   }
+  if (modKey === 'REVERB') {
+    const cnt = player._reverbShots | 0;
+    return ` ${cnt % 5}/5`;
+  }
   return '';
 }
 

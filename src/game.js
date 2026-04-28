@@ -1040,6 +1040,13 @@ const game = {
         // on a SIGNAL_BOOST floor preserves the rhythm. Mirrors the
         // WINDFALL explicit-enum pattern.
         _signalBoostKills: p._signalBoostKills || 0,
+        // REVERB floor modifier — per-run shot counter, every 5th shot
+        // fires a free echo of the same shot intent. Persisted so
+        // save/resume on a REVERB floor preserves the rhythm (otherwise
+        // the counter would reset to 0 mid-floor and the next 4 shots
+        // would lose their free-echo slot). Mirrors the OVERCHARGE
+        // explicit-enum pattern.
+        _reverbShots: p._reverbShots || 0,
         // trauma_kit panic-button charges — per-run counter seeded by
         // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
         // Continue mid-run preserves remaining charges (otherwise a
@@ -1174,6 +1181,9 @@ const game = {
     // SIGNAL_BOOST per-run kill counter — restore from save (defaults to 0
     // for older saves that predate the field; mirrors WINDFALL).
     p._signalBoostKills = s._signalBoostKills || 0;
+    // REVERB per-run shot counter — restore from save (defaults to 0 for
+    // older saves that predate the field; mirrors OVERCHARGE restore).
+    p._reverbShots = s._reverbShots || 0;
     // trauma_kit panic-button charges — restore from save when present.
     // For saves produced BEFORE this PR shipped, the explicit field is
     // absent (`s._nanoMedicCharges == null`); we fall back to the
