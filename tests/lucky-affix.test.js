@@ -66,7 +66,7 @@ test('LUCKY on-kill gates on !isProc (proc finishers do not roll Luck)', () => {
   // a Lucky drop they didn't earn. Mirrors applyOnKill at
   // entities.js:1158-1162 and the SALVAGE/GREEDY blocks.
   const idx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
-  assert.ok(idx > 0, 'lucky gate must exist');
+  assert.ok(idx !== -1, 'lucky gate must exist');
   // Search the preceding ~400 chars for !_lctx?.isProc or !ctx.isProc style.
   const head = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx);
   assert.match(head, /!\s*[\w.]*isProc/,
@@ -81,7 +81,7 @@ test('LUCKY skips summons and shards (defense in depth)', () => {
   // "earn" with a real ranged hit. Mirrors HARVESTER/MAGPIE/VAULTMASTER
   // and the SALVAGE/GREEDY on-kill gates.
   const idx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
-  assert.ok(idx > 0, 'lucky gate must exist');
+  assert.ok(idx !== -1, 'lucky gate must exist');
   // Search a wider window because the gate spans multiple lines.
   const window = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx + 600);
   assert.match(window, /!\s*this\.isShard/,
@@ -96,7 +96,7 @@ test('LUCKY rolls Math.random() < 0.08 (8% chance per qualifying kill)', () => {
   // the curve self-balances against an item-flooded floor. Pin the
   // value so an unintentional re-tune is caught in review.
   const idx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
-  assert.ok(idx > 0, 'lucky gate must exist');
+  assert.ok(idx !== -1, 'lucky gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /Math\.random\(\)\s*<\s*0\.08/,
     'LUCKY must roll Math.random() < 0.08 (8% chance)');
@@ -108,7 +108,7 @@ test('LUCKY calls items.push(new Item(this.x, this.y)) and emits gold particle h
   // The gold particle burst is a tell that THIS kill triggered the
   // suffix even before the Item's idle pulse engages.
   const idx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
-  assert.ok(idx > 0, 'lucky gate must exist');
+  assert.ok(idx !== -1, 'lucky gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /items\.push\(\s*new\s+Item\(\s*this\.x\s*,\s*this\.y\s*\)\s*\)/,
     'LUCKY must call items.push(new Item(this.x, this.y))');
@@ -123,7 +123,7 @@ test('LUCKY block runs AFTER the elite/boss core drop (so it stacks, not replace
   // positions: the elite/boss core drop must precede the lucky gate.
   const eliteDropIdx = ENTITIES_CODE.indexOf('NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal)');
   const luckyGateIdx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
-  assert.ok(eliteDropIdx > 0, 'elite/boss core drop line must exist');
+  assert.ok(eliteDropIdx !== -1, 'elite/boss core drop line must exist');
   assert.ok(luckyGateIdx > eliteDropIdx,
     'LUCKY drop block must come AFTER the elite/boss core drop so it stacks');
 });
@@ -133,7 +133,7 @@ test('LUCKY suffix is registered in AFFIX_SUFFIXES key list (drop pool eligibili
   // Verify LUCKY appears in the registry between the start of WEAPON_AFFIXES
   // and the closing brace, so the derived AFFIX_SUFFIXES picks it up.
   const startIdx = CONTENT.indexOf('const WEAPON_AFFIXES');
-  assert.ok(startIdx > 0, 'WEAPON_AFFIXES registry must exist');
+  assert.ok(startIdx !== -1, 'WEAPON_AFFIXES registry must exist');
   const endIdx = CONTENT.indexOf('};', startIdx);
   assert.ok(endIdx > startIdx, 'WEAPON_AFFIXES registry must terminate');
   const registryBody = CONTENT.slice(startIdx, endIdx);

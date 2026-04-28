@@ -72,9 +72,9 @@ test('SIPHON branch lives inside applyHitEffects (not applyOnKill)', () => {
   const fxIdx = ENTITIES_CODE.indexOf('function applyHitEffects(');
   const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(fxIdx > 0, 'applyHitEffects function must exist');
-  assert.ok(okIdx > 0, 'applyOnKill function must exist');
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(fxIdx !== -1, 'applyHitEffects function must exist');
+  assert.ok(okIdx !== -1, 'applyOnKill function must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   assert.ok(sipIdx > fxIdx && sipIdx < okIdx,
     'SIPHON branch must live inside applyHitEffects, not applyOnKill');
 });
@@ -87,10 +87,10 @@ test('SIPHON increments _siphonHits counter on the player', () => {
   // assertion inside the siphon branch via brace-walked extraction so
   // the regex can't drift into a neighbouring branch.
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   // Walk braces from siphon match's opening '{' to its matching close.
   const openIdx = ENTITIES_CODE.indexOf('{', sipIdx);
-  assert.ok(openIdx > 0, 'siphon branch must have an opening brace');
+  assert.ok(openIdx !== -1, 'siphon branch must have an opening brace');
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {
     const c = ENTITIES_CODE[i];
@@ -126,7 +126,7 @@ test('SIPHON triggers at threshold 3 (every 3rd hit grants +1 credit)', () => {
   // SIPHON nearly double GREEDY for shotguns; bumping to 5+ makes it
   // feel inert. Pin the value so an unintentional re-tune is caught.
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   const openIdx = ENTITIES_CODE.indexOf('{', sipIdx);
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {
@@ -146,7 +146,7 @@ test('SIPHON resets the counter and grants +1 credit on trigger', () => {
   // The credit grant is the entire point — without `+= 1` the suffix
   // is a cosmetic no-op.
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   const openIdx = ENTITIES_CODE.indexOf('{', sipIdx);
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {
@@ -167,7 +167,7 @@ test('SIPHON emits a "+1 CR" floating text in green for player feedback', () => 
   // (#88ff88) distinguishes it from GREEDY's gold (#ffd700) so a
   // weapon with both equipped shows two distinct credit-source colours.
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   const openIdx = ENTITIES_CODE.indexOf('{', sipIdx);
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {
@@ -188,7 +188,7 @@ test('SIPHON null-guards on _EG.player (defense in depth)', () => {
   // path that drives takeDamage with no live player. Pattern matches
   // the `if (_EG.player) { ... }` guard in the LEECH branch.
   const sipIdx = ENTITIES_CODE.indexOf("eff === 'siphon'");
-  assert.ok(sipIdx > 0, 'siphon branch must exist');
+  assert.ok(sipIdx !== -1, 'siphon branch must exist');
   const openIdx = ENTITIES_CODE.indexOf('{', sipIdx);
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {
@@ -232,7 +232,7 @@ test('SIPHON does not appear in applyOnKill (per-hit, not per-kill)', () => {
   // on the killing-blow hit). Anchor by isolating the function body
   // of applyOnKill via brace walking and asserting absence.
   const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
-  assert.ok(okIdx > 0, 'applyOnKill function must exist');
+  assert.ok(okIdx !== -1, 'applyOnKill function must exist');
   const openIdx = ENTITIES_CODE.indexOf('{', okIdx);
   let depth = 0, end = -1;
   for (let i = openIdx; i < ENTITIES_CODE.length; i++) {

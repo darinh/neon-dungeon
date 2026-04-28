@@ -349,9 +349,9 @@ test('CREDIT_CACHE.fn (behavioural): bonus is added as a flat per-pickup value, 
     const arrowStart = fnBody.indexOf('p)=>{');
     // Find the matching `=>` then `{`
     const arrowMarker = fnBody.indexOf('=>', fnBody.indexOf('fn'));
-    assert.ok(arrowMarker > 0, 'arrow operator must be findable');
+    assert.ok(arrowMarker !== -1, 'arrow operator must be findable');
     const braceIdx = fnBody.indexOf('{', arrowMarker);
-    assert.ok(braceIdx > 0, 'arrow body { must be findable');
+    assert.ok(braceIdx !== -1, 'arrow body { must be findable');
     // Find matching close.
     let depth = 1;
     let endIdx = -1;

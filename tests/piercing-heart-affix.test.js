@@ -151,7 +151,7 @@ test('PIERCING_HEART suffix is registered in WEAPON_AFFIXES (drop pool eligibili
   // picks it up. Without this, the suffix would be defined but never
   // rolled by the affix-drop system.
   const startIdx = CONTENT.indexOf('const WEAPON_AFFIXES');
-  assert.ok(startIdx > 0, 'WEAPON_AFFIXES registry must exist');
+  assert.ok(startIdx !== -1, 'WEAPON_AFFIXES registry must exist');
   const endIdx = CONTENT.indexOf('};', startIdx);
   assert.ok(endIdx > startIdx, 'WEAPON_AFFIXES registry must terminate');
   const registryBody = CONTENT.slice(startIdx, endIdx);
@@ -176,7 +176,7 @@ test('PIERCING_HEART on-kill gates on !isProc (proc finishers do not credit the 
   // a +1 maxHp the player didn't earn with the suffix. Mirrors
   // applyOnKill at entities.js:1262 and the SALVAGE/GREEDY/LUCKY blocks.
   const idx = ENTITIES_CODE.indexOf("effects.includes('pierceheart')");
-  assert.ok(idx > 0, 'pierceheart gate must exist');
+  assert.ok(idx !== -1, 'pierceheart gate must exist');
   // Search the preceding ~400 chars for !ctx.isProc / !_phctx.isProc style.
   const head = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx);
   assert.match(head, /!\s*[\w.]*isProc/,
@@ -273,7 +273,7 @@ test('PIERCING_HEART block runs AFTER the elite/boss core drop (so it stacks, no
   // pierceheart gate. Same defensive ordering as LUCKY at line 2248.
   const eliteDropIdx = ENTITIES_CODE.indexOf('NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal)');
   const phGateIdx = ENTITIES_CODE.indexOf("effects.includes('pierceheart')");
-  assert.ok(eliteDropIdx > 0, 'elite/boss core drop line must exist');
+  assert.ok(eliteDropIdx !== -1, 'elite/boss core drop line must exist');
   assert.ok(phGateIdx > eliteDropIdx,
     'PIERCING_HEART block must come AFTER the elite/boss core drop so it stacks');
 });

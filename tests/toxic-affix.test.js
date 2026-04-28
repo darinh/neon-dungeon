@@ -134,9 +134,9 @@ test('TOXIC poison branch lives inside applyHitEffects (not applyOnKill)', () =>
   const fxIdx = ENTITIES_CODE.indexOf('function applyHitEffects(');
   const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
   const poisonIdx = ENTITIES_CODE.indexOf("eff === 'poison'");
-  assert.ok(fxIdx > 0, 'applyHitEffects function must exist');
-  assert.ok(okIdx > 0, 'applyOnKill function must exist');
-  assert.ok(poisonIdx > 0, 'poison branch must exist');
+  assert.ok(fxIdx !== -1, 'applyHitEffects function must exist');
+  assert.ok(okIdx !== -1, 'applyOnKill function must exist');
+  assert.ok(poisonIdx !== -1, 'poison branch must exist');
   assert.ok(poisonIdx > fxIdx && poisonIdx < okIdx,
     'TOXIC poison branch must live inside applyHitEffects, not applyOnKill');
 });
@@ -186,9 +186,9 @@ test('TOXIC poison DoT branch lives in tickEnemyStatusEffects', () => {
   const ticksIdx = ENTITIES_CODE.indexOf('function tickEnemyStatusEffects(');
   const tickEliteIdx = ENTITIES_CODE.indexOf('function tickEliteAffix(');
   const poisonTickIdx = ENTITIES_CODE.indexOf('enemy.poisonTimer > 0');
-  assert.ok(ticksIdx > 0, 'tickEnemyStatusEffects must exist');
-  assert.ok(tickEliteIdx > 0, 'tickEliteAffix must exist');
-  assert.ok(poisonTickIdx > 0, 'poison DoT tick must exist');
+  assert.ok(ticksIdx !== -1, 'tickEnemyStatusEffects must exist');
+  assert.ok(tickEliteIdx !== -1, 'tickEliteAffix must exist');
+  assert.ok(poisonTickIdx !== -1, 'poison DoT tick must exist');
   assert.ok(poisonTickIdx > ticksIdx && poisonTickIdx < tickEliteIdx,
     'TOXIC poison DoT must live inside tickEnemyStatusEffects, not tickEliteAffix');
 });
@@ -330,7 +330,7 @@ test('TOXIC poisonTimer is recognised by the EXPLOITER perk status check (cross-
   // from EXPLOITER's side). A future refactor that drops poisonTimer
   // from EXPLOITER's enumerated check is caught HERE as well.
   const exploiterIdx = ENTITIES_CODE.search(/perks\.EXPLOITER/);
-  assert.ok(exploiterIdx > 0, 'EXPLOITER branch must exist in entities.js');
+  assert.ok(exploiterIdx !== -1, 'EXPLOITER branch must exist in entities.js');
   // The status enumeration lives within ~700 chars of the perk gate
   // (mirror the slice size in tests/exploiter-perk.test.js).
   const branchSlice = ENTITIES_CODE.slice(exploiterIdx, exploiterIdx + 700);

@@ -102,8 +102,8 @@ test('parry block executes BEFORE the damage block (early return)', () => {
   const idxParry = CONTENT.indexOf("player.perks.PARRY && player.dashTimer > 0");
   const idxDamage = CONTENT.indexOf(
     "!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5");
-  assert.ok(idxParry > 0, 'parry gate must exist in src/content.js');
-  assert.ok(idxDamage > 0, 'damage gate must still exist in src/content.js');
+  assert.ok(idxParry !== -1, 'parry gate must exist in src/content.js');
+  assert.ok(idxDamage !== -1, 'damage gate must still exist in src/content.js');
   assert.ok(idxParry < idxDamage,
     'parry block must precede the damage block (early-return short-circuits damage)');
 });

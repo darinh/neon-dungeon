@@ -102,8 +102,8 @@ test('REGENERATIVE regen does NOT tick during stun (stun is neutralization)', ()
   // Anchor on the tick site (uses _regenTimer accumulator), NOT the
   // takeDamage reset which appears earlier in the file.
   const regenIdx = ENTITIES.indexOf('this._regenTimer = (this._regenTimer || 0) + dt');
-  assert.ok(stunReturnIdx > 0, 'stun early-return must exist in Enemy.update');
-  assert.ok(regenIdx > 0, 'REGENERATIVE tick must exist in Enemy.update');
+  assert.ok(stunReturnIdx !== -1, 'stun early-return must exist in Enemy.update');
+  assert.ok(regenIdx !== -1, 'REGENERATIVE tick must exist in Enemy.update');
   assert.ok(regenIdx > stunReturnIdx, 'REGENERATIVE regen tick must live AFTER the stun early-return so stun freezes regen');
 });
 

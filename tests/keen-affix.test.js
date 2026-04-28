@@ -92,7 +92,7 @@ test('KEEN listing follows the existing prefix block structure', () => {
   const volatileIdx = CONTENT_CODE.indexOf('VOLATILE:');
   const keenIdx = CONTENT_CODE.indexOf('KEEN:');
   const flameIdx = CONTENT_CODE.indexOf('FLAME:');
-  assert.ok(volatileIdx > 0 && keenIdx > 0 && flameIdx > 0,
+  assert.ok(volatileIdx !== -1 && keenIdx !== -1 && flameIdx !== -1,
     'VOLATILE, KEEN, FLAME must all exist');
   assert.ok(keenIdx > volatileIdx,
     'KEEN must come after VOLATILE (last existing prefix at insertion time)');

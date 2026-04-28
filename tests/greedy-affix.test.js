@@ -65,7 +65,7 @@ test('GREEDY on-kill gates on !isProc (proc finishers do not credit Greedy)', ()
   // entities.js:1158-1162.
   // Anchor on the greedy-includes match and walk back to find the gate.
   const idx = ENTITIES_CODE.indexOf("effects.includes('greedy')");
-  assert.ok(idx > 0, 'greedy gate must exist');
+  assert.ok(idx !== -1, 'greedy gate must exist');
   // Search the preceding ~400 chars for !_gctx?.isProc or !ctx.isProc style.
   const head = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx);
   assert.match(head, /!\s*[\w.]*isProc/,
@@ -78,7 +78,7 @@ test('GREEDY skips summons and shards (defense in depth)', () => {
   // credit. Mirrors the !this.isShard && !isSummon gate used by
   // HARVESTER/MAGPIE/VAULTMASTER drops above.
   const idx = ENTITIES_CODE.indexOf("effects.includes('greedy')");
-  assert.ok(idx > 0, 'greedy gate must exist');
+  assert.ok(idx !== -1, 'greedy gate must exist');
   // Search a wider window because the gate spans multiple lines.
   const window = ENTITIES_CODE.slice(Math.max(0, idx - 400), idx + 600);
   assert.match(window, /!\s*this\.isShard/,
@@ -93,7 +93,7 @@ test('GREEDY adds bonus to player.credits and emits gold +CR feedback', () => {
   // player gets unambiguous feedback even on a small screen / busy frame
   // (mirrors VAULTMASTER and bounty bonus visual contracts).
   const idx = ENTITIES_CODE.indexOf("effects.includes('greedy')");
-  assert.ok(idx > 0, 'greedy gate must exist');
+  assert.ok(idx !== -1, 'greedy gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /_EG\.player\.credits\s*\+=\s*bonusCr/,
     'GREEDY must add bonusCr to player.credits');
@@ -109,7 +109,7 @@ test('GREEDY bonus is +50% of base credit drop, rounded, with sub-1 zero-suppres
   // GRUNTs) from showing "+0 CR" floating text on every kill (visual
   // noise; the suffix should feel premium).
   const idx = ENTITIES_CODE.indexOf("effects.includes('greedy')");
-  assert.ok(idx > 0, 'greedy gate must exist');
+  assert.ok(idx !== -1, 'greedy gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
   assert.match(window, /Math\.round\(\s*cr\s*\*\s*0\.5\s*\)/,
     'GREEDY bonus must be Math.round(cr * 0.5) — 50% of base credit drop');
@@ -123,7 +123,7 @@ test('GREEDY block runs AFTER the base credit award (so it stacks, not replaces)
   // or replace. Anchor on positions: the base award must precede the gate.
   const baseAwardIdx = ENTITIES_CODE.indexOf('_EG.player.credits += cr');
   const greedyGateIdx = ENTITIES_CODE.indexOf("effects.includes('greedy')");
-  assert.ok(baseAwardIdx > 0, 'base credit award line must exist');
+  assert.ok(baseAwardIdx !== -1, 'base credit award line must exist');
   assert.ok(greedyGateIdx > baseAwardIdx,
     'GREEDY bonus block must come AFTER the base credit award so it stacks');
 });

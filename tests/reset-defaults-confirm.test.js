@@ -201,10 +201,10 @@ test('reset-confirm: every non-reset actionable mouse-click row clears the arm',
   const toggleHeader = updateBody[0].indexOf("// Toggle rows click");
   const rebindHeader = updateBody[0].indexOf("// Rebind rows click");
   const resetHeader = updateBody[0].indexOf("// Reset defaults row");
-  assert.ok(sliderStart > 0, 'slider branch marker not found');
-  assert.ok(toggleHeader > 0, 'toggle branch marker not found');
-  assert.ok(rebindHeader > 0, 'rebind branch marker not found');
-  assert.ok(resetHeader > 0, 'reset branch marker not found');
+  assert.ok(sliderStart !== -1, 'slider branch marker not found');
+  assert.ok(toggleHeader !== -1, 'toggle branch marker not found');
+  assert.ok(rebindHeader !== -1, 'rebind branch marker not found');
+  assert.ok(resetHeader !== -1, 'reset branch marker not found');
   const sliderSlice = updateBody[0].slice(sliderStart, toggleHeader);
   const toggleSlice = updateBody[0].slice(toggleHeader, rebindHeader);
   const rebindSlice = updateBody[0].slice(rebindHeader, resetHeader);

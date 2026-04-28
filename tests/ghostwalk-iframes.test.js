@@ -153,8 +153,8 @@ test('dashTimer and _dashIFrameTimer are SET in the same dash block (so the immu
   // intentional decoupling without flagging cosmetic re-orderings).
   const dashTimerIdx = ENTITIES_CODE.indexOf('this.dashTimer=0.12');
   const iframeIdx = ENTITIES_CODE.indexOf('this._dashIFrameTimer = 0.12 + (this.dashIFrameBonus');
-  assert.ok(dashTimerIdx > 0, 'this.dashTimer=0.12 must be locatable in source');
-  assert.ok(iframeIdx > 0, 'this._dashIFrameTimer set must be locatable in source');
+  assert.ok(dashTimerIdx !== -1, 'this.dashTimer=0.12 must be locatable in source');
+  assert.ok(iframeIdx !== -1, 'this._dashIFrameTimer set must be locatable in source');
   assert.ok(Math.abs(iframeIdx - dashTimerIdx) < 400,
     'this._dashIFrameTimer SET must live within ~400 chars of this.dashTimer=0.12 (i.e. same dash entry block)');
 });
@@ -206,7 +206,7 @@ test('_dashIFrameTimer set is unconditional on bonus value (base dash flows thro
   // Look for the SET line — the closest enclosing `if (` line should
   // NOT mention dashIFrameBonus.
   const setIdx = ENTITIES_CODE.indexOf('this._dashIFrameTimer = 0.12 + (this.dashIFrameBonus');
-  assert.ok(setIdx > 0, '_dashIFrameTimer SET must be locatable');
+  assert.ok(setIdx !== -1, '_dashIFrameTimer SET must be locatable');
   // Walk backwards 200 chars and check there's no `if (` containing dashIFrameBonus
   const slice = ENTITIES_CODE.slice(Math.max(0, setIdx - 200), setIdx);
   assert.ok(!/if\s*\([^)]*dashIFrameBonus[^)]*\)\s*\{[^{}]*$/.test(slice),

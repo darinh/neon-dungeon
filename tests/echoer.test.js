@@ -156,7 +156,7 @@ test('aiEchoer honors hologram-taunt redirection', () => {
   // history fallback so the decoy is never bypassed.
   const ti = aiBody.indexOf('_tauntTarget');
   const gi = aiBody.indexOf('getPositionAgo');
-  assert.ok(ti > 0 && gi > 0 && ti < gi,
+  assert.ok(ti !== -1 && gi !== -1 && ti < gi,
     'taunt check must appear before getPositionAgo fallback in aiEchoer');
 });
 

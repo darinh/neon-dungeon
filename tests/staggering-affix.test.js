@@ -112,9 +112,9 @@ test('STAGGER branch lives inside applyHitEffects (not applyOnKill)', () => {
   const fxIdx = ENTITIES_CODE.indexOf('function applyHitEffects(');
   const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
   const stIdx = ENTITIES_CODE.indexOf("eff === 'stagger'");
-  assert.ok(fxIdx > 0, 'applyHitEffects function must exist');
-  assert.ok(okIdx > 0, 'applyOnKill function must exist');
-  assert.ok(stIdx > 0, 'stagger branch must exist');
+  assert.ok(fxIdx !== -1, 'applyHitEffects function must exist');
+  assert.ok(okIdx !== -1, 'applyOnKill function must exist');
+  assert.ok(stIdx !== -1, 'stagger branch must exist');
   assert.ok(stIdx > fxIdx && stIdx < okIdx,
     'STAGGER branch must live inside applyHitEffects, not applyOnKill');
 });

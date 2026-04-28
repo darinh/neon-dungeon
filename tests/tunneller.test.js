@@ -98,7 +98,7 @@ test('TUNNELLER draw branch hides the body while underground (early return)', ()
   // While tunneling/surfacing the regular sprite must NOT draw — only the
   // dust mound. Branch must end with `return;` to skip the body draw.
   const drawIdx = ENTITIES.indexOf("this.type === 'TUNNELLER' && (this._tnState === 'tunneling' || this._tnState === 'surfacing')");
-  assert.ok(drawIdx > 0, 'TUNNELLER draw branch must exist');
+  assert.ok(drawIdx !== -1, 'TUNNELLER draw branch must exist');
   const branch = ENTITIES.slice(drawIdx, drawIdx + 2000);
   // The branch must contain a ctx.restore() and a return; — guards against
   // ctx-state leak and against falling through into the normal sprite draw.

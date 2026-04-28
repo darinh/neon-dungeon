@@ -118,15 +118,15 @@ test('takeDamage trigger fires BEFORE hp deduction (clutch save semantics)', () 
   // mutation in the linear source.
   const triggerIdx = ENTITIES_SRC.indexOf("this.lastStandTimer = 5;");
   const hpDeductIdx = ENTITIES_SRC.indexOf("this.hp=Math.max(0,this.hp-actual);");
-  assert.ok(triggerIdx > 0, 'trigger present');
-  assert.ok(hpDeductIdx > 0, 'hp deduction present');
+  assert.ok(triggerIdx !== -1, 'trigger present');
+  assert.ok(hpDeductIdx !== -1, 'hp deduction present');
   assert.ok(triggerIdx < hpDeductIdx, 'trigger must precede hp deduction in takeDamage');
 });
 
 test('takeDamage applies DR in the same flow (between trigger and hp deduction)', () => {
   const drIdx = ENTITIES_SRC.indexOf('if (this.lastStandTimer > 0) actual = actual * 0.5;');
   const hpDeductIdx = ENTITIES_SRC.indexOf("this.hp=Math.max(0,this.hp-actual);");
-  assert.ok(drIdx > 0, 'DR present');
+  assert.ok(drIdx !== -1, 'DR present');
   assert.ok(drIdx < hpDeductIdx, 'DR must precede hp deduction so activating hit benefits');
 });
 

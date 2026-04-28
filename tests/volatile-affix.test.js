@@ -71,7 +71,7 @@ test('buildWeapon applies mods.spreadAdd as an additive (post-multiplier) operat
   // intended additive-after-multiplicative ordering.
   const mulIdx = CONTENT_CODE.search(/if\s*\(af\.mods\.spread\s*!==\s*undefined\)/);
   const addIdx = CONTENT_CODE.search(/if\s*\(af\.mods\.spreadAdd\)/);
-  assert.ok(mulIdx > 0 && addIdx > 0, 'both spread branches must exist');
+  assert.ok(mulIdx !== -1 && addIdx !== -1, 'both spread branches must exist');
   assert.ok(addIdx > mulIdx,
     'spreadAdd branch must follow the multiplicative spread branch in buildWeapon');
 });
@@ -97,7 +97,7 @@ test('VOLATILE listing follows the existing prefix block structure', () => {
   const burstIdx = CONTENT_CODE.indexOf("BURST:");
   const volatileIdx = CONTENT_CODE.indexOf("VOLATILE:");
   const flameIdx = CONTENT_CODE.indexOf("FLAME:");
-  assert.ok(burstIdx > 0 && volatileIdx > 0 && flameIdx > 0,
+  assert.ok(burstIdx !== -1 && volatileIdx !== -1 && flameIdx !== -1,
     'BURST, VOLATILE, FLAME must all exist');
   assert.ok(volatileIdx > burstIdx,
     'VOLATILE must come after BURST (last existing prefix)');

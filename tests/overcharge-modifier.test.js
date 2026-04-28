@@ -264,8 +264,8 @@ test('OVERCHARGE counter increment lives ABOVE the crit-roll sites in Player.sho
   // forceCrit OR-into-crit site in source-text order.
   const ovIdx = ENTITIES_CODE.indexOf("_EG.modifier === 'OVERCHARGE'");
   const firstCritIdx = ENTITIES_CODE.indexOf('forceCrit || (critChance');
-  assert.ok(ovIdx > 0, 'OVERCHARGE branch must be locatable');
-  assert.ok(firstCritIdx > 0, 'forceCrit OR-into-crit site must be locatable');
+  assert.ok(ovIdx !== -1, 'OVERCHARGE branch must be locatable');
+  assert.ok(firstCritIdx !== -1, 'forceCrit OR-into-crit site must be locatable');
   assert.ok(ovIdx < firstCritIdx,
     'OVERCHARGE counter increment must come BEFORE the crit-roll sites so forceCrit is set when the rolls evaluate');
 });

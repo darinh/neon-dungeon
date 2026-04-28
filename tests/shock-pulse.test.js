@@ -160,8 +160,8 @@ test('game.js item pickup loop has an isShockPulse branch that calls triggerShoc
   // other pickup-effect branches above the lore overlay).
   const idxShock = GAME.indexOf('it.isShockPulse');
   const idxWhisper = GAME.indexOf('it.isWhisper');
-  assert.ok(idxShock > 0, 'pickup loop must reference it.isShockPulse');
-  assert.ok(idxWhisper > 0, 'pickup loop must reference it.isWhisper (sanity)');
+  assert.ok(idxShock !== -1, 'pickup loop must reference it.isShockPulse');
+  assert.ok(idxWhisper !== -1, 'pickup loop must reference it.isWhisper (sanity)');
   assert.ok(idxShock < idxWhisper,
     'isShockPulse branch should appear before isWhisper (effect-pickup grouping)');
   // Branch body must call triggerShockPulse() and splice the pickup out.
@@ -176,7 +176,7 @@ test('game.js item pickup loop has an isShockPulse branch that calls triggerShoc
 
 test('populateFloor places at most one ShockPulsePickup per floor on floor 3+', () => {
   const idx = RENDER.indexOf('populateFloor');
-  assert.ok(idx > 0, 'populateFloor must exist in render.js');
+  assert.ok(idx !== -1, 'populateFloor must exist in render.js');
   // Once-per-floor flag declared above the room loop.
   assert.match(RENDER, /_shockPulseRoll\s*=\s*floorNum\s*>=\s*3/,
     '_shockPulseRoll must require floorNum >= 3 (mid-run+ tool)');

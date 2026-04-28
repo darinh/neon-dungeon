@@ -102,7 +102,7 @@ test('spawn grace is gated on savedModifier === undefined (fresh transition)', (
   // Same gate semantics as keys / boosts / telemetry / biome card / modifier
   // banner blocks elsewhere in loadFloor.
   const sliceStart = GAME.indexOf('_spawnGraceTimer');
-  assert.ok(sliceStart > 0, '_spawnGraceTimer must appear in game.js');
+  assert.ok(sliceStart !== -1, '_spawnGraceTimer must appear in game.js');
   const slice = GAME.slice(Math.max(0, sliceStart - 400), sliceStart + 200);
   assert.match(slice, /savedModifier\s*===\s*undefined/,
     'spawn grace must be gated on savedModifier === undefined');

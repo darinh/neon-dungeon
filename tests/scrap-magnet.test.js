@@ -43,7 +43,7 @@ test('SCRAP_MAGNET activation invokes audio and posts a status toast', () => {
   // Audio + toast are the cast feedback the player needs to read the cast.
   // Toast colour matches gold (#ffd700) for visual continuity with VaultCoin.
   const caseStart = CONTENT.indexOf("case 'SCRAP_MAGNET':");
-  assert.ok(caseStart > 0, "SCRAP_MAGNET case must exist in activateHackware");
+  assert.ok(caseStart !== -1, "SCRAP_MAGNET case must exist in activateHackware");
   const caseSlice = CONTENT.slice(caseStart, caseStart + 2000);
   assert.match(caseSlice, /audio\.hackwareScrapMagnet\s*\(/, 'must call audio.hackwareScrapMagnet()');
   assert.match(caseSlice, /_CG\.msg\(\s*'[^']*SCRAP MAGNET[^']*',\s*'#ffd700'/, 'must post a SCRAP MAGNET toast in gold (#ffd700)');
@@ -135,7 +135,7 @@ test('drawHackwareEffects has a scrap_magnet draw branch with a gold ring', () =
   // Locate the draw branch specifically: it sits inside drawHackwareEffects
   // and references camX/camY (activation+update don't).
   const drawIdx = CONTENT.indexOf('function drawHackwareEffects');
-  assert.ok(drawIdx > 0, 'drawHackwareEffects must exist');
+  assert.ok(drawIdx !== -1, 'drawHackwareEffects must exist');
   const drawSlice = CONTENT.slice(drawIdx, drawIdx + 8000);
   const branchRe = /if\s*\(\s*fx\.type\s*===\s*'scrap_magnet'\s*\)\s*\{[\s\S]{0,2500}?#ffd700/;
   assert.match(drawSlice, branchRe, 'draw branch must paint a #ffd700 (gold) element');

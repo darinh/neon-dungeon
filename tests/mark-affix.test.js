@@ -185,10 +185,10 @@ test('takeDamage applies +30% bonus when ctx has effects:mark AND _markedTimer>0
   // executable condition. The full file ENTITIES_NC has comments stripped
   // already, so the walk-back is safe.
   const assignIdx = ENTITIES_NC.search(/dmg\s*=\s*Math\.round\(\s*dmg\s*\*\s*1\.30?\s*\)/);
-  assert.ok(assignIdx > 0, 'mark bonus assignment must exist in EXECUTABLE code');
+  assert.ok(assignIdx !== -1, 'mark bonus assignment must exist in EXECUTABLE code');
   const before = ENTITIES_NC.slice(0, assignIdx);
   const ifIdx = before.lastIndexOf('if (');
-  assert.ok(ifIdx > 0, 'mark bonus must be inside an `if (...)` block');
+  assert.ok(ifIdx !== -1, 'mark bonus must be inside an `if (...)` block');
   const condSpan = ENTITIES_NC.slice(ifIdx, assignIdx);
   assert.match(condSpan, /!\s*[_\w]+\.isProc/,
     'mark bonus if-condition must include `!<ctx>.isProc` in EXECUTABLE code — proc double-dip protection');
@@ -208,8 +208,8 @@ test('mark bonus is applied BEFORE SHIELDED/shieldGen/NEXUS DR (mitigation order
   // Use comment-stripped source so commented-out form can't satisfy.
   const markIdx = ENTITIES_NC.search(/dmg\s*=\s*Math\.round\(\s*dmg\s*\*\s*1\.30?\s*\)/);
   const shieldedIdx = ENTITIES_NC.search(/this\.eliteAffix\s*===\s*'SHIELDED'\s*&&\s*this\.shieldHp\s*>\s*0/);
-  assert.ok(markIdx > 0, 'mark bonus assignment must exist in EXECUTABLE code');
-  assert.ok(shieldedIdx > 0, 'SHIELDED absorb branch must exist in EXECUTABLE code');
+  assert.ok(markIdx !== -1, 'mark bonus assignment must exist in EXECUTABLE code');
+  assert.ok(shieldedIdx !== -1, 'SHIELDED absorb branch must exist in EXECUTABLE code');
   assert.ok(markIdx < shieldedIdx,
     `mark bonus (${markIdx}) must appear BEFORE SHIELDED absorb (${shieldedIdx}) in source order`);
 });
@@ -225,7 +225,7 @@ test('tickEnemyStatusEffects decays enemy._markedTimer with dt and clamps to 0',
   // The decay must be inside tickEnemyStatusEffects (not orphaned elsewhere).
   const fnIdx = ENTITIES_NC.search(/function\s+tickEnemyStatusEffects\s*\(/);
   const decayIdx = ENTITIES_NC.search(/enemy\._markedTimer\s*-=\s*dt/);
-  assert.ok(fnIdx > 0 && decayIdx > fnIdx,
+  assert.ok(fnIdx !== -1 && decayIdx > fnIdx,
     'mark decay must live inside tickEnemyStatusEffects in EXECUTABLE code');
 });
 
