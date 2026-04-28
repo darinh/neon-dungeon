@@ -40,7 +40,37 @@ const KEY_DISPLAY = k => {
   return map[k] || k;
 };
 
-/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
+// Discrete steps for the accessibility-scale settings. The settings UI
+// only exposes these four values for each scale (stepper UI, not a
+// continuous slider), and load() snaps any out-of-range or untyped
+// persisted value to the nearest legal step. Keeping the canonical step
+// list here means the UI, the loader, and any test that asserts
+// snapping behaviour all share the same source of truth.
+const MINIMAP_SCALE_STEPS = [0.75, 1.0, 1.25, 1.5];
+const TEXT_SCALE_STEPS    = [0.85, 1.0, 1.15, 1.3];
+
+/**
+ * Snap an arbitrary numeric value to the nearest entry in `steps`. Used
+ * by settings.load() to coerce persisted values into the canonical
+ * discrete set, so that an old save written under a future build with
+ * different steps doesn't leak weird intermediate values into the UI.
+ * @param {number} v
+ * @param {number[]} steps
+ * @returns {number}
+ */
+function snapToSteps(v, steps) {
+  if (!steps.length) return v;
+  let best = /** @type {number} */ (steps[0]);
+  let bestDist = Math.abs(v - best);
+  for (let i = 1; i < steps.length; i++) {
+    const s = /** @type {number} */ (steps[i]);
+    const d = Math.abs(v - s);
+    if (d < bestDist) { best = s; bestDist = d; }
+  }
+  return best;
+}
+
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, minimapScale:number, textScale:number, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -57,6 +87,20 @@ const settings = {
   // users with vestibular sensitivity / low-vision flicker concerns can
   // opt in.
   reducedMotion: false,
+  // Accessibility — corner minimap pixel-size multiplier. The base
+  // minimap is 120×80; this scales those dimensions (and the cached
+  // offscreen canvas, with rebuild-on-resize gating in render.js).
+  // Allowed values: MINIMAP_SCALE_STEPS. Default 1.0 (= base 120×80).
+  minimapScale: 1.0,
+  // Accessibility — text-scale multiplier applied to status FX badges
+  // (drawStatusBar in content.js) and floating damage numbers
+  // (drawFloatingTexts in content.js). NOT applied to the main HUD bar
+  // (drawHUD in render.js): that path is heavily layout-coupled — the
+  // hardcoded text baselines pair with hardcoded bar geometry, so a
+  // global font scale would break alignment without a parallel layout
+  // overhaul. If users want HUD-text scaling, that's a follow-up.
+  // Allowed values: TEXT_SCALE_STEPS. Default 1.0 (no scaling).
+  textScale: 1.0,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
@@ -70,6 +114,16 @@ const settings = {
       if (typeof raw.aimAssist === 'boolean') this.aimAssist = raw.aimAssist;
       if (typeof raw.crtMode === 'boolean') this.crtMode = raw.crtMode;
       if (typeof raw.reducedMotion === 'boolean') this.reducedMotion = raw.reducedMotion;
+      // Snap-to-nearest-step on load so persisted values from an older
+      // build (or a tampered localStorage) can never leak intermediate
+      // multipliers into the UI. Untyped/non-finite values fall back to
+      // the schema default (1.0).
+      if (typeof raw.minimapScale === 'number' && Number.isFinite(raw.minimapScale)) {
+        this.minimapScale = snapToSteps(raw.minimapScale, MINIMAP_SCALE_STEPS);
+      }
+      if (typeof raw.textScale === 'number' && Number.isFinite(raw.textScale)) {
+        this.textScale = snapToSteps(raw.textScale, TEXT_SCALE_STEPS);
+      }
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
@@ -86,6 +140,8 @@ const settings = {
         aimAssist: this.aimAssist,
         crtMode: this.crtMode,
         reducedMotion: this.reducedMotion,
+        minimapScale: this.minimapScale,
+        textScale: this.textScale,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -97,6 +153,8 @@ const settings = {
     this.aimAssist = false;
     this.crtMode = false;
     this.reducedMotion = false;
+    this.minimapScale = 1.0;
+    this.textScale = 1.0;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
