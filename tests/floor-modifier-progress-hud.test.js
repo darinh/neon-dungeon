@@ -35,44 +35,14 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { stripComments, extractBranch } = require('./_alignment-helpers.js');
 
+// floor-modifier-progress reads src/render.js (not content.js / entities.js);
+// loadAlignmentSources doesn't cover render.js — keep this load inline.
 const RENDER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
 );
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
 const RENDER_CODE = stripComments(RENDER);
-
-/**
- * Brace-walk a `{`...`}` body starting from the FIRST match of `openerRe`.
- * `openerRe` MUST end at (or just after) the opening `{`. Returns the full
- * slice including the opener through the matching close brace, or null if
- * no balanced close is found. Mirrors helper in trauma-kit-hud-indicator
- * and deadly-affix tests (per stored memory 'test source-text extraction').
- *
- * @param {string} src
- * @param {RegExp} openerRe
- */
-function extractBranch(src, openerRe) {
-  const m = src.match(openerRe);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  let depth = 1;
-  for (let i = startIdx; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return src.slice(m.index, i + 1);
-    }
-  }
-  return null;
-}
 
 // ─── helper definition exists at module scope ─────────────────────────────
 
