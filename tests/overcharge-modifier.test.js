@@ -205,20 +205,28 @@ test('Player.shoot declares forceCrit = false at top so non-OVERCHARGE floors ta
     'Player.shoot must declare `let forceCrit = false;` so non-OVERCHARGE shots fall back to random crit roll');
 });
 
-test('forceCrit is wired into all three crit-roll sites: melee, ranged main, MULTI_SHOT bonus', () => {
+test('forceCrit is wired into all five crit-roll sites: melee, ranged main, MULTI_SHOT bonus, ranged echo, melee echo', () => {
   // The single-trigger semantic requires forceCrit to be ORed into
   // every crit decision Player.shoot makes within one trigger pull —
-  // melee sword arc, the ranged main projectile loop, AND the
-  // MULTI_SHOT perk's bonus projectile. A regression that drops one
-  // (e.g. a refactor that introduces a fourth crit site without
-  // forwarding forceCrit) would make OVERCHARGE behave inconsistently
-  // across weapon types and perk loadouts. Count occurrences to lock
-  // the wire-count.
+  // melee sword arc, the ranged main projectile loop, the MULTI_SHOT
+  // perk's bonus projectile, AND the REVERB echo's two branches
+  // (ranged echo + melee echo). A regression that drops one (e.g. a
+  // refactor that introduces a sixth crit site without forwarding
+  // forceCrit, or removes one of the existing five) would make
+  // OVERCHARGE behave inconsistently across weapon types and modifier
+  // interactions. Count occurrences to lock the wire-count.
+  //
+  // Pre-REVERB pool was 3 (melee + ranged main + MULTI_SHOT). REVERB
+  // echo branches add 2 more (REVERB+OVERCHARGE on the 5th shot must
+  // crit BOTH the main shot and the echo, or the modifier interaction
+  // is broken). Adding a future crit-roll site (e.g. a 7th positive
+  // modifier that fires another bonus projectile) means bumping this
+  // assertion AND wiring forceCrit into the new site.
   const occurrences = (ENTITIES_CODE.match(
     /forceCrit\s*\|\|\s*\(\s*critChance\s*>\s*0\s*&&\s*Math\.random\(\)\s*<\s*critChance\s*\)/g
   ) || []).length;
-  assert.strictEqual(occurrences, 3,
-    'forceCrit must be ORed into exactly THREE crit-roll sites (melee + ranged main + MULTI_SHOT bonus); got ' + occurrences);
+  assert.strictEqual(occurrences, 5,
+    'forceCrit must be ORed into exactly FIVE crit-roll sites (melee + ranged main + MULTI_SHOT bonus + ranged echo + melee echo); got ' + occurrences);
 });
 
 test('OVERCHARGE counter persists through saveGame (per-run rhythm survives save/resume)', () => {

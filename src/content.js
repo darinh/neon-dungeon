@@ -1706,6 +1706,7 @@ const FLOOR_MODIFIERS = {
   OVERCHARGE:{ label:'OVERCHARGE',desc:'Every 5th shot guaranteed crit',        colour:'#ffee66', icon:'⚡' },
   WINDFALL:  { label:'WINDFALL',  desc:'Every 5th defeat drops a bonus core',   colour:'#a866ff', icon:'◆' },
   SIGNAL_BOOST: { label:'SIGNAL_BOOST', desc:'Every 5th defeat resets hackware', colour:'#00ddff', icon:'↻' },
+  REVERB:    { label:'REVERB',    desc:'Every 5th shot fires a free echo',     colour:'#ff66cc', icon:'♪' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
@@ -3597,6 +3598,7 @@ class Projectile {
   /** @type {any} */ maxPierces;
   /** @type {any} */ isAllyTurret;
   /** @type {any} */ fromPlayerShot;
+  /** @type {any} */ _isReverbEcho;
   /**
    * @param {any} x
    * @param {any} y
@@ -3668,6 +3670,7 @@ class Projectile {
     this.ownerType = null;
     this.isAllyTurret = false;
     this.fromPlayerShot = false;
+    this._isReverbEcho = false;
     this._owner = /** @type {any} */ (null);
     this.isCrit = false;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
