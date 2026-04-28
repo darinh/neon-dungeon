@@ -2512,6 +2512,35 @@ function getStatusEffects(player) {
     // saturation tells the state.
     fx.push({ id: 'last-stand-cd', icon: '✦', label: Math.ceil(player.lastStandCD)+'s', colour: '#886622' });
   }
+  // RETRIBUTION clutch window active — perk gives +50% outgoing damage for
+  // 3s after taking damage (entities.js:11349 multiplier; trigger at
+  // entities.js:11568 sets retributionTimer = 3 inside takeDamage when actual
+  // damage > 0). Without an HUD indicator the buff fires invisibly: players
+  // see damage numbers tick up after a hit-trade but have no signal that the
+  // window is active and no countdown until expiry. Mirrors the
+  // adrenalineTimer / lastStandTimer pattern (timer-driven, .toFixed(1)+'s'
+  // label, perk-gated) — RETRIBUTION's 3s window is the same scale as
+  // LAST_STAND's 5s clutch window so the same display format applies.
+  //
+  // Display: ☄ N.Ns — icon ☄ matches the perk-card glyph at content.js:4512;
+  // colour #ff2266 matches the perk-card colour exactly so the badge ties
+  // visually to the perk it represents (mirrors LAST_STAND's ✦ icon match).
+  //
+  // Gates: perk owned + active timer. Defensive `player.perks &&` null-check
+  // matches the codebase pattern for nullable nested fields. Timer > 0 is
+  // the active-window predicate (mirrors entities.js:11349's multiplier
+  // gate exactly, so the badge appears iff the bonus is being applied).
+  //
+  // Cross-file alignment: the perk-card colour at content.js:4512 ('#ff2266')
+  // and the multiplier at entities.js:11349 (×1.5) are the source of truth.
+  // The badge intentionally does NOT show the multiplier in the label —
+  // RETRIBUTION's bonus is fixed at +50% regardless of stacks/state, so
+  // showing a static "×1.50" every tick would be informational redundancy.
+  // The countdown is the actionable signal; the icon+colour identify the
+  // buff type at a glance.
+  if (player.perks && player.perks.RETRIBUTION && player.retributionTimer > 0) {
+    fx.push({ id: 'retribution', icon: '☄', label: player.retributionTimer.toFixed(1)+'s', colour: '#ff2266' });
+  }
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
