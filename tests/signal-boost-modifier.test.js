@@ -37,6 +37,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { assertModifierPoolSize, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
@@ -339,20 +340,11 @@ test('modifierProgressSuffix has a SIGNAL_BOOST branch reading _signalBoostKills
 
 // ─── modifier-pool count invariants ───────────────────────────────────
 
-test('FLOOR_MODIFIERS now contains 19 entries (18 prior + CHAINREACT)', () => {
-  // Floor-modifier roll uses Object.keys — any addition shifts the
-  // probability of every other modifier. Pin the pool size so an
-  // accidental drop (or accidental duplicate) is an immediate failure.
-  // Pre-WINDFALL pool was 13; WINDFALL→14; SIGNAL_BOOST→15; REVERB→16;
-  // QUARTERMASTER→17; AUTONOMY→18 with 8 positive (CASCADE, OVERCHARGE,
-  // WINDFALL, SIGNAL_BOOST, REVERB, QUARTERMASTER, AUTONOMY) and 11
-  // negative-or-neutral.
-  const startIdx = CONTENT.indexOf('const FLOOR_MODIFIERS');
-  const endIdx = CONTENT.indexOf('};', startIdx);
-  const dictBody = CONTENT.slice(startIdx, endIdx);
-  const keys = dictBody.match(/^\s*[A-Z_]+:\s*\{/gm) || [];
-  assert.equal(keys.length, 19,
-    `FLOOR_MODIFIERS must contain 19 entries after CHAINREACT added; found ${keys.length}`);
+test(`FLOOR_MODIFIERS pool size invariant (${EXPECTED_MODIFIER_POOL_SIZE} entries)`, () => {
+  // Pool-count invariant — see tests/_modifier-pool.js for details.
+  // Adding a new modifier requires bumping EXPECTED_MODIFIER_POOL_SIZE
+  // in that helper file (single source of truth).
+  assertModifierPoolSize(CONTENT);
 });
 
 // ─── runtime simulation: extracted Enemy.die() block exhibits gating ──
