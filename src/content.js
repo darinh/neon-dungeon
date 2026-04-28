@@ -1092,6 +1092,7 @@ function activateHackware(player) {
         p.dx = -p.dx;
         p.dy = -p.dy;
         p.fromPlayer = true;
+        p.fromPlayerShot = false;
         p.isAllyTurret = false;
         p.ownerType = 'Reverse Polarity';
         p._owner = null;
@@ -3550,6 +3551,7 @@ class Projectile {
   /** @type {any} */ targetY;
   /** @type {any} */ maxPierces;
   /** @type {any} */ isAllyTurret;
+  /** @type {any} */ fromPlayerShot;
   /**
    * @param {any} x
    * @param {any} y
@@ -3620,6 +3622,7 @@ class Projectile {
     this.targetY = 0;
     this.ownerType = null;
     this.isAllyTurret = false;
+    this.fromPlayerShot = false;
     this._owner = /** @type {any} */ (null);
     this.isCrit = false;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
@@ -3731,6 +3734,7 @@ class Projectile {
             this.dx = -this.dx;
             this.dy = -this.dy;
             this.fromPlayer = false;
+            this.fromPlayerShot = false;
             this.dmg = Math.round(this.dmg * 0.6);
             this.ownerType = 'Reflected';
             this.hitEnemies = new Set();
@@ -3767,7 +3771,7 @@ class Projectile {
             }
             this.dead = true; return;
           }
-          e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[] });
+          e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[], fromPlayerShot: this.fromPlayerShot === true });
           if (this.isCrit) spawnDmgText(e.x, e.y - 0.3, 'CRIT!', '#ffdd00');
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
           this.hitEnemies.add(e);
@@ -3785,6 +3789,7 @@ class Projectile {
         this.dx = -this.dx;
         this.dy = -this.dy;
         this.fromPlayer = true;
+        this.fromPlayerShot = false;
         this.ownerType = 'Parry';
         this._owner = null;
         this.weaponName = 'Parry';
@@ -4277,6 +4282,7 @@ const PERK_POOL = {
   GLASS_CANNON:    { name:'Glass Cannon',      icon:'⟁', desc:'+30% damage dealt, +25% damage taken',  colour:'#ff66aa' },
   BULWARK:         { name:'Bulwark',           icon:'◈', desc:'−15% damage taken at or above 75% HP',   colour:'#88ccff' },
   EXPLOITER:       { name:'Exploiter',         icon:'🎯', desc:'+25% damage to enemies with status effects', colour:'#ff8844' },
+  HOT_HAND:        { name:'Hot Hand',           icon:'♨', desc:'Consecutive hits on same target: +5% per stack (max +30%)', colour:'#ff5522' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice

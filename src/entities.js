@@ -1669,6 +1669,73 @@ class Enemy {
         }
       }
     }
+    // HOT_HAND perk: per-target consecutive-hit damage stack. Applied at
+    // the same chokepoint as MARK and EXPLOITER above — BEFORE shield/
+    // shieldGen/NEXUS DR — so the bonus follows the standard mitigation
+    // pipeline. Multiplicative on top of MARK and EXPLOITER by design.
+    //
+    // Gates (stricter than EXPLOITER because HOT_HAND MUTATES player
+    // state; we cannot let enemy-on-enemy collateral, environmental
+    // damage, or PLAYER-ALIGNED-BUT-AUTONOMOUS damage incorrectly
+    // attribute hits to the player's streak):
+    //   _EG.player.perks.HOT_HAND — only when player owns the perk.
+    //   typeof hitCtx === 'object' (via _hctx null-check) — string ctx
+    //     ('Volatile', 'Bomb', 'Auto-Laser', 'Saw Blade', 'Tunneller
+    //     Eruption', etc.) is NOT player-attributable to a streak.
+    //   !_hctx.isProc — chain/ricochet/explode procs don't double-dip
+    //     and don't increment the streak (same convention as MARK and
+    //     EXPLOITER). Otherwise a chain proc hitting 5 enemies in one
+    //     frame would alternately reset and re-target the streak.
+    //   _hctx.fromPlayerShot — explicit attribution flag set ONLY by
+    //     Player.shoot()'s melee branch and the player's intentional
+    //     ranged projectiles (entities.js:11147 + ~11199 + ~11219). The
+    //     flag is NOT propagated to:
+    //       • Hacked wall turret / decoy turret projectiles (ally
+    //         turrets that share the projectile-vs-enemy collision path
+    //         at content.js:3770, but spawn outside Player.shoot)
+    //       • Plasma Orb / Sentry Drone auto-fire (game.js per-frame
+    //         spell ticks, also outside Player.shoot)
+    //       • Auto-Laser / Saw Blade (already filtered — string ctx)
+    //       • Reflected/parried/reverse-polarity flipped projectiles
+    //         (the flip path doesn't set the flag, and the underlying
+    //         projectile started as an ENEMY shot with flag=false)
+    //     This matches the perk's "Hot Hand" thematic — it rewards the
+    //     player's intentional aimed fire / melee, not passive auto-fire.
+    //     The Projectile pool (content.js:3570) explicitly resets
+    //     fromPlayerShot=false in _init so a stale flag from a prior
+    //     pooled occupant cannot leak into a freshly-spawned enemy or
+    //     turret projectile.
+    //
+    // Streak update happens AFTER the damage multiplier is applied so
+    // the current hit reads the streak from the PREVIOUS hits. Order:
+    //   1. Read current streak (or 0 if target switched / window expired)
+    //   2. Apply bonus = min(streak, MAX_STACKS) * PER_STACK
+    //   3. Increment streak for this hit, refresh window timer
+    //   4. Update _hotHandLastTarget to this enemy
+    //
+    // _wrPhased / phaseImmune already returned early at the top of
+    // takeDamage, so they can't reach here. _disguised mimics force-
+    // reveal earlier (wasDisguised capture), so the first-hit reveal
+    // does count toward the streak — that's fine, it WAS a real hit.
+    {
+      const _hctx = typeof hitCtx === 'string' ? null : hitCtx;
+      const _hpc = _EG.player;
+      if (_hctx && !_hctx.isProc && _hctx.fromPlayerShot && _hpc && _hpc.perks && _hpc.perks.HOT_HAND) {
+        // Target-switch reset: a different enemy reference clears the
+        // streak BEFORE we read it, so the first hit on a new target
+        // gets +0% (streak=0 → bonus=0), not the last target's bonus.
+        if (_hpc._hotHandLastTarget !== this) {
+          _hpc._hotHandStreak = 0;
+        }
+        const stacks = Math.min((_hpc._hotHandStreak || 0), HOT_HAND_MAX_STACKS);
+        if (stacks > 0) {
+          dmg = Math.round(dmg * (1 + stacks * HOT_HAND_PER_STACK));
+        }
+        _hpc._hotHandStreak = (_hpc._hotHandStreak || 0) + 1;
+        _hpc._hotHandLastTarget = this;
+        _hpc._hotHandTimer = HOT_HAND_WINDOW;
+      }
+    }
     // SHIELDED: any hit resets shield regen delay
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
     // SHIELDED elite affix: absorb with shield first. Gated on the affix
@@ -10414,6 +10481,32 @@ const DEADEYE_MOVE_RATE = 0.5;    // tiles/sec — at/above counts as "moving"
 const DEADEYE_CHARGE_TIME = 1.0;  // seconds of stillness to fully charge
 const DEADEYE_DMG_MUL = 1.5;      // +50% damage on the charged attack
 
+// HOT_HAND perk constants. Rewards focused fire on a single target —
+// each consecutive direct hit on the SAME enemy adds HOT_HAND_PER_STACK
+// damage, up to HOT_HAND_MAX_STACKS extra hits beyond the first. The
+// streak resets when the player switches targets (different enemy ref)
+// or stops hitting for HOT_HAND_WINDOW seconds. Both reset paths are
+// required: the target check rewards laser focus on tanks, the timer
+// prevents stale streaks from carrying through long disengagements
+// (e.g., a teleport pad sequence with no combat in between).
+//
+// Bonus formula: bonus = min(streak - 1, HOT_HAND_MAX_STACKS) * HOT_HAND_PER_STACK
+//   1st hit on a target  → streak=1 → +0%
+//   2nd hit              → streak=2 → +5%
+//   ...
+//   7th hit and beyond   → streak>=7 → +30% (capped)
+//
+// Hooks live in Enemy.takeDamage at the same chokepoint as the EXPLOITER
+// perk and MARK affix bonuses (BEFORE shield/DR/NEXUS) so the multiplier
+// follows the standard damage-mitigation pipeline. Multiplicative with
+// EXPLOITER and MARK by design — a focus-fire build that lands its 7th
+// consecutive hit on a marked, burning target with EXPLOITER active gets
+// (1.30 MARK) × (1.25 EXPLOITER) × (1.30 HOT_HAND) ≈ +111% damage. That's
+// strong but requires three independent build conditions to align.
+const HOT_HAND_PER_STACK = 0.05;   // +5% per consecutive hit
+const HOT_HAND_MAX_STACKS = 6;     // cap → +30% at streak >= 7
+const HOT_HAND_WINDOW    = 3.0;    // seconds since last hit before streak resets
+
 class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
@@ -10422,6 +10515,9 @@ class Player {
   /** @type {any} */ _strideStillTime;
   /** @type {any} */ _steadyChargeTime;
   /** @type {any} */ _steadyReady;
+  /** @type {any} */ _hotHandStreak;
+  /** @type {any} */ _hotHandLastTarget;
+  /** @type {any} */ _hotHandTimer;
   /** @type {any} */ _outOfCombatTimer;
   /** @type {any} */ _huntStill;
   /** @type {any} */ _prevHuntX;
@@ -10657,6 +10753,17 @@ class Player {
     // (across movement, dash, etc.) until consumed by the next shoot().
     this._steadyChargeTime=0;
     this._steadyReady=false;
+    // HOT_HAND perk: per-target consecutive-hit streak. Runtime-only.
+    // _hotHandLastTarget is the enemy reference of the last hit (or
+    // null for "no streak"). _hotHandStreak counts how many consecutive
+    // hits have landed on that target. _hotHandTimer is the seconds
+    // remaining in the window before the streak self-clears via the
+    // tick block in Player.update. All three reset together — see the
+    // takeDamage hook (target-switch reset) and Player.update tick
+    // block (timeout reset) and game.js loadFloor (floor reset).
+    this._hotHandStreak=0;
+    this._hotHandLastTarget=null;
+    this._hotHandTimer=0;
   }
 
   // ── Weapon Belt ──────────────────────────────────────────────────────
@@ -11047,7 +11154,7 @@ class Player {
     if (this.shootCooldown>0) return;
     const w=this.weapon;
     const [dx,dy]=norm(aimX-this.x,aimY-this.y);
-    const hitCtx = { name:w.name, affixes:w._affixes||[], effects:w._effects||[] };
+    const hitCtx = { name:w.name, affixes:w._affixes||[], effects:w._effects||[], fromPlayerShot:true };
     // UNCHAINED #36: consume one surge shot + compute momentum/overclock mul.
     const surgeMul = this._consumeSurgeShot();
     // UNCHAINED #38: temp-boost COMBAT STIM stacks multiplicatively.
@@ -11101,6 +11208,7 @@ class Player {
         proj.isCrit = isCrit;
         proj._effects = w._effects || [];
         proj._affixes = w._affixes || [];
+        proj.fromPlayerShot = true;
         if (this.perks.PIERCING_ROUNDS) proj.maxPierces+=1;
         proj.bouncesLeft=this.upgrades.RICOCHET||0;
         if (proj.bouncesLeft) proj._hasRicochet=true;
@@ -11121,6 +11229,7 @@ class Player {
         proj.isCrit = isCrit;
         proj._effects = w._effects || [];
         proj._affixes = w._affixes || [];
+        proj.fromPlayerShot = true;
         if (this.perks.PIERCING_ROUNDS) proj.maxPierces += 1;
         proj.bouncesLeft = this.upgrades.RICOCHET || 0;
         if (proj.bouncesLeft) proj._hasRicochet = true;
@@ -11265,6 +11374,21 @@ class Player {
     if (this.lastStandTimer > 0) this.lastStandTimer = Math.max(0, this.lastStandTimer - dt);
     if (this.lastStandCD > 0) this.lastStandCD = Math.max(0, this.lastStandCD - dt);
     if (this.retributionTimer > 0) this.retributionTimer = Math.max(0, this.retributionTimer - dt);
+    // HOT_HAND perk: tick the per-target streak window. While the player
+    // keeps landing direct hits on the same enemy, the takeDamage hook
+    // refreshes _hotHandTimer to HOT_HAND_WINDOW each hit. If they stop
+    // hitting (or switch to dash/movement-only play) for HOT_HAND_WINDOW
+    // seconds the streak self-clears here so a stale target reference
+    // can't carry through long disengagements (e.g. cross-room sprint).
+    // The takeDamage hook handles the target-switch reset path
+    // independently — this tick handles ONLY the timeout reset.
+    if (this._hotHandTimer > 0) {
+      this._hotHandTimer = Math.max(0, this._hotHandTimer - dt);
+      if (this._hotHandTimer <= 0) {
+        this._hotHandStreak = 0;
+        this._hotHandLastTarget = null;
+      }
+    }
     // UNCHAINED #36 momentum: countdown damage-bonus window.
     NEON.behavior.tickMomentum(this, dt);
     // Tick timed boost windows (HARVEST_SURGE, etc.) — clears the activeBoosts

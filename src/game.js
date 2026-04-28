@@ -256,6 +256,17 @@ const game = {
       // zero _steadyChargeTime so partial progress doesn't carry over.
       this.player._steadyChargeTime = 0;
       this.player._steadyReady = false;
+      // HOT_HAND perk: drop the per-target consecutive-hit streak on
+      // floor transition. The descend warp teleports the player and
+      // wipes all enemies from the previous floor — keeping a stale
+      // _hotHandLastTarget reference would (a) hold a dead enemy in
+      // memory until the next streak overwrite, and (b) be moot
+      // anyway since the new floor's enemies are all fresh refs that
+      // would trip the target-switch reset on first hit. Resetting
+      // here is correct AND tidies up the GC-able reference.
+      this.player._hotHandStreak = 0;
+      this.player._hotHandLastTarget = null;
+      this.player._hotHandTimer = 0;
     }
     // Reset teleport pad cooldown
     this.teleportCooldown = 0;
