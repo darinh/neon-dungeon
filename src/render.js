@@ -1575,6 +1575,117 @@ function drawBossIntroOverlay() {
  */
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
+// ─── Boss Death Telegraph ────────────────────────────────────────────────────
+// Atmospheric overlay rendered for `bossDeathDuration` seconds after the
+// last boss is killed (bossAlive flips true→false). Three layered effects:
+//   1. White-flash impact spike — first ~0.18s, tapers fast. The "moment
+//      of impact" beat — reads as the kill landing.
+//   2. Radial flash vignette in the snapshot boss colour — tints the
+//      whole screen briefly with the chromatic identity of the boss
+//      that was just defeated. Fades in (~0.18s), holds, fades out.
+//   3. "DESTROYED" titlecard — large monospace text centered on the
+//      upper third, with the boss name beneath in the snapshot colour.
+//      Same fade envelope plus a subtle vertical "pop" on entry
+//      (suppressed under reducedMotion). Mirrors the boss intro
+//      overlay's titlecard layout to anchor the visual rhyme.
+//
+// Gameplay continues unaffected — this is a pure cosmetic overlay. Internally
+// gates on `_RG.bossDeathTimer > 0`, so it's a no-op outside the death window.
+// A truthy timer with a zero duration is treated as a no-op (defensive: would
+// otherwise trigger a divide-by-zero in the progress calculation).
+function drawBossDeathOverlay() {
+  const t = _RG.bossDeathTimer;
+  const dur = _RG.bossDeathDuration;
+  if (!t || t <= 0 || !dur || dur <= 0) return;
+
+  const elapsed = dur - t;
+  const fadeIn = 0.18;
+  const fadeOut = 0.55;
+  // Envelope: ramp up over fadeIn, hold at 1, ramp down over fadeOut. Same
+  // shape as drawBossIntroOverlay so the two overlays share a visual
+  // rhythm. fadeIn is shorter (0.18s vs 0.25s) because the death moment
+  // wants to land hard; fadeOut is longer (0.55s vs 0.45s) because the
+  // overlay should drift out gently rather than snap.
+  let alpha = 1;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  // Boss colour is read from the snapshot field that the boss-HUD block
+  // in game.js writes per-frame while the boss is alive. By the time
+  // this overlay is rendered the boss instance has already been spliced
+  // from `enemies`, so the live lookup the intro overlay does is not
+  // available here. Fallback to neon green (#39ff14) — the same victory
+  // colour used by the existing 'DESTROYED' floater.
+  const col = _RG.bossDeathColor || '#39ff14';
+  const name = _RG.bossDeathName || 'BOSS';
+
+  ctx.save();
+
+  // Layer 1 — white-flash impact spike. Independent envelope: full alpha
+  // at t=0, decays to 0 over 0.22s. This is the "kill lands" beat. Uses
+  // additive composite so it brightens whatever's underneath rather than
+  // tinting it. Skipped past the spike window to avoid a no-op fillRect.
+  const flashSpike = 0.22;
+  if (elapsed < flashSpike) {
+    const spikeAlpha = (1 - elapsed / flashSpike) * 0.55;
+    if (spikeAlpha > 0.01) {
+      const prevComp = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = spikeAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = prevComp;
+    }
+  }
+
+  // Layer 2 — radial vignette tinted with the boss colour. Bright ring at
+  // ~30% screen radius fading toward the edges. Boss colour applied at
+  // moderate alpha so it's a TINT not a flood. Skipped if vignette alpha
+  // resolves to ~0 (avoids no-op gradient allocation in the fade tails).
+  const vignAlpha = alpha * 0.5;
+  if (vignAlpha > 0.01) {
+    ctx.globalAlpha = vignAlpha;
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, col);
+    grad.addColorStop(0.6, 'rgba(0,0,0,0.25)');
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Layer 3 — titlecard. "DESTROYED" header in neon green (the canonical
+  // victory colour from the existing floater) plus the boss name beneath
+  // in the boss colour for chromatic identity. Subtle vertical "pop"
+  // (8px → 0px) on entry; suppressed under reducedMotion. Colour-graded
+  // glow uses the boss colour so the WHOLE overlay reads as a single
+  // chromatic moment. Mirrors drawBossIntroOverlay's layout so the two
+  // overlays anchor the same visual rhyme.
+  const baseFs = layout.compact ? 28 : 38;
+  const titleFs = Math.max(18, Math.round(baseFs * settings.textScale));
+  const popOffset = settings.reducedMotion ? 0 : -8 * (1 - easeOutCubic(Math.min(1, elapsed / fadeIn)));
+  const titleY = H * 0.32 + popOffset;
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${titleFs}px monospace`;
+  ctx.shadowBlur = 18; ctx.shadowColor = '#39ff14';
+  ctx.fillStyle = '#39ff14';
+  ctx.fillText('DESTROYED', W / 2, titleY);
+
+  // Boss name beneath — colour-graded with the snapshot colour so the
+  // overlay reads as "this specific boss is gone". textScale-aware so
+  // the gap stays proportional at 0.85× / 1.0× / 1.15× / 1.3×.
+  const subFs = Math.max(10, Math.round(14 * settings.textScale));
+  const subGap = Math.max(8, Math.round(14 * settings.textScale));
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.font = `bold ${subFs}px monospace`;
+  ctx.shadowBlur = 12; ctx.shadowColor = col;
+  ctx.fillStyle = col;
+  ctx.fillText(name, W / 2, titleY + titleFs + subGap);
+
+  ctx.restore();
+}
+
 // ─── Biome Intro Card ────────────────────────────────────────────────────────
 // UNCHAINED #40. Shown for 3s on first floor of each biome (floors 4/7/10/13).
 // Any-key skips (game.biomeCardTimer zeroed in updatePlaying). Renders above
