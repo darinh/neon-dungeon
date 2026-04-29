@@ -363,15 +363,15 @@ test(`FLOOR_MODIFIERS pool size invariant (${EXPECTED_MODIFIER_POOL_SIZE} entrie
   assertModifierPoolSize(CONTENT);
 });
 
-test('FLOOR_MODIFIERS pool size is exactly 25 (JAMMED added)', () => {
-  // Canary literal — owns the next-modifier-added pin. Per stored
-  // memory 'modifier pool canary pattern', this literal is the single
-  // canary for the current pool size; when modifier #26 is added the
-  // canary role moves to that modifier's own test file and this
-  // assertion is retired (replaced with a comment pointing at the
-  // new canary).
-  assert.equal(EXPECTED_MODIFIER_POOL_SIZE, 25,
-    'EXPECTED_MODIFIER_POOL_SIZE in tests/_modifier-pool.js must be 25 after JAMMED is added');
+test('FLOOR_MODIFIERS pool size canary moved to PROXIMITY (modifier #26)', () => {
+  // Canary literal RETIRED — per stored memory 'modifier pool canary
+  // pattern', when modifier #26 (PROXIMITY) was added the next-pool-size
+  // canary moved to tests/proximity-modifier.test.js. JAMMED's own
+  // pool-size assertion (assertModifierPoolSize above) still defends
+  // against accidental dict shrinkage; only the literal `25 (JAMMED added)`
+  // pin moved on.
+  assert.ok(EXPECTED_MODIFIER_POOL_SIZE >= 26,
+    'pool size must be at least 26 after PROXIMITY landed');
 });
 
 // ─── runtime simulation: composition with OVERCLOCKER and AUTONOMY ────

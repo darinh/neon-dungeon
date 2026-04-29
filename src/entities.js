@@ -1578,6 +1578,17 @@ function tickEliteAffix(enemy, dt) {
   }
   // FRENZY: speed/attack boost from stacks (applied dynamically via frenzyMul())
   // Stacks granted by notifyFrenzyElites() on nearby ally death
+  // PREDATOR: decay the lock-on buff timer; while >0 the elite gets a
+  // +30% speed/CD bonus via berserkerMul(). Refresh-only — re-triggering
+  // resets the timer rather than stacking. Distinct from FRENZY (stacks
+  // on ALLY death) and BERSERKER (own missing HP) — PREDATOR is event-
+  // driven by the PLAYER taking real HP damage. Pulsing red lock-on
+  // particles while active so the player can identify the threatened
+  // elite at a glance (mirrors VOLATILE's per-frame visual warning).
+  if (aff === 'PREDATOR' && enemy.predatorBuffTimer > 0) {
+    enemy.predatorBuffTimer = Math.max(0, enemy.predatorBuffTimer - dt);
+    if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff0099', 1);
+  }
 }
 
 // Notify FRENZY-affix elites within 4 tiles of a death — grant a frenzy stack
@@ -1594,6 +1605,38 @@ function notifyFrenzyElites(deathX, deathY) {
       spawnParticles(e.x, e.y, 'EXPLOSION', '#ff4466', 8);
       audio.eliteFrenzy();
       _EG.msg('⚡ FRENZY!', '#ff4466');
+    }
+  }
+}
+
+// Notify PREDATOR-affix elites within 8 tiles of the player — grant the
+// 3-second lock-on buff. Called from Player.takeDamage on every event
+// where REAL HP damage lands (`actual > 0`), gated AFTER the absorb
+// short-circuits so bubble/SHIELD DRIVER/ENERGY_SHIELD full-absorbs
+// don't trigger lock-on. Refresh-only (max one cue per elite per damage
+// event): the audio + glow burst fires on the LEADING edge — i.e. only
+// when the timer was at 0. Re-triggering during an active window silently
+// extends the timer, so DoT ticks (burn/toxic/arc/disruption) keep the
+// buff alive without spamming cues. Range check is positional only (no
+// LOS) — matches FRENZY's 4-tile death radius pattern; PREDATOR's 8t
+// range is doubled because the trigger fires at most once per real-
+// damage event (vs FRENZY's once per kill) and the elite needs enough
+// reach to be a meaningful threat at the moment the player took the hit.
+/**
+ * @param {any} [px]
+ * @param {any} [py]
+ */
+function notifyPredatorElites(px, py) {
+  for (const e of enemies) {
+    if (e.dead || e.eliteAffix !== 'PREDATOR') continue;
+    if (dist(e.x, e.y, px, py) <= 8) {
+      const wasInactive = e.predatorBuffTimer <= 0;
+      e.predatorBuffTimer = 3;
+      if (wasInactive) {
+        spawnParticles(e.x, e.y, 'EXPLOSION', '#ff0099', 8);
+        audio.elitePredator();
+        _EG.msg('🎯 PREDATOR!', '#ff0099');
+      }
     }
   }
 }
@@ -1789,6 +1832,7 @@ class Enemy {
   /** @type {any} */ phase;
   /** @type {any} */ phaseImmune;
   /** @type {any} */ phaseTimer;
+  /** @type {any} */ predatorBuffTimer;
   /** @type {any} */ prevPhase;
   /** @type {any} */ room;
   /** @type {any} */ shieldAngle;
@@ -1860,6 +1904,7 @@ class Enemy {
     this.shieldHp=0; this.shieldMax=0; this.shieldRegenDelay=0;
     this.phaseTimer=0; this.phaseImmune=false;
     this.frenzyStacks=0; // FRENZY affix: stacks gained from nearby ally deaths (max 2)
+    this.predatorBuffTimer=0; // PREDATOR affix: refresh-only countdown (s) — set by notifyPredatorElites() when player takes real HP damage within 8t
     // Weapon affix status effects
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
@@ -1974,6 +2019,57 @@ class Enemy {
             || (this._markedTimer && this._markedTimer > 0)
             || (this.poisonTimer && this.poisonTimer > 0)) {
           dmg = Math.round(dmg * 1.25);
+        }
+      }
+    }
+    // PROXIMITY floor modifier: enemies within 4 tiles of the player take
+    // +30% damage on this floor. Applied at the same chokepoint as MARK,
+    // EXPLOITER, and HOT_HAND above — BEFORE shield/shieldGen/NEXUS DR —
+    // so the bonus follows the standard mitigation pipeline. Multiplicative
+    // on top of MARK/EXPLOITER/HOT_HAND by design (each gates on
+    // independent state).
+    //
+    // Gates:
+    //   _EG.modifier === 'PROXIMITY' — modifier-roll only; off-floor and
+    //     other-modifier runs see no behavior change. Reads via the
+    //     _EG proxy so floor swaps and tests-without-game-bound-state
+    //     both resolve correctly (mirrors REGENERATIVE/CASCADE/WINDFALL/
+    //     SIGNAL_BOOST sites above and below).
+    //   !_isProc — chain/ricochet/explode procs that EXPLICITLY pass
+    //     `{ isProc: true }` don't double-dip the bonus (same convention
+    //     as MARK and EXPLOITER). NOTE: legacy string-context proc paths
+    //     (e.g. 'Explosion', 'Neural Feedback', 'Volatile Elite' at
+    //     entities.js ~2651/2679/2727) become _pctx=null → _isProc=false,
+    //     so they DO receive the PROXIMITY amp — exactly matching the
+    //     EXPLOITER precedent. This is intentional: those legacy proc
+    //     ctxs are environmental/secondary damage that the player
+    //     positionally chose to be near, so the close-range bonus is
+    //     thematically apt. A future refactor that converts those paths
+    //     to object ctx with `isProc:true` would correctly tighten BOTH
+    //     EXPLOITER and PROXIMITY in lockstep.
+    //   _EG.player + dist(player, this) < 4 — radius gate. Math.sqrt
+    //     returns a finite non-negative number for any finite dx/dy, so
+    //     no NaN propagation. Player x/y are world-tile coordinates
+    //     (same units as enemy x/y), so the 4-tile literal is unitless
+    //     world-distance.
+    //
+    // Note: ally-turret / Plasma Orb / Sentry Drone hits also pass through
+    // Enemy.takeDamage. They benefit from PROXIMITY when the ENEMY they
+    // hit is within 4 tiles of the player (regardless of where the shot
+    // originated) — by design. The modifier rewards the player for
+    // POSITIONING (where they stand relative to enemies), not for
+    // attribution (who fired the shot). This matches the EXPLOITER
+    // precedent: any direct hit on a status-debuffed enemy gets the
+    // bonus, regardless of damage source.
+    {
+      const _pctx = typeof hitCtx === 'string' ? null : hitCtx;
+      const _isProc = !!(_pctx && _pctx.isProc);
+      if (!_isProc && _EG.modifier === 'PROXIMITY' && _EG.player) {
+        const _pdx = _EG.player.x - this.x;
+        const _pdy = _EG.player.y - this.y;
+        const _pdist = Math.sqrt(_pdx * _pdx + _pdy * _pdy);
+        if (_pdist < 4) {
+          dmg = Math.round(dmg * 1.30);
         }
       }
     }
@@ -2971,9 +3067,19 @@ class Enemy {
   // Elite affix combat tempo multiplier — scales speed and cooldowns
   // BERSERKER: scales with missing HP (1.0 → 1.5)
   // FRENZY: +40% per stack from nearby ally deaths (max 2 stacks = 1.8)
+  // PREDATOR: flat +30% during the 3s lock-on window after the player
+  //   takes real HP damage within 8 tiles. Refresh-only — DoTs keep the
+  //   timer alive but don't stack the multiplier. Mid-range between
+  //   BERSERKER's max (1.5 at 0 HP) and FRENZY's first stack (1.4),
+  //   intentional: PREDATOR's value isn't peak strength but reactive
+  //   uptime — it punishes the player for mistakes (hazards, DoT ticks,
+  //   bad positioning) rather than escalating with the fight. Mutually
+  //   exclusive with the other affixes (one affix per elite), so the
+  //   if/else-if early-return chain composes cleanly.
   berserkerMul() {
     if (this.eliteAffix === 'BERSERKER') return 1 + 0.5 * (1 - this.hp / this.maxHp);
     if (this.eliteAffix === 'FRENZY' && this.frenzyStacks > 0) return 1 + 0.4 * this.frenzyStacks;
+    if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) return 1.3;
     return 1;
   }
 
@@ -9174,6 +9280,37 @@ class Enemy {
         NEON.draw.circle(ctx, sx, sy, sz * (1.1 + this.frenzyStacks * 0.15));
         ctx.restore();
       }
+      // PREDATOR affix: pulsing red lock-on ring + crosshair tick marks
+      // while the buff timer is active. Alpha and ring radius pulse with
+      // bobAngle so the visual reads as "this elite is currently
+      // hunting you" — distinct from FRENZY's solid filled aura (which
+      // shows raw rage) and VOLATILE's stroked warning ring (death
+      // detonation telegraph). Clamp alpha into [0,1] per the canvas
+      // gotcha (negative globalAlpha is silently ignored — assignments
+      // outside [0,1] keep the previous value, so a small base + a
+      // signed pulse can render at full opacity for the negative phase
+      // of the pulse). Frac < 1 lerps the ring out toward the end of
+      // the buff window so it visibly winds down.
+      if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) {
+        ctx.save();
+        const frac = Math.min(1, this.predatorBuffTimer / 3);
+        const pPulse = 0.4 + 0.2 * Math.sin(this.bobAngle * 5);
+        ctx.globalAlpha = Math.max(0, Math.min(1, pPulse * frac));
+        ctx.strokeStyle = '#ff0099';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 8 + Math.sin(this.bobAngle * 5) * 4;
+        ctx.shadowColor = '#ff0099';
+        const rR = sz * (1.2 + 0.15 * Math.sin(this.bobAngle * 5));
+        NEON.draw.circleStroke(ctx, sx, sy, rR);
+        // Crosshair tick marks at N/E/S/W for the lock-on read
+        ctx.beginPath();
+        ctx.moveTo(sx - rR - 3, sy); ctx.lineTo(sx - rR + 1, sy);
+        ctx.moveTo(sx + rR - 1, sy); ctx.lineTo(sx + rR + 3, sy);
+        ctx.moveTo(sx, sy - rR - 3); ctx.lineTo(sx, sy - rR + 1);
+        ctx.moveTo(sx, sy + rR - 1); ctx.lineTo(sx, sy + rR + 3);
+        ctx.stroke();
+        ctx.restore();
+      }
       // Shield Generator protection: subtle cyan glow
       if (isEnemyShieldGenProtected(this)) {
         ctx.save();
@@ -11946,6 +12083,8 @@ class Player {
   /** @type {any} */ regenTimer;
   /** @type {any} */ _repairTicksLeft;
   /** @type {any} */ _repairTickTimer;
+  /** @type {any} */ bubbleHp;
+  /** @type {any} */ bubbleTimer;
   /** @type {any} */ roomsCleared;
   /** @type {any} */ score;
   /** @type {any} */ secondWindUsed;
@@ -12075,6 +12214,19 @@ class Player {
     // logic next to HP_REGEN block in update(); activation in content.js.
     this._repairTicksLeft=0;
     this._repairTickTimer=0;
+    // SHIELD_BUBBLE hackware: multi-hit damage-pool absorption. bubbleHp
+    // is the remaining absorption pool (0..35), bubbleTimer is the
+    // expiry countdown (0..6 seconds). Drain logic in takeDamage @
+    // ~12385 (BEFORE the one-shot SHIELD DRIVER boost / ENERGY_SHIELD
+    // perk so an active bubble preserves those rare reserves). Tick
+    // logic next to the REPAIR_PROTOCOL HoT block in update() — a
+    // dt-based decrement so 30/60/120fps expire identically. Self-
+    // clearing (hp drains to 0 OR timer expires; either zeroes both).
+    // NOT serialized — like cloakTimer/repairTicksLeft, transient run-
+    // state buffs are lost on Continue (consistent with the existing
+    // hackware-buff convention). Wiped on death/respawn (new Player()).
+    this.bubbleHp=0;
+    this.bubbleTimer=0;
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
     // LAST_STAND perk: clutch defensive window. lastStandTimer counts down
     // an active 5s buff (+75% outgoing dmg via effectiveAtk, ×0.5 incoming
@@ -12316,6 +12468,92 @@ class Player {
     const options = opts || {};
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
     if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
+    // SHIELD_BUBBLE hackware: multi-hit damage-pool absorption. Drains
+    // BEFORE the one-shot SHIELD DRIVER boost / ENERGY_SHIELD perk so
+    // an active bubble preserves those rare reserves (a player who
+    // pre-emptively pops bubble before a known damage spike must not
+    // burn their one-shot defenses too — that would invert the active
+    // vs passive trade-off). Drain-and-pass mirrors the SHIELDED enemy
+    // affix at entities.js:1448-1450 — `absorbed = min(bubbleHp, dmg);
+    // bubbleHp -= absorbed; dmg -= absorbed`. Residual passes through
+    // to the one-shot defenses below; if the shot fully drains the
+    // bubble AND has leftover dmg the one-shot perks/boost still fire
+    // on the residual (defense-in-depth).
+    //
+    // GATES (in evaluation order):
+    //   - !options.ignoreShield: env-DoT ticks (Plasma burnDps*dt,
+    //     Toxic toxDps*dt, Arc Grid, Disruption Field, Frost Patch,
+    //     Proximity Mine ignoreDefense path, CRAWLER burn DoT) all
+    //     pass ignoreShield:true. They MUST bypass the bubble — a
+    //     35hp pool would evaporate in <1s of plasma contact at
+    //     60fps, trivialising the defense AND the env hazards both.
+    //     Same gate the existing one-shot defenses use; consistent.
+    //   - !options.ignoreInvincible: same rationale (env DoTs pass
+    //     this too) plus a defense-in-depth catch in case a future
+    //     hazard sets only ignoreInvincible (current code: no such
+    //     hazard exists, but the gate matches the SHIELD DRIVER block
+    //     below to keep the contract aligned).
+    //   - dmg > 0: a 0-dmg hit (already-mitigated) shouldn't tick
+    //     the bubble at all. Defense-in-depth — current callers don't
+    //     pass dmg=0 but the guard costs nothing and prevents a
+    //     future regression where a chained mitigation reduces dmg
+    //     to 0 before reaching this layer.
+    //
+    // Visual feedback: spawnDmgText 'ABSORB N' shows the player
+    // exactly how much the bubble ate. audio.shieldBreak() fires
+    // ONLY on full drain (bubble hp dropped to 0 from this hit) so
+    // partial absorbs are silent — otherwise a sustained-fire enemy
+    // would spam the break sound. Self-zero on bubbleHp <= 0:
+    // bubbleTimer also clears so the Player.update tick doesn't see
+    // a half-cleared state. Note: small absorbs that DON'T break the
+    // bubble fire NO audio — this is an intentional design choice
+    // (the visible ring already conveys ongoing absorption; an
+    // additional sound per partial hit would be noise). Subtle but
+    // important for sustained-fire enemy patterns (e.g. AUTOGUN
+    // bursts) where 6+ ticks/second would otherwise machine-gun the
+    // shieldBreak audio.
+    if (!options.ignoreShield && !options.ignoreInvincible && this.bubbleHp > 0 && dmg > 0) {
+      const absorbed = Math.min(this.bubbleHp, dmg);
+      this.bubbleHp -= absorbed;
+      dmg -= absorbed;
+      spawnDmgText(this.x, this.y, 'ABSORB ' + absorbed, '#e0e0ff');
+      if (this.bubbleHp <= 0) {
+        this.bubbleHp = 0;
+        this.bubbleTimer = 0;
+        audio.shieldBreak();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#e0e0ff', 12);
+        _EG.msg('⊚ BUBBLE BROKEN', '#e0e0ff');
+        triggerShake(2, 0.10);
+      }
+      // Full absorb — short-circuit and return 0 (NOT absorbed). The
+      // takeDamage return value is the contract used by callers to
+      // detect "real damage landed on the player": CRAWLER burn
+      // (entities.js:3083), SAPPER boost drain (entities.js:3097),
+      // SNIPER shock (content.js:5179), SIPHON lifesteal (content.js:
+      // 5185), CHARGER knockback (entities.js:6111), laser shock
+      // (entities.js:11181) ALL gate on `dealt > 0`. Returning a
+      // positive `absorbed` would incorrectly trigger every one of
+      // those on-hit effects on a bubble-absorbed hit — burn DoTs
+      // would tick, the bubble would lose its purpose. The existing
+      // SHIELD DRIVER (~12461) and ENERGY_SHIELD (~12474) full-absorb
+      // paths both `return 0` for the same reason; the bubble must
+      // mirror that contract. Caught by all 3 adversarial reviewers
+      // (gpt-5.3-codex / claude-opus-4.6 / gpt-5.5) as HIGH severity.
+      //
+      // hitsBlocked counter is incremented ONLY on full-absorb (here)
+      // — gpt-5.5 review caught a double-count bug if we incremented
+      // earlier: a partial bubble absorb would increment, then if the
+      // residual hit fully consumed SHIELD DRIVER or ENERGY_SHIELD
+      // those layers ALSO increment hitsBlocked, inflating the run-
+      // recap stat (displayed in game.js:5543 / 5622). Restricting
+      // increment to full absorbs keeps the semantics aligned with
+      // the existing one-shot defenses (which only ever increment on
+      // a complete block).
+      if (dmg <= 0) {
+        this.hitsBlocked = (this.hitsBlocked|0) + 1;
+        return 0;
+      }
+    }
     // UNCHAINED #38: SHIELD DRIVER boost — one-shot absorb. Consumed before
     // the ENERGY_SHIELD perk so a stacked player uses the cheap boost first.
     // Skip consumption when caller bypasses i-frames (env hazard DoT ticks
@@ -12473,6 +12711,25 @@ class Player {
       actual = actual * 0.85;
     }
     this.hp=Math.max(0,this.hp-actual);
+    // PREDATOR elite affix: real HP damage just landed, so notify any
+    // PREDATOR-affix elites within 8 tiles so they enter their 3s
+    // lock-on window. Placed AFTER hp deduction (and AFTER the
+    // `actual <= 0` early-return at ~12582 plus all absorb short-
+    // circuits — bubble/SHIELD DRIVER/ENERGY_SHIELD all `return 0`
+    // before this point per the takeDamage RETURN VALUE CONTRACT) so
+    // we only trigger on real HP loss. Placed BEFORE the on-hit
+    // visual/audio block so the PREDATOR cue sequences naturally with
+    // the hit reaction. DoT ticks (burn/toxic/arc/disruption/frost)
+    // pass ignoreDefense:true with sub-1 fractional dmg, but the
+    // `actual <= 0` early-return AND the `Math.max(1, …)` clamps in
+    // the direct-hit path mean ignoreDefense DoTs that pass through
+    // here have actual >= 0 — the float-vs-int comparison is safe
+    // because notifyPredatorElites is idempotent on refresh (the
+    // leading-edge gate on `wasInactive` ensures audio/glow only fire
+    // once per buff window, no matter how many DoT frames flow
+    // through). Bounded loop over `enemies` is hot-path acceptable —
+    // takeDamage is called per hit, not per frame.
+    notifyPredatorElites(this.x, this.y);
     // RETRIBUTION perk: arm/refresh the 3s ATK window on every hit that lands
     // real damage. Refresh-on-tick is intentional — env DoTs (plasma/toxic/
     // arc/disruption/frost) keep the window alive while the player is in a
@@ -13061,6 +13318,29 @@ class Player {
       this._repairTickTimer = 0;
     }
 
+    // SHIELD_BUBBLE hackware: dt-decrement the bubble timer. When timer
+    // reaches 0 (bubble expired without being fully drained), zero
+    // bubbleHp too AND emit a "BUBBLE EXPIRED" floater so the player
+    // sees the buff drop. NOT gated on hp>0 (consistent with cloakTimer
+    // ticking through death — the buff just disappears with the player;
+    // no observable effect either way since a dead player doesn't get
+    // hit again). The hp<=0 short-circuit in the takeDamage drain path
+    // ALREADY zeroes both fields synchronously when the bubble breaks
+    // from a hit; this branch only handles the timer-expiry path.
+    // Self-clearing — no loadFloor reset needed (transient buff timer
+    // mirrors cloakTimer/lastStandTimer pattern).
+    if (this.bubbleTimer > 0) {
+      this.bubbleTimer -= dt;
+      if (this.bubbleTimer <= 0) {
+        this.bubbleTimer = 0;
+        if (this.bubbleHp > 0) {
+          this.bubbleHp = 0;
+          spawnDmgText(this.x, this.y, 'BUBBLE EXPIRED', '#e0e0ff');
+          spawnParticles(this.x, this.y, 'SPARK', '#e0e0ff', 6);
+        }
+      }
+    }
+
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
@@ -13156,15 +13436,14 @@ class Player {
         dx=this.facing.x; dy=this.facing.y;
       } else {
         // Use current aim direction (facing may be stale by one frame).
-        // Mouse → world tile must factor /worldZoom so dash direction
-        // reads from the actual cursor position when the playfield is
-        // zoomed (every other mouse-aim path in the codebase does this
-        // — see game.js worldAimX/Y, content.js aim-place hackware).
-        // Without /worldZoom, dash points at a phantom location off-
-        // screen and the player launches in a confusing direction.
+        // mouse.x/y are already in logical (post-zoom) coordinates —
+        // normalised at the host boundary in src/platform.js — so the
+        // conversion to world tiles is a plain `(mouse + cam) / TILE`
+        // with no per-zoom correction. (Pre-global-UI-zoom this site
+        // had a `/worldZoom` factor that was easy to forget; under
+        // the current architecture there's nothing to forget.)
         const cam=getCamera(this);
-        const _wz = (settings && settings.worldZoom) || 1;
-        const ax=(mouse.x/_wz+cam.x)/TILE-this.x, ay=(mouse.y/_wz+cam.y)/TILE-this.y;
+        const ax=(mouse.x+cam.x)/TILE-this.x, ay=(mouse.y+cam.y)/TILE-this.y;
         [dx,dy]=norm(ax,ay);
         if (!dx&&!dy) { dx=this.facing.x; dy=this.facing.y; }
       }
@@ -13357,6 +13636,49 @@ class Player {
       ctx.shadowBlur=12; ctx.shadowColor='#4488ff';
       ctx.lineWidth=1.5;
       NEON.draw.circleStroke(ctx, sx, sy, 12);
+      ctx.restore();
+    }
+    // SHIELD_BUBBLE hackware: cyan ring around player. Opacity scales
+    // with REMAINING fraction of bubbleHp (35 max) so a near-broken
+    // bubble looks visually weaker — gives the player a clear at-a-
+    // glance read on remaining absorption capacity. Radius pulses on
+    // a slower phase than the ENERGY_SHIELD perk ring (0.006 vs 0.004
+    // rad/ms) so a player with BOTH active sees TWO distinguishable
+    // rings at different cadences (no visual collision). Drawn AFTER
+    // the perk ring so the bubble layers on top — the active hackware
+    // is the more transient signal and benefits from being on top.
+    // Colour #66ddff matches the catalog colour exactly so the icon-
+    // to-effect mapping is visually consistent. Slightly LARGER radius
+    // (14 vs perk's 12) so the two rings are visually distinct when
+    // both active. Defensive guard: render only when both bubbleHp > 0
+    // AND bubbleTimer > 0 (in case future code zeros only one of the
+    // two — current code zeros both atomically but the AND guard is
+    // free defense-in-depth).
+    if (this.bubbleHp > 0 && this.bubbleTimer > 0) {
+      ctx.save();
+      const frac = Math.max(0.15, this.bubbleHp / 35);
+      const pulse = 0.10 * Math.sin(performance.now() * 0.006);
+      // Clamp to [0, 1]. At low bubbleHp (frac ≤ 0.33), the base
+      // value 0.30 * frac drops below the pulse amplitude (0.10) and
+      // the sum could go negative on the trough of the sin wave. Per
+      // the HTML Canvas spec, setting globalAlpha to a value outside
+      // [0, 1] is IGNORED, leaving the property at its previous value
+      // (1.0 after ctx.save() restored from the outer context). The
+      // result: the ring would render at FULL OPACITY for ~42% of the
+      // pulse cycle at hp=1 — a jarring bright flash exactly when
+      // the player wants smooth fade-out feedback. Clamping at the
+      // assignment is the canonical defense (Math.max(0, ...) plus
+      // an upper Math.min(1, ...) for symmetry, even though the
+      // upper bound isn't reachable here). Caught by claude-opus-4.6
+      // + gpt-5.5 reviews as MEDIUM severity. Mirrors the burn
+      // indicator pattern at ~13543 which uses 0.35 ± 0.15 = always-
+      // positive arithmetic (0.20-0.50) — but clamping is the more
+      // robust defense than relying on arithmetic invariants.
+      ctx.globalAlpha = Math.max(0, Math.min(1, 0.30 * frac + pulse));
+      ctx.strokeStyle = '#e0e0ff';
+      ctx.shadowBlur = 14; ctx.shadowColor = '#e0e0ff';
+      ctx.lineWidth = 2.0;
+      NEON.draw.circleStroke(ctx, sx, sy, 14);
       ctx.restore();
     }
     // Burn indicator — flickering orange underglow

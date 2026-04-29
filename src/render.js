@@ -84,6 +84,61 @@ function modifierProgressSuffix(modKey, player) {
 }
 
 /**
+ * Draws a wrapping expanded-map legend row. The expanded minimap is modal
+ * rather than hot-path HUD, so measured text is safer than hard-coded widths
+ * that drift with textScale and glyph choice.
+ *
+ * @param {Array<[string, string]>} items
+ * @param {number} x
+ * @param {number} y
+ * @param {number} maxX
+ * @param {number} lineH
+ * @returns {number}
+ */
+function drawExpandedLegendItems(items, x, y, maxX, lineH) {
+  let lx = x;
+  let ly = y;
+  for (const [col, label] of items) {
+    if (col == null || label == null) continue;
+    ctx.fillStyle = col;
+    const tw = ctx.measureText(label).width;
+    if (lx > x && lx + tw > maxX) {
+      lx = x;
+      ly += lineH;
+    }
+    if (ly + lineH > H - safeBottom) break;
+    ctx.fillText(label, lx, ly);
+    lx += tw + 12;
+  }
+  return ly + lineH;
+}
+
+/**
+ * @returns {Array<[string, string]>}
+ */
+function expandedEliteAffixLegendItems() {
+  if (typeof ELITE_AFFIX_KEYS === 'undefined' || typeof ELITE_AFFIXES === 'undefined') return [];
+  /** @type {Array<[string, string]>} */
+  const items = [];
+  for (const id of ELITE_AFFIX_KEYS) {
+    const aff = /** @type {any} */ (ELITE_AFFIXES)[id];
+    if (!aff || !aff.colour || !aff.icon || !aff.label) continue;
+    items.push([aff.colour, `${aff.icon} ${aff.label}`]);
+  }
+  return items;
+}
+
+/**
+ * @returns {Array<[string, string]>}
+ */
+function expandedActiveModifierLegendItems() {
+  if (!_RG.modifier || typeof getMod !== 'function') return [];
+  const mod = /** @type {any} */ (getMod());
+  if (!mod || !mod.colour || !mod.icon || !mod.label) return [];
+  return [[mod.colour, `${mod.icon} ${mod.label}`]];
+}
+
+/**
  * Piercing Heart weapon-affix HUD progress suffix — appended to the HUD
  * weapon-name readout when the active weapon carries the PIERCING_HEART
  * suffix affix ("of Piercing Heart"). Without this indicator, players
@@ -178,17 +233,14 @@ function siphonHudSuffix(player) {
  * @param {any} player
  */
 function getCamera(player) {
-  // settings.worldZoom is the user-facing playfield zoom multiplier.
-  // The world is rendered inside a `ctx.scale(zoom, zoom)` transform,
-  // so the visible viewport in WORLD-pixel space is W/zoom × H/zoom.
-  // Camera math centres the player against that effective viewport
-  // and clamps against the world bounds using the same effective size.
-  // Falls back to 1.0 if settings is partially populated (defensive —
-  // matches the snap-to-step + mobile-default loader path in
-  // platform.js, but guards against a transient pre-load() read).
-  const zoom = (settings && settings.worldZoom) || 1;
-  const viewW = W / zoom;
-  const viewH = H / zoom;
+  // Under the global UI-zoom architecture, W and H are the EFFECTIVE
+  // logical canvas size (rawW / worldZoom × rawH / worldZoom). The
+  // visible viewport in WORLD-pixel space is exactly W × H — no
+  // per-zoom divide here. The `ctx.scale(worldZoom)` wrap at the top
+  // of every frame in render() blows the smaller logical area up to
+  // fill the canvas backing.
+  const viewW = W;
+  const viewH = H;
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
   // Allow camera overscroll near edges so player remains visible under minimap / touch controls
   const leftPad = 5 * TILE;
@@ -671,14 +723,15 @@ function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
  */
 function drawWorld(dungeon, camX, camY) {
   const pal = currentBiomePalette();
-  // Effective viewport in world-pixel space = W/zoom × (H-hudH)/zoom.
-  // Without dividing by zoom here, the tile loop traverses the full
-  // unzoomed canvas area — at zoom 2.5× that's ~6.25× more tiles and
-  // decor cells than are actually visible, exactly the perf penalty
-  // mobile (the worldZoom feature's primary audience) cannot afford.
-  const _wz = (settings && settings.worldZoom) || 1;
-  const _viewWTiles = Math.ceil((W / _wz) / TILE);
-  const _viewHTiles = Math.ceil(((H - layout.hudH) / _wz) / TILE);
+  // Effective viewport in world-pixel space = W × (H - hudH). Under
+  // the global UI-zoom architecture, W and H are already the
+  // post-zoom logical canvas size (rawW/H divided by worldZoom in
+  // resize()), so the tile loop visits exactly the visible area at
+  // any zoom level — no per-zoom divide here. Mobile (the worldZoom
+  // feature's primary audience) gets the same culling efficiency at
+  // any zoom step because the bound shrinks with W/H automatically.
+  const _viewWTiles = Math.ceil(W / TILE);
+  const _viewHTiles = Math.ceil((H - layout.hudH) / TILE);
   const startX=Math.max(0,Math.floor(camX/TILE)-1);
   const startY=Math.max(0,Math.floor(camY/TILE)-1);
   const endX=Math.min(MAP_W,startX+_viewWTiles+2);
@@ -851,6 +904,48 @@ function drawWorld(dungeon, camX, camY) {
             ctx.fillStyle = '#ffffaa';
             ctx.fillRect(sx+TILE/2-1, sy+TILE/2-1, 2, 2);
           }
+          break;
+        }
+        case T.REPULSOR: {
+          // Kinetic emitter plate — flat dark base + pulsing cyan radial
+          // arrows pointing outward from the centre. Visually distinct
+          // from SHOCK_TILE (yellow coil ring) and ARC (cyan fill on
+          // damage phase): REPULSOR shows a steady ring of four short
+          // outward-pointing strokes, always legible so the player can
+          // route around it. Pulse synced per-tile so adjacent repulsors
+          // breathe together (unlike SHOCK_TILE which uses tx/ty offsets).
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
+          // Dark inner plate
+          ctx.globalAlpha = brightness * 0.55;
+          ctx.fillStyle='#0e2030';
+          ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          // Outer cyan ring — base outline
+          const rPulse = 0.45 + 0.25 * Math.sin(lastTime/200 + tx*0.9 + ty*1.3);
+          ctx.globalAlpha = brightness * rPulse;
+          ctx.shadowBlur = 6; ctx.shadowColor = '#44ddff';
+          ctx.strokeStyle = '#44ddff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sx+3.5, sy+3.5, TILE-7, TILE-7);
+          // Four outward arrows (top/right/bottom/left) — short strokes
+          // from inner ring to outer edge, telegraphing "this pushes you
+          // out".
+          ctx.globalAlpha = brightness * (0.6 + 0.3 * rPulse);
+          ctx.beginPath();
+          const cx = sx + TILE/2, cy = sy + TILE/2;
+          const innerR = TILE/2 - 4, outerR = TILE/2 - 1;
+          // up
+          ctx.moveTo(cx, cy - innerR); ctx.lineTo(cx, cy - outerR);
+          // down
+          ctx.moveTo(cx, cy + innerR); ctx.lineTo(cx, cy + outerR);
+          // left
+          ctx.moveTo(cx - innerR, cy); ctx.lineTo(cx - outerR, cy);
+          // right
+          ctx.moveTo(cx + innerR, cy); ctx.lineTo(cx + outerR, cy);
+          ctx.stroke();
+          // Bright centre core dot — steady (the emitter)
+          ctx.globalAlpha = brightness * 0.7;
+          ctx.fillStyle = '#aaeeff';
+          ctx.fillRect(sx+TILE/2-1, sy+TILE/2-1, 2, 2);
           break;
         }
         case T.PLASMA: {
@@ -1875,7 +1970,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
       if (tile === T.WALL || tile === T.CRACKED) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2277,7 +2372,7 @@ function drawExpandedMinimap(dungeon, player) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2464,19 +2559,27 @@ function drawExpandedMinimap(dungeon, player) {
   const legendX = mx + 6, legendY = my + mh + 24;
   const lFs = Math.max(8, Math.min(10, fs - 1));
   ctx.font = `${lFs}px monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  /** @type {Array<[string, string]>} */
   const legend = [
     ['#00f5ff','● You'], ['#ff3333','● Enemy'], ['#ffffff','■ Exit'],
     ['#39ff14','■ Shop'], ['#ffb700','■ Lore'], ['#cc44ff','■ Implant'],
     ['#44ffcc','■ Event'], ['#ff6633','■ Challenge']
   ];
-  let lx = legendX;
-  for (const [col, label] of legend) {
-    if (col == null || label == null) continue;
-    ctx.fillStyle = col;
-    const tw = ctx.measureText(label).width;
-    if (lx + tw > mx + mw) break;
-    ctx.fillText(label, lx, legendY);
-    lx += tw + 12;
+  const legendLineH = Math.max(12, lFs + 4);
+  let nextLegendY = drawExpandedLegendItems(legend, legendX, legendY, mx + mw, legendLineH);
+  const eliteLegend = expandedEliteAffixLegendItems();
+  if (eliteLegend.length) {
+    ctx.fillStyle = '#666688';
+    ctx.fillText('ELITES:', legendX, nextLegendY);
+    const eliteStartX = legendX + ctx.measureText('ELITES:').width + 10;
+    nextLegendY = drawExpandedLegendItems(eliteLegend, eliteStartX, nextLegendY, mx + mw, legendLineH);
+  }
+  const modifierLegend = expandedActiveModifierLegendItems();
+  if (modifierLegend.length) {
+    ctx.fillStyle = '#666688';
+    ctx.fillText('MOD:', legendX, nextLegendY);
+    const modifierStartX = legendX + ctx.measureText('MOD:').width + 10;
+    drawExpandedLegendItems(modifierLegend, modifierStartX, nextLegendY, mx + mw, legendLineH);
   }
 
   ctx.restore();
@@ -2540,17 +2643,13 @@ function drawThreatIndicators(camX, camY) {
   if (!_RG.player.perks.THREAT_SENSE) return;
   const px = _RG.player.x, py = _RG.player.y;
   const margin = 14;
-  // Threat indicators run OUTSIDE the world ctx.scale transform, but
-  // their concept of "on-screen" must use the EFFECTIVE viewport
-  // (W/zoom × (H-hudH)/zoom in world-pixel space). At zoom > 1 the
-  // visible world is smaller than W×H, so without /zoom here, enemies
-  // outside the zoomed-in view get suppressed (false-clear) and the
-  // perk silently stops warning the player about half its detection
-  // range. Arrow projection mirrors the ctx.scale by multiplying the
-  // world-px deltas by zoom before clamping into canvas-px range.
-  const _wz = (settings && settings.worldZoom) || 1;
+  // Threat indicators run inside the global ctx.scale(worldZoom) wrap
+  // (along with everything else in render()), so the visible viewport
+  // in WORLD-pixel space is exactly W × (H - hudH) — no per-zoom
+  // divide here. Arrow projection is plain `e.x*TILE - camX` (logical
+  // px), no per-zoom multiply.
   const viewL = camX / TILE, viewT = camY / TILE;
-  const viewR = (camX + W / _wz) / TILE, viewB = (camY + (H - layout.hudH) / _wz) / TILE;
+  const viewR = (camX + W) / TILE, viewB = (camY + H - layout.hudH) / TILE;
   const range = 18;
 
   for (const e of enemies) {
@@ -2564,12 +2663,10 @@ function drawThreatIndicators(camX, camY) {
     // Skip enemies already on screen
     if (e.x > viewL + 1 && e.x < viewR - 1 && e.y > viewT + 1 && e.y < viewB - 1) continue;
 
-    // World-px deltas multiplied by zoom = canvas-px coordinates,
-    // matching the ctx.scale projection the world block performs
-    // implicitly. Without * _wz, arrows clustered toward the centre
-    // at high zoom rather than the screen edges.
-    const sx = (e.x * TILE - camX) * _wz;
-    const sy = (e.y * TILE - camY) * _wz;
+    // World-px deltas in logical-canvas space — no zoom multiply
+    // because the global ctx.scale wrap handles the upscale.
+    const sx = (e.x * TILE - camX);
+    const sy = (e.y * TILE - camY);
     // Clamp to screen edges
     const cx = clamp(sx, margin, W - margin);
     const cy = clamp(sy, margin, H - layout.hudH - margin);
