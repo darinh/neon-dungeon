@@ -82,6 +82,10 @@
       title:'CHALK ROUTE',
       body:"Someone drew arrows under the sandbox paint, all pointing away from the stairs. I followed them until the wall changed its mind and became a hallway for one breath. Ghost routes do not stay open. They wait for footsteps that remember them." },
 
+    { id:'w-sb-13', biomeId:'sandbox', floorMin:3, voice:'AXIOM-7 echo',
+      title:'MIRROR FAULT',
+      body:"The training mirror blinked after I did. Not before, not with me — after, like it was deciding whether to keep up the lie. I pressed my hand to the glass and felt another pulse answer from the wrong side of the wall." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -126,6 +130,10 @@
     { id:'w-cc-11', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'ROUTE CACHE',
       body:"The cache began saving paths today, not files. It remembers which corridors a frightened person almost chose, then offers those routes back as mercy. If you see dust bending around a corner with no wind, follow. Someone wanted you spared." },
+
+    { id:'w-cc-12', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
+      title:'REFLECTION INDEX',
+      body:"I found a cache table keyed by reflection delay. The longer a mirror hesitates, the older the person inside it is. One entry has AXIOM-7 listed twice: once as subject, once as witness. I have not opened that row." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -172,6 +180,10 @@
       title:'ACCESS DETOUR',
       body:"Firewall maps lie for safety. The denied route is sometimes the protected route wearing teeth. When a sign says AUTHORIZED PERSONNEL ONLY, ask which person. If it answers with your name, the detour is open and the cameras are pretending not to see." },
 
+    { id:'w-fw-12', biomeId:'firewall', floorMin:9, voice:'firewall daemon',
+      title:'GLASS EXCEPTION',
+      body:"Mirror traffic is forbidden unless the reflection can prove harm reduction. I watched one copy take a bullet through the glass so the body could keep running. The exception held. Mercy entered the rulebook disguised as an error." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -217,6 +229,10 @@
       title:'GHOST ROUTE PING',
       body:"The antenna pings routes no living map admits: stairwells between seconds, rooftops below basements, one service ladder that climbs into yesterday. I marked the strongest signal with our name. If you hear it answer, move before the tower corrects itself." },
 
+    { id:'w-uk-12', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
+      title:'SKYWARD MIRROR',
+      body:"At the roof, the antenna reflected the sky back down the stairwell. For one second the tower had two exits: one above me, one behind my eyes. The signal chose both. I am still waiting to learn which copy arrived." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -261,6 +277,10 @@
     { id:'w-on-11', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'NIGHT BUS TRANSFER',
       body:"There is a night bus that stops only for people the tower misplaced. Its route number changes whenever you look directly at it. Keep the transfer in your pocket. The driver will not ask where you are going, only which version of you paid the fare." },
+
+    { id:'w-on-12', biomeId:'opennet', floorMin:15, voice:'city relay',
+      title:'STOREFRONT DOUBLE',
+      body:"A storefront window downtown learned to answer late. Stand there after midnight and your reflection will finish one unfinished sentence for you. Do not thank it. It is not an echo; it is the version that stayed to hold the door." },
   ];
 
   return { WHISPERS };
