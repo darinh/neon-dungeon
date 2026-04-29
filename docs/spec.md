@@ -3546,7 +3546,7 @@ Placed on a random `T.FLOOR` tile away from room edges (1-tile inset). Generated
 terminal"). Press E → game enters `READING` state, gameplay pauses. The terminal
 is consumed (converted to `T.FLOOR`) — single use per terminal.
 
-**Lore selection:** 25-entry pool of cyberpunk narrative fragments. Each terminal
+**Lore selection:** 32-entry pool of cyberpunk narrative fragments. Each terminal
 displays an entry not yet seen this run (`player.loreRead` Set of indices). When
 all entries exhausted, repeats randomly. Each new entry awards +50 score.
 
@@ -4404,3 +4404,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | v115.0  | WARDEN boss reactivated as floor-3 alternate (restores original v37.0 design). `src/data/biomes.js`: sandbox `bossPool` now `['SENTINEL','WARDEN']`; new optional per-area `bossDisplayNames: {TYPE: 'NAME'}` map lets a pool member override the biome's narrative `displayName` on a per-boss basis. `src/entities.js` BOSS_NAMES IIFE consults `bossDisplayNames[b]` before falling back to `displayName`, so HUD/death text on a WARDEN roll reads `WARDEN` while a SENTINEL roll still reads `SENTINEL-PRIME`. WARDEN stats/AI untouched (HP 450, ATK 16, charge wind-up + ground-slam phase 2, per v89 balance). `tests/biomes.test.js`: 2 new tests lock sandbox pool containing both ids and shape-guard the `bossDisplayNames` override table. SW cache v114 → v115. 193/193 tests pass. |
 | v129.0  | Batch-2 enemy and environment variety pass. Added **SCORCHER** (floor 4+, fire-trail pressure unit: HP 28 / ATK 9 / SPD 2.6 / XP 24, cap 2, weight 2+2/floor) and **BRUTE** (floor 3+, melee-only heavy: HP 70 / ATK 16 / SPD 1.6 / XP 30, cap 1, weight 3+2/floor). LEAPER floor gate moved to 2+ (already live in weights) and spec updated to match. `SOURCE_LABELS`/`SOURCE_COLOURS` include `Scorcher Trail` recap source. Added deterministic lab-floor dressing in `drawWorld()` (wall consoles, cables, canisters; visual-only, suppressed near interactables/hazards) and deterministic sconce flicker modulation in `updateLighting()` for unstable-lab ambience. |
+| v130.0  | GENESIS lore-thread extension: `LORE_ENTRIES` grows from 27 to 32 authored terminal fragments, adding five late-arc documents that foreground the GENESIS_LEGACY predecessor voice, Voss's concealment of GENESIS inside OMEGA, and ambiguous facility behavior around SL-4/SL-7/SL-9/SL-10. New `tests/lore-genesis-thread.test.js` pins the exact 32-entry canary, regression floor, duplicate/length sanity, and GENESIS-thread continuity for the current tail entries. |
