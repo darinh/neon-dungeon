@@ -13155,9 +13155,16 @@ class Player {
         // Lock-aim mode: ignore mouse, dash in last-walked direction
         dx=this.facing.x; dy=this.facing.y;
       } else {
-        // Use current aim direction (facing may be stale by one frame)
+        // Use current aim direction (facing may be stale by one frame).
+        // Mouse → world tile must factor /worldZoom so dash direction
+        // reads from the actual cursor position when the playfield is
+        // zoomed (every other mouse-aim path in the codebase does this
+        // — see game.js worldAimX/Y, content.js aim-place hackware).
+        // Without /worldZoom, dash points at a phantom location off-
+        // screen and the player launches in a confusing direction.
         const cam=getCamera(this);
-        const ax=(mouse.x+cam.x)/TILE-this.x, ay=(mouse.y+cam.y)/TILE-this.y;
+        const _wz = (settings && settings.worldZoom) || 1;
+        const ax=(mouse.x/_wz+cam.x)/TILE-this.x, ay=(mouse.y/_wz+cam.y)/TILE-this.y;
         [dx,dy]=norm(ax,ay);
         if (!dx&&!dy) { dx=this.facing.x; dy=this.facing.y; }
       }

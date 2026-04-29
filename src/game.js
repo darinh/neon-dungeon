@@ -1465,13 +1465,31 @@ const game = {
     }
 
     const cam=getCamera(player);
+    // World-zoom scalar — used for screen↔world coordinate conversions
+    // throughout this update tick. Touch/mouse events arrive in canvas
+    // (logical) pixels; the playfield is rendered through ctx.scale(z)
+    // in renderPlaying, so converting to world tiles requires a /zoom
+    // factor on the canvas-px term BEFORE adding the cam (which is
+    // already in world-pixel units). Sites: touch-aim synthesis below
+    // and the mouse-aim worldAim conversion further down. Cached once
+    // per tick because settings reads are cheap but ergonomic.
+    const _wzoom = (settings && settings.worldZoom) || 1;
 
     // sync touch aim: synthesise a mouse position far in the joystick direction
     if (touch.aim.active) {
       mouse.down = touch.aim.shooting;
       if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
-        mouse.x = player.x * TILE - cam.x + touch.aim.dx * 300;
-        mouse.y = player.y * TILE - cam.y + touch.aim.dy * 300;
+        // Player's on-canvas pixel position: in the world-render block
+        // we draw at (player.x*TILE - cam.x), then ctx.scale(_wzoom)
+        // multiplies that by zoom for the final canvas coordinate. So
+        // synthesise the touch-aim mouse position in canvas-px terms,
+        // matching the resolution of an actual pointermove event.
+        // The 300-px deflection radius stays in canvas-px (so the joystick
+        // "reach" feels the same on screen at any zoom — the aim ARC in
+        // world tiles shrinks proportionally to zoom, which means more
+        // PRECISE aim at higher zoom; matches user expectation).
+        mouse.x = (player.x * TILE - cam.x) * _wzoom + touch.aim.dx * 300;
+        mouse.y = (player.y * TILE - cam.y) * _wzoom + touch.aim.dy * 300;
       }
     }
 
@@ -1513,8 +1531,11 @@ const game = {
       worldAimX = player.x + player.facing.x * 8;
       worldAimY = player.y + player.facing.y * 8;
     } else {
-      worldAimX = (mouse.x + cam.x) / TILE;
-      worldAimY = (mouse.y + cam.y) / TILE;
+      // Mouse → world tile: undo the ctx.scale(_wzoom) on the canvas-px
+      // coordinate first (mouse.x is in canvas px), THEN add the cam
+      // (in world-px), THEN convert to tiles.
+      worldAimX = (mouse.x / _wzoom + cam.x) / TILE;
+      worldAimY = (mouse.y / _wzoom + cam.y) / TILE;
       const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     }
@@ -3484,7 +3505,7 @@ const game = {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
     const STEPPER_START = 8;  // row index where scale steppers begin (after 6 toggles)
-    const STEPPER_COUNT = 2;  // MINIMAP SIZE + TEXT SIZE
+    const STEPPER_COUNT = 3;  // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
     const CTRL_START = STEPPER_START + STEPPER_COUNT;  // row index where key rebind rows begin
     // Total items: 2 sliders + 6 toggles + 2 steppers + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
@@ -3584,14 +3605,16 @@ const game = {
       }
     }
 
-    // Left/right or Enter cycles scale steppers (MINIMAP SIZE / TEXT SIZE).
-    // Steppers walk through a discrete value list in `MINIMAP_SCALE_STEPS`
-    // and `TEXT_SCALE_STEPS` (defined in platform.js); right wraps to start,
-    // left wraps to end, Enter advances forward (matches toggles UX).
-    /** @type {Array<{ key:'minimapScale'|'textScale', steps:number[] }>} */
+    // Left/right or Enter cycles scale steppers (MINIMAP SIZE / TEXT SIZE / WORLD ZOOM).
+    // Steppers walk through a discrete value list in `MINIMAP_SCALE_STEPS`,
+    // `TEXT_SCALE_STEPS`, and `WORLD_ZOOM_STEPS` (defined in platform.js);
+    // right wraps to start, left wraps to end, Enter advances forward
+    // (matches toggles UX).
+    /** @type {Array<{ key:'minimapScale'|'textScale'|'worldZoom', steps:number[] }>} */
     const stepperRows = [
       { key: 'minimapScale', steps: MINIMAP_SCALE_STEPS },
       { key: 'textScale',    steps: TEXT_SCALE_STEPS },
+      { key: 'worldZoom',    steps: WORLD_ZOOM_STEPS },
     ];
     if (sel >= STEPPER_START && sel < CTRL_START) {
       const row = stepperRows[sel - STEPPER_START];
@@ -3768,7 +3791,7 @@ const game = {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
     const STEPPER_START = 8;        // 6 toggles before steppers
-    const STEPPER_COUNT = 2;        // MINIMAP SIZE + TEXT SIZE
+    const STEPPER_COUNT = 3;        // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
     const CTRL_START = STEPPER_START + STEPPER_COUNT;  // matches updateSettings
     const totalRows = CTRL_START + actions.length + 2;
     // Dynamic row metrics shared with updateSettings — see _settingsLayout.
@@ -3834,12 +3857,12 @@ const game = {
       ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
     }
 
-    // ── Scale steppers (MINIMAP SIZE + TEXT SIZE) ──
+    // ── Scale steppers (MINIMAP SIZE + TEXT SIZE + WORLD ZOOM) ──
     // Discrete-value rows rendered identically to toggles, but the centre
     // shows the numeric multiplier (e.g. "◀ 1.00× ▶") instead of ON/OFF.
     // The keyboard ◀/▶ + Enter handling lives in updateSettings.
-    const stepperLabels = ['MINIMAP SIZE', 'TEXT SIZE'];
-    const stepperKeys = ['minimapScale', 'textScale'];
+    const stepperLabels = ['MINIMAP SIZE', 'TEXT SIZE', 'WORLD ZOOM'];
+    const stepperKeys = ['minimapScale', 'textScale', 'worldZoom'];
     for (let i = 0; i < stepperLabels.length; i++) {
       const ry = startY + (STEPPER_START + i) * rowH;
       const isSel = sel === STEPPER_START + i;
@@ -4166,8 +4189,28 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     const cam=getCamera(player);
-    cam.x += shake.ox;
-    cam.y += shake.oy;
+    // World-zoom scalar — used (a) to scale the shake offset back to
+    // SCREEN-px equivalents (shake.ox/oy are tuned as canvas-px
+    // magnitudes 2-5 in content.js triggerShake; without /zoom here
+    // they'd play back at zoom× intensity, e.g. 50% stronger at the
+    // mobile-first 1.5× default — actively bad for the audience the
+    // feature targets), and (b) wired into the world-block ctx.scale
+    // wrap below + every screen↔world conversion in this update tick.
+    const _zoom = (settings && settings.worldZoom) || 1;
+    cam.x += shake.ox / _zoom;
+    cam.y += shake.oy / _zoom;
+    // World-space draw block — wrapped in a single ctx.scale transform
+    // so the entire playfield (tiles, ambient, room markers, hazards,
+    // items, enemies, projectiles, particles, player, orbitals, etc.)
+    // is rendered at `settings.worldZoom` magnification. HUD chrome
+    // (drawHUD, drawMinimap, drawBossBar, intro/death overlays, danger
+    // vignette) sits OUTSIDE this transform and stays at native scale.
+    // Camera math in getCamera already accounts for zoom by clamping
+    // against the effective W/zoom × H/zoom viewport, so the existing
+    // `worldX*TILE - cam.x` arithmetic inside this block needs NO
+    // changes — the scale is purely a final viewport multiplier.
+    const _zoomed = _zoom !== 1;
+    if (_zoomed) { ctx.save(); ctx.scale(_zoom, _zoom); }
     drawWorld(dungeon,cam.x,cam.y);
     drawAmbient(cam.x,cam.y);
 
@@ -4344,6 +4387,13 @@ const game = {
       }
       ctx.restore();
     }
+
+    // End of world-space draw block — restore the canvas transform so
+    // the HUD/overlay block below renders at native (1.0) scale. The
+    // matching ctx.save() + ctx.scale() is at the top of renderPlaying
+    // (gated on `_zoomed`), so this restore is gated on the same flag
+    // to keep the save/restore pair balanced.
+    if (_zoomed) { ctx.restore(); }
 
     drawDangerVignette(player);
     drawHUD(player);

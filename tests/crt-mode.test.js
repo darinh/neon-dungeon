@@ -77,26 +77,26 @@ test('crtMode key wired in BOTH updateSettings and renderSettings', () => {
     `crtMode must appear in BOTH toggleKeys arrays (updateSettings + renderSettings); found ${occurrences ? occurrences.length : 0}`);
 });
 
-test('CTRL_START sits below the toggle + stepper rows (now 10 = 6 toggles + 2 scale steppers)', () => {
+test('CTRL_START sits below the toggle + stepper rows (now 11 = 6 toggles + 3 scale steppers)', () => {
   // CTRL_START is the row index where key-rebind rows begin. It must
   // equal TOGGLE_START (2) + number-of-toggles + number-of-steppers.
   // Adding a toggle/stepper without bumping this constant overlaps the
   // new row onto the first key-rebind row — both unclickable on touch
-  // and visually stomped. As of the MINIMAP SIZE + TEXT SIZE scale-
-  // stepper rows, the layout is 6 toggles + 2 steppers, so CTRL_START
-  // = 8 + 2 = 10. Both updateSettings and renderSettings declare it
-  // structurally as STEPPER_START + STEPPER_COUNT — pin both copies of
-  // the structural form here so silent edits don't desync them.
+  // and visually stomped. As of the WORLD ZOOM scale-stepper row, the
+  // layout is 6 toggles + 3 steppers, so CTRL_START = 8 + 3 = 11. Both
+  // updateSettings and renderSettings declare it structurally as
+  // STEPPER_START + STEPPER_COUNT — pin both copies of the structural
+  // form here so silent edits don't desync them.
   const structural = GAME.match(/CTRL_START\s*=\s*STEPPER_START\s*\+\s*STEPPER_COUNT/g);
   assert.ok(structural && structural.length === 2,
     `CTRL_START must be defined as STEPPER_START + STEPPER_COUNT in BOTH updateSettings and renderSettings; found ${structural ? structural.length : 0}`);
-  // And the underlying constants must add up to 10.
+  // And the underlying constants must add up to 11.
   const stepperStart = GAME.match(/STEPPER_START\s*=\s*8/g);
-  const stepperCount = GAME.match(/STEPPER_COUNT\s*=\s*2/g);
+  const stepperCount = GAME.match(/STEPPER_COUNT\s*=\s*3/g);
   assert.ok(stepperStart && stepperStart.length === 2,
     'STEPPER_START must be 8 (after 2 sliders + 6 toggles) in both updateSettings and renderSettings');
   assert.ok(stepperCount && stepperCount.length === 2,
-    'STEPPER_COUNT must be 2 (MINIMAP SIZE + TEXT SIZE) in both updateSettings and renderSettings');
+    'STEPPER_COUNT must be 3 (MINIMAP SIZE + TEXT SIZE + WORLD ZOOM) in both updateSettings and renderSettings');
 });
 
 // ─── Render pipeline integration ───────────────────────────────────────

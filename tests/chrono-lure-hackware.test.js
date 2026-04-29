@@ -277,10 +277,15 @@ test('CHRONO_LURE aim-places at cursor with wall fallback to player tile (matche
   // the spell silently no-ops. Mirror DECOY_TURRET's "fall back to
   // player tile if aim lands in a non-passable tile" pattern.
   const body = chronoLureCaseBodyNoDead();
-  assert.match(body, /\(\s*mouse\.x\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/,
-    'CHRONO_LURE must read aim x from `(mouse.x + cam.x) / TILE` (cursor-driven placement)');
-  assert.match(body, /\(\s*mouse\.y\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/,
-    'CHRONO_LURE must read aim y from `(mouse.y + cam.y) / TILE`');
+  // Allow an optional `/ <ident>` zoom factor between mouse.x and the
+  // `+ camCL.x` term — the worldZoom feature divides the canvas-px
+  // coordinate by `settings.worldZoom` before adding the cam (which is
+  // in world-px units). Old shape `(mouse.x + camCL.x) / TILE` and new
+  // shape `(mouse.x / _wzCL + camCL.x) / TILE` both pass.
+  assert.match(body, /\(\s*mouse\.x\s*(?:\/\s*[a-zA-Z_$][\w$]*\s*)?\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/,
+    'CHRONO_LURE must read aim x from `(mouse.x [/zoom] + cam.x) / TILE` (cursor-driven placement)');
+  assert.match(body, /\(\s*mouse\.y\s*(?:\/\s*[a-zA-Z_$][\w$]*\s*)?\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/,
+    'CHRONO_LURE must read aim y from `(mouse.y [/zoom] + cam.y) / TILE`');
   // Wall fallback: the test for the resolved tile must check both
   // T.FLOOR and T.DOOR_OPEN (both are valid spawn surfaces — closed
   // doors are not passable). Without the door check, players can't
