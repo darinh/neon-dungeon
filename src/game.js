@@ -9,6 +9,18 @@
 // constant is what the PR #184 known-limitation note flagged).
 const RESET_CONFIRM_WINDOW_MS = 3000;
 
+// Boss intro telegraph duration (seconds). Triggered when the player crosses
+// the threshold of a boss room and the room seals. During this window an
+// atmospheric overlay (radial vignette in the boss colour + boss-name
+// titlecard) is rendered on top of the world, and audio.bossIntro() plays
+// as a low-frequency hum sting. Gameplay is NOT paused — the intro is a
+// pure cosmetic flourish that runs in parallel with normal play.
+//
+// 2.4s chosen to be: long enough that the titlecard registers (~1.5s of
+// "hold" in the middle after fade-in), short enough that it doesn't
+// overstay the moment or eclipse the AI's first telegraphed attack.
+const BOSS_INTRO_DURATION = 2.4;
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -40,6 +52,15 @@ const game = {
   bossAlive: false,
   bossBarAnim: 0,
   bossHpGhost: 0,
+  // Boss intro telegraph — atmospheric overlay (radial vignette + titlecard +
+  // audio sting) that plays for BOSS_INTRO_DURATION seconds when the player
+  // first enters the boss room (i.e. when bossSealed flips false→true).
+  // Gameplay continues during the intro — this is purely cosmetic. Timer
+  // counts DOWN to 0; duration field is kept for fade-envelope math in the
+  // renderer (so the renderer can compute progress = 1 - timer/duration
+  // without re-deriving the constant).
+  bossIntroTimer: 0,
+  bossIntroDuration: 0,
   modifier: null,
   modBannerTimer: 0,
   // UNCHAINED #40: biome intro card — shown 3s on first floor of a biome
@@ -209,6 +230,8 @@ const game = {
     this.bossAlive=false;
     this.bossBarAnim=0;
     this.bossHpGhost=0;
+    this.bossIntroTimer=0;
+    this.bossIntroDuration=0;
     this.clearedRooms=new Set();
     this._chainBolts=[];
     this.sealedEntranceSet=new Set();
@@ -2364,7 +2387,28 @@ const game = {
         }
         audio.roomSeal();
         this.msg('⚠ ROOM SEALED','#ff3333');
+        // Boss intro telegraph — fires ONCE per boss encounter, on the
+        // false→true bossSealed flip. Atmospheric overlay (radial vignette
+        // in boss colour + boss-name titlecard + low-frequency audio sting).
+        // Gameplay continues during the BOSS_INTRO_DURATION-second window;
+        // the player can still move/shoot. Bosses themselves are AI-driven
+        // and typically telegraph their first attack, so the intro doesn't
+        // create unfair pressure. Save/load resumes mid-fight do NOT
+        // re-trigger this — descend() resets bossSealed to false and the
+        // dungeon is regenerated on Continue, so the seal-flip path is
+        // re-entered cleanly only on first physical entry to the room.
+        this.bossIntroDuration = BOSS_INTRO_DURATION;
+        this.bossIntroTimer = BOSS_INTRO_DURATION;
+        if (audio.bossIntro) audio.bossIntro();
       }
+    }
+
+    // Boss intro telegraph — count DOWN every frame regardless of camera or
+    // pause state (pause already short-circuits the entire update loop).
+    // Clamp to 0 to keep the renderer's `timer > 0` gate clean and to ensure
+    // the timer can never be re-played by an integer-overflow / underflow path.
+    if (this.bossIntroTimer > 0) {
+      this.bossIntroTimer = Math.max(0, this.bossIntroTimer - dt);
     }
 
     // boss death — unseal room and update state
@@ -2379,6 +2423,12 @@ const game = {
       }
       this.bossSealed=false;
       this.refreshSealedEntrances();
+      // Edge case — if the boss dies DURING the intro telegraph (player one-
+      // shots a low-HP boss the instant they cross the threshold), kill the
+      // intro overlay so the "boss is dead" state isn't visually contradicted
+      // by a still-fading titlecard with the boss's name.
+      this.bossIntroTimer = 0;
+      this.bossIntroDuration = 0;
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
@@ -4239,6 +4289,12 @@ const game = {
     drawMinimap(dungeon,player);
     drawBoostStrip(player);
     drawBossBar();
+    // Boss intro telegraph overlay — radial vignette in the boss colour +
+    // titlecard with the boss name. Rendered LAST so it sits on top of the
+    // world and HUD chrome (it's a transient cinematic moment; HUD remains
+    // visible THROUGH the partially-transparent vignette). Gates internally
+    // on `bossIntroTimer > 0` so this is a no-op outside the intro window.
+    drawBossIntroOverlay();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.

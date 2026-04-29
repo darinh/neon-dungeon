@@ -994,6 +994,28 @@ const audio = (() => {
       osc('sine', 30, 26, 0.16, t + 0.12, 1.9, bus, { attack:0.02 });
       osc('sine', 42, 36, 0.08, t + 0.62, 1.1, bus, { pan:-0.08 });
     },
+    // Boss intro telegraph sting — fires when the boss room SEALS (player
+    // crosses the threshold), distinct from bossEnter which fires on FLOOR
+    // entry as a "boss is on this floor" warning. Lower-frequency sub-bass
+    // hum + slowly-rising filtered noise sweep, designed to layer ON TOP
+    // of audio.roomSeal()'s metallic slam (which fires in the same frame).
+    // Duration ~2.0s — matches BOSS_INTRO_DURATION's hold window so the
+    // hum sustains throughout the visual titlecard.
+    bossIntro() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.6, 2.6);
+      // Sub-bass drone — layered sines an octave apart, slow attack so it
+      // swells in under the existing slam, holds, then fades.
+      osc('sine', 38, 34, 0.18, t, 2.0, bus, { attack:0.12 });
+      osc('sine', 76, 68, 0.10, t + 0.05, 1.9, bus, { attack:0.18, pan:-0.15 });
+      osc('sine', 76, 68, 0.10, t + 0.05, 1.9, bus, { attack:0.18, pan:0.15 });
+      // Mid-range sawtooth pad — quiet menace, narrow stereo spread.
+      osc('sawtooth', 110, 100, 0.06, t + 0.2, 1.7, bus, { attack:0.25, filterType:'lowpass', filterFreq:600, filterFreq2:200 });
+      osc('sawtooth', 116, 104, 0.06, t + 0.2, 1.7, bus, { attack:0.25, filterType:'lowpass', filterFreq:600, filterFreq2:200, pan:0.18 });
+      // Filtered noise sweep — slow rise from 200Hz cutoff to 600Hz, gives
+      // the sting a "tension building" texture without being abrasive.
+      noise(0.08, t, 2.0, 600, bus, { filterType:'lowpass', filterFreq2:200, q:0.5 });
+    },
     descend() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.5, 0.4);

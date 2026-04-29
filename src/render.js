@@ -1483,6 +1483,93 @@ function drawBossBar() {
   ctx.restore();
 }
 
+// ─── Boss Intro Telegraph ────────────────────────────────────────────────────
+// Atmospheric overlay rendered for `bossIntroDuration` seconds when the
+// player first enters the boss room. Two layered effects:
+//   1. Radial vignette in the boss colour — darkens screen edges, frames
+//      attention on the centre. Fades in (~0.25s), holds, fades out.
+//   2. Boss-name titlecard — large monospace text centered on the upper
+//      third of the screen. Same fade envelope plus a subtle vertical
+//      "drop-in" slide on entry (suppressed under reducedMotion).
+//
+// Gameplay continues unaffected — this is a pure cosmetic overlay. Internally
+// gates on `_RG.bossIntroTimer > 0`, so it's a no-op outside the intro window.
+// A truthy timer with a zero duration is treated as a no-op (defensive: would
+// otherwise trigger a divide-by-zero in the progress calculation).
+function drawBossIntroOverlay() {
+  const t = _RG.bossIntroTimer;
+  const dur = _RG.bossIntroDuration;
+  if (!t || t <= 0 || !dur || dur <= 0) return;
+
+  const elapsed = dur - t;
+  const fadeIn = 0.25;
+  const fadeOut = 0.45;
+  // Envelope: ramp up over fadeIn, hold at 1, ramp down over fadeOut. Same
+  // shape as drawBiomeCard's envelope so the visual rhythm is consistent
+  // across the game's two timed intro overlays.
+  let alpha = 1;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  // Look up boss colour from the live boss instance if it exists; otherwise
+  // fall back to the alarm-red used by the "⚠ BOSS DETECTED" floor message
+  // (consistent visual vocabulary). The boss may be momentarily absent at
+  // the very first frame of the intro (between bossSealed-flip and the next
+  // enemies-array scan), so this fallback is the safe default.
+  const boss = enemies.find(e => e.isBoss && !e.dead);
+  const col = boss ? boss.colour : '#ff3333';
+  const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
+
+  ctx.save();
+
+  // Layer 1 — radial vignette. Darkness anchored at the screen edges, fading
+  // toward transparent at ~30% screen radius. Boss colour applied at low
+  // alpha so it's a TINT not a flood. Skipped entirely if vignette alpha
+  // resolves to 0 (avoids a no-op gradient allocation in the fade tails).
+  const vignAlpha = alpha * 0.55;
+  if (vignAlpha > 0.01) {
+    ctx.globalAlpha = vignAlpha;
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.7, col);
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Layer 2 — titlecard. Large boss name on the upper third. Monospace
+  // matches the rest of the game's typographic identity. Subtle drop-in
+  // slide (12px → 0px) on entry; suppressed under reducedMotion (the
+  // accessibility setting that exists to mitigate vestibular triggers).
+  // Colour-graded glow uses the boss colour so the WHOLE overlay reads as
+  // a single chromatic moment.
+  const baseFs = layout.compact ? 28 : 38;
+  const titleFs = Math.max(18, Math.round(baseFs * settings.textScale));
+  const slideOffset = settings.reducedMotion ? 0 : 12 * (1 - easeOutCubic(Math.min(1, elapsed / fadeIn)));
+  const titleY = H * 0.32 + slideOffset;
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${titleFs}px monospace`;
+  ctx.shadowBlur = 18; ctx.shadowColor = col;
+  ctx.fillStyle = col;
+  ctx.fillText(name, W / 2, titleY);
+
+  // Subtitle — small "⚠ ENGAGING" line beneath the boss name. Quieter
+  // grey so it doesn't compete with the colour-graded title. Uses the
+  // same alpha envelope so it fades together. textScale-aware so the
+  // gap stays proportional at 0.85× / 1.0× / 1.15× / 1.3×.
+  const subFs = Math.max(8, Math.round(11 * settings.textScale));
+  const subGap = Math.max(8, Math.round(14 * settings.textScale));
+  ctx.globalAlpha = alpha * 0.75;
+  ctx.font = `${subFs}px monospace`;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#aaaacc';
+  ctx.fillText('⚠ ENGAGING', W / 2, titleY + titleFs + subGap);
+
+  ctx.restore();
+}
+
 /**
  * @param {any} t
  */
