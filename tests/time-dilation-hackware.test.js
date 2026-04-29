@@ -797,17 +797,20 @@ test('audio.hackwareTimeDilation is defined in platform.js', () => {
 
 // ─── HACKWARE pool size canary ───────────────────────────────────────────
 
-test('HACKWARE catalog has 14 entries (TIME_DILATION is the 14th)', () => {
-  // Canary literal — when the next hackware is added, this assertion
-  // moves to that test file (mirrors the modifier-pool canary
-  // pattern). Per CHRONO_LURE conventions: the previous-last-added
-  // hackware test file owns the literal; this canary moves forward.
-  // Pull all keys from the HACKWARE block.
+test('HACKWARE catalog has at least 14 entries (TIME_DILATION landed)', () => {
+  // Canary RETIRED: this test was the exact-count canary when
+  // TIME_DILATION was the latest hackware. The next-added hackware
+  // (DATA_SPIKE) takes over the exact-count pin in its own test file —
+  // see tests/data-spike-hackware.test.js. This regression guard
+  // remains as a floor (>= 14) so a future contributor accidentally
+  // deleting TIME_DILATION's catalog entry still trips a failure here.
+  // Mirrors the modifier-pool canary pattern (tests/jammed-modifier
+  // post-PROXIMITY).
   const hwBlock = CONTENT_NC.match(/const\s+HACKWARE\s*=\s*\{([\s\S]*?)\n\}\s*;/);
   assert.ok(hwBlock, 'HACKWARE registry block must be locatable');
   const keys = hwBlock[1].match(/^\s*([A-Z_]+)\s*:\s*\{/gm) || [];
-  assert.equal(keys.length, 14,
-    `HACKWARE registry must have EXACTLY 14 entries — got ${keys.length} (TIME_DILATION is the 14th; if you added a new hackware, move this canary to its test file)`);
+  assert.ok(keys.length >= 14,
+    `HACKWARE registry must have AT LEAST 14 entries (TIME_DILATION floor) — got ${keys.length}`);
 });
 
 // ─── SW cache invalidation ────────────────────────────────────────────────
