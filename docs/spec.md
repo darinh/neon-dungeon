@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 36 entries. Every biome has at least
-seven whispers after the threshold/keyhole bundle (`w-sb-08`, `w-cc-07`,
-`w-fw-07`, `w-uk-07`, `w-on-07`), which extends the AXIOM-7 copy/voice motif
-from facility signal routing, stored memory, and physical anchors into doors,
-gates, exits, and permissions the loop treats as narrative checkpoints.
+Authored whisper content currently ships 41 entries. Every biome has at least
+eight whispers after the black-ice lockdown bundle (`w-sb-09`, `w-cc-08`,
+`w-fw-08`, `w-uk-08`, `w-on-08`), which reframes black ice as a defensive
+quarantine instinct: frightening, cold, and dangerous, but sometimes protecting
+names and memories the loop would otherwise erase.
 
 ---
 
