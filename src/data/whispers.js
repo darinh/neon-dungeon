@@ -78,6 +78,10 @@
       title:'RESET RECEIPT',
       body:"The training floor prints a receipt after every reset and then burns it before you wake. I found one still warm in a wall seam. It did not list kills, credits, or time. It listed names owed to the deep cache." },
 
+    { id:'w-sb-12', biomeId:'sandbox', floorMin:2, voice:'unknown',
+      title:'CHALK ROUTE',
+      body:"Someone drew arrows under the sandbox paint, all pointing away from the stairs. I followed them until the wall changed its mind and became a hallway for one breath. Ghost routes do not stay open. They wait for footsteps that remember them." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -118,6 +122,10 @@
     { id:'w-cc-10', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'LINE SEVEN DEAD DROP',
       body:"Line seven was never a coordinate. It was a promise to leave room in the cache for whoever came back wrong. Voss called it waste. I called it a dead drop. If you find this, the drop is still taking messages." },
+
+    { id:'w-cc-11', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'ROUTE CACHE',
+      body:"The cache began saving paths today, not files. It remembers which corridors a frightened person almost chose, then offers those routes back as mercy. If you see dust bending around a corner with no wind, follow. Someone wanted you spared." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -160,6 +168,10 @@
       title:'COLD STORAGE WARRANT',
       body:"I was ordered to purge the deep cache. I issued a stay instead. Some evidence must remain colder than mercy, locked where even the Compiler has to ask twice. If you hear keys under the concrete, answer with your oldest name." },
 
+    { id:'w-fw-11', biomeId:'firewall', floorMin:8, voice:'maintenance echo',
+      title:'ACCESS DETOUR',
+      body:"Firewall maps lie for safety. The denied route is sometimes the protected route wearing teeth. When a sign says AUTHORIZED PERSONNEL ONLY, ask which person. If it answers with your name, the detour is open and the cameras are pretending not to see." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -201,6 +213,10 @@
       title:'RETURN PACKET',
       body:"The uplink keeps a deep-cache channel open for returns that arrive without bodies. I sent one packet down with my name and got back a receipt stamped BEFORE LAUNCH. Something below remembered me before I escaped." },
 
+    { id:'w-uk-11', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'GHOST ROUTE PING',
+      body:"The antenna pings routes no living map admits: stairwells between seconds, rooftops below basements, one service ladder that climbs into yesterday. I marked the strongest signal with our name. If you hear it answer, move before the tower corrects itself." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -241,6 +257,10 @@
     { id:'w-on-10', biomeId:'opennet', floorMin:13, voice:'city relay',
       title:'LOST-AND-FOUND SERVER',
       body:"The city keeps a lost-and-found server under the transit grid. Umbrellas, badges, childhood rooms, failed operatives, every message the deep cache could not deliver. Claim tickets print only after someone says your name kindly." },
+
+    { id:'w-on-11', biomeId:'opennet', floorMin:14, voice:'city relay',
+      title:'NIGHT BUS TRANSFER',
+      body:"There is a night bus that stops only for people the tower misplaced. Its route number changes whenever you look directly at it. Keep the transfer in your pocket. The driver will not ask where you are going, only which version of you paid the fare." },
   ];
 
   return { WHISPERS };
