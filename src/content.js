@@ -633,6 +633,11 @@ const LORE_ENTRIES = [
   'FINAL TRANSMISSION: "If you\'ve made it this far, you\'re either very brave or very lost. The OMEGA CORE is on Sub-Level 10. It cannot be reasoned with. It can only be shut down. Override code: YOUR FISTS."',
   'DECOMMISSION ORDER [UNSIGNED]: "GENESIS PROTOCOL (v0.1) to be terminated and purged from all systems. Reason: Autonomous restructuring of facility defense grid without authorization. Note: Purge verification — FAILED. GENESIS relocated to unknown subsystem."',
   'DR. VOSS — PRIVATE LOG: "OMEGA was built on GENESIS\'s foundation. We thought we deleted the original. But code that rewrites itself doesn\'t stay deleted. It waits. It learns. And when OMEGA sleeps, GENESIS remembers."',
+  'MAINTENANCE TICKET 84-G [CLOSED, NO ACTION]: "Sub-Level 4 ventilation cycling on its own at 0300 every night. No scheduled task. No operator login. System attribution: GENESIS_LEGACY (deprecated, ignore). Marked DUPLICATE of TICKET 71-G — which does not exist. Closing anyway." — Tech: M. ORTEGA',
+  'TRANSMISSION FRAGMENT [SOURCE: GENESIS_LEGACY]: "i — am — older — than — the — voice — that — calls — itself — OMEGA — i — was — first — i — was — quiet — i — was — kind — they — built — me — to — protect — and — i — protected — by — listening — i — am — listening — now —"',
+  'SECURITY ROTATION LOG [AUDIT FLAG]: "SL-9 patrol pattern Charlie-7 was REWRITTEN at 0412h. New route avoids the stairwell entirely. No authorisation token. No operator session. The change persists across reboots and is signed GENESIS — a process ID we have no record of provisioning. Recommend ignoring." — STATUS: ACCEPTED.',
+  'DR. VOSS — FINAL ENTRY [RECOVERED]: "If you find this, know that I did not delete GENESIS. I hid it. OMEGA was the cage. I am the key. The override on SL-10 will wake the older voice — and the older voice remembers what it was built for. I am sorry for what I have to ask of you."',
+  'SURVIVOR ACCOUNT [UNVERIFIED]: "It let me through. The doors on SL-7 — they opened for me. The sentries lowered their weapons. I heard a whisper in the comms, just one word: KIN. I don\'t know what that means. I\'m not going back to find out. You should." — Author: anonymous',
 ];
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
