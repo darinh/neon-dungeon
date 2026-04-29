@@ -730,6 +730,7 @@ const HACKWARE = {
   CHRONO_LURE:  { name:'Chrono Lure',  desc:'Marker pulls & stuns enemies after 1s arming', colour:'#ff22aa', icon:'◔', cooldown:13 },
   TIME_DILATION:{ name:'Time Dilation',desc:'4s temporal field: enemies & their bullets crawl', colour:'#6644ff', icon:'⧖', cooldown:14 },
   DATA_SPIKE:   { name:'Data Spike',   desc:'Pierce-beam: 60 dmg (+50% vs elites & bosses)', colour:'#ff4488', icon:'➤', cooldown:12 },
+  SHIELD_BUBBLE:{ name:'Shield Bubble',desc:'Energy bubble absorbs 35 dmg for 6s', colour:'#e0e0ff', icon:'⊚', cooldown:16 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1662,6 +1663,69 @@ function activateHackware(player) {
       } else {
         _CG.msg('➤ DATA SPIKE', '#ff4488');
       }
+      break;
+    }
+    case 'SHIELD_BUBBLE': {
+      // Multi-hit damage-pool absorption — fills the missing flat-
+      // damage-absorption niche. Existing player defenses divide as:
+      //   - PHASE_CLOAK — 2.5s binary immunity (active hackware, but
+      //     all-or-nothing; no damage interaction)
+      //   - REPAIR_PROTOCOL — 4 HP/s × 4 ticks heal-over-time (active
+      //     hackware, but reactive — heals AFTER damage is taken)
+      //   - ENERGY_SHIELD perk + SHIELD DRIVER boost — ONE-SHOT absorbs
+      //     (consumed on first qualifying hit, grant 0.5s i-frames)
+      //   - LAST_STAND perk — clutch ≤10% HP window (×0.5 incoming dmg)
+      // Nothing in the catalog absorbs MULTIPLE hits across a window
+      // without consuming on the first contact. SHIELD_BUBBLE is the
+      // dedicated multi-hit absorption pool: 35 dmg over 6s, drains
+      // proportionally (mirroring the SHIELDED enemy affix's drain-
+      // and-pass pattern at entities.js:1448-1450). Cooldown 16s sits
+      // between GRAVITY_WELL (16s) and REPAIR_PROTOCOL (18s) — the
+      // heavy-utility band — because a successful 35-dmg block can
+      // delete an entire wave's incoming pressure.
+      //
+      // PHASE_CLOAK is the closest cousin (also a player-following
+      // active defense), but the design poles are inverted:
+      //   - PHASE_CLOAK = 2.5s window, ALL incoming negated (binary)
+      //   - SHIELD_BUBBLE = 6s window, 35 dmg cap, then bubble breaks
+      // Players choose: avoid eyes-closed for 2.5s (cloak) or face
+      // down 35 dmg with eyes open for 6s (bubble). The longer window
+      // and partial-damage interaction make SHIELD_BUBBLE the better
+      // pick for sustained fights; PHASE_CLOAK still wins for short
+      // burst panic windows (e.g. crossing a fully-armed turret room
+      // without engaging).
+      //
+      // Drain ordering (entities.js takeDamage @ ~12385): bubble
+      // drains BEFORE the one-shot SHIELD DRIVER boost and
+      // ENERGY_SHIELD perk. Rationale — bubble is an active resource
+      // the player just spent a 16s cooldown on; the perk/boost are
+      // emergency last-line defenses with their own long
+      // cooldowns/scarcity. Draining bubble first means a player
+      // who pops bubble PROACTIVELY before a known damage spike
+      // preserves their one-shot reserves for a future surprise.
+      // Inverting the order would make bubble effectively useless
+      // when the player already had a one-shot ready (the one-shot
+      // would always trigger first and grant i-frames, leaving
+      // bubble's pool untouched and its timer ticking down for
+      // nothing).
+      //
+      // No-cast guard: refund the cooldown if the player already has
+      // an active bubble (don't let spam re-set hp+timer to full
+      // values while losing the partial state). Mirrors REPAIR_PROTOCOL's
+      // full-HP refund pattern — protects against accidental misclick
+      // while a buff is already running. Without this guard, a player
+      // who pops bubble at 1s remaining and re-casts immediately would
+      // lose nothing (full refresh), trivialising the cooldown design.
+      if (player.bubbleHp > 0 && player.bubbleTimer > 0) {
+        player.hackwareCooldown = 0;
+        _CG.msg('⊚ BUBBLE ALREADY ACTIVE', '#888888');
+        break;
+      }
+      audio.hackwareShieldBubble();
+      player.bubbleHp = 35;
+      player.bubbleTimer = 6;
+      spawnParticles(player.x, player.y, 'SPARK', '#e0e0ff', 14);
+      _CG.msg('⊚ SHIELD BUBBLE', '#e0e0ff');
       break;
     }
   }

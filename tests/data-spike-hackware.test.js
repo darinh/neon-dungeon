@@ -395,17 +395,23 @@ test('platform.js defines audio.hackwareDataSpike()', () => {
     'platform.js must define an audio.hackwareDataSpike() method (otherwise activation crashes)');
 });
 
-// ─── HACKWARE pool size canary (DATA_SPIKE is the 15th) ───────────────────
+// ─── HACKWARE pool size floor (>= 15 — DATA_SPIKE was the 15th) ───────────
+//
+// Canary RETIRED post SHIELD_BUBBLE PR. The exact-count assertion
+// moved to tests/shield-bubble-hackware.test.js (which now pins
+// EXACTLY 16). This file keeps a regression FLOOR (>= 15) so a
+// future deletion of DATA_SPIKE or any earlier hackware fails here
+// (tests in this file would break on missing DATA_SPIKE wiring
+// regardless, but the explicit floor documents the intent).
+//
+// When the 17th hackware lands, that test file pins EXACTLY 17 and
+// the SHIELD_BUBBLE test drops to a `>= 16` floor. Same handoff
+// pattern as the FLOOR_MODIFIERS canary (PROXIMITY/JAMMED).
 
-test('HACKWARE catalog has EXACTLY 15 entries (DATA_SPIKE is the 15th)', () => {
-  // Canary literal — when the next hackware is added, this assertion
-  // moves to that test file and this one drops to a `>= 15` floor
-  // (mirrors the modifier-pool canary pattern: see
-  // tests/proximity-modifier.test.js + tests/jammed-modifier.test.js
-  // post-PROXIMITY).
+test('HACKWARE catalog has AT LEAST 15 entries (DATA_SPIKE floor)', () => {
   const hwBlock = CONTENT_NC.match(/const\s+HACKWARE\s*=\s*\{([\s\S]*?)\n\}\s*;/);
   assert.ok(hwBlock, 'HACKWARE registry block must be locatable');
   const keys = hwBlock[1].match(/^\s*([A-Z_]+)\s*:\s*\{/gm) || [];
-  assert.equal(keys.length, 15,
-    `HACKWARE registry must have EXACTLY 15 entries — got ${keys.length} (DATA_SPIKE is the 15th; if you added a new hackware, move this canary to its test file and replace this with a >= 15 floor)`);
+  assert.ok(keys.length >= 15,
+    `HACKWARE registry must have AT LEAST 15 entries (DATA_SPIKE floor) — got ${keys.length}`);
 });
