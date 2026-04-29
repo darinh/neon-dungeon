@@ -1869,6 +1869,18 @@ const audio = (() => {
       noise(0.2, t, 0.1, 5000, bus);
       osc('sine', 80, 40, 0.12, t + 0.05, 0.3);
     },
+    hackwareJammed() {
+      // Activation denied — short "denied" buzz with downward chirp so the
+      // ear immediately reads "NO". Distinct from hackwareEMP (sustained
+      // electric burst) and disruptorField (soft static crackle): this is
+      // a sharp staccato refusal. Heard whenever the player tries to
+      // activate hackware while inside a NULLIFIER jam aura.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.4, 0.05, 0.05);
+      osc('square', 380, 110, 0.08, t, 0.10, bus);
+      osc('sawtooth', 240, 80, 0.05, t + 0.02, 0.08, bus);
+      noise(0.05, t, 0.06, 3000, bus);
+    },
     hackwareCloak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.5, 0.8);

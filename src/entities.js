@@ -242,7 +242,7 @@ function notifyVengeance(deadEnemy) {
 }
 
 /** @type {Record<string, any>} */
-const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, ARCHITECT:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, ARCHITECT:10, NULLIFIER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -464,6 +464,54 @@ const ARCHITECT_TARGET_TIME  = 1.5;   // seconds — telegraph window before com
 const ARCHITECT_RECOVERY     = 2.0;   // seconds — post-commit cooldown
 const ARCHITECT_IDLE_BASE    = 8.0;   // seconds — between commits when conditions hold
 const ARCHITECT_DECAY_TIME   = 12.0;  // seconds — placed wall lifetime
+
+// ─── NULLIFIER tuning constants ──────────────────────────────────────────
+// NULLIFIER is the first mob whose role is anti-hackware specifically. The
+// JAMMED floor modifier shifts hackware cooldown +25%; DISRUPTOR drops
+// short-lived fields that *suppress* cooldown ticking via the existing
+// player.disruptionFieldActive flag. Neither blocks ACTIVATION, and neither
+// is a persistent room-scoped threat — DISRUPTOR fires its fields and the
+// mob can be killed leaving them to decay. NULLIFIER closes that gap:
+//
+//   - Stationary structure (atk=0, spd=0) — no chase, no contact damage.
+//     The "threat" is purely positional: enter the aura and your hackware
+//     stops working. The aura ONLY exists while the mob is alive AND not
+//     stunned, so the counter-tools (kill it, EMP_BURST, EMP_LINE) all
+//     work. Note: NULLIFIER itself is INSIDE its own aura — using EMP_BURST
+//     while in range is a chicken-and-egg gotcha; counter is to leave the
+//     aura first OR pre-arm the EMP outside and walk in (cooldown is
+//     already ticking before entry).
+//
+//   - Persistent radial jam aura (NULLIFIER_FIELD_R = 5 tiles). While the
+//     player is inside ANY live NULLIFIER's aura:
+//       * player.hackwareCooldown does NOT tick down (extends the
+//         existing disruptionFieldActive gate at the player-update site)
+//       * activateHackware() bails out with an audio + "JAMMED" floater
+//         (extends the existing cooldown gate in src/content.js)
+//
+//   - Visual: pulsing cyan-magenta crosshatch ring at field radius +
+//     dashed counter-rotating arcs. Distinct from MAGNETON's smooth
+//     dashed ring (#ff44dd) and DISRUPTOR fields (#ff44aa fading-pink
+//     fill). NULLIFIER mob colour is #cc66dd — purple-magenta. The
+//     ring INTENSIFIES when the player is inside (visual confirmation
+//     that jamming is active right now).
+//
+//   - Stun cancels jamming (stunTimer > 0 returns early before AI dispatch
+//     at the canonical spot, so updateNullifierJam reads stunTimer === 0
+//     as the live-aura gate).
+//
+// Compositional layers (intentional, not bugs):
+//   - JAMMED floor + NULLIFIER aura: cooldowns +25% AND can't tick AND
+//     can't activate. Pure anti-hackware hellhole. Counter: kill the
+//     nullifier, then activations resume (cooldown ticks resume too).
+//   - NULLIFIER + DISRUPTOR field overlap: redundant suppression on
+//     hackwareCooldown (both gates set the no-tick condition); the
+//     activation-block from NULLIFIER is the differentiator.
+//
+// Spawn weight: minFloor 6, base 1, perFloor 1 (mid-late game tier).
+// Mirrors GRAVITON (also a stationary field-deployer) and DISRUPTOR.
+const NULLIFIER_FIELD_R      = 5;     // tiles — aura radius (jam zone)
+const NULLIFIER_PULSE_RATE   = 1.8;   // hz — visual pulse base rate
 
 // MIRROR tuning constants — exported on globalThis for cross-file test reads.
 // Stationary mob whose hook is mimicry: it fires a single projectile at the
@@ -964,7 +1012,7 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 const SOURCE_LABELS = {
   GUARD:'Guard', TURRET:'Turret', CRAWLER:'Crawler', PHANTOM:'Phantom',
   DRONE:'Drone', SHIELDER:'Shielder', GRENADIER:'Grenadier', SPLITTER:'Splitter',
-  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', GULPER:'Gulper', WATCHER:'Watcher', 'Watcher Beam':'Watcher Beam', ARCHITECT:'Architect', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
+  TELEPORTER:'Teleporter', SNIPER:'Sniper', SUMMONER:'Summoner', HEALER:'Healer', CHARGER:'Charger', MIMIC:'Mimic', LEAPER:'Leaper', REFLECTOR:'Reflector', DISRUPTOR:'Disruptor', WRAITH:'Wraith', NEXUS:'Nexus', SIPHON:'Siphon', GRAVITON:'Graviton', SEEKER:'Seeker', PULSER:'Pulser', ECHOER:'Echoer', 'Echo Shot':'Echo Shot', RESONATOR:'Resonator', 'Resonator Cone':'Resonator Cone', MIRROR:'Mirror', 'Mirror Shot':'Mirror Shot', REAPER:'Reaper', GHOST_PROJECTOR:'Ghost Projector', PROPHET:'Prophet', 'Prophet Shot':'Prophet Shot', CRYOPHAGE:'Cryophage', 'Frost Patch':'Frost Patch', WARDLING:'Wardling', VENGEANCE:'Vengeance', CONDUIT:'Conduit', 'Conduit Beam':'Conduit Beam', HARVESTER:'Harvester', MAGNETON:'Magneton', SPECTRE:'Spectre', SAPPER:'Sapper', MAGPIE:'Magpie', TETHER:'Tether', GULPER:'Gulper', WATCHER:'Watcher', 'Watcher Beam':'Watcher Beam', ARCHITECT:'Architect', NULLIFIER:'Nullifier', SHARD:'Shard', SENTINEL:'Sentinel Mk-I',
   SCORCHER:'Scorcher', BRUTE:'Brute',
   WARDEN:'Warden', HIVE:'Neural Hive', CONDUCTOR:'Conductor', OMEGA:'Omega Core', GENESIS:'Genesis Protocol',
   'Spike Trap':'Spike Trap', 'Plasma':'Plasma', 'Arc Grid':'Arc Grid',
@@ -990,7 +1038,7 @@ const SOURCE_LABELS = {
 const SOURCE_COLOURS = {
   GUARD:'#ff3333', TURRET:'#ffb700', CRAWLER:'#39ff14', PHANTOM:'#cc00ff',
   DRONE:'#00aaff', SHIELDER:'#66eeff', GRENADIER:'#ff6622', SPLITTER:'#00ff88',
-  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', GULPER:'#bbdd33', WATCHER:'#ffee66', 'Watcher Beam':'#ffee66', ARCHITECT:'#aa6633', SHARD:'#00cc66', SENTINEL:'#ff4444',
+  TELEPORTER:'#ff44ff', SNIPER:'#ff2266', SUMMONER:'#bb44ff', HEALER:'#44ffaa', CHARGER:'#ff6600', MIMIC:'#cc33ff', LEAPER:'#22ff88', REFLECTOR:'#88ddff', DISRUPTOR:'#ff44aa', WRAITH:'#66ffcc', NEXUS:'#00eedd', SIPHON:'#dd2244', GRAVITON:'#8833ff', SEEKER:'#ffdd00', PULSER:'#44ddff', ECHOER:'#aa66ff', 'Echo Shot':'#aa66ff', RESONATOR:'#ff66cc', 'Resonator Cone':'#ff66cc', MIRROR:'#88ff44', 'Mirror Shot':'#88ff44', REAPER:'#cc1144', GHOST_PROJECTOR:'#cc99ff', PROPHET:'#ffaa22', 'Prophet Shot':'#ffaa22', CRYOPHAGE:'#88ddff', 'Frost Patch':'#88ddff', WARDLING:'#ffcc66', VENGEANCE:'#cc1166', CONDUIT:'#44ffff', 'Conduit Beam':'#44ffff', HARVESTER:'#ff9933', MAGNETON:'#ff44dd', SPECTRE:'#eeccff', SAPPER:'#ddff44', MAGPIE:'#cceeff', TETHER:'#ff8866', GULPER:'#bbdd33', WATCHER:'#ffee66', 'Watcher Beam':'#ffee66', ARCHITECT:'#aa6633', NULLIFIER:'#cc66dd', SHARD:'#00cc66', SENTINEL:'#ff4444',
   SCORCHER:'#ff5522', BRUTE:'#cc3344',
   WARDEN:'#ff8800', HIVE:'#aa00ff', CONDUCTOR:'#00ccff', OMEGA:'#ff00c8', GENESIS:'#ffcc00',
   'Spike Trap':'#ff6644', 'Plasma':'#ff8800', 'Arc Grid':'#44ccff',
@@ -2903,6 +2951,7 @@ class Enemy {
       case 'GULPER':this.aiGulper(dt,player,map,d,los); break;
       case 'WATCHER':this.aiWatcher(dt,player,map,d,los); break;
       case 'ARCHITECT':this.aiArchitect(dt,player,map,d,los); break;
+      case 'NULLIFIER':this.aiNullifier(dt,player,map,d,los); break;
       case 'RESONATOR':this.aiResonator(dt,player,map,d,los); break;
       case 'MIRROR':  this.aiMirror(dt,player,map,d,los); break;
       case 'REAPER':  this.aiReaper(dt,player,map,d,los); break;
@@ -3157,6 +3206,44 @@ class Enemy {
       );
       p.dx = ndx; p.dy = ndy;
     }
+  }
+
+  /**
+   * NULLIFIER — stationary anti-hackware specialist (floor 6+, hp=70,
+   * atk=0, spd=0, xpVal=24, colour #cc66dd).
+   *
+   * The mob has NO direct AI behaviour — it neither moves nor attacks nor
+   * fires. Its entire role is the persistent jam aura that gates
+   * player.hackwareCooldown ticking AND blocks activateHackware. That
+   * gating lives in updateNullifierJam (called from the main game loop
+   * next to updateDisruptionFields) which iterates live NULLIFIERs and
+   * sets player.hackwareJammed when the player is inside any aura.
+   *
+   * Why a no-op AI method: the canonical AI dispatch switch in
+   * Enemy.update() routes every mob type to a dedicated method; if
+   * NULLIFIER had no case it would fall through to the default GUARD
+   * chase, which at spd=0 is a no-op anyway BUT would also try
+   * canMelee/meleeAttack with atk=0 (also a no-op, so harmless), AND
+   * tick attackTimer/shootTimer for nothing. Routing here makes the
+   * inertness explicit and matches the convention every other
+   * stationary mob (TURRET, MAGNETON, RESONATOR, MIRROR, GHOST_PROJECTOR,
+   * ARCHITECT, WATCHER) follows: a named method that owns the type's
+   * behaviour, even when that behaviour is "advance a visual pulse".
+   *
+   * Stun handling: stunTimer > 0 returns early in update() before AI
+   * dispatch (see line ~2828), so the field naturally disables under
+   * stun. updateNullifierJam ALSO gates on stunTimer === 0 as a
+   * defence-in-depth check — without it, a future change to the early-
+   * return convention could silently let stunned NULLIFIERs keep jamming.
+   *
+   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
+   */
+  aiNullifier(dt, player, map, d, los) {
+    void player; void map; void d; void los;
+    // Visual pulse — used by render branch (drift so clustered spawns
+    // don't pulse in lock-step). Real dt (no berserker/OC mods) — purely
+    // cosmetic. Mirrors aiMagneton's _mgPulse pattern.
+    this._nlPulse = (this._nlPulse || 0) + dt * NULLIFIER_PULSE_RATE;
   }
 
   /**
@@ -8499,6 +8586,61 @@ class Enemy {
         NEON.draw.circleStroke(ctx, sx, sy, sz * 1.15);
         ctx.restore();
       }
+      // NULLIFIER: persistent jam-aura visual. Mirrors MAGNETON's field-
+      // ring pattern (the field IS the telegraph) but in NULLIFIER's
+      // purple-magenta palette and with crosshatch interference instead
+      // of smooth dashed dashes — visually reads as "interference / jam"
+      // rather than MAGNETON's "magnetic pull". Ring INTENSIFIES when
+      // the player is inside the aura (player.hackwareJammed === true)
+      // so the player gets immediate visual confirmation that jamming
+      // is currently active. When stunned, the ring fades to confirm
+      // the mob is defused.
+      if (this.type === 'NULLIFIER') {
+        const stunned = (this.stunTimer && this.stunTimer > 0);
+        ctx.save();
+        const nlT = this._nlPulse || 0;
+        const fieldPx = NULLIFIER_FIELD_R * TILE;
+        const nlPulse = 0.5 + 0.5 * Math.sin(nlT * 1.4);
+        // Active jam: when player is inside the aura, the ring brightens
+        // and pulses faster. The flag is set by updateNullifierJam each
+        // frame; reading it here is a pure render-side intensity boost
+        // (no gameplay coupling — same flag drives the cooldown gate
+        // and the activation gate elsewhere).
+        const player = _EG && _EG.player;
+        const jamActive = !!(player && player.hackwareJammed && !stunned
+          && dist(this.x, this.y, player.x, player.y) < NULLIFIER_FIELD_R);
+        const intensity = stunned ? 0.25 : (jamActive ? 1.0 : 0.55);
+        // Outer field boundary — crosshatch dashed magenta ring. Two
+        // dash passes counter-rotating gives the "interference" read.
+        ctx.globalAlpha = (0.18 + 0.22 * nlPulse) * intensity;
+        ctx.strokeStyle = '#cc66dd';
+        ctx.shadowBlur = 8 + nlPulse * 6;
+        ctx.shadowColor = '#cc66dd';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([4, 6]);
+        ctx.lineDashOffset = -nlT * 16;
+        NEON.draw.circleStroke(ctx, sx, sy, fieldPx);
+        ctx.setLineDash([5, 9]);
+        ctx.lineDashOffset = nlT * 12;
+        NEON.draw.circleStroke(ctx, sx, sy, fieldPx * 0.94);
+        ctx.setLineDash([]);
+        // Inner counter-rotating arcs — directional energy.
+        ctx.globalAlpha = (0.20 + 0.22 * nlPulse) * intensity;
+        ctx.lineWidth = 1.5;
+        const nlA0 = nlT * 1.2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, fieldPx * 0.55, nlA0, nlA0 + Math.PI * 0.65);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sx, sy, fieldPx * 0.55, nlA0 + Math.PI, nlA0 + Math.PI * 1.65);
+        ctx.stroke();
+        // Body core ring — bright purple-magenta, brighter when jamming.
+        ctx.globalAlpha = (0.40 + 0.30 * nlPulse) * intensity;
+        ctx.lineWidth = jamActive ? 2.2 : 1.7;
+        ctx.shadowBlur = 12 + nlPulse * 10;
+        NEON.draw.circleStroke(ctx, sx, sy, sz * 1.15);
+        ctx.restore();
+      }
       // GULPER: state-aware mouth-cone visual (the cone IS the warning,
       // mirroring MAGNETON's field-ring pattern). Render parity with
       // gameplay:
@@ -9140,6 +9282,7 @@ const ENEMY_WEIGHTS = {
   GULPER:     { base: 2,  perFloor: 1, minFloor: 6 },  // projectile-eating mid-tank — slow chaser with front-facing mouth-cone that destroys player shots and stacks; at max stacks belches a fat slow projectile (anti-spam, compositional — counter via flank/melee/burst, distinct from MAGNETON which only bends)
   WATCHER:    { base: 2,  perFloor: 1, minFloor: 6 },  // sweeping vision-cone lighthouse — stationary, cone rotates continuously at WATCHER_SWEEP_RATE; on player-cross it locks+telegraphs+fires a hitscan beam (anti-camping, anti-static-positioning — counter by perpendicular crossings, dash through telegraph, or LOS break, distinct from RESONATOR which AIMS the cone)
   ARCHITECT:  { base: 2,  perFloor: 1, minFloor: 7 },  // stationary fortifier — atk=0, periodically converts a FLOOR tile BETWEEN itself and the perceived target into a temporary T.WALL (auto-decays in 12s), creating cover. Counterplay: kill the architect, break LOS, or move ONTO the targeted tile to cancel the build (between-geometry rule prevents telefrag-class griefing)
+  NULLIFIER:  { base: 1,  perFloor: 1, minFloor: 6 },  // stationary anti-hackware specialist — atk=0, projects persistent radial jam aura (NULLIFIER_FIELD_R tiles); inside aura, player.hackwareCooldown does NOT tick AND activateHackware fails. First mob whose entire role is anti-hackware (gap fill: SAPPER drains TIMED BOOSTS, DISRUPTOR drops decaying fields). Counterplay: leave aura OR kill the mob (stun also defuses, since stunTimer > 0 returns early before aiNullifier and gates updateNullifierJam too)
 };
 const ENEMY_TYPES_LIST = Object.keys(ENEMY_WEIGHTS);
 
@@ -9261,6 +9404,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     case 'GULPER':    hp=90; atk=14; spd=1.4; xpVal=28; colour='#bbdd33'; break;
     case 'WATCHER':   hp=70; atk=12; spd=0;   xpVal=26; colour='#ffee66'; break;
     case 'ARCHITECT': hp=80; atk=0;  spd=0;   xpVal=30; colour='#aa6633'; break;
+    case 'NULLIFIER': hp=70; atk=0;  spd=0;   xpVal=24; colour='#cc66dd'; break;
     case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
     case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
     case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
@@ -9535,12 +9679,20 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // mob died, etc.). Same defensive pattern as WATCHER's _wFired.
     e._aCommitted = false;
   }
+  if (type==='NULLIFIER') {
+    // Stationary anti-hackware specialist (atk=0, spd=0). The aura is
+    // intrinsic to the mob (no separate field object) — updateNullifierJam
+    // walks live NULLIFIERs each frame and sets player.hackwareJammed.
+    // _nlPulse drifts so clustered spawns don't pulse in lock-step (visual
+    // only, no gameplay coupling). Random offset on init.
+    e._nlPulse = Math.random() * TWO_PI;
+  }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && type !== 'NULLIFIER' && floorNum >= 3 && Math.random() < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -11433,6 +11585,93 @@ function drawDisruptionFields(camX, camY) {
   }
 }
 
+// ─── NULLIFIER Jam Aura (anti-hackware) ──────────────────────────────────
+// Persistent radial aura tied to NULLIFIER mob lifetime. Inside any live
+// NULLIFIER's NULLIFIER_FIELD_R-tile aura: player.hackwareCooldown does NOT
+// tick down (gate on the player.update line that decrements the counter)
+// AND activateHackware() bails out (gate added to the canonical guard at
+// the top of activateHackware in src/content.js — emits an audio cue +
+// "JAMMED" floater for player feedback).
+//
+// Two consumers, two access paths:
+//   - Cooldown-tick gate (player.update) uses the CACHED flag
+//     player.hackwareJammed, set by updateNullifierJam each frame. The
+//     flag is one frame stale relative to player position (call order is
+//     player.update → ... → updateNullifierJam, mirroring DISRUPTOR's
+//     existing pattern). For cooldown ticking that's invisible — losing
+//     1/60s of cooldown progress on a 10s cooldown is 0.17%.
+//   - Activation gate (activateHackware) calls isPlayerInNullifierAura
+//     DIRECTLY for a FRESH same-frame check. Staleness here would let a
+//     player who steps into an aura on the same frame as pressing the
+//     hackware key sneak an activation past the gate (boundary exploit;
+//     called out by gpt-5.3-codex r1 + gpt-5.5 r1 of the NULLIFIER PR).
+//     Fresh compute eliminates the 1-frame window entirely.
+//
+// Why iterating the live `enemies` array rather than a separate module-
+// level array (compare DISRUPTOR's disruptionFields): the aura is
+// intrinsic to the mob — there's no decay, no drift, no independent
+// lifetime. Iterating enemies adds one player.x/y distance check per
+// frame to the existing per-frame walk; storing a parallel field array
+// would require sync on spawn, death, room transitions, and floor
+// changes, with no benefit. Same architectural choice as MAGNETON.
+//
+// Stun gating: stunTimer === 0 is the live-aura precondition. The early
+// return at the top of Enemy.update (stunTimer > 0) already prevents
+// aiNullifier from running, but the jam GATE is checked here OUTSIDE
+// the AI dispatch — without the explicit stunTimer check this loop
+// would happily set hackwareJammed for stunned NULLIFIERs that aren't
+// running their AI. EMP_BURST/EMP_LINE/SHOCK should defuse the jam, so
+// this gate is not optional.
+//
+// isPlayerDamageImmune gate: matches DISRUPTOR's precedent at line ~11519
+// (callout from claude-opus-4.7 r1 of the NULLIFIER PR). A dashing or
+// cloaked player gets a clean pass — dash-through becomes legitimate
+// counterplay, mirroring how DISRUPTOR fields work. Note: PHASE_CLOAK is
+// itself a hackware, so you CANNOT pop cloak inside an aura (the
+// activateHackware gate fires first); pre-cloaking outside the aura
+// IS the intended counterplay vector.
+//
+// Cross-room semantics: the aura is GLOBAL (no room gating). A NULLIFIER
+// in a neighbouring room can jam through walls if you're within radius.
+// Intentional and matches the convention for stationary field-emitters
+// (DISRUPTOR fields, gravity wells, MAGNETON fields all reach through
+// walls). Floor-transition wipe of `enemies` cleans up cross-floor leak.
+
+/**
+ * Pure boolean check — is the player currently inside any live unstunned
+ * NULLIFIER's aura, AND not damage-immune (dash i-frames / cloak)?
+ * Called from BOTH updateNullifierJam (caches the result on the player
+ * for the cooldown-tick gate) AND activateHackware (fresh same-frame
+ * check, eliminates 1-frame staleness for the activation path).
+ *
+ * @param {any} player
+ * @returns {boolean}
+ */
+function isPlayerInNullifierAura(player) {
+  if (!player) return false;
+  if (isPlayerDamageImmune()) return false;
+  const r2 = NULLIFIER_FIELD_R * NULLIFIER_FIELD_R;
+  const px = player.x, py = player.y;
+  for (const e of enemies) {
+    if (!e || e.dead) continue;
+    if (e.type !== 'NULLIFIER') continue;
+    if (e.stunTimer && e.stunTimer > 0) continue;
+    const vx = e.x - px, vy = e.y - py;
+    if (vx * vx + vy * vy < r2) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {any} [dt]
+ * @param {any} [player]
+ */
+function updateNullifierJam(dt, player) {
+  void dt;
+  player.hackwareJammed = isPlayerInNullifierAura(player);
+}
+
+
 // ─── Frost Patches (CRYOPHAGE area-denial tiles) ──────────────────────────────
 // Each patch is { x, y, age, maxAge, tickCd, dmg, dead }.
 // Lifecycle: spawned at telegraph commit in aiCryophage; ticks down per
@@ -11686,6 +11925,7 @@ class Player {
   /** @type {any} */ gravityPullActive;
   /** @type {any} */ hackware;
   /** @type {any} */ hackwareCooldown;
+  /** @type {any} */ hackwareJammed;
   /** @type {any} */ hitsBlocked;
   /** @type {any} */ hp;
   /** @type {any} */ invincibleTimer;
@@ -11772,6 +12012,7 @@ class Player {
     // resets it each frame. dashTimer bypasses (mirrors toxic/disruption).
     this._tetherSlowFactor=1;
     this.disruptionFieldActive=false; // true while inside a disruption field
+    this.hackwareJammed=false;        // true while inside a NULLIFIER aura — blocks cooldown ticking AND activateHackware
     this.gravityPullActive=false;     // true while being pulled by gravity well
     // Player status effect debuffs (applied by enemy attacks)
     this.burnTimer=0; this.burnDps=0;  // burn DoT from enemy melee/attacks
@@ -12669,8 +12910,15 @@ class Player {
     // this tick the timer would never expire and the immunity would
     // be permanent after the first dash.
     this._dashIFrameTimer = Math.max(0, (this._dashIFrameTimer || 0) - dt);
-    // Hackware cooldown + cloak timer (frozen by disruption fields)
-    if (!this.disruptionFieldActive) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
+    // Hackware cooldown + cloak timer (frozen by disruption fields AND by
+    // NULLIFIER jam aura — the player.hackwareJammed flag is set by
+    // updateNullifierJam each frame BEFORE this player.update tick reads
+    // it, mirroring the disruptionFieldActive call ordering in the main
+    // game loop). Without the jam gate, NULLIFIERs would still BLOCK
+    // activation but the cooldown would tick down inside the aura, so a
+    // patient player could pre-bake a fresh activation by camping just
+    // outside, then dashing in to fire — defeating the point of the mob.
+    if (!this.disruptionFieldActive && !this.hackwareJammed) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
     if (this.cloakTimer > 0) {
       this.cloakTimer -= dt;
       if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#cc44ff', 1);
