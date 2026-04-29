@@ -208,6 +208,15 @@ const game = {
    */
   loadFloor(n, savedModifier) {
     this.floor=n;
+    // Per-biome damage flash colour: cached once per floor so the entities.js
+    // hot-path draw code (Enemy.draw + Player.draw at the `flashTimer>0?...`
+    // ternaries) can read a property instead of routing through NEON.biomes
+    // + BIOME_PALETTES on every flash. Falls back to '#ffffff' if palettes.js
+    // hasn't loaded — preserves legacy white-flash behaviour. See
+    // src/data/palettes.js currentDamageFlash() for the resolver.
+    this._damageFlash = (typeof NEON !== 'undefined' && NEON.palettes && NEON.palettes.currentDamageFlash)
+      ? NEON.palettes.currentDamageFlash(n)
+      : '#ffffff';
     // UNCHAINED #34: track current biome index and bump meta.deepestBiome on
     // floor entry so death respawn returns to the deepest biome start.
     if (typeof NEON !== 'undefined' && NEON.biomes) {
