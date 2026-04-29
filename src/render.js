@@ -178,17 +178,14 @@ function siphonHudSuffix(player) {
  * @param {any} player
  */
 function getCamera(player) {
-  // settings.worldZoom is the user-facing playfield zoom multiplier.
-  // The world is rendered inside a `ctx.scale(zoom, zoom)` transform,
-  // so the visible viewport in WORLD-pixel space is W/zoom × H/zoom.
-  // Camera math centres the player against that effective viewport
-  // and clamps against the world bounds using the same effective size.
-  // Falls back to 1.0 if settings is partially populated (defensive —
-  // matches the snap-to-step + mobile-default loader path in
-  // platform.js, but guards against a transient pre-load() read).
-  const zoom = (settings && settings.worldZoom) || 1;
-  const viewW = W / zoom;
-  const viewH = H / zoom;
+  // Under the global UI-zoom architecture, W and H are the EFFECTIVE
+  // logical canvas size (rawW / worldZoom × rawH / worldZoom). The
+  // visible viewport in WORLD-pixel space is exactly W × H — no
+  // per-zoom divide here. The `ctx.scale(worldZoom)` wrap at the top
+  // of every frame in render() blows the smaller logical area up to
+  // fill the canvas backing.
+  const viewW = W;
+  const viewH = H;
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
   // Allow camera overscroll near edges so player remains visible under minimap / touch controls
   const leftPad = 5 * TILE;
@@ -671,14 +668,15 @@ function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
  */
 function drawWorld(dungeon, camX, camY) {
   const pal = currentBiomePalette();
-  // Effective viewport in world-pixel space = W/zoom × (H-hudH)/zoom.
-  // Without dividing by zoom here, the tile loop traverses the full
-  // unzoomed canvas area — at zoom 2.5× that's ~6.25× more tiles and
-  // decor cells than are actually visible, exactly the perf penalty
-  // mobile (the worldZoom feature's primary audience) cannot afford.
-  const _wz = (settings && settings.worldZoom) || 1;
-  const _viewWTiles = Math.ceil((W / _wz) / TILE);
-  const _viewHTiles = Math.ceil(((H - layout.hudH) / _wz) / TILE);
+  // Effective viewport in world-pixel space = W × (H - hudH). Under
+  // the global UI-zoom architecture, W and H are already the
+  // post-zoom logical canvas size (rawW/H divided by worldZoom in
+  // resize()), so the tile loop visits exactly the visible area at
+  // any zoom level — no per-zoom divide here. Mobile (the worldZoom
+  // feature's primary audience) gets the same culling efficiency at
+  // any zoom step because the bound shrinks with W/H automatically.
+  const _viewWTiles = Math.ceil(W / TILE);
+  const _viewHTiles = Math.ceil((H - layout.hudH) / TILE);
   const startX=Math.max(0,Math.floor(camX/TILE)-1);
   const startY=Math.max(0,Math.floor(camY/TILE)-1);
   const endX=Math.min(MAP_W,startX+_viewWTiles+2);
@@ -2540,17 +2538,13 @@ function drawThreatIndicators(camX, camY) {
   if (!_RG.player.perks.THREAT_SENSE) return;
   const px = _RG.player.x, py = _RG.player.y;
   const margin = 14;
-  // Threat indicators run OUTSIDE the world ctx.scale transform, but
-  // their concept of "on-screen" must use the EFFECTIVE viewport
-  // (W/zoom × (H-hudH)/zoom in world-pixel space). At zoom > 1 the
-  // visible world is smaller than W×H, so without /zoom here, enemies
-  // outside the zoomed-in view get suppressed (false-clear) and the
-  // perk silently stops warning the player about half its detection
-  // range. Arrow projection mirrors the ctx.scale by multiplying the
-  // world-px deltas by zoom before clamping into canvas-px range.
-  const _wz = (settings && settings.worldZoom) || 1;
+  // Threat indicators run inside the global ctx.scale(worldZoom) wrap
+  // (along with everything else in render()), so the visible viewport
+  // in WORLD-pixel space is exactly W × (H - hudH) — no per-zoom
+  // divide here. Arrow projection is plain `e.x*TILE - camX` (logical
+  // px), no per-zoom multiply.
   const viewL = camX / TILE, viewT = camY / TILE;
-  const viewR = (camX + W / _wz) / TILE, viewB = (camY + (H - layout.hudH) / _wz) / TILE;
+  const viewR = (camX + W) / TILE, viewB = (camY + H - layout.hudH) / TILE;
   const range = 18;
 
   for (const e of enemies) {
@@ -2564,12 +2558,10 @@ function drawThreatIndicators(camX, camY) {
     // Skip enemies already on screen
     if (e.x > viewL + 1 && e.x < viewR - 1 && e.y > viewT + 1 && e.y < viewB - 1) continue;
 
-    // World-px deltas multiplied by zoom = canvas-px coordinates,
-    // matching the ctx.scale projection the world block performs
-    // implicitly. Without * _wz, arrows clustered toward the centre
-    // at high zoom rather than the screen edges.
-    const sx = (e.x * TILE - camX) * _wz;
-    const sy = (e.y * TILE - camY) * _wz;
+    // World-px deltas in logical-canvas space — no zoom multiply
+    // because the global ctx.scale wrap handles the upscale.
+    const sx = (e.x * TILE - camX);
+    const sy = (e.y * TILE - camY);
     // Clamp to screen edges
     const cx = clamp(sx, margin, W - margin);
     const cy = clamp(sy, margin, H - layout.hudH - margin);

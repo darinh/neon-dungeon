@@ -2,7 +2,24 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+// W/H are the EFFECTIVE LOGICAL canvas size — what every renderer + layout
+// path treats as the drawable area. They equal `rawW / worldZoom` and
+// `rawH / worldZoom` respectively, where rawW/rawH are the canvas backing
+// dimensions derived from the viewport + gameScale (engine/viewport.js).
+//
+// `worldZoom` is the user-facing global UI scale (browser-CTRL-+ analog).
+// At the top of every per-frame render the canvas context is wrapped in
+// `ctx.scale(worldZoom, worldZoom)`, so the smaller logical W×H is blown
+// up to fill the full canvas backing. Pointer/touch input is divided by
+// worldZoom at the host boundary (toLogical/mousemove) so every consumer
+// sees coordinates already in logical (post-zoom) space — no per-site
+// `/worldZoom` corrections required anywhere in the codebase.
 let W = 900, H = 600;
+// Raw canvas backing size (= `vw / gameScale`). Pre-zoom. Used by
+// resize() and the host-side input normalization to derive logical W/H
+// + divide pointer input by worldZoom. Stored so the resize re-fire on
+// stepper change can recompute logical W/H without re-querying the DOM.
+let rawW = 900, rawH = 600;
 let gameScale = 1;
 const TILE = 32;
 const MAP_W = 80, MAP_H = 50;
@@ -271,10 +288,24 @@ function resize() {
   // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
   gameScale = _vp.computeScale(vw, vh);
   const _sz = _vp.computeLogicalSize(vw, vh, gameScale);
-  W = _sz.W;
-  H = _sz.H;
-  canvas.width = W;
-  canvas.height = H;
+  // rawW/rawH = canvas backing size (pre-worldZoom logical). The canvas
+  // backing always matches the gameScale-derived raw size — worldZoom
+  // only affects what we expose as W/H to the rendering and layout code,
+  // and the `ctx.scale(worldZoom)` wrap at the top of every frame
+  // upscales the smaller logical area to fill this backing.
+  rawW = _sz.W;
+  rawH = _sz.H;
+  canvas.width  = rawW;
+  canvas.height = rawH;
+  // Effective logical W/H = raw / worldZoom. At worldZoom = 1.0 they
+  // equal rawW/rawH (no behaviour change); at 2.0× they're half-size,
+  // so menu/HUD layout sees a smaller canvas and the global ctx.scale
+  // wrap blows it back up — exact CTRL+ analog. Defensive: settings
+  // may not be fully populated on the very first resize before load();
+  // fall back to 1.0 in that case.
+  const _wz = (settings && settings.worldZoom) || 1;
+  W = Math.max(1, Math.round(rawW / _wz));
+  H = Math.max(1, Math.round(rawH / _wz));
   scale = gameScale;
   offX = 0;
   offY = 0;
@@ -292,7 +323,22 @@ function resize() {
   // window resize / orientation change can't clobber a user's
   // explicit zoom choice. See settings.applyMobileFirstDefaults
   // for the deferred-default rationale.
+  const _wzBefore = (settings && settings.worldZoom) || 1;
   settings.applyMobileFirstDefaults();
+  const _wzAfter = (settings && settings.worldZoom) || 1;
+  // Init-order race fix (codex review): applyMobileFirstDefaults can
+  // bump worldZoom from 1.0 → 1.5 on a fresh-install compact device.
+  // The W/H + updateLayout above used the PRE-bump zoom, so without
+  // this re-compute the very first frame would render with the new
+  // ctx.scale(1.5) wrap but stale 1.0×-sized logical bounds — menus
+  // overflow off-canvas. Recompute only on actual change so the
+  // common-case (no bump, or non-first resize that early-returns
+  // inside applyMobileFirstDefaults) stays a single-pass.
+  if (_wzAfter !== _wzBefore) {
+    W = Math.max(1, Math.round(rawW / _wzAfter));
+    H = Math.max(1, Math.round(rawH / _wzAfter));
+    updateLayout();
+  }
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
 // resize() + event listener registered in Boot section (after all defs are ready)
@@ -399,8 +445,16 @@ let lastKey = '';
 let nameEntryTap = null;
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
-  mouse.x = (e.clientX - r.left) * canvas.width / r.width;
-  mouse.y = (e.clientY - r.top)  * canvas.height / r.height;
+  // Pointer events arrive in CSS px → map to canvas BACKING px → then
+  // divide by worldZoom to land in LOGICAL coordinates (the same space
+  // every renderer + layout path operates in). With this single
+  // normalization site, no consumer in the codebase needs a
+  // `/worldZoom` correction — every `mouse.x`/`mouse.y` read is
+  // already pre-zoomed. Defensive: settings may be momentarily
+  // un-populated; fall back to 1.0.
+  const _wz = (settings && settings.worldZoom) || 1;
+  mouse.x = (e.clientX - r.left) * canvas.width  / r.width  / _wz;
+  mouse.y = (e.clientY - r.top)  * canvas.height / r.height / _wz;
 });
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
@@ -469,7 +523,13 @@ const _touchHelpers = NEON.touch;
  * @returns {[number, number]}
  */
 function toCanvas(clientX, clientY) {
-  return _touchHelpers.toCanvas(clientX, clientY, canvas);
+  // Canvas-internal coords first → divide by worldZoom to land in
+  // logical (post-global-scale-wrap) coordinates. Single host-side
+  // normalization site so every touch handler downstream sees mouse-
+  // compatible logical coords (matches the mousemove handler exactly).
+  const [cx, cy] = _touchHelpers.toCanvas(clientX, clientY, canvas);
+  const _wz = (settings && settings.worldZoom) || 1;
+  return [cx / _wz, cy / _wz];
 }
 
 /**
