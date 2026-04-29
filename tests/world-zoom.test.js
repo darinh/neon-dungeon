@@ -1,18 +1,31 @@
 'use strict';
-// World zoom — playfield-only scale multiplier applied to the world
-// canvas via `ctx.scale(zoom, zoom)` in renderPlaying. Mobile-first:
-// the auto-fit `gameScale` clamps tiles to ~14–30 CSS-px on the
-// smaller axis, which is uncomfortably small on phones; this setting
-// lets users zoom in further. HUD chrome (drawHUD, minimap, status
-// bar, boss bar, intro/death overlays, danger vignette) sits OUTSIDE
-// the scaled transform so it remains at native (1.0) scale.
+// World zoom — GLOBAL UI scale (browser CTRL-+ analog). Repurposed from
+// the playfield-only multiplier (PR #388, v384) to a uniform global
+// scale that wraps everything: main menus, loot choices, HUD, world,
+// pause/death overlays, base text size, etc. Mobile-first 1.5×
+// default still applies. textScale stacks multiplicatively (it
+// multiplies font px BEFORE we draw → final on-screen text is
+// `baseSize * textScale * worldZoom`).
 //
-// game.js / render.js / platform.js / content.js are all browser-
-// coupled (no UMD exports), so we can't exercise the runtime state
-// machine under node:test. Instead these tests assert the structural
-// invariants any working implementation must satisfy. Pattern matches
-// the canonical structural-test scaffold used across the codebase
-// (boss-intro, boss-death, NULLIFIER, etc.).
+// Architecture, single source of truth:
+//   1. resize() in src/platform.js sets `rawW/rawH` from the viewport
+//      + gameScale, then sets effective `W = round(rawW / worldZoom)`,
+//      `H = round(rawH / worldZoom)`. Canvas backing stays at rawW×rawH.
+//   2. render() in src/game.js wraps the ENTIRE per-frame draw in a
+//      single `ctx.save() + ctx.scale(worldZoom, worldZoom) + ... +
+//      ctx.restore()` block — every state (MENU, PLAYING, HUB, …)
+//      runs inside.
+//   3. Pointer/touch input is divided by worldZoom at the host
+//      boundary (mousemove + toCanvas in src/platform.js) so every
+//      consumer sees mouse.x/y already in LOGICAL (post-zoom)
+//      coordinates. NO per-site `/worldZoom` correction anywhere.
+//
+// game.js / render.js / platform.js / content.js / entities.js are all
+// browser-coupled (no UMD exports), so we can't exercise the runtime
+// state machine under node:test. Instead these tests assert the
+// structural invariants any working implementation must satisfy.
+// Pattern matches the canonical structural-test scaffold used across
+// the codebase (boss-intro, boss-death, NULLIFIER, etc.).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,26 +44,39 @@ const PLATFORM = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const ENTITIES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
+);
 
+// stripComments must only strip FULL-LINE `//` comments. The aggressive
+// pattern `/(^|[^:\\])\/\/[^\n]*/g` over-strips real code after `//`
+// inside string literals (e.g. `'x//y'` → `'x`). See stored memory
+// `structural test bypass classes`.
 /** @param {string} src */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
 }
 
 const GAME_NC = stripComments(GAME);
 const RENDER_NC = stripComments(RENDER);
 const PLATFORM_NC = stripComments(PLATFORM);
 const CONTENT_NC = stripComments(CONTENT);
+const ENTITIES_NC = stripComments(ENTITIES);
+
+/** @param {string} src @param {number} fnIdx Returns the brace-balanced body of the function whose `{` opens at-or-after fnIdx. */
+function extractBody(src, fnIdx) {
+  const open = src.indexOf('{', fnIdx);
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}') { depth--; if (depth === 0) return src.slice(fnIdx, j + 1); }
+  }
+  return '';
+}
 
 // ─── Step list ──────────────────────────────────────────────────────────────
 
 test('WORLD_ZOOM_STEPS is declared in platform.js with a finite, sorted, mobile-friendly range', () => {
-  // Pin the canonical step list. Without it the stepper UI can't cycle
-  // through values and load() snap-to-nearest can't normalise persisted
-  // values. The list must include 1.0 (the legacy / no-zoom default)
-  // and at least one step ≥ 2.0 (mobile genuinely needs the high end —
-  // a phone in compact mode at 2× zoom is the difference between
-  // playable and squinting).
   const m = PLATFORM_NC.match(/const\s+WORLD_ZOOM_STEPS\s*=\s*\[([^\]]+)\]/);
   assert.ok(m, 'platform.js must declare `const WORLD_ZOOM_STEPS = [...]` for the worldZoom stepper');
   const values = m[1].split(',').map(s => Number(s.trim())).filter(v => Number.isFinite(v));
@@ -61,15 +87,10 @@ test('WORLD_ZOOM_STEPS is declared in platform.js with a finite, sorted, mobile-
   const max = Math.max(...values);
   assert.ok(max >= 2.0,
     `WORLD_ZOOM_STEPS top step must be ≥ 2.0 (mobile genuinely needs the high end); got ${max}`);
-  // Steps must be strictly ascending (the stepper UI walks the list
-  // forward / backward; an out-of-order entry breaks the "wraps to
-  // start" semantic).
   for (let i = 1; i < values.length; i++) {
     assert.ok(values[i] > values[i - 1],
       `WORLD_ZOOM_STEPS must be strictly ascending; got ${values.join(', ')}`);
   }
-  // All steps must be positive (a zero or negative zoom would invert /
-  // collapse the playfield — would crash ctx.scale or render nothing).
   for (const v of values) {
     assert.ok(v > 0, `WORLD_ZOOM_STEPS entries must be positive; got ${v}`);
   }
@@ -78,422 +99,496 @@ test('WORLD_ZOOM_STEPS is declared in platform.js with a finite, sorted, mobile-
 // ─── Settings field ─────────────────────────────────────────────────────────
 
 test('settings object declares worldZoom field with a default of 1.0', () => {
-  // The field must exist as a numeric property with a default of 1.0
-  // (the legacy / no-zoom value). The mobile-first override happens
-  // INSIDE load() / resetAll() based on viewport width — the schema
-  // default is the "everywhere" baseline.
   assert.match(PLATFORM_NC, /\bworldZoom:\s*1\.0,/,
     'settings literal must initialise worldZoom: 1.0,');
-  // Type signature must include worldZoom:number so the typecheck
-  // catches accidental string / undefined assignments. JSDoc lives
-  // in /** ... */ blocks, so we read the COMMENTED source for this
-  // check (PLATFORM_NC has comments stripped).
   assert.match(PLATFORM, /worldZoom\s*:\s*number/,
     'settings JSDoc type signature must include `worldZoom:number`');
 });
 
-test('settings.load() snaps worldZoom to WORLD_ZOOM_STEPS; first-run default is deferred to applyMobileFirstDefaults()', () => {
-  // The load() path must (a) snap a persisted value to the nearest
-  // canonical step and clear the deferred-default flag, and (b) when
-  // no persisted value exists, leave worldZoom at the schema default
-  // (1.0) AND leave the _worldZoomFromDefault flag at TRUE so the
-  // mobile-first override can fire later from applyMobileFirstDefaults
-  // — called by resize() AFTER W/H have been populated. This avoids
-  // the load-order race where a top-level settings.load() reads W
-  // before resize() runs (W stays at its initial 900, the W < 700
-  // mobile-default check always fails, and EVERY first-time mobile
-  // user gets 1.0× instead of the intended 1.5×).
+test('settings.load() snaps worldZoom to WORLD_ZOOM_STEPS; first-run default deferred to applyMobileFirstDefaults()', () => {
   assert.match(PLATFORM_NC, /raw\.worldZoom[\s\S]{0,80}?snapToSteps\(\s*raw\.worldZoom\s*,\s*WORLD_ZOOM_STEPS\s*\)/,
     'settings.load() must snap raw.worldZoom to WORLD_ZOOM_STEPS');
-  // The persisted-value branch must clear the deferred-default flag
-  // (an explicit choice exists, don't override it later).
   assert.match(PLATFORM_NC, /this\.worldZoom\s*=\s*snapToSteps[\s\S]{0,120}?this\._worldZoomFromDefault\s*=\s*false/,
     'settings.load() must clear _worldZoomFromDefault when a persisted worldZoom exists (explicit user choice)');
 });
 
 test('settings.applyMobileFirstDefaults uses layout.compact and is idempotent (one-shot, early-return BEFORE compact read)', () => {
-  // Mobile-first applicator runs ONCE, after the first real resize().
-  // Subsequent calls (window resize, orientation change) must no-op so
-  // a user's explicit zoom choice is never clobbered.
   assert.match(PLATFORM_NC, /\bapplyMobileFirstDefaults\s*\(\s*\)\s*\{/,
     'settings.applyMobileFirstDefaults() method must be defined');
-  // Extract the function body via brace-depth so we can assert
-  // POSITIONAL ordering of internal statements (gpt-5.5 r2 hardening:
-  // a presence-only check would not catch a contributor moving the
-  // compact branch ABOVE the flag guard, which would clobber explicit
-  // 1.0× choices on subsequent resizes).
   const fnIdx = PLATFORM_NC.search(/applyMobileFirstDefaults\s*\(\s*\)\s*\{/);
-  assert.ok(fnIdx >= 0, 'must locate applyMobileFirstDefaults');
-  const open = PLATFORM_NC.indexOf('{', fnIdx);
-  let depth = 0;
-  let bodyEnd = -1;
-  for (let j = open; j < PLATFORM_NC.length; j++) {
-    if (PLATFORM_NC[j] === '{') depth++;
-    else if (PLATFORM_NC[j] === '}') { depth--; if (depth === 0) { bodyEnd = j + 1; break; } }
-  }
-  assert.ok(bodyEnd > 0, 'must extract applyMobileFirstDefaults body');
-  const body = PLATFORM_NC.slice(fnIdx, bodyEnd);
-  // Must early-return when the deferred-default flag is false.
+  const body = extractBody(PLATFORM_NC, fnIdx);
+  assert.ok(body, 'must extract applyMobileFirstDefaults body');
   assert.match(body, /if\s*\(\s*!\s*this\._worldZoomFromDefault\s*\)\s*return/,
     'applyMobileFirstDefaults must early-return when _worldZoomFromDefault is false (idempotent / no clobber)');
-  // The early-return must precede the compact read AND the worldZoom
-  // assignment — otherwise compact resizes clobber explicit / reset
-  // 1.0× choices.
   const earlyReturnIdx = body.search(/if\s*\(\s*!\s*this\._worldZoomFromDefault\s*\)\s*return/);
   const compactReadIdx = body.search(/layout\s*&&\s*layout\.compact/);
   const worldZoomSetIdx = body.search(/this\.worldZoom\s*=\s*1\.5/);
   assert.ok(earlyReturnIdx >= 0 && compactReadIdx >= 0 && worldZoomSetIdx >= 0,
     'applyMobileFirstDefaults body must contain early-return + compact read + worldZoom set');
   assert.ok(earlyReturnIdx < compactReadIdx,
-    'applyMobileFirstDefaults early-return MUST appear BEFORE the layout.compact read (otherwise compact resizes clobber explicit choices)');
+    'applyMobileFirstDefaults early-return MUST appear BEFORE the layout.compact read');
   assert.ok(earlyReturnIdx < worldZoomSetIdx,
     'applyMobileFirstDefaults early-return MUST appear BEFORE the worldZoom assignment');
-  // Compact branch: must set worldZoom to 1.5×.
-  // Latch — flag flips to false even on the non-compact path so a
-  // window-resize-into-compact later doesn't surprise-update the
-  // user's explicit 1.0× preference.
   assert.match(body, /this\._worldZoomFromDefault\s*=\s*false/,
     'applyMobileFirstDefaults must latch _worldZoomFromDefault to false (one-shot)');
 });
 
 test('resize() invokes settings.applyMobileFirstDefaults AFTER updateLayout (deferred default needs layout.compact)', () => {
-  // Without this call, the deferred mobile-first default never runs
-  // and first-time mobile users get 1.0× — the bug R1 reviewers
-  // flagged as Critical. Order matters: applyMobileFirstDefaults
-  // reads layout.compact, which is set by updateLayout. Calling them
-  // in reverse order silently breaks the compact predicate.
   const fnIdx = PLATFORM_NC.search(/function\s+resize\s*\(\s*\)\s*\{/);
-  assert.ok(fnIdx >= 0, 'must locate function resize()');
-  const open = PLATFORM_NC.indexOf('{', fnIdx);
-  let depth = 0;
-  let bodyEnd = -1;
-  for (let j = open; j < PLATFORM_NC.length; j++) {
-    if (PLATFORM_NC[j] === '{') depth++;
-    else if (PLATFORM_NC[j] === '}') { depth--; if (depth === 0) { bodyEnd = j + 1; break; } }
-  }
-  assert.ok(bodyEnd > 0, 'must extract resize() body');
-  const body = PLATFORM_NC.slice(fnIdx, bodyEnd);
-  assert.match(body, /settings\.applyMobileFirstDefaults\s*\(\s*\)/,
-    'resize() must call settings.applyMobileFirstDefaults()');
+  const body = extractBody(PLATFORM_NC, fnIdx);
+  assert.ok(body, 'must extract resize() body');
   const updateLayoutIdx = body.search(/\bupdateLayout\s*\(\s*\)/);
   const applyDefaultsIdx = body.search(/settings\.applyMobileFirstDefaults\s*\(\s*\)/);
   assert.ok(updateLayoutIdx >= 0, 'resize() must call updateLayout()');
   assert.ok(applyDefaultsIdx >= 0, 'resize() must call settings.applyMobileFirstDefaults()');
   assert.ok(updateLayoutIdx < applyDefaultsIdx,
-    'updateLayout() MUST be called BEFORE settings.applyMobileFirstDefaults() (the applicator reads layout.compact, which updateLayout populates)');
+    'updateLayout() MUST be called BEFORE settings.applyMobileFirstDefaults()');
 });
 
 test('settings.load() restores the persisted _worldZoomFromDefault flag (protects accepted-default users)', () => {
-  // gpt-5.5 r2 hardening: without this load branch, a user who
-  // explicitly accepted the schema 1.0× default last session would
-  // come back with the flag at the schema TRUE, and the next mobile
-  // resize would surprise-bump them to 1.5×. The persisted flag is
-  // the ONLY mechanism that protects accepted-default users from
-  // re-applying the deferred default.
   assert.match(PLATFORM_NC, /typeof\s+raw\._worldZoomFromDefault\s*===\s*'boolean'[\s\S]{0,80}?this\._worldZoomFromDefault\s*=\s*raw\._worldZoomFromDefault/,
-    'settings.load() must read raw._worldZoomFromDefault (when boolean) into this._worldZoomFromDefault — protects users who accepted the schema 1.0× default from re-applying the mobile-first override');
+    'settings.load() must read raw._worldZoomFromDefault into this._worldZoomFromDefault');
 });
 
-test('settings.save() persists worldZoom + _worldZoomFromDefault flag, settings.resetAll() restores the mobile-aware default', () => {
-  // Persistence: save() must include worldZoom + the deferred-default
-  // tracking flag so a returning user's explicit choice survives
-  // reload AND a returning first-time-default user doesn't get the
-  // mobile-first override re-applied surprisingly.
+test('settings.save() persists worldZoom + _worldZoomFromDefault, settings.resetAll() restores mobile-aware default', () => {
   assert.match(PLATFORM_NC, /worldZoom:\s*this\.worldZoom/,
     'settings.save() payload must include `worldZoom: this.worldZoom`');
   assert.match(PLATFORM_NC, /_worldZoomFromDefault:\s*this\._worldZoomFromDefault/,
-    'settings.save() payload must include `_worldZoomFromDefault` so explicit-choice tracking survives reload');
-  // resetAll() must use layout.compact (same predicate as
-  // applyMobileFirstDefaults) so RESET on a phone keeps the playfield
-  // comfortably readable.
+    'settings.save() payload must include `_worldZoomFromDefault`');
   assert.match(PLATFORM_NC, /resetAll\(\)\s*\{[\s\S]*?layout\s*&&\s*layout\.compact[\s\S]{0,120}?this\.worldZoom\s*=\s*[^;]*\?\s*1\.5\s*:\s*1\.0/,
-    'settings.resetAll() must apply the layout.compact-aware default (compact → 1.5, else → 1.0) — matches applyMobileFirstDefaults to keep RESET safe on phones');
-  // RESET counts as an explicit user action — flag must clear so the
-  // deferred default doesn't re-fire on a subsequent resize.
+    'settings.resetAll() must apply the layout.compact-aware default (compact → 1.5, else → 1.0)');
   assert.match(PLATFORM_NC, /resetAll\(\)\s*\{[\s\S]*?this\._worldZoomFromDefault\s*=\s*false/,
-    'settings.resetAll() must clear _worldZoomFromDefault (RESET is an explicit user action)');
+    'settings.resetAll() must clear _worldZoomFromDefault');
 });
 
-// ─── Camera math (render.js getCamera) ─────────────────────────────────────
+// ─── NEW: effective W/H = raw / worldZoom (split done in resize) ──────────────
 
-test('getCamera reads settings.worldZoom and uses W/zoom × H/zoom as the effective viewport', () => {
-  // Without zoom in the camera math, edge-clamp uses the full canvas
-  // size — at zoom > 1 the player would walk into edges that the
-  // visible viewport already shows blank. Pin the structural shape:
-  // a `zoom` local sourced from settings.worldZoom AND viewW/viewH
-  // locals computed as W/zoom and H/zoom.
-  const fnIdx = RENDER_NC.search(/\bfunction\s+getCamera\s*\(/);
-  assert.ok(fnIdx >= 0, 'render.js must define function getCamera');
-  // Find the function body — extract via brace-depth from the opening {
-  const open = RENDER_NC.indexOf('{', fnIdx);
-  let depth = 0;
-  let bodyEnd = -1;
-  for (let j = open; j < RENDER_NC.length; j++) {
-    if (RENDER_NC[j] === '{') depth++;
-    else if (RENDER_NC[j] === '}') { depth--; if (depth === 0) { bodyEnd = j + 1; break; } }
-  }
-  assert.ok(bodyEnd > 0, 'must extract getCamera body via brace-depth');
-  const body = RENDER_NC.slice(fnIdx, bodyEnd);
+test('resize() computes effective W/H by dividing rawW/rawH by settings.worldZoom (the global wrap arithmetic)', () => {
+  // Under the new global UI-zoom architecture, the entire per-frame
+  // render is wrapped in `ctx.scale(worldZoom)`, and W/H are exposed
+  // to all renderers as `rawW/H / worldZoom` so layout code naturally
+  // sees a smaller logical viewport at higher zoom (browser CTRL+
+  // analog). Pin the structural shape: resize() must read
+  // settings.worldZoom and divide rawW + rawH by it (with defensive
+  // `|| 1` fallback).
+  const fnIdx = PLATFORM_NC.search(/function\s+resize\s*\(\s*\)\s*\{/);
+  const body = extractBody(PLATFORM_NC, fnIdx);
+  assert.ok(body, 'must extract resize() body');
   assert.match(body, /settings(?:\s*&&\s*settings)?\.worldZoom/,
-    'getCamera must read settings.worldZoom (with optional defensive guard)');
-  assert.match(body, /\bW\s*\/\s*zoom\b/,
-    'getCamera must compute viewW = W / zoom (effective viewport accounts for zoom)');
-  assert.match(body, /\bH\s*\/\s*zoom\b/,
-    'getCamera must compute viewH = H / zoom (effective viewport accounts for zoom)');
-  // The clamp / centring math must use viewW/viewH (not raw W/H) so
-  // the player stays centred and edge-clamping respects the zoomed
-  // visible area. Pin the player-centring math.
-  assert.match(body, /player\.x\s*\*\s*TILE\s*-\s*viewW\s*\/\s*2/,
-    'getCamera must centre on player using viewW (zoom-adjusted), not raw W');
-  assert.match(body, /player\.y\s*\*\s*TILE\s*-\s*viewH\s*\/\s*2/,
-    'getCamera must centre on player using viewH (zoom-adjusted), not raw H');
+    'resize() must read settings.worldZoom for the effective logical-size divisor');
+  // rawW/rawH must be assigned from the gameScale-derived logical
+  // size FIRST, then W/H derive from rawW/rawH divided by zoom.
+  assert.match(body, /rawW\s*=\s*_sz\.W/,
+    'resize() must store the gameScale-derived logical width as rawW');
+  assert.match(body, /rawH\s*=\s*_sz\.H/,
+    'resize() must store the gameScale-derived logical height as rawH');
+  // Canvas backing stays at rawW × rawH (the global ctx.scale wrap
+  // upscales the smaller logical area to fill it).
+  assert.match(body, /canvas\.width\s*=\s*rawW/,
+    'resize() must set canvas.width = rawW (canvas backing stays at pre-zoom logical size)');
+  assert.match(body, /canvas\.height\s*=\s*rawH/,
+    'resize() must set canvas.height = rawH');
+  // Effective W = rawW / worldZoom. Allow Math.round + Math.max guard
+  // for safety against zero / overflow but require the arithmetic
+  // shape — `rawW` divided by an identifier that resolves to zoom.
+  assert.match(body, /W\s*=\s*Math\.max\(\s*1\s*,\s*Math\.round\(\s*rawW\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\)/,
+    'resize() must compute W = Math.max(1, Math.round(rawW / worldZoom))');
+  assert.match(body, /H\s*=\s*Math\.max\(\s*1\s*,\s*Math\.round\(\s*rawH\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\)/,
+    'resize() must compute H = Math.max(1, Math.round(rawH / worldZoom))');
 });
 
-// ─── ctx.scale wrap in renderPlaying ────────────────────────────────────────
+// ─── NEW: global ctx.scale wrap in render() ─────────────────────────────────
 
-test('renderPlaying wraps the world-render block in ctx.save + ctx.scale + ctx.restore', () => {
-  // The world-space draws (drawWorld + ambient + room markers + hazards
-  // + items + enemies + projectiles + particles + player + orbitals)
-  // must run INSIDE a ctx.scale(zoom, zoom) transform so worldZoom
-  // actually magnifies the playfield. The HUD/overlay block runs
-  // OUTSIDE so it stays at native scale.
-  //
-  // Find renderPlaying and verify the structural shape.
-  const renderPlayingIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
-  assert.ok(renderPlayingIdx >= 0, 'must find renderPlaying() in game.js');
-  const tail = GAME_NC.slice(renderPlayingIdx);
-  // The opening of the world block: ctx.save followed by ctx.scale
-  // with the same identifier on both axes. Allow an optional gating
-  // `if (zoomed)` wrapper since ctx.save + ctx.scale + ctx.restore at
-  // zoom=1.0 is wasteful in the hot path.
-  assert.match(tail, /ctx\.save\(\s*\)\s*;\s*ctx\.scale\(\s*([a-zA-Z_$][\w$]*)\s*,\s*\1\s*\)/,
-    'renderPlaying must open a ctx.save() + ctx.scale(zoom, zoom) block before world-space draws');
-  // The matching ctx.restore must appear AFTER the world block but
-  // BEFORE the HUD block (drawDangerVignette is the first HUD call).
-  // Find positions and assert ordering.
-  const scaleIdx = tail.search(/ctx\.scale\(\s*([a-zA-Z_$][\w$]*)\s*,\s*\1\s*\)/);
-  const dangerVignetteIdx = tail.search(/\bdrawDangerVignette\s*\(/);
-  assert.ok(scaleIdx >= 0, 'renderPlaying must call ctx.scale(zoom, zoom)');
-  assert.ok(dangerVignetteIdx >= 0, 'renderPlaying must call drawDangerVignette (HUD block start)');
-  // Find a ctx.restore between scale and dangerVignette (the world-block-end restore).
-  const between = tail.slice(scaleIdx, dangerVignetteIdx);
-  assert.match(between, /ctx\.restore\(\s*\)/,
-    'renderPlaying must call ctx.restore() AFTER the world block and BEFORE drawDangerVignette (HUD must render at native scale)');
+test('render() (the top-level state dispatch) wraps the entire frame in a single ctx.scale(worldZoom) block', () => {
+  // The global UI-zoom requirement: every renderable state (MENU,
+  // PLAYING, HUB, SETTINGS, all overlays) must run inside the same
+  // ctx.scale(worldZoom) wrap. The single dispatch site is `render()`
+  // in game.js — wrapping there is the ONE place that covers
+  // everything. A per-state wrap (e.g. in renderPlaying only) would
+  // leave menus + HUB at native scale and silently break the user
+  // request.
+  const fnIdx = GAME_NC.search(/\brender\s*\(\s*\)\s*\{/);
+  assert.ok(fnIdx >= 0, 'must locate render() method in game.js');
+  const body = extractBody(GAME_NC, fnIdx);
+  assert.ok(body, 'must extract render() body');
+  // Must read settings.worldZoom (not a hardcoded literal).
+  assert.match(body, /settings(?:\s*&&\s*settings)?\.worldZoom/,
+    'render() must read settings.worldZoom for the global ctx.scale wrap');
+  // Must open a ctx.save() + ctx.scale(zoom, zoom) block. The
+  // identifier must match on both axes (uniform scale, not skewed).
+  assert.match(body, /ctx\.save\(\s*\)\s*;\s*ctx\.scale\(\s*([a-zA-Z_$][\w$]*)\s*,\s*\1\s*\)/,
+    'render() must open a ctx.save() + ctx.scale(zoom, zoom) block (uniform scale on both axes)');
+  // Must close with a matching ctx.restore() at the bottom of the
+  // function — pin the LAST ctx.restore() call inside render() to
+  // confirm the wrap encompasses the entire dispatch + the trailing
+  // crtMode overlay.
+  const lastRestore = body.lastIndexOf('ctx.restore(');
+  const lastCrt = body.lastIndexOf('drawCrtOverlay');
+  assert.ok(lastRestore > 0 && lastCrt > 0,
+    'render() must call drawCrtOverlay AND a closing ctx.restore()');
+  assert.ok(lastRestore > lastCrt,
+    'render() trailing ctx.restore() MUST appear AFTER drawCrtOverlay so the CRT overlay is also inside the global scale wrap');
+  // Strict !== 1 gate (not !=) — defends against string-coercion
+  // silent failures (settings.worldZoom = "1" via corrupted
+  // localStorage that bypassed snapToSteps would coerce as `"1" != 1`
+  // → false with `==`, skipping the wrap, but every input divisor
+  // does `mouse.x / "1"` which coerces to a number — silently
+  // desynchronising rendering from aim).
+  assert.match(body, /_uiZoom\s*!==\s*1\b/,
+    'global ctx.scale gate must use STRICT inequality (`_uiZoom !== 1`) to defeat string-coercion silent failure');
 });
 
-test('renderPlaying world-block reads settings.worldZoom (single source of truth)', () => {
-  // The zoom value passed to ctx.scale must derive from
-  // settings.worldZoom (not a hardcoded literal). Otherwise the
-  // setting changes don't actually move the playfield.
-  const renderPlayingIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
-  assert.ok(renderPlayingIdx >= 0, 'must find renderPlaying()');
-  // Look at the first ~3000 chars of renderPlaying for a settings.worldZoom read
-  const head = GAME_NC.slice(renderPlayingIdx, renderPlayingIdx + 3000);
-  assert.match(head, /settings(?:\s*&&\s*settings)?\.worldZoom/,
-    'renderPlaying must read settings.worldZoom (with optional defensive guard) before the world-block ctx.scale');
+test('render() global-wrap fillRect uses W,H (logical bounds) so it covers the full canvas backing under ctx.scale', () => {
+  // The clear-screen fillRect runs INSIDE the global ctx.scale wrap,
+  // so it must use logical W,H bounds — those become canvas-backing
+  // coords once the scale transform is applied, perfectly clearing
+  // the entire backing. Using rawW/rawH here would over-fill at zoom>1
+  // and leak into negative coords (harmless but wasteful) AND would
+  // be wrong if the wrap were ever moved.
+  const fnIdx = GAME_NC.search(/\brender\s*\(\s*\)\s*\{/);
+  const body = extractBody(GAME_NC, fnIdx);
+  assert.match(body, /ctx\.fillRect\(\s*0\s*,\s*0\s*,\s*W\s*,\s*H\s*\)/,
+    'render() clear-screen fillRect must use W,H (logical bounds) — under the global ctx.scale wrap this fills the full canvas backing');
 });
 
-test('renderPlaying screen-shake offset is divided by worldZoom (preserves canvas-px shake magnitude across zoom levels)', () => {
-  // Opus r2 finding: shake.ox/oy are produced by triggerShake() with
-  // canvas-px magnitudes (2-5). They're added to cam.x/cam.y (world-px
-  // units) which are then consumed inside ctx.scale(zoom). Without
-  // /zoom, the on-screen shake plays back at zoom× intensity — at the
-  // mobile-first 1.5× default that's 50% stronger than tuned, actively
-  // bad for the audience the feature targets. Divide by zoom to
-  // restore historical canvas-px magnitude across all zoom levels.
-  const renderPlayingIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
-  assert.ok(renderPlayingIdx >= 0, 'must find renderPlaying()');
-  const head = GAME_NC.slice(renderPlayingIdx, renderPlayingIdx + 3000);
-  assert.match(head, /cam\.x\s*\+=\s*shake\.ox\s*\/\s*[a-zA-Z_$][\w$]*/,
-    'renderPlaying must apply shake to cam.x as `shake.ox / worldZoom` (preserve canvas-px shake magnitude under ctx.scale)');
-  assert.match(head, /cam\.y\s*\+=\s*shake\.oy\s*\/\s*[a-zA-Z_$][\w$]*/,
-    'renderPlaying must apply shake to cam.y as `shake.oy / worldZoom`');
+// ─── NEW: renderPlaying must NOT have its own playfield-only ctx.scale wrap ─
+
+test('renderPlaying does NOT wrap its world block in a separate ctx.scale(zoom, zoom) (the global wrap in render() handles it)', () => {
+  // Pre-global-UI-zoom architecture had a playfield-only scale wrap
+  // inside renderPlaying — that wrap is now in render() (the
+  // top-level dispatch). Keeping both would double-scale the
+  // playfield while leaving menus single-scaled. Forbid the
+  // identifier-symmetric `ctx.scale(X, X)` shape inside renderPlaying.
+  const fnIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
+  assert.ok(fnIdx >= 0, 'must find renderPlaying()');
+  const body = extractBody(GAME_NC, fnIdx);
+  assert.ok(body, 'must extract renderPlaying() body');
+  // Forbid `ctx.scale(<ident>, <ident>)` with the same identifier on
+  // both axes (the global-wrap shape). Per-axis non-uniform scales
+  // (e.g. `ctx.scale(1, -1)` for sprite flipping) are still allowed.
+  assert.doesNotMatch(body, /ctx\.scale\(\s*([a-zA-Z_$][\w$]*)\s*,\s*\1\s*\)/,
+    'renderPlaying must NOT contain a uniform `ctx.scale(zoom, zoom)` wrap — the global wrap in render() handles it');
 });
 
-test('renderPlaying gates ctx.scale wrap on STRICT inequality (!== 1) to defeat string-coercion silent failures', () => {
-  // Opus r1 finding: a "simplification" from `!== 1` to `!= 1` would
-  // still work for numeric zoom, but if a regression sets
-  // `settings.worldZoom = "1"` (string from a corrupted localStorage
-  // payload that bypasses snapToSteps) then `"1" != 1` is FALSE with
-  // ==, the scale block is skipped, and the world renders at 1× while
-  // every mouse-conversion site does `mouse.x / "1"` (which coerces
-  // back to a number and works) — silently desynchronising aim from
-  // rendering. The strict-equality form catches the type drift and
-  // chooses the same gate as the conversions.
-  const renderPlayingIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
-  assert.ok(renderPlayingIdx >= 0, 'must find renderPlaying()');
-  const head = GAME_NC.slice(renderPlayingIdx, renderPlayingIdx + 3000);
-  assert.match(head, /_zoom\s*!==\s*1\b/,
-    'world-zoom gate must use STRICT inequality (`_zoom !== 1`) to defeat string-coercion silent failure (do not weaken to `!=`)');
+test('renderPlaying applies shake to cam without dividing by worldZoom (logical-units invariant)', () => {
+  // Under the global wrap, shake offsets stay in the logical-units
+  // space (same as cam.x/cam.y), so adding them directly preserves
+  // the canvas-px shake magnitude after the global ctx.scale is
+  // applied. The pre-global-UI-zoom architecture had a `/_zoom`
+  // correction here — forbidding it now prevents accidental
+  // double-correction.
+  const fnIdx = GAME_NC.search(/\brenderPlaying\s*\(\s*\)\s*\{/);
+  const body = extractBody(GAME_NC, fnIdx);
+  assert.match(body, /cam\.x\s*\+=\s*shake\.ox\s*;/,
+    'renderPlaying must add shake.ox to cam.x WITHOUT a per-zoom divide');
+  assert.match(body, /cam\.y\s*\+=\s*shake\.oy\s*;/,
+    'renderPlaying must add shake.oy to cam.y WITHOUT a per-zoom divide');
+  assert.doesNotMatch(body, /shake\.o[xy]\s*\//,
+    'renderPlaying must NOT divide shake offsets by anything (logical units already match cam units)');
 });
 
-// ─── Touch + mouse → world conversions ──────────────────────────────────────
+// ─── NEW: input-coord normalization at the host boundary ─────────────────────
 
-test('touch-aim synthesis multiplies player screen position by worldZoom', () => {
-  // The touch-aim handler at game.js writes `mouse.x = playerScreenPx
-  // + touch.aim.dx * 300`. With ctx.scale(z) active in the renderer,
-  // the player's CANVAS pixel position is `(player.x*TILE - cam.x) * z`
-  // — not just `player.x*TILE - cam.x`. Without the * z multiplier the
-  // synthetic mouse position lands in the wrong place AND the
-  // worldAim conversion (also zoom-aware) would aim somewhere
-  // entirely different from where the joystick is pointing.
-  //
-  // Pin both axes.
-  assert.match(GAME_NC, /mouse\.x\s*=\s*\(\s*player\.x\s*\*\s*TILE\s*-\s*cam\.x\s*\)\s*\*\s*[a-zA-Z_$][\w$]*\s*\+\s*touch\.aim\.dx\s*\*\s*300/,
-    'touch-aim must compute mouse.x = (player.x*TILE - cam.x) * worldZoom + touch.aim.dx * 300');
-  assert.match(GAME_NC, /mouse\.y\s*=\s*\(\s*player\.y\s*\*\s*TILE\s*-\s*cam\.y\s*\)\s*\*\s*[a-zA-Z_$][\w$]*\s*\+\s*touch\.aim\.dy\s*\*\s*300/,
-    'touch-aim must compute mouse.y = (player.y*TILE - cam.y) * worldZoom + touch.aim.dy * 300');
+test('platform.js mousemove handler divides client→canvas conversion by worldZoom (logical coords delivered)', () => {
+  // The single input-normalization site for pointer events. Without
+  // this divide, every consumer in the codebase would need its own
+  // `/worldZoom` correction — the architecture explicitly avoids
+  // that scattering by normalising once at the host boundary.
+  const mmIdx = PLATFORM_NC.search(/canvas\.addEventListener\(\s*'mousemove'/);
+  assert.ok(mmIdx >= 0, 'must find canvas mousemove listener');
+  const tail = PLATFORM_NC.slice(mmIdx, mmIdx + 600);
+  // mouse.x = (clientX - r.left) * canvas.width / r.width / worldZoom
+  assert.match(tail, /mouse\.x\s*=\s*\(\s*e\.clientX\s*-\s*r\.left\s*\)\s*\*\s*canvas\.width\s*\/\s*r\.width\s*\/\s*[a-zA-Z_$][\w$]*/,
+    'mousemove handler must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
+  assert.match(tail, /mouse\.y\s*=\s*\(\s*e\.clientY\s*-\s*r\.top\s*\)\s*\*\s*canvas\.height\s*\/\s*r\.height\s*\/\s*[a-zA-Z_$][\w$]*/,
+    'mousemove handler must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
+  // The divisor must derive from settings.worldZoom (with defensive
+  // guard) — a hardcoded 1 would silently break the feature.
+  assert.match(tail, /settings(?:\s*&&\s*settings)?\.worldZoom/,
+    'mousemove handler must read settings.worldZoom for the input-normalization divisor');
 });
 
-test('mouse → worldAim conversion divides mouse coords by worldZoom before adding cam', () => {
-  // Mouse events arrive in canvas (logical) px. The world-render block
-  // uses ctx.scale(z), so converting back to world tiles requires
-  // /zoom on the canvas-px term BEFORE adding the cam (in world-px).
-  // Without /zoom, aim is wildly miscalibrated at non-1.0 zoom.
-  //
-  // Pin BOTH axes of the worldAimX/Y assignment.
-  assert.match(GAME_NC, /worldAimX\s*=\s*\(\s*mouse\.x\s*\/\s*[a-zA-Z_$][\w$]*\s*\+\s*cam\.x\s*\)\s*\/\s*TILE/,
-    'worldAimX must be (mouse.x / worldZoom + cam.x) / TILE');
-  assert.match(GAME_NC, /worldAimY\s*=\s*\(\s*mouse\.y\s*\/\s*[a-zA-Z_$][\w$]*\s*\+\s*cam\.y\s*\)\s*\/\s*TILE/,
-    'worldAimY must be (mouse.y / worldZoom + cam.y) / TILE');
+test('platform.js toCanvas wrapper divides _touchHelpers.toCanvas output by worldZoom (parity with mousemove)', () => {
+  // Touch handlers all flow through this single helper — keeping the
+  // /worldZoom divide here ensures touch coords match mouse coords
+  // exactly (same logical-units space). Without parity, mouse aim
+  // would land at a different world position than touch aim at the
+  // same screen location.
+  const fnIdx = PLATFORM_NC.search(/function\s+toCanvas\s*\(/);
+  assert.ok(fnIdx >= 0, 'must find toCanvas() in platform.js');
+  const body = extractBody(PLATFORM_NC, fnIdx);
+  assert.ok(body, 'must extract toCanvas() body');
+  assert.match(body, /_touchHelpers\.toCanvas\(\s*clientX\s*,\s*clientY\s*,\s*canvas\s*\)/,
+    'toCanvas wrapper must call the engine helper to get canvas-internal coords');
+  assert.match(body, /settings(?:\s*&&\s*settings)?\.worldZoom/,
+    'toCanvas wrapper must read settings.worldZoom for the divisor');
+  assert.match(body, /\bcx\s*\/\s*[a-zA-Z_$][\w$]*\s*,\s*cy\s*\/\s*[a-zA-Z_$][\w$]*/,
+    'toCanvas wrapper must return [cx / worldZoom, cy / worldZoom]');
 });
 
-test('every aim-place hackware in content.js divides mouse coords by worldZoom', () => {
-  // Hackware that aim-places at the cursor (GRAVITY_WELL, STATIC_FIELD,
-  // HOLO_DECOY, DECOY_TURRET, BLINK, HACKWARE_BEAM, CHRONO_LURE)
-  // converts mouse → world via `(mouse + cam) / TILE`. Each site must
-  // factor in /worldZoom to land at the actual cursor position.
-  //
-  // Count the unscaled `(mouse.x + ...x) / TILE` shape — must be 0.
-  // Count the scaled `(mouse.x / <ident> + ...x) / TILE` shape — must
-  // be ≥ 6 (one per hackware that aim-places). The exact count may
-  // grow as new aim-place hackware is added; pin a lower bound.
-  const unscaledX = (CONTENT_NC.match(/\(\s*mouse\.x\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/g) || []).length;
-  const unscaledY = (CONTENT_NC.match(/\(\s*mouse\.y\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/g) || []).length;
-  assert.equal(unscaledX, 0,
-    `content.js must not contain any unscaled \`(mouse.x + cam.x) / TILE\` conversions — every site must factor /worldZoom (got ${unscaledX} unscaled)`);
-  assert.equal(unscaledY, 0,
-    `content.js must not contain any unscaled \`(mouse.y + cam.y) / TILE\` conversions — every site must factor /worldZoom (got ${unscaledY} unscaled)`);
-  const scaledX = (CONTENT_NC.match(/\(\s*mouse\.x\s*\/\s*[a-zA-Z_$][\w$]*\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/g) || []).length;
-  const scaledY = (CONTENT_NC.match(/\(\s*mouse\.y\s*\/\s*[a-zA-Z_$][\w$]*\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/g) || []).length;
-  assert.ok(scaledX >= 6,
-    `content.js must have ≥ 6 zoom-scaled \`(mouse.x / wz + cam.x) / TILE\` sites (one per aim-place hackware); got ${scaledX}`);
-  assert.ok(scaledY >= 6,
-    `content.js must have ≥ 6 zoom-scaled \`(mouse.y / wz + cam.y) / TILE\` sites; got ${scaledY}`);
-});
+// ─── NEW: NO per-section worldZoom corrections anywhere ─────────────────────
 
-test('NO src file contains an unscaled `(mouse + cam) / TILE` conversion (catches the codex r1 dash-aim omission class)', () => {
-  // Codex R1 caught a missed conversion site in entities.js dash-aim
-  // (line 13160) — my survey only enumerated content.js + game.js
-  // sites. To prevent the same omission class for any future input
-  // path that converts canvas px → world tiles, scan EVERY src file
-  // for the unscaled shape and fail loudly if one reappears.
-  const ENTITIES_NC = stripComments(fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-  ));
-  const sources = /** @type {[string, string][]} */ ([
+test('NO src file contains a `mouse.[xy] / <ident>` correction shape (host-side normalization is the single source of truth)', () => {
+  // Inversion of the pre-global-UI-zoom invariant. Under the new
+  // architecture, mouse.x/y arrive pre-normalized in logical
+  // coordinates, so any per-site `mouse.x / <something>` is wrong —
+  // it'd over-divide. This includes the legacy `mouse.x / _wz +
+  // cam.x` shape that used to exist in 8 places across game.js,
+  // entities.js, content.js, render.js. The mousemove handler in
+  // platform.js is exempt because the divide there IS the host-side
+  // normalization.
+  /** @type {[string, string][]} */
+  const sources = [
     ['game.js', GAME_NC],
     ['render.js', RENDER_NC],
-    ['platform.js', PLATFORM_NC],
     ['content.js', CONTENT_NC],
     ['entities.js', ENTITIES_NC],
-  ]);
+  ];
+  // Forbid `mouse.x / X` and `mouse.y / X` for ANY identifier X.
+  // (Numeric divisors aren't meaningful here either — there's no
+  // legitimate reason to divide a logical mouse coordinate by anything
+  // in these consumer files.)
   for (const [name, src] of sources) {
-    const unscaled = (src.match(/\(\s*mouse\.[xy]\s*\+\s*[a-zA-Z_$][\w$]*\.[xy]\s*\)\s*\/\s*TILE/g) || []).length;
-    assert.equal(unscaled, 0,
-      `${name} must not contain any unscaled \`(mouse.[xy] + cam.[xy]) / TILE\` conversions — every site must factor /worldZoom; got ${unscaled} unscaled. (Codex r1 caught the dash-aim omission at entities.js:13160 by exactly this audit; this test prevents recurrence.)`);
+    const xMatches = src.match(/\bmouse\.x\s*\/\s*\S/g) || [];
+    const yMatches = src.match(/\bmouse\.y\s*\/\s*\S/g) || [];
+    assert.equal(xMatches.length, 0,
+      `${name} must not contain any \`mouse.x / ...\` correction — host-side normalization in platform.js delivers logical coords. Found: ${JSON.stringify(xMatches)}`);
+    assert.equal(yMatches.length, 0,
+      `${name} must not contain any \`mouse.y / ...\` correction — host-side normalization in platform.js delivers logical coords. Found: ${JSON.stringify(yMatches)}`);
   }
+});
+
+test('every aim-place hackware in content.js uses the unscaled `(mouse + cam) / TILE` shape (logical coords already match world units)', () => {
+  // Under the new architecture, every aim-place hackware site
+  // (GRAVITY_WELL, STATIC_FIELD, HOLO_DECOY, DECOY_TURRET, BLINK,
+  // EMP_LINE / hackware beam, CHRONO_LURE) must use the plain
+  // `(mouse.x + cam.x) / TILE` shape. The pre-global-UI-zoom shape
+  // `(mouse.x / wz + cam.x) / TILE` would over-divide.
+  const unscaledX = (CONTENT_NC.match(/\(\s*mouse\.x\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/g) || []).length;
+  const unscaledY = (CONTENT_NC.match(/\(\s*mouse\.y\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/g) || []).length;
+  assert.ok(unscaledX >= 6,
+    `content.js must contain ≥ 6 unscaled \`(mouse.x + cam.x) / TILE\` aim-place sites; got ${unscaledX}`);
+  assert.ok(unscaledY >= 6,
+    `content.js must contain ≥ 6 unscaled \`(mouse.y + cam.y) / TILE\` aim-place sites; got ${unscaledY}`);
+});
+
+test('NO src file contains the legacy `mouse.[xy] / <ident> + cam.[xy]` correction shape (catches accidental re-introduction of the pre-global-UI-zoom pattern)', () => {
+  // Specific bypass-class guard against a contributor copying the
+  // pre-PR-#388 idiom and reintroducing per-site /worldZoom factors.
+  // The pattern was scattered across 8+ sites; this test catches any
+  // single reappearance.
+  /** @type {[string, string][]} */
+  const sources = [
+    ['game.js', GAME_NC],
+    ['render.js', RENDER_NC],
+    ['content.js', CONTENT_NC],
+    ['entities.js', ENTITIES_NC],
+    ['platform.js', PLATFORM_NC],
+  ];
+  for (const [name, src] of sources) {
+    const matches = src.match(/mouse\.[xy]\s*\/\s*[a-zA-Z_$][\w$]*\s*\+\s*[a-zA-Z_$][\w$]*\.[xy]/g) || [];
+    assert.equal(matches.length, 0,
+      `${name} must not contain the legacy \`mouse.[xy] / wz + cam.[xy]\` shape — host-side normalization makes per-site correction wrong. Found: ${JSON.stringify(matches)}`);
+  }
+});
+
+// ─── NEW: render.js camera + tile loop + threat indicators (no zoom divides) ─
+
+test('getCamera does NOT divide W or H by worldZoom (W/H are already post-zoom logical bounds)', () => {
+  // Under the new architecture, W/H exposed to render code are
+  // already `rawW/H / worldZoom` (set by resize()), so dividing
+  // them again here would compound the shrink by zoom². The
+  // viewport math must use plain W and H.
+  const fnIdx = RENDER_NC.search(/\bfunction\s+getCamera\s*\(/);
+  assert.ok(fnIdx >= 0, 'render.js must define function getCamera');
+  const body = extractBody(RENDER_NC, fnIdx);
+  assert.ok(body, 'must extract getCamera body');
+  // Player-centring math must use viewW/viewH (assigned to W/H).
+  assert.match(body, /player\.x\s*\*\s*TILE\s*-\s*viewW\s*\/\s*2/,
+    'getCamera must centre on player using viewW (which equals W under the global wrap)');
+  assert.match(body, /player\.y\s*\*\s*TILE\s*-\s*viewH\s*\/\s*2/,
+    'getCamera must centre on player using viewH (which equals H under the global wrap)');
+  // viewW = W (no /zoom).
+  assert.match(body, /\bviewW\s*=\s*W\s*;/,
+    'getCamera must set viewW = W (no per-zoom divide — W is already post-zoom under the global wrap)');
+  assert.match(body, /\bviewH\s*=\s*H\s*;/,
+    'getCamera must set viewH = H (no per-zoom divide — H is already post-zoom under the global wrap)');
+  // Forbid the pre-global-UI-zoom `W / zoom` and `H / zoom` shapes.
+  assert.doesNotMatch(body, /\bW\s*\/\s*zoom\b/,
+    'getCamera must NOT divide W by zoom (W is already post-zoom under the global wrap — would compound to zoom²)');
+  assert.doesNotMatch(body, /\bH\s*\/\s*zoom\b/,
+    'getCamera must NOT divide H by zoom');
+});
+
+test('drawWorld tile-loop culling uses plain W/TILE and (H-hudH)/TILE (no per-zoom divide) AND keeps the +2 safety margin', () => {
+  // Under the global wrap, W and H are already the post-zoom
+  // viewport bounds, so the tile loop visits exactly the visible
+  // area at any zoom — no per-zoom divide. The +1/+2 safety margin
+  // around startX/Y/endX/Y stays the same so sub-tile camera
+  // offsets don't drop edge tiles.
+  const fnIdx = RENDER_NC.search(/\bfunction\s+drawWorld\s*\(/);
+  assert.ok(fnIdx >= 0, 'must find drawWorld');
+  const head = RENDER_NC.slice(fnIdx, fnIdx + 1500);
+  // Viewport size in tiles uses plain W and (H - layout.hudH) — no
+  // per-zoom divide.
+  assert.match(head, /Math\.ceil\(\s*W\s*\/\s*TILE\s*\)/,
+    'drawWorld must compute viewport-tile-width as `Math.ceil(W / TILE)` (W is already post-zoom under the global wrap)');
+  assert.match(head, /Math\.ceil\(\s*\(\s*H\s*-\s*layout\.hudH\s*\)\s*\/\s*TILE\s*\)/,
+    'drawWorld must compute viewport-tile-height as `Math.ceil((H - layout.hudH) / TILE)`');
+  // Safety margins preserved.
+  assert.match(head, /startX\s*=\s*Math\.max\(\s*0\s*,\s*Math\.floor\(\s*camX\s*\/\s*TILE\s*\)\s*-\s*1\s*\)/,
+    'drawWorld must keep `startX = Math.max(0, Math.floor(camX/TILE) - 1)` safety margin');
+  assert.match(head, /startY\s*=\s*Math\.max\(\s*0\s*,\s*Math\.floor\(\s*camY\s*\/\s*TILE\s*\)\s*-\s*1\s*\)/,
+    'drawWorld must keep `startY = Math.max(0, Math.floor(camY/TILE) - 1)` safety margin');
+  assert.match(head, /startX\s*\+\s*[a-zA-Z_$][\w$]*\s*\+\s*2/,
+    'drawWorld endX must keep the `+ 2` safety margin');
+  assert.match(head, /startY\s*\+\s*[a-zA-Z_$][\w$]*\s*\+\s*2/,
+    'drawWorld endY must keep the `+ 2` safety margin');
+  // Forbid the pre-global-UI-zoom shape that divided by an extra zoom.
+  assert.doesNotMatch(head, /\(\s*W\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\/\s*TILE/,
+    'drawWorld must NOT divide W by zoom before /TILE (would compound to zoom²)');
+});
+
+test('drawThreatIndicators uses plain W and (H-hudH) for view bounds AND projects arrows in logical coords (no per-zoom multiply) AND keeps screen-edge clamp', () => {
+  // Pre-global-UI-zoom this had `W/zoom`/`H/zoom` divides + a `*zoom`
+  // arrow projection. Under the global wrap, both must disappear:
+  // viewport bounds are already post-zoom, and arrow projection in
+  // logical coords is just `e.x*TILE - camX` (no multiply). The
+  // screen-edge clamp stays — without it arrows can leak off-canvas.
+  const fnIdx = RENDER_NC.search(/\bfunction\s+drawThreatIndicators\s*\(/);
+  assert.ok(fnIdx >= 0, 'must find drawThreatIndicators');
+  const head = RENDER_NC.slice(fnIdx, fnIdx + 2000);
+  // viewR uses (camX + W) / TILE — no per-zoom divide.
+  assert.match(head, /viewR\s*=\s*\(\s*camX\s*\+\s*W\s*\)\s*\/\s*TILE/,
+    'drawThreatIndicators viewR must be `(camX + W) / TILE` (W is already post-zoom)');
+  assert.match(head, /viewB\s*=\s*\(\s*camY\s*\+\s*H\s*-\s*layout\.hudH\s*\)\s*\/\s*TILE/,
+    'drawThreatIndicators viewB must be `(camY + H - layout.hudH) / TILE`');
+  // Arrow projection: plain `e.x * TILE - camX` (no per-zoom multiply).
+  assert.match(head, /\bsx\s*=\s*\(\s*e\.x\s*\*\s*TILE\s*-\s*camX\s*\)\s*;/,
+    'drawThreatIndicators arrow sx must be `(e.x * TILE - camX)` with no per-zoom multiply');
+  assert.match(head, /\bsy\s*=\s*\(\s*e\.y\s*\*\s*TILE\s*-\s*camY\s*\)\s*;/,
+    'drawThreatIndicators arrow sy must be `(e.y * TILE - camY)` with no per-zoom multiply');
+  // Forbid the pre-global-UI-zoom multiply shape.
+  assert.doesNotMatch(head, /\(\s*e\.[xy]\s*\*\s*TILE\s*-\s*cam[XY]\s*\)\s*\*\s*[a-zA-Z_$]/,
+    'drawThreatIndicators must NOT multiply arrow projection by zoom (would double-scale under the global wrap)');
+  // Screen-edge clamp stays.
+  assert.match(head, /clamp\(\s*sx\s*,\s*margin\s*,\s*W\s*-\s*margin\s*\)/,
+    'drawThreatIndicators must clamp arrow cx to [margin, W - margin]');
+  assert.match(head, /clamp\(\s*sy\s*,\s*margin\s*,\s*H\s*-\s*layout\.hudH\s*-\s*margin\s*\)/,
+    'drawThreatIndicators must clamp arrow cy to [margin, H - layout.hudH - margin]');
 });
 
 // ─── Settings UI wiring ─────────────────────────────────────────────────────
 
 test('updateSettings stepperRows includes worldZoom alongside minimapScale + textScale', () => {
-  // The stepper UI wiring lives in updateSettings — without an entry
-  // here the player has no way to change worldZoom in-game. Pin the
-  // structural shape (key + steps reference).
   assert.match(GAME_NC, /\{\s*key:\s*['"]worldZoom['"]\s*,\s*steps:\s*WORLD_ZOOM_STEPS\s*\}/,
     'updateSettings stepperRows must include { key: "worldZoom", steps: WORLD_ZOOM_STEPS }');
 });
 
 test('renderSettings stepperLabels includes "WORLD ZOOM" alongside MINIMAP SIZE + TEXT SIZE', () => {
-  // The visible label rendered by renderSettings must include the
-  // WORLD ZOOM stepper. Without it the row exists in the data array
-  // but draws blank — invisible to the player.
   assert.match(GAME_NC, /stepperLabels\s*=\s*\[\s*['"]MINIMAP SIZE['"]\s*,\s*['"]TEXT SIZE['"]\s*,\s*['"]WORLD ZOOM['"]\s*\]/,
     'renderSettings stepperLabels must include "WORLD ZOOM" as the third entry');
 });
 
-test('STEPPER_COUNT bumped from 2 to 3 in BOTH updateSettings + renderSettings', () => {
-  // Adding a stepper without bumping STEPPER_COUNT pushes the rebind
-  // rows under the new stepper, making the last toggle/stepper
-  // unclickable on touch. Pin both copies (CTRL_START canary in
-  // crt-mode/reduced-motion tests already cover the structural form).
+test('STEPPER_COUNT = 3 in BOTH updateSettings + renderSettings', () => {
   const counts = (GAME_NC.match(/const\s+STEPPER_COUNT\s*=\s*3\b/g) || []).length;
   assert.equal(counts, 2,
     `STEPPER_COUNT = 3 must appear EXACTLY twice in game.js (updateSettings + renderSettings); got ${counts}`);
 });
 
-// ─── HUD-space draws that need zoom-awareness ───────────────────────────────
-
-test('drawWorld tile-loop culling uses W/zoom and (H-hudH)/zoom for endX/endY (mobile perf) AND keeps the +2 safety margin (no edge-tile skip)', () => {
-  // gpt-5.5 r1 finding: at zoom 2.5×, the visible viewport is
-  // W/zoom × H/zoom world-px, but the tile loop without /zoom
-  // traverses the full W × H area — ~6.25× more tiles than visible.
-  // Mobile is the worldZoom feature's primary audience and the
-  // population that can least afford that overdraw. Pin the structural
-  // shape: the endX/endY math must factor /worldZoom AND keep the
-  // existing startX/startY -1 + endX/endY +2 safety margin so
-  // sub-tile camera offsets don't skip visible edge tiles
-  // (gpt-5.5 r2 hardening — presence-only check would not catch a
-  // contributor removing the margin).
-  const fnIdx = RENDER_NC.search(/\bfunction\s+drawWorld\s*\(/);
-  assert.ok(fnIdx >= 0, 'must find drawWorld');
-  const head = RENDER_NC.slice(fnIdx, fnIdx + 1500);
-  assert.match(head, /W\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\/\s*TILE/,
-    'drawWorld endX must compute (W / worldZoom) / TILE (zoom-aware tile-loop culling — mobile perf)');
-  assert.match(head, /\(\s*H\s*-\s*layout\.hudH\s*\)\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\/\s*TILE/,
-    'drawWorld endY must compute ((H - layout.hudH) / worldZoom) / TILE (zoom-aware tile-loop culling — mobile perf)');
-  // Safety margin: startX/startY use floor(cam/TILE) - 1 so a sub-tile
-  // camera offset doesn't drop the leftmost/topmost edge tile.
-  assert.match(head, /startX\s*=\s*Math\.max\(\s*0\s*,\s*Math\.floor\(\s*camX\s*\/\s*TILE\s*\)\s*-\s*1\s*\)/,
-    'drawWorld must keep `startX = Math.max(0, Math.floor(camX/TILE) - 1)` safety margin (sub-tile camera offset coverage)');
-  assert.match(head, /startY\s*=\s*Math\.max\(\s*0\s*,\s*Math\.floor\(\s*camY\s*\/\s*TILE\s*\)\s*-\s*1\s*\)/,
-    'drawWorld must keep `startY = Math.max(0, Math.floor(camY/TILE) - 1)` safety margin');
-  // End-tile +2 padding — covers the start-tile -1 plus a
-  // post-fractional rightmost-edge tile.
-  assert.match(head, /startX\s*\+\s*[a-zA-Z_$][\w$]*\s*\+\s*2/,
-    'drawWorld endX must keep the `+ 2` safety margin (covers start -1 + rightmost-edge fractional tile)');
-  assert.match(head, /startY\s*\+\s*[a-zA-Z_$][\w$]*\s*\+\s*2/,
-    'drawWorld endY must keep the `+ 2` safety margin');
+test('worldZoom stepper change triggers a resize() call (so logical W/H refresh before next frame)', () => {
+  // Without this, the user changes worldZoom and the next frame's
+  // layout still uses the OLD logical W/H — pointer normalisation
+  // would update immediately (it reads settings.worldZoom on every
+  // event) but layout would lag a frame, producing a visible jump.
+  // resize() fires on both keyboard AND mouse stepper change paths.
+  // Each path sits inside its own `if (row.key === 'worldZoom')`
+  // gate, so count occurrences of that gate followed by a resize()
+  // call. Must be ≥ 2 (one per input path).
+  const matches = GAME_NC.match(/row\.key\s*===\s*['"]worldZoom['"]\s*\)\s*\{\s*resize\(/g) || [];
+  assert.ok(matches.length >= 2,
+    `worldZoom stepper change must call resize() in BOTH the keyboard and mouse-click paths; got ${matches.length} occurrences of the gated resize() call`);
 });
 
-test('drawThreatIndicators uses W/zoom and (H-hudH)/zoom for view bounds AND projects arrows by *zoom (HUD-space + zoom-aware) AND clamps to screen edges', () => {
-  // Multiple r1 reviewers (gpt-5.5, opus, codex) flagged that
-  // drawThreatIndicators runs OUTSIDE the world ctx.scale wrap but
-  // its math hadn't been zoom-corrected. At zoom > 1, enemies clearly
-  // inside the zoomed-in view get suppressed (false-clear) AND arrows
-  // for genuinely-off-screen enemies cluster toward the centre rather
-  // than the screen edge. Pin both fixes AND the screen-edge clamp
-  // (gpt-5.5 r2 hardening — presence-only zoom check would not catch
-  // a contributor removing the clamp, which would let arrows leak
-  // off-canvas at extreme zoom).
-  const fnIdx = RENDER_NC.search(/\bfunction\s+drawThreatIndicators\s*\(/);
-  assert.ok(fnIdx >= 0, 'must find drawThreatIndicators');
-  const head = RENDER_NC.slice(fnIdx, fnIdx + 2000);
-  assert.match(head, /settings(?:\s*&&\s*settings)?\.worldZoom/,
-    'drawThreatIndicators must read settings.worldZoom');
-  assert.match(head, /camX\s*\+\s*W\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\/\s*TILE/,
-    'drawThreatIndicators viewR must use (camX + W / worldZoom) / TILE (effective viewport)');
-  assert.match(head, /camY\s*\+\s*\(\s*H\s*-\s*layout\.hudH\s*\)\s*\/\s*[a-zA-Z_$][\w$]*\s*\)\s*\/\s*TILE/,
-    'drawThreatIndicators viewB must use (camY + (H - layout.hudH) / worldZoom) / TILE (effective viewport)');
-  assert.match(head, /\(\s*e\.x\s*\*\s*TILE\s*-\s*camX\s*\)\s*\*\s*[a-zA-Z_$][\w$]*/,
-    'drawThreatIndicators arrow sx must be (e.x * TILE - camX) * worldZoom (project world-px to canvas-px outside the world transform)');
-  assert.match(head, /\(\s*e\.y\s*\*\s*TILE\s*-\s*camY\s*\)\s*\*\s*[a-zA-Z_$][\w$]*/,
-    'drawThreatIndicators arrow sy must be (e.y * TILE - camY) * worldZoom');
-  // Screen-edge clamp — without this, arrows leak off-canvas at
-  // extreme zoom (the projected sx/sy can exceed W or H).
-  assert.match(head, /clamp\(\s*sx\s*,\s*margin\s*,\s*W\s*-\s*margin\s*\)/,
-    'drawThreatIndicators must clamp arrow cx to [margin, W - margin] so arrows stay on-screen');
-  assert.match(head, /clamp\(\s*sy\s*,\s*margin\s*,\s*H\s*-\s*layout\.hudH\s*-\s*margin\s*\)/,
-    'drawThreatIndicators must clamp arrow cy to [margin, H - layout.hudH - margin] so arrows stay above the HUD bar');
+test('settings.resetAll() commit path triggers a resize() call (mobile-aware default may flip worldZoom)', () => {
+  // settings.resetAll() restores the layout.compact-aware default,
+  // which on a phone bumps worldZoom to 1.5×. Without re-firing
+  // resize(), the next frame uses the old logical W/H and pointer
+  // normalization fights the layout. Both reset paths (keyboard +
+  // mouse) call resetAll() — both must call resize() afterwards.
+  const matches = GAME_NC.match(/settings\.resetAll\(\)[\s\S]{0,400}?resize\(\)/g) || [];
+  assert.ok(matches.length >= 2,
+    `settings.resetAll() must be followed by a resize() call in BOTH keyboard and mouse reset paths; got ${matches.length}`);
+});
+
+// ─── REVIEWER HARDENING ─────────────────────────────────────────────────────
+
+test('resize() recomputes W/H AFTER applyMobileFirstDefaults if worldZoom changed (codex r1: init-order race)', () => {
+  // Codex r1 finding: applyMobileFirstDefaults() runs INSIDE resize()
+  // and can mutate settings.worldZoom from 1.0 → 1.5 on a fresh
+  // compact device. The W/H computation above happens BEFORE that
+  // mutation. Without a post-default re-compute, the very first frame
+  // renders with the new ctx.scale(1.5) wrap but the OLD 1.0×-sized
+  // logical W/H, so menus draw at full-canvas size and clip 33% off
+  // the canvas right/bottom edges. Pin the structural fix:
+  // applyMobileFirstDefaults must be bracketed by zoom captures and
+  // followed by a guarded re-compute.
+  const fnIdx = PLATFORM_NC.search(/function\s+resize\s*\(\s*\)\s*\{/);
+  const body = extractBody(PLATFORM_NC, fnIdx);
+  assert.ok(body, 'must extract resize() body');
+  // Capture the pre-call zoom value into a local.
+  const beforeIdx = body.search(/_wzBefore\s*=\s*\(\s*settings[\s\S]{0,40}?worldZoom\s*\)\s*\|\|\s*1/);
+  // Run the applicator.
+  const applyIdx = body.search(/settings\.applyMobileFirstDefaults\s*\(\s*\)/);
+  // Capture the post-call zoom value.
+  const afterIdx = body.search(/_wzAfter\s*=\s*\(\s*settings[\s\S]{0,40}?worldZoom\s*\)\s*\|\|\s*1/);
+  // Compare and re-compute.
+  const compareIdx = body.search(/_wzAfter\s*!==\s*_wzBefore/);
+  assert.ok(beforeIdx >= 0, 'resize() must capture pre-call worldZoom into _wzBefore');
+  assert.ok(applyIdx >= 0, 'resize() must call settings.applyMobileFirstDefaults()');
+  assert.ok(afterIdx >= 0, 'resize() must capture post-call worldZoom into _wzAfter');
+  assert.ok(compareIdx >= 0, 'resize() must compare _wzAfter !== _wzBefore');
+  assert.ok(beforeIdx < applyIdx,
+    'resize() must capture _wzBefore BEFORE applyMobileFirstDefaults() (otherwise both captures see the post-mutation value and the guard never fires)');
+  assert.ok(applyIdx < afterIdx,
+    'resize() must capture _wzAfter AFTER applyMobileFirstDefaults() (otherwise both captures see the pre-mutation value)');
+  assert.ok(compareIdx > afterIdx,
+    'resize() must compare _wzAfter !== _wzBefore AFTER both captures');
+  // The recompute branch must redo W/H with the NEW zoom AND re-call updateLayout
+  // so layout.compact tracks the new W (it could flip in edge cases).
+  const guardedBlock = body.slice(compareIdx, compareIdx + 500);
+  assert.match(guardedBlock, /W\s*=\s*Math\.max\(\s*1\s*,\s*Math\.round\(\s*rawW\s*\/\s*_wzAfter\s*\)\s*\)/,
+    'guarded recompute must redo W = Math.max(1, Math.round(rawW / _wzAfter))');
+  assert.match(guardedBlock, /H\s*=\s*Math\.max\(\s*1\s*,\s*Math\.round\(\s*rawH\s*\/\s*_wzAfter\s*\)\s*\)/,
+    'guarded recompute must redo H = Math.max(1, Math.round(rawH / _wzAfter))');
+  assert.match(guardedBlock, /\bupdateLayout\s*\(\s*\)/,
+    'guarded recompute must call updateLayout() so layout.compact tracks the new W');
+});
+
+test('render() global-wrap save/scale/restore is balanced via try/finally (gpt-5.5 r1: leaks on render exception)', () => {
+  // gpt-5.5 r1 finding: the main loop catches render exceptions and
+  // continues (engine/render-boundary.js + game.js:5760-5774). Without
+  // a try/finally around the global ctx.save+scale, a thrown renderer
+  // leaves the canvas state stack scaled. The next frame's wrap then
+  // compounds atop the leaked transform AND the drawErrorOverlay at
+  // line 5773 also draws under the leaked transform. Pin the
+  // structural shape: the save+scale must be paired with the matching
+  // restore inside a `finally` block, both gated on the SAME
+  // `_uiScaled` flag.
+  const fnIdx = GAME_NC.search(/\brender\s*\(\s*\)\s*\{/);
+  const body = extractBody(GAME_NC, fnIdx);
+  // try block must exist after the save+scale.
+  const saveIdx = body.search(/if\s*\(\s*_uiScaled\s*\)\s*\{\s*ctx\.save\(\s*\)\s*;\s*ctx\.scale/);
+  const tryIdx  = body.search(/\btry\s*\{/);
+  const finIdx  = body.search(/\}\s*finally\s*\{/);
+  const restoreIdx = body.search(/\}\s*finally\s*\{[\s\S]{0,200}?if\s*\(\s*_uiScaled\s*\)\s*\{\s*ctx\.restore\(/);
+  assert.ok(saveIdx >= 0, 'render() must open `if (_uiScaled) { ctx.save(); ctx.scale(...) }`');
+  assert.ok(tryIdx >= 0, 'render() must open a `try {` block');
+  assert.ok(finIdx >= 0, 'render() must contain a `} finally {` block');
+  assert.ok(restoreIdx >= 0,
+    'render() finally block must contain `if (_uiScaled) { ctx.restore() }` — the matching restore must be gated on the SAME flag as the save (both-or-neither, never half-balanced)');
+  assert.ok(saveIdx < tryIdx,
+    'save+scale MUST appear BEFORE the try block (otherwise an early-frame exception in the save itself bypasses the cleanup)');
+  assert.ok(tryIdx < finIdx,
+    'try block MUST appear before the finally clause');
 });
