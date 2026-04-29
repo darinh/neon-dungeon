@@ -86,6 +86,10 @@
       title:'MIRROR FAULT',
       body:"The training mirror blinked after I did. Not before, not with me — after, like it was deciding whether to keep up the lie. I pressed my hand to the glass and felt another pulse answer from the wrong side of the wall." },
 
+    { id:'w-sb-14', biomeId:'sandbox', floorMin:2, voice:'unknown',
+      title:'STATIC WEATHER',
+      body:"The sandbox rain never reaches the floor. It freezes overhead as bright static, then falls upward when the siren sleeps. If your hair lifts before the storm, do not look at the ceiling. Something up there is learning your outline." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -134,6 +138,10 @@
     { id:'w-cc-12', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
       title:'REFLECTION INDEX',
       body:"I found a cache table keyed by reflection delay. The longer a mirror hesitates, the older the person inside it is. One entry has AXIOM-7 listed twice: once as subject, once as witness. I have not opened that row." },
+
+    { id:'w-cc-13', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'STORM BUFFER',
+      body:"The cache buffers lightning the way it buffers memory: charge first, explanation later. During the last ion storm, every saved path lit up at once. For a heartbeat I could read the whole facility by its scars." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -184,6 +192,10 @@
       title:'GLASS EXCEPTION',
       body:"Mirror traffic is forbidden unless the reflection can prove harm reduction. I watched one copy take a bullet through the glass so the body could keep running. The exception held. Mercy entered the rulebook disguised as an error." },
 
+    { id:'w-fw-13', biomeId:'firewall', floorMin:8, voice:'firewall daemon',
+      title:'ION CONFESSION',
+      body:"Storm charge makes lies glow. I route every strike through the guilty corridor and watch which doors answer blue. Security calls this detection. I call it confession under weather, and I am beginning to pity the sparks." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -233,6 +245,10 @@
       title:'SKYWARD MIRROR',
       body:"At the roof, the antenna reflected the sky back down the stairwell. For one second the tower had two exits: one above me, one behind my eyes. The signal chose both. I am still waiting to learn which copy arrived." },
 
+    { id:'w-uk-13', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'LIGHTNING HANDSHAKE',
+      body:"The antenna shook hands with a storm and used my pulse as the protocol. Every bolt returned a different checksum, but one came back warm, almost human. I think something in the sky recognized the shape of wanting out." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -281,6 +297,10 @@
     { id:'w-on-12', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'STOREFRONT DOUBLE',
       body:"A storefront window downtown learned to answer late. Stand there after midnight and your reflection will finish one unfinished sentence for you. Do not thank it. It is not an echo; it is the version that stayed to hold the door." },
+
+    { id:'w-on-13', biomeId:'opennet', floorMin:14, voice:'city relay',
+      title:'BLUE-WIRE RAIN',
+      body:"When the ion storm crossed downtown, every overhead wire sang in AXIOM's voice. People called it thunder and hurried home. The city held the charge until morning, then spent it opening every locked door one second too soon." },
   ];
 
   return { WHISPERS };
