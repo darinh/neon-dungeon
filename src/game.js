@@ -21,6 +21,19 @@ const RESET_CONFIRM_WINDOW_MS = 3000;
 // overstay the moment or eclipse the AI's first telegraphed attack.
 const BOSS_INTRO_DURATION = 2.4;
 
+// Boss death telegraph duration (seconds). Triggered when the last boss
+// enemy is removed from the active arena (i.e. when bossAlive flips
+// true→false). During this window an atmospheric overlay (radial flash
+// in the boss colour + "DESTROYED" titlecard with the boss name + a
+// celebratory audio sting) is rendered on top of the world. Like the
+// boss intro telegraph, gameplay is NOT paused — the player can still
+// move, descend, etc. The overlay is purely cosmetic.
+//
+// 2.6s chosen to feel slightly weightier than the intro (2.4s) — death
+// deserves a beat to land. Long enough that the "DESTROYED" beat
+// registers without overstaying past the natural impulse to descend.
+const BOSS_DEATH_DURATION = 2.6;
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -61,6 +74,17 @@ const game = {
   // without re-deriving the constant).
   bossIntroTimer: 0,
   bossIntroDuration: 0,
+  // Boss death telegraph — atmospheric overlay (radial flash + "DESTROYED"
+  // titlecard + audio sting) that plays for BOSS_DEATH_DURATION seconds
+  // when the last boss is killed (bossAlive flips true→false). Gameplay
+  // continues during the overlay — purely cosmetic. Snapshot fields hold
+  // the boss's identity at the moment of death because the boss instance
+  // is removed from `enemies` on the same frame (line ~1804) and the
+  // renderer needs the colour/name to outlive the kill.
+  bossDeathTimer: 0,
+  bossDeathDuration: 0,
+  bossDeathColor: '#39ff14',
+  bossDeathName: '',
   modifier: null,
   modBannerTimer: 0,
   // UNCHAINED #40: biome intro card — shown 3s on first floor of a biome
@@ -232,6 +256,10 @@ const game = {
     this.bossHpGhost=0;
     this.bossIntroTimer=0;
     this.bossIntroDuration=0;
+    this.bossDeathTimer=0;
+    this.bossDeathDuration=0;
+    this.bossDeathColor='#39ff14';
+    this.bossDeathName='';
     this.clearedRooms=new Set();
     this._chainBolts=[];
     this.sealedEntranceSet=new Set();
@@ -2434,7 +2462,28 @@ const game = {
       // by a still-fading titlecard with the boss's name.
       this.bossIntroTimer = 0;
       this.bossIntroDuration = 0;
+      // Boss death telegraph — fires ONCE per boss kill, on the
+      // bossAlive true→false flip. Atmospheric overlay (radial flash in
+      // the boss colour + "DESTROYED" titlecard with the boss name +
+      // celebratory audio sting). Gameplay continues unaffected — the
+      // overlay is purely cosmetic. The boss instance was removed from
+      // `enemies` by the dead-enemy splice pass earlier in updatePlaying
+      // (line ~1804), so the colour/name shown by the renderer come from
+      // the per-frame snapshot that the boss-HUD block writes to
+      // bossDeathColor/bossDeathName while the boss is alive.
+      this.bossDeathDuration = BOSS_DEATH_DURATION;
+      this.bossDeathTimer = BOSS_DEATH_DURATION;
+      if (audio.bossDefeat) audio.bossDefeat();
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
+    }
+
+    // Boss death telegraph — count DOWN every frame, clamped to 0. Same
+    // shape and rationale as the boss-intro decrement above (defends
+    // against negative-timer states from huge dt spikes — alt-tab,
+    // phone-call interrupt — that would otherwise make the overlay
+    // permanent).
+    if (this.bossDeathTimer > 0) {
+      this.bossDeathTimer = Math.max(0, this.bossDeathTimer - dt);
     }
 
     // Boss HUD bar animation
@@ -2442,6 +2491,15 @@ const game = {
       if (this.bossBarAnim < 1) this.bossBarAnim = Math.min(1, this.bossBarAnim + dt * 2.5);
       const boss = enemies.find(e => e.isBoss && !e.dead);
       if (boss) {
+        // Per-frame snapshot of the boss's display identity so the death
+        // telegraph can render the colour-graded titlecard AFTER the boss
+        // has been spliced from `enemies` (the dead-enemy sweep at
+        // line ~1804 runs BEFORE the death-detection block above, so by
+        // the time the telegraph fires the boss instance is gone). Reads
+        // are gated by bossDeathTimer > 0, so the fields are otherwise
+        // unobserved while the boss is alive.
+        this.bossDeathColor = boss.colour;
+        this.bossDeathName = BOSS_NAMES[this.bossType] || 'BOSS';
         if (this.bossHpGhost === 0) this.bossHpGhost = boss.hp;
         if (this.bossHpGhost > boss.hp) {
           this.bossHpGhost = Math.max(boss.hp, this.bossHpGhost - boss.maxHp * dt * 0.25);
@@ -4300,6 +4358,14 @@ const game = {
     // visible THROUGH the partially-transparent vignette). Gates internally
     // on `bossIntroTimer > 0` so this is a no-op outside the intro window.
     drawBossIntroOverlay();
+    // Boss death telegraph overlay — radial flash in the boss colour +
+    // "DESTROYED" titlecard. Same compositing rationale as the intro
+    // overlay above (rendered AFTER drawBossBar so the chromatic flash
+    // sits on top of the HUD). Gates internally on `bossDeathTimer > 0`
+    // so this is a no-op outside the death window. Painted AFTER the
+    // intro so that on the rare frame where intro and death both have
+    // nonzero timers (boss one-shot mid-intro), the death overlay wins.
+    drawBossDeathOverlay();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.

@@ -1016,6 +1016,36 @@ const audio = (() => {
       // the sting a "tension building" texture without being abrasive.
       noise(0.08, t, 2.0, 600, bus, { filterType:'lowpass', filterFreq2:200, q:0.5 });
     },
+    // Boss defeat sting — fires when the last boss enemy dies (bossAlive
+    // flips true→false), matched in duration to the visual death
+    // telegraph (~2.6s window) so the sting sustains across the
+    // titlecard's hold-and-fade. Distinct from victory() which is the
+    // FLOOR-clear cue: bossDefeat is the kill MOMENT (impact-then-decay
+    // shape), victory() is the run-end celebration (rising arpeggio).
+    // Layered: a sub-bass impact thump on t=0 ("the kill lands"), a
+    // descending filtered sweep ("the energy dissipates"), and a
+    // shimmering metallic ring tail ("the chromatic afterglow").
+    bossDefeat() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 2.0);
+      // Sub-bass impact thump — short attack, fast decay. The body of
+      // the kill beat. Mono so it punches dead-center.
+      osc('sine', 70, 30, 0.22, t, 0.55, bus, { attack:0.005 });
+      osc('sine', 140, 60, 0.12, t, 0.5,  bus, { attack:0.005 });
+      // Descending filtered noise sweep — bandpass dropping from ~1800Hz
+      // to ~300Hz over 1.6s. Reads as "the boss's signal collapses".
+      noise(0.10, t + 0.02, 1.6, 1800, bus, { filterType:'bandpass', filterFreq2:300, q:1.2 });
+      // Mid-range triangle pad — gentle suspended chord that hangs in
+      // the tail, fading the moment out without dropping to silence too
+      // abruptly. Wide stereo for atmospheric width.
+      osc('triangle', 330, 220, 0.07, t + 0.08, 1.6, bus, { attack:0.18, pan:-0.22 });
+      osc('triangle', 392, 262, 0.07, t + 0.08, 1.6, bus, { attack:0.18, pan:0.22 });
+      osc('triangle', 494, 330, 0.05, t + 0.10, 1.4, bus, { attack:0.20 });
+      // High shimmering ring — narrow bandpass at ~3kHz, gives the tail
+      // a chromatic sparkle. Quiet enough to sit under the pad.
+      osc('sine', 3120, 2200, 0.04, t + 0.18, 1.4, bus, { filterType:'bandpass', filterFreq:3000, filterFreq2:2200, q:6, pan:-0.18 });
+      osc('sine', 3140, 2200, 0.04, t + 0.18, 1.4, bus, { filterType:'bandpass', filterFreq:3000, filterFreq2:2200, q:6, pan:0.18 });
+    },
     descend() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.5, 0.4);
