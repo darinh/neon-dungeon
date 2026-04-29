@@ -7455,7 +7455,7 @@ class Enemy {
     ctx.save();
     ctx.globalAlpha=alpha;
 
-    const col=this.flashTimer>0?'#ffffff':this.colour;
+    const col=this.flashTimer>0?(_EG._damageFlash||'#ffffff'):this.colour;
     const elitePulse = this.elite ? 12 + Math.sin(this.bobAngle * 2) * 8 : 0;
     ctx.shadowBlur=this.isBoss?20: this.elite ? 10 + elitePulse : 10;
     const eliteGlow = this.eliteAffix ? ELITE_AFFIXES[this.eliteAffix].colour : col;
@@ -13267,7 +13267,7 @@ class Player {
    */
   draw(camX,camY) {
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY;
-    const col=this.flashTimer>0?'#ffffff':'#00f5ff';
+    const col=this.flashTimer>0?(_EG._damageFlash||'#ffffff'):'#00f5ff';
 
     // Dash afterimages
     for (const g of this.dashTrail) {

@@ -4184,7 +4184,7 @@ function generateFloor(floorNum) {
       t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
-      t === T.PLASMA || t === T.ARC ||
+      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE ||
       t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
@@ -4333,7 +4333,13 @@ function generateFloor(floorNum) {
         const tx = r.x + rndInt(1, r.w-2);
         const ty = r.y + rndInt(1, r.h-2);
         if (map[ty][tx] === T.FLOOR) {
-          map[ty][tx] = Math.random() < 0.7 ? T.TRAP_SPIKE : T.TRAP_SLOW;
+          // Trap mix: 60% spike (damage), 25% slow (impede), 15% shock
+          // (movement-suppress). Shock is the rarest because it commits
+          // the player in place — over-spawning trivialises rooms.
+          const roll = Math.random();
+          map[ty][tx] = roll < 0.60 ? T.TRAP_SPIKE
+                      : roll < 0.85 ? T.TRAP_SLOW
+                      : T.SHOCK_TILE;
         }
       }
     }
