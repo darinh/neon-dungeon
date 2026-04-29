@@ -728,6 +728,7 @@ const HACKWARE = {
   REVERSE_POLARITY:{ name:'Reverse Polarity', desc:'Reflect enemy shots in 6t back at owners', colour:'#aaffee', icon:'⇄', cooldown:14 },
   EMP_LINE:     { name:'EMP Line',     desc:'Stun beam: 8t pierce, disables electronics', colour:'#00eecc', icon:'═', cooldown:11 },
   CHRONO_LURE:  { name:'Chrono Lure',  desc:'Marker pulls & stuns enemies after 1s arming', colour:'#ff22aa', icon:'◔', cooldown:13 },
+  TIME_DILATION:{ name:'Time Dilation',desc:'4s temporal field: enemies & their bullets crawl', colour:'#6644ff', icon:'⧖', cooldown:14 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1149,6 +1150,16 @@ function activateHackware(player) {
         p._affixes = /** @type {any[]} */ ([]);
         p.isCrit = false;
         p.colour = '#aaffee';
+        // TIME_DILATION ownership-flip cleanup: an enemy bullet
+        // slowed by a time_field has _timeMul=0.5; once flipped to
+        // fromPlayer=true the per-frame field loop skips it and the
+        // 0.5 sticks until field expiry. Snap it back here so the
+        // reflected shot flies at full speed immediately. Mirrors the
+        // hitEnemies/maxPierces/piercing/etc. ownership cleanup
+        // above — anything that "promotes to player-owned" must
+        // touch _timeMul too. Same fix lives on the PARRY reflect at
+        // ~L4895.
+        p._timeMul = 1;
         spawnParticles(p.x, p.y, 'SPARK', '#aaffee', 4);
         reflected++;
       }
@@ -1454,6 +1465,47 @@ function activateHackware(player) {
       _CG.msg('◔ CHRONO LURE ARMED', '#ff22aa');
       break;
     }
+    case 'TIME_DILATION': {
+      // Temporal field — first hackware to slow enemy projectiles
+      // (the novel mechanic). Distinct from STATIC_FIELD which slows
+      // enemies (×0.6) AND damages them: TIME_DILATION's slow is
+      // STRONGER on enemies (×0.35 grunt / ×0.6 boss), does no damage,
+      // and ALSO halves enemy projectile velocity inside the zone.
+      // Combined effect: bullets become readable, enemies barely move
+      // — a brief breathing window for repositioning or precision
+      // shots. Niche distinct from EMP_BURST (full disable, instant)
+      // and CHRONO_LURE (delayed pull+stun): time_field is a
+      // continuous battlefield-control layer, not a CC spike.
+      audio.hackwareTimeDilation();
+      // Self-centred placement (mirrors REPAIR_PROTOCOL — no aim).
+      // The field follows the cast point, not the player; this keeps
+      // the temporal anchor stationary so retreat-then-engage tactics
+      // (lay it ahead, dash through) work intuitively.
+      // Max 1 active — recasting replaces the existing field (mirrors
+      // STATIC_FIELD/HOLO_DECOY/DECOY_TURRET dedup pattern). Without
+      // dedup, stacked fields would silently leak _timeMul state on
+      // overlapping projectiles AND multiply per-tick enemy slow
+      // application costs. Pre-expiry restore: any leftover slowed
+      // projectiles from the displaced field have their _timeMul
+      // cleared so they don't crawl forever after the new field
+      // ignores them. Caught proactively (mirrors the projectile
+      // restore in updateHackwareEffects' expiry branch).
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'time_field') {
+          for (const p of projectiles) {
+            if (p && p._timeMul !== undefined && p._timeMul !== 1) p._timeMul = 1;
+          }
+          hackwareEffects.splice(j, 1);
+        }
+      }
+      hackwareEffects.push({
+        type:'time_field', x:player.x, y:player.y, age:0, maxAge:4, radius:4
+      });
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#6644ff', 16);
+      triggerShake(2, 0.12);
+      _CG.msg('⧖ TIME DILATION ENGAGED', '#6644ff');
+      break;
+    }
   }
 }
 
@@ -1483,6 +1535,18 @@ function updateHackwareEffects(dt) {
         audio.turretDestroy();
         spawnParticles(fx.x, fx.y, 'EXPLOSION', '#00ffaa', 12);
         spawnParticles(fx.x, fx.y, 'SPARK', '#66ffcc', 6);
+      }
+      if (fx.type === 'time_field') {
+        // Restore any projectiles still inside the zone — without
+        // this, enemy bullets last seen inside the field would
+        // crawl forever after expiry (the per-frame "default to 1
+        // then maybe 0.5" reset stops running once fx is spliced).
+        // Loop walks ALL projectiles (not just enemy-owned) so a
+        // mid-field reflect (REVERSE_POLARITY flips fromPlayer mid-
+        // flight) doesn't leave a player-owned shot stuck slow.
+        for (const p of projectiles) {
+          if (p && p._timeMul !== undefined && p._timeMul !== 1) p._timeMul = 1;
+        }
       }
       hackwareEffects.splice(i, 1); continue;
     }
@@ -1721,6 +1785,62 @@ function updateHackwareEffects(dt) {
       }
     }
     // emp_ring is visual only, handled in draw
+
+    if (fx.type === 'time_field') {
+      // Continuous battlefield-control field. Two layered effects each
+      // tick: (a) enemy slow inside the radius (LOS-gated, stronger
+      // than STATIC_FIELD's slow + halved on bosses); (b) enemy
+      // projectile slow — first hackware to touch projectile velocity.
+      // No damage layer (distinct from STATIC_FIELD).
+      // ---- (a) Enemy slow ----
+      for (const e of enemies) {
+        if (e.dead) continue;
+        // Disguised mimics skipped: applying a visible slow without
+        // dealing damage (TIME_DILATION is control-only) would
+        // silently reveal a disguised crate's true identity (the
+        // player sees a "crate" creeping forward). STATIC_FIELD
+        // doesn't need this skip because it ALSO damages, so the
+        // identity reveal happens via takeDamage anyway — there's
+        // no information leak unique to the slow.
+        if (e._disguised) continue;
+        if (e._wrPhased) continue;
+        const d = dist(e.x, e.y, fx.x, fx.y);
+        if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+          // Stronger-wins: only deepen existing slows. The 0.3s timer
+          // refreshes each frame an enemy stays inside, so the slow
+          // lingers ~0.3s after exit (smooths zone-edge dance). Boss
+          // factor halved (0.6 vs grunt 0.35) per EMP_BURST/EMP_LINE
+          // precedent — stops boss perma-control via field stacking.
+          e.slowTimer = Math.max(e.slowTimer || 0, 0.3);
+          e.slowFactor = Math.min(e.slowFactor || 1, e.isBoss ? 0.6 : 0.35);
+        }
+      }
+      // ---- (b) Enemy projectile slow (NOVEL) ----
+      // Per-frame reset-then-set: every enemy projectile defaults
+      // back to _timeMul=1, then those inside the radius drop to 0.5.
+      // This implicitly handles the "exit while field alive" case
+      // (next frame the projectile is outside → reset to 1). The
+      // expiry branch above handles "field expires while inside".
+      // Skip: player shots, ally turret shots (DECOY_TURRET), dead
+      // projectiles. Position-based gate (no LOS) — bullets flying
+      // in straight lines through the zone get slowed regardless of
+      // wall geometry; LOS would create unintuitive "bullet whips
+      // back to fast speed when wall blocks line to centre" jitter.
+      for (const p of projectiles) {
+        if (!p || p.dead) continue;
+        if (p.fromPlayer || p.fromPlayerShot || p.isAllyTurret) continue;
+        const dpx = p.x - fx.x, dpy = p.y - fx.y;
+        const inside = (dpx * dpx + dpy * dpy) < (fx.radius * fx.radius);
+        p._timeMul = inside ? 0.5 : 1;
+      }
+      // Ambient temporal sparkles — slower spawn than static_field
+      // (the visual language is "time slowed" not "energetic").
+      if (Math.random() < dt * 5) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#aa88ff', 1);
+      }
+    }
 
     if (fx.type === 'hologram') {
       // Taunt nearby enemies toward the hologram
@@ -1962,6 +2082,47 @@ function drawHackwareEffects(camX, camY) {
             sx + Math.cos(aa) * r * 0.7, sy + Math.sin(aa) * r * 0.7);
         }
       }
+      ctx.restore();
+    }
+    if (fx.type === 'time_field') {
+      // Temporal field — purple zone with slow-rotating clock arms.
+      // Visual language: "time slowed" — gentle pulse, sweep arms
+      // rotate at 1/3 normal hackware-arm speed (CHRONO_LURE uses
+      // ×8, here ×2.5) so the eye reads "stretched time". Distinct
+      // from STATIC_FIELD (cyan, energetic 3-arc pulse) and
+      // CHRONO_LURE (pink, fast vortex on detonation).
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const r = fx.radius * TILE;
+      // Fade IN over 0.2s + fade OUT over the last 0.5s — eases the
+      // boundary so enemies don't appear to slow then snap back to
+      // full speed without warning.
+      const fadeIn = Math.min(1, fx.age / 0.2);
+      const fadeOut = Math.min(1, (fx.maxAge - fx.age) / 0.5);
+      const fade = Math.max(0, Math.min(fadeIn, fadeOut));
+      ctx.save();
+      // Outer boundary glow.
+      const pulse = 0.5 + Math.sin(fx.age * 4) * 0.2;
+      ctx.globalAlpha = fade * 0.18 * pulse;
+      ctx.fillStyle = '#6644ff';
+      ctx.shadowBlur = 22; ctx.shadowColor = '#6644ff';
+      NEON.draw.circle(ctx, sx, sy, r);
+      // Boundary stroke ring.
+      ctx.globalAlpha = fade * 0.5;
+      ctx.strokeStyle = '#aa88ff'; ctx.lineWidth = 1.5;
+      NEON.draw.circleStroke(ctx, sx, sy, r);
+      // Slow-rotating clock arms — three hands at 120° spacing.
+      ctx.strokeStyle = '#cca0ff'; ctx.lineWidth = 2;
+      ctx.globalAlpha = fade * 0.55;
+      for (let arm = 0; arm < 3; arm++) {
+        const aa = fx.age * 2.5 + (TWO_PI / 3) * arm;
+        NEON.draw.line(ctx,
+          sx + Math.cos(aa) * 6, sy + Math.sin(aa) * 6,
+          sx + Math.cos(aa) * r * 0.65, sy + Math.sin(aa) * r * 0.65);
+      }
+      // Centre core — soft pulsing dot, marks the anchor point.
+      ctx.globalAlpha = fade * 0.85;
+      ctx.fillStyle = '#e0c8ff';
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 6) * 1);
       ctx.restore();
     }
     if (fx.type === 'hologram') {
@@ -4478,6 +4639,7 @@ class Projectile {
   /** @type {any} */ isAllyTurret;
   /** @type {any} */ fromPlayerShot;
   /** @type {any} */ _isReverbEcho;
+  /** @type {any} */ _timeMul;
   /**
    * @param {any} x
    * @param {any} y
@@ -4552,6 +4714,11 @@ class Projectile {
     this._isReverbEcho = false;
     this._owner = /** @type {any} */ (null);
     this.isCrit = false;
+    // Pool-reset: a recycled projectile slot must NOT inherit a
+    // _timeMul=0.5 from a prior occupant that died inside a
+    // TIME_DILATION zone. Without this reset, the next shot fired
+    // from the same slot would crawl at half speed.
+    this._timeMul = 1;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
     else if (!this._affixes) this._affixes = /** @type {any[]} */ ([]);
   }
@@ -4579,7 +4746,17 @@ class Projectile {
     }
           /** @type {any} */ const prevX=this.x;
           /** @type {any} */ const prevY=this.y;
-    const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
+    // TIME_DILATION temporal field (content.js time_field branch in
+    // updateHackwareEffects) sets this._timeMul to 0.5 each frame
+    // for enemy projectiles inside the radius, and back to 1 when
+    // outside. The expiry branch + the activation dedup both restore
+    // any leftover slowed projectiles. Default to 1 so projectiles
+    // never touched by a field move at full speed. Multiply BOTH the
+    // x/y delta AND the travelled accumulator so range budget ticks
+    // at the same slowed rate (otherwise a slowed projectile would
+    // exhaust its maxRange before traversing the slowed distance).
+    const tmul = this._timeMul || 1;
+    const mx=this.dx*this.spd*tmul*dt, my=this.dy*this.spd*tmul*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
     if (this.travelled>=this.maxRange) {
@@ -4731,6 +4908,11 @@ class Projectile {
         this._affixes = /** @type {any[]} */ ([]);
         this.isCrit = false;
         this.colour = '#aaffee';
+        // TIME_DILATION ownership-flip cleanup — see REVERSE_POLARITY
+        // mirror at ~L1153 for the rationale. A parried bullet that
+        // was slowed by a time_field needs _timeMul snapped back to 1
+        // so the player's reflected shot doesn't crawl at half speed.
+        this._timeMul = 1;
         spawnParticles(this.x, this.y, 'SPARK', '#aaffee', 8);
         audio.reflect();
         return;

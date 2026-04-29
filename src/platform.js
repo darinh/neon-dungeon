@@ -1940,6 +1940,24 @@ const audio = (() => {
       noise(0.10, t, 0.18, 3500, bus);
       osc('sine',      40,  30, 0.18, t + 0.08,  0.45);
     },
+    hackwareTimeDilation() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 0.7);
+      // Temporal field engagement — sustained pitched-down hum that
+      // sells "time slowed". Opens with a tone pair (fifth) that
+      // sweeps DOWN slowly over 0.6s (vs the snap UP-then-DOWN of
+      // hackwareCloak's shimmer or the burst-then-decay of
+      // hackwareEMP). Long reverb tail (0.7 wet) gives the ear the
+      // sense of stretched time without resorting to a literal
+      // pitch-shift on a sample. Distinct from hackwareChronoLure
+      // (sharp triangle ticks) and hackwareGravity (deep sub-bass
+      // implosion) — both are timing/control-coded, but time-field
+      // is a soft envelopment, not a pulse.
+      osc('sine',     520, 240, 0.10, t,         0.55, bus);
+      osc('triangle', 780, 320, 0.06, t,         0.55, bus);
+      osc('sine',     180, 110, 0.08, t + 0.05,  0.65, bus);
+      noise(0.04, t, 0.45, 800, bus, { filterType: 'lowpass', q: 0.6 });
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
