@@ -690,6 +690,7 @@ const ELITE_AFFIXES = {
   PHASING:      { label:'Phasing',      colour:'#cc88ff', desc:'Periodically invulnerable',    icon:'◇' },
   VOLATILE:     { label:'Volatile',     colour:'#ff6600', desc:'Explodes on death',            icon:'💥' },
   FRENZY:       { label:'Frenzy',       colour:'#ff4466', desc:'Enrages when allies die',      icon:'🔥' },
+  PREDATOR:     { label:'Predator',     colour:'#ff0099', desc:'Locks on when player is hit',  icon:'🎯' },
 };
 const ELITE_AFFIX_KEYS = Object.keys(ELITE_AFFIXES);
 

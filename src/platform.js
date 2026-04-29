@@ -2422,6 +2422,19 @@ const audio = (() => {
       osc('square', 200, 500, 0.06, t + 0.05, 0.15, bus);
       noise(0.06, t + 0.02, 0.08, 4000, bus);
     },
+    elitePredator() {
+      // PREDATOR elite affix lock-on activation. Sharp two-tone
+      // descending chirp + filtered noise click — reads as a targeting
+      // computer locking onto the player. Distinct from eliteFrenzy
+      // (snarl + rising sawtooth — rage) and shieldBreak (low boom).
+      // Short overall envelope (~0.18s) so the cue doesn't cover up
+      // the hit reaction sounds it sequences with.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.35, 0.25);
+      osc('square',   1400, 700,  0.08, t,        0.10, bus, { attack:0.002 });
+      osc('triangle', 1100, 550,  0.06, t + 0.05, 0.10, bus, { attack:0.002 });
+      noise(0.04, t, 0.06, 5000, bus, { filterType:'highpass' });
+    },
     holoDecoyDeploy() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(0.7, 0.4, 0.3);

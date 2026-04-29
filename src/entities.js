@@ -1578,6 +1578,17 @@ function tickEliteAffix(enemy, dt) {
   }
   // FRENZY: speed/attack boost from stacks (applied dynamically via frenzyMul())
   // Stacks granted by notifyFrenzyElites() on nearby ally death
+  // PREDATOR: decay the lock-on buff timer; while >0 the elite gets a
+  // +30% speed/CD bonus via berserkerMul(). Refresh-only — re-triggering
+  // resets the timer rather than stacking. Distinct from FRENZY (stacks
+  // on ALLY death) and BERSERKER (own missing HP) — PREDATOR is event-
+  // driven by the PLAYER taking real HP damage. Pulsing red lock-on
+  // particles while active so the player can identify the threatened
+  // elite at a glance (mirrors VOLATILE's per-frame visual warning).
+  if (aff === 'PREDATOR' && enemy.predatorBuffTimer > 0) {
+    enemy.predatorBuffTimer = Math.max(0, enemy.predatorBuffTimer - dt);
+    if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff0099', 1);
+  }
 }
 
 // Notify FRENZY-affix elites within 4 tiles of a death — grant a frenzy stack
@@ -1594,6 +1605,38 @@ function notifyFrenzyElites(deathX, deathY) {
       spawnParticles(e.x, e.y, 'EXPLOSION', '#ff4466', 8);
       audio.eliteFrenzy();
       _EG.msg('⚡ FRENZY!', '#ff4466');
+    }
+  }
+}
+
+// Notify PREDATOR-affix elites within 8 tiles of the player — grant the
+// 3-second lock-on buff. Called from Player.takeDamage on every event
+// where REAL HP damage lands (`actual > 0`), gated AFTER the absorb
+// short-circuits so bubble/SHIELD DRIVER/ENERGY_SHIELD full-absorbs
+// don't trigger lock-on. Refresh-only (max one cue per elite per damage
+// event): the audio + glow burst fires on the LEADING edge — i.e. only
+// when the timer was at 0. Re-triggering during an active window silently
+// extends the timer, so DoT ticks (burn/toxic/arc/disruption) keep the
+// buff alive without spamming cues. Range check is positional only (no
+// LOS) — matches FRENZY's 4-tile death radius pattern; PREDATOR's 8t
+// range is doubled because the trigger fires at most once per real-
+// damage event (vs FRENZY's once per kill) and the elite needs enough
+// reach to be a meaningful threat at the moment the player took the hit.
+/**
+ * @param {any} [px]
+ * @param {any} [py]
+ */
+function notifyPredatorElites(px, py) {
+  for (const e of enemies) {
+    if (e.dead || e.eliteAffix !== 'PREDATOR') continue;
+    if (dist(e.x, e.y, px, py) <= 8) {
+      const wasInactive = e.predatorBuffTimer <= 0;
+      e.predatorBuffTimer = 3;
+      if (wasInactive) {
+        spawnParticles(e.x, e.y, 'EXPLOSION', '#ff0099', 8);
+        audio.elitePredator();
+        _EG.msg('🎯 PREDATOR!', '#ff0099');
+      }
     }
   }
 }
@@ -1789,6 +1832,7 @@ class Enemy {
   /** @type {any} */ phase;
   /** @type {any} */ phaseImmune;
   /** @type {any} */ phaseTimer;
+  /** @type {any} */ predatorBuffTimer;
   /** @type {any} */ prevPhase;
   /** @type {any} */ room;
   /** @type {any} */ shieldAngle;
@@ -1860,6 +1904,7 @@ class Enemy {
     this.shieldHp=0; this.shieldMax=0; this.shieldRegenDelay=0;
     this.phaseTimer=0; this.phaseImmune=false;
     this.frenzyStacks=0; // FRENZY affix: stacks gained from nearby ally deaths (max 2)
+    this.predatorBuffTimer=0; // PREDATOR affix: refresh-only countdown (s) — set by notifyPredatorElites() when player takes real HP damage within 8t
     // Weapon affix status effects
     this.burnTimer=0; this.burnDps=0;
     this.slowTimer=0; this.slowFactor=1;  // 1 = normal speed
@@ -3022,9 +3067,19 @@ class Enemy {
   // Elite affix combat tempo multiplier — scales speed and cooldowns
   // BERSERKER: scales with missing HP (1.0 → 1.5)
   // FRENZY: +40% per stack from nearby ally deaths (max 2 stacks = 1.8)
+  // PREDATOR: flat +30% during the 3s lock-on window after the player
+  //   takes real HP damage within 8 tiles. Refresh-only — DoTs keep the
+  //   timer alive but don't stack the multiplier. Mid-range between
+  //   BERSERKER's max (1.5 at 0 HP) and FRENZY's first stack (1.4),
+  //   intentional: PREDATOR's value isn't peak strength but reactive
+  //   uptime — it punishes the player for mistakes (hazards, DoT ticks,
+  //   bad positioning) rather than escalating with the fight. Mutually
+  //   exclusive with the other affixes (one affix per elite), so the
+  //   if/else-if early-return chain composes cleanly.
   berserkerMul() {
     if (this.eliteAffix === 'BERSERKER') return 1 + 0.5 * (1 - this.hp / this.maxHp);
     if (this.eliteAffix === 'FRENZY' && this.frenzyStacks > 0) return 1 + 0.4 * this.frenzyStacks;
+    if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) return 1.3;
     return 1;
   }
 
@@ -9225,6 +9280,37 @@ class Enemy {
         NEON.draw.circle(ctx, sx, sy, sz * (1.1 + this.frenzyStacks * 0.15));
         ctx.restore();
       }
+      // PREDATOR affix: pulsing red lock-on ring + crosshair tick marks
+      // while the buff timer is active. Alpha and ring radius pulse with
+      // bobAngle so the visual reads as "this elite is currently
+      // hunting you" — distinct from FRENZY's solid filled aura (which
+      // shows raw rage) and VOLATILE's stroked warning ring (death
+      // detonation telegraph). Clamp alpha into [0,1] per the canvas
+      // gotcha (negative globalAlpha is silently ignored — assignments
+      // outside [0,1] keep the previous value, so a small base + a
+      // signed pulse can render at full opacity for the negative phase
+      // of the pulse). Frac < 1 lerps the ring out toward the end of
+      // the buff window so it visibly winds down.
+      if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) {
+        ctx.save();
+        const frac = Math.min(1, this.predatorBuffTimer / 3);
+        const pPulse = 0.4 + 0.2 * Math.sin(this.bobAngle * 5);
+        ctx.globalAlpha = Math.max(0, Math.min(1, pPulse * frac));
+        ctx.strokeStyle = '#ff0099';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 8 + Math.sin(this.bobAngle * 5) * 4;
+        ctx.shadowColor = '#ff0099';
+        const rR = sz * (1.2 + 0.15 * Math.sin(this.bobAngle * 5));
+        NEON.draw.circleStroke(ctx, sx, sy, rR);
+        // Crosshair tick marks at N/E/S/W for the lock-on read
+        ctx.beginPath();
+        ctx.moveTo(sx - rR - 3, sy); ctx.lineTo(sx - rR + 1, sy);
+        ctx.moveTo(sx + rR - 1, sy); ctx.lineTo(sx + rR + 3, sy);
+        ctx.moveTo(sx, sy - rR - 3); ctx.lineTo(sx, sy - rR + 1);
+        ctx.moveTo(sx, sy + rR - 1); ctx.lineTo(sx, sy + rR + 3);
+        ctx.stroke();
+        ctx.restore();
+      }
       // Shield Generator protection: subtle cyan glow
       if (isEnemyShieldGenProtected(this)) {
         ctx.save();
@@ -12625,6 +12711,25 @@ class Player {
       actual = actual * 0.85;
     }
     this.hp=Math.max(0,this.hp-actual);
+    // PREDATOR elite affix: real HP damage just landed, so notify any
+    // PREDATOR-affix elites within 8 tiles so they enter their 3s
+    // lock-on window. Placed AFTER hp deduction (and AFTER the
+    // `actual <= 0` early-return at ~12582 plus all absorb short-
+    // circuits — bubble/SHIELD DRIVER/ENERGY_SHIELD all `return 0`
+    // before this point per the takeDamage RETURN VALUE CONTRACT) so
+    // we only trigger on real HP loss. Placed BEFORE the on-hit
+    // visual/audio block so the PREDATOR cue sequences naturally with
+    // the hit reaction. DoT ticks (burn/toxic/arc/disruption/frost)
+    // pass ignoreDefense:true with sub-1 fractional dmg, but the
+    // `actual <= 0` early-return AND the `Math.max(1, …)` clamps in
+    // the direct-hit path mean ignoreDefense DoTs that pass through
+    // here have actual >= 0 — the float-vs-int comparison is safe
+    // because notifyPredatorElites is idempotent on refresh (the
+    // leading-edge gate on `wasInactive` ensures audio/glow only fire
+    // once per buff window, no matter how many DoT frames flow
+    // through). Bounded loop over `enemies` is hot-path acceptable —
+    // takeDamage is called per hit, not per frame.
+    notifyPredatorElites(this.x, this.y);
     // RETRIBUTION perk: arm/refresh the 3s ATK window on every hit that lands
     // real damage. Refresh-on-tick is intentional — env DoTs (plasma/toxic/
     // arc/disruption/frost) keep the window alive while the player is in a
