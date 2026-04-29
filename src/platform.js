@@ -2,14 +2,31 @@
 'use strict';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+// W/H are the EFFECTIVE LOGICAL canvas size — what every renderer + layout
+// path treats as the drawable area. They equal `rawW / worldZoom` and
+// `rawH / worldZoom` respectively, where rawW/rawH are the canvas backing
+// dimensions derived from the viewport + gameScale (engine/viewport.js).
+//
+// `worldZoom` is the user-facing global UI scale (browser-CTRL-+ analog).
+// At the top of every per-frame render the canvas context is wrapped in
+// `ctx.scale(worldZoom, worldZoom)`, so the smaller logical W×H is blown
+// up to fill the full canvas backing. Pointer/touch input is divided by
+// worldZoom at the host boundary (toLogical/mousemove) so every consumer
+// sees coordinates already in logical (post-zoom) space — no per-site
+// `/worldZoom` corrections required anywhere in the codebase.
 let W = 900, H = 600;
+// Raw canvas backing size (= `vw / gameScale`). Pre-zoom. Used by
+// resize() and the host-side input normalization to derive logical W/H
+// + divide pointer input by worldZoom. Stored so the resize re-fire on
+// stepper change can recompute logical W/H without re-querying the DOM.
+let rawW = 900, rawH = 600;
 let gameScale = 1;
 const TILE = 32;
 const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 /** @type {Record<string, string>} */
@@ -271,10 +288,24 @@ function resize() {
   // Clamped so tiles stay between ~14 CSS px (0.7) and ~30 CSS px (1.5)
   gameScale = _vp.computeScale(vw, vh);
   const _sz = _vp.computeLogicalSize(vw, vh, gameScale);
-  W = _sz.W;
-  H = _sz.H;
-  canvas.width = W;
-  canvas.height = H;
+  // rawW/rawH = canvas backing size (pre-worldZoom logical). The canvas
+  // backing always matches the gameScale-derived raw size — worldZoom
+  // only affects what we expose as W/H to the rendering and layout code,
+  // and the `ctx.scale(worldZoom)` wrap at the top of every frame
+  // upscales the smaller logical area to fill this backing.
+  rawW = _sz.W;
+  rawH = _sz.H;
+  canvas.width  = rawW;
+  canvas.height = rawH;
+  // Effective logical W/H = raw / worldZoom. At worldZoom = 1.0 they
+  // equal rawW/rawH (no behaviour change); at 2.0× they're half-size,
+  // so menu/HUD layout sees a smaller canvas and the global ctx.scale
+  // wrap blows it back up — exact CTRL+ analog. Defensive: settings
+  // may not be fully populated on the very first resize before load();
+  // fall back to 1.0 in that case.
+  const _wz = (settings && settings.worldZoom) || 1;
+  W = Math.max(1, Math.round(rawW / _wz));
+  H = Math.max(1, Math.round(rawH / _wz));
   scale = gameScale;
   offX = 0;
   offY = 0;
@@ -292,7 +323,22 @@ function resize() {
   // window resize / orientation change can't clobber a user's
   // explicit zoom choice. See settings.applyMobileFirstDefaults
   // for the deferred-default rationale.
+  const _wzBefore = (settings && settings.worldZoom) || 1;
   settings.applyMobileFirstDefaults();
+  const _wzAfter = (settings && settings.worldZoom) || 1;
+  // Init-order race fix (codex review): applyMobileFirstDefaults can
+  // bump worldZoom from 1.0 → 1.5 on a fresh-install compact device.
+  // The W/H + updateLayout above used the PRE-bump zoom, so without
+  // this re-compute the very first frame would render with the new
+  // ctx.scale(1.5) wrap but stale 1.0×-sized logical bounds — menus
+  // overflow off-canvas. Recompute only on actual change so the
+  // common-case (no bump, or non-first resize that early-returns
+  // inside applyMobileFirstDefaults) stays a single-pass.
+  if (_wzAfter !== _wzBefore) {
+    W = Math.max(1, Math.round(rawW / _wzAfter));
+    H = Math.max(1, Math.round(rawH / _wzAfter));
+    updateLayout();
+  }
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
 // resize() + event listener registered in Boot section (after all defs are ready)
@@ -399,8 +445,16 @@ let lastKey = '';
 let nameEntryTap = null;
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
-  mouse.x = (e.clientX - r.left) * canvas.width / r.width;
-  mouse.y = (e.clientY - r.top)  * canvas.height / r.height;
+  // Pointer events arrive in CSS px → map to canvas BACKING px → then
+  // divide by worldZoom to land in LOGICAL coordinates (the same space
+  // every renderer + layout path operates in). With this single
+  // normalization site, no consumer in the codebase needs a
+  // `/worldZoom` correction — every `mouse.x`/`mouse.y` read is
+  // already pre-zoomed. Defensive: settings may be momentarily
+  // un-populated; fall back to 1.0.
+  const _wz = (settings && settings.worldZoom) || 1;
+  mouse.x = (e.clientX - r.left) * canvas.width  / r.width  / _wz;
+  mouse.y = (e.clientY - r.top)  * canvas.height / r.height / _wz;
 });
 canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
@@ -469,7 +523,13 @@ const _touchHelpers = NEON.touch;
  * @returns {[number, number]}
  */
 function toCanvas(clientX, clientY) {
-  return _touchHelpers.toCanvas(clientX, clientY, canvas);
+  // Canvas-internal coords first → divide by worldZoom to land in
+  // logical (post-global-scale-wrap) coordinates. Single host-side
+  // normalization site so every touch handler downstream sees mouse-
+  // compatible logical coords (matches the mousemove handler exactly).
+  const [cx, cy] = _touchHelpers.toCanvas(clientX, clientY, canvas);
+  const _wz = (settings && settings.worldZoom) || 1;
+  return [cx / _wz, cy / _wz];
 }
 
 /**
@@ -895,7 +955,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 
 // Tile helpers
 /** @param {any} t */
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR; }
 /** @param {any} t */
 function isSeeThrough(t) {
   return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
@@ -1193,6 +1253,16 @@ const audio = (() => {
       osc('square', 1400, 280, 0.05, t, 0.10);
       osc('square', 900,  180, 0.04, t + 0.04, 0.08);
       noise(0.04, t, 0.12, 1600, null, { filterType:'lowpass', filterFreq2:600 });
+    },
+    repulsor() {
+      // Quick "boing" cue for REPULSOR_TILE — ascending pitch sweep paired
+      // with a soft band-limited noise puff. Distinct from shockTile (which
+      // descends and feels lock-down) and arcZap (which is sharp + bright).
+      // Cyan-coded in-game; sound rises to mirror the outward push.
+      const c = getCtx(); const t = c.currentTime;
+      osc('triangle', 320, 720, 0.06, t, 0.12);
+      osc('sine',     220, 540, 0.04, t + 0.02, 0.10);
+      noise(0.03, t, 0.10, 2200, null, { filterType:'bandpass', filterFreq2:1400 });
     },
     toxicBurn() {
       const c = getCtx(); const t = c.currentTime;
@@ -2101,6 +2171,41 @@ const audio = (() => {
       osc('sine',     180, 110, 0.08, t + 0.05,  0.65, bus);
       noise(0.04, t, 0.45, 800, bus, { filterType: 'lowpass', q: 0.6 });
     },
+    hackwareDataSpike() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.3);
+      // Precision pierce — sharp metallic chirp + tight high-frequency
+      // crackle. Distinct from hackwareEMPLine (sweeping rising sine
+      // 300→1400Hz with sawtooth) which is broader and longer. The
+      // spike opens with a snap chirp (1600→2800Hz over 60ms), layers
+      // a brief square attack for the "data" tonal bite, and a noise
+      // pop for the impact. Lower wet/dry than EMP variants — the
+      // spike is a focused hit, not a sweeping disruption, so it
+      // shouldn't ring out as long. The brief sub-tone at the tail
+      // grounds the high-end stack so it doesn't feel weightless.
+      osc('triangle', 1600, 2800, 0.06, t,         0.10, bus);
+      osc('square',   2200, 1100, 0.04, t + 0.01,  0.08, bus);
+      noise(0.08, t, 0.06, 6000, bus, { filterType: 'highpass', q: 0.8 });
+      osc('sine',      120,   60, 0.06, t + 0.03,  0.18);
+    },
+    hackwareShieldBubble() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.7);
+      // Defensive activation — soft ascending shimmer + warm sub.
+      // Sits in the same energetic family as shieldRestore() (the
+      // existing perk-restore chime) but stretched longer (180ms vs
+      // ~120ms) and pitched lower at the start so the ear reads it as
+      // "force field engaged" rather than "small charge restored".
+      // Distinct from hackwareCloak (pure shimmer w/ no body) by the
+      // sub layer, and from hackwareRepair (single triangle ping) by
+      // the layered ascending arpeggio. Higher wet/dry (0.7) gives
+      // the bubble a literal "enclosed-space" reverb tail.
+      osc('sine',     350, 750,  0.18, t,          0.22, bus);
+      osc('triangle', 500, 1050, 0.14, t + 0.04,   0.18, bus);
+      osc('sine',     700, 1300, 0.08, t + 0.10,   0.14, bus);
+      // Sub thump anchors the activation
+      osc('sine',     180,  90,  0.20, t,          0.18);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
@@ -2316,6 +2421,19 @@ const audio = (() => {
       osc('sawtooth', 120, 280, 0.1, t, 0.2, bus);
       osc('square', 200, 500, 0.06, t + 0.05, 0.15, bus);
       noise(0.06, t + 0.02, 0.08, 4000, bus);
+    },
+    elitePredator() {
+      // PREDATOR elite affix lock-on activation. Sharp two-tone
+      // descending chirp + filtered noise click — reads as a targeting
+      // computer locking onto the player. Distinct from eliteFrenzy
+      // (snarl + rising sawtooth — rage) and shieldBreak (low boom).
+      // Short overall envelope (~0.18s) so the cue doesn't cover up
+      // the hit reaction sounds it sequences with.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.7, 0.35, 0.25);
+      osc('square',   1400, 700,  0.08, t,        0.10, bus, { attack:0.002 });
+      osc('triangle', 1100, 550,  0.06, t + 0.05, 0.10, bus, { attack:0.002 });
+      noise(0.04, t, 0.06, 5000, bus, { filterType:'highpass' });
     },
     holoDecoyDeploy() {
       const c = getCtx(); const t = c.currentTime;
