@@ -769,6 +769,33 @@ function isPlayerDamageImmune() {
  */
 function activateHackware(player) {
   if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
+  // NULLIFIER jam aura blocks activation entirely. Calls
+  // isPlayerInNullifierAura DIRECTLY (rather than reading the cached
+  // player.hackwareJammed flag) for a FRESH same-frame check — the
+  // cached flag is set by updateNullifierJam which runs AFTER
+  // player.update in the main game loop, so reading the flag here would
+  // be one frame stale. A player stepping into an aura on the same
+  // frame as the activation key-press could otherwise sneak past the
+  // gate (boundary exploit; called out by gpt-5.3-codex r1 + gpt-5.5 r1).
+  // The fresh-check eliminates the 1-frame window entirely.
+  //
+  // The cached flag (player.hackwareJammed) is still used by the
+  // cooldown-tick gate at the player.update site — staleness on
+  // cooldown ticking is invisible (1/60s out of a 10s cooldown is 0.17%).
+  // The helper itself respects isPlayerDamageImmune() (dash i-frames
+  // and PHASE_CLOAK pass through, matching DISRUPTOR precedent — claude-
+  // opus-4.7 r1 callout). Note: PHASE_CLOAK is itself a hackware so the
+  // gate fires BEFORE you can pop cloak inside an aura; pre-cloaking
+  // outside is the intended counterplay vector.
+  //
+  // Audio + floater give immediate tactile feedback so the player
+  // understands WHY the hackware fizzled (without this, a silent
+  // return would feel like an input lag bug).
+  if (isPlayerInNullifierAura(player)) {
+    audio.hackwareJammed();
+    spawnDmgText(player.x, player.y, 'JAMMED', '#cc66dd');
+    return;
+  }
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
   // Hackware cooldown set on activation. Stacks multiplicatively with

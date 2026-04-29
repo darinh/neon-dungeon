@@ -1588,6 +1588,11 @@ const game = {
 
     // update disruption fields (must run before player.update next frame for flag)
     updateDisruptionFields(dt, player);
+    // update NULLIFIER jam aura (must run before player.update next frame
+    // for player.hackwareJammed flag — same call-ordering rationale as
+    // updateDisruptionFields above). Iterates live NULLIFIERs and sets
+    // the flag based on player proximity.
+    updateNullifierJam(dt, player);
     updateFrostPatches(dt, player);
     // Tick ARCHITECT-placed walls — auto-decay back to origTile after
     // ARCHITECT_DECAY_TIME. Pass dungeon.map so the helper can mutate it.
