@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 66 entries. Every biome has at least
-thirteen whispers after the ion-storm bundle (`w-sb-14`, `w-cc-13`,
-`w-fw-13`, `w-uk-13`, `w-on-13`), which extends the signal/anchor thread into
-charged weather, buffered lightning, ion confessions, antenna handshakes, and
-blue-wire city rain.
+Authored whisper content currently ships 71 entries. Every biome has at least
+fourteen whispers after the afterimage/exposure bundle (`w-sb-15`, `w-cc-14`,
+`w-fw-14`, `w-uk-14`, `w-on-14`), which extends the signal/anchor thread into
+delayed light, exposure tables, retinal exceptions, phosphene maps, and city
+crosswalk afterimages.
 
 ---
 
@@ -4436,3 +4436,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v139.0  | Secret-room whisper ghost-route wayfinding bundle: `WHISPERS` grows to 56 entries with one new biome-gated fragment per biome (`w-sb-12`, `w-cc-11`, `w-fw-11`, `w-uk-11`, `w-on-11`) extending the deep-cache dead-drop thread into hidden paths, firewall detours, uplink pings, and city transit signals. Added `tests/whispers-bundle-10.test.js` to pin metadata, picker eligibility, per-biome >=11 coverage, progress floor, uniqueness, and ghost-route vocabulary continuity. |
 | v140.0  | Secret-room whisper mirror-fault bundle: `WHISPERS` grows to 61 entries with one new biome-gated fragment per biome (`w-sb-13`, `w-cc-12`, `w-fw-12`, `w-uk-12`, `w-on-12`) extending the reflection/anchor thread into delayed mirrors, cached reflection indexes, glass exceptions, antenna doubles, and city storefront windows. Added `tests/whispers-bundle-11.test.js` to pin metadata, picker eligibility, per-biome >=12 coverage, progress floor, uniqueness, and mirror-fault vocabulary continuity. |
 | v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
+| v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |

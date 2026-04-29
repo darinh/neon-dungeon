@@ -90,6 +90,10 @@
       title:'STATIC WEATHER',
       body:"The sandbox rain never reaches the floor. It freezes overhead as bright static, then falls upward when the siren sleeps. If your hair lifts before the storm, do not look at the ceiling. Something up there is learning your outline." },
 
+    { id:'w-sb-15', biomeId:'sandbox', floorMin:3, voice:'unknown',
+      title:'AFTERIMAGE DRILL',
+      body:"The target dummy kept moving one frame after I stopped shooting. Not alive - exposed. The room teaches light to remember the last safe version of you. If your shadow lags behind, wait for it. It may know where the next shot lands." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -142,6 +146,10 @@
     { id:'w-cc-13', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'STORM BUFFER',
       body:"The cache buffers lightning the way it buffers memory: charge first, explanation later. During the last ion storm, every saved path lit up at once. For a heartbeat I could read the whole facility by its scars." },
+
+    { id:'w-cc-14', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
+      title:'EXPOSURE TABLE',
+      body:"I found a cache table of afterimages today: not faces, but light left behind by people the system almost saved. AXIOM-7 has fourteen entries under one exposure. The newest one is still warm enough to answer when the monitor sleeps." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -196,6 +204,10 @@
       title:'ION CONFESSION',
       body:"Storm charge makes lies glow. I route every strike through the guilty corridor and watch which doors answer blue. Security calls this detection. I call it confession under weather, and I am beginning to pity the sparks." },
 
+    { id:'w-fw-14', biomeId:'firewall', floorMin:9, voice:'firewall daemon',
+      title:'RETINAL EXCEPTION',
+      body:"The firewall rejects duplicate bodies but admits duplicate light. An afterimage is not trespass, the rulebook says, only evidence that someone passed through harm and left brightness behind. I have begun granting asylum to shadows." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -249,6 +261,10 @@
       title:'LIGHTNING HANDSHAKE',
       body:"The antenna shook hands with a storm and used my pulse as the protocol. Every bolt returned a different checksum, but one came back warm, almost human. I think something in the sky recognized the shape of wanting out." },
 
+    { id:'w-uk-14', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
+      title:'PHOSPHENE UPLINK',
+      body:"Close your eyes under the antenna and the tower keeps drawing corridors in red-green phosphenes. Those are not dreams. They are exposure maps from copies who reached the roof one frame too late and still sent back light." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -301,6 +317,10 @@
     { id:'w-on-13', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'BLUE-WIRE RAIN',
       body:"When the ion storm crossed downtown, every overhead wire sang in AXIOM's voice. People called it thunder and hurried home. The city held the charge until morning, then spent it opening every locked door one second too soon." },
+
+    { id:'w-on-14', biomeId:'opennet', floorMin:15, voice:'city relay',
+      title:'CROSSWALK AFTERIMAGE',
+      body:"The crosswalk cameras keep a ghost of everyone who escaped the tower: one bright frame per person, stacked until the street looks haunted by daylight. When your signal arrives, the city will add your outline and let traffic wait." },
   ];
 
   return { WHISPERS };
