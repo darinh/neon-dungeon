@@ -84,6 +84,51 @@ function modifierProgressSuffix(modKey, player) {
 }
 
 /**
+ * Draws a wrapping expanded-map legend row. The expanded minimap is modal
+ * rather than hot-path HUD, so measured text is safer than hard-coded widths
+ * that drift with textScale and glyph choice.
+ *
+ * @param {Array<[string, string]>} items
+ * @param {number} x
+ * @param {number} y
+ * @param {number} maxX
+ * @param {number} lineH
+ * @returns {number}
+ */
+function drawExpandedLegendItems(items, x, y, maxX, lineH) {
+  let lx = x;
+  let ly = y;
+  for (const [col, label] of items) {
+    if (col == null || label == null) continue;
+    ctx.fillStyle = col;
+    const tw = ctx.measureText(label).width;
+    if (lx > x && lx + tw > maxX) {
+      lx = x;
+      ly += lineH;
+    }
+    if (ly + lineH > H - safeBottom) break;
+    ctx.fillText(label, lx, ly);
+    lx += tw + 12;
+  }
+  return ly + lineH;
+}
+
+/**
+ * @returns {Array<[string, string]>}
+ */
+function expandedEliteAffixLegendItems() {
+  if (typeof ELITE_AFFIX_KEYS === 'undefined' || typeof ELITE_AFFIXES === 'undefined') return [];
+  /** @type {Array<[string, string]>} */
+  const items = [];
+  for (const id of ELITE_AFFIX_KEYS) {
+    const aff = /** @type {any} */ (ELITE_AFFIXES)[id];
+    if (!aff || !aff.colour || !aff.icon || !aff.label) continue;
+    items.push([aff.colour, `${aff.icon} ${aff.label}`]);
+  }
+  return items;
+}
+
+/**
  * Piercing Heart weapon-affix HUD progress suffix — appended to the HUD
  * weapon-name readout when the active weapon carries the PIERCING_HEART
  * suffix affix ("of Piercing Heart"). Without this indicator, players
@@ -2504,19 +2549,20 @@ function drawExpandedMinimap(dungeon, player) {
   const legendX = mx + 6, legendY = my + mh + 24;
   const lFs = Math.max(8, Math.min(10, fs - 1));
   ctx.font = `${lFs}px monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  /** @type {Array<[string, string]>} */
   const legend = [
     ['#00f5ff','● You'], ['#ff3333','● Enemy'], ['#ffffff','■ Exit'],
     ['#39ff14','■ Shop'], ['#ffb700','■ Lore'], ['#cc44ff','■ Implant'],
     ['#44ffcc','■ Event'], ['#ff6633','■ Challenge']
   ];
-  let lx = legendX;
-  for (const [col, label] of legend) {
-    if (col == null || label == null) continue;
-    ctx.fillStyle = col;
-    const tw = ctx.measureText(label).width;
-    if (lx + tw > mx + mw) break;
-    ctx.fillText(label, lx, legendY);
-    lx += tw + 12;
+  const legendLineH = Math.max(12, lFs + 4);
+  const nextLegendY = drawExpandedLegendItems(legend, legendX, legendY, mx + mw, legendLineH);
+  const eliteLegend = expandedEliteAffixLegendItems();
+  if (eliteLegend.length) {
+    ctx.fillStyle = '#666688';
+    ctx.fillText('ELITES:', legendX, nextLegendY);
+    const eliteStartX = legendX + ctx.measureText('ELITES:').width + 10;
+    drawExpandedLegendItems(eliteLegend, eliteStartX, nextLegendY, mx + mw, legendLineH);
   }
 
   ctx.restore();
