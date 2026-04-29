@@ -2,7 +2,8 @@
 'use strict';
 // src/meta/alarm-light.js — game-side wiring of the engine alarm-light.
 //
-// Configures the NEON DUNGEON-specific biome allowlist (cache, firewall)
+// Configures the NEON DUNGEON-specific biome allowlist (cache, firewall,
+// uplink)
 // against the engine factory at engine/alarm-light.js, and exposes the
 // wired-up surface on NEON.alarmLight for render.js consumers.
 //
@@ -22,7 +23,7 @@
 
   // Biomes that opt in to alarm lights. Keyed by AREAS[i].id from
   // src/data/biomes.js.
-  const ALARM_BIOMES = new Set(['cache', 'firewall']);
+  const ALARM_BIOMES = new Set(['cache', 'firewall', 'uplink']);
 
   const wired = engine.createAlarmLight({ allowedBiomes: ALARM_BIOMES });
 
