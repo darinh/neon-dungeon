@@ -29,24 +29,179 @@ function currentBiomePalette() {
            minimapWall:'#1a1a2e', minimapFloor:'#252545', dust:['#66ddff','#aabbcc'], ambient:'#66ddff' };
 }
 
+/**
+ * Floor modifier progress suffix — appended to the HUD modifier badge for
+ * counter-driven positive modifiers. Without this indicator, OVERCHARGE
+ * ("every 5th shot guaranteed crit") and WINDFALL ("every 5th defeat drops
+ * a bonus core") tick invisibly — players only see the trigger payoff
+ * (crit floater, +1◆ floater) with no sense of when the next one is due.
+ * Same discoverability gap PR #248 closed for trauma_kit charges.
+ *
+ * Format: ` N/5` where N = (counter % 5). At floor start or just after a
+ * trigger N=0 ("just rolled over"); at N=4 the next event triggers; then
+ * the counter wraps back to 0. Matches the increment-then-mod path in
+ * Player.shoot (OVERCHARGE) and Enemy.die (WINDFALL): the counter is
+ * incremented BEFORE the % 5 === 0 check, so the displayed value reflects
+ * the count AFTER the most recent qualifying event. Defensive `|0`
+ * nucleation tolerates undefined on legacy player shapes that bypassed
+ * the ctor (mirrors the trauma_kit `_nanoMedicCharges | 0` pattern at
+ * ~render.js:861).
+ *
+ * Returns '' for non-counter modifiers (CASCADE — procs every kill within
+ * radius, no count to show; all negative modifiers — no progress) so the
+ * badge layout for those is unchanged.
+ *
+ * @param {string|null|undefined} modKey
+ * @param {any} player
+ * @returns {string}
+ */
+function modifierProgressSuffix(modKey, player) {
+  if (!modKey || !player) return '';
+  if (modKey === 'OVERCHARGE') {
+    const cnt = player._overchargeShots | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  if (modKey === 'WINDFALL') {
+    const cnt = player._windfallKills | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  if (modKey === 'SIGNAL_BOOST') {
+    const cnt = player._signalBoostKills | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  if (modKey === 'REVERB') {
+    const cnt = player._reverbShots | 0;
+    return ` ${cnt % 5}/5`;
+  }
+  if (modKey === 'CHAINREACT') {
+    // CHAINREACT shows a flat ⚡ glyph while the chain window is alive
+    // (player._chainBuffTimer > 0), nothing when the chain has lapsed.
+    // No N/M counter — the modifier's relevant state is "is a chain in
+    // flight RIGHT NOW", not how many defeats accumulated.
+    return (player._chainBuffTimer > 0) ? ' ⚡' : '';
+  }
+  return '';
+}
+
+/**
+ * Piercing Heart weapon-affix HUD progress suffix — appended to the HUD
+ * weapon-name readout when the active weapon carries the PIERCING_HEART
+ * suffix affix ("of Piercing Heart"). Without this indicator, players
+ * have no visibility into the +1 Max HP per kill cap (hardcoded at 20 in
+ * src/entities.js Enemy.die `_phStacks < 20` gate) — they only see the
+ * +heal floater on a qualifying kill, with no sense of how close they
+ * are to the cap. This is the same discoverability gap modifierProgressSuffix
+ * closed for floor modifiers (PR #252 / #256) and that the trauma_kit
+ * HUD indicator closed for that meta upgrade (PR #248).
+ *
+ * Format: ` ♥N/20` where N = `player._piercingHearts | 0` clamped to the
+ * cap. The ♥ glyph mirrors HP semantics (the affix grants +Max HP).
+ * Defensive `| 0` nucleation tolerates undefined on legacy player shapes
+ * that bypassed the ctor (mirrors the trauma_kit `_nanoMedicCharges | 0`
+ * pattern at ~render.js:861 and the modifier-suffix counter pattern).
+ *
+ * The cap (20) is duplicated from src/entities.js Enemy.die — when
+ * changing the cap, update BOTH sites.
+ *
+ * Counter scope: per-RUN (lives on `_EG.player._piercingHearts`,
+ * persisted in saveGame's explicit-enum block at src/game.js:1023).
+ * Stacks are NOT weapon-scoped — they persist across weapon swaps
+ * within a run. The HUD indicator surfaces ONLY when a PIERCING_HEART
+ * weapon is currently equipped (so a swap-away hides the badge but
+ * preserves the underlying stack count for when a PH weapon is
+ * re-equipped). Returns '' when no PH weapon is equipped, when the
+ * weapon has no _affixes array, or when player/weapon is missing —
+ * defensive against boot/teardown frames where the HUD may be drawn
+ * before weapon initialization.
+ *
+ * @param {any} player
+ * @returns {string}
+ */
+function piercingHeartHudSuffix(player) {
+  if (!player) return '';
+  const w = player.weapon;
+  if (!w || !Array.isArray(w._affixes)) return '';
+  if (!w._affixes.includes('PIERCING_HEART')) return '';
+  const stacks = player._piercingHearts | 0;
+  const capped = stacks < 0 ? 0 : (stacks > 20 ? 20 : stacks);
+  return ` ♥${capped}/20`;
+}
+
+/**
+ * Siphon weapon-affix HUD progress suffix — appended to the HUD weapon-name
+ * readout when the active weapon carries the SIPHON suffix affix
+ * ("of Siphoning"). Without this indicator the +1 credit drip every 3rd
+ * direct hit is barely noticeable — players see a single "+1 CR" floater
+ * spawn near themselves at unpredictable cadence with no sense of how
+ * close the next drip is. Same discoverability gap PR #258 closed for
+ * PIERCING_HEART (and PR #252 / #256 for OVERCHARGE / WINDFALL /
+ * SIGNAL_BOOST floor modifiers).
+ *
+ * Format: ` ◈N/3` where N = `player._siphonHits | 0` mod 3 (the counter
+ * resets to 0 at >= 3 in src/entities.js applyHitEffects so values
+ * displayed are 0..2 in normal gameplay; the % 3 guards against any
+ * future code path that leaves the counter > 2). The ◈ glyph mirrors
+ * the credit symbol used in the credit readout (`◈${player.credits}`
+ * at ~render.js:947) and the floater (`+N◈` floaters across
+ * entities.js) — the player reads it as "credit accumulator" at a glance.
+ *
+ * Counter scope: per-RUN, lives on `_EG.player._siphonHits`. NOT
+ * persisted across save/load (see src/entities.js:1182-1186 — losing
+ * 0–2 hits across a Continue is acceptable to keep the save schema
+ * lean). The `| 0` nucleation tolerates the post-Continue undefined
+ * case AND any NaN/Infinity from corrupted localStorage (defensive
+ * even though the field isn't currently saved — future-proofing).
+ *
+ * The threshold (3) is duplicated from src/entities.js applyHitEffects
+ * — when changing the threshold, update BOTH sites.
+ *
+ * Surfaces ONLY when a SIPHON weapon is currently equipped. Swapping
+ * to a non-SIPHON weapon hides the badge but the underlying counter
+ * persists (run-scoped) — re-equipping a SIPHON weapon resumes the
+ * count. Mirrors the piercingHeartHudSuffix swap-survival behavior.
+ *
+ * @param {any} player
+ * @returns {string}
+ */
+function siphonHudSuffix(player) {
+  if (!player) return '';
+  const w = player.weapon;
+  if (!w || !Array.isArray(w._affixes)) return '';
+  if (!w._affixes.includes('SIPHON')) return '';
+  const hits = player._siphonHits | 0;
+  const shown = hits < 0 ? 0 : (hits % 3);
+  return ` ◈${shown}/3`;
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 /**
  * @param {any} player
  */
 function getCamera(player) {
+  // settings.worldZoom is the user-facing playfield zoom multiplier.
+  // The world is rendered inside a `ctx.scale(zoom, zoom)` transform,
+  // so the visible viewport in WORLD-pixel space is W/zoom × H/zoom.
+  // Camera math centres the player against that effective viewport
+  // and clamps against the world bounds using the same effective size.
+  // Falls back to 1.0 if settings is partially populated (defensive —
+  // matches the snap-to-step + mobile-default loader path in
+  // platform.js, but guards against a transient pre-load() read).
+  const zoom = (settings && settings.worldZoom) || 1;
+  const viewW = W / zoom;
+  const viewH = H / zoom;
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
   // Allow camera overscroll near edges so player remains visible under minimap / touch controls
   const leftPad = 5 * TILE;
   const rightPad = Math.max(5 * TILE, 130 + safeRight);
   const topPad = Math.max(5 * TILE, 92 + safeTop);
   const bottomPad = 5 * TILE;
-  const camX = W >= worldW
-    ? -(W - worldW) / 2
-    : clamp(player.x * TILE - W / 2, -leftPad, worldW - W + rightPad);
+  const camX = viewW >= worldW
+    ? -(viewW - worldW) / 2
+    : clamp(player.x * TILE - viewW / 2, -leftPad, worldW - viewW + rightPad);
   const botClear = layout.hudH / 2;
-  const camY = H >= worldH
-    ? -(H - worldH) / 2
-    : clamp(player.y * TILE - H / 2 + botClear, -topPad, worldH - H + botClear + bottomPad);
+  const camY = viewH >= worldH
+    ? -(viewH - worldH) / 2
+    : clamp(player.y * TILE - viewH / 2 + botClear, -topPad, worldH - viewH + botClear + bottomPad);
   return { x: camX, y: camY };
 }
 
@@ -516,10 +671,18 @@ function drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness) {
  */
 function drawWorld(dungeon, camX, camY) {
   const pal = currentBiomePalette();
+  // Effective viewport in world-pixel space = W/zoom × (H-hudH)/zoom.
+  // Without dividing by zoom here, the tile loop traverses the full
+  // unzoomed canvas area — at zoom 2.5× that's ~6.25× more tiles and
+  // decor cells than are actually visible, exactly the perf penalty
+  // mobile (the worldZoom feature's primary audience) cannot afford.
+  const _wz = (settings && settings.worldZoom) || 1;
+  const _viewWTiles = Math.ceil((W / _wz) / TILE);
+  const _viewHTiles = Math.ceil(((H - layout.hudH) / _wz) / TILE);
   const startX=Math.max(0,Math.floor(camX/TILE)-1);
   const startY=Math.max(0,Math.floor(camY/TILE)-1);
-  const endX=Math.min(MAP_W,startX+Math.ceil(W/TILE)+2);
-  const endY=Math.min(MAP_H,startY+Math.ceil((H-layout.hudH)/TILE)+2);
+  const endX=Math.min(MAP_W,startX+_viewWTiles+2);
+  const endY=Math.min(MAP_H,startY+_viewHTiles+2);
 
   for (let ty=startY; ty<endY; ty++) {
     for (let tx=startX; tx<endX; tx++) {
@@ -853,6 +1016,22 @@ function drawHUD(player) {
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 2, r1 + 10);
 
+    // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
+    // it groups visually with the HP it protects. Gated on charges>0 — when
+    // the upgrade isn't owned (or last charge has been spent) the slot is
+    // empty. `|0` nucleation matches the saveGame/Player ctor pattern and
+    // tolerates undefined on legacy data shapes that bypassed the ctor.
+    const _nmcCompact = player._nanoMedicCharges | 0;
+    if (_nmcCompact > 0) {
+      ctx.save();
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff88aa'; ctx.font=`${fs}px monospace`;
+      ctx.textAlign='right';
+      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
+      ctx.textAlign='left';
+      ctx.restore();
+    }
+
     const mid = lx + hpW + 10;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
     ctx.fillText(`FLR:${_RG.floor}`, mid, r1 + 10);
@@ -863,7 +1042,7 @@ function drawHUD(player) {
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour; ctx.font=`${fs-1}px monospace`;
-      ctx.fillText(`${m.icon}${m.label}`, mid, r1 + 22);
+      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, mid, r1 + 22);
       ctx.restore();
     }
 
@@ -922,13 +1101,47 @@ function drawHUD(player) {
     const wColour = /** @type {string} */ (wRarity > 0 ? RARITY_COLOURS[wRarity] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColour;
     ctx.fillStyle=wColour; ctx.font=`${fs}px monospace`;
-    const weapMaxW = W - (statsX + 80) - safeRight - 10;
+    // PIERCING_HEART HUD progress suffix — reserve width so truncation of
+    // the weapon name accounts for the trailing " ♥N/20" badge. Suffix is
+    // rendered AFTER the (possibly truncated) name in the affix colour
+    // (#ff4488) so it remains visible regardless of name length.
+    //
+    // PH and SIPHON are mutually exclusive on a single weapon (both are
+    // suffix-slot in WEAPON_AFFIXES — buildWeapon picks at most one
+    // suffix), so at most ONE of phSufC / spSufC is non-empty at a
+    // time. Combined width is reserved in the truncation budget so a
+    // future affix that bypasses the mutex would still render correctly.
+    const phSufC = piercingHeartHudSuffix(player);
+    const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
+    const spSufC = siphonHudSuffix(player);
+    const spSufWC = spSufC ? ctx.measureText(spSufC).width : 0;
+    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC - spSufWC;
     let weapName = player.weapon.displayName || player.weapon.name;
     if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
       while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
     ctx.fillText(weapName, statsX + 74, r2 + 10);
+    // Render any active weapon-affix suffixes side-by-side using a
+    // cumulative x-offset. Currently PH and SIPHON are mutually exclusive
+    // on a single weapon (both suffix-slot, buildWeapon picks at most one
+    // via `.find(slot==='suffix')`), so in practice ONE renders at a
+    // time — but if a future code path or corrupted save shape ever
+    // produces a multi-suffix weapon, the cumulative offset prevents
+    // overlap. Truncation budget above already reserves combined width.
+    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width;
+    if (phSufC) {
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff4488';
+      ctx.fillText(phSufC, _sufX_C, r2 + 10);
+      _sufX_C += ctx.measureText(phSufC).width;
+    }
+    if (spSufC) {
+      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+      ctx.fillStyle='#88ff88';
+      ctx.fillText(spSufC, _sufX_C, r2 + 10);
+      _sufX_C += ctx.measureText(spSufC).width;
+    }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
     if (player.weapons && player.weapons.length > 1) {
@@ -977,6 +1190,19 @@ function drawHUD(player) {
     ctx.fillStyle='#e0e0ff'; ctx.font='13px monospace';
     ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 4, y + 15);
 
+    // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
+    // it groups visually with the HP it protects. Mirrors the compact branch.
+    const _nmcLand = player._nanoMedicCharges | 0;
+    if (_nmcLand > 0) {
+      ctx.save();
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff88aa'; ctx.font='13px monospace';
+      ctx.textAlign='right';
+      ctx.fillText(`✚${_nmcLand}`, lx + 130 - 4, y + 15);
+      ctx.textAlign='left';
+      ctx.restore();
+    }
+
     const colBase = lx + 141;
     ctx.fillStyle='#aaaacc'; ctx.font='13px monospace';
     ctx.fillText(`LVL:${player.level}`, colBase, y + 10);
@@ -995,7 +1221,7 @@ function drawHUD(player) {
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour;
-      ctx.fillText(`${m.icon}${m.label}`, colBase + 160, y + 22);
+      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, colBase + 160, y + 22);
       ctx.restore();
     }
 
@@ -1003,13 +1229,41 @@ function drawHUD(player) {
     const wColL = /** @type {string} */ (wRarL > 0 ? RARITY_COLOURS[wRarL] : '#ff00c8');
     ctx.shadowBlur=6; ctx.shadowColor=wColL;
     ctx.fillStyle=wColL;
+    // PIERCING_HEART HUD progress suffix — same pattern as compact branch.
+    // Reserve width for the trailing " ♥N/20" badge so the truncation
+    // budget is honest, then render the suffix in the affix colour
+    // (#ff4488) after the (possibly truncated) weapon name.
+    //
+    // PH and SIPHON are mutually exclusive on a single weapon (both are
+    // suffix-slot in WEAPON_AFFIXES), so at most ONE of phSufL / spSufL
+    // is non-empty at a time. Combined width is reserved in the
+    // truncation budget defensively.
+    const phSufL = piercingHeartHudSuffix(player);
+    const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
+    const spSufL = siphonHudSuffix(player);
+    const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const wMaxL = W - (colBase + 230) - 10;
+    const wMaxL = W - (colBase + 230) - 10 - phSufWL - spSufWL;
     if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
     ctx.fillText(wNameL, colBase + 220, y + 10);
+    // Cumulative x-offset for stacked affix suffixes — see compact
+    // branch comment for rationale (mutex defense + future-proofing).
+    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width;
+    if (phSufL) {
+      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+      ctx.fillStyle='#ff4488';
+      ctx.fillText(phSufL, _sufX_L, y + 10);
+      _sufX_L += ctx.measureText(phSufL).width;
+    }
+    if (spSufL) {
+      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+      ctx.fillStyle='#88ff88';
+      ctx.fillText(spSufL, _sufX_L, y + 10);
+      _sufX_L += ctx.measureText(spSufL).width;
+    }
     ctx.shadowBlur=0;
     if (player.weapons && player.weapons.length > 1) {
       const pipXL = colBase + 220;
@@ -1091,20 +1345,39 @@ function drawHUD(player) {
    */
   if (hasKeys) {
     ctx.save();
-    const keyY = layout.hudTop - 18;
+    // Base 12px font + 18px gap-above-HUD + 55px stride scale with
+    // `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors keep things
+    // legible at 0.85×; gap + stride scale together so the row never
+    // collides with status badges (which sit at hudTop-32 and grow
+    // upward via their own textScale-derived height) and adjacent key
+    // tokens never overlap horizontally at 1.3×.
+    const keyFs = Math.max(9, Math.round(12 * settings.textScale));
+    const keyGap = Math.max(14, Math.round(18 * settings.textScale));
+    const keyStride = Math.max(40, Math.round(55 * settings.textScale));
+    const keyY = layout.hudTop - keyGap;
     let kx = 14 + safeLeft;
     const keyData = [['red','#ff3333'],['blue','#3388ff'],['gold','#ffcc00']];
+    // Hoist font string outside the loop (per "hot path discipline"
+    // memory) — drawHUD runs every frame and assigning ctx.font from a
+    // fresh template literal per key would churn GC for no benefit.
+    const keyFontStr = `bold ${keyFs}px monospace`;
     for (const [col, hex] of keyData) {
       if (col != null && hex != null && player.keys[col] > 0) {
         ctx.shadowBlur=6; ctx.shadowColor=hex;
-        ctx.fillStyle=hex; ctx.font='bold 12px monospace';
+        ctx.fillStyle=hex; ctx.font=keyFontStr;
         ctx.fillText('🔑×'+player.keys[col], kx, keyY);
-        kx += 55;
+        kx += keyStride;
       }
     }
     ctx.restore();
   }
-  if (player.levelFlash>0) {
+  // The cyan full-screen LEVEL UP flash is a high-contrast, high-area
+  // overlay that can be unpleasant for users with vestibular sensitivity
+  // or photosensitive epilepsy. The new `reducedMotion` setting (off by
+  // default) suppresses both the flash AND the centered "LEVEL UP!"
+  // text. The level-up still fires gameplay-wise (perks, audio, HUD
+  // counter) — only the screen-filling visual is gated.
+  if (player.levelFlash > 0 && !settings.reducedMotion) {
     ctx.save();
     ctx.globalAlpha=Math.min(0.5,player.levelFlash*0.35);
     ctx.fillStyle='#00f5ff';
@@ -1113,7 +1386,11 @@ function drawHUD(player) {
     if (player.levelFlash>0.5) {
       ctx.save();
       ctx.shadowBlur=20; ctx.shadowColor='#00f5ff';
-      ctx.fillStyle='#00f5ff'; ctx.font='bold 36px monospace';
+      // Base 36px multiplied by `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3).
+      // Floor at 20px so a tiny textScale stays legible. Single-call site,
+      // no hoist needed.
+      const luFs = Math.max(20, Math.round(36 * settings.textScale));
+      ctx.fillStyle='#00f5ff'; ctx.font=`bold ${luFs}px monospace`;
       ctx.textAlign='center'; ctx.fillText('LEVEL UP!',W/2,H/2-40);
       ctx.textAlign='left'; ctx.restore();
     }
@@ -1141,15 +1418,22 @@ function drawBossBar() {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // Boss name
+  // Boss name. Base 10px font + 3px gap-above-bar scale with
+  // `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors keep the
+  // name readable at 0.85×; gap scales proportionally so a 1.3× name
+  // stays clear of the bar at every text size. The bar geometry itself
+  // (barW/barH/barX/barY) is intentionally NOT text-scaled — it's a
+  // graphical HP indicator anchored to top-of-screen, not a text box.
   const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
   const barCx = barX + barW / 2;
+  const nameFs = Math.max(8, Math.round(10 * settings.textScale));
+  const nameGap = Math.max(2, Math.round(3 * settings.textScale));
   ctx.textAlign = 'center';
-  ctx.font = 'bold 10px monospace';
+  ctx.font = `bold ${nameFs}px monospace`;
   const col = boss ? boss.colour : '#ff3333';
   ctx.shadowBlur = 8; ctx.shadowColor = col;
   ctx.fillStyle = col;
-  ctx.fillText(name, barCx, barY - 3);
+  ctx.fillText(name, barCx, barY - nameGap);
 
   if (!boss) { ctx.restore(); return; }
 
@@ -1201,13 +1485,106 @@ function drawBossBar() {
     }
   }
 
-  // HP text + phase label
-  ctx.font = '8px monospace';
+  // HP text + phase label. Base 8px font + 9px gap-below-bar scale
+  // with `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Both scale
+  // together so the text stays clear of the bar at 1.3× (when 8→11px
+  // would otherwise crowd the 9px gap). Floor keeps the readout
+  // legible at 0.85×.
+  const hpFs = Math.max(7, Math.round(8 * settings.textScale));
+  const hpGap = Math.max(7, Math.round(9 * settings.textScale));
+  ctx.font = `${hpFs}px monospace`;
   ctx.fillStyle = '#8888aa';
   ctx.textAlign = 'center';
   const hpText = `${Math.ceil(boss.hp)}/${boss.maxHp}`;
   const phaseText = boss.phase > 1 ? `  P${boss.phase}` : '';
-  ctx.fillText(hpText + phaseText, barCx, barY + barH + 9);
+  ctx.fillText(hpText + phaseText, barCx, barY + barH + hpGap);
+
+  ctx.restore();
+}
+
+// ─── Boss Intro Telegraph ────────────────────────────────────────────────────
+// Atmospheric overlay rendered for `bossIntroDuration` seconds when the
+// player first enters the boss room. Two layered effects:
+//   1. Radial vignette in the boss colour — darkens screen edges, frames
+//      attention on the centre. Fades in (~0.25s), holds, fades out.
+//   2. Boss-name titlecard — large monospace text centered on the upper
+//      third of the screen. Same fade envelope plus a subtle vertical
+//      "drop-in" slide on entry (suppressed under reducedMotion).
+//
+// Gameplay continues unaffected — this is a pure cosmetic overlay. Internally
+// gates on `_RG.bossIntroTimer > 0`, so it's a no-op outside the intro window.
+// A truthy timer with a zero duration is treated as a no-op (defensive: would
+// otherwise trigger a divide-by-zero in the progress calculation).
+function drawBossIntroOverlay() {
+  const t = _RG.bossIntroTimer;
+  const dur = _RG.bossIntroDuration;
+  if (!t || t <= 0 || !dur || dur <= 0) return;
+
+  const elapsed = dur - t;
+  const fadeIn = 0.25;
+  const fadeOut = 0.45;
+  // Envelope: ramp up over fadeIn, hold at 1, ramp down over fadeOut. Same
+  // shape as drawBiomeCard's envelope so the visual rhythm is consistent
+  // across the game's two timed intro overlays.
+  let alpha = 1;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  // Look up boss colour from the live boss instance if it exists; otherwise
+  // fall back to the alarm-red used by the "⚠ BOSS DETECTED" floor message
+  // (consistent visual vocabulary). The boss may be momentarily absent at
+  // the very first frame of the intro (between bossSealed-flip and the next
+  // enemies-array scan), so this fallback is the safe default.
+  const boss = enemies.find(e => e.isBoss && !e.dead);
+  const col = boss ? boss.colour : '#ff3333';
+  const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
+
+  ctx.save();
+
+  // Layer 1 — radial vignette. Darkness anchored at the screen edges, fading
+  // toward transparent at ~30% screen radius. Boss colour applied at low
+  // alpha so it's a TINT not a flood. Skipped entirely if vignette alpha
+  // resolves to 0 (avoids a no-op gradient allocation in the fade tails).
+  const vignAlpha = alpha * 0.55;
+  if (vignAlpha > 0.01) {
+    ctx.globalAlpha = vignAlpha;
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.7, col);
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Layer 2 — titlecard. Large boss name on the upper third. Monospace
+  // matches the rest of the game's typographic identity. Subtle drop-in
+  // slide (12px → 0px) on entry; suppressed under reducedMotion (the
+  // accessibility setting that exists to mitigate vestibular triggers).
+  // Colour-graded glow uses the boss colour so the WHOLE overlay reads as
+  // a single chromatic moment.
+  const baseFs = layout.compact ? 28 : 38;
+  const titleFs = Math.max(18, Math.round(baseFs * settings.textScale));
+  const slideOffset = settings.reducedMotion ? 0 : 12 * (1 - easeOutCubic(Math.min(1, elapsed / fadeIn)));
+  const titleY = H * 0.32 + slideOffset;
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${titleFs}px monospace`;
+  ctx.shadowBlur = 18; ctx.shadowColor = col;
+  ctx.fillStyle = col;
+  ctx.fillText(name, W / 2, titleY);
+
+  // Subtitle — small "⚠ ENGAGING" line beneath the boss name. Quieter
+  // grey so it doesn't compete with the colour-graded title. Uses the
+  // same alpha envelope so it fades together. textScale-aware so the
+  // gap stays proportional at 0.85× / 1.0× / 1.15× / 1.3×.
+  const subFs = Math.max(8, Math.round(11 * settings.textScale));
+  const subGap = Math.max(8, Math.round(14 * settings.textScale));
+  ctx.globalAlpha = alpha * 0.75;
+  ctx.font = `${subFs}px monospace`;
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#aaaacc';
+  ctx.fillText('⚠ ENGAGING', W / 2, titleY + titleFs + subGap);
 
   ctx.restore();
 }
@@ -1216,6 +1593,117 @@ function drawBossBar() {
  * @param {any} t
  */
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+// ─── Boss Death Telegraph ────────────────────────────────────────────────────
+// Atmospheric overlay rendered for `bossDeathDuration` seconds after the
+// last boss is killed (bossAlive flips true→false). Three layered effects:
+//   1. White-flash impact spike — first ~0.18s, tapers fast. The "moment
+//      of impact" beat — reads as the kill landing.
+//   2. Radial flash vignette in the snapshot boss colour — tints the
+//      whole screen briefly with the chromatic identity of the boss
+//      that was just defeated. Fades in (~0.18s), holds, fades out.
+//   3. "DESTROYED" titlecard — large monospace text centered on the
+//      upper third, with the boss name beneath in the snapshot colour.
+//      Same fade envelope plus a subtle vertical "pop" on entry
+//      (suppressed under reducedMotion). Mirrors the boss intro
+//      overlay's titlecard layout to anchor the visual rhyme.
+//
+// Gameplay continues unaffected — this is a pure cosmetic overlay. Internally
+// gates on `_RG.bossDeathTimer > 0`, so it's a no-op outside the death window.
+// A truthy timer with a zero duration is treated as a no-op (defensive: would
+// otherwise trigger a divide-by-zero in the progress calculation).
+function drawBossDeathOverlay() {
+  const t = _RG.bossDeathTimer;
+  const dur = _RG.bossDeathDuration;
+  if (!t || t <= 0 || !dur || dur <= 0) return;
+
+  const elapsed = dur - t;
+  const fadeIn = 0.18;
+  const fadeOut = 0.55;
+  // Envelope: ramp up over fadeIn, hold at 1, ramp down over fadeOut. Same
+  // shape as drawBossIntroOverlay so the two overlays share a visual
+  // rhythm. fadeIn is shorter (0.18s vs 0.25s) because the death moment
+  // wants to land hard; fadeOut is longer (0.55s vs 0.45s) because the
+  // overlay should drift out gently rather than snap.
+  let alpha = 1;
+  if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+  else if (t < fadeOut) alpha = t / fadeOut;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  // Boss colour is read from the snapshot field that the boss-HUD block
+  // in game.js writes per-frame while the boss is alive. By the time
+  // this overlay is rendered the boss instance has already been spliced
+  // from `enemies`, so the live lookup the intro overlay does is not
+  // available here. Fallback to neon green (#39ff14) — the same victory
+  // colour used by the existing 'DESTROYED' floater.
+  const col = _RG.bossDeathColor || '#39ff14';
+  const name = _RG.bossDeathName || 'BOSS';
+
+  ctx.save();
+
+  // Layer 1 — white-flash impact spike. Independent envelope: full alpha
+  // at t=0, decays to 0 over 0.22s. This is the "kill lands" beat. Uses
+  // additive composite so it brightens whatever's underneath rather than
+  // tinting it. Skipped past the spike window to avoid a no-op fillRect.
+  const flashSpike = 0.22;
+  if (elapsed < flashSpike) {
+    const spikeAlpha = (1 - elapsed / flashSpike) * 0.55;
+    if (spikeAlpha > 0.01) {
+      const prevComp = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = spikeAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = prevComp;
+    }
+  }
+
+  // Layer 2 — radial vignette tinted with the boss colour. Bright ring at
+  // ~30% screen radius fading toward the edges. Boss colour applied at
+  // moderate alpha so it's a TINT not a flood. Skipped if vignette alpha
+  // resolves to ~0 (avoids no-op gradient allocation in the fade tails).
+  const vignAlpha = alpha * 0.5;
+  if (vignAlpha > 0.01) {
+    ctx.globalAlpha = vignAlpha;
+    const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, col);
+    grad.addColorStop(0.6, 'rgba(0,0,0,0.25)');
+    grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Layer 3 — titlecard. "DESTROYED" header in neon green (the canonical
+  // victory colour from the existing floater) plus the boss name beneath
+  // in the boss colour for chromatic identity. Subtle vertical "pop"
+  // (8px → 0px) on entry; suppressed under reducedMotion. Colour-graded
+  // glow uses the boss colour so the WHOLE overlay reads as a single
+  // chromatic moment. Mirrors drawBossIntroOverlay's layout so the two
+  // overlays anchor the same visual rhyme.
+  const baseFs = layout.compact ? 28 : 38;
+  const titleFs = Math.max(18, Math.round(baseFs * settings.textScale));
+  const popOffset = settings.reducedMotion ? 0 : -8 * (1 - easeOutCubic(Math.min(1, elapsed / fadeIn)));
+  const titleY = H * 0.32 + popOffset;
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${titleFs}px monospace`;
+  ctx.shadowBlur = 18; ctx.shadowColor = '#39ff14';
+  ctx.fillStyle = '#39ff14';
+  ctx.fillText('DESTROYED', W / 2, titleY);
+
+  // Boss name beneath — colour-graded with the snapshot colour so the
+  // overlay reads as "this specific boss is gone". textScale-aware so
+  // the gap stays proportional at 0.85× / 1.0× / 1.15× / 1.3×.
+  const subFs = Math.max(10, Math.round(14 * settings.textScale));
+  const subGap = Math.max(8, Math.round(14 * settings.textScale));
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.font = `bold ${subFs}px monospace`;
+  ctx.shadowBlur = 12; ctx.shadowColor = col;
+  ctx.fillStyle = col;
+  ctx.fillText(name, W / 2, titleY + titleFs + subGap);
+
+  ctx.restore();
+}
 
 // ─── Biome Intro Card ────────────────────────────────────────────────────────
 // UNCHAINED #40. Shown for 3s on first floor of each biome (floors 4/7/10/13).
@@ -1315,12 +1803,25 @@ function drawBiomeCard() {
  * @param {any} echoMap
  */
 function rebuildMinimapBase(dungeon, echoMap) {
-  const MW = 120, MH = 80;
+  // Corner minimap dimensions are settings-scaled. The base 120×80
+  // multiplied by `settings.minimapScale` (0.75 / 1.0 / 1.25 / 1.5).
+  // `drawMinimap` uses the SAME formula so the cache canvas size and
+  // the on-screen blit size always match.
+  const MW = Math.round(120 * settings.minimapScale);
+  const MH = Math.round(80 * settings.minimapScale);
   const pal = currentBiomePalette();
   let off = _RG._minimapCanvas;
+  // Cache invalidation: if the existing offscreen canvas was sized for
+  // a different `minimapScale` (player toggled the setting between
+  // floors), recreate at the new size. Without this, the cached canvas
+  // would be blitted at a different size than it was drawn for, causing
+  // stretched/aliased pixels.
+  if (off && (off.width !== MW || off.height !== MH)) {
+    off = null;
+    _RG._minimapCanvas = null;
+  }
   if (!off) {
-    off = document.createElement('canvas');
-    off.width = MW; off.height = MH;
+    off = NEON.minimap.createOffscreenMinimap(MW, MH);
     _RG._minimapCanvas = off;
   }
   const o = off.getContext('2d');
@@ -1372,17 +1873,28 @@ function rebuildMinimapBase(dungeon, echoMap) {
  * @param {any} player
  */
 function drawMinimap(dungeon, player) {
-  const MW=120, MH=80, MX=W-MW-8-safeRight, MY=8+safeTop;
+  // Settings-scaled corner minimap: base 120×80 multiplied by
+  // `settings.minimapScale`. Both axes scale together so aspect ratio
+  // is preserved. Same formula as `rebuildMinimapBase` so the cached
+  // canvas size matches the blit destination size exactly.
+  const MW = Math.round(120 * settings.minimapScale);
+  const MH = Math.round(80 * settings.minimapScale);
+  const MX = W - MW - 8 - safeRight, MY = 8 + safeTop;
   ctx.save();
-  ctx.fillStyle='rgba(0,0,0,0.75)';
-  ctx.fillRect(MX-2,MY-2,MW+4,MH+4);
-  ctx.strokeStyle='#2d2d5e'; ctx.lineWidth=1; ctx.strokeRect(MX-2,MY-2,MW+4,MH+4);
+  // Border + background frame (engine helper). The defaults here match the
+  // values previously inlined; an opts object would override them if a
+  // future biome/state needed a different look.
+  NEON.minimap.drawMinimapFrame(ctx, MX, MY, MW, MH);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
   const echoMap = _RG.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
 
-  // Rebuild cache on demand. echoMap flip also forces rebuild.
-  if (_RG._minimapDirty || !_RG._minimapCanvas || _RG._minimapEchoMap !== echoMap) {
+  // Rebuild cache on demand. echoMap flip OR a settings.minimapScale
+  // change (detected via canvas size mismatch in rebuildMinimapBase)
+  // also forces rebuild.
+  const sizeMismatch = _RG._minimapCanvas
+    && (_RG._minimapCanvas.width !== MW || _RG._minimapCanvas.height !== MH);
+  if (_RG._minimapDirty || !_RG._minimapCanvas || _RG._minimapEchoMap !== echoMap || sizeMismatch) {
     rebuildMinimapBase(dungeon, echoMap);
     _RG._minimapDirty = false;
   }
@@ -1630,7 +2142,11 @@ function drawBoostStrip(player) {
   if (!player || typeof NEON === 'undefined' || !NEON.boosts) return;
   const list = NEON.boosts.getActiveBoostList(player);
   if (!list.length) return;
-  const MH=80;
+  // Anchor below the corner minimap. The minimap is settings-scaled
+  // (`settings.minimapScale`) so this MH must use the same formula as
+  // rebuildMinimapBase / drawMinimap, otherwise the boost pills overlap
+  // the minimap (small scale) or float in space (large scale).
+  const MH = Math.round(80 * settings.minimapScale);
   const MY=8+safeTop;
   const pillH = 18;
   const startY = MY + MH + 8; // 8px gap below minimap
@@ -1675,17 +2191,15 @@ const ROOM_LABEL_COLOURS = {
 function drawExpandedMinimap(dungeon, player) {
   const pad = 20;
   const pal = currentBiomePalette();
-  const ratio = MAP_W / MAP_H; // 80/50 = 1.6
-  // Fit to ~85% of screen, respecting safe areas
-  const maxW = (W - 2 * pad - safeLeft - safeRight) * 0.85;
-  const maxH = (H - 2 * pad - safeTop - safeBottom) * 0.85;
-  let mw, mh;
-  if (maxW / ratio <= maxH) { mw = maxW; mh = maxW / ratio; }
-  else { mh = maxH; mw = maxH * ratio; }
-  mw = Math.round(mw); mh = Math.round(mh);
-  const mx = Math.round((W - mw) / 2);
-  const my = Math.round((H - mh) / 2);
-  const sx = mw / MAP_W, sy = mh / MAP_H;
+  // Layout via engine helper: fits MAP_W/MAP_H aspect ratio inside the
+  // viewport less safe insets, capping at 85% of the inset area.
+  const layout = NEON.minimap.fitExpandedMinimap(
+    W, H, MAP_W, MAP_H,
+    { left: safeLeft, right: safeRight, top: safeTop, bottom: safeBottom },
+    pad
+  );
+  const mw = layout.mw, mh = layout.mh, mx = layout.mx, my = layout.my;
+  const sx = layout.sx, sy = layout.sy;
 
   ctx.save();
 
@@ -1693,11 +2207,20 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillStyle = 'rgba(0,0,10,0.82)';
   ctx.fillRect(0, 0, W, H);
 
-  // Map border
-  ctx.strokeStyle = '#2d2d5e'; ctx.lineWidth = 2;
-  ctx.strokeRect(mx - 2, my - 2, mw + 4, mh + 4);
-  ctx.fillStyle = 'rgba(8,8,20,0.92)';
-  ctx.fillRect(mx, my, mw, mh);
+  // Map border + background frame (engine helper). Expanded view uses
+  // a 2-px border (vs 1-px for the corner minimap) and a darker
+  // backing tint that nearly hides the dim backdrop behind it.
+  // fillInner:true preserves pre-extraction stroke-outer + fill-inner
+  // geometry (per gpt-5.5 + opus r1 visual-equivalence findings — the
+  // older fill-outer path painted over a 2-px ring of the dim backdrop
+  // that should remain visible).
+  NEON.minimap.drawMinimapFrame(ctx, mx, my, mw, mh, {
+    borderColor: '#2d2d5e',
+    borderWidth: 2,
+    borderInset: 2,
+    backgroundColor: 'rgba(8,8,20,0.92)',
+    fillInner: true,
+  });
 
   const echoMap = _RG.mapRevealed;
   const thermalOptics = hasAugment('THERMAL_OPTICS');
@@ -1894,13 +2417,19 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillRect(mx + player.x * sx - pDot / 2, my + player.y * sy - pDot / 2, pDot, pDot);
   ctx.shadowBlur = 0;
 
-  // Title + hint
+  // Title + hint. Base sizes (14 / 11) and the title gap-above-map (22)
+  // scale with `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3). Floors
+  // keep things readable at 0.85×; gap scales proportionally so the
+  // title never collides with the map frame even at 1.3×.
+  const tFs = Math.max(10, Math.round(14 * settings.textScale));
+  const tGap = Math.max(16, Math.round(22 * settings.textScale));
+  const hFs = Math.max(8, Math.round(11 * settings.textScale));
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.shadowBlur = 8; ctx.shadowColor = '#00f5ff';
-  ctx.fillStyle = '#00f5ff'; ctx.font = 'bold 14px monospace';
-  ctx.fillText(`FLOOR ${_RG.floor} MAP`, W / 2, my - 22);
+  ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${tFs}px monospace`;
+  ctx.fillText(`FLOOR ${_RG.floor} MAP`, W / 2, my - tGap);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#666688'; ctx.font = '11px monospace';
+  ctx.fillStyle = '#666688'; ctx.font = `${hFs}px monospace`;
   const hint = isTouchDevice() ? 'TAP TO CLOSE' : 'TAB / ESC TO CLOSE';
   ctx.fillText(hint, W / 2, my + mh + 8);
 
@@ -1930,7 +2459,15 @@ function drawExpandedMinimap(dungeon, player) {
 /** @type {any[]} */
 const messages=[];
 function drawMessages() {
-  const msgFs = 16, msgLh = 22;
+  // Base 16px font + 22px line-height multiplied by `settings.textScale`
+  // (0.85 / 1.0 / 1.15 / 1.3). Floors keep things legible at 0.85×. Both
+  // values scale together so multi-message stacks don't overlap.
+  // Hot-path: the assembled font string is hoisted ONCE per call (per
+  // `hot path discipline` memory) — drawMessages can render N messages
+  // per frame, so per-iteration template-literal alloc would churn GC.
+  const msgFs = Math.max(10, Math.round(16 * settings.textScale));
+  const msgLh = Math.max(14, Math.round(22 * settings.textScale));
+  const fontStr = `bold ${msgFs}px monospace`;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
@@ -1939,7 +2476,7 @@ function drawMessages() {
     const my = layout.msgBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
-    ctx.font=`bold ${msgFs}px monospace`;
+    ctx.font = fontStr;
     const tw = ctx.measureText(m.text).width;
     ctx.fillStyle='rgba(10,10,18,0.7)';
     ctx.fillRect(mx-4, my-msgFs+1, tw+8, msgFs+4);
@@ -1954,12 +2491,17 @@ function drawHint() {
   const h = _RG.hint;
   if (!h) return;
   const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 300);
+  // Base 15px font + 14px gap-above-HUD multiplied by `settings.textScale`
+  // (0.85 / 1.0 / 1.15 / 1.3). Scaling the gap proportionally preserves
+  // the visual breathing room above the HUD bar at every text size.
+  const hFs = Math.max(10, Math.round(15 * settings.textScale));
+  const hGap = Math.max(8, Math.round(14 * settings.textScale));
   ctx.save();
   ctx.globalAlpha = pulse;
   ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
   ctx.fillStyle = h.colour;
-  ctx.font = '15px monospace'; ctx.textAlign = 'center';
-  ctx.fillText(h.text, W / 2, layout.hudTop - 14);
+  ctx.font = `${hFs}px monospace`; ctx.textAlign = 'center';
+  ctx.fillText(h.text, W / 2, layout.hudTop - hGap);
   ctx.restore();
 }
 
@@ -1971,8 +2513,17 @@ function drawThreatIndicators(camX, camY) {
   if (!_RG.player.perks.THREAT_SENSE) return;
   const px = _RG.player.x, py = _RG.player.y;
   const margin = 14;
+  // Threat indicators run OUTSIDE the world ctx.scale transform, but
+  // their concept of "on-screen" must use the EFFECTIVE viewport
+  // (W/zoom × (H-hudH)/zoom in world-pixel space). At zoom > 1 the
+  // visible world is smaller than W×H, so without /zoom here, enemies
+  // outside the zoomed-in view get suppressed (false-clear) and the
+  // perk silently stops warning the player about half its detection
+  // range. Arrow projection mirrors the ctx.scale by multiplying the
+  // world-px deltas by zoom before clamping into canvas-px range.
+  const _wz = (settings && settings.worldZoom) || 1;
   const viewL = camX / TILE, viewT = camY / TILE;
-  const viewR = (camX + W) / TILE, viewB = (camY + H - layout.hudH) / TILE;
+  const viewR = (camX + W / _wz) / TILE, viewB = (camY + (H - layout.hudH) / _wz) / TILE;
   const range = 18;
 
   for (const e of enemies) {
@@ -1986,7 +2537,12 @@ function drawThreatIndicators(camX, camY) {
     // Skip enemies already on screen
     if (e.x > viewL + 1 && e.x < viewR - 1 && e.y > viewT + 1 && e.y < viewB - 1) continue;
 
-    const sx = e.x * TILE - camX, sy = e.y * TILE - camY;
+    // World-px deltas multiplied by zoom = canvas-px coordinates,
+    // matching the ctx.scale projection the world block performs
+    // implicitly. Without * _wz, arrows clustered toward the centre
+    // at high zoom rather than the screen edges.
+    const sx = (e.x * TILE - camX) * _wz;
+    const sy = (e.y * TILE - camY) * _wz;
     // Clamp to screen edges
     const cx = clamp(sx, margin, W - margin);
     const cy = clamp(sy, margin, H - layout.hudH - margin);
@@ -2031,6 +2587,14 @@ function populateFloor(dungeon, floorNum) {
 
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
+
+  // SHOCK_PULSE pickup — defensive panic-button consumable. Floor-gated to
+  // 3+ (matches mine floor gate — both are mid-run+ tools), 30% per floor,
+  // capped at 1 placement per floor (rare panic button, not a stack-and-
+  // spam consumable). Placement uses the same room-eligibility shape as
+  // mines (interior tile, not adjacent to other props).
+  const _shockPulseRoll = floorNum >= 3 && Math.random() < 0.30;
+  let _shockPulsePlaced = !_shockPulseRoll;
 
   for (let i=0;i<dungeon.rooms.length;i++) {
     const room=dungeon.rooms[i];
@@ -2128,6 +2692,27 @@ function populateFloor(dungeon, floorNum) {
         if (!tooClose) for (const v of vcores) { if (dist(mx, my, v.x, v.y) < 1.5) { tooClose = true; break; } }
         if (!tooClose) for (const c of crates) { if (dist(mx, my, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
         if (!tooClose) mines.push(createMine(mx, my, floorNum, room));
+      }
+    }
+
+    // SHOCK_PULSE pickup — once per floor (gated by _shockPulsePlaced
+    // flag declared above the room loop). 1/3 chance per eligible normal
+    // room until a successful placement caps the floor's allotment. Same
+    // tile-spacing checks as mines so two pickups don't visually stack.
+    if (!_shockPulsePlaced && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.34) {
+      const sx = room.x + rndInt(2, room.w - 3) + 0.5;
+      const sy = room.y + rndInt(2, room.h - 3) + 0.5;
+      const stx = Math.floor(sx), sty = Math.floor(sy);
+      if (dungeon.map[sty]?.[stx] === T.FLOOR) {
+        let tooClose = false;
+        for (const b of beacons) { if (dist(sx, sy, b.x, b.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const v of vcores) { if (dist(sx, sy, v.x, v.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const c of crates) { if (dist(sx, sy, c.tx + 0.5, c.ty + 0.5) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) for (const m of mines) { if (dist(sx, sy, m.x, m.y) < 1.5) { tooClose = true; break; } }
+        if (!tooClose) {
+          items.push(new ShockPulsePickup(sx, sy));
+          _shockPulsePlaced = true;
+        }
       }
     }
 

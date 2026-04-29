@@ -40,7 +40,46 @@ const KEY_DISPLAY = k => {
   return map[k] || k;
 };
 
-/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
+// Discrete steps for the accessibility-scale settings. The settings UI
+// only exposes these four values for each scale (stepper UI, not a
+// continuous slider), and load() snaps any out-of-range or untyped
+// persisted value to the nearest legal step. Keeping the canonical step
+// list here means the UI, the loader, and any test that asserts
+// snapping behaviour all share the same source of truth.
+const MINIMAP_SCALE_STEPS = [0.75, 1.0, 1.25, 1.5];
+const TEXT_SCALE_STEPS    = [0.85, 1.0, 1.15, 1.3];
+// World zoom multiplier — playfield-only scale applied to the world
+// canvas via `ctx.scale(zoom, zoom)` in renderPlaying. HUD chrome and
+// overlays remain at native (1.0) scale. Mobile-first: the auto-fit
+// gameScale clamps tiles to ~14–30 CSS-px on the smaller axis, which
+// is uncomfortably small on phones; this setting lets users zoom in
+// further without recompiling. Steps go higher than the text/minimap
+// scales because mobile genuinely needs the high end (e.g. a phone
+// playing in compact mode at 1.5× zoom = ~21–45 CSS-px tile).
+const WORLD_ZOOM_STEPS    = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
+
+/**
+ * Snap an arbitrary numeric value to the nearest entry in `steps`. Used
+ * by settings.load() to coerce persisted values into the canonical
+ * discrete set, so that an old save written under a future build with
+ * different steps doesn't leak weird intermediate values into the UI.
+ * @param {number} v
+ * @param {number[]} steps
+ * @returns {number}
+ */
+function snapToSteps(v, steps) {
+  if (!steps.length) return v;
+  let best = /** @type {number} */ (steps[0]);
+  let bestDist = Math.abs(v - best);
+  for (let i = 1; i < steps.length; i++) {
+    const s = /** @type {number} */ (steps[i]);
+    const d = Math.abs(v - s);
+    if (d < bestDist) { best = s; bestDist = d; }
+  }
+  return best;
+}
+
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, minimapScale:number, textScale:number, worldZoom:number, _worldZoomFromDefault:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void, applyMobileFirstDefaults():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -48,10 +87,31 @@ const settings = {
   damageNumbers: true,
   lockAimToMove: false,
   aimAssist: false,  // accessibility — auto-aim at nearest visible enemy
+  crtMode: false,    // cosmetic — scanline + vignette retro CRT overlay
+  reducedMotion: false,
+  minimapScale: 1.0,
+  textScale: 1.0,
+  worldZoom: 1.0,
+  // Internal flag — TRUE while the worldZoom value still reflects the
+  // schema default (1.0), FALSE the moment the user picks a value via
+  // the SETTINGS stepper OR a non-default value gets restored from
+  // localStorage. The boot path uses this to apply the mobile-first
+  // default (1.5× on compact viewports) ONCE, AFTER the first resize()
+  // populates real W/H — without overwriting a user choice. Persisted
+  // intentionally in save() so a returning user with the exact 1.0×
+  // default still gets re-applied to mobile-first if they uninstall +
+  // reinstall on a different device class.
+  _worldZoomFromDefault: true,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
       const raw = JSON.parse(localStorage.getItem('neonDungeonSettings') || 'null');
+      // Empty / first-run path: leave every field at its schema default.
+      // The mobile-first worldZoom override is applied later by
+      // applyMobileFirstDefaults() once resize() has populated W/H —
+      // see the call from resize() below. Returning here keeps the
+      // _worldZoomFromDefault flag at TRUE so the deferred override
+      // can fire.
       if (!raw) return;
       if (typeof raw.sfxVol === 'number') this.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
@@ -59,12 +119,68 @@ const settings = {
       if (typeof raw.damageNumbers === 'boolean') this.damageNumbers = raw.damageNumbers;
       if (typeof raw.lockAimToMove === 'boolean') this.lockAimToMove = raw.lockAimToMove;
       if (typeof raw.aimAssist === 'boolean') this.aimAssist = raw.aimAssist;
+      if (typeof raw.crtMode === 'boolean') this.crtMode = raw.crtMode;
+      if (typeof raw.reducedMotion === 'boolean') this.reducedMotion = raw.reducedMotion;
+      // Snap-to-nearest-step on load so persisted values from an older
+      // build (or a tampered localStorage) can never leak intermediate
+      // multipliers into the UI. Untyped/non-finite values fall back to
+      // the schema default (1.0).
+      if (typeof raw.minimapScale === 'number' && Number.isFinite(raw.minimapScale)) {
+        this.minimapScale = snapToSteps(raw.minimapScale, MINIMAP_SCALE_STEPS);
+      }
+      if (typeof raw.textScale === 'number' && Number.isFinite(raw.textScale)) {
+        this.textScale = snapToSteps(raw.textScale, TEXT_SCALE_STEPS);
+      }
+      // worldZoom: snap-to-step on load. If a persisted value exists we
+      // honour it (the user has expressed intent — never overwrite).
+      // The deferred mobile-first default fires only when no value has
+      // been persisted (legacy save predating worldZoom OR fresh
+      // install) — tracked via the _worldZoomFromDefault flag.
+      if (typeof raw.worldZoom === 'number' && Number.isFinite(raw.worldZoom)) {
+        this.worldZoom = snapToSteps(raw.worldZoom, WORLD_ZOOM_STEPS);
+        this._worldZoomFromDefault = false;
+      }
+      // Persisted flag — if a returning user explicitly chose the 1.0×
+      // value before, respect it (don't re-apply mobile default on
+      // device change). Defaults to TRUE for old saves so that path
+      // reaches applyMobileFirstDefaults() naturally.
+      if (typeof raw._worldZoomFromDefault === 'boolean') {
+        this._worldZoomFromDefault = raw._worldZoomFromDefault;
+      }
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
         }
       }
     } catch(e) {}
+  },
+  // Mobile-first default applicator. Called from resize() AFTER the
+  // first real viewport measurement, so layout.compact and W/H reflect
+  // the actual device. Runs ONCE per session: after applying it (or
+  // skipping because the user already chose a value), the
+  // _worldZoomFromDefault flag flips to false and subsequent resize()
+  // calls (window resize, orientation change) are no-ops. Without
+  // this, a user who rotates their phone would have their explicit
+  // zoom choice clobbered by the mobile default every rotation.
+  applyMobileFirstDefaults() {
+    if (!this._worldZoomFromDefault) return;
+    // Use the SAME compact predicate as the layout system (see
+    // engine/viewport.js computeLayout: `H > W && W <= 600`). Sharing
+    // the predicate means "compact UI" and "compact-default zoom"
+    // never disagree — a non-compact landscape viewport doesn't get
+    // the mobile zoom applied just because its width happens to be
+    // small. Falls back to false if layout hasn't initialised yet
+    // (defensive — applyMobileFirstDefaults should only be called
+    // post-updateLayout but we don't want a throw at boot).
+    const isCompact = !!(layout && layout.compact);
+    if (isCompact) {
+      this.worldZoom = 1.5;
+    }
+    // Latch — even if we didn't change worldZoom (non-compact case),
+    // set the flag so a window-resize-into-compact later doesn't
+    // surprise-update the user's explicit 1.0× preference.
+    this._worldZoomFromDefault = false;
+    this.save();
   },
   save() {
     try {
@@ -73,6 +189,12 @@ const settings = {
         screenShake: this.screenShake, damageNumbers: this.damageNumbers,
         lockAimToMove: this.lockAimToMove,
         aimAssist: this.aimAssist,
+        crtMode: this.crtMode,
+        reducedMotion: this.reducedMotion,
+        minimapScale: this.minimapScale,
+        textScale: this.textScale,
+        worldZoom: this.worldZoom,
+        _worldZoomFromDefault: this._worldZoomFromDefault,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -82,6 +204,20 @@ const settings = {
     this.screenShake = true; this.damageNumbers = true;
     this.lockAimToMove = false;
     this.aimAssist = false;
+    this.crtMode = false;
+    this.reducedMotion = false;
+    this.minimapScale = 1.0;
+    this.textScale = 1.0;
+    // Reset to mobile-first default. Unlike load() this runs AFTER
+    // the canvas has been sized (the user is in the SETTINGS menu
+    // after at least one render frame), so layout.compact is reliable
+    // here — no need for the deferred-default machinery. Falls back
+    // to 1.0× when layout is missing for any reason (defensive).
+    const isCompact = !!(layout && layout.compact);
+    this.worldZoom = isCompact ? 1.5 : 1.0;
+    // RESET counts as an explicit user action — clear the deferred-
+    // default flag so a subsequent resize() doesn't re-apply on top.
+    this._worldZoomFromDefault = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
@@ -150,6 +286,13 @@ function resize() {
   safeBottom = _sa.bottom;
   safeLeft   = _sa.left;
   updateLayout();
+  // Apply mobile-first defaults ONCE, after the first real viewport
+  // measurement has populated W/H and updateLayout has set
+  // layout.compact. The applicator no-ops on subsequent calls so
+  // window resize / orientation change can't clobber a user's
+  // explicit zoom choice. See settings.applyMobileFirstDefaults
+  // for the deferred-default rationale.
+  settings.applyMobileFirstDefaults();
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
 // resize() + event listener registered in Boot section (after all defs are ready)
@@ -921,6 +1064,58 @@ const audio = (() => {
       osc('sine', 30, 26, 0.16, t + 0.12, 1.9, bus, { attack:0.02 });
       osc('sine', 42, 36, 0.08, t + 0.62, 1.1, bus, { pan:-0.08 });
     },
+    // Boss intro telegraph sting — fires when the boss room SEALS (player
+    // crosses the threshold), distinct from bossEnter which fires on FLOOR
+    // entry as a "boss is on this floor" warning. Lower-frequency sub-bass
+    // hum + slowly-rising filtered noise sweep, designed to layer ON TOP
+    // of audio.roomSeal()'s metallic slam (which fires in the same frame).
+    // Duration ~2.0s — matches BOSS_INTRO_DURATION's hold window so the
+    // hum sustains throughout the visual titlecard.
+    bossIntro() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.6, 2.6);
+      // Sub-bass drone — layered sines an octave apart, slow attack so it
+      // swells in under the existing slam, holds, then fades.
+      osc('sine', 38, 34, 0.18, t, 2.0, bus, { attack:0.12 });
+      osc('sine', 76, 68, 0.10, t + 0.05, 1.9, bus, { attack:0.18, pan:-0.15 });
+      osc('sine', 76, 68, 0.10, t + 0.05, 1.9, bus, { attack:0.18, pan:0.15 });
+      // Mid-range sawtooth pad — quiet menace, narrow stereo spread.
+      osc('sawtooth', 110, 100, 0.06, t + 0.2, 1.7, bus, { attack:0.25, filterType:'lowpass', filterFreq:600, filterFreq2:200 });
+      osc('sawtooth', 116, 104, 0.06, t + 0.2, 1.7, bus, { attack:0.25, filterType:'lowpass', filterFreq:600, filterFreq2:200, pan:0.18 });
+      // Filtered noise sweep — slow rise from 200Hz cutoff to 600Hz, gives
+      // the sting a "tension building" texture without being abrasive.
+      noise(0.08, t, 2.0, 600, bus, { filterType:'lowpass', filterFreq2:200, q:0.5 });
+    },
+    // Boss defeat sting — fires when the last boss enemy dies (bossAlive
+    // flips true→false), matched in duration to the visual death
+    // telegraph (~2.6s window) so the sting sustains across the
+    // titlecard's hold-and-fade. Distinct from victory() which is the
+    // FLOOR-clear cue: bossDefeat is the kill MOMENT (impact-then-decay
+    // shape), victory() is the run-end celebration (rising arpeggio).
+    // Layered: a sub-bass impact thump on t=0 ("the kill lands"), a
+    // descending filtered sweep ("the energy dissipates"), and a
+    // shimmering metallic ring tail ("the chromatic afterglow").
+    bossDefeat() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 2.0);
+      // Sub-bass impact thump — short attack, fast decay. The body of
+      // the kill beat. Mono so it punches dead-center.
+      osc('sine', 70, 30, 0.22, t, 0.55, bus, { attack:0.005 });
+      osc('sine', 140, 60, 0.12, t, 0.5,  bus, { attack:0.005 });
+      // Descending filtered noise sweep — bandpass dropping from ~1800Hz
+      // to ~300Hz over 1.6s. Reads as "the boss's signal collapses".
+      noise(0.10, t + 0.02, 1.6, 1800, bus, { filterType:'bandpass', filterFreq2:300, q:1.2 });
+      // Mid-range triangle pad — gentle suspended chord that hangs in
+      // the tail, fading the moment out without dropping to silence too
+      // abruptly. Wide stereo for atmospheric width.
+      osc('triangle', 330, 220, 0.07, t + 0.08, 1.6, bus, { attack:0.18, pan:-0.22 });
+      osc('triangle', 392, 262, 0.07, t + 0.08, 1.6, bus, { attack:0.18, pan:0.22 });
+      osc('triangle', 494, 330, 0.05, t + 0.10, 1.4, bus, { attack:0.20 });
+      // High shimmering ring — narrow bandpass at ~3kHz, gives the tail
+      // a chromatic sparkle. Quiet enough to sit under the pad.
+      osc('sine', 3120, 2200, 0.04, t + 0.18, 1.4, bus, { filterType:'bandpass', filterFreq:3000, filterFreq2:2200, q:6, pan:-0.18 });
+      osc('sine', 3140, 2200, 0.04, t + 0.18, 1.4, bus, { filterType:'bandpass', filterFreq:3000, filterFreq2:2200, q:6, pan:0.18 });
+    },
     descend() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.5, 0.4);
@@ -1141,6 +1336,202 @@ const audio = (() => {
       noise(0.20, t, 0.06, 8000, bus);
       osc('sawtooth', 1200, 200, 0.12, t, 0.08, bus);
       osc('sine', 60, 30, 0.10, t + 0.02, 0.15);
+    },
+    echoerLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sonar ping — soft descending sine + faint reverb pip. Telegraphs
+      // the lock without the hard threat-alert of sniperCharge.
+      const bus = wetDry(1, 0.5, 0.4);
+      osc('sine', 700, 380, 0.08, t, 0.18, bus);
+      osc('sine', 1100, 550, 0.04, t + 0.05, 0.12, bus);
+    },
+    echoerFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hollow echo-chamber pop — short triangle thump + decay tail.
+      const bus = wetDry(1, 0.4, 0.5);
+      osc('triangle', 240, 90, 0.14, t, 0.16, bus);
+      noise(0.10, t + 0.02, 0.10, 1800, bus);
+      osc('sine', 90, 55, 0.10, t, 0.12);
+    },
+    prophetLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising sonar — a forward-leaning ascending sine pair signals
+      // "this one fires AHEAD", contrasting with echoerLock's descent.
+      const bus = wetDry(1, 0.5, 0.4);
+      osc('sine', 380, 760, 0.08, t, 0.18, bus);
+      osc('sine', 580, 1180, 0.04, t + 0.05, 0.14, bus);
+    },
+    prophetFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Bright forward snap — sharper than echoerFire (faster projectile,
+      // committed-strike timbre). Dry-leaning so it cuts through the lane.
+      const bus = wetDry(1, 0.25, 0.35);
+      osc('triangle', 520, 180, 0.12, t, 0.14, bus);
+      noise(0.08, t + 0.01, 0.08, 3200, bus);
+      osc('sine', 140, 70, 0.10, t, 0.10);
+    },
+    cryophageLock() {
+      const c = getCtx(); const t = c.currentTime;
+      // Crystalline ping — a glassy two-tone descending sine pair. Cooler
+      // and shorter than echoerLock so the player can distinguish lattice
+      // commits from sonar locks in mixed encounters.
+      const bus = wetDry(1, 0.6, 0.3);
+      osc('sine', 1100, 880, 0.06, t, 0.16, bus);
+      osc('sine', 1480, 1180, 0.04, t + 0.04, 0.12, bus);
+    },
+    cryophageCommit() {
+      const c = getCtx(); const t = c.currentTime;
+      // Frosted shatter — short noise burst + low triangle thunk so the
+      // commit cue is unmistakable even without the visual flash.
+      const bus = wetDry(1, 0.4, 0.4);
+      noise(0.10, t, 0.12, 4200, bus);
+      osc('triangle', 180, 120, 0.10, t + 0.02, 0.14);
+    },
+    vengeanceCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Low rumbling charge-up — descending sawtooth pair signals
+      // "something heavy is winding up to retaliate". Wet for menace.
+      const bus = wetDry(1, 0.55, 0.4);
+      osc('sawtooth', 220, 90, 0.10, t, 0.55, bus);
+      osc('sawtooth', 320, 130, 0.06, t + 0.10, 0.50, bus);
+      osc('sine', 60, 40, 0.12, t, 0.30);
+    },
+    conduitFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Solo basic shot — short cyan zap. Lighter than the beam tick so
+      // a clustered solo-fire room doesn't sound like a beam-storm.
+      const bus = wetDry(1, 0.4, 0.3);
+      osc('square', 720, 480, 0.04, t, 0.10, bus);
+      osc('sine', 1100, 880, 0.03, t + 0.02, 0.08);
+    },
+    conduitBeam() {
+      const c = getCtx(); const t = c.currentTime;
+      // Per-tick beam zap — tight high-pass click + low body thunk so
+      // the player feels the damage tick over the ambient electrical hum.
+      const bus = wetDry(1, 0.35, 0.25);
+      noise(0.06, t, 0.05, 6000, bus);
+      osc('triangle', 320, 200, 0.06, t + 0.005, 0.10);
+    },
+    resonatorCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Rising harmonic chord — the resonator winding up its cone. Two
+      // detuned sines + a soft bell, wet for spatial threat.
+      const bus = wetDry(1, 0.55, 0.35);
+      osc('sine', 320, 720, 0.08, t, 0.55, bus);
+      osc('sine', 480, 1080, 0.06, t + 0.05, 0.50, bus);
+      osc('triangle', 220, 540, 0.05, t + 0.10, 0.45, bus);
+    },
+    resonatorFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sonic-cone discharge — wet boom + descending whine + grit.
+      const bus = wetDry(1, 0.35, 0.5);
+      osc('sawtooth', 600, 90, 0.10, t, 0.20, bus);
+      osc('sine', 140, 50, 0.18, t, 0.22, bus);
+      noise(0.16, t + 0.01, 0.14, 2400, bus);
+    },
+    watcherCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Scanner radar lock-on — bright ascending ping + soft sub pulse.
+      // Distinct from resonator's harmonic chord (320-720Hz, three layers,
+      // wet/diffuse): higher fundamental, narrower spectrum, dryer envelope
+      // so the player reads "lighthouse caught me" not "cone winding up".
+      // Drier mix (less reverb tail) keeps multiple watchers in a room from
+      // mudding into one wash.
+      const bus = wetDry(1, 0.30, 0.20);
+      osc('sine', 1500, 3500, 0.06, t, 0.32, bus);
+      osc('triangle', 2400, 4200, 0.04, t + 0.02, 0.18, bus);
+      osc('sine', 220, 180, 0.08, t, 0.18, bus);
+    },
+    watcherFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Hitscan beam discharge — bright laser snap + thin sine glide + a
+      // crisp noise burst. Distinct from resonator's bass-heavy sonic boom
+      // (140Hz sine, 600→90Hz saw, 2.4kHz noise): higher register, no sub,
+      // shorter tail. Reads as "beam fired" not "cone roared". Same dry
+      // envelope as watcherCharge so a fire-on-stun cancellation isn't
+      // flooded by reverb from the canceled charge.
+      const bus = wetDry(1, 0.20, 0.30);
+      osc('square', 880, 440, 0.05, t, 0.16, bus);
+      osc('sine', 2200, 1100, 0.07, t, 0.14, bus);
+      noise(0.06, t + 0.005, 0.06, 4000, bus);
+    },
+    architectTarget() {
+      const c = getCtx(); const t = c.currentTime;
+      // ARCHITECT target telegraph — earthy mid-low rumble with metallic
+      // punctuation. Distinct from watcherCharge (bright high register)
+      // and resonator (harmonic chord) so the player can identify the
+      // mob by sound alone in a multi-mob room. Read: "something is
+      // about to drop" — geological, mechanical, not laser.
+      const bus = wetDry(1, 0.35, 0.30);
+      osc('sine', 130, 95, 0.08, t, 0.22, bus);          // sub thump
+      osc('triangle', 320, 240, 0.06, t + 0.05, 0.14, bus); // metallic ring
+      noise(0.04, t + 0.10, 0.05, 1800, bus);             // grit tail
+    },
+    architectCommit() {
+      const c = getCtx(); const t = c.currentTime;
+      // ARCHITECT commit — heavy brick-thud with concrete impact. Single
+      // sharp drop that reads as "wall slammed into existence". Drier
+      // than the target telegraph so the commit feels SOLID and
+      // immediate even when multiple architects fire in quick succession.
+      const bus = wetDry(1, 0.20, 0.20);
+      osc('sine', 90, 55, 0.10, t, 0.32, bus);          // body of the thud
+      osc('square', 280, 120, 0.05, t + 0.005, 0.10, bus); // impact crack
+      noise(0.07, t + 0.01, 0.05, 800, bus);              // dust crunch
+    },
+    mirrorCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Glassy ascending shimmer — "your shot is coming back". Bright
+      // detuned sines so it reads as mimicry, not the resonator's chord.
+      const bus = wetDry(1, 0.45, 0.40);
+      osc('sine', 880, 1320, 0.06, t, 0.45, bus);
+      osc('triangle', 660, 990, 0.05, t + 0.06, 0.40, bus);
+      osc('sine', 1320, 1980, 0.04, t + 0.12, 0.35, bus);
+    },
+    mirrorFire() {
+      const c = getCtx(); const t = c.currentTime;
+      // Snappy reversed-shot pop — short, sharp, lime-bright register.
+      const bus = wetDry(1, 0.25, 0.35);
+      osc('square', 520, 220, 0.08, t, 0.18, bus);
+      osc('sine', 1100, 440, 0.06, t, 0.16, bus);
+      noise(0.05, t + 0.005, 0.06, 3200, bus);
+    },
+    reaperTelegraph() {
+      const c = getCtx(); const t = c.currentTime;
+      // Heartbeat-style descending pulse — "you've been marked". Two low
+      // detuned thumps with a thin metallic shimmer on top so it cuts
+      // through combat noise without overwhelming.
+      const bus = wetDry(1, 0.30, 0.50);
+      osc('sine', 220, 110, 0.09, t, 0.30, bus);
+      osc('sine', 240, 120, 0.09, t + 0.18, 0.28, bus);
+      osc('triangle', 880, 660, 0.05, t, 0.10, bus);
+    },
+    reaperFrenzy() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp red roar — frenzy commits. Detuned saws + noise burst, more
+      // aggressive than the telegraph pulse.
+      const bus = wetDry(1, 0.20, 0.45);
+      osc('sawtooth', 180, 90, 0.20, t, 0.30, bus);
+      osc('sawtooth', 195, 95, 0.20, t, 0.26, bus);
+      noise(0.10, t, 0.08, 2400, bus);
+      osc('square', 660, 220, 0.10, t + 0.04, 0.16, bus);
+    },
+    ghostProjectorMemory() {
+      // Soft chime + downward whisper — projector has CLAIMED a memory.
+      // Subtle so it doesn't spam during a kill streak; player should
+      // perceive it as ambience until they learn what it means.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 0.35);
+      osc('sine', 880, 440, 0.05, t, 0.10, bus);
+      osc('triangle', 660, 330, 0.04, t + 0.05, 0.10, bus);
+    },
+    ghostProjectorSpawn() {
+      // Reverb-heavy rising tone + airy noise — "haunting commits".
+      // Distinctly spectral compared to normal spawn sounds.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.65, 0.50);
+      osc('sine', 220, 660, 0.18, t, 0.18, bus);
+      osc('triangle', 440, 1100, 0.14, t + 0.04, 0.14, bus);
+      noise(0.12, t, 0.18, 3200, bus);
     },
     wardenCharge() {
       const c = getCtx(); const t = c.currentTime;
@@ -1403,6 +1794,40 @@ const audio = (() => {
       osc('sine', 80, 60, 0.06, t, 0.3, bus);
       noise(0.04, t + 0.1, 0.15, 2000, bus);
     },
+    shockPulse() {
+      const c = getCtx(); const t = c.currentTime;
+      // Sharp ionised whoosh — descending sine + bright noise burst.
+      // Recognisable as "energy release" but distinct from mineExplode
+      // (no low concussive thud) and from teleport (no high-end zwip).
+      const bus = wetDry(0.9, 0.25, 0.2);
+      osc('sine',     1600, 200, 0.10, t,        0.18, bus);
+      osc('triangle', 1200, 300, 0.06, t + 0.02, 0.14, bus);
+      osc('square',    600, 250, 0.04, t + 0.03, 0.10, bus);
+      noise(0.08, t,        0.05, 6000, bus);
+      noise(0.04, t + 0.06, 0.10, 3000, bus);
+    },
+    gulperCharge() {
+      const c = getCtx(); const t = c.currentTime;
+      // Wet ascending swallow — distinct from mineArm (metallic click) and
+      // from beaconTrigger (klaxon). Rising pitch + low-band noise reads
+      // as "thing inhaling/loading" before the spit.
+      const bus = wetDry(0.7, 0.4, 0.35);
+      osc('triangle', 180, 320, 0.10, t,        0.20, bus);
+      osc('sine',      90, 160, 0.06, t,        0.30, bus);
+      noise(0.05, t,        0.18, 1200, bus);
+    },
+    gulperBelch() {
+      const c = getCtx(); const t = c.currentTime;
+      // Wet plosive — short sharp low-mid burst with descending tail.
+      // Distinct from mineExplode (no concussive boom) and from shockPulse
+      // (no bright high-end). Reads as "ugh, something thrown UP".
+      const bus = wetDry(0.85, 0.35, 0.30);
+      osc('square',   320, 80,  0.12, t,        0.16, bus);
+      osc('triangle', 240, 60,  0.08, t + 0.01, 0.20, bus);
+      osc('sine',     120, 50,  0.06, t,        0.28, bus);
+      noise(0.10, t,        0.06, 2200, bus);
+      noise(0.05, t + 0.05, 0.14, 800,  bus);
+    },
     mineArm() {
       const c = getCtx(); const t = c.currentTime;
       // Metallic click + ascending warning tone
@@ -1544,6 +1969,18 @@ const audio = (() => {
       noise(0.2, t, 0.1, 5000, bus);
       osc('sine', 80, 40, 0.12, t + 0.05, 0.3);
     },
+    hackwareJammed() {
+      // Activation denied — short "denied" buzz with downward chirp so the
+      // ear immediately reads "NO". Distinct from hackwareEMP (sustained
+      // electric burst) and disruptorField (soft static crackle): this is
+      // a sharp staccato refusal. Heard whenever the player tries to
+      // activate hackware while inside a NULLIFIER jam aura.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.4, 0.05, 0.05);
+      osc('square', 380, 110, 0.08, t, 0.10, bus);
+      osc('sawtooth', 240, 80, 0.05, t + 0.02, 0.08, bus);
+      noise(0.05, t, 0.06, 3000, bus);
+    },
     hackwareCloak() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.5, 0.8);
@@ -1585,6 +2022,75 @@ const audio = (() => {
       // Shimmer back in
       osc('sine', 1600, 600, 0.06, t, 0.2, bus);
       osc('triangle', 1200, 400, 0.04, t + 0.05, 0.15, bus);
+    },
+    hackwareBlink() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.25, 0.35);
+      // Quick whoosh-zip: pitched-down departure + pitched-up arrival.
+      // Distinct from hackwareCloak (sustained shimmer) and hackwareEMP
+      // (electric burst) so the two cyan-coded abilities sound different.
+      osc('triangle', 1800, 300, 0.05, t,         0.18, bus);
+      osc('sine',     400, 1400, 0.04, t + 0.06,  0.15, bus);
+      noise(0.05, t, 0.08, 4000, bus);
+    },
+    hackwareEMPLine() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.3, 0.4);
+      // Sweeping zap: rising sweep + tight crackle. Distinct from
+      // hackwareEMP (which opens with a saw burst at 200→60Hz). Here we
+      // open with a rising sine sweep (300→1400Hz) to convey
+      // "directional projection", followed by a clipped noise burst to
+      // sell the pierce. Same wet/dry profile as hackwareEMP so both
+      // EMP variants share a tonal family without being identical.
+      osc('sine',     300, 1400, 0.10, t,         0.18, bus);
+      osc('sawtooth', 800, 1600, 0.08, t + 0.02,  0.15, bus);
+      noise(0.12, t, 0.12, 4500, bus);
+      osc('sine',      80,   60, 0.10, t + 0.06,  0.25);
+    },
+    hackwareChronoLure() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.35, 0.45);
+      // Arming chime — three rising clock-tick blips. Magenta-coded
+      // delay marker. Opens with a clean triangle ping at the cast,
+      // then two echo ticks at 0.25s + 0.5s to telegraph "1 second
+      // until detonation". Distinct from hackwareGravity (deep
+      // sub-implosion) — chrono lure is a setup tool, gravity well
+      // is the impact — so the audio reads "tick-tick-tick" not
+      // "BOOM".
+      osc('triangle', 1100, 1400, 0.08, t,         0.10, bus);
+      osc('triangle',  900, 1100, 0.06, t + 0.30,  0.10, bus);
+      osc('triangle',  700,  900, 0.05, t + 0.60,  0.10, bus);
+      osc('sine',      220,  180, 0.05, t,         0.20);
+    },
+    hackwareChronoLureBoom() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.45, 0.55);
+      // Detonation — collapsing magenta singularity. Pitched-down
+      // sub-bass sweep + bright noise crackle for the stun pop. Pairs
+      // with the visual transition from countdown clock → pull vortex
+      // so the player hears AND sees the arm-end transition.
+      osc('sine',     900,  60, 0.18, t,         0.35, bus);
+      osc('triangle', 600,  80, 0.12, t,         0.30, bus);
+      noise(0.10, t, 0.18, 3500, bus);
+      osc('sine',      40,  30, 0.18, t + 0.08,  0.45);
+    },
+    hackwareTimeDilation() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.55, 0.7);
+      // Temporal field engagement — sustained pitched-down hum that
+      // sells "time slowed". Opens with a tone pair (fifth) that
+      // sweeps DOWN slowly over 0.6s (vs the snap UP-then-DOWN of
+      // hackwareCloak's shimmer or the burst-then-decay of
+      // hackwareEMP). Long reverb tail (0.7 wet) gives the ear the
+      // sense of stretched time without resorting to a literal
+      // pitch-shift on a sample. Distinct from hackwareChronoLure
+      // (sharp triangle ticks) and hackwareGravity (deep sub-bass
+      // implosion) — both are timing/control-coded, but time-field
+      // is a soft envelopment, not a pulse.
+      osc('sine',     520, 240, 0.10, t,         0.55, bus);
+      osc('triangle', 780, 320, 0.06, t,         0.55, bus);
+      osc('sine',     180, 110, 0.08, t + 0.05,  0.65, bus);
+      noise(0.04, t, 0.45, 800, bus, { filterType: 'lowpass', q: 0.6 });
     },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
@@ -1819,6 +2325,18 @@ const audio = (() => {
       osc('square', 800, 200, 0.05, t + 0.03, 0.15, bus);
       noise(0.08, t, 0.12, 5000, bus);
     },
+    hackwareScrapMagnet() {
+      // SCRAP_MAGNET hackware deploy — bright ascending coin-shimmer, evokes
+      // a sucked-in hoard. Distinct from holoDecoyDeploy (mid-warble shimmer)
+      // and hackwareGravity (deep sub-implosion) so the player audibly maps
+      // the cast to the visual gold ring.
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(0.8, 0.35, 0.45);
+      osc('triangle', 880, 1760, 0.07, t, 0.14, bus, { attack:0.002 });
+      osc('sine',     1320, 2200, 0.05, t + 0.04, 0.12, bus, { attack:0.002 });
+      osc('sine',      660, 1100, 0.05, t + 0.08, 0.14, bus, { attack:0.002 });
+      noise(0.03, t, 0.08, 6500, bus, { filterType:'highpass' });
+    },
     upgradePurchased() {
       // UNCHAINED #36 — UPGRADE MATRIX node purchase confirmation
       const c = getCtx(); const t = c.currentTime;
@@ -1847,6 +2365,12 @@ const audio = (() => {
 // Auto-pause when the browser hides the tab (iOS lock, tab switch, phone call)
 // and resume audio context when returning. Prevents the iOS freeze where an
 // interrupted AudioContext kills the rAF chain and the drone oscillator drones.
+//
+// `_autoPaused` is the in-flight flag (true between hide and visible).
+// `_G.wasAutoPaused` is the sticky indicator the pause renderer reads —
+// set on auto-pause, cleared by game.js when the player manually unpauses.
+// Without the sticky flag, a returning player sees "PAUSED" with no
+// explanation and may not realize the pause was automatic.
 let _autoPaused = false;
 let _preVisibilityState = null;
 
@@ -1862,6 +2386,12 @@ function _onVisibilityHidden() {
   if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(_G.state)) {
     _preVisibilityState = _G.state;
     _autoPaused = true;
+    // Sticky indicator the pause renderer reads. Cleared by game.js
+    // when the player resumes manually (Escape, "Resume", or any
+    // other transition out of PAUSED). Survives the
+    // hidden→visible→still-PAUSED window so the returning player
+    // sees "(auto-paused)" instead of an unexplained PAUSED screen.
+    _G.wasAutoPaused = true;
     _G.setState('PAUSED');
   }
 }

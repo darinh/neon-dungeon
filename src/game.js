@@ -1,6 +1,39 @@
 // @ts-check
 'use strict';
 
+// Two-tap window for the destructive [RESET TO DEFAULTS] button in the
+// SETTINGS menu — first press arms a timestamp, second press within
+// this window commits, anything else (nav, click elsewhere, Escape,
+// timeout) cancels. Centralized here so both updateSettings and
+// renderSettings share the same source of truth (the prior split
+// constant is what the PR #184 known-limitation note flagged).
+const RESET_CONFIRM_WINDOW_MS = 3000;
+
+// Boss intro telegraph duration (seconds). Triggered when the player crosses
+// the threshold of a boss room and the room seals. During this window an
+// atmospheric overlay (radial vignette in the boss colour + boss-name
+// titlecard) is rendered on top of the world, and audio.bossIntro() plays
+// as a low-frequency hum sting. Gameplay is NOT paused — the intro is a
+// pure cosmetic flourish that runs in parallel with normal play.
+//
+// 2.4s chosen to be: long enough that the titlecard registers (~1.5s of
+// "hold" in the middle after fade-in), short enough that it doesn't
+// overstay the moment or eclipse the AI's first telegraphed attack.
+const BOSS_INTRO_DURATION = 2.4;
+
+// Boss death telegraph duration (seconds). Triggered when the last boss
+// enemy is removed from the active arena (i.e. when bossAlive flips
+// true→false). During this window an atmospheric overlay (radial flash
+// in the boss colour + "DESTROYED" titlecard with the boss name + a
+// celebratory audio sting) is rendered on top of the world. Like the
+// boss intro telegraph, gameplay is NOT paused — the player can still
+// move, descend, etc. The overlay is purely cosmetic.
+//
+// 2.6s chosen to feel slightly weightier than the intro (2.4s) — death
+// deserves a beat to land. Long enough that the "DESTROYED" beat
+// registers without overstaying past the natural impulse to descend.
+const BOSS_DEATH_DURATION = 2.6;
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -8,6 +41,13 @@ const game = {
   floor: 1,
   player: null,
   dungeon: null,
+  // Sticky indicator set by platform.js's visibilitychange handler
+  // when the game auto-pauses (tab switch, iOS lock, phone call) and
+  // cleared in setState() on any transition out of PAUSED. Read by
+  // renderPaused() to show a subtitle distinguishing automatic from
+  // manual pauses, so a returning player isn't confused by an
+  // unexplained PAUSED screen.
+  wasAutoPaused: false,
   fadeAlpha: 0,
   fadeDir: 0,
   fadeCallback: null,
@@ -25,6 +65,26 @@ const game = {
   bossAlive: false,
   bossBarAnim: 0,
   bossHpGhost: 0,
+  // Boss intro telegraph — atmospheric overlay (radial vignette + titlecard +
+  // audio sting) that plays for BOSS_INTRO_DURATION seconds when the player
+  // first enters the boss room (i.e. when bossSealed flips false→true).
+  // Gameplay continues during the intro — this is purely cosmetic. Timer
+  // counts DOWN to 0; duration field is kept for fade-envelope math in the
+  // renderer (so the renderer can compute progress = 1 - timer/duration
+  // without re-deriving the constant).
+  bossIntroTimer: 0,
+  bossIntroDuration: 0,
+  // Boss death telegraph — atmospheric overlay (radial flash + "DESTROYED"
+  // titlecard + audio sting) that plays for BOSS_DEATH_DURATION seconds
+  // when the last boss is killed (bossAlive flips true→false). Gameplay
+  // continues during the overlay — purely cosmetic. Snapshot fields hold
+  // the boss's identity at the moment of death because the boss instance
+  // is removed from `enemies` on the same frame (line ~1804) and the
+  // renderer needs the colour/name to outlive the kill.
+  bossDeathTimer: 0,
+  bossDeathDuration: 0,
+  bossDeathColor: '#39ff14',
+  bossDeathName: '',
   modifier: null,
   modBannerTimer: 0,
   // UNCHAINED #40: biome intro card — shown 3s on first floor of a biome
@@ -101,6 +161,12 @@ const game = {
    * @param {any} callback
    */
   setState(s, callback) {
+    // Clear the auto-paused sticky indicator on any transition OUT of
+    // PAUSED — PLAYING (manual resume), MENU (quit), SETTINGS (open
+    // submenu), etc. The next auto-pause will set it again. Without
+    // this, a player who auto-pauses then manually unpauses then
+    // pauses again later by hand would still see "(auto-paused)".
+    if (this.state === 'PAUSED' && s !== 'PAUSED') this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; music.stop(); }
@@ -188,6 +254,12 @@ const game = {
     this.bossAlive=false;
     this.bossBarAnim=0;
     this.bossHpGhost=0;
+    this.bossIntroTimer=0;
+    this.bossIntroDuration=0;
+    this.bossDeathTimer=0;
+    this.bossDeathDuration=0;
+    this.bossDeathColor='#39ff14';
+    this.bossDeathName='';
     this.clearedRooms=new Set();
     this._chainBolts=[];
     this.sealedEntranceSet=new Set();
@@ -204,8 +276,49 @@ const game = {
     this.challengeComplete=false;
     // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
+    // SPAWN GRACE: 1.5s of invulnerability on FRESH floor entry (not save-
+    // resume — they paused, they're not under threat). Covers chaos-on-spawn
+    // cases: arriving next to an arc grid, descending into an active mob
+    // pack, dropping into a boss room mid-fight after `descend()`. Gate is
+    // savedModifier === undefined (matches the existing pattern used for
+    // keys, boosts, telemetry, biome card, modifier banner). Damage path
+    // honours this via isPlayerDamageImmune() in src/content.js. The visual
+    // halo lives in Player.draw() in src/entities.js (cyan pulsing ring).
+    // Keep the literal in sync with the src/entities.js comment header.
+    if (this.player) {
+      this.player._spawnGraceTimer = (savedModifier === undefined) ? 1.5 : 0;
+    }
     // Clear player debuffs on floor transition
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
+    // STRIDE perk: drop movement-built ATK stacks on floor transition. The
+    // player teleports to the new spawn between frames; without this reset
+    // the next-frame moved/dt rate would be enormous (huge displacement /
+    // tiny dt) and STRIDE would treat the warp as "continuous movement",
+    // letting full-RUSH stacks survive into the new floor for free.
+    if (this.player) {
+      this.player._strideStacks = 0;
+      this.player._strideMovingTime = 0;
+      this.player._strideStillTime = 0;
+      // DEADEYE perk: drop stillness charge + readiness latch on floor
+      // transition. Same rationale as the STRIDE reset above — the
+      // descend warp teleports player.x/y between frames, and without
+      // an explicit clear the stale _steadyReady=true would let the
+      // first shot on the new floor consume a free buffed hit. Also
+      // zero _steadyChargeTime so partial progress doesn't carry over.
+      this.player._steadyChargeTime = 0;
+      this.player._steadyReady = false;
+      // HOT_HAND perk: drop the per-target consecutive-hit streak on
+      // floor transition. The descend warp teleports the player and
+      // wipes all enemies from the previous floor — keeping a stale
+      // _hotHandLastTarget reference would (a) hold a dead enemy in
+      // memory until the next streak overwrite, and (b) be moot
+      // anyway since the new floor's enemies are all fresh refs that
+      // would trip the target-switch reset on first hit. Resetting
+      // here is correct AND tidies up the GC-able reference.
+      this.player._hotHandStreak = 0;
+      this.player._hotHandLastTarget = null;
+      this.player._hotHandTimer = 0;
+    }
     // Reset teleport pad cooldown
     this.teleportCooldown = 0;
     // UNCHAINED #39: clear leftover core drops from previous floor.
@@ -217,6 +330,28 @@ const game = {
     // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
       this.player._shieldCharges = (this.player._shieldCharges | 0) + this.player.metaFlags.floorStartShieldCharges;
+    }
+    // EMERGENCY_CACHE augment: anti-snowball lifeline. On a FRESH floor entry
+    // (savedModifier === undefined — same gate as spawn grace, keys, boosts),
+    // if the player arrives below 30% HP, top them up to 50% HP. Once-per-
+    // floor by construction (only triggers at fresh entry). No effect when
+    // the player is already healthy. Save-resume is intentionally skipped so
+    // reloading a save mid-floor does not heal. Player.hp > 0 guard prevents
+    // a corner case where loadFloor is invoked on a dead player. The toast
+    // is deferred via setTimeout so it survives the `messages.length=0`
+    // floor-transition wipe further down in loadFloor (line ~305) — same
+    // deferral pattern used by applyPerk / makeAugmentShopOption install
+    // messages and by the BOSS DETECTED announcement.
+    if (savedModifier === undefined && hasAugment('EMERGENCY_CACHE') && this.player && this.player.hp > 0) {
+      const max = this.player.maxHp | 0;
+      if (max > 0 && (this.player.hp / max) < 0.30) {
+        const target = Math.ceil(max * 0.50);
+        if (this.player.hp < target) {
+          const healed = target - this.player.hp;
+          this.player.hp = target;
+          setTimeout(() => this.msg('🔋 EMERGENCY CACHE: +' + healed + ' HP', '#88ffaa'), 250);
+        }
+      }
     }
     // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
     // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
@@ -252,6 +387,31 @@ const game = {
     this._exitPos = null;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
+    // Clear position history on floor transition so an ECHOER on the new
+    // floor cannot fire at a position the player held on the previous
+    // floor (locks need ECHOER_LOOKBACK seconds of fresh samples).
+    if (this.player._posHistory) this.player._posHistory.length = 0;
+    // Same rationale for shot kinematics history — a MIRROR on the new
+    // floor must not be able to mimic a shot the player fired on the
+    // previous floor before they have fired anything on the current floor.
+    if (this.player._shotHistory) this.player._shotHistory.length = 0;
+    // Clear frost patches on floor transition — patches from a CRYOPHAGE
+    // on the previous floor would otherwise persist as invisible damage
+    // tiles on the new floor's coordinates (same rationale as the
+    // history rings above: cross-floor leak of room-local state).
+    frostPatches.length = 0;
+    // Reset per-room kill counter on floor transition: the new floor's room
+    // layout has nothing to do with the previous floor's kills, and the
+    // player's _currentRoom reference is stale (rooms array is new). The
+    // first frame of updatePlaying will re-detect the spawn room and
+    // re-arm any REAPERs there via the room-change path.
+    this.player.killsInCurrentRoom = 0;
+    this.player._currentRoom = null;
+    // Clear ARCHITECT-placed walls on floor transition — the dungeon.map
+    // is regenerated, so the placed-wall list referencing old tile
+    // coordinates is invalid. Walls were applied to the old map; not
+    // restored here because the old map is being thrown away anyway.
+    placedWalls.length = 0;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
     // Telemetry: floor start
@@ -365,6 +525,20 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
+    // hacktool meta upgrade — pre-equip a random hackware module at run
+    // start (reinterpreted from "extra hackware slot" since the game has
+    // only one slot; see src/meta/save.js hacktool case for full history).
+    // Done HERE (not in save.applyMetaToPlayer) so the meta layer stays
+    // decoupled from entity data: HACKWARE is browser-side content, and
+    // applyMetaToPlayer is also exercised by node-runnable behavioural
+    // tests that don't load content.js. The !p.hackware guard makes the
+    // seed idempotent — re-entering startGame after a meta-only path
+    // (e.g. the new-game-confirm prompt loop) won't reroll the module.
+    if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
+      const _hwKey = HACKWARE_KEYS[Math.floor(Math.random() * HACKWARE_KEYS.length)];
+      this.player.hackware = _hwKey;
+      this.player.hackwareCooldown = 0;
+    }
     // UNCHAINED #37: transient pickup array. Modules dropped this run live
     // here until commit on floor clear / victory; discarded on death.
     this.runModules = [];
@@ -869,6 +1043,8 @@ const game = {
         hackware:p.hackware,
         hackwareCooldown:p.hackwareCooldown,
         secondWindUsed:p.secondWindUsed,
+        lastStandTimer:p.lastStandTimer || 0,
+        lastStandCD:p.lastStandCD || 0,
         augments:p.augments||{},
         // UNCHAINED #36: persist meta-node runtime state so Continue doesn't
         // drop behavioural hooks and stat carriers. Additive-to-base values
@@ -886,7 +1062,64 @@ const game = {
         // UNCHAINED #38: persist current-floor temp-boost state so a Continue
         // preserves purchases (save-resume is not a fresh floor transition).
         activeBoosts: p.activeBoosts ? {...p.activeBoosts} : {},
-        _shieldCharges: p._shieldCharges | 0
+        // HARVESTER timed-boost remaining seconds. Persisted alongside
+        // activeBoosts so `HARVEST_SURGE` (and any future timed boost) does
+        // NOT become an unrevokeable floor-buff after save/resume — the timer
+        // would otherwise be lost while the activeBoosts flag survived,
+        // leaving tickBoosts with no way to expire it (3 reviewers caught
+        // this on PR #143 review).
+        _boostTimers: p._boostTimers ? {...p._boostTimers} : {},
+        _shieldCharges: p._shieldCharges | 0,
+        // PIERCING_HEART 'of Piercing Heart' suffix — per-run cap counter.
+        // Persisted so save/resume preserves the +20 cap (otherwise a
+        // quit-and-resume mid-run would let the player re-earn the cap
+        // from scratch, since maxHp survives but the counter wouldn't).
+        // Mirrors the explicit-enum pattern (no Object.keys) per
+        // stored memory 'on-hit weapon affixes'.
+        _piercingHearts: p._piercingHearts || 0,
+        // OVERCHARGE floor modifier — per-run shot counter, every 5th shot
+        // is a guaranteed crit. Persisted so save/resume on an OVERCHARGE
+        // floor preserves the rhythm (otherwise the counter would reset to
+        // 0 mid-floor and the next 4 shots would lose their guaranteed
+        // crit slot). Mirrors the PIERCING_HEART explicit-enum pattern.
+        _overchargeShots: p._overchargeShots || 0,
+        // WINDFALL floor modifier — per-run kill counter, every 5th defeat
+        // drops a bonus core. Persisted so save/resume on a WINDFALL floor
+        // preserves the rhythm (otherwise the counter would reset to 0
+        // mid-floor and the next 4 kills would lose their bonus slot).
+        // Mirrors the OVERCHARGE explicit-enum pattern.
+        _windfallKills: p._windfallKills || 0,
+        // SIGNAL_BOOST floor modifier — per-run kill counter, every 5th
+        // defeat instantly clears the player's hackware cooldown (effect
+        // gated on player.hackware; counter ticks unconditionally so the
+        // HUD progress suffix stays consistent). Persisted so save/resume
+        // on a SIGNAL_BOOST floor preserves the rhythm. Mirrors the
+        // WINDFALL explicit-enum pattern.
+        _signalBoostKills: p._signalBoostKills || 0,
+        // REVERB floor modifier — per-run shot counter, every 5th shot
+        // fires a free echo of the same shot intent. Persisted so
+        // save/resume on a REVERB floor preserves the rhythm (otherwise
+        // the counter would reset to 0 mid-floor and the next 4 shots
+        // would lose their free-echo slot). Mirrors the OVERCHARGE
+        // explicit-enum pattern.
+        _reverbShots: p._reverbShots || 0,
+        // CHAINREACT floor modifier — per-run countdown timer for the
+        // chain-window. Persisted so save/resume on a CHAINREACT floor
+        // mid-chain doesn't drop the rhythm. A timer (not a counter)
+        // because the modifier's gameplay is "is the chain still alive
+        // right now", not "how many defeats are stacked". Saves under
+        // a number 0-1.5; legacy saves predating this PR get 0 via the
+        // `|| 0` nucleation pattern.
+        _chainBuffTimer: p._chainBuffTimer || 0,
+        // trauma_kit panic-button charges — per-run counter seeded by
+        // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
+        // Continue mid-run preserves remaining charges (otherwise a
+        // quit-and-resume after a panic-heal would refund consumed
+        // charges since startingNanoMedics is stat-only and the live
+        // counter would default back to the upgrade level). Mirrors the
+        // explicit-enum pattern (no Object.keys) per stored memory
+        // 'on-hit weapon affixes'.
+        _nanoMedicCharges: p._nanoMedicCharges | 0
       }
     };
     try { localStorage.setItem('neonDungeonSave', JSON.stringify(save)); } catch(e){}
@@ -965,6 +1198,8 @@ const game = {
     p.hackware=(s.hackware && HACKWARE[s.hackware]) ? s.hackware : null;
     p.hackwareCooldown=s.hackwareCooldown||0;
     p.secondWindUsed=!!s.secondWindUsed;
+    p.lastStandTimer=s.lastStandTimer||0;
+    p.lastStandCD=s.lastStandCD||0;
     p.augments=s.augments||{};
     // UNCHAINED #36: restore meta runtime state (persisted since SAVE_VERSION 9.x).
     // Old saves predating this have these fields undefined → defaults kick in.
@@ -979,7 +1214,59 @@ const game = {
     p._metaSecondWindUsed = !!s.metaSecondWindUsed;
     // UNCHAINED #38: restore in-run temp boosts (defaults empty for old saves).
     p.activeBoosts = s.activeBoosts ? {...s.activeBoosts} : {};
+    // HARVESTER timed-boost remaining seconds (defaults empty for old saves
+    // without the field). Defensive sweep: any activeBoosts flag for a timed
+    // boost without a backing timer is dropped — without this, a save
+    // produced by a pre-fix build that lost _boostTimers would resume with
+    // a permanently-stuck HARVEST_SURGE flag (the bug the persistence fix
+    // resolves going forward).
+    p._boostTimers = s._boostTimers ? {...s._boostTimers} : {};
+    if (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.BOOSTS) {
+      const timers = /** @type {Record<string, number>} */ (p._boostTimers);
+      for (const id in p.activeBoosts) {
+        const def = NEON.boosts.BOOSTS[id];
+        if (def && def.duration === 'timed' && !((timers[id] || 0) > 0)) {
+          delete p.activeBoosts[id];
+        }
+      }
+    }
     p._shieldCharges = s._shieldCharges | 0;
+    // PIERCING_HEART per-run cap counter — restore from save (defaults to
+    // 0 for older saves that predate the field; same `||0` nucleation
+    // pattern used elsewhere in continueGame).
+    p._piercingHearts = s._piercingHearts || 0;
+    // OVERCHARGE per-run shot counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors PIERCING_HEART
+    // restore pattern).
+    p._overchargeShots = s._overchargeShots || 0;
+    // WINDFALL per-run kill counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors OVERCHARGE).
+    p._windfallKills = s._windfallKills || 0;
+    // SIGNAL_BOOST per-run kill counter — restore from save (defaults to 0
+    // for older saves that predate the field; mirrors WINDFALL).
+    p._signalBoostKills = s._signalBoostKills || 0;
+    // REVERB per-run shot counter — restore from save (defaults to 0 for
+    // older saves that predate the field; mirrors OVERCHARGE restore).
+    p._reverbShots = s._reverbShots || 0;
+    // CHAINREACT chain-window timer — restore from save (defaults to 0
+    // for legacy saves that predate the field; mirrors REVERB restore).
+    p._chainBuffTimer = s._chainBuffTimer || 0;
+    // trauma_kit panic-button charges — restore from save when present.
+    // For saves produced BEFORE this PR shipped, the explicit field is
+    // absent (`s._nanoMedicCharges == null`); we fall back to the
+    // metaFlags-recorded upgrade level (which IS persisted in legacy
+    // saves via `metaFlags: ...` at saveGame:983) so that a player who
+    // owns trauma_kit and Continues from a pre-PR save gets the
+    // advertised charges instead of being silently zeroed. This refunds
+    // any charges they MIGHT have used pre-PR — but since trauma_kit
+    // produced no runtime charges before this PR, that's a vacuous case.
+    // Saves produced AFTER this PR always carry the explicit field and
+    // hit the first branch.
+    if (s._nanoMedicCharges != null) {
+      p._nanoMedicCharges = s._nanoMedicCharges | 0;
+    } else if (s.metaFlags && s.metaFlags.trauma_kit) {
+      p._nanoMedicCharges = s.metaFlags.trauma_kit | 0;
+    }
     p.shieldBonus=0; // loadFloor will manage floor-only bonuses
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
@@ -1150,14 +1437,59 @@ const game = {
 
     player.update(dt,dungeon.map);
 
+    // ── REAPER aggression tracking: detect player room change BEFORE the
+    // enemy-update loop, so REAPERs read fresh state and Enemy.die() events
+    // this frame attribute kills to the correct room. Scope: per-frame
+    // single rooms.find scan (cheap — dungeon.rooms is small).
+    {
+      const px = player.x, py = player.y;
+      let nextRoom = null;
+      for (const r of dungeon.rooms) {
+        if (px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h) { nextRoom = r; break; }
+      }
+      if (nextRoom !== player._currentRoom) {
+        player.killsInCurrentRoom = 0;
+        player._currentRoom = nextRoom;
+        // Re-arm any REAPERs in the room the player just entered (if any).
+        // Reapers in the room they just LEFT keep _reHasFrenzied — re-entry
+        // will clear it via this same code path because that room then
+        // becomes the next nextRoom.
+        if (nextRoom) {
+          for (const e of enemies) {
+            if (!e.dead && e.type === 'REAPER' && e.room === nextRoom) {
+              e._reHasFrenzied = false;
+            }
+          }
+        }
+      }
+    }
+
     const cam=getCamera(player);
+    // World-zoom scalar — used for screen↔world coordinate conversions
+    // throughout this update tick. Touch/mouse events arrive in canvas
+    // (logical) pixels; the playfield is rendered through ctx.scale(z)
+    // in renderPlaying, so converting to world tiles requires a /zoom
+    // factor on the canvas-px term BEFORE adding the cam (which is
+    // already in world-pixel units). Sites: touch-aim synthesis below
+    // and the mouse-aim worldAim conversion further down. Cached once
+    // per tick because settings reads are cheap but ergonomic.
+    const _wzoom = (settings && settings.worldZoom) || 1;
 
     // sync touch aim: synthesise a mouse position far in the joystick direction
     if (touch.aim.active) {
       mouse.down = touch.aim.shooting;
       if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
-        mouse.x = player.x * TILE - cam.x + touch.aim.dx * 300;
-        mouse.y = player.y * TILE - cam.y + touch.aim.dy * 300;
+        // Player's on-canvas pixel position: in the world-render block
+        // we draw at (player.x*TILE - cam.x), then ctx.scale(_wzoom)
+        // multiplies that by zoom for the final canvas coordinate. So
+        // synthesise the touch-aim mouse position in canvas-px terms,
+        // matching the resolution of an actual pointermove event.
+        // The 300-px deflection radius stays in canvas-px (so the joystick
+        // "reach" feels the same on screen at any zoom — the aim ARC in
+        // world tiles shrinks proportionally to zoom, which means more
+        // PRECISE aim at higher zoom; matches user expectation).
+        mouse.x = (player.x * TILE - cam.x) * _wzoom + touch.aim.dx * 300;
+        mouse.y = (player.y * TILE - cam.y) * _wzoom + touch.aim.dy * 300;
       }
     }
 
@@ -1199,8 +1531,11 @@ const game = {
       worldAimX = player.x + player.facing.x * 8;
       worldAimY = player.y + player.facing.y * 8;
     } else {
-      worldAimX = (mouse.x + cam.x) / TILE;
-      worldAimY = (mouse.y + cam.y) / TILE;
+      // Mouse → world tile: undo the ctx.scale(_wzoom) on the canvas-px
+      // coordinate first (mouse.x is in canvas px), THEN add the cam
+      // (in world-px), THEN convert to tiles.
+      worldAimX = (mouse.x / _wzoom + cam.x) / TILE;
+      worldAimY = (mouse.y / _wzoom + cam.y) / TILE;
       const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     }
@@ -1302,12 +1637,30 @@ const game = {
 
     // update disruption fields (must run before player.update next frame for flag)
     updateDisruptionFields(dt, player);
+    // update NULLIFIER jam aura (must run before player.update next frame
+    // for player.hackwareJammed flag — same call-ordering rationale as
+    // updateDisruptionFields above). Iterates live NULLIFIERs and sets
+    // the flag based on player proximity.
+    updateNullifierJam(dt, player);
+    updateFrostPatches(dt, player);
+    // Tick ARCHITECT-placed walls — auto-decay back to origTile after
+    // ARCHITECT_DECAY_TIME. Pass dungeon.map so the helper can mutate it.
+    updatePlacedWalls(dt, dungeon.map);
 
     // update gravity wells
     updateGravityWells(dt);
 
     // update items
     for (const it of items) it.update(dt);
+    // Prune items that ticked themselves dead (HarvestPickup TTL expiry).
+    // Plain Items / KeyItems / WhisperItems are always spliced at pickup
+    // time, so their `dead` flag never goes true here — but TTL-based
+    // pickups would otherwise stay in the items array, drawing forever
+    // and consuming hit-test loop work. (3 reviewers caught this on the
+    // HARVESTER PR — drawing-but-uncollectable ghost pickup.)
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].dead) items.splice(i, 1);
+    }
     // update fuse bombs (tap-tap V) — drawn between items and enemies in
     // render loop so a planted bomb is visible above ground but obscured by
     // mobs standing on it. Dead-bomb prune handled inside.
@@ -1331,13 +1684,78 @@ const game = {
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
-      const pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
+      // Pickup-radius composition. Stacks multiplicatively with the
+      // MAGNETIC_FIELD augment ("Double item pickup radius") AND the
+      // MAGNETISM floor modifier (ninth positive modifier, "Item pickup
+      // radius increased 50% on this floor"). Both are passive
+      // multiplicative reductions, so an MAGNETISM floor with
+      // MAGNETIC_FIELD yields radius × 2 × 1.5 = ×3 (0.7 → 2.1 tiles).
+      // Mirrors the AUTONOMY×OVERCLOCKER pattern at content.js
+      // activateHackware (PR #266). Uses this.modifier (the canonical
+      // game.js floor-modifier ref) so a typo would silently disable
+      // the bonus on every pickup tick.
+      let pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
+      if (this.modifier === 'MAGNETISM') pickupRadius *= 1.5;
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<pickupRadius) {
         if (it.isKey) {
           audio.pickup();
           items.splice(i,1);
           player.keys[it.colour]++;
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
+          continue;
+        }
+        // HARVESTER drop — applies HARVEST_SURGE (+50% damage for 8s, see
+        // src/meta/boosts.js). Strict temp-only per design rule (no permanent
+        // power-ups from mob drops). Auto-collected on contact like other
+        // pickups; perk choice gating is irrelevant here (it's a buff, not
+        // an upgrade choice). Toast colour matches the pickup's surge-orange.
+        if (it.isHarvest) {
+          audio.pickup();
+          items.splice(i, 1);
+          if (typeof NEON !== 'undefined' && NEON.boosts) {
+            NEON.boosts.applyBoost(player, 'HARVEST_SURGE');
+          }
+          this.msg('HARVEST SURGE — +50% DMG (8s)', '#ff9933');
+          continue;
+        }
+        // MAGPIE hoard — thief returns banked credits on death pickup.
+        // The MagpieHoard.amt was set to the exact value the thief
+        // banked (sum of MAGPIE_STOLEN_BASE + floor * MAGPIE_STOLEN_PERFL
+        // per consumed Item) so this is always a clean refund of the
+        // stolen value. Floating "+N CR" + gold flash mirrors the
+        // CREDIT_CACHE pickup feedback so the player reads the recovery
+        // unambiguously.
+        if (it.isHoard) {
+          audio.pickup();
+          items.splice(i, 1);
+          // SCAVENGER meta upgrade: same flat per-pickup bonus as
+          // CREDIT_CACHE.fn (src/content.js ~line 4145). MagpieHoard +
+          // VaultCoin both flow through this branch (both flag .isHoard
+          // = true), so this single wire covers all credit-item pickup
+          // paths. Sanitize identically — see the CREDIT_CACHE.fn
+          // comment for the corrupted-localStorage rationale.
+          let bonus = (player && player.bonusCreditPerPickup) || 0;
+          if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
+          if (bonus > 32) bonus = 32;
+          bonus = Math.floor(bonus);
+          const amt = Math.max(0, Math.round(it.amt || 0)) + bonus;
+          player.credits = (player.credits || 0) + amt;
+          if (typeof spawnDmgText === 'function') spawnDmgText(player.x, player.y, '+' + amt + ' CR', '#ffd700');
+          if (typeof spawnParticles === 'function') spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);
+          this.msg('HOARD RECOVERED  +' + amt + ' CR', '#ffd700');
+          continue;
+        }
+        // SHOCK_PULSE pickup — defensive panic-button consumable. Auto-
+        // triggers on contact (mirrors HARVEST_SURGE / HOARD recovery
+        // feedback shape). Discharges an AoE knockback + brief stun
+        // centred on the player. NON-DAMAGING — payoff is positional
+        // (panic-eject a swarm), not DPS. Detonation math + LOS gate
+        // + boss carve-out live in triggerShockPulse() in entities.js.
+        if (it.isShockPulse) {
+          items.splice(i, 1);
+          const hit = (typeof triggerShockPulse === 'function') ? triggerShockPulse() : 0;
+          try { audio.pickup(); } catch (_) {}
+          this.msg(hit > 0 ? ('SHOCK PULSE — ' + hit + ' STUNNED') : 'SHOCK PULSE', '#66e0ff');
           continue;
         }
         if (it.isWhisper) {
@@ -1401,7 +1819,13 @@ const game = {
           const needsHp = player.hp < player.maxHp;
           const aIsHeal = optA.id === 'MED_PACK' || optA.id === 'NANO_REPAIR';
           const bIsHeal = optB.id === 'MED_PACK' || optB.id === 'NANO_REPAIR';
-          const pick = (needsHp && bIsHeal && !aIsHeal) ? optB : optA;
+          // Heal-priority when wounded: prefer the heal option.
+          // Waste-avoidance when full HP: prefer the non-heal option (a heal
+          // at max HP heals nothing, so the boost/currency/XP is strictly
+          // better). Default: keep optA.
+          let pick = optA;
+          if (needsHp && bIsHeal && !aIsHeal) pick = optB;
+          else if (!needsHp && aIsHeal && !bIsHeal) pick = optB;
           pick.fn(player);
           this.msg(pick.name, pick.colour);
           if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('auto_collect', { item: pick.id, floor: this.floor });
@@ -1429,11 +1853,17 @@ const game = {
       if (enemies[i].dead) enemies.splice(i,1);
     }
 
-    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs)
+    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs,
+    // GHOST_PROJECTOR → ghosts)
     if (pendingEnemySpawns.length) {
       for (const s of pendingEnemySpawns) {
         // Skip orphan summons whose summoner died this frame
         if (s._summoned && (!s._summonerRef || s._summonerRef.dead)) continue;
+        // Skip orphan ghosts whose projector died this frame — the haunt
+        // dies with its source. Avoids spectral ghosts wandering after
+        // their projector is gone (would also be unfair: the player
+        // pre-empted the projector but still got a ghost).
+        if (s._ghIsGhost && (!s._ghOwnerProjector || s._ghOwnerProjector.dead)) continue;
         const e = spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false);
         if (s._challengeWave) e._challengeWave = true;
         if (s._summoned && s._summonerRef) {
@@ -1441,6 +1871,25 @@ const game = {
           e._summonerRef = s._summonerRef;
           e.xpValue = 0; // no XP farming from summons
           s._summonerRef._summons.push(e);
+        }
+        if (s._ghIsGhost) {
+          // Apply ghost mutations after a real spawnEnemy build so AI/
+          // collision/draw paths all work with normal enemy state.
+          e._ghIsGhost = true;
+          e._ghLife = GHOST_PROJECTOR_GHOST_LIFE;
+          e.hp = Math.max(1, Math.round(e.hp * GHOST_PROJECTOR_HP_MUL));
+          e.maxHp = e.hp;
+          e.atk = Math.max(1, Math.round(e.atk * GHOST_PROJECTOR_ATK_MUL));
+          e.xpValue = 0; // no XP from ghost kills
+          // Atomically clear the projector's pending state AND back-assign
+          // the live ghost ref. Done together (and only here) so the
+          // notifyGhostProjectors busy-skip stays valid across the
+          // queue→flush window via the _gpAwaitingFlush sentinel.
+          const proj = s._ghOwnerProjector;
+          proj._gpActiveGhost = e;
+          proj._gpPendingType = null;
+          proj._gpPendingDelay = 0;
+          proj._gpAwaitingFlush = false;
         }
         enemies.push(e);
       }
@@ -1799,7 +2248,9 @@ const game = {
     // environmental hazards (separate from traps — own cooldowns, bypass armor)
     if (tile === T.PLASMA && !isPlayerDamageImmune()) {
       // Continuous burn: bypasses defense and hit i-frames, but still respects shield/SECOND_WIND.
-      const burnDps = (3 + this.floor) * getDiff().envDmg;
+      // BIOFILTER augment halves env-tile damage (status-resistance niche).
+      const bioMul = hasAugment('BIOFILTER') ? 0.5 : 1;
+      const burnDps = (3 + this.floor) * getDiff().envDmg * bioMul;
       player.takeDamage(burnDps * dt, 'Plasma', {
         ignoreInvincible: true,
         ignoreDefense: true,
@@ -1819,7 +2270,7 @@ const game = {
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && !isPlayerDamageImmune() && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
       // Periodic zap during active phase
-      const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg);
+      const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1));
       player.takeDamage(zapDmg, 'Arc Grid', {
         ignoreInvincible: true,
         ignoreDefense: true,
@@ -1836,7 +2287,7 @@ const game = {
 
     // ── Toxic Pool (damages player + slows) ──
     if (tile === T.TOXIC && !isPlayerDamageImmune()) {
-      const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg;
+      const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1);
       player.takeDamage(toxDps * dt, 'Toxic Pool', {
         ignoreInvincible: true,
         ignoreDefense: true,
@@ -1990,7 +2441,28 @@ const game = {
         }
         audio.roomSeal();
         this.msg('⚠ ROOM SEALED','#ff3333');
+        // Boss intro telegraph — fires ONCE per boss encounter, on the
+        // false→true bossSealed flip. Atmospheric overlay (radial vignette
+        // in boss colour + boss-name titlecard + low-frequency audio sting).
+        // Gameplay continues during the BOSS_INTRO_DURATION-second window;
+        // the player can still move/shoot. Bosses themselves are AI-driven
+        // and typically telegraph their first attack, so the intro doesn't
+        // create unfair pressure. Save/load resumes mid-fight do NOT
+        // re-trigger this — descend() resets bossSealed to false and the
+        // dungeon is regenerated on Continue, so the seal-flip path is
+        // re-entered cleanly only on first physical entry to the room.
+        this.bossIntroDuration = BOSS_INTRO_DURATION;
+        this.bossIntroTimer = BOSS_INTRO_DURATION;
+        if (audio.bossIntro) audio.bossIntro();
       }
+    }
+
+    // Boss intro telegraph — count DOWN every frame regardless of camera or
+    // pause state (pause already short-circuits the entire update loop).
+    // Clamp to 0 to keep the renderer's `timer > 0` gate clean and to ensure
+    // the timer can never be re-played by an integer-overflow / underflow path.
+    if (this.bossIntroTimer > 0) {
+      this.bossIntroTimer = Math.max(0, this.bossIntroTimer - dt);
     }
 
     // boss death — unseal room and update state
@@ -2005,7 +2477,34 @@ const game = {
       }
       this.bossSealed=false;
       this.refreshSealedEntrances();
+      // Edge case — if the boss dies DURING the intro telegraph (player one-
+      // shots a low-HP boss the instant they cross the threshold), kill the
+      // intro overlay so the "boss is dead" state isn't visually contradicted
+      // by a still-fading titlecard with the boss's name.
+      this.bossIntroTimer = 0;
+      this.bossIntroDuration = 0;
+      // Boss death telegraph — fires ONCE per boss kill, on the
+      // bossAlive true→false flip. Atmospheric overlay (radial flash in
+      // the boss colour + "DESTROYED" titlecard with the boss name +
+      // celebratory audio sting). Gameplay continues unaffected — the
+      // overlay is purely cosmetic. The boss instance was removed from
+      // `enemies` by the dead-enemy splice pass earlier in updatePlaying
+      // (line ~1804), so the colour/name shown by the renderer come from
+      // the per-frame snapshot that the boss-HUD block writes to
+      // bossDeathColor/bossDeathName while the boss is alive.
+      this.bossDeathDuration = BOSS_DEATH_DURATION;
+      this.bossDeathTimer = BOSS_DEATH_DURATION;
+      if (audio.bossDefeat) audio.bossDefeat();
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
+    }
+
+    // Boss death telegraph — count DOWN every frame, clamped to 0. Same
+    // shape and rationale as the boss-intro decrement above (defends
+    // against negative-timer states from huge dt spikes — alt-tab,
+    // phone-call interrupt — that would otherwise make the overlay
+    // permanent).
+    if (this.bossDeathTimer > 0) {
+      this.bossDeathTimer = Math.max(0, this.bossDeathTimer - dt);
     }
 
     // Boss HUD bar animation
@@ -2013,6 +2512,15 @@ const game = {
       if (this.bossBarAnim < 1) this.bossBarAnim = Math.min(1, this.bossBarAnim + dt * 2.5);
       const boss = enemies.find(e => e.isBoss && !e.dead);
       if (boss) {
+        // Per-frame snapshot of the boss's display identity so the death
+        // telegraph can render the colour-graded titlecard AFTER the boss
+        // has been spliced from `enemies` (the dead-enemy sweep at
+        // line ~1804 runs BEFORE the death-detection block above, so by
+        // the time the telegraph fires the boss instance is gone). Reads
+        // are gated by bossDeathTimer > 0, so the fields are otherwise
+        // unobserved while the boss is alive.
+        this.bossDeathColor = boss.colour;
+        this.bossDeathName = BOSS_NAMES[this.bossType] || 'BOSS';
         if (this.bossHpGhost === 0) this.bossHpGhost = boss.hp;
         if (this.bossHpGhost > boss.hp) {
           this.bossHpGhost = Math.max(boss.hp, this.bossHpGhost - boss.maxHp * dt * 0.25);
@@ -2961,13 +3469,61 @@ const game = {
   _settingsSel: 0,
   _settingsCapture: null,  // action name being rebound, or null
   _settingsDrag: null,     // 'sfx' or 'music' while dragging a slider
+  // Two-tap confirmation for [RESET TO DEFAULTS]. First Enter/click on
+  // the row arms the timestamp (performance.now()); a second
+  // Enter/click within RESET_CONFIRM_WINDOW_MS commits the reset. Any
+  // other action — navigating to a different row, clicking elsewhere,
+  // pressing Escape, or just letting the window expire — clears it.
+  // Prevents a single fat-finger from wiping all keybinds + toggles
+  // (which `settings.resetAll()` does irreversibly).
+  _settingsResetConfirm: 0,
+
+  /**
+   * Settings menu row metrics — single source of truth for both
+   * updateSettings (hit-testing) and renderSettings (drawing). The
+   * row height SHRINKS dynamically to fit `totalRows` inside the
+   * current viewport `H` so the back / reset rows don't fall off-
+   * screen on common 720-logical-pixel landscape windows. Capped at
+   * the historical defaults (28 narrow / 34 wide) so taller windows
+   * keep the legacy spacing.
+   *
+   * @param {number} totalRows
+   * @returns {{ startY:number, rowH:number }}
+   */
+  _settingsLayout(totalRows) {
+    const narrow = layout.compact;
+    const startY = narrow ? 80 : 80;        // narrow: unchanged; wide: was 100, reduced for row count
+    const desiredRowH = narrow ? 28 : 34;
+    const navHintMargin = 30;               // bottom hint sits at H - 20 + 10 padding
+    const span = Math.max(1, totalRows - 1); // last row index = totalRows - 1
+    const fitRowH = Math.floor((H - startY - navHintMargin) / span);
+    const rowH = Math.max(16, Math.min(desiredRowH, fitRowH));
+    return { startY, rowH };
+  },
 
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
-    const CTRL_START = 6;     // row index where key rebind rows begin (4 toggles)
-    // Total items: 2 sliders + 4 toggles + N rebind rows + 1 reset row + 1 back row
+    const STEPPER_START = 8;  // row index where scale steppers begin (after 6 toggles)
+    const STEPPER_COUNT = 3;  // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
+    const CTRL_START = STEPPER_START + STEPPER_COUNT;  // row index where key rebind rows begin
+    // Total items: 2 sliders + 6 toggles + 2 steppers + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
+    // Compute the row metrics once. The dynamic rowH shrinks the menu
+    // to fit the current viewport H (capped at the desired default), so
+    // the back/reset rows don't fall off-screen on common 720-logical-px
+    // landscape windows after the layout grew past 21 rows. See
+    // game._settingsLayout for the formula.
+    const layoutM = this._settingsLayout(totalRows);
+    const startY = layoutM.startY;
+    const rowH = layoutM.rowH;
+    // Auto-expire a stale reset confirmation. Without this, a player who
+    // armed the confirmation 30 seconds ago and walks away returns to a
+    // settings menu where the very next Enter wipes their config.
+    if (this._settingsResetConfirm > 0
+        && (performance.now() - this._settingsResetConfirm) > RESET_CONFIRM_WINDOW_MS) {
+      this._settingsResetConfirm = 0;
+    }
 
     // Key capture mode — wait for next keydown
     if (this._settingsCapture) {
@@ -3010,9 +3566,12 @@ const game = {
     }
     if (this._settingsDrag && !mouse.down) { this._settingsDrag = null; }
 
-    // Navigation
+    // Navigation. Any move clears a pending reset confirmation — the
+    // user wandered off the row, so the arming intent is gone.
+    const prevSel = this._settingsSel;
     if (jp(ALT_KEYS.up) || jp(km('up')))     this._settingsSel = (this._settingsSel - 1 + totalRows) % totalRows;
     if (jp(ALT_KEYS.down) || jp(km('down')))  this._settingsSel = (this._settingsSel + 1) % totalRows;
+    if (this._settingsSel !== prevSel) this._settingsResetConfirm = 0;
 
     const sel = this._settingsSel;
 
@@ -3032,8 +3591,8 @@ const game = {
     }
 
     // Left/right or Enter toggles display options
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
-    if (sel >= TOGGLE_START && sel < CTRL_START) {
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
+    if (sel >= TOGGLE_START && sel < STEPPER_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
         const key = toggleKeys[sel - TOGGLE_START];
         if (key) {
@@ -3046,25 +3605,69 @@ const game = {
       }
     }
 
+    // Left/right or Enter cycles scale steppers (MINIMAP SIZE / TEXT SIZE / WORLD ZOOM).
+    // Steppers walk through a discrete value list in `MINIMAP_SCALE_STEPS`,
+    // `TEXT_SCALE_STEPS`, and `WORLD_ZOOM_STEPS` (defined in platform.js);
+    // right wraps to start, left wraps to end, Enter advances forward
+    // (matches toggles UX).
+    /** @type {Array<{ key:'minimapScale'|'textScale'|'worldZoom', steps:number[] }>} */
+    const stepperRows = [
+      { key: 'minimapScale', steps: MINIMAP_SCALE_STEPS },
+      { key: 'textScale',    steps: TEXT_SCALE_STEPS },
+      { key: 'worldZoom',    steps: WORLD_ZOOM_STEPS },
+    ];
+    if (sel >= STEPPER_START && sel < CTRL_START) {
+      const row = stepperRows[sel - STEPPER_START];
+      if (row) {
+        /** @type {any} */
+        const s = settings;
+        const cur = row.steps.indexOf(snapToSteps(s[row.key], row.steps));
+        const safe = cur < 0 ? 0 : cur;
+        if (jp(ALT_KEYS.left) || jp(km('left'))) {
+          s[row.key] = row.steps[(safe - 1 + row.steps.length) % row.steps.length];
+          if (row.key === 'minimapScale') _RG._minimapDirty = true;
+          settings.save();
+          audio.menuSelect();
+        } else if (jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
+          s[row.key] = row.steps[(safe + 1) % row.steps.length];
+          if (row.key === 'minimapScale') _RG._minimapDirty = true;
+          settings.save();
+          audio.menuSelect();
+        }
+      }
+    }
+
     // Mouse click hit-testing
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
-      const startY = narrow ? 80 : 100;
-      const rowH = narrow ? 28 : 34;
+      // Use the SAME dynamic row metrics as renderSettings — declared
+      // at the top of updateSettings (startY/rowH locals). Re-computing
+      // here would risk silent drift if one path is updated and the
+      // other isn't.
       const sliderX = narrow ? 120 : 200;
       const sliderW = narrow ? (W - 240) : 400;
       const mx = mouse.x, my = mouse.y;
+      // Hit-test band, capped at rowH-1 so adjacent rows can never
+      // produce overlapping click regions on shrunk-rowH viewports
+      // (per gpt-5.3-codex r2 review). Default band is `[ry-8, ry+14]`
+      // (22 px tall, asymmetric to favour the text below the baseline);
+      // when rowH < 22 the band shrinks proportionally so row N+1
+      // can't poach a strip of row N.
+      const hitH = Math.min(22, Math.max(2, rowH - 1));
+      const hitTop = Math.min(8, Math.floor(hitH * 8 / 22));
+      const hitBot = hitH - hitTop;
 
       // Slider click
       for (let i = 0; i < 2; i++) {
         const ry = startY + i * rowH;
-        if (my >= ry - 8 && my <= ry + 14 && mx >= sliderX && mx <= sliderX + sliderW) {
+        if (my >= ry - hitTop && my <= ry + hitBot && mx >= sliderX && mx <= sliderX + sliderW) {
           let val = (mx - sliderX) / sliderW;
           val = Math.max(0, Math.min(1, val));
           if (i === 0) audio.setSfxVolume(val);
           else audio.setMusicVolume(val);
           this._settingsDrag = i === 0 ? 'sfx' : 'music';
           this._settingsSel = i;
+          this._settingsResetConfirm = 0;
           settings.save();
           audio.menuSelect();
           return;
@@ -3073,8 +3676,9 @@ const game = {
       // Toggle rows click
       for (let i = 0; i < toggleKeys.length; i++) {
         const ry = startY + (TOGGLE_START + i) * rowH;
-        if (my >= ry - 8 && my <= ry + 14) {
+        if (my >= ry - hitTop && my <= ry + hitBot) {
           this._settingsSel = TOGGLE_START + i;
+          this._settingsResetConfirm = 0;
           const tk = toggleKeys[i];
           if (tk) {
             /** @type {any} */
@@ -3086,43 +3690,89 @@ const game = {
           return;
         }
       }
+      // Stepper rows click — left half steps backward, right half steps
+      // forward. Mirrors the keyboard ◀/▶ semantics (with Enter = forward).
+      for (let i = 0; i < stepperRows.length; i++) {
+        const ry = startY + (STEPPER_START + i) * rowH;
+        if (my >= ry - hitTop && my <= ry + hitBot) {
+          this._settingsSel = STEPPER_START + i;
+          this._settingsResetConfirm = 0;
+          const row = stepperRows[i];
+          if (row) {
+            /** @type {any} */
+            const s = settings;
+            const cur = row.steps.indexOf(snapToSteps(s[row.key], row.steps));
+            const safe = cur < 0 ? 0 : cur;
+            const dir = (mx < W / 2) ? -1 : 1;
+            const next = (safe + dir + row.steps.length) % row.steps.length;
+            s[row.key] = row.steps[next];
+            if (row.key === 'minimapScale') _RG._minimapDirty = true;
+            settings.save();
+            audio.menuSelect();
+          }
+          return;
+        }
+      }
       // Rebind rows click
       for (let i = 0; i < actions.length; i++) {
         const ry = startY + (CTRL_START + i) * rowH;
-        if (my >= ry - 8 && my <= ry + 14) {
+        if (my >= ry - hitTop && my <= ry + hitBot) {
           this._settingsSel = CTRL_START + i;
+          this._settingsResetConfirm = 0;
           this._settingsCapture = actions[i];
           audio.menuSelect();
           return;
         }
       }
-      // Reset defaults row
+      // Reset defaults row — two-tap confirmation. First click within
+      // the window arms; second click commits. Click anywhere else or
+      // wait the window out → cancelled.
       const resetY = startY + (CTRL_START + actions.length) * rowH;
-      if (my >= resetY - 8 && my <= resetY + 14) {
-        settings.resetAll();
-        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+      if (my >= resetY - hitTop && my <= resetY + hitBot) {
+        this._settingsSel = CTRL_START + actions.length;
+        if (this._settingsResetConfirm > 0
+            && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
+          settings.resetAll();
+          audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+          this._settingsResetConfirm = 0;
+        } else {
+          this._settingsResetConfirm = performance.now();
+        }
         audio.menuSelect();
         return;
       }
       // Back row
       const backY = startY + (CTRL_START + actions.length + 1) * rowH;
-      if (my >= backY - 8 && my <= backY + 14) {
+      if (my >= backY - hitTop && my <= backY + hitBot) {
+        this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
         return;
       }
+      // Click landed outside any actionable row — cancel a pending
+      // reset arming so the next stray click on the row won't commit.
+      this._settingsResetConfirm = 0;
     }
 
     // Enter on selected row (toggles handled above)
     if (jp('Enter') || jp(km('shoot'))) {
       if (sel >= CTRL_START && sel < CTRL_START + actions.length) {
+        this._settingsResetConfirm = 0;
         this._settingsCapture = actions[sel - CTRL_START];
         audio.menuSelect();
       } else if (sel === CTRL_START + actions.length) {
-        settings.resetAll();
-        audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+        // Two-tap confirmation, keyboard path. Mirrors the mouse path.
+        if (this._settingsResetConfirm > 0
+            && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
+          settings.resetAll();
+          audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
+          this._settingsResetConfirm = 0;
+        } else {
+          this._settingsResetConfirm = performance.now();
+        }
         audio.menuSelect();
       } else if (sel === totalRows - 1) {
+        this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
       }
@@ -3130,6 +3780,7 @@ const game = {
 
     // Escape goes back
     if (jp('Escape') || jp('KeyQ')) {
+      this._settingsResetConfirm = 0;
       audio.menuSelect();
       this.setState(this._settingsFrom || 'MENU');
     }
@@ -3139,9 +3790,14 @@ const game = {
     const narrow = layout.compact;
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;
-    const CTRL_START = 6;  // matches updateSettings — 4 toggles
-    const startY = narrow ? 80 : 100;
-    const rowH = narrow ? 28 : 34;
+    const STEPPER_START = 8;        // 6 toggles before steppers
+    const STEPPER_COUNT = 3;        // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
+    const CTRL_START = STEPPER_START + STEPPER_COUNT;  // matches updateSettings
+    const totalRows = CTRL_START + actions.length + 2;
+    // Dynamic row metrics shared with updateSettings — see _settingsLayout.
+    const layoutM = this._settingsLayout(totalRows);
+    const startY = layoutM.startY;
+    const rowH = layoutM.rowH;
     const fs = narrow ? 13 : 16;
     const labelX = narrow ? 20 : 40;
     const sliderX = narrow ? 120 : 200;
@@ -3186,8 +3842,8 @@ const game = {
     }
 
     // ── Display section ──
-    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST'];
-    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist'];
+    const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST', 'CRT MODE', 'REDUCED MOTION'];
+    const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
     for (let i = 0; i < toggleLabels.length; i++) {
       const ry = startY + (TOGGLE_START + i) * rowH;
       const isSel = sel === TOGGLE_START + i;
@@ -3199,6 +3855,25 @@ const game = {
       ctx.textAlign = 'center';
       ctx.fillStyle = on ? (isSel ? '#00ff88' : '#22aa66') : (isSel ? '#ff4466' : '#884444');
       ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
+    }
+
+    // ── Scale steppers (MINIMAP SIZE + TEXT SIZE + WORLD ZOOM) ──
+    // Discrete-value rows rendered identically to toggles, but the centre
+    // shows the numeric multiplier (e.g. "◀ 1.00× ▶") instead of ON/OFF.
+    // The keyboard ◀/▶ + Enter handling lives in updateSettings.
+    const stepperLabels = ['MINIMAP SIZE', 'TEXT SIZE', 'WORLD ZOOM'];
+    const stepperKeys = ['minimapScale', 'textScale', 'worldZoom'];
+    for (let i = 0; i < stepperLabels.length; i++) {
+      const ry = startY + (STEPPER_START + i) * rowH;
+      const isSel = sel === STEPPER_START + i;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
+      ctx.fillText(stepperLabels[i] || '', labelX, ry);
+      ctx.textAlign = 'center';
+      const k = stepperKeys[i];
+      const v = k ? /** @type {any} */ (settings)[k] : 1;
+      ctx.fillStyle = isSel ? '#ffcc00' : '#aaaacc';
+      ctx.fillText(`◀ ${Number(v).toFixed(2)}× ▶`, W/2, ry);
     }
 
     // ── Controls section ──
@@ -3236,12 +3911,25 @@ const game = {
       }
     }
 
-    // Reset defaults row
+    // Reset defaults row — when armed, switches to a red blinking
+    // "PRESS AGAIN TO CONFIRM" label so the player has unmistakable
+    // feedback that another tap will wipe their config.
     const resetIdx = CTRL_START + actions.length;
     const resetY = startY + resetIdx * rowH;
     ctx.textAlign = 'center';
-    ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
-    ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
+    const armed = this._settingsResetConfirm > 0
+      && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS;
+    if (armed) {
+      const blink = Math.sin(performance.now() / 120) > 0 ? 1 : 0.4;
+      ctx.save();
+      ctx.globalAlpha = blink;
+      ctx.fillStyle = '#ff4466';
+      ctx.fillText('[ PRESS AGAIN TO CONFIRM ]', W/2, resetY);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = sel === resetIdx ? '#ffcc00' : '#666677';
+      ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
+    }
 
     // Back row
     const backIdx = resetIdx + 1;
@@ -3286,6 +3974,8 @@ const game = {
       case 'VICTORY':   this.renderVictory();  break;
       case 'NAME_ENTRY': this.renderNameEntry(); break;
     }
+
+    if (settings.crtMode) drawCrtOverlay();
   },
 
   /**
@@ -3499,8 +4189,28 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     const cam=getCamera(player);
-    cam.x += shake.ox;
-    cam.y += shake.oy;
+    // World-zoom scalar — used (a) to scale the shake offset back to
+    // SCREEN-px equivalents (shake.ox/oy are tuned as canvas-px
+    // magnitudes 2-5 in content.js triggerShake; without /zoom here
+    // they'd play back at zoom× intensity, e.g. 50% stronger at the
+    // mobile-first 1.5× default — actively bad for the audience the
+    // feature targets), and (b) wired into the world-block ctx.scale
+    // wrap below + every screen↔world conversion in this update tick.
+    const _zoom = (settings && settings.worldZoom) || 1;
+    cam.x += shake.ox / _zoom;
+    cam.y += shake.oy / _zoom;
+    // World-space draw block — wrapped in a single ctx.scale transform
+    // so the entire playfield (tiles, ambient, room markers, hazards,
+    // items, enemies, projectiles, particles, player, orbitals, etc.)
+    // is rendered at `settings.worldZoom` magnification. HUD chrome
+    // (drawHUD, drawMinimap, drawBossBar, intro/death overlays, danger
+    // vignette) sits OUTSIDE this transform and stays at native scale.
+    // Camera math in getCamera already accounts for zoom by clamping
+    // against the effective W/zoom × H/zoom viewport, so the existing
+    // `worldX*TILE - cam.x` arithmetic inside this block needs NO
+    // changes — the scale is purely a final viewport multiplier.
+    const _zoomed = _zoom !== 1;
+    if (_zoomed) { ctx.save(); ctx.scale(_zoom, _zoom); }
     drawWorld(dungeon,cam.x,cam.y);
     drawAmbient(cam.x,cam.y);
 
@@ -3547,6 +4257,7 @@ const game = {
     // hazard zones (ground effects — below items/enemies)
     drawHazardZones(cam.x, cam.y);
     drawDisruptionFields(cam.x, cam.y);
+    drawFrostPatches(cam.x, cam.y);
     drawGravityWells(cam.x, cam.y);
     drawHackwareEffects(cam.x, cam.y);
 
@@ -3618,6 +4329,13 @@ const game = {
     drawParticles(cam.x,cam.y);
     drawFloatingTexts(cam.x,cam.y);
 
+    // REAPER on-player telegraph rings — drawn AFTER particles/floating
+    // text but BEFORE the player sprite so the ring sits beneath the
+    // player and is never suppressed by the per-enemy FOV/cull in
+    // Enemy.draw (an off-screen reaper must still warn the marked player).
+    drawReaperPlayerRings(cam.x, cam.y);
+    drawTetherLeashes(cam.x, cam.y);
+
     // player
     player.draw(cam.x,cam.y);
 
@@ -3670,6 +4388,13 @@ const game = {
       ctx.restore();
     }
 
+    // End of world-space draw block — restore the canvas transform so
+    // the HUD/overlay block below renders at native (1.0) scale. The
+    // matching ctx.save() + ctx.scale() is at the top of renderPlaying
+    // (gated on `_zoomed`), so this restore is gated on the same flag
+    // to keep the save/restore pair balanced.
+    if (_zoomed) { ctx.restore(); }
+
     drawDangerVignette(player);
     drawHUD(player);
     drawStatusBar(player);
@@ -3677,6 +4402,20 @@ const game = {
     drawMinimap(dungeon,player);
     drawBoostStrip(player);
     drawBossBar();
+    // Boss intro telegraph overlay — radial vignette in the boss colour +
+    // titlecard with the boss name. Rendered LAST so it sits on top of the
+    // world and HUD chrome (it's a transient cinematic moment; HUD remains
+    // visible THROUGH the partially-transparent vignette). Gates internally
+    // on `bossIntroTimer > 0` so this is a no-op outside the intro window.
+    drawBossIntroOverlay();
+    // Boss death telegraph overlay — radial flash in the boss colour +
+    // "DESTROYED" titlecard. Same compositing rationale as the intro
+    // overlay above (rendered AFTER drawBossBar so the chromatic flash
+    // sits on top of the HUD). Gates internally on `bossDeathTimer > 0`
+    // so this is a no-op outside the death window. Painted AFTER the
+    // intro so that on the rare frame where intro and death both have
+    // nonzero timers (boss one-shot mid-intro), the death overlay wins.
+    drawBossDeathOverlay();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.
@@ -3769,6 +4508,17 @@ const game = {
     ctx.fillStyle='#ff00c8'; ctx.font=`bold ${narrow ? 36 : 48}px monospace`;
     ctx.fillText('PAUSED',W/2, narrow ? 200 : 240);
     ctx.shadowBlur=0;
+    // Subtitle if this pause was triggered automatically by the
+    // visibilitychange handler (tab switch, iOS lock, etc) — gives
+    // the returning player context for why they're paused. Cleared
+    // on resume in setState().
+    if (this.wasAutoPaused) {
+      ctx.font = `${narrow ? 11 : 14}px monospace`;
+      ctx.fillStyle = '#ffb700';
+      ctx.shadowBlur = 6; ctx.shadowColor = '#ffb700';
+      ctx.fillText('(auto-paused — focus lost)', W/2, narrow ? 222 : 268);
+      ctx.shadowBlur = 0;
+    }
     const fs = narrow ? 14 : 18;
     const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
     if (isTouch) {
@@ -4842,6 +5592,47 @@ const perf = {
   },
 };
 
+// ─── CRT mode overlay ─────────────────────────────────────────────────────
+// Cosmetic post-effect: scanlines + vignette. Toggleable in settings (default off).
+// Pattern + radial gradient cached and rebuilt on canvas resize.
+/** @type {{ w:number, h:number, pattern: CanvasPattern|null, vignette: CanvasGradient|null }} */
+const _crtCache = { w: 0, h: 0, pattern: null, vignette: null };
+function _rebuildCrtCache() {
+  // Scanline pattern: 2px tall — 1 transparent row + 1 dark row.
+  const pc = document.createElement('canvas');
+  pc.width = 1; pc.height = 2;
+  const pctx = pc.getContext('2d');
+  if (pctx) {
+    pctx.fillStyle = 'rgba(0,0,0,0.22)';
+    pctx.fillRect(0, 1, 1, 1);
+    _crtCache.pattern = ctx.createPattern(pc, 'repeat');
+  }
+  // Vignette: radial darkening from center → corners.
+  const cx = W / 2, cy = H / 2;
+  const r0 = Math.min(W, H) * 0.45;
+  const r1 = Math.hypot(cx, cy);
+  const g = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.55)');
+  _crtCache.vignette = g;
+  _crtCache.w = W; _crtCache.h = H;
+}
+function drawCrtOverlay() {
+  if (_crtCache.w !== W || _crtCache.h !== H || !_crtCache.pattern || !_crtCache.vignette) {
+    _rebuildCrtCache();
+  }
+  ctx.save();
+  if (_crtCache.pattern) {
+    ctx.fillStyle = _crtCache.pattern;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (_crtCache.vignette) {
+    ctx.fillStyle = _crtCache.vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+}
+
 function renderPerfHUD() {
   const s = perf.stats();
   const pad = 6;
@@ -4852,7 +5643,7 @@ function renderPerfHUD() {
     `enemies ${enemies.length}  proj ${projectiles.length}  part ${particleCount()}`,
     `ft ${floatingTexts.length}  vcore ${vcores.length}  beacon ${beacons.length}`,
     `mine ${mines.length}  cam ${cameras.length}  laser ${lasers.length}`,
-    `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}`,
+    `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}  fp ${frostPatches.length}`,
     `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
   ];
   // Subsystem timing — show each tracked label with avg/max ms over the last

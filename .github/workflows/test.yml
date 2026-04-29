@@ -7,13 +7,23 @@ on:
     branches: [main, develop]
 
 jobs:
-  unit:
-    name: node --test
+  check:
+    # Runs the same gate as the documented pre-commit `npm run check`:
+    # eslint + tsc --noEmit + engine-purity + node --test. CI used to run
+    # `npm test` only, which let lint/typecheck/engine-purity regressions
+    # slip through whenever a contributor skipped the pre-commit gate.
+    # Aligning CI with the documented gate closes that hole.
+    name: npm run check
+    # Self-hosted runner — see .runner/setup.sh for provisioning.
+    # Migrated from ubuntu-latest in PR #383 to keep CI under the
+    # repository owner's control and avoid GitHub-hosted minutes.
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run tests
-        run: npm test
+      - name: Install dev deps (eslint + typescript)
+        run: npm ci
+      - name: Run check (lint + typecheck + engine-purity + tests)
+        run: npm run check
