@@ -26,7 +26,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 /** @type {Record<string, string>} */
@@ -955,7 +955,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 
 // Tile helpers
 /** @param {any} t */
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR; }
 /** @param {any} t */
 function isSeeThrough(t) {
   return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
@@ -1253,6 +1253,16 @@ const audio = (() => {
       osc('square', 1400, 280, 0.05, t, 0.10);
       osc('square', 900,  180, 0.04, t + 0.04, 0.08);
       noise(0.04, t, 0.12, 1600, null, { filterType:'lowpass', filterFreq2:600 });
+    },
+    repulsor() {
+      // Quick "boing" cue for REPULSOR_TILE — ascending pitch sweep paired
+      // with a soft band-limited noise puff. Distinct from shockTile (which
+      // descends and feels lock-down) and arcZap (which is sharp + bright).
+      // Cyan-coded in-game; sound rises to mirror the outward push.
+      const c = getCtx(); const t = c.currentTime;
+      osc('triangle', 320, 720, 0.06, t, 0.12);
+      osc('sine',     220, 540, 0.04, t + 0.02, 0.10);
+      noise(0.03, t, 0.10, 2200, null, { filterType:'bandpass', filterFreq2:1400 });
     },
     toxicBurn() {
       const c = getCtx(); const t = c.currentTime;
