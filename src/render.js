@@ -826,6 +826,33 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle='#8866ff';
           ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6); // subtle goo
           break;
+        case T.SHOCK_TILE: {
+          // Electrified plate — flat dark base + pulsing yellow coil ring.
+          // Visually distinct from ARC (which fills the tile cyan during
+          // its damage phase) and from TRAP_SPIKE (red spikes): SHOCK_TILE
+          // shows a steady ring with intermittent crackle so the threat is
+          // always legible (no off-phase like ARC) but cosmetic-only when
+          // the player's not on it.
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
+          // Dark inner plate
+          ctx.globalAlpha = brightness * 0.55;
+          ctx.fillStyle='#1a1530';
+          ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          // Coil ring — yellow pulse
+          const sPulse = 0.45 + 0.25 * Math.sin(lastTime/180 + tx*1.1 + ty*0.7);
+          ctx.globalAlpha = brightness * sPulse;
+          ctx.shadowBlur = 6; ctx.shadowColor = '#ffee44';
+          ctx.strokeStyle = '#ffee44';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sx+3.5, sy+3.5, TILE-7, TILE-7);
+          // Intermittent crackle dot in centre
+          if (Math.sin(lastTime/120 + tx*2.3 + ty*1.7) > 0.6) {
+            ctx.globalAlpha = brightness * 0.85;
+            ctx.fillStyle = '#ffffaa';
+            ctx.fillRect(sx+TILE/2-1, sy+TILE/2-1, 2, 2);
+          }
+          break;
+        }
         case T.PLASMA: {
           ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Animated orange glow with pulsing brightness
@@ -1848,7 +1875,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
       if (tile === T.WALL || tile === T.CRACKED) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2250,7 +2277,7 @@ function drawExpandedMinimap(dungeon, player) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';
