@@ -3334,11 +3334,12 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 46 entries. Every biome has at least
-nine whispers after the negative-floor bundle (`w-sb-10`, `w-cc-09`,
-`w-fw-09`, `w-uk-09`, `w-on-09`), which follows the failed compiles and
-below-sandbox rumours seeded by earlier whispers into a hidden underworld of
-discarded operatives, downlinks, and transit routes the facility denies exist.
+Authored whisper content currently ships 51 entries. Every biome has at least
+ten whispers after the deep-cache dead-drop bundle (`w-sb-11`, `w-cc-10`,
+`w-fw-10`, `w-uk-10`, `w-on-10`), which ties reset receipts, Elena's line-seven
+cache promise, firewall evidence stays, return packets, and city claim tickets
+into the hidden underworld of discarded operatives and messages the facility
+cannot safely delete.
 
 ---
 
@@ -4430,3 +4431,6 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v133.0  | Secret-room whisper signal-memory bundle: `WHISPERS` grows to 26 entries with one new biome-gated fragment per biome (`w-sb-06`, `w-cc-05`, `w-fw-05`, `w-uk-05`, `w-on-05`) extending the voice/copy motif into signal routing, stored memories, firewall checksums, uplink delay, and city relay echoes. Added `tests/whispers-bundle-4.test.js` to pin metadata, picker eligibility, per-biome >=5 coverage, progress floor, and signal/memory vocabulary continuity. |
 | v134.0  | Secret-room whisper mirror-anchor bundle: `WHISPERS` grows to 31 entries with one new biome-gated fragment per biome (`w-sb-07`, `w-cc-06`, `w-fw-06`, `w-uk-06`, `w-on-06`) extending the signal-memory thread into physical return anchors: mirrors, windows, impossible objects, and other places the loop miscounts. Added `tests/whispers-bundle-5.test.js` to pin metadata, picker eligibility, per-biome >=6 coverage, progress floor, and mirror-anchor vocabulary continuity. |
 | v135.0  | Secret-room whisper threshold/keyhole bundle: `WHISPERS` grows to 36 entries with one new biome-gated fragment per biome (`w-sb-08`, `w-cc-07`, `w-fw-07`, `w-uk-07`, `w-on-07`) extending the mirror-anchor thread into doors, gates, exits, and permissions the loop treats as narrative checkpoints. Added `tests/whispers-bundle-6.test.js` to pin metadata, picker eligibility, per-biome >=7 coverage, progress floor, and threshold vocabulary continuity. |
+| v136.0  | Secret-room whisper black-ice lockdown bundle: `WHISPERS` grows to 41 entries with one new biome-gated fragment per biome (`w-sb-09`, `w-cc-08`, `w-fw-08`, `w-uk-08`, `w-on-08`) reframing quarantine, frost, lock, and guard imagery as protective rather than merely hostile. Added `tests/whispers-bundle-7.test.js` to pin metadata, picker eligibility, per-biome >=8 coverage, progress floor, and lockdown/protection vocabulary continuity. |
+| v137.0  | Secret-room whisper negative-floor bundle: `WHISPERS` grows to 46 entries with one new biome-gated fragment per biome (`w-sb-10`, `w-cc-09`, `w-fw-09`, `w-uk-09`, `w-on-09`) extending failed-compile and below-sandbox rumours into hidden underworld transit, occupants, downlinks, and city routes. Added `tests/whispers-bundle-8.test.js` to pin metadata, picker eligibility, per-biome >=9 coverage, progress floor, and below-facility vocabulary continuity. |
+| v138.0  | Secret-room whisper deep-cache dead-drop bundle: `WHISPERS` grows to 51 entries with one new biome-gated fragment per biome (`w-sb-11`, `w-cc-10`, `w-fw-10`, `w-uk-10`, `w-on-10`) connecting reset receipts, Elena's line-seven dead drop, firewall evidence stays, uplink return packets, and city claim tickets. Added `tests/whispers-bundle-9.test.js` to pin metadata, picker eligibility, per-biome >=10 coverage, progress floor, uniqueness, and deep-cache vocabulary continuity. |

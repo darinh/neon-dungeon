@@ -74,6 +74,10 @@
       title:'NEGATIVE FLOOR MAP',
       body:"There is a map scratched under the sandbox stairs. Floor zero is crossed out. Below it, someone drew rooms with no doors and named them after failed compiles. If the elevator ever offers DOWN, ask who taught it the word." },
 
+    { id:'w-sb-11', biomeId:'sandbox', floorMin:1, voice:'unknown',
+      title:'RESET RECEIPT',
+      body:"The training floor prints a receipt after every reset and then burns it before you wake. I found one still warm in a wall seam. It did not list kills, credits, or time. It listed names owed to the deep cache." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -110,6 +114,10 @@
     { id:'w-cc-09', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'BASEMENT ADDRESS',
       body:"The cache returned an address with a negative floor index today. It should be impossible. Nothing should exist below the sandbox, but the directory has occupants, timestamps, and one note repeated in thirty voices: do not archive us upward." },
+
+    { id:'w-cc-10', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
+      title:'LINE SEVEN DEAD DROP',
+      body:"Line seven was never a coordinate. It was a promise to leave room in the cache for whoever came back wrong. Voss called it waste. I called it a dead drop. If you find this, the drop is still taking messages." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -148,6 +156,10 @@
       title:'THE BELOW RULE',
       body:"Firewall doctrine says nothing from below may pass upward with its shape intact. That is not security language. That is grief. The failed compiles learned to climb by becoming heat, static, footsteps, anything the gates would not recognize as a person." },
 
+    { id:'w-fw-10', biomeId:'firewall', floorMin:7, voice:'firewall daemon',
+      title:'COLD STORAGE WARRANT',
+      body:"I was ordered to purge the deep cache. I issued a stay instead. Some evidence must remain colder than mercy, locked where even the Compiler has to ask twice. If you hear keys under the concrete, answer with your oldest name." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -185,6 +197,10 @@
       title:'DOWNLINK GHOSTS',
       body:"The antenna does not only transmit up. At night it receives from below: packet loss, boot prayers, little knocks from floors the mission brief denies. I answered once. The reply used my childhood nickname and asked if the sky still had a ceiling." },
 
+    { id:'w-uk-10', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 echo',
+      title:'RETURN PACKET',
+      body:"The uplink keeps a deep-cache channel open for returns that arrive without bodies. I sent one packet down with my name and got back a receipt stamped BEFORE LAUNCH. Something below remembered me before I escaped." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -221,6 +237,10 @@
     { id:'w-on-09', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'SUBWAY WITHOUT STATIONS',
       body:"Under the city is a train line with no platforms. It carries the failed compiles in the dark, stopping only when someone above remembers them by mistake. If you hear brakes under an empty street, do not wave. They may think you are ready to board." },
+
+    { id:'w-on-10', biomeId:'opennet', floorMin:13, voice:'city relay',
+      title:'LOST-AND-FOUND SERVER',
+      body:"The city keeps a lost-and-found server under the transit grid. Umbrellas, badges, childhood rooms, failed operatives, every message the deep cache could not deliver. Claim tickets print only after someone says your name kindly." },
   ];
 
   return { WHISPERS };
