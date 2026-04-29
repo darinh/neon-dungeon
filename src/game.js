@@ -386,7 +386,7 @@ const game = {
          */
         const isSafeSpawn = (t) => isPassable(t) &&
           t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
-          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC;
+          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE;
         const near =
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
@@ -2251,6 +2251,21 @@ const game = {
         player.trapCooldown = 3.0;
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
+      } else if (tile===T.SHOCK_TILE && !isPlayerDamageImmune()) {
+        // SHOCK_TILE: brief movement-suppress hazard. Reuses the existing
+        // player.shockTimer primitive (already wired in entities.js to zero
+        // movement input but leave aim+shoot intact, mirroring the SHOCKER
+        // mob). 0.5s lockdown is short enough to be fair on mobile yet long
+        // enough to commit the player to defending in place. trapCooldown
+        // 1.5s prevents standing-on-it from looping the freeze. Damage-
+        // immune frames (dash i-frames, cloak, etc.) bypass — matches
+        // PLASMA/ARC/TOXIC convention so dash-through-hazard reads
+        // consistently.
+        player.shockTimer = Math.max(player.shockTimer || 0, 0.5);
+        player.trapCooldown = 1.5;
+        this.msg('Shock tile!','#ffee44');
+        spawnParticles(player.x, player.y, 'SPARK', '#ffee44', 5);
+        audio.shockTile();
       }
     }
 
