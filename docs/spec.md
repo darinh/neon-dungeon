@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 61 entries. Every biome has at least
-twelve whispers after the mirror-fault bundle (`w-sb-13`, `w-cc-12`,
-`w-fw-12`, `w-uk-12`, `w-on-12`), which extends the reflection/anchor thread
-into delayed mirrors, cached reflection indexes, glass exceptions, antenna
-doubles, and city storefront windows for versions of AXIOM-7 that answer late.
+Authored whisper content currently ships 66 entries. Every biome has at least
+thirteen whispers after the ion-storm bundle (`w-sb-14`, `w-cc-13`,
+`w-fw-13`, `w-uk-13`, `w-on-13`), which extends the signal/anchor thread into
+charged weather, buffered lightning, ion confessions, antenna handshakes, and
+blue-wire city rain.
 
 ---
 
@@ -4434,3 +4434,5 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v137.0  | Secret-room whisper negative-floor bundle: `WHISPERS` grows to 46 entries with one new biome-gated fragment per biome (`w-sb-10`, `w-cc-09`, `w-fw-09`, `w-uk-09`, `w-on-09`) extending failed-compile and below-sandbox rumours into hidden underworld transit, occupants, downlinks, and city routes. Added `tests/whispers-bundle-8.test.js` to pin metadata, picker eligibility, per-biome >=9 coverage, progress floor, and below-facility vocabulary continuity. |
 | v138.0  | Secret-room whisper deep-cache dead-drop bundle: `WHISPERS` grows to 51 entries with one new biome-gated fragment per biome (`w-sb-11`, `w-cc-10`, `w-fw-10`, `w-uk-10`, `w-on-10`) connecting reset receipts, Elena's line-seven dead drop, firewall evidence stays, uplink return packets, and city claim tickets. Added `tests/whispers-bundle-9.test.js` to pin metadata, picker eligibility, per-biome >=10 coverage, progress floor, uniqueness, and deep-cache vocabulary continuity. |
 | v139.0  | Secret-room whisper ghost-route wayfinding bundle: `WHISPERS` grows to 56 entries with one new biome-gated fragment per biome (`w-sb-12`, `w-cc-11`, `w-fw-11`, `w-uk-11`, `w-on-11`) extending the deep-cache dead-drop thread into hidden paths, firewall detours, uplink pings, and city transit signals. Added `tests/whispers-bundle-10.test.js` to pin metadata, picker eligibility, per-biome >=11 coverage, progress floor, uniqueness, and ghost-route vocabulary continuity. |
+| v140.0  | Secret-room whisper mirror-fault bundle: `WHISPERS` grows to 61 entries with one new biome-gated fragment per biome (`w-sb-13`, `w-cc-12`, `w-fw-12`, `w-uk-12`, `w-on-12`) extending the reflection/anchor thread into delayed mirrors, cached reflection indexes, glass exceptions, antenna doubles, and city storefront windows. Added `tests/whispers-bundle-11.test.js` to pin metadata, picker eligibility, per-biome >=12 coverage, progress floor, uniqueness, and mirror-fault vocabulary continuity. |
+| v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
