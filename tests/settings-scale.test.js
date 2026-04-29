@@ -268,21 +268,25 @@ test('drawFloatingTexts font scales with settings.textScale (and hoists the font
 
 test('updateSettings declares STEPPER_START + STEPPER_COUNT for the scale rows', () => {
   // The stepper rows live between toggles and rebinds. Adding them
-  // structurally (rather than as +2 magic numbers) keeps the layout
+  // structurally (rather than as +N magic numbers) keeps the layout
   // re-shuffleable and pins the row count to the toggle/stepper add.
+  // Bumped to 3 with the WORLD ZOOM stepper (mobile-first playfield zoom).
   assert.match(GAME, /const\s+STEPPER_START\s*=\s*8/,
     'updateSettings must declare STEPPER_START = 8');
-  assert.match(GAME, /const\s+STEPPER_COUNT\s*=\s*2/,
-    'updateSettings must declare STEPPER_COUNT = 2');
+  assert.match(GAME, /const\s+STEPPER_COUNT\s*=\s*3/,
+    'updateSettings must declare STEPPER_COUNT = 3 (MINIMAP SIZE + TEXT SIZE + WORLD ZOOM)');
 });
 
-test('updateSettings stepperRows wires both scales to MINIMAP_SCALE_STEPS / TEXT_SCALE_STEPS', () => {
+test('updateSettings stepperRows wires all three scales to the canonical step lists', () => {
   assert.match(GAME,
     /\{\s*key:\s*['"]minimapScale['"]\s*,\s*steps:\s*MINIMAP_SCALE_STEPS\s*\}/,
     'minimapScale stepper must reference MINIMAP_SCALE_STEPS');
   assert.match(GAME,
     /\{\s*key:\s*['"]textScale['"]\s*,\s*steps:\s*TEXT_SCALE_STEPS\s*\}/,
     'textScale stepper must reference TEXT_SCALE_STEPS');
+  assert.match(GAME,
+    /\{\s*key:\s*['"]worldZoom['"]\s*,\s*steps:\s*WORLD_ZOOM_STEPS\s*\}/,
+    'worldZoom stepper must reference WORLD_ZOOM_STEPS');
 });
 
 test('renderSettings draws stepper rows with × multiplier suffix', () => {
@@ -292,8 +296,8 @@ test('renderSettings draws stepper rows with × multiplier suffix', () => {
     /\$\{Number\(v\)\.toFixed\(2\)\}×/,
     'renderSettings stepper label must format value as N.NN×');
   assert.match(GAME,
-    /stepperLabels\s*=\s*\[\s*['"]MINIMAP SIZE['"]\s*,\s*['"]TEXT SIZE['"]\s*\]/,
-    'renderSettings must declare stepperLabels = ["MINIMAP SIZE", "TEXT SIZE"]');
+    /stepperLabels\s*=\s*\[\s*['"]MINIMAP SIZE['"]\s*,\s*['"]TEXT SIZE['"]\s*,\s*['"]WORLD ZOOM['"]\s*\]/,
+    'renderSettings must declare stepperLabels = ["MINIMAP SIZE", "TEXT SIZE", "WORLD ZOOM"]');
 });
 
 test('settings layout: rowH shrinks dynamically so 21-row menu fits in viewport H', () => {

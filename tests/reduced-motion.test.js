@@ -118,27 +118,26 @@ test('REDUCED_MOTION: settings menu toggleLabels includes "REDUCED MOTION"', () 
   );
 });
 
-test('REDUCED_MOTION: CTRL_START bumped from 7 to 10 (six toggles + two scale steppers)', () => {
+test('REDUCED_MOTION: CTRL_START bumped to 11 (six toggles + three scale steppers)', () => {
   // CTRL_START is the row index where key-rebind rows begin — must equal
   // TOGGLE_START (2) + number-of-toggles + number-of-steppers. Adding a
   // toggle/stepper without bumping this constant pushes rebind rows
   // under the toggle row, making the last toggle invisible / unclickable.
-  // The MINIMAP SIZE + TEXT SIZE scale-stepper rows live between toggles
-  // and rebinds, so the layout is now 6 toggles + 2 steppers and
-  // CTRL_START = STEPPER_START + STEPPER_COUNT = 8 + 2 = 10. Pinned
-  // structurally + numerically below.
+  // With WORLD ZOOM added (mobile-first playfield zoom) the layout is
+  // now 6 toggles + 3 steppers and CTRL_START = STEPPER_START +
+  // STEPPER_COUNT = 8 + 3 = 11. Pinned structurally + numerically below.
   const structural = GAME_NC.match(/const\s+CTRL_START\s*=\s*STEPPER_START\s*\+\s*STEPPER_COUNT\b/g);
   assert.ok(
     structural && structural.length >= 2,
     `CTRL_START must be defined as STEPPER_START + STEPPER_COUNT in BOTH updateSettings and renderSettings (found ${structural ? structural.length : 0})`
   );
-  // Underlying constants must equal 8 and 2 in both copies.
+  // Underlying constants must equal 8 and 3 in both copies.
   const stepperStart = GAME_NC.match(/const\s+STEPPER_START\s*=\s*8\b/g);
-  const stepperCount = GAME_NC.match(/const\s+STEPPER_COUNT\s*=\s*2\b/g);
+  const stepperCount = GAME_NC.match(/const\s+STEPPER_COUNT\s*=\s*3\b/g);
   assert.ok(stepperStart && stepperStart.length >= 2,
     'STEPPER_START must equal 8 in both updateSettings and renderSettings');
   assert.ok(stepperCount && stepperCount.length >= 2,
-    'STEPPER_COUNT must equal 2 in both updateSettings and renderSettings');
+    'STEPPER_COUNT must equal 3 in both updateSettings and renderSettings');
   // And no leftover CTRL_START = 7 or = 8 numeric assignments remain.
   assert.doesNotMatch(
     GAME_NC,

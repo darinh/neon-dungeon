@@ -48,6 +48,15 @@ const KEY_DISPLAY = k => {
 // snapping behaviour all share the same source of truth.
 const MINIMAP_SCALE_STEPS = [0.75, 1.0, 1.25, 1.5];
 const TEXT_SCALE_STEPS    = [0.85, 1.0, 1.15, 1.3];
+// World zoom multiplier — playfield-only scale applied to the world
+// canvas via `ctx.scale(zoom, zoom)` in renderPlaying. HUD chrome and
+// overlays remain at native (1.0) scale. Mobile-first: the auto-fit
+// gameScale clamps tiles to ~14–30 CSS-px on the smaller axis, which
+// is uncomfortably small on phones; this setting lets users zoom in
+// further without recompiling. Steps go higher than the text/minimap
+// scales because mobile genuinely needs the high end (e.g. a phone
+// playing in compact mode at 1.5× zoom = ~21–45 CSS-px tile).
+const WORLD_ZOOM_STEPS    = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
 
 /**
  * Snap an arbitrary numeric value to the nearest entry in `steps`. Used
@@ -70,7 +79,7 @@ function snapToSteps(v, steps) {
   return best;
 }
 
-/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, minimapScale:number, textScale:number, keyMap:Record<string,string>, load():void, save():void, resetAll():void }} */
+/** @type {{ sfxVol:number, musicVol:number, screenShake:boolean, damageNumbers:boolean, lockAimToMove:boolean, aimAssist:boolean, crtMode:boolean, reducedMotion:boolean, minimapScale:number, textScale:number, worldZoom:number, _worldZoomFromDefault:boolean, keyMap:Record<string,string>, load():void, save():void, resetAll():void, applyMobileFirstDefaults():void }} */
 const settings = {
   sfxVol: 1.0,
   musicVol: 1.0,
@@ -79,32 +88,30 @@ const settings = {
   lockAimToMove: false,
   aimAssist: false,  // accessibility — auto-aim at nearest visible enemy
   crtMode: false,    // cosmetic — scanline + vignette retro CRT overlay
-  // Accessibility — when ON, suppresses motion-sensitive overlays that
-  // aren't already covered by `screenShake` (currently: the cyan
-  // full-screen LEVEL UP flash). Designed as the umbrella setting that
-  // future motion-suppression code can hang off without adding more
-  // toggles. Default OFF so behavior is unchanged for existing users;
-  // users with vestibular sensitivity / low-vision flicker concerns can
-  // opt in.
   reducedMotion: false,
-  // Accessibility — corner minimap pixel-size multiplier. The base
-  // minimap is 120×80; this scales those dimensions (and the cached
-  // offscreen canvas, with rebuild-on-resize gating in render.js).
-  // Allowed values: MINIMAP_SCALE_STEPS. Default 1.0 (= base 120×80).
   minimapScale: 1.0,
-  // Accessibility — text-scale multiplier applied to status FX badges
-  // (drawStatusBar in content.js) and floating damage numbers
-  // (drawFloatingTexts in content.js). NOT applied to the main HUD bar
-  // (drawHUD in render.js): that path is heavily layout-coupled — the
-  // hardcoded text baselines pair with hardcoded bar geometry, so a
-  // global font scale would break alignment without a parallel layout
-  // overhaul. If users want HUD-text scaling, that's a follow-up.
-  // Allowed values: TEXT_SCALE_STEPS. Default 1.0 (no scaling).
   textScale: 1.0,
+  worldZoom: 1.0,
+  // Internal flag — TRUE while the worldZoom value still reflects the
+  // schema default (1.0), FALSE the moment the user picks a value via
+  // the SETTINGS stepper OR a non-default value gets restored from
+  // localStorage. The boot path uses this to apply the mobile-first
+  // default (1.5× on compact viewports) ONCE, AFTER the first resize()
+  // populates real W/H — without overwriting a user choice. Persisted
+  // intentionally in save() so a returning user with the exact 1.0×
+  // default still gets re-applied to mobile-first if they uninstall +
+  // reinstall on a different device class.
+  _worldZoomFromDefault: true,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
     try {
       const raw = JSON.parse(localStorage.getItem('neonDungeonSettings') || 'null');
+      // Empty / first-run path: leave every field at its schema default.
+      // The mobile-first worldZoom override is applied later by
+      // applyMobileFirstDefaults() once resize() has populated W/H —
+      // see the call from resize() below. Returning here keeps the
+      // _worldZoomFromDefault flag at TRUE so the deferred override
+      // can fire.
       if (!raw) return;
       if (typeof raw.sfxVol === 'number') this.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
       if (typeof raw.musicVol === 'number') this.musicVol = Math.max(0, Math.min(1, raw.musicVol));
@@ -124,12 +131,56 @@ const settings = {
       if (typeof raw.textScale === 'number' && Number.isFinite(raw.textScale)) {
         this.textScale = snapToSteps(raw.textScale, TEXT_SCALE_STEPS);
       }
+      // worldZoom: snap-to-step on load. If a persisted value exists we
+      // honour it (the user has expressed intent — never overwrite).
+      // The deferred mobile-first default fires only when no value has
+      // been persisted (legacy save predating worldZoom OR fresh
+      // install) — tracked via the _worldZoomFromDefault flag.
+      if (typeof raw.worldZoom === 'number' && Number.isFinite(raw.worldZoom)) {
+        this.worldZoom = snapToSteps(raw.worldZoom, WORLD_ZOOM_STEPS);
+        this._worldZoomFromDefault = false;
+      }
+      // Persisted flag — if a returning user explicitly chose the 1.0×
+      // value before, respect it (don't re-apply mobile default on
+      // device change). Defaults to TRUE for old saves so that path
+      // reaches applyMobileFirstDefaults() naturally.
+      if (typeof raw._worldZoomFromDefault === 'boolean') {
+        this._worldZoomFromDefault = raw._worldZoomFromDefault;
+      }
       if (raw.keyMap && typeof raw.keyMap === 'object') {
         for (const a of Object.keys(DEFAULT_KEY_MAP)) {
           if (typeof raw.keyMap[a] === 'string') this.keyMap[a] = raw.keyMap[a];
         }
       }
     } catch(e) {}
+  },
+  // Mobile-first default applicator. Called from resize() AFTER the
+  // first real viewport measurement, so layout.compact and W/H reflect
+  // the actual device. Runs ONCE per session: after applying it (or
+  // skipping because the user already chose a value), the
+  // _worldZoomFromDefault flag flips to false and subsequent resize()
+  // calls (window resize, orientation change) are no-ops. Without
+  // this, a user who rotates their phone would have their explicit
+  // zoom choice clobbered by the mobile default every rotation.
+  applyMobileFirstDefaults() {
+    if (!this._worldZoomFromDefault) return;
+    // Use the SAME compact predicate as the layout system (see
+    // engine/viewport.js computeLayout: `H > W && W <= 600`). Sharing
+    // the predicate means "compact UI" and "compact-default zoom"
+    // never disagree — a non-compact landscape viewport doesn't get
+    // the mobile zoom applied just because its width happens to be
+    // small. Falls back to false if layout hasn't initialised yet
+    // (defensive — applyMobileFirstDefaults should only be called
+    // post-updateLayout but we don't want a throw at boot).
+    const isCompact = !!(layout && layout.compact);
+    if (isCompact) {
+      this.worldZoom = 1.5;
+    }
+    // Latch — even if we didn't change worldZoom (non-compact case),
+    // set the flag so a window-resize-into-compact later doesn't
+    // surprise-update the user's explicit 1.0× preference.
+    this._worldZoomFromDefault = false;
+    this.save();
   },
   save() {
     try {
@@ -142,6 +193,8 @@ const settings = {
         reducedMotion: this.reducedMotion,
         minimapScale: this.minimapScale,
         textScale: this.textScale,
+        worldZoom: this.worldZoom,
+        _worldZoomFromDefault: this._worldZoomFromDefault,
         keyMap: this.keyMap
       }));
     } catch(e) {}
@@ -155,6 +208,16 @@ const settings = {
     this.reducedMotion = false;
     this.minimapScale = 1.0;
     this.textScale = 1.0;
+    // Reset to mobile-first default. Unlike load() this runs AFTER
+    // the canvas has been sized (the user is in the SETTINGS menu
+    // after at least one render frame), so layout.compact is reliable
+    // here — no need for the deferred-default machinery. Falls back
+    // to 1.0× when layout is missing for any reason (defensive).
+    const isCompact = !!(layout && layout.compact);
+    this.worldZoom = isCompact ? 1.5 : 1.0;
+    // RESET counts as an explicit user action — clear the deferred-
+    // default flag so a subsequent resize() doesn't re-apply on top.
+    this._worldZoomFromDefault = false;
     this.keyMap = { ...DEFAULT_KEY_MAP }; this.save();
   }
 };
@@ -223,6 +286,13 @@ function resize() {
   safeBottom = _sa.bottom;
   safeLeft   = _sa.left;
   updateLayout();
+  // Apply mobile-first defaults ONCE, after the first real viewport
+  // measurement has populated W/H and updateLayout has set
+  // layout.compact. The applicator no-ops on subsequent calls so
+  // window resize / orientation change can't clobber a user's
+  // explicit zoom choice. See settings.applyMobileFirstDefaults
+  // for the deferred-default rationale.
+  settings.applyMobileFirstDefaults();
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
 // resize() + event listener registered in Boot section (after all defs are ready)

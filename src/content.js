@@ -924,8 +924,9 @@ function activateHackware(player) {
       audio.hackwareGravity();
       // Place at aim position
       const cam = getCamera(player);
-      const wx = (mouse.x + cam.x) / TILE;
-      const wy = (mouse.y + cam.y) / TILE;
+      const _wz = (settings && settings.worldZoom) || 1;
+      const wx = (mouse.x / _wz + cam.x) / TILE;
+      const wy = (mouse.y / _wz + cam.y) / TILE;
       hackwareEffects.push({
         type:'gravity', x:wx, y:wy, age:0, maxAge:3, radius:5
       });
@@ -937,8 +938,9 @@ function activateHackware(player) {
       audio.hackwareStaticField();
       // Place at aim position (same pattern as Gravity Well)
       const cam2 = getCamera(player);
-      const sx = (mouse.x + cam2.x) / TILE;
-      const sy = (mouse.y + cam2.y) / TILE;
+      const _wz2 = (settings && settings.worldZoom) || 1;
+      const sx = (mouse.x / _wz2 + cam2.x) / TILE;
+      const sy = (mouse.y / _wz2 + cam2.y) / TILE;
       // Remove any existing static field (max 1 active)
       for (let j = hackwareEffects.length - 1; j >= 0; j--) {
         if (hackwareEffects[j].type === 'static_field') hackwareEffects.splice(j, 1);
@@ -955,8 +957,9 @@ function activateHackware(player) {
     case 'HOLO_DECOY': {
       audio.holoDecoyDeploy();
       const cam5 = getCamera(player);
-      const hx = (mouse.x + cam5.x) / TILE;
-      const hy = (mouse.y + cam5.y) / TILE;
+      const _wz5 = (settings && settings.worldZoom) || 1;
+      const hx = (mouse.x / _wz5 + cam5.x) / TILE;
+      const hy = (mouse.y / _wz5 + cam5.y) / TILE;
       // Remove existing hologram + clear taunt refs
       for (let j = hackwareEffects.length - 1; j >= 0; j--) {
         if (hackwareEffects[j].type === 'hologram') {
@@ -974,8 +977,9 @@ function activateHackware(player) {
       // Fall back to player tile if aim lands in a wall — projectiles spawning
       // inside walls would just collide instantly.
       const cam6 = getCamera(player);
-      let dx = (mouse.x + cam6.x) / TILE;
-      let dy = (mouse.y + cam6.y) / TILE;
+      const _wz6 = (settings && settings.worldZoom) || 1;
+      let dx = (mouse.x / _wz6 + cam6.x) / TILE;
+      let dy = (mouse.y / _wz6 + cam6.y) / TILE;
       const txi = Math.floor(dx), tyi = Math.floor(dy);
       const tile = (map && map[tyi] != null) ? map[tyi][txi] : null;
       if (tile !== T.FLOOR && tile !== T.DOOR_OPEN) {
@@ -1032,8 +1036,9 @@ function activateHackware(player) {
         bdx = player.facing.x; bdy = player.facing.y;
       } else {
         const cam7 = getCamera(player);
-        const ax = (mouse.x + cam7.x) / TILE - player.x;
-        const ay = (mouse.y + cam7.y) / TILE - player.y;
+        const _wz7 = (settings && settings.worldZoom) || 1;
+        const ax = (mouse.x / _wz7 + cam7.x) / TILE - player.x;
+        const ay = (mouse.y / _wz7 + cam7.y) / TILE - player.y;
         [bdx, bdy] = norm(ax, ay);
         if (!bdx && !bdy) { bdx = player.facing.x; bdy = player.facing.y; }
       }
@@ -1221,8 +1226,9 @@ function activateHackware(player) {
         edx = player.facing.x; edy = player.facing.y;
       } else {
         const camE = getCamera(player);
-        const ax = (mouse.x + camE.x) / TILE - player.x;
-        const ay = (mouse.y + camE.y) / TILE - player.y;
+        const _wzE = (settings && settings.worldZoom) || 1;
+        const ax = (mouse.x / _wzE + camE.x) / TILE - player.x;
+        const ay = (mouse.y / _wzE + camE.y) / TILE - player.y;
         [edx, edy] = norm(ax, ay);
         if (!edx && !edy) { edx = player.facing.x; edy = player.facing.y; }
       }
@@ -1471,8 +1477,9 @@ function activateHackware(player) {
       // wall (matches DECOY_TURRET — a marker spawned inside a wall is
       // unreachable for enemies and wastes the cast).
       const camCL = getCamera(player);
-      let lx = (mouse.x + camCL.x) / TILE;
-      let ly = (mouse.y + camCL.y) / TILE;
+      const _wzCL = (settings && settings.worldZoom) || 1;
+      let lx = (mouse.x / _wzCL + camCL.x) / TILE;
+      let ly = (mouse.y / _wzCL + camCL.y) / TILE;
       const ltxi = Math.floor(lx), ltyi = Math.floor(ly);
       const ltile = (map && map[ltyi] != null) ? map[ltyi][ltxi] : null;
       if (ltile !== T.FLOOR && ltile !== T.DOOR_OPEN) {
