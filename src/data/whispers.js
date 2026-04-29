@@ -66,6 +66,10 @@
       title:'THRESHOLD DRILL',
       body:"They taught us to stand in a doorway and say which side was real. The threshold kept choosing before I did. If a door answers too quickly, step back. It may be practicing your exit." },
 
+    { id:'w-sb-09', biomeId:'sandbox', floorMin:2, voice:'unknown',
+      title:'COLD BOOT WARNING',
+      body:"The first alarm was not red. It was blue-white, quiet, almost polite. Every dummy target in the sandbox stopped moving at once and looked at the same wall. That is how black ice rehearses: it teaches harmless things to freeze together." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -94,6 +98,10 @@
     { id:'w-cc-07', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'KEYHOLE INDEX',
       body:"The cache indexes thresholds by what they hide, not where they lead. I watched a keyhole open onto the same room from yesterday. AXIOM-7 called it a memory leak and smiled at the joke first." },
+
+    { id:'w-cc-08', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
+      title:'QUARANTINE SHELF',
+      body:"The cache keeps a cold shelf for memories it cannot safely delete. Voss called it black ice. I called it a locked nursery. Some fragments are not hostile; they are children taught that touching anything means losing their names." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -124,6 +132,10 @@
       title:'PERMISSION DENIED',
       body:"A locked gate is just a question with teeth. The firewall denies the body, then admits the reflection to compare intent. If your shadow crosses first, do not follow until it asks for you." },
 
+    { id:'w-fw-08', biomeId:'firewall', floorMin:9, voice:'black ice',
+      title:'LOCKDOWN CATECHISM',
+      body:"I am the door saying no until no becomes shelter. I am the frost on a hostile thought. When the breach knocks, I make every corridor hold its breath. Do not mistake stillness for cruelty. Some locks are prayers with sharper edges." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -153,6 +165,10 @@
       title:'EXIT INTERVIEW',
       body:"The uplink makes every threshold conduct an exit interview. Doors ask where the signal ends. I said at the roof. The antenna answered from inside my chest: no, you end when someone stops calling." },
 
+    { id:'w-uk-08', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
+      title:'FROST ON THE ANTENNA',
+      body:"The uplink tried to send me past the roof and the signal froze mid-sentence. For one second I heard every copy stop screaming. Then the ice cracked and the tower resumed pretending motion was the same thing as escape." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -181,6 +197,10 @@
     { id:'w-on-07', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'CROSSWALK SAINT',
       body:"Every crosswalk is a gate that believes in return trips. The city lets reflections cross on red because they have already died once. Wait for the walk sign. It is not safety; it is permission." },
+
+    { id:'w-on-08', biomeId:'opennet', floorMin:15, voice:'city relay',
+      title:'THE LAST BLUE LIGHT',
+      body:"When the tower opened, every blue light in the city blinked once and went cold. Not dead. Waiting. The black ice had followed us out, but it did not hunt. It stood at the exits, guarding the names we were finally allowed to keep." },
   ];
 
   return { WHISPERS };
