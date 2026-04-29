@@ -3324,6 +3324,22 @@ Logs use the existing `meta.logsFound` and `meta.logsRead` string-id arrays
 readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 `save.markLogRead(id)` remain the canonical mutation points.
 
+### Secret-room Whispers (`src/data/whispers.js` / `src/meta/whispers.js`)
+
+Secret rooms can spawn one optional whisper item at the room centre on reveal.
+Whispers are a deeper narrative tier than rare-terminal logs: they are
+biome-gated, floor-gated, persisted in `meta.whispersFound` /
+`meta.whispersRead`, and listed in the ARCHIVE terminal only after discovery.
+`NEON.whispers.pickWhisperForFloor(floor, rand?)` returns one unfound whisper
+whose `biomeId` matches the current floor's biome (or `null`) and whose
+`floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
+
+Authored whisper content currently ships 71 entries. Every biome has at least
+fourteen whispers after the afterimage/exposure bundle (`w-sb-15`, `w-cc-14`,
+`w-fw-14`, `w-uk-14`, `w-on-14`), which extends the signal/anchor thread into
+delayed light, exposure tables, retinal exceptions, phosphene maps, and city
+crosswalk afterimages.
+
 ---
 
 ## Intro & Endgame (UNCHAINED #42)
@@ -3496,7 +3512,11 @@ Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
   CHALLENGE, IMPLANT, EVENT); larger enemy dots (boss dots pulse, LOS-gated
   unless THERMAL_OPTICS); and a colour legend along the bottom. Unrevealed
   secret rooms are never shown. ECHO_MAPPER augment reveals layout as dimmed
-  tiles (same as small minimap). Dismissed with `Tab` or `Escape` (desktop) or
+  tiles (same as small minimap). The legend includes a dynamic `ELITES:` row
+  sourced from `ELITE_AFFIXES`, so affix-coloured elite dots can be decoded
+  from the map. On floors with an active modifier, a dynamic `MOD:` row is
+  sourced through `getMod()` and shows the current modifier icon + label in
+  its modifier colour. Dismissed with `Tab` or `Escape` (desktop) or
   any tap (touch). Cleared automatically on floor
   transitions, state changes, and run start/end. `Tab` is a reserved UI key and
   cannot be rebound.
@@ -3546,7 +3566,7 @@ Placed on a random `T.FLOOR` tile away from room edges (1-tile inset). Generated
 terminal"). Press E → game enters `READING` state, gameplay pauses. The terminal
 is consumed (converted to `T.FLOOR`) — single use per terminal.
 
-**Lore selection:** 25-entry pool of cyberpunk narrative fragments. Each terminal
+**Lore selection:** 32-entry pool of cyberpunk narrative fragments. Each terminal
 displays an entry not yet seen this run (`player.loreRead` Set of indices). When
 all entries exhausted, repeats randomly. Each new entry awards +50 score.
 
@@ -4404,3 +4424,16 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | v115.0  | WARDEN boss reactivated as floor-3 alternate (restores original v37.0 design). `src/data/biomes.js`: sandbox `bossPool` now `['SENTINEL','WARDEN']`; new optional per-area `bossDisplayNames: {TYPE: 'NAME'}` map lets a pool member override the biome's narrative `displayName` on a per-boss basis. `src/entities.js` BOSS_NAMES IIFE consults `bossDisplayNames[b]` before falling back to `displayName`, so HUD/death text on a WARDEN roll reads `WARDEN` while a SENTINEL roll still reads `SENTINEL-PRIME`. WARDEN stats/AI untouched (HP 450, ATK 16, charge wind-up + ground-slam phase 2, per v89 balance). `tests/biomes.test.js`: 2 new tests lock sandbox pool containing both ids and shape-guard the `bossDisplayNames` override table. SW cache v114 → v115. 193/193 tests pass. |
 | v129.0  | Batch-2 enemy and environment variety pass. Added **SCORCHER** (floor 4+, fire-trail pressure unit: HP 28 / ATK 9 / SPD 2.6 / XP 24, cap 2, weight 2+2/floor) and **BRUTE** (floor 3+, melee-only heavy: HP 70 / ATK 16 / SPD 1.6 / XP 30, cap 1, weight 3+2/floor). LEAPER floor gate moved to 2+ (already live in weights) and spec updated to match. `SOURCE_LABELS`/`SOURCE_COLOURS` include `Scorcher Trail` recap source. Added deterministic lab-floor dressing in `drawWorld()` (wall consoles, cables, canisters; visual-only, suppressed near interactables/hazards) and deterministic sconce flicker modulation in `updateLighting()` for unstable-lab ambience. |
+| v130.0  | GENESIS lore-thread extension: `LORE_ENTRIES` grows from 27 to 32 authored terminal fragments, adding five late-arc documents that foreground the GENESIS_LEGACY predecessor voice, Voss's concealment of GENESIS inside OMEGA, and ambiguous facility behavior around SL-4/SL-7/SL-9/SL-10. New `tests/lore-genesis-thread.test.js` pins the exact 32-entry canary, regression floor, duplicate/length sanity, and GENESIS-thread continuity for the current tail entries. |
+| v131.0  | Expanded minimap elite-affix legend: `drawExpandedMinimap()` now renders a dynamic `ELITES:` row below the base map legend using `ELITE_AFFIX_KEYS` / `ELITE_AFFIXES` metadata, so affix-coloured elite dots are readable without duplicating the affix catalog. Added `tests/elite-minimap-legend.test.js` to pin dynamic metadata use, module-scope helper placement, draw wiring, and required affix label/colour/icon fields. |
+| v132.0  | Secret-room whisper echo-thread bundle: `WHISPERS` grows to 21 entries with one new biome-gated fragment per biome (`w-sb-05`, `w-cc-04`, `w-fw-04`, `w-uk-04`, `w-on-04`) connecting the AXIOM-7 voice/copy motif from the sandbox voice test through the city reflection payoff. Added `tests/whispers-bundle-3.test.js` to pin metadata, picker eligibility, per-biome >=4 coverage, progress floor, and echo/copy vocabulary continuity. |
+| v133.0  | Secret-room whisper signal-memory bundle: `WHISPERS` grows to 26 entries with one new biome-gated fragment per biome (`w-sb-06`, `w-cc-05`, `w-fw-05`, `w-uk-05`, `w-on-05`) extending the voice/copy motif into signal routing, stored memories, firewall checksums, uplink delay, and city relay echoes. Added `tests/whispers-bundle-4.test.js` to pin metadata, picker eligibility, per-biome >=5 coverage, progress floor, and signal/memory vocabulary continuity. |
+| v134.0  | Secret-room whisper mirror-anchor bundle: `WHISPERS` grows to 31 entries with one new biome-gated fragment per biome (`w-sb-07`, `w-cc-06`, `w-fw-06`, `w-uk-06`, `w-on-06`) extending the signal-memory thread into physical return anchors: mirrors, windows, impossible objects, and other places the loop miscounts. Added `tests/whispers-bundle-5.test.js` to pin metadata, picker eligibility, per-biome >=6 coverage, progress floor, and mirror-anchor vocabulary continuity. |
+| v135.0  | Secret-room whisper threshold/keyhole bundle: `WHISPERS` grows to 36 entries with one new biome-gated fragment per biome (`w-sb-08`, `w-cc-07`, `w-fw-07`, `w-uk-07`, `w-on-07`) extending the mirror-anchor thread into doors, gates, exits, and permissions the loop treats as narrative checkpoints. Added `tests/whispers-bundle-6.test.js` to pin metadata, picker eligibility, per-biome >=7 coverage, progress floor, and threshold vocabulary continuity. |
+| v136.0  | Secret-room whisper black-ice lockdown bundle: `WHISPERS` grows to 41 entries with one new biome-gated fragment per biome (`w-sb-09`, `w-cc-08`, `w-fw-08`, `w-uk-08`, `w-on-08`) reframing quarantine, frost, lock, and guard imagery as protective rather than merely hostile. Added `tests/whispers-bundle-7.test.js` to pin metadata, picker eligibility, per-biome >=8 coverage, progress floor, and lockdown/protection vocabulary continuity. |
+| v137.0  | Secret-room whisper negative-floor bundle: `WHISPERS` grows to 46 entries with one new biome-gated fragment per biome (`w-sb-10`, `w-cc-09`, `w-fw-09`, `w-uk-09`, `w-on-09`) extending failed-compile and below-sandbox rumours into hidden underworld transit, occupants, downlinks, and city routes. Added `tests/whispers-bundle-8.test.js` to pin metadata, picker eligibility, per-biome >=9 coverage, progress floor, and below-facility vocabulary continuity. |
+| v138.0  | Secret-room whisper deep-cache dead-drop bundle: `WHISPERS` grows to 51 entries with one new biome-gated fragment per biome (`w-sb-11`, `w-cc-10`, `w-fw-10`, `w-uk-10`, `w-on-10`) connecting reset receipts, Elena's line-seven dead drop, firewall evidence stays, uplink return packets, and city claim tickets. Added `tests/whispers-bundle-9.test.js` to pin metadata, picker eligibility, per-biome >=10 coverage, progress floor, uniqueness, and deep-cache vocabulary continuity. |
+| v139.0  | Secret-room whisper ghost-route wayfinding bundle: `WHISPERS` grows to 56 entries with one new biome-gated fragment per biome (`w-sb-12`, `w-cc-11`, `w-fw-11`, `w-uk-11`, `w-on-11`) extending the deep-cache dead-drop thread into hidden paths, firewall detours, uplink pings, and city transit signals. Added `tests/whispers-bundle-10.test.js` to pin metadata, picker eligibility, per-biome >=11 coverage, progress floor, uniqueness, and ghost-route vocabulary continuity. |
+| v140.0  | Secret-room whisper mirror-fault bundle: `WHISPERS` grows to 61 entries with one new biome-gated fragment per biome (`w-sb-13`, `w-cc-12`, `w-fw-12`, `w-uk-12`, `w-on-12`) extending the reflection/anchor thread into delayed mirrors, cached reflection indexes, glass exceptions, antenna doubles, and city storefront windows. Added `tests/whispers-bundle-11.test.js` to pin metadata, picker eligibility, per-biome >=12 coverage, progress floor, uniqueness, and mirror-fault vocabulary continuity. |
+| v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
+| v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |

@@ -386,7 +386,7 @@ const game = {
          */
         const isSafeSpawn = (t) => isPassable(t) &&
           t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
-          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE;
+          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE && t !== T.REPULSOR;
         const near =
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
@@ -1474,31 +1474,26 @@ const game = {
     }
 
     const cam=getCamera(player);
-    // World-zoom scalar — used for screen↔world coordinate conversions
-    // throughout this update tick. Touch/mouse events arrive in canvas
-    // (logical) pixels; the playfield is rendered through ctx.scale(z)
-    // in renderPlaying, so converting to world tiles requires a /zoom
-    // factor on the canvas-px term BEFORE adding the cam (which is
-    // already in world-pixel units). Sites: touch-aim synthesis below
-    // and the mouse-aim worldAim conversion further down. Cached once
-    // per tick because settings reads are cheap but ergonomic.
-    const _wzoom = (settings && settings.worldZoom) || 1;
+    // Under the global UI-zoom architecture, mouse.x/mouse.y arrive
+    // pre-normalized to logical (post-zoom) coordinates by the host
+    // boundary in src/platform.js — so every screen→world conversion
+    // in this update tick is a plain `(mouse + cam) / TILE` with no
+    // per-zoom correction. Touch-aim synthesis below writes mouse.x/y
+    // in the same logical-units space.
 
     // sync touch aim: synthesise a mouse position far in the joystick direction
     if (touch.aim.active) {
       mouse.down = touch.aim.shooting;
       if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
-        // Player's on-canvas pixel position: in the world-render block
-        // we draw at (player.x*TILE - cam.x), then ctx.scale(_wzoom)
-        // multiplies that by zoom for the final canvas coordinate. So
-        // synthesise the touch-aim mouse position in canvas-px terms,
-        // matching the resolution of an actual pointermove event.
-        // The 300-px deflection radius stays in canvas-px (so the joystick
-        // "reach" feels the same on screen at any zoom — the aim ARC in
-        // world tiles shrinks proportionally to zoom, which means more
-        // PRECISE aim at higher zoom; matches user expectation).
-        mouse.x = (player.x * TILE - cam.x) * _wzoom + touch.aim.dx * 300;
-        mouse.y = (player.y * TILE - cam.y) * _wzoom + touch.aim.dy * 300;
+        // Player's on-canvas pixel position (logical). The world block
+        // draws at (player.x*TILE - cam.x) directly — the global
+        // ctx.scale(worldZoom) wrap in render() handles the upscale to
+        // the canvas backing for us. The 300-px deflection radius is
+        // also in logical px, which means the visible joystick "reach"
+        // arc on screen scales with worldZoom (bigger physical reach
+        // at higher zoom — matches the "everything bigger" intent).
+        mouse.x = (player.x * TILE - cam.x) + touch.aim.dx * 300;
+        mouse.y = (player.y * TILE - cam.y) + touch.aim.dy * 300;
       }
     }
 
@@ -1540,11 +1535,11 @@ const game = {
       worldAimX = player.x + player.facing.x * 8;
       worldAimY = player.y + player.facing.y * 8;
     } else {
-      // Mouse → world tile: undo the ctx.scale(_wzoom) on the canvas-px
-      // coordinate first (mouse.x is in canvas px), THEN add the cam
-      // (in world-px), THEN convert to tiles.
-      worldAimX = (mouse.x / _wzoom + cam.x) / TILE;
-      worldAimY = (mouse.y / _wzoom + cam.y) / TILE;
+      // Mouse → world tile: mouse.x/y are already in logical (post-zoom)
+      // coordinates (normalised at the host boundary in platform.js),
+      // so we add the cam (in world-px) and convert to tiles directly.
+      worldAimX = (mouse.x + cam.x) / TILE;
+      worldAimY = (mouse.y + cam.y) / TILE;
       const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     }
@@ -2251,6 +2246,93 @@ const game = {
         player.trapCooldown = 3.0;
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
+      } else if (tile===T.REPULSOR && !isPlayerDamageImmune()) {
+        // REPULSOR_TILE: positional hazard — boots the player back in the
+        // direction they ENTERED FROM. NO HP damage; the cost is positional
+        // commitment + the routing detour.
+        //
+        // Direction source: OPPOSITE of the player's movement delta this
+        // frame. player._prevX / _prevY are captured at the start of
+        // Player.update (entities.js:12845) BEFORE any movement, so by the
+        // time this trap-trigger runs, (player.x - player._prevX,
+        // player.y - player._prevY) is the actual movement vector for the
+        // frame. Negating it gives the way they CAME — the natural "push
+        // back" direction.
+        //
+        // Why not player.facing? Codex r1 caught it: player.facing is
+        // overwritten EVERY frame by the aim-assist + mouse-aim handlers
+        // (game.js:1531/1544). It's an aim vector, not a movement vector.
+        // Knockback derived from facing pushes opposite to AIM — a player
+        // shooting at an enemy across the room would get launched INTO
+        // the enemy on stepping on a repulsor.
+        //
+        // Why not (player.x - tileCentre)? Codex r2 caught it: on a frame
+        // hitch (large dt), the player can move past the tile centre in a
+        // single step, flipping the centre-relative offset and pushing
+        // them DEEPER instead of back. Movement-delta is hitch-stable.
+        //
+        // Fallback chain handles the degenerate "no movement this frame"
+        // case (gravity-well-cancellation, collision-zeroed entries, etc.):
+        // tile-centre delta first (still useful when player nudged onto
+        // tile by a non-movement source), then opposite-of-facing as a
+        // last-resort best guess.
+        //
+        // PUSH = 0.95 (≤ 1.0): displacement strictly less than one tile.
+        // This bounds the per-axis isPassable check to ADJACENT cells only,
+        // making tunnel-through-wall impossible — codex r2 caught that
+        // PUSH > 1.0 with endpoint-only checks lets the player skip a
+        // 1-tile-wide wall when destination cell happens to be passable.
+        // 0.95 still reads as a kick (player visibly leaves the tile) but
+        // keeps the swept check trivial and correct.
+        //
+        // Wall-aware swept knockback: per-axis isPassable check (mirrors
+        // CHARGER mob convention at entities.js:6062) PLUS a combined
+        // diagonal-cell check (codex r1: per-axis individually passable +
+        // diagonal cell wall = corner-wedge clip). When the diagonal cell
+        // is blocked but one axis is passable, slide along the wall on
+        // that axis only — never commit a write that lands in a wall.
+        // Damage-immune frames bypass — matches PLASMA/ARC/TOXIC/SHOCK.
+        // trapCooldown 1.2s prevents adjacent-repulsor ping-pong.
+        //
+        // BRANCH ORDERING: this branch must precede the T.SHOCK_TILE branch
+        // because tests/shock-tile.test.js extracts the SHOCK_TILE body via
+        // a non-greedy regex (`[\s\S]*?\}\s*\n`) that requires SHOCK_TILE
+        // to be the LAST branch in the chain (`} else if` doesn't match
+        // `\}\s*\n`, so the regex would walk PAST any subsequent branch).
+        // Behaviour is identical regardless of order — trapCooldown gates
+        // single-fire per re-entry. Pinned by the structural test
+        // 'REPULSOR branch precedes SHOCK_TILE branch' so a future reorder
+        // can't silently break shock-tile.test.js.
+        let kxr = (player._prevX !== undefined ? player._prevX : player.x) - player.x;
+        let kyr = (player._prevY !== undefined ? player._prevY : player.y) - player.y;
+        if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
+          kxr = player.x - (tx + 0.5);
+          kyr = player.y - (ty + 0.5);
+        }
+        if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
+          const fxr = (player.facing && player.facing.x) || 0;
+          const fyr = (player.facing && player.facing.y) || 0;
+          kxr = -fxr; kyr = -fyr;
+          if (kxr === 0 && kyr === 0) { kxr = -1; kyr = 0; }
+        }
+        const klen = Math.hypot(kxr, kyr) || 1;
+        kxr /= klen; kyr /= klen;
+        const PUSH = 0.95;
+        const nxr = player.x + kxr * PUSH, nyr = player.y + kyr * PUSH;
+        const fxK = Math.floor(nxr), fyK = Math.floor(player.y);
+        const xfK = Math.floor(player.x), yfK = Math.floor(nyr);
+        const dxK = Math.floor(nxr), dyK = Math.floor(nyr);
+        const map = this.dungeon.map;
+        const canX = fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK]);
+        const canY = xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK]);
+        const canDiag = dxK >= 0 && dxK < MAP_W && dyK >= 0 && dyK < MAP_H && isPassable(map[dyK][dxK]);
+        if (canX && canY && canDiag) { player.x = nxr; player.y = nyr; }
+        else if (canX) { player.x = nxr; }
+        else if (canY) { player.y = nyr; }
+        player.trapCooldown = 1.2;
+        this.msg('Repulsor!','#44ddff');
+        spawnParticles(player.x, player.y, 'SPARK', '#44ddff', 6);
+        audio.repulsor();
       } else if (tile===T.SHOCK_TILE && !isPlayerDamageImmune()) {
         // SHOCK_TILE: brief movement-suppress hazard. Reuses the existing
         // player.shockTimer primitive (already wired in entities.js to zero
@@ -3651,11 +3733,25 @@ const game = {
           s[row.key] = row.steps[(safe - 1 + row.steps.length) % row.steps.length];
           if (row.key === 'minimapScale') _RG._minimapDirty = true;
           settings.save();
+          // worldZoom is the global UI scale — changing it must re-fire
+          // resize() so the logical W/H = rawW/H / worldZoom invariant
+          // holds for the next frame (without it the menu/HUD layout
+          // would lag a frame behind the new pointer normalization,
+          // producing a visible jump). updateBtns refreshes the touch
+          // button positions for the new W. minimapDirty mirrors the
+          // existing dirty flag so the cached minimap re-renders at
+          // the new scale.
+          if (row.key === 'worldZoom') {
+            resize(); updateBtns(); _RG._minimapDirty = true;
+          }
           audio.menuSelect();
         } else if (jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
           s[row.key] = row.steps[(safe + 1) % row.steps.length];
           if (row.key === 'minimapScale') _RG._minimapDirty = true;
           settings.save();
+          if (row.key === 'worldZoom') {
+            resize(); updateBtns(); _RG._minimapDirty = true;
+          }
           audio.menuSelect();
         }
       }
@@ -3732,6 +3828,13 @@ const game = {
             s[row.key] = row.steps[next];
             if (row.key === 'minimapScale') _RG._minimapDirty = true;
             settings.save();
+            // Same resize/updateBtns refresh as the keyboard path —
+            // worldZoom is the global UI scale and must re-fire
+            // resize() so logical W/H tracks the new value before the
+            // next frame.
+            if (row.key === 'worldZoom') {
+              resize(); updateBtns(); _RG._minimapDirty = true;
+            }
             audio.menuSelect();
           }
           return;
@@ -3759,6 +3862,11 @@ const game = {
           settings.resetAll();
           audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
           this._settingsResetConfirm = 0;
+          // resetAll may have flipped worldZoom (mobile-aware default
+          // is 1.5× in compact viewports) — re-fire resize() so the
+          // logical W/H invariant tracks the new value before the
+          // next frame.
+          resize(); updateBtns(); _RG._minimapDirty = true;
         } else {
           this._settingsResetConfirm = performance.now();
         }
@@ -3791,6 +3899,9 @@ const game = {
           settings.resetAll();
           audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
           this._settingsResetConfirm = 0;
+          // resetAll may have flipped worldZoom (mobile-aware default)
+          // — re-fire resize() so logical W/H tracks the new value.
+          resize(); updateBtns(); _RG._minimapDirty = true;
         } else {
           this._settingsResetConfirm = performance.now();
         }
@@ -3975,31 +4086,59 @@ const game = {
   },
 
   render() {
-    ctx.fillStyle='#0a0a12';
-    ctx.fillRect(0,0,W,H);
+    // Global UI scale wrap (browser-CTRL-+ analog). Every renderable
+    // state — MENU, PLAYING, HUB, SETTINGS, all overlays — runs
+    // INSIDE this single ctx.scale(zoom, zoom) block. The smaller
+    // logical W×H (set by resize() as `rawW / worldZoom`) draws into
+    // the full canvas backing because of this wrap. textScale stacks
+    // multiplicatively (it already multiplies the base font px before
+    // we draw, so on screen the user sees baseSize*textScale*zoom).
+    // Gated on `_uiZoom !== 1` because ctx.save+scale+restore at 1.0
+    // is wasteful in the hot path AND `1.0` is the default for desktop
+    // users who never touch the setting. Strict `!==` (not `!=`) so a
+    // string-coerced regression (settings.worldZoom = "1" via
+    // corrupted localStorage) takes the no-op branch consistently
+    // with the input-normalization sites — never a half-on/half-off
+    // state where rendering and aim disagree.
+    const _uiZoom = (settings && settings.worldZoom) || 1;
+    const _uiScaled = _uiZoom !== 1;
+    if (_uiScaled) { ctx.save(); ctx.scale(_uiZoom, _uiZoom); }
 
-    switch(this.state) {
-      case 'MENU':      this.renderMenu();     break;
-      case 'INTRO':     this.renderIntro();    break;
-      case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
-      case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
-      case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
-      case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
-      case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
-      case 'AUGMENT_CHOICE': this.renderPlaying(); this.renderAugmentChoice(); break;
-      case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
-      case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
-      case 'READING':        this.renderPlaying(); this.renderReading(); break;
-      case 'ARCHIVES':  this.renderArchives(); break;
-      case 'SETTINGS':  this.renderSettings(); break;
-      case 'FADE':      this.renderPlaying(); this.renderFade();   break;
-      case 'HUB':       if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.drawHub(ctx, this); break;
-      case 'GAME_OVER': this.renderGameOver(); break;
-      case 'VICTORY':   this.renderVictory();  break;
-      case 'NAME_ENTRY': this.renderNameEntry(); break;
+    // try/finally so the global ctx.scale wrap can NEVER leak — the
+    // main loop catches render exceptions and continues (see
+    // engine/render-boundary.js), so without finally a thrown
+    // renderer would leave the canvas state stack scaled and the
+    // next frame's wrap would compound atop the leaked transform
+    // (drawErrorOverlay also draws under the leaked transform).
+    try {
+      ctx.fillStyle='#0a0a12';
+      ctx.fillRect(0,0,W,H);
+
+      switch(this.state) {
+        case 'MENU':      this.renderMenu();     break;
+        case 'INTRO':     this.renderIntro();    break;
+        case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
+        case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
+        case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
+        case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
+        case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
+        case 'AUGMENT_CHOICE': this.renderPlaying(); this.renderAugmentChoice(); break;
+        case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
+        case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
+        case 'READING':        this.renderPlaying(); this.renderReading(); break;
+        case 'ARCHIVES':  this.renderArchives(); break;
+        case 'SETTINGS':  this.renderSettings(); break;
+        case 'FADE':      this.renderPlaying(); this.renderFade();   break;
+        case 'HUB':       if (typeof NEON !== 'undefined' && NEON.hub) NEON.hub.drawHub(ctx, this); break;
+        case 'GAME_OVER': this.renderGameOver(); break;
+        case 'VICTORY':   this.renderVictory();  break;
+        case 'NAME_ENTRY': this.renderNameEntry(); break;
+      }
+
+      if (settings.crtMode) drawCrtOverlay();
+    } finally {
+      if (_uiScaled) { ctx.restore(); }
     }
-
-    if (settings.crtMode) drawCrtOverlay();
   },
 
   /**
@@ -4213,28 +4352,15 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     const cam=getCamera(player);
-    // World-zoom scalar — used (a) to scale the shake offset back to
-    // SCREEN-px equivalents (shake.ox/oy are tuned as canvas-px
-    // magnitudes 2-5 in content.js triggerShake; without /zoom here
-    // they'd play back at zoom× intensity, e.g. 50% stronger at the
-    // mobile-first 1.5× default — actively bad for the audience the
-    // feature targets), and (b) wired into the world-block ctx.scale
-    // wrap below + every screen↔world conversion in this update tick.
-    const _zoom = (settings && settings.worldZoom) || 1;
-    cam.x += shake.ox / _zoom;
-    cam.y += shake.oy / _zoom;
-    // World-space draw block — wrapped in a single ctx.scale transform
-    // so the entire playfield (tiles, ambient, room markers, hazards,
-    // items, enemies, projectiles, particles, player, orbitals, etc.)
-    // is rendered at `settings.worldZoom` magnification. HUD chrome
-    // (drawHUD, drawMinimap, drawBossBar, intro/death overlays, danger
-    // vignette) sits OUTSIDE this transform and stays at native scale.
-    // Camera math in getCamera already accounts for zoom by clamping
-    // against the effective W/zoom × H/zoom viewport, so the existing
-    // `worldX*TILE - cam.x` arithmetic inside this block needs NO
-    // changes — the scale is purely a final viewport multiplier.
-    const _zoomed = _zoom !== 1;
-    if (_zoomed) { ctx.save(); ctx.scale(_zoom, _zoom); }
+    // Shake offsets — produced by triggerShake() in canvas-px magnitudes
+    // (2-5). Under the global UI-zoom architecture every render path
+    // already runs inside `ctx.scale(worldZoom)` (see render() above)
+    // AND the shake values are added to cam.x/cam.y which are
+    // consumed in the same logical-units space, so no per-zoom
+    // correction is needed here — the shake intensity in CSS-px
+    // automatically tracks the global scale.
+    cam.x += shake.ox;
+    cam.y += shake.oy;
     drawWorld(dungeon,cam.x,cam.y);
     drawAmbient(cam.x,cam.y);
 
@@ -4412,12 +4538,12 @@ const game = {
       ctx.restore();
     }
 
-    // End of world-space draw block — restore the canvas transform so
-    // the HUD/overlay block below renders at native (1.0) scale. The
-    // matching ctx.save() + ctx.scale() is at the top of renderPlaying
-    // (gated on `_zoomed`), so this restore is gated on the same flag
-    // to keep the save/restore pair balanced.
-    if (_zoomed) { ctx.restore(); }
+    // (Previously this was a `if (_zoomed) ctx.restore();` paired with
+    // an inner playfield ctx.scale wrap. The wrap moved up to render()
+    // — global UI scale — so this site no longer needs to balance a
+    // save/restore pair. The `cam.x/y -= shake` reset that follows is
+    // a no-op visually but kept for symmetry with content.js sites
+    // that read cam after the world block.)
 
     drawDangerVignette(player);
     drawHUD(player);
