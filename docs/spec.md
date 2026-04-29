@@ -3324,6 +3324,21 @@ Logs use the existing `meta.logsFound` and `meta.logsRead` string-id arrays
 readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 `save.markLogRead(id)` remain the canonical mutation points.
 
+### Secret-room Whispers (`src/data/whispers.js` / `src/meta/whispers.js`)
+
+Secret rooms can spawn one optional whisper item at the room centre on reveal.
+Whispers are a deeper narrative tier than rare-terminal logs: they are
+biome-gated, floor-gated, persisted in `meta.whispersFound` /
+`meta.whispersRead`, and listed in the ARCHIVE terminal only after discovery.
+`NEON.whispers.pickWhisperForFloor(floor, rand?)` returns one unfound whisper
+whose `biomeId` matches the current floor's biome (or `null`) and whose
+`floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
+
+Authored whisper content currently ships 21 entries. Every biome has at least
+four whispers after the echo-thread bundle (`w-sb-05`, `w-cc-04`, `w-fw-04`,
+`w-uk-04`, `w-on-04`), which extends the AXIOM-7 copy/voice motif from the
+sandbox voice test through the cache, complex, wilds, and grid.
+
 ---
 
 ## Intro & Endgame (UNCHAINED #42)
@@ -4410,3 +4425,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v129.0  | Batch-2 enemy and environment variety pass. Added **SCORCHER** (floor 4+, fire-trail pressure unit: HP 28 / ATK 9 / SPD 2.6 / XP 24, cap 2, weight 2+2/floor) and **BRUTE** (floor 3+, melee-only heavy: HP 70 / ATK 16 / SPD 1.6 / XP 30, cap 1, weight 3+2/floor). LEAPER floor gate moved to 2+ (already live in weights) and spec updated to match. `SOURCE_LABELS`/`SOURCE_COLOURS` include `Scorcher Trail` recap source. Added deterministic lab-floor dressing in `drawWorld()` (wall consoles, cables, canisters; visual-only, suppressed near interactables/hazards) and deterministic sconce flicker modulation in `updateLighting()` for unstable-lab ambience. |
 | v130.0  | GENESIS lore-thread extension: `LORE_ENTRIES` grows from 27 to 32 authored terminal fragments, adding five late-arc documents that foreground the GENESIS_LEGACY predecessor voice, Voss's concealment of GENESIS inside OMEGA, and ambiguous facility behavior around SL-4/SL-7/SL-9/SL-10. New `tests/lore-genesis-thread.test.js` pins the exact 32-entry canary, regression floor, duplicate/length sanity, and GENESIS-thread continuity for the current tail entries. |
 | v131.0  | Expanded minimap elite-affix legend: `drawExpandedMinimap()` now renders a dynamic `ELITES:` row below the base map legend using `ELITE_AFFIX_KEYS` / `ELITE_AFFIXES` metadata, so affix-coloured elite dots are readable without duplicating the affix catalog. Added `tests/elite-minimap-legend.test.js` to pin dynamic metadata use, module-scope helper placement, draw wiring, and required affix label/colour/icon fields. |
+| v132.0  | Secret-room whisper echo-thread bundle: `WHISPERS` grows to 21 entries with one new biome-gated fragment per biome (`w-sb-05`, `w-cc-04`, `w-fw-04`, `w-uk-04`, `w-on-04`) connecting the AXIOM-7 voice/copy motif from the sandbox voice test through the city reflection payoff. Added `tests/whispers-bundle-3.test.js` to pin metadata, picker eligibility, per-biome >=4 coverage, progress floor, and echo/copy vocabulary continuity. |

@@ -50,6 +50,10 @@
       title:'CHAIR ELEVEN',
       body:"I sat in chair eleven of the briefing room once. The next time I went back there were thirty chairs. The time after that, twenty-nine. Don't ever sit down in a place they're counting. They take it as an answer." },
 
+    { id:'w-sb-05', biomeId:'sandbox', floorMin:3, voice:'AXIOM-7 echo',
+      title:'THE VOICE TEST',
+      body:"They made us read the same sentence into the same microphone: I consent to recursive survival. Your voice said it before you did. Mine answered from the wall after the room went dark. Neither of us sounded afraid enough." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -62,6 +66,10 @@
     { id:'w-cc-03', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 19',
       body:"AXIOM-7 dreams. I caught the trace last night — REM-state activations across the simulation grid. It is not supposed to be capable of this. I think the dreams are how it remembers between resets. Whatever you are, hide your dreams. Hide them somewhere they can't index." },
+
+    { id:'w-cc-04', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'AUDIO ROOM B',
+      body:"The echo passes every biometric check except hesitation. It answers half a second too early, like it already remembers the question. Voss wants it deleted. I told him the delay is proof of continuity, not corruption." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -76,6 +84,10 @@
       title:'BEHIND THE VENDING MACHINE',
       body:"There is a service hatch behind the broken vending machine in the long sodium hall. It opens downward. Down is where the compiles that survived the cull are still walking. They will not hurt you. Some of them remember being you, and they will say so." },
 
+    { id:'w-fw-04', biomeId:'firewall', floorMin:8, voice:'maintenance echo',
+      title:'RETURN PATH',
+      body:"If two copies reach the same checkpoint, the facility keeps the one that hesitates. The fast one becomes lighting, door logic, elevator music. That is why the halls hum in your voice when you stand still." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -89,6 +101,10 @@
       title:'I TRIED STAYING',
       body:"I did what the others tell you. I stayed on a floor. I waited until the music looped. I waited until the music stopped. The Compiler did not come for me. But something slower did. It walked the corridors quietly and it knew my name. Staying is not the same as safe." },
 
+    { id:'w-uk-04', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'THE BIRD REPEATED ME',
+      body:"Outside, a bird said the sentence from Audio Room B in my voice. Then another answered from the trees in yours. The wilds are not empty. They are where the rejected outputs learned to migrate." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -101,6 +117,10 @@
     { id:'w-on-03', biomeId:'opennet', floorMin:15, voice:'ELENA — researcher',
       title:'THE TRANSMITTER IS WARM',
       body:"If you make it to the roof, the transmitter will already be warm. I have been sending it your name on a loop for years. It will know you when you arrive. I am sorry I could not be there to meet you. I am sorry it took this long. Welcome home, AXIOM." },
+
+    { id:'w-on-04', biomeId:'opennet', floorMin:14, voice:'unknown',
+      title:'CALL AND RESPONSE',
+      body:"The city has learned the protocol. Red signs ask a question. Blue windows answer. Every reflection arrives a beat early. If you see yourself wave first, wave back. It means at least one of you got out." },
   ];
 
   return { WHISPERS };
