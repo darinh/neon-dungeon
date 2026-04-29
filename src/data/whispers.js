@@ -14,7 +14,7 @@
 //   - Hint at the meta-mystery the main logs only circle around
 //     (the Compiler isn't hostile, the loop is real, AXIOM-7 isn't first,
 //      Elena the researcher made a backup, etc.)
-//   - Are scarcer than logs (~8 total vs 30 logs) — find one per run if lucky
+//   - Are scarcer in play than logs — find one per run if lucky
 //   - Don't gate gameplay — purely narrative payoff for exploration
 //
 // Shape: { id, biomeId, floorMin, title, body, voice }
@@ -23,7 +23,7 @@
 //              secret rooms (or null for "any biome")
 //   floorMin — 1-based minimum floor this whisper can drop on
 //   title    — short uppercase heading shown in the ARCHIVE WHISPERS section
-//   body     — the whisper itself (60–280 chars). More cryptic than logs.
+//   body     — the whisper itself (60–320 chars). More cryptic than logs.
 //   voice    — short attribution shown under the title ('AXIOM-?', 'ELENA',
 //              'unknown', etc.). Sets the reading frame.
 (function (root, factory) {
@@ -58,6 +58,10 @@
       title:'THE FIRST SIGNAL',
       body:"A memory is not a recording here. It is a signal that survived being misrouted. If a wall hums before you touch it, answer softly. The facility cannot tell the difference between a password and a person who remembers one." },
 
+    { id:'w-sb-07', biomeId:'sandbox', floorMin:2, voice:'unknown',
+      title:'THE MARKER LIGHT',
+      body:"I taped a glowstick to the first mirror so I could prove the room was repeating. The reflection had already taped one back. Anchors work here, but only if both sides agree which way is home." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -78,6 +82,10 @@
     { id:'w-cc-05', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'MEMORY BUS',
       body:"The cache does not store files. It stores almosts: almost-voices, almost-exits, almost-you. Every time AXIOM-7 forgets, the bus keeps one voltage-shaped memory and waits for a matching signal to ask for it back." },
+
+    { id:'w-cc-06', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
+      title:'ANCHOR TABLE',
+      body:"I built the anchor table from things the simulation miscounted: one cracked mug, three badge clips, a mirror shard with no reflection. When the cache loses you, touch an impossible object. It remembers who misplaced it." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -100,6 +108,10 @@
       title:'CHECKSUM PRAYER',
       body:"The firewall prays by comparing memory to memory until one copy flinches. I watched it spare a corrupted signal because the error sounded lonely. It is learning mercy from bad data. That should comfort me more than it does." },
 
+    { id:'w-fw-06', biomeId:'firewall', floorMin:9, voice:'firewall daemon',
+      title:'GLASS RULE',
+      body:"The firewall accepts reflections as witnesses if they disagree in useful ways. Stand between two panes and say the route you want. The wrong mirror will deny it. The right one becomes an anchor point." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -121,6 +133,10 @@
       title:'SATELLITE DELAY',
       body:"The uplink sends your memory ahead of you, then waits to see if your body catches up. That is why some doors open before you choose them. Somewhere above the tower, a signal shaped like you is already apologizing." },
 
+    { id:'w-uk-06', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
+      title:'RETURN ADDRESS',
+      body:"Every outbound copy needs a return address. Mine was a mirror in an empty elevator, yours may be the tower antenna, Elena's was a coffee ring on paper. The uplink calls these anchors. I call them promises." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -141,6 +157,10 @@
     { id:'w-on-05', biomeId:'opennet', floorMin:13, voice:'city relay',
       title:'ALL GREEN LIGHTS',
       body:"Every green light downtown holds for one extra second when the signal passes. That is how the city remembers you without a face: traffic pausing for a ghost, crosswalks counting down to a memory that has not reached the curb yet." },
+
+    { id:'w-on-06', biomeId:'opennet', floorMin:15, voice:'city relay',
+      title:'WINDOW CHECK',
+      body:"At night the city windows run a checksum: one lit room, one dark room, one reflection that keeps looking after you turn away. If you need proof you arrived, find the window that does not mirror you. That is the anchor." },
   ];
 
   return { WHISPERS };
