@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 31 entries. Every biome has at least
-six whispers after the mirror-anchor bundle (`w-sb-07`, `w-cc-06`,
-`w-fw-06`, `w-uk-06`, `w-on-06`), which extends the AXIOM-7 copy/voice motif
-from facility signal routing and stored memory into physical return anchors:
-mirrors, windows, impossible objects, and other places the loop miscounts.
+Authored whisper content currently ships 36 entries. Every biome has at least
+seven whispers after the threshold/keyhole bundle (`w-sb-08`, `w-cc-07`,
+`w-fw-07`, `w-uk-07`, `w-on-07`), which extends the AXIOM-7 copy/voice motif
+from facility signal routing, stored memory, and physical anchors into doors,
+gates, exits, and permissions the loop treats as narrative checkpoints.
 
 ---
 
@@ -4429,3 +4429,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v132.0  | Secret-room whisper echo-thread bundle: `WHISPERS` grows to 21 entries with one new biome-gated fragment per biome (`w-sb-05`, `w-cc-04`, `w-fw-04`, `w-uk-04`, `w-on-04`) connecting the AXIOM-7 voice/copy motif from the sandbox voice test through the city reflection payoff. Added `tests/whispers-bundle-3.test.js` to pin metadata, picker eligibility, per-biome >=4 coverage, progress floor, and echo/copy vocabulary continuity. |
 | v133.0  | Secret-room whisper signal-memory bundle: `WHISPERS` grows to 26 entries with one new biome-gated fragment per biome (`w-sb-06`, `w-cc-05`, `w-fw-05`, `w-uk-05`, `w-on-05`) extending the voice/copy motif into signal routing, stored memories, firewall checksums, uplink delay, and city relay echoes. Added `tests/whispers-bundle-4.test.js` to pin metadata, picker eligibility, per-biome >=5 coverage, progress floor, and signal/memory vocabulary continuity. |
 | v134.0  | Secret-room whisper mirror-anchor bundle: `WHISPERS` grows to 31 entries with one new biome-gated fragment per biome (`w-sb-07`, `w-cc-06`, `w-fw-06`, `w-uk-06`, `w-on-06`) extending the signal-memory thread into physical return anchors: mirrors, windows, impossible objects, and other places the loop miscounts. Added `tests/whispers-bundle-5.test.js` to pin metadata, picker eligibility, per-biome >=6 coverage, progress floor, and mirror-anchor vocabulary continuity. |
+| v135.0  | Secret-room whisper threshold/keyhole bundle: `WHISPERS` grows to 36 entries with one new biome-gated fragment per biome (`w-sb-08`, `w-cc-07`, `w-fw-07`, `w-uk-07`, `w-on-07`) extending the mirror-anchor thread into doors, gates, exits, and permissions the loop treats as narrative checkpoints. Added `tests/whispers-bundle-6.test.js` to pin metadata, picker eligibility, per-biome >=7 coverage, progress floor, and threshold vocabulary continuity. |
