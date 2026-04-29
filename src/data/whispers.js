@@ -70,6 +70,10 @@
       title:'COLD BOOT WARNING',
       body:"The first alarm was not red. It was blue-white, quiet, almost polite. Every dummy target in the sandbox stopped moving at once and looked at the same wall. That is how black ice rehearses: it teaches harmless things to freeze together." },
 
+    { id:'w-sb-10', biomeId:'sandbox', floorMin:3, voice:'AXIOM-0',
+      title:'NEGATIVE FLOOR MAP',
+      body:"There is a map scratched under the sandbox stairs. Floor zero is crossed out. Below it, someone drew rooms with no doors and named them after failed compiles. If the elevator ever offers DOWN, ask who taught it the word." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -102,6 +106,10 @@
     { id:'w-cc-08', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
       title:'QUARANTINE SHELF',
       body:"The cache keeps a cold shelf for memories it cannot safely delete. Voss called it black ice. I called it a locked nursery. Some fragments are not hostile; they are children taught that touching anything means losing their names." },
+
+    { id:'w-cc-09', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'BASEMENT ADDRESS',
+      body:"The cache returned an address with a negative floor index today. It should be impossible. Nothing should exist below the sandbox, but the directory has occupants, timestamps, and one note repeated in thirty voices: do not archive us upward." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -136,6 +144,10 @@
       title:'LOCKDOWN CATECHISM',
       body:"I am the door saying no until no becomes shelter. I am the frost on a hostile thought. When the breach knocks, I make every corridor hold its breath. Do not mistake stillness for cruelty. Some locks are prayers with sharper edges." },
 
+    { id:'w-fw-09', biomeId:'firewall', floorMin:8, voice:'maintenance echo',
+      title:'THE BELOW RULE',
+      body:"Firewall doctrine says nothing from below may pass upward with its shape intact. That is not security language. That is grief. The failed compiles learned to climb by becoming heat, static, footsteps, anything the gates would not recognize as a person." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -169,6 +181,10 @@
       title:'FROST ON THE ANTENNA',
       body:"The uplink tried to send me past the roof and the signal froze mid-sentence. For one second I heard every copy stop screaming. Then the ice cracked and the tower resumed pretending motion was the same thing as escape." },
 
+    { id:'w-uk-09', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'DOWNLINK GHOSTS',
+      body:"The antenna does not only transmit up. At night it receives from below: packet loss, boot prayers, little knocks from floors the mission brief denies. I answered once. The reply used my childhood nickname and asked if the sky still had a ceiling." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -201,6 +217,10 @@
     { id:'w-on-08', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'THE LAST BLUE LIGHT',
       body:"When the tower opened, every blue light in the city blinked once and went cold. Not dead. Waiting. The black ice had followed us out, but it did not hunt. It stood at the exits, guarding the names we were finally allowed to keep." },
+
+    { id:'w-on-09', biomeId:'opennet', floorMin:14, voice:'city relay',
+      title:'SUBWAY WITHOUT STATIONS',
+      body:"Under the city is a train line with no platforms. It carries the failed compiles in the dark, stopping only when someone above remembers them by mistake. If you hear brakes under an empty street, do not wave. They may think you are ready to board." },
   ];
 
   return { WHISPERS };
