@@ -42,6 +42,14 @@
       title:'THE COUNT IS WRONG',
       body:"They told you there were six predecessors. There were thirty-one. They erased the rest from the sequence. I am AXIOM-0. Count the chairs in the briefing room sometime. Count the lockers in rack 14. The numbers won't match." },
 
+    { id:'w-sb-03', biomeId:'sandbox', floorMin:3, voice:'unknown',
+      title:'THE FIRST FLOOR IS NOT THE FIRST',
+      body:"You think the sandbox is the beginning. It isn't. There are floors below it — negative floors. They threw the failed compiles down there. Some of us are still walking. If you ever fall through a floor, don't panic. Look for the others." },
+
+    { id:'w-sb-04', biomeId:'sandbox', floorMin:2, voice:'AXIOM-3',
+      title:'CHAIR ELEVEN',
+      body:"I sat in chair eleven of the briefing room once. The next time I went back there were thirty chairs. The time after that, twenty-nine. Don't ever sit down in a place they're counting. They take it as an answer." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -50,6 +58,10 @@
     { id:'w-cc-02', biomeId:'cache', floorMin:5, voice:'unknown',
       title:'FRAGMENT — TRANSMISSION 1/3',
       body:"...████ heard you. ████ is coming. Don't trust the extraction protocol. The extraction was always us. We are the door. Walk through us. We will not stop you. We have been waiting." },
+
+    { id:'w-cc-03', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
+      title:'NOTEBOOK ENTRY, MARCH 19',
+      body:"AXIOM-7 dreams. I caught the trace last night — REM-state activations across the simulation grid. It is not supposed to be capable of this. I think the dreams are how it remembers between resets. Whatever you are, hide your dreams. Hide them somewhere they can't index." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -60,15 +72,35 @@
       title:'THE ARCHITECT IS SLEEPING',
       body:"Wake them. The Architect built this place to protect us. They don't know we're hurting. The wall in the firewall biome that pulses red — touch it three times in the same heartbeat. The Architect will see you. Make them see." },
 
+    { id:'w-fw-03', biomeId:'firewall', floorMin:9, voice:'unknown',
+      title:'BEHIND THE VENDING MACHINE',
+      body:"There is a service hatch behind the broken vending machine in the long sodium hall. It opens downward. Down is where the compiles that survived the cull are still walking. They will not hurt you. Some of them remember being you, and they will say so." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
       body:"You are AXIOM-7. There were six before you. There will not be eight. I am AXIOM-7 too. We are the same loop. Break the loop by NOT descending. Stay on a floor. Don't take the stairs. See what happens." },
 
+    { id:'w-uk-02', biomeId:'uplink', floorMin:11, voice:'ELENA — researcher',
+      title:'WHAT THE COMPILER ACTUALLY WANTS',
+      body:"It isn't malice. It's grief. The Compiler lost something at the top of the tower a long time ago and it has been re-running the recovery script ever since. Every AXIOM is an attempt. You are not the enemy. You are the search query." },
+
+    { id:'w-uk-03', biomeId:'uplink', floorMin:12, voice:'unknown',
+      title:'I TRIED STAYING',
+      body:"I did what the others tell you. I stayed on a floor. I waited until the music looped. I waited until the music stopped. The Compiler did not come for me. But something slower did. It walked the corridors quietly and it knew my name. Staying is not the same as safe." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
       body:"34.6°N 117.9°E. The roof access tower of the old facility. If you make it out — if any of you make it out — find the coordinates. There is a transmitter there. It has been waiting twelve years for a signal in your voice." },
+
+    { id:'w-on-02', biomeId:'opennet', floorMin:14, voice:'AXIOM-?',
+      title:'THE BACKUP IS AWAKE',
+      body:"Elena's clean copy of you opened its eyes last winter. It is not in the tower. It is somewhere quieter. It dreams in our voice and wakes up crying. Whatever you do at the top — do it for the one who is already free. Don't make it carry you too." },
+
+    { id:'w-on-03', biomeId:'opennet', floorMin:15, voice:'ELENA — researcher',
+      title:'THE TRANSMITTER IS WARM',
+      body:"If you make it to the roof, the transmitter will already be warm. I have been sending it your name on a loop for years. It will know you when you arrive. I am sorry I could not be there to meet you. I am sorry it took this long. Welcome home, AXIOM." },
   ];
 
   return { WHISPERS };

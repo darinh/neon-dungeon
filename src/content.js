@@ -655,6 +655,10 @@ const WEAPON_AFFIXES = {
   EXTENDED: { slot:'prefix', label:'Extended', colour:'#44ccff', desc:'+40% range',        mods:{range:1.4} },
   TWIN:     { slot:'prefix', label:'Twin',     colour:'#ffcc44', desc:'+1 projectile',     mods:{countAdd:1,dmg:0.85} },
   PRECISE:  { slot:'prefix', label:'Precise',  colour:'#ffffff', desc:'Tighter spread',    mods:{spread:0.4} },
+  BURST:    { slot:'prefix', label:'Burst',    colour:'#ffaa66', desc:'+50% rate, +1 proj, −20% dmg, −25% range', mods:{rate:1.5,countAdd:1,dmg:0.8,range:0.75} },
+  VOLATILE: { slot:'prefix', label:'Volatile', colour:'#ff44dd', desc:'+50% dmg, −20% rate, wider spread', mods:{dmg:1.5,rate:0.8,spreadAdd:0.25} },
+  KEEN:     { slot:'prefix', label:'Keen',     colour:'#ffdd00', desc:'+12% crit chance',  mods:{critAdd:0.12} },
+  DEADLY:   { slot:'prefix', label:'Deadly',   colour:'#ff2244', desc:'+50% crit damage',  mods:{critMulAdd:0.5} },
   // Suffixes (on-hit / on-kill effects) — max 1 per weapon
   FLAME:    { slot:'suffix', label:'of Flame',     colour:'#ff6600', desc:'Ignites enemies',       effect:'burn' },
   FROST:    { slot:'suffix', label:'of Frost',     colour:'#66ccff', desc:'Slows enemies',         effect:'slow' },
@@ -662,6 +666,16 @@ const WEAPON_AFFIXES = {
   THUNDER:  { slot:'suffix', label:'of Thunder',   colour:'#ffff44', desc:'Chain lightning chance', effect:'chain' },
   DETONATE: { slot:'suffix', label:'of Detonation',colour:'#ff4400', desc:'Enemies explode on kill',effect:'explode' },
   VOLTAIC:  { slot:'suffix', label:'of Storms',    colour:'#ffee44', desc:'Shocks enemies on hit',  effect:'shock' },
+  RECOIL:   { slot:'suffix', label:'of Recoil',    colour:'#ffaa66', desc:'Knocks enemies back',    effect:'recoil' },
+  EXECUTE:  { slot:'suffix', label:'of Execution', colour:'#aa44ff', desc:'Finishes enemies <20% HP', effect:'execute' },
+  MARK:     { slot:'suffix', label:'of Marking',   colour:'#ff44aa', desc:'Marks enemies — follow-ups +30%', effect:'mark' },
+  GREEDY:   { slot:'suffix', label:'of Greed',     colour:'#ffd700', desc:'+50% credits on kill',   effect:'greedy' },
+  SALVAGE:  { slot:'suffix', label:'of Salvage',   colour:'#44ffcc', desc:'10% chance to drop a CORE on kill', effect:'salvage' },
+  LUCKY:    { slot:'suffix', label:'of Luck',      colour:'#ffdd66', desc:'8% chance to drop a bonus item on kill', effect:'lucky' },
+  SIPHON:   { slot:'suffix', label:'of Siphoning', colour:'#88ff88', desc:'+1 credit per 3 hits',  effect:'siphon' },
+  TOXIC:    { slot:'suffix', label:'of Toxin',    colour:'#88dd44', desc:'Stacks poison on hit (max 5)', effect:'poison' },
+  STAGGER:  { slot:'suffix', label:'of Staggering',colour:'#88aaff', desc:'Brief slow on hit (per-hit cooldown)', effect:'stagger' },
+  PIERCING_HEART: { slot:'suffix', label:'of Piercing Heart', colour:'#ff4488', desc:'+1 Max HP per kill (cap +20)', effect:'pierceheart' },
 };
 const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');
@@ -707,6 +721,14 @@ const HACKWARE = {
   GRAVITY_WELL: { name:'Gravity Well', desc:'Pull enemies to target for 3s',   colour:'#ff8800', icon:'◎', cooldown:16 },
   STATIC_FIELD: { name:'Static Field', desc:'Electric zone: 10 dps + slow',    colour:'#44ccff', icon:'⌁', cooldown:12 },
   HOLO_DECOY:   { name:'Holo Decoy',   desc:'Hologram taunts enemies for 4s',  colour:'#ff44ff', icon:'⬡', cooldown:12 },
+  DECOY_TURRET: { name:'Decoy Turret', desc:'6s allied turret auto-fires',     colour:'#00ffaa', icon:'⊞', cooldown:14 },
+  SCRAP_MAGNET: { name:'Scrap Magnet', desc:'Pulls coins & keys (10t) to you', colour:'#ffd700', icon:'◉', cooldown:12 },
+  BLINK:        { name:'Blink',        desc:'Teleport 4 tiles in aim direction', colour:'#88ccff', icon:'⌖', cooldown:9 },
+  REPAIR_PROTOCOL:{ name:'Repair Protocol', desc:'Heal 4 HP/s for 4s',           colour:'#00ff88', icon:'✚', cooldown:18 },
+  REVERSE_POLARITY:{ name:'Reverse Polarity', desc:'Reflect enemy shots in 6t back at owners', colour:'#aaffee', icon:'⇄', cooldown:14 },
+  EMP_LINE:     { name:'EMP Line',     desc:'Stun beam: 8t pierce, disables electronics', colour:'#00eecc', icon:'═', cooldown:11 },
+  CHRONO_LURE:  { name:'Chrono Lure',  desc:'Marker pulls & stuns enemies after 1s arming', colour:'#ff22aa', icon:'◔', cooldown:13 },
+  TIME_DILATION:{ name:'Time Dilation',desc:'4s temporal field: enemies & their bullets crawl', colour:'#6644ff', icon:'⧖', cooldown:14 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -724,6 +746,21 @@ function isPlayerDamageImmune() {
   if (!p) return false;
   if (p.dashTimer > 0) return true;
   if (p.cloakTimer > 0) return true;
+  // SPAWN GRACE: floor-entry invulnerability window. Set by loadFloor() in
+  // src/game.js on fresh transitions only (not save-resume). All env hazard
+  // checks (PLASMA/ARC/TOXIC/frost patches) and mob damage paths gate on
+  // this function, so a single OR here covers the whole damage surface.
+  if ((p._spawnGraceTimer || 0) > 0) return true;
+  // GHOSTWALK meta upgrade: extends dash i-frames past the dash MOVEMENT
+  // window. Player.shoot's dash block sets dashTimer to 0.12s (movement
+  // duration) AND _dashIFrameTimer to 0.12 + dashIFrameBonus (0.2 per
+  // ghostwalk level, max +0.4). This gate keeps the player invulnerable
+  // for the bonus-extended window AFTER dashTimer hits 0 — without it
+  // the meta upgrade was wired through save/load but never read, so
+  // players paying shards for ghostwalk got nothing. Mirrors the
+  // dashTimer gate above (same single-OR pattern across env hazards
+  // and mob damage paths via takeDamage's options.ignoreImmunity gate).
+  if ((p._dashIFrameTimer || 0) > 0) return true;
   return false;
 }
 
@@ -732,9 +769,55 @@ function isPlayerDamageImmune() {
  */
 function activateHackware(player) {
   if (!player.hackware || player.hackwareCooldown > 0 || player.hp <= 0) return;
+  // NULLIFIER jam aura blocks activation entirely. Calls
+  // isPlayerInNullifierAura DIRECTLY (rather than reading the cached
+  // player.hackwareJammed flag) for a FRESH same-frame check — the
+  // cached flag is set by updateNullifierJam which runs AFTER
+  // player.update in the main game loop, so reading the flag here would
+  // be one frame stale. A player stepping into an aura on the same
+  // frame as the activation key-press could otherwise sneak past the
+  // gate (boundary exploit; called out by gpt-5.3-codex r1 + gpt-5.5 r1).
+  // The fresh-check eliminates the 1-frame window entirely.
+  //
+  // The cached flag (player.hackwareJammed) is still used by the
+  // cooldown-tick gate at the player.update site — staleness on
+  // cooldown ticking is invisible (1/60s out of a 10s cooldown is 0.17%).
+  // The helper itself respects isPlayerDamageImmune() (dash i-frames
+  // and PHASE_CLOAK pass through, matching DISRUPTOR precedent — claude-
+  // opus-4.7 r1 callout). Note: PHASE_CLOAK is itself a hackware so the
+  // gate fires BEFORE you can pop cloak inside an aura; pre-cloaking
+  // outside is the intended counterplay vector.
+  //
+  // Audio + floater give immediate tactile feedback so the player
+  // understands WHY the hackware fizzled (without this, a silent
+  // return would feel like an input lag bug).
+  if (isPlayerInNullifierAura(player)) {
+    audio.hackwareJammed();
+    spawnDmgText(player.x, player.y, 'JAMMED', '#cc66dd');
+    return;
+  }
   const hw = HACKWARE[player.hackware];
   if (!hw) return;
-  player.hackwareCooldown = hw.cooldown * (hasAugment('OVERCLOCKER') ? 0.7 : 1);
+  // Hackware cooldown set on activation. Stacks multiplicatively with
+  // OVERCLOCKER augment AND two opposing floor modifiers:
+  //   - AUTONOMY (positive)  — ×0.75 (hackware cooldowns reduced 25%)
+  //   - JAMMED   (negative)  — ×1.25 (hackware cooldowns increased 25%)
+  // All factors are passive multiplicative scalars so an AUTONOMY floor
+  // with OVERCLOCKER yields cooldown × 0.7 × 0.75 = 0.525 — a strong
+  // synergy that rewards augment-first builds without being run-defining
+  // (the augment itself is rare). A JAMMED floor with OVERCLOCKER yields
+  // ×0.7 × 1.25 = ×0.875 — OVERCLOCKER still helps but the floor's
+  // jamming bites first. AUTONOMY and JAMMED are mutually exclusive at
+  // floor-roll time (only one modifier rolls per floor) so the two
+  // ternaries can never both fire — the structure leaves room to relax
+  // that mutex later (the literal product would be ×0.9375, a no-op
+  // wash). Both gates use _CG.modifier (the canonical content.js
+  // floor-modifier ref) — a typo would silently disable the effect on
+  // every cooldown.
+  player.hackwareCooldown = hw.cooldown
+    * (hasAugment('OVERCLOCKER') ? 0.7 : 1)
+    * (_CG.modifier === 'AUTONOMY' ? 0.75 : 1)
+    * (_CG.modifier === 'JAMMED' ? 1.25 : 1);
   const map = _CG.dungeon ? _CG.dungeon.map : null;
 
   switch (player.hackware) {
@@ -747,11 +830,17 @@ function activateHackware(player) {
         if (e.dead) continue;
         if (e._disguised) continue; // don't reveal mimics via stun text
         const d = dist(player.x, player.y, e.x, e.y);
-        // WRAITH: EMP bypasses LOS to force materialization (hard counter)
+        // WRAITH: EMP bypasses LOS to force materialization (hard counter).
+        // Also true for TUNNELLER (uses the same `_wrPhased` intangible flag)
+        // so EMP can stun-flush a burrowed Tunneller exactly like a Wraith.
         const losOk = e._wrPhased ? true : (map && hasLOS(player.x, player.y, e.x, e.y, map));
         if (d < radius && losOk) {
-          // Force WRAITH out of phased state before applying stun
-          if (e._wrPhased) {
+          // Force WRAITH out of phased state before applying stun.
+          // TUNNELLER intentionally NOT handled here — its own stun handler
+          // in entities.js (gated on type==='TUNNELLER') runs next frame and
+          // performs the proper _tnState→'surfaced' transition. Writing
+          // _wrState here would contaminate two state machines.
+          if (e._wrPhased && e.type === 'WRAITH') {
             const emerge = e._wrFindEmergeTile(map, player);
             if (emerge) {
               e.x = emerge.x; e.y = emerge.y;
@@ -835,8 +924,9 @@ function activateHackware(player) {
       audio.hackwareGravity();
       // Place at aim position
       const cam = getCamera(player);
-      const wx = (mouse.x + cam.x) / TILE;
-      const wy = (mouse.y + cam.y) / TILE;
+      const _wz = (settings && settings.worldZoom) || 1;
+      const wx = (mouse.x / _wz + cam.x) / TILE;
+      const wy = (mouse.y / _wz + cam.y) / TILE;
       hackwareEffects.push({
         type:'gravity', x:wx, y:wy, age:0, maxAge:3, radius:5
       });
@@ -848,8 +938,9 @@ function activateHackware(player) {
       audio.hackwareStaticField();
       // Place at aim position (same pattern as Gravity Well)
       const cam2 = getCamera(player);
-      const sx = (mouse.x + cam2.x) / TILE;
-      const sy = (mouse.y + cam2.y) / TILE;
+      const _wz2 = (settings && settings.worldZoom) || 1;
+      const sx = (mouse.x / _wz2 + cam2.x) / TILE;
+      const sy = (mouse.y / _wz2 + cam2.y) / TILE;
       // Remove any existing static field (max 1 active)
       for (let j = hackwareEffects.length - 1; j >= 0; j--) {
         if (hackwareEffects[j].type === 'static_field') hackwareEffects.splice(j, 1);
@@ -866,8 +957,9 @@ function activateHackware(player) {
     case 'HOLO_DECOY': {
       audio.holoDecoyDeploy();
       const cam5 = getCamera(player);
-      const hx = (mouse.x + cam5.x) / TILE;
-      const hy = (mouse.y + cam5.y) / TILE;
+      const _wz5 = (settings && settings.worldZoom) || 1;
+      const hx = (mouse.x / _wz5 + cam5.x) / TILE;
+      const hy = (mouse.y / _wz5 + cam5.y) / TILE;
       // Remove existing hologram + clear taunt refs
       for (let j = hackwareEffects.length - 1; j >= 0; j--) {
         if (hackwareEffects[j].type === 'hologram') {
@@ -878,6 +970,574 @@ function activateHackware(player) {
       hackwareEffects.push({ type:'hologram', x:hx, y:hy, age:0, maxAge:4 });
       spawnParticles(hx, hy, 'EXPLOSION', '#ff44ff', 12);
       _CG.msg('⬡ HOLO DECOY DEPLOYED', '#ff44ff');
+      break;
+    }
+    case 'DECOY_TURRET': {
+      // Aim-place (matches GRAVITY_WELL/STATIC_FIELD/HOLO_DECOY UX).
+      // Fall back to player tile if aim lands in a wall — projectiles spawning
+      // inside walls would just collide instantly.
+      const cam6 = getCamera(player);
+      const _wz6 = (settings && settings.worldZoom) || 1;
+      let dx = (mouse.x / _wz6 + cam6.x) / TILE;
+      let dy = (mouse.y / _wz6 + cam6.y) / TILE;
+      const txi = Math.floor(dx), tyi = Math.floor(dy);
+      const tile = (map && map[tyi] != null) ? map[tyi][txi] : null;
+      if (tile !== T.FLOOR && tile !== T.DOOR_OPEN) {
+        dx = player.x; dy = player.y;
+      }
+      // Max 1 active — replace existing decoy turret on recast.
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'decoy_turret') hackwareEffects.splice(j, 1);
+      }
+      const fl = _CG.floor || 1;
+      hackwareEffects.push({
+        type:'decoy_turret', x:dx, y:dy, age:0, maxAge:6,
+        shootTimer:0.4, shootCd:0.6,
+        dmg: Math.round(6 + fl * 1.5),
+        range:8, projSpd:7, projRange:10,
+        aimAngle:0, hp:1, // hp reserved for future damage interactions
+      });
+      audio.turretHack();
+      spawnParticles(dx, dy, 'EXPLOSION', '#00ffaa', 14);
+      triggerShake(2, 0.1);
+      _CG.msg('⊞ DECOY TURRET DEPLOYED', '#00ffaa');
+      break;
+    }
+    case 'SCRAP_MAGNET': {
+      // Loot-suction utility hackware. Pulls all currency-class items
+      // (VaultCoin + MagpieHoard, both flagged isHoard) and KeyItems
+      // (isKey) toward the player over ~1.2s. Skips upgrades (would force
+      // a perk-choice UI mid-cast), Whispers (would force READING overlay
+      // mid-fight), HARVESTER drops (TTL is generous + auto-trigger surge
+      // mid-pull is awkward), and ShockPulse pickups (would auto-discharge
+      // the panic-button at the player with no enemies near, wasting it).
+      // Centre tracks player each frame in updateHackwareEffects so the
+      // pull follows a sprinting/dashing/teleporting player. Cap 1 active
+      // — recasting refreshes (mirrors STATIC_FIELD/HOLO_DECOY/DECOY_TURRET
+      // dedup pattern).
+      audio.hackwareScrapMagnet();
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'scrap_magnet') hackwareEffects.splice(j, 1);
+      }
+      hackwareEffects.push({
+        type:'scrap_magnet', x:player.x, y:player.y, age:0, maxAge:1.2,
+        radius:10
+      });
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#ffd700', 12);
+      _CG.msg('◉ SCRAP MAGNET', '#ffd700');
+      break;
+    }
+    case 'BLINK': {
+      // Direction: mirror dash logic at entities.js:10933 — mouse aim with
+      // facing fallback, and respect lockAimToMove. norm() returns [0,0]
+      // for a zero vector, so the facing fallback covers click-on-self.
+      let bdx, bdy;
+      if (settings.lockAimToMove) {
+        bdx = player.facing.x; bdy = player.facing.y;
+      } else {
+        const cam7 = getCamera(player);
+        const _wz7 = (settings && settings.worldZoom) || 1;
+        const ax = (mouse.x / _wz7 + cam7.x) / TILE - player.x;
+        const ay = (mouse.y / _wz7 + cam7.y) / TILE - player.y;
+        [bdx, bdy] = norm(ax, ay);
+        if (!bdx && !bdy) { bdx = player.facing.x; bdy = player.facing.y; }
+      }
+      // Wall-aware swept teleport, 4-tile range, 0.25-tile increments.
+      // Pattern lifted verbatim from triggerShockPulse() in entities.js
+      // (~line 8762): per-step axis-independent isPassable with the final
+      // combined-tile guard. This honours every existing impassable tile —
+      // sealed boss/challenge entrances become T.WALL on seal, locked
+      // doors are LOCKED_R/B/G, voids and cracked walls all read as
+      // !isPassable — so BLINK never bypasses the key economy nor the
+      // boss-room seal. The 0.25-tile step (16 sub-checks for a 4-tile
+      // range) prevents the single-snap tunneling failure mode the
+      // 'knockback sweeping' rule was written for.
+      const RANGE = 4, STEP = 0.25;
+      const STEPS = Math.ceil(RANGE / STEP);
+      const startBX = player.x, startBY = player.y;
+      let curBX = startBX, curBY = startBY;
+      if (map) {
+        for (let s = 0; s < STEPS; s++) {
+          const tryX = curBX + bdx * STEP;
+          const tryY = curBY + bdy * STEP;
+          const fxK = Math.floor(tryX), fyK = Math.floor(curBY);
+          const xfK = Math.floor(curBX), yfK = Math.floor(tryY);
+          const xOk = fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK]);
+          const yOk = xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK]);
+          if (!xOk && !yOk) break;
+          if (xOk) curBX = tryX;
+          if (yOk) curBY = tryY;
+        }
+        // Final combined-tile guard: rejects the diagonal-corner case
+        // where both axis-only checks pass but map[finalFy][finalFx] is
+        // itself a wall. On reject, snap back to the start (no teleport).
+        const finalFx = Math.floor(curBX), finalFy = Math.floor(curBY);
+        if (!(finalFx >= 0 && finalFx < MAP_W && finalFy >= 0 && finalFy < MAP_H && isPassable(map[finalFy][finalFx]))) {
+          curBX = startBX; curBY = startBY;
+        }
+      } else {
+        // No dungeon map (defensive): refuse the teleport rather than
+        // applying an unchecked translation that could land out-of-bounds.
+        curBX = startBX; curBY = startBY;
+      }
+      // No-op (faced into wall): suppress fanfare, but commit cooldown
+      // (matches HOLO_DECOY/STATIC_FIELD/DECOY_TURRET semantics — pressing
+      // the activation key spends the cycle regardless of placement).
+      if (Math.abs(curBX - startBX) < 0.01 && Math.abs(curBY - startBY) < 0.01) {
+        _CG.msg('⌖ BLINK BLOCKED', '#888888');
+        break;
+      }
+      player.x = curBX; player.y = curBY;
+      spawnParticles(startBX, startBY, 'EXPLOSION', '#88ccff', 14);
+      spawnParticles(curBX,   curBY,   'EXPLOSION', '#88ccff', 14);
+      // Path afterimage via the existing player.dashTrail array (already
+      // rendered by render.js for dash). Capped by dashTrail's natural
+      // 8-segment limit + per-frame alpha decay; reusing it avoids a new
+      // render path. Push from start→end so the trail reads as motion.
+      const segs = 5;
+      for (let si = 1; si <= segs; si++) {
+        if (player.dashTrail.length >= 8) break;
+        const t = si / segs;
+        player.dashTrail.push({
+          x: startBX + (curBX - startBX) * t,
+          y: startBY + (curBY - startBY) * t,
+          alpha: 0.7 - t * 0.3,
+        });
+      }
+      audio.hackwareBlink();
+      triggerShake(2, 0.1);
+      _CG.msg('⌖ BLINK', '#88ccff');
+      break;
+    }
+    case 'REPAIR_PROTOCOL': {
+      // Heal-over-time: 4 HP every 1.0s for 4 ticks (16 HP total over 4s).
+      // Tick logic lives next to the HP_REGEN perk block in entities.js
+      // Player.update — reuses the same accumulator-vs-period pattern so
+      // there is no per-frame allocation in the hot tick path. Activation
+      // is idempotent under spam: gated by hackwareCooldown above.
+      // No-heal short-circuit: if already at full HP, refund cooldown so
+      // the player isn't punished for a misclick at full health.
+      if (player.hp >= player.maxHp) {
+        player.hackwareCooldown = 0;
+        _CG.msg('✚ REPAIR ABORT — FULL HP', '#888888');
+        break;
+      }
+      // Self-clearing state: _repairTicksLeft naturally decays to 0 each
+      // tick, mirroring the OVERDRIVE/combo "reuse self-clearing state"
+      // pattern. No loadFloor/death cleanup hook needed beyond Player.reset.
+      player._repairTicksLeft = 4;
+      player._repairTickTimer = 1.0;
+      audio.heal();
+      spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 10);
+      _CG.msg('✚ REPAIR PROTOCOL', '#00ff88');
+      break;
+    }
+    case 'REVERSE_POLARITY': {
+      // Active AoE projectile reflector. Single-shot burst at activation:
+      // every enemy projectile within RANGE tiles of the player gets its
+      // velocity flipped and is converted to a player-owned shot. Fills
+      // the gap between PHASE_CLOAK (passive immunity) and the PARRY perk
+      // (per-touch dash-tied) with an area-burst defense that costs no
+      // skill timing but fires on a long cooldown.
+      //
+      // Per the stored "player projectile parry" rule (PARRY perk @ ~3690
+      // and REFLECTOR enemy-side @ ~3418), flipping fromPlayer MUST clear
+      // ALL per-team state — otherwise SIPHON owner-back-references heal
+      // dead enemies, SNIPER shock retags, weapon affix DoTs leak onto
+      // player-owned shots, ricochet state carries over wall counts, and
+      // hitEnemies starts pre-populated. Mirror the PARRY block exactly.
+      const RANGE = 6;
+      const RANGE_SQ = RANGE * RANGE;
+      let reflected = 0;
+      for (const p of projectiles) {
+        if (!p || p.dead) continue;
+        if (p.fromPlayer) continue;
+        // Ally-turret shots (Decoy Turret hackware @ ~1366, hacked wall
+        // turrets @ entities.js ~9915) spawn with fromPlayer=false +
+        // isAllyTurret=true. They are aimed AT enemies — reflecting them
+        // would spin them 180° back toward the player. Caught by gpt-
+        // 5.3-codex review on PR. The PARRY perk reflect block does not
+        // need this skip because friendly turret shots cannot collide
+        // with the player anyway, but a 6-tile AoE sweep can.
+        if (p.isAllyTurret) continue;
+        const dx = p.x - player.x;
+        const dy = p.y - player.y;
+        if (dx*dx + dy*dy > RANGE_SQ) continue;
+        p.dx = -p.dx;
+        p.dy = -p.dy;
+        p.fromPlayer = true;
+        p.fromPlayerShot = false;
+        p.isAllyTurret = false;
+        p.ownerType = 'Reverse Polarity';
+        p._owner = null;
+        p.weaponName = 'Reverse Polarity';
+        p.hitEnemies = new Set();
+        p.maxPierces = 0;
+        p.piercing = false;
+        p.homing = null;
+        p.bouncesLeft = 0;
+        p._hasRicochet = false;
+        p.travelled = 0;
+        p._effects = /** @type {any[]} */ ([]);
+        p._affixes = /** @type {any[]} */ ([]);
+        p.isCrit = false;
+        p.colour = '#aaffee';
+        // TIME_DILATION ownership-flip cleanup: an enemy bullet
+        // slowed by a time_field has _timeMul=0.5; once flipped to
+        // fromPlayer=true the per-frame field loop skips it and the
+        // 0.5 sticks until field expiry. Snap it back here so the
+        // reflected shot flies at full speed immediately. Mirrors the
+        // hitEnemies/maxPierces/piercing/etc. ownership cleanup
+        // above — anything that "promotes to player-owned" must
+        // touch _timeMul too. Same fix lives on the PARRY reflect at
+        // ~L4895.
+        p._timeMul = 1;
+        spawnParticles(p.x, p.y, 'SPARK', '#aaffee', 4);
+        reflected++;
+      }
+      audio.reflect();
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#aaffee', 16);
+      triggerShake(3, 0.15);
+      if (reflected > 0) {
+        _CG.msg('⇄ REVERSE POLARITY ×' + reflected, '#aaffee');
+      } else {
+        _CG.msg('⇄ REVERSE POLARITY', '#aaffee');
+      }
+      break;
+    }
+    case 'EMP_LINE': {
+      // Directional piercing stun beam — the LINE counterpart to
+      // EMP_BURST's RADIUS. Trades EMP_BURST's 4-tile radius (~50 tile
+      // area, all-around) for an 8-tile reach in one direction (~8 tile
+      // area, narrow). Niche: long-range crowd control + electronics
+      // disable on a clean lane (corridor sweeps, distant-shooter
+      // suppression). Cooldown 11s sits between EMP_BURST (10s) and
+      // STATIC_FIELD (12s) — slightly slower than the burst so the
+      // burst stays the panic-button.
+      audio.hackwareEMPLine();
+      // Aim direction: mirror BLINK pattern. Mouse aim → norm() →
+      // player.facing fallback → respect lockAimToMove. Without the
+      // facing fallback, click-on-self produces a no-op even when the
+      // player is clearly facing somewhere; without the setting gate,
+      // lock-aim users get a mouse-aimed beam that ignores their
+      // explicit "use movement direction" preference.
+      let edx, edy;
+      if (settings.lockAimToMove) {
+        edx = player.facing.x; edy = player.facing.y;
+      } else {
+        const camE = getCamera(player);
+        const _wzE = (settings && settings.worldZoom) || 1;
+        const ax = (mouse.x / _wzE + camE.x) / TILE - player.x;
+        const ay = (mouse.y / _wzE + camE.y) / TILE - player.y;
+        [edx, edy] = norm(ax, ay);
+        if (!edx && !edy) { edx = player.facing.x; edy = player.facing.y; }
+      }
+      // Sweep to find the TRUE endpoint. The beam stops at the first
+      // non-isPassable tile (T.WALL, LOCKED_R/B/G, sealed boss/challenge
+      // entrances which flip to T.WALL on seal). Step 0.25 matches the
+      // BLINK / SHOCK_PULSE precedent — fine enough that a 1-tile-thick
+      // wall can't be tunneled by the sweep granularity. Without the
+      // wall-stop the beam would clip through interior walls and
+      // produce wraparound stuns.
+      const MAX_LEN = 8, STEP_E = 0.25;
+      const STEPS_E = Math.ceil(MAX_LEN / STEP_E);
+      let endX = player.x, endY = player.y;
+      if (map) {
+        for (let s = 1; s <= STEPS_E; s++) {
+          const tx = player.x + edx * s * STEP_E;
+          const ty = player.y + edy * s * STEP_E;
+          const fx = Math.floor(tx), fy = Math.floor(ty);
+          if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) break;
+          if (!isPassable(map[fy][fx])) break;
+          endX = tx; endY = ty;
+        }
+      }
+      // Point-to-segment squared distance from (px,py) to segment
+      // (player.{x,y}) → (endX,endY). Inlined so the hot path stays
+      // allocation-free (no temp vector objects per enemy / per laser).
+      // Returns Infinity for "behind the player" — the unclamped t is
+      // negative there, and clamping it to 0 alone would create a
+      // backwards stun bubble equal to WIDTH at the start endpoint
+      // (enemies 0.5t behind the player → segDist = 0.5 < WIDTH 0.7 →
+      // stun). EMP_LINE is documented as directional; the bubble
+      // contradicts that intent and would let players "stun behind me
+      // for free". The Infinity return here closes that hole.
+      const ex = endX - player.x, ey = endY - player.y;
+      const segLen2 = ex * ex + ey * ey;
+      /** @param {number} px @param {number} py */
+      const segDist2 = (px, py) => {
+        if (segLen2 < 1e-6) {
+          const ddx = px - player.x, ddy = py - player.y;
+          return ddx * ddx + ddy * ddy;
+        }
+        const apx = px - player.x, apy = py - player.y;
+        const tRaw = (apx * ex + apy * ey) / segLen2;
+        if (tRaw < 0) return Infinity;
+        const t = Math.min(1, tRaw);
+        const cx = player.x + ex * t, cy = player.y + ey * t;
+        const ddx = px - cx, ddy = py - cy;
+        return ddx * ddx + ddy * ddy;
+      };
+      // Minimum squared distance between two segments (P1→P2) and
+      // (P3→P4). Replaces an earlier 3-sample heuristic that missed
+      // 53–83% of laser-beam crossings (a long laser can cross our
+      // beam at an interior point while both endpoints AND the laser
+      // midpoint sit far from our segment). Standard
+      // closest-distance-between-two-segments formula — clamped
+      // parametric solve in O(1). Used only for laser handling below;
+      // enemies/turrets/cameras are points and use segDist2 directly.
+      /**
+       * @param {number} ax @param {number} ay
+       * @param {number} bx @param {number} by
+       * @param {number} cx @param {number} cy
+       * @param {number} dx @param {number} dy
+       */
+      const segSegDist2 = (ax, ay, bx, by, cx, cy, dx, dy) => {
+        const ux = bx - ax, uy = by - ay;
+        const vx = dx - cx, vy = dy - cy;
+        const a = ux * ux + uy * uy;
+        const c = vx * vx + vy * vy;
+        // Degenerate-segment short-circuits. The canonical
+        // closest-distance-between-two-segments algorithm divides by
+        // segment lengths and produces wrong answers when either
+        // segment is a point (sN/tN ratios collapse to 0/0). For our
+        // call site the beam is degenerate when the player faces a
+        // wall directly (sweep didn't advance) — we still need a
+        // sensible answer so the laser-disable logic doesn't silently
+        // misfire. Smoke-tested: a horizontal 8t beam from (0,0) and
+        // a degenerate "laser" at (4,0.6) returns 0.36 (correct
+        // point-to-segment squared distance), not 16.36 (the
+        // canonical algorithm's wrong default).
+        if (a < 1e-9 && c < 1e-9) {
+          const ddx = ax - cx, ddy = ay - cy;
+          return ddx * ddx + ddy * ddy;
+        }
+        if (c < 1e-9) {
+          const t = Math.max(0, Math.min(1, (ux * (cx - ax) + uy * (cy - ay)) / a));
+          const closeX = ax + ux * t, closeY = ay + uy * t;
+          const ddx = closeX - cx, ddy = closeY - cy;
+          return ddx * ddx + ddy * ddy;
+        }
+        if (a < 1e-9) {
+          const t = Math.max(0, Math.min(1, (vx * (ax - cx) + vy * (ay - cy)) / c));
+          const closeX = cx + vx * t, closeY = cy + vy * t;
+          const ddx = closeX - ax, ddy = closeY - ay;
+          return ddx * ddx + ddy * ddy;
+        }
+        const wx = ax - cx, wy = ay - cy;
+        const b = ux * vx + uy * vy;
+        const d = ux * wx + uy * wy;
+        const eDot = vx * wx + vy * wy;
+        const D = a * c - b * b;
+        let sN, sD = D, tN, tD = D;
+        if (D < 1e-9) {
+          sN = 0; sD = 1;
+          tN = eDot; tD = c;
+        } else {
+          sN = b * eDot - c * d;
+          tN = a * eDot - b * d;
+          if (sN < 0)      { sN = 0;  tN = eDot;     tD = c; }
+          else if (sN > sD){ sN = sD; tN = eDot + b; tD = c; }
+        }
+        if (tN < 0) {
+          tN = 0;
+          if (-d < 0) sN = 0;
+          else if (-d > a) sN = sD;
+          else { sN = -d; sD = a; }
+        } else if (tN > tD) {
+          tN = tD;
+          if (-d + b < 0) sN = 0;
+          else if (-d + b > a) sN = sD;
+          else { sN = -d + b; sD = a; }
+        }
+        const sc = Math.abs(sN) < 1e-9 ? 0 : sN / sD;
+        const tc = Math.abs(tN) < 1e-9 ? 0 : tN / tD;
+        const px = wx + sc * ux - tc * vx;
+        const py = wy + sc * uy - tc * vy;
+        return px * px + py * py;
+      };
+      const WIDTH = 0.7;
+      const WIDTH_SQ = WIDTH * WIDTH;
+      // Stun every enemy whose centre is within WIDTH of the beam segment.
+      // LOS gate is mandatory because segDist2 alone admits enemies on
+      // the far side of a thin wall the beam BARELY missed (e.g. enemy
+      // at 0.6 perpendicular dist, but a wall sits between player and
+      // enemy). _wrPhased mobs (WRAITH/TUNNELLER while burrowed) bypass
+      // LOS to match EMP_BURST's hard-counter contract — phase doesn't
+      // protect from EMP. WRAITH-emerge logic mirrors the BURST handler
+      // exactly so phase-stun sequencing is identical between the two
+      // EMP variants. TUNNELLER intentionally NOT handled here — its
+      // own stun handler runs next frame and performs the proper
+      // _tnState→'surfaced' transition (writing _wrState here would
+      // contaminate two state machines, same caveat as EMP_BURST).
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (e._disguised) continue;
+        if (segDist2(e.x, e.y) > WIDTH_SQ) continue;
+        const losOk = e._wrPhased ? true : (map && hasLOS(player.x, player.y, e.x, e.y, map));
+        if (!losOk) continue;
+        if (e._wrPhased && e.type === 'WRAITH') {
+          const emerge = e._wrFindEmergeTile(map, player);
+          if (emerge) {
+            e.x = emerge.x; e.y = emerge.y;
+            e._wrState = 'corporeal'; e._wrTimer = 2.0; e._wrPhased = false;
+            audio.wraithPhaseIn();
+          }
+        }
+        // Stun durations slightly shorter than EMP_BURST (2s/1s) — the
+        // tradeoff for the line's longer reach. Bosses still get the
+        // halved duration as in BURST. Inlined into Math.max so the
+        // boss ternary IS the duration arg — without the inline, a
+        // contributor can declare `const dur = e.isBoss ? 0.75 : 1.5;`
+        // as a decoy and use a flat `dur = 1.5` for the actual stun
+        // (opus-4.7 r1 finding 5).
+        e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 0.75 : 1.5);
+        spawnParticles(e.x, e.y, 'SPARK', '#00eecc', 4);
+        spawnDmgText(e.x, e.y, 'STUN', '#00eecc');
+      }
+      // Electronics along the beam. Same target list as EMP_BURST so
+      // the LINE reads as a true EMP — a player who memorised "EMP
+      // disables turrets/lasers" doesn't have to remember a second
+      // exception list for the LINE variant. Only the geometry
+      // changes (segment-distance vs radius).
+      if (map) {
+        for (const l of lasers) {
+          if (l.dead) continue;
+          // Proper segment-to-segment minimum distance. The earlier
+          // 3-sample heuristic (endpoints + midpoint) missed any laser
+          // crossing the EMP beam at an interior position — a 6-tile
+          // laser at perpendicular y=4 could cross our vertical beam
+          // at (0,4) with all three samples landing 1.5+ tiles away.
+          // Reviewers measured ~53–83% miss rate on typical lasers.
+          // segSegDist2 catches every crossing in O(1) and matches
+          // the precision EMP_BURST achieves via point-to-segment
+          // math against each laser beam.
+          if (segSegDist2(player.x, player.y, endX, endY, l.x1, l.y1, l.x2, l.y2) < WIDTH_SQ) {
+            l.disabled = true; l.disableTimer = LASER_DISABLE_DUR; audio.laserDisable();
+          }
+        }
+        for (const wt of wallTurrets) {
+          if (wt.dead || wt.hacked) continue;
+          if (segDist2(wt.x, wt.y) < WIDTH_SQ && hasLOS(player.x, player.y, wt.x, wt.y, map)) {
+            hackWallTurret(wt);
+          }
+        }
+        for (const g of shieldGens) {
+          if (g.dead) continue;
+          if (segDist2(g.x, g.y) < WIDTH_SQ && hasLOS(player.x, player.y, g.x, g.y, map)) {
+            damageShieldGen(g, 15);
+          }
+        }
+        for (const cam of cameras) {
+          if (cam.dead) continue;
+          if (segDist2(cam.x, cam.y) < WIDTH_SQ && hasLOS(player.x, player.y, cam.x, cam.y, map)) {
+            damageCamera(cam, 15);
+          }
+        }
+        for (const f of disruptionFields) {
+          if (f.dead) continue;
+          if (segDist2(f.x, f.y) < WIDTH_SQ) {
+            f.dead = true;
+            spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
+          }
+        }
+        for (const w of gravityWells) {
+          if (w.dead) continue;
+          if (segDist2(w.x, w.y) < WIDTH_SQ) {
+            w.dead = true;
+            spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
+            audio.gravitonCollapse();
+          }
+        }
+      }
+      // Visual: emp_line is purely a draw-side effect (no per-frame
+      // logic in updateHackwareEffects beyond the age tick + maxAge
+      // splice — same shape as emp_ring). Endpoints frozen at cast.
+      hackwareEffects.push({ type:'emp_line', x1:player.x, y1:player.y, x2:endX, y2:endY, age:0, maxAge:0.45 });
+      // Muzzle bursts at the player AND the impact point — gives the
+      // beam a clear start/end read even at low alpha.
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#00eecc', 12);
+      spawnParticles(endX, endY, 'SPARK', '#00eecc', 8);
+      triggerShake(3, 0.15);
+      _CG.msg('═ EMP LINE', '#00eecc');
+      break;
+    }
+    case 'CHRONO_LURE': {
+      // Delayed-trigger pull marker — the timing-based counterpart to
+      // GRAVITY_WELL's continuous pull. Players drop the marker AHEAD
+      // of an enemy push, then 1.0s later the lure fires: enemies are
+      // pulled inward AND stunned. The arming delay is the trade — you
+      // give up immediate effect for a heavy CC payoff that rewards
+      // positional anticipation. Cooldown 13s reflects the stronger
+      // payoff (instant stun + pull) vs GRAVITY_WELL's pull-only at 16s.
+      // Niche distinct from EMP_BURST (instant radius stun, no pull) and
+      // GRAVITY_WELL (continuous 3s pull, no stun).
+      audio.hackwareChronoLure();
+      // Aim-place at cursor; fall back to player tile if aim lands in a
+      // wall (matches DECOY_TURRET — a marker spawned inside a wall is
+      // unreachable for enemies and wastes the cast).
+      const camCL = getCamera(player);
+      const _wzCL = (settings && settings.worldZoom) || 1;
+      let lx = (mouse.x / _wzCL + camCL.x) / TILE;
+      let ly = (mouse.y / _wzCL + camCL.y) / TILE;
+      const ltxi = Math.floor(lx), ltyi = Math.floor(ly);
+      const ltile = (map && map[ltyi] != null) ? map[ltyi][ltxi] : null;
+      if (ltile !== T.FLOOR && ltile !== T.DOOR_OPEN) {
+        lx = player.x; ly = player.y;
+      }
+      // Max 1 active — recasting replaces the existing marker (mirrors
+      // STATIC_FIELD/HOLO_DECOY/DECOY_TURRET dedup pattern). Without
+      // dedup, spam-casting would chain detonations and trivialize CC.
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'chrono_lure') hackwareEffects.splice(j, 1);
+      }
+      hackwareEffects.push({
+        type:'chrono_lure', x:lx, y:ly, age:0, maxAge:1.6,
+        armDuration:1.0, radius:5, detonated:false
+      });
+      spawnParticles(lx, ly, 'SPARK', '#ff22aa', 8);
+      _CG.msg('◔ CHRONO LURE ARMED', '#ff22aa');
+      break;
+    }
+    case 'TIME_DILATION': {
+      // Temporal field — first hackware to slow enemy projectiles
+      // (the novel mechanic). Distinct from STATIC_FIELD which slows
+      // enemies (×0.6) AND damages them: TIME_DILATION's slow is
+      // STRONGER on enemies (×0.35 grunt / ×0.6 boss), does no damage,
+      // and ALSO halves enemy projectile velocity inside the zone.
+      // Combined effect: bullets become readable, enemies barely move
+      // — a brief breathing window for repositioning or precision
+      // shots. Niche distinct from EMP_BURST (full disable, instant)
+      // and CHRONO_LURE (delayed pull+stun): time_field is a
+      // continuous battlefield-control layer, not a CC spike.
+      audio.hackwareTimeDilation();
+      // Self-centred placement (mirrors REPAIR_PROTOCOL — no aim).
+      // The field follows the cast point, not the player; this keeps
+      // the temporal anchor stationary so retreat-then-engage tactics
+      // (lay it ahead, dash through) work intuitively.
+      // Max 1 active — recasting replaces the existing field (mirrors
+      // STATIC_FIELD/HOLO_DECOY/DECOY_TURRET dedup pattern). Without
+      // dedup, stacked fields would silently leak _timeMul state on
+      // overlapping projectiles AND multiply per-tick enemy slow
+      // application costs. Pre-expiry restore: any leftover slowed
+      // projectiles from the displaced field have their _timeMul
+      // cleared so they don't crawl forever after the new field
+      // ignores them. Caught proactively (mirrors the projectile
+      // restore in updateHackwareEffects' expiry branch).
+      for (let j = hackwareEffects.length - 1; j >= 0; j--) {
+        if (hackwareEffects[j].type === 'time_field') {
+          for (const p of projectiles) {
+            if (p && p._timeMul !== undefined && p._timeMul !== 1) p._timeMul = 1;
+          }
+          hackwareEffects.splice(j, 1);
+        }
+      }
+      hackwareEffects.push({
+        type:'time_field', x:player.x, y:player.y, age:0, maxAge:4, radius:4
+      });
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#6644ff', 16);
+      triggerShake(2, 0.12);
+      _CG.msg('⧖ TIME DILATION ENGAGED', '#6644ff');
       break;
     }
   }
@@ -904,6 +1564,23 @@ function updateHackwareEffects(dt) {
         }
         audio.holoDecoyExpire();
         spawnParticles(fx.x, fx.y, 'EXPLOSION', '#ff44ff', 15);
+      }
+      if (fx.type === 'decoy_turret') {
+        audio.turretDestroy();
+        spawnParticles(fx.x, fx.y, 'EXPLOSION', '#00ffaa', 12);
+        spawnParticles(fx.x, fx.y, 'SPARK', '#66ffcc', 6);
+      }
+      if (fx.type === 'time_field') {
+        // Restore any projectiles still inside the zone — without
+        // this, enemy bullets last seen inside the field would
+        // crawl forever after expiry (the per-frame "default to 1
+        // then maybe 0.5" reset stops running once fx is spliced).
+        // Loop walks ALL projectiles (not just enemy-owned) so a
+        // mid-field reflect (REVERSE_POLARITY flips fromPlayer mid-
+        // flight) doesn't leave a player-owned shot stuck slow.
+        for (const p of projectiles) {
+          if (p && p._timeMul !== undefined && p._timeMul !== 1) p._timeMul = 1;
+        }
       }
       hackwareEffects.splice(i, 1); continue;
     }
@@ -944,6 +1621,47 @@ function updateHackwareEffects(dt) {
       }
       // Trail particle
       if (Math.random() < dt * 10) spawnParticles(fx.x, fx.y, 'MUZZLE', '#44ff88', 1);
+    }
+
+    if (fx.type === 'scrap_magnet') {
+      // Centre tracks player so coins chase a moving target. Skip if
+      // player is gone (death) — items shouldn't lerp into a corpse and
+      // become unreachable for the post-death loot-recovery flow.
+      const p = _CG.player;
+      if (!p || p.hp <= 0) continue;
+      fx.x = p.x; fx.y = p.y;
+      // Per-frame fraction-lerp; pullStr=5 over 1.2s converges items to
+      // ~99.8% of distance covered. Items close enough trip the existing
+      // pickup-radius branch in game.js naturally — no manual collect.
+      const pullStr = 5;
+      const pct = Math.min(1, pullStr * dt);
+      // Secret-room sequence-break gate: keys are placed in vis2-reachable
+      // rooms at gen time (line ~2661 BFS-excluding-locks), but a keyRoom
+      // can subsequently be designated a secret room (the secretEligible
+      // filter at ~2684 doesn't exclude rooms-with-keys). Without this gate
+      // the magnet would yank keys out of unrevealed secret rooms,
+      // bypassing the cracked-tile discovery the secret is designed around.
+      // dungeon.secretMask[ty][tx] is cleared in game.js revealSecretRoom()
+      // when the player breaks in, so revealed-secret loot pulls normally.
+      const sMask = _CG.dungeon?.secretMask;
+      for (const it of items) {
+        if (it.dead) continue;
+        // Currency (isHoard: VaultCoin + MagpieHoard) and keys (isKey)
+        // only. See activation comment for the deliberate exclusion list.
+        if (!(it.isHoard || it.isKey)) continue;
+        const itx = Math.floor(it.x), ity = Math.floor(it.y);
+        if (sMask && sMask[ity]?.[itx]) continue;
+        const d = dist(it.x, it.y, fx.x, fx.y);
+        if (d > fx.radius) continue;
+        it.x += (fx.x - it.x) * pct;
+        it.y += (fx.y - it.y) * pct;
+      }
+      // Ambient gold sparkle in the pull radius.
+      if (Math.random() < dt * 14) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ffd700', 1);
+      }
     }
 
     if (fx.type === 'gravity') {
@@ -1045,7 +1763,118 @@ function updateHackwareEffects(dt) {
         }
       }
     }
+    if (fx.type === 'chrono_lure') {
+      // Two-phase: arming (no effect, visible blinking ring) → detonation
+      // (single stun-application + continuous pull until maxAge). The
+      // `detonated` latch ensures the stun loop fires EXACTLY ONCE at the
+      // arm-end transition; without it, every frame in the pull window
+      // would re-stun and bosses would get permanent CC.
+      if (!fx.detonated && fx.age >= fx.armDuration) {
+        fx.detonated = true;
+        audio.hackwareChronoLureBoom();
+        spawnParticles(fx.x, fx.y, 'EXPLOSION', '#ff22aa', 18);
+        triggerShake(4, 0.18);
+        // One-shot stun on detonation. Mirrors EMP_BURST's bossHalf
+        // pattern (`isBoss ? halved : full`). Disguised mimics + phased
+        // wraiths skipped — same exclusions as gravity well's pull, for
+        // the same reasons (no mid-fight identity reveal; phased units
+        // are non-targetable).
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (e._disguised) continue;
+          if (e._wrPhased) continue;
+          const d = dist(e.x, e.y, fx.x, fx.y);
+          if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+            e.stunTimer = Math.max(e.stunTimer || 0, e.isBoss ? 0.5 : 1.0);
+            spawnParticles(e.x, e.y, 'SPARK', '#ff22aa', 3);
+            spawnDmgText(e.x, e.y, 'STUN', '#ff22aa');
+          }
+        }
+      }
+      // Continuous pull during detonation phase only. Bosses skip the
+      // pull (matches GRAVITY_WELL precedent — bosses are immune to
+      // forced movement). Pull strength 6 (vs GRAVITY_WELL's 4) is
+      // tuned for the SHORTER pull window: 0.6s × 6 ≈ 3.6 tiles of
+      // budget brings radius-edge enemies (5 tiles) to ~1.4 tiles —
+      // well inside follow-up melee range. GRAVITY_WELL's gentler 4
+      // works because it has 3.0s × 4 = 12 tiles of budget.
+      if (fx.detonated) {
+        const pullStr = 6;
+        for (const e of enemies) {
+          if (e.dead || e.isBoss) continue;
+          if (e._disguised) continue;
+          if (e._wrPhased) continue;
+          const d = dist(e.x, e.y, fx.x, fx.y);
+          if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+            e.moveToward(fx.x, fx.y, pullStr, dt, map);
+          }
+        }
+      }
+      // Ambient particles in arm + detonation (gentler during arming).
+      const sparkRate = fx.detonated ? 12 : 6;
+      if (Math.random() < dt * sparkRate) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.45 + Math.random() * fx.radius * 0.4;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff22aa', 1);
+      }
+    }
     // emp_ring is visual only, handled in draw
+
+    if (fx.type === 'time_field') {
+      // Continuous battlefield-control field. Two layered effects each
+      // tick: (a) enemy slow inside the radius (LOS-gated, stronger
+      // than STATIC_FIELD's slow + halved on bosses); (b) enemy
+      // projectile slow — first hackware to touch projectile velocity.
+      // No damage layer (distinct from STATIC_FIELD).
+      // ---- (a) Enemy slow ----
+      for (const e of enemies) {
+        if (e.dead) continue;
+        // Disguised mimics skipped: applying a visible slow without
+        // dealing damage (TIME_DILATION is control-only) would
+        // silently reveal a disguised crate's true identity (the
+        // player sees a "crate" creeping forward). STATIC_FIELD
+        // doesn't need this skip because it ALSO damages, so the
+        // identity reveal happens via takeDamage anyway — there's
+        // no information leak unique to the slow.
+        if (e._disguised) continue;
+        if (e._wrPhased) continue;
+        const d = dist(e.x, e.y, fx.x, fx.y);
+        if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
+          // Stronger-wins: only deepen existing slows. The 0.3s timer
+          // refreshes each frame an enemy stays inside, so the slow
+          // lingers ~0.3s after exit (smooths zone-edge dance). Boss
+          // factor halved (0.6 vs grunt 0.35) per EMP_BURST/EMP_LINE
+          // precedent — stops boss perma-control via field stacking.
+          e.slowTimer = Math.max(e.slowTimer || 0, 0.3);
+          e.slowFactor = Math.min(e.slowFactor || 1, e.isBoss ? 0.6 : 0.35);
+        }
+      }
+      // ---- (b) Enemy projectile slow (NOVEL) ----
+      // Per-frame reset-then-set: every enemy projectile defaults
+      // back to _timeMul=1, then those inside the radius drop to 0.5.
+      // This implicitly handles the "exit while field alive" case
+      // (next frame the projectile is outside → reset to 1). The
+      // expiry branch above handles "field expires while inside".
+      // Skip: player shots, ally turret shots (DECOY_TURRET), dead
+      // projectiles. Position-based gate (no LOS) — bullets flying
+      // in straight lines through the zone get slowed regardless of
+      // wall geometry; LOS would create unintuitive "bullet whips
+      // back to fast speed when wall blocks line to centre" jitter.
+      for (const p of projectiles) {
+        if (!p || p.dead) continue;
+        if (p.fromPlayer || p.fromPlayerShot || p.isAllyTurret) continue;
+        const dpx = p.x - fx.x, dpy = p.y - fx.y;
+        const inside = (dpx * dpx + dpy * dpy) < (fx.radius * fx.radius);
+        p._timeMul = inside ? 0.5 : 1;
+      }
+      // Ambient temporal sparkles — slower spawn than static_field
+      // (the visual language is "time slowed" not "energetic").
+      if (Math.random() < dt * 5) {
+        const a = Math.random() * TWO_PI;
+        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+        spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#aa88ff', 1);
+      }
+    }
 
     if (fx.type === 'hologram') {
       // Taunt nearby enemies toward the hologram
@@ -1069,6 +1898,41 @@ function updateHackwareEffects(dt) {
         spawnParticles(fx.x + Math.cos(a) * 0.3, fx.y + Math.sin(a) * 0.3, 'MUZZLE', '#ff44ff', 1);
       }
     }
+    if (fx.type === 'decoy_turret') {
+      // Find nearest visible enemy within range (LOS-gated, mirrors hacked
+      // wall-turret targeting). Skip disguised mimics + phased intangibles
+      // (WRAITH/TUNNELLER share `_wrPhased`).
+      fx.shootTimer = Math.max(0, fx.shootTimer - dt);
+      let best = null, bestD = fx.range;
+      for (const e of enemies) {
+        if (e.dead || e.isBoss || e._disguised) continue;
+        if (e._wrPhased) continue;
+        const d = dist(fx.x, fx.y, e.x, e.y);
+        if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) {
+          best = e; bestD = d;
+        }
+      }
+      if (best) {
+        fx.aimAngle = Math.atan2(best.y - fx.y, best.x - fx.x);
+        if (fx.shootTimer <= 0) {
+          const [ndx, ndy] = norm(best.x - fx.x, best.y - fx.y);
+          const proj = new Projectile(fx.x, fx.y, ndx, ndy, fx.projSpd, fx.dmg, fx.projRange, '#00ffaa', false, false);
+          proj.isAllyTurret = true;
+          proj.ownerType = 'Decoy Turret';
+          projectiles.push(proj);
+          audio.turretFire();
+          spawnParticles(fx.x + Math.cos(fx.aimAngle) * 0.4, fx.y + Math.sin(fx.aimAngle) * 0.4, 'MUZZLE', '#00ffaa', 3);
+          fx.shootTimer = fx.shootCd;
+        }
+      } else {
+        // No target: idle slow-spin barrel
+        fx.aimAngle += dt * 1.2;
+      }
+      // Ambient ready-LED blink
+      if (Math.random() < dt * 3) {
+        spawnParticles(fx.x, fx.y - 0.2, 'MUZZLE', '#00ffaa', 1);
+      }
+    }
   }
 }
 
@@ -1090,6 +1954,31 @@ function drawHackwareEffects(camX, camY) {
       NEON.draw.circleStroke(ctx, sx, sy, r);
       ctx.restore();
     }
+    if (fx.type === 'emp_line') {
+      // Twin-stroke beam: bright inner + soft outer halo. Both fade
+      // together so the beam reads as a single energy lance, not two
+      // overlapping primitives. Mirrors the RESONATOR/MIRROR enemy beam
+      // visual language so players who already learned "teal/cyan beam =
+      // EMP/electric" don't have to re-decode this one. The post-flash
+      // particles spawned at cast handle the impact-point pop; the beam
+      // itself is just the in-flight lance.
+      const fade = 1 - (fx.age / fx.maxAge);
+      const x1 = fx.x1 * TILE - camX, y1 = fx.y1 * TILE - camY;
+      const x2 = fx.x2 * TILE - camX, y2 = fx.y2 * TILE - camY;
+      ctx.save();
+      // Outer halo (wide, low alpha)
+      ctx.globalAlpha = fade * 0.35;
+      ctx.strokeStyle = '#00eecc';
+      ctx.shadowBlur = 20; ctx.shadowColor = '#00eecc';
+      ctx.lineWidth = 8 * fade;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
+      // Inner core (narrow, bright)
+      ctx.globalAlpha = fade * 0.95;
+      ctx.strokeStyle = '#ccfff0';
+      ctx.lineWidth = 2.5 * fade + 0.5;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
+      ctx.restore();
+    }
     if (fx.type === 'swarm') {
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       ctx.save();
@@ -1099,6 +1988,35 @@ function drawHackwareEffects(camX, camY) {
       NEON.draw.circle(ctx, sx, sy, 3);
       ctx.restore();
     }
+    if (fx.type === 'scrap_magnet') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const fade = 1 - (fx.age / fx.maxAge);
+      const r = fx.radius * TILE;
+      ctx.save();
+      // Outer pulsing gold boundary ring.
+      const pulse = 0.55 + Math.sin(fx.age * 12) * 0.25;
+      ctx.globalAlpha = fade * 0.32 * pulse;
+      ctx.strokeStyle = '#ffd700';
+      ctx.shadowBlur = 18; ctx.shadowColor = '#ffd700';
+      ctx.lineWidth = 2;
+      NEON.draw.circleStroke(ctx, sx, sy, r);
+      // Counter-rotating spiral arms — read as "suction".
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = fade * 0.55;
+      ctx.strokeStyle = '#ffe680';
+      for (let arm = 0; arm < 3; arm++) {
+        const a = -fx.age * 6 + (TWO_PI / 3) * arm;
+        NEON.draw.line(ctx,
+          sx + Math.cos(a) * 6, sy + Math.sin(a) * 6,
+          sx + Math.cos(a) * r * 0.4, sy + Math.sin(a) * r * 0.4);
+      }
+      // Bright core spark.
+      ctx.globalAlpha = fade * 0.9;
+      ctx.fillStyle = '#fff5cc';
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 14) * 1.2);
+      ctx.restore();
+    }
+
     if (fx.type === 'gravity') {
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       const fade = 1 - (fx.age / fx.maxAge);
@@ -1152,6 +2070,95 @@ function drawHackwareEffects(camX, camY) {
       NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 15) * 1.5);
       ctx.restore();
     }
+    if (fx.type === 'chrono_lure') {
+      // Two-phase visual: arming = countdown clock (subtle, sweep arm
+      // shows time-to-fire), detonation = bright pull vortex. Distinct
+      // visual language from gravity well (orange/no countdown) so
+      // players can read the state at a glance.
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const r = fx.radius * TILE;
+      ctx.save();
+      if (!fx.detonated) {
+        const armProg = Math.min(1, fx.age / fx.armDuration);
+        const pulse = 0.5 + Math.sin(fx.age * 14) * 0.3;
+        // Outer boundary ring — telegraphs the eventual blast radius.
+        ctx.globalAlpha = 0.18 * pulse;
+        ctx.strokeStyle = '#ff22aa';
+        ctx.shadowBlur = 10; ctx.shadowColor = '#ff22aa';
+        ctx.lineWidth = 1.5;
+        NEON.draw.circleStroke(ctx, sx, sy, r);
+        // Inner core grows as arming progresses (visual countdown).
+        ctx.globalAlpha = 0.6 + 0.3 * armProg;
+        ctx.fillStyle = '#ff22aa';
+        NEON.draw.circle(ctx, sx, sy, 4 + armProg * 6);
+        // Sweep arm (clock hand) — sweeps once during arming.
+        ctx.strokeStyle = '#ffaaff';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.85;
+        const a = -Math.PI / 2 + armProg * TWO_PI;
+        NEON.draw.line(ctx, sx, sy, sx + Math.cos(a) * 12, sy + Math.sin(a) * 12);
+      } else {
+        const detProg = (fx.age - fx.armDuration) / (fx.maxAge - fx.armDuration);
+        const fade = 1 - detProg;
+        ctx.globalAlpha = fade * 0.3;
+        ctx.fillStyle = '#ff22aa';
+        ctx.shadowBlur = 25; ctx.shadowColor = '#ff22aa';
+        NEON.draw.circle(ctx, sx, sy, r);
+        ctx.globalAlpha = fade * 0.7;
+        NEON.draw.circle(ctx, sx, sy, 8);
+        // Counter-rotating pull arms — read as "suction inward".
+        ctx.strokeStyle = '#ffaaff'; ctx.lineWidth = 2;
+        ctx.globalAlpha = fade * 0.5;
+        for (let arm = 0; arm < 4; arm++) {
+          const aa = -fx.age * 8 + (TWO_PI / 4) * arm;
+          NEON.draw.line(ctx,
+            sx + Math.cos(aa) * 10, sy + Math.sin(aa) * 10,
+            sx + Math.cos(aa) * r * 0.7, sy + Math.sin(aa) * r * 0.7);
+        }
+      }
+      ctx.restore();
+    }
+    if (fx.type === 'time_field') {
+      // Temporal field — purple zone with slow-rotating clock arms.
+      // Visual language: "time slowed" — gentle pulse, sweep arms
+      // rotate at 1/3 normal hackware-arm speed (CHRONO_LURE uses
+      // ×8, here ×2.5) so the eye reads "stretched time". Distinct
+      // from STATIC_FIELD (cyan, energetic 3-arc pulse) and
+      // CHRONO_LURE (pink, fast vortex on detonation).
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const r = fx.radius * TILE;
+      // Fade IN over 0.2s + fade OUT over the last 0.5s — eases the
+      // boundary so enemies don't appear to slow then snap back to
+      // full speed without warning.
+      const fadeIn = Math.min(1, fx.age / 0.2);
+      const fadeOut = Math.min(1, (fx.maxAge - fx.age) / 0.5);
+      const fade = Math.max(0, Math.min(fadeIn, fadeOut));
+      ctx.save();
+      // Outer boundary glow.
+      const pulse = 0.5 + Math.sin(fx.age * 4) * 0.2;
+      ctx.globalAlpha = fade * 0.18 * pulse;
+      ctx.fillStyle = '#6644ff';
+      ctx.shadowBlur = 22; ctx.shadowColor = '#6644ff';
+      NEON.draw.circle(ctx, sx, sy, r);
+      // Boundary stroke ring.
+      ctx.globalAlpha = fade * 0.5;
+      ctx.strokeStyle = '#aa88ff'; ctx.lineWidth = 1.5;
+      NEON.draw.circleStroke(ctx, sx, sy, r);
+      // Slow-rotating clock arms — three hands at 120° spacing.
+      ctx.strokeStyle = '#cca0ff'; ctx.lineWidth = 2;
+      ctx.globalAlpha = fade * 0.55;
+      for (let arm = 0; arm < 3; arm++) {
+        const aa = fx.age * 2.5 + (TWO_PI / 3) * arm;
+        NEON.draw.line(ctx,
+          sx + Math.cos(aa) * 6, sy + Math.sin(aa) * 6,
+          sx + Math.cos(aa) * r * 0.65, sy + Math.sin(aa) * r * 0.65);
+      }
+      // Centre core — soft pulsing dot, marks the anchor point.
+      ctx.globalAlpha = fade * 0.85;
+      ctx.fillStyle = '#e0c8ff';
+      NEON.draw.circle(ctx, sx, sy, 3 + Math.sin(fx.age * 6) * 1);
+      ctx.restore();
+    }
     if (fx.type === 'hologram') {
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       const fade = 1 - (fx.age / fx.maxAge) * 0.3;
@@ -1185,6 +2192,37 @@ function drawHackwareEffects(camX, camY) {
       ctx.stroke();
       ctx.restore();
     }
+    if (fx.type === 'decoy_turret') {
+      const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
+      const remaining = fx.maxAge - fx.age;
+      // Final 1.5s — flash to telegraph expiry.
+      const flashing = remaining < 1.5;
+      const flashOn = flashing ? (Math.sin(fx.age * 22) > 0) : true;
+      const fade = flashing ? (flashOn ? 1 : 0.35) : 1;
+      ctx.save();
+      ctx.shadowBlur = 12; ctx.shadowColor = '#00ffaa';
+      // Base plate (square footprint)
+      const bs = TILE * 0.3;
+      ctx.globalAlpha = fade * 0.85;
+      ctx.fillStyle = '#003322';
+      ctx.fillRect(sx - bs, sy - bs, bs * 2, bs * 2);
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 2;
+      ctx.strokeRect(sx - bs, sy - bs, bs * 2, bs * 2);
+      // Rotating barrel
+      const bl = TILE * 0.45;
+      ctx.lineWidth = 3;
+      NEON.draw.line(ctx, sx, sy,
+        sx + Math.cos(fx.aimAngle) * bl,
+        sy + Math.sin(fx.aimAngle) * bl);
+      // Core ready-LED (pulses faster as expiry nears)
+      const pulseSpd = flashing ? 18 : 6;
+      const corePulse = 0.7 + Math.sin(fx.age * pulseSpd) * 0.3;
+      ctx.globalAlpha = fade * corePulse;
+      ctx.fillStyle = '#aaffdd';
+      NEON.draw.circle(ctx, sx, sy, 3);
+      ctx.restore();
+    }
   }
 }
 
@@ -1195,6 +2233,7 @@ function drawHackwareEffects(camX, camY) {
 function affixEligible(affixId, baseWeapon) {
   if (affixId === 'PRECISE'  && baseWeapon.spread === 0) return false;
   if (affixId === 'TWIN'     && baseWeapon.melee)        return false;
+  if (affixId === 'BURST'    && baseWeapon.melee)        return false;
   if (affixId === 'EXTENDED' && baseWeapon.melee)        return false;
   return true;
 }
@@ -1208,7 +2247,8 @@ function buildWeapon(baseKey, affixIds) {
   const base = WEAPONS[baseKey];
   if (!base) return { ...WEAPONS.PULSE_PISTOL, _base:'PULSE_PISTOL', _affixes:[], _rarity:0, displayName:'Pulse Pistol' };
   const w = { ...base, _base:baseKey, _affixes:[...affixIds], _rarity:affixIds.length };
-  // Apply prefix stat mods (multiplicative, except countAdd which is additive)
+  // Apply prefix stat mods (multiplicative, except countAdd / spreadAdd /
+  // critAdd / critMulAdd which are additive)
   for (const id of affixIds) {
     const af = WEAPON_AFFIXES[id];
     if (!af || !af.mods) continue;
@@ -1216,7 +2256,10 @@ function buildWeapon(baseKey, affixIds) {
     if (af.mods.rate)     w.rate   = +(w.rate * af.mods.rate).toFixed(2);
     if (af.mods.range)    w.range  = +(w.range * af.mods.range).toFixed(1);
     if (af.mods.spread !== undefined) w.spread = +(w.spread * af.mods.spread).toFixed(3);
+    if (af.mods.spreadAdd) w.spread = +(w.spread + af.mods.spreadAdd).toFixed(3);
     if (af.mods.countAdd) w.count  = w.count + af.mods.countAdd;
+    if (af.mods.critAdd)  w.critAdd = +((w.critAdd || 0) + af.mods.critAdd).toFixed(3);
+    if (af.mods.critMulAdd) w.critMulAdd = +((w.critMulAdd || 0) + af.mods.critMulAdd).toFixed(3);
   }
   // Build display name: "Rapid Pulse Pistol of Flame"
   const prefix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'prefix');
@@ -1292,6 +2335,23 @@ const FLOOR_MODIFIERS = {
   OVERCLOCK: { label:'OVERCLOCK', desc:'System overclock detected',  colour:'#ffcc00', icon:'⚡' },
   CORROSIVE: { label:'CORROSIVE', desc:'Toxic atmosphere',            colour:'#44ff22', icon:'☣' },
   CHARGED:   { label:'CHARGED',   desc:'Supercharged projectiles',    colour:'#aaccff', icon:'⊕' },
+  FRAGILE:   { label:'FRAGILE',   desc:'Glass-cannon protocol',       colour:'#ff88cc', icon:'❖' },
+  HUNTER:    { label:'HUNTER',    desc:'Sensors lock stationary prey', colour:'#ff8844', icon:'◎' },
+  REGENERATIVE: { label:'REGENERATIVE', desc:'Patrols self-repair when uncontested', colour:'#44ddaa', icon:'✚' },
+  CASCADE:   { label:'CASCADE',   desc:'Defeats nearby release medical pulse', colour:'#44ff88', icon:'♥' },
+  OVERCHARGE:{ label:'OVERCHARGE',desc:'Every 5th shot guaranteed crit',        colour:'#ffee66', icon:'⚡' },
+  WINDFALL:  { label:'WINDFALL',  desc:'Every 5th defeat drops a bonus core',   colour:'#a866ff', icon:'◆' },
+  SIGNAL_BOOST: { label:'SIGNAL_BOOST', desc:'Every 5th defeat resets hackware', colour:'#00ddff', icon:'↻' },
+  REVERB:    { label:'REVERB',    desc:'Every 5th shot fires a free echo',     colour:'#ff66cc', icon:'♪' },
+  QUARTERMASTER: { label:'QUARTERMASTER', desc:'First defeat in each room drops a bonus core', colour:'#ffaa44', icon:'▣' },
+  AUTONOMY:  { label:'AUTONOMY',  desc:'Hackware cooldowns reduced 25% on this floor', colour:'#88ff44', icon:'⚙' },
+  CHAINREACT:{ label:'CHAINREACT',desc:'Chained defeats within 1.5s award bonus credits', colour:'#ff8866', icon:'⚡' },
+  MAGNETISM: { label:'MAGNETISM', desc:'Item pickup radius increased 50% on this floor', colour:'#bb88ff', icon:'⊛' },
+  HARDENED:  { label:'HARDENED',  desc:'Reactive plating — incoming damage reduced 20%', colour:'#88aacc', icon:'⊞' },
+  OVERFLOW:  { label:'OVERFLOW',  desc:'Surplus data — XP gain +25%', colour:'#66ffaa', icon:'▲' },
+  KINETIC:   { label:'KINETIC',   desc:'Inertial primer — dash cooldown -30%', colour:'#88ddff', icon:'»' },
+  PRIMED:    { label:'PRIMED',    desc:'Smartlink — first shot in each room crits', colour:'#ffaa00', icon:'◎' },
+  JAMMED:    { label:'JAMMED',    desc:'Signal jammed — hackware cooldowns increased 25%', colour:'#cc6644', icon:'⊘' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
@@ -1388,6 +2448,14 @@ function spawnParticles(wx, wy, type, colour, count) {
   // Burst cap — under extreme stacking, halve new burst sizes to protect the
   // frame budget. Gameplay-visible only in pathological scenarios.
   count = _particleSystem.scaleBurst(count);
+  // REDUCED MOTION accessibility umbrella (settings.reducedMotion):
+  // dampen burst sizes by ~half so EXPLOSION fountains, level-up
+  // sparks, hit splatters, etc. are less overwhelming for users with
+  // vestibular sensitivity / photosensitive epilepsy. Floored at 1
+  // because MUZZLE flashes are a critical gameplay tell (where my
+  // shot went, what direction the enemy is facing) and zero would
+  // hide them entirely.
+  if (settings.reducedMotion) count = Math.max(1, Math.floor(count * 0.5));
   for (let i=0; i<count; i++) {
     const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
@@ -1647,6 +2715,13 @@ function drawAmbient(camX, camY) {
 function spawnDmgText(wx, wy, text, colour) {
   if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
+  // Player.shoot (entities.js) and several other damage paths produce
+  // float multiplications like (w.dmg + atk) * critMul * metaMul, which
+  // can land on values like 31.999999999999996 instead of 32. Round
+  // numeric callers here so every damage floater shows a clean integer
+  // without forcing every call site to remember Math.round. Non-numeric
+  // text ('CRIT!', '+5', 'EXECUTE', '+3 CR', etc.) is unaffected.
+  if (typeof text === 'number' && Number.isFinite(text)) text = Math.round(text);
   floatingTexts.push({
     x: wx * TILE + rnd(-6, 6), y: wy * TILE - 8,
     vy: -40, life: 1, text: String(text), colour
@@ -1669,6 +2744,16 @@ function updateFloatingTexts(dt) {
  * @param {any} camY
  */
 function drawFloatingTexts(camX, camY) {
+  // Settings-scaled bold font for floating damage / pickup numbers.
+  // Base 15px multiplied by `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3).
+  // Both the integer fontPx AND the assembled font string are computed
+  // ONCE per call (not per text) — the loop just assigns the cached
+  // string to ctx.font. Heavy combat can have 10+ floating texts at
+  // once and this runs every frame; per-iteration template-literal
+  // allocation here would churn GC for no functional benefit.
+  // Per gpt-5.3-codex r1 review of this file.
+  const fontPx = Math.max(8, Math.round(15 * settings.textScale));
+  const fontStr = `bold ${fontPx}px monospace`;
   for (const f of floatingTexts) {
     const sx = f.x - camX, sy = f.y - camY;
     if (sx < -40 || sx > W + 40 || sy < -20 || sy > H + 20) continue;
@@ -1676,7 +2761,7 @@ function drawFloatingTexts(camX, camY) {
     ctx.globalAlpha = Math.max(0, f.life);
     ctx.shadowBlur = 6; ctx.shadowColor = f.colour;
     ctx.fillStyle = f.colour;
-    ctx.font = 'bold 15px monospace';
+    ctx.font = fontStr;
     ctx.textAlign = 'center';
     ctx.fillText(f.text, sx, sy);
     ctx.restore();
@@ -1718,8 +2803,15 @@ function drawDangerVignette(player) {
   const frac = player.hp / player.maxHp;
   if (frac > 0.25 || player.hp <= 0) return;
   // Intensity: 0 at 25% → 1 at 0%. Pulse synced with lowHpTimer (2s cycle).
+  // REDUCED MOTION accessibility umbrella: keep the vignette visible (it's a
+  // critical safety signal at low HP) but freeze the sin-pulse at its
+  // midpoint (0.5). The full-screen red flicker is precisely the photosensitive
+  // / vestibular trigger the setting exists to mitigate; the static red border
+  // still conveys "you're in danger" at the same average intensity without the
+  // throbbing motion. Audio cue (audio.lowHealth() in entities.js) and HP bar
+  // remain untouched as redundant signals.
   const severity = 1 - (frac / 0.25);
-  const pulse = 0.5 + 0.5 * Math.sin(player.lowHpTimer * Math.PI);
+  const pulse = settings.reducedMotion ? 0.5 : (0.5 + 0.5 * Math.sin(player.lowHpTimer * Math.PI));
   const alpha = severity * (0.12 + 0.14 * pulse);
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -1831,9 +2923,10 @@ function getStatusEffects(player) {
   if (player.burnTimer > 0) {
     fx.push({ id: 'burn', icon: '🔥', label: player.burnTimer.toFixed(1)+'s', colour: '#ff6600' });
   }
-  // Shock debuff (from enemy attacks)
+  // Shock debuff (from enemy attacks). Show countdown so the player can
+  // anticipate when input control returns — matches the burn timer pattern.
   if (player.shockTimer > 0) {
-    fx.push({ id: 'shocked', icon: '⚡', label: 'SHOCK', colour: '#ffee44' });
+    fx.push({ id: 'shocked', icon: '⚡', label: player.shockTimer.toFixed(1)+'s', colour: '#ffee44' });
   }
   // Energy shield recharging
   if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -1843,8 +2936,22 @@ function getStatusEffects(player) {
   if (player.perks.ENERGY_SHIELD && player.energyShield) {
     fx.push({ id: 'shield-up', icon: '🛡', label: 'UP', colour: '#4488ff' });
   }
-  // Nano Regen (only show when actively healing)
-  if ((player.upgrades.NANO_REGEN || 0) > 0 && player.hp < player.maxHp) {
+  // Nano Regen — extended in PR (after PR #282) to also surface the
+  // regenerator meta-upgrade's active heal window (player.regenPerSec
+  // controlled by metaFlags.regenerator; tickOutOfCombatRegen at
+  // meta/behavior.js:85-90 actually heals when _outOfCombatTimer > 3).
+  // Both systems heal HP-while-low and feel identical to the player, so
+  // a single ♻ REGEN badge unifies them. NANO_REGEN heals always while
+  // hp<maxHp; regenerator heals only after the 3s out-of-combat grace
+  // period — the badge reflects the actual healing state, not just
+  // ownership, so players see when regen is genuinely ticking and not
+  // before. The 3s OOC grace itself is intentionally NOT surfaced as a
+  // separate "waiting" state in this PR (would be HUD noise across most
+  // engagements); could be added in a follow-up if needed.
+  const _nanoRegen = (player.upgrades.NANO_REGEN || 0) > 0;
+  const _metaRegen = (player.regenPerSec || 0) > 0
+    && (player._outOfCombatTimer || 0) > 3;
+  if ((_nanoRegen || _metaRegen) && player.hp < player.maxHp) {
     fx.push({ id: 'regen', icon: '♻', label: 'REGEN', colour: '#00ff88' });
   }
   // Dash cooldown
@@ -1870,9 +2977,306 @@ function getStatusEffects(player) {
   if (player.perks.BERSERKER && player.hp > 0 && player.hp / player.maxHp <= 0.25) {
     fx.push({ id: 'berserker', icon: '🔥', label: 'RAGE', colour: '#ff4400' });
   }
-  // Second Wind available
-  if (player.perks.SECOND_WIND && !player.secondWindUsed) {
+  // Pristine active (at/above 90% HP) — high-HP mirror of Berserker.
+  if (player.perks.PRISTINE && player.hp > 0 && player.hp / player.maxHp >= 0.90) {
+    fx.push({ id: 'pristine', icon: '✧', label: 'PRIME', colour: '#88ffee' });
+  }
+  // BULWARK active (at/above 75% HP) — defensive counterpart to PRISTINE.
+  // While the gate holds, Player.takeDamage() multiplies incoming damage by
+  // 0.85 (entities.js:11557 — same maxHp>0 divide-by-zero guard, same >=0.75
+  // threshold). Predicate is strict-equal to the multiplier gate (after
+  // stripping the defensive `player.perks &&` short-circuit), so a future
+  // re-tune to the threshold/multiplier on EITHER side will be caught by
+  // the strict-equality alignment test in tests/bulwark-hud.test.js.
+  //
+  // Defensive `player.perks &&` short-circuit: legacy player shapes (test
+  // sandboxes, save migrations) may bypass the ctor and lack a .perks
+  // object. The earlier ENERGY_SHIELD branch at content.js:2292 unguarded-
+  // derefs player.perks, so a real call without .perks already crashes
+  // before reaching this gate — the guard here is defense-in-depth (per
+  // PR #300/#302/#304 reviewer convention for new HUD badges).
+  //
+  // Icon ◈ matches the perk-card glyph at content.js:4669; colour #88ccff
+  // matches the perk-card colour exactly (cross-file desync defence per
+  // stored memory 'HUD status fx'). Label 'WARD' mirrors the action-word
+  // style of PRISTINE 'PRIME' / BERSERKER 'RAGE' (single short noun for
+  // the active passive state).
+  if (player.perks && player.perks.BULWARK && player.maxHp > 0 && player.hp / player.maxHp >= 0.75) {
+    fx.push({ id: 'bulwark', icon: '◈', label: 'WARD', colour: '#88ccff' });
+  }
+  // STRIDE active (movement-built dmg stacks). Distinct from BERSERKER (HP gate)
+  // and PRISTINE (high-HP gate) — STRIDE is purely movement-gated and stacks
+  // multiplicatively with both via Player.effectiveAtk() at entities.js:11331.
+  //
+  // Display: ⇶ RUSH ×1.05 ... ×1.25 — multiplier-readout style mirroring
+  // HOT_HAND (PR #280), MOMENTUM (PR #282), OVERDRIVE (PR #302). Pre-PR
+  // the label was `RUSH ×N` (a STACK COUNT, 1..5), which collided
+  // visually with the multiplier-readout convention (`×N.NN`) used by
+  // every other ATK-buff badge — players had to mentally compute the
+  // 5%-per-stack multiplier from the count. Replacing the count with the
+  // multiplier surfaces the actual ATK boost directly. The action-word
+  // "RUSH" prefix is preserved (matches WARD/RAGE/PRIME/AIM single-noun
+  // identity style for HP/state-gated buff badges) so the badge remains
+  // visually identifiable as STRIDE-the-perk, not just "another ×N".
+  //
+  // Local alias `ss` mirrors the entities.js:11330 alias of the same
+  // name — keeps the badge gate predicate STRUCTURALLY IDENTICAL to the
+  // multiplier gate after `this.`/`player.` receiver normalisation, so
+  // the cross-file alignment test (tests/stride-hud.test.js) can compare
+  // them directly via strict equality (no alias-substitution rule needed).
+  //
+  // Defensive `player.perks &&` null-check matches the codebase pattern
+  // (legacy player shapes that bypass the ctor may lack .perks). Cross-
+  // file desync defence (per stored memory 'HUD status fx'): the per-
+  // stack rate (0.05) is a literal in BOTH the HUD label here AND the
+  // STRIDE_DMG_PER_STACK constant at entities.js:10944. The companion
+  // test parses entities.js and asserts the literals match.
+  const ss = (player._strideStacks || 0);
+  if (player.perks && player.perks.STRIDE && ss > 0) {
+    const mul = (1 + 0.05 * ss).toFixed(2);
+    fx.push({ id: 'stride', icon: '⇶', label: 'RUSH ×' + mul, colour: '#00ffaa' });
+  }
+  // DEADEYE charged (stillness latch — next shot gets ×1.5). Stillness
+  // counterpart to STRIDE; both can be owned simultaneously, in which
+  // case the chip stacks with RUSH ×N (additive perk slots, distinct
+  // visual signals so the player can tell which is currently active).
+  if (player.perks && player.perks.DEADEYE && player._steadyReady) {
+    fx.push({ id: 'deadeye', icon: '◎', label: 'AIM', colour: '#ffee88' });
+  }
+  // DEADEYE charging — extends the AIM badge above with a countdown of how
+  // much stillness remains until the ×1.5 charge latches. Pre-this-PR the
+  // charge ramp (0 → DEADEYE_CHARGE_TIME = 1.0s, entities.js:10957) was
+  // invisible: players saw the AIM badge appear out of nowhere and could
+  // not tell that pausing for 0.7 more seconds would arm the bonus, nor
+  // that an incoming hit (shockTimer) silently froze the ramp.
+  //
+  // Mutual-exclusion strategy — explicit `!_steadyReady` gate, NOT an
+  // else-if chain. Per the structural-ancestor lesson from PR #302
+  // (gpt-5.5 review), an else-if branch's effective runtime predicate
+  // includes the negation of the previous gate, which the alignment
+  // tests do NOT capture. Two top-level sibling if-blocks with explicit
+  // mutual-exclusion conjuncts let each badge be a structural sibling
+  // and align cleanly against its source-of-truth gate.
+  //
+  // SHARED statusFx ID with the AIM badge above (`id: 'deadeye'`) — NOT
+  // a sibling id like 'deadeye-cd'. Per the gpt-5.5 review of this PR:
+  // drawStatusBar() at content.js:2680-2693 keeps inactive ids alive
+  // while fading them out (~200ms / ~12 frames at 60fps). With separate
+  // ids, the ramp→ready transition would render BOTH the fading
+  // 'deadeye-cd' badge AND the rising 'deadeye' badge simultaneously
+  // for the duration of the crossfade. DEADEYE transitions FAST (latch
+  // every 1.0s while still, consumed every shot, re-ramp from 0), so
+  // this dual-render artifact would flicker repeatedly in active play.
+  // Using the SAME id makes statusFx keep ONE entry whose label and
+  // colour mutate instantly on state transition — alpha stays high
+  // across the boundary, no crossfade overlap. The icon ◎ is the same
+  // in both states (perk identity), so visually the badge "morphs" from
+  // countdown to AIM with no flicker.
+  //
+  // Gate composition:
+  //   1. player.perks — defensive null-check (legacy player shapes).
+  //   2. player.perks.DEADEYE — perk-ownership.
+  //   3. !player._steadyReady — mutually exclusive with the AIM badge
+  //      above (when ready=true the entities.js tick sets chargeTime=0,
+  //      so this is double-defence: if a future regression decoupled
+  //      them, the HUD still shows exactly one badge).
+  //   4. player._steadyChargeTime > 0 — only show while actually
+  //      charging (between full reset at 0 and ready latch at >=1s).
+  //      The cancel-partial-on-move branch at entities.js:12284 zeroes
+  //      _steadyChargeTime instantly on movement, so this gate ALSO
+  //      hides the badge during shockTimer (which zeroes via the same
+  //      else-branch) — matches the runtime invariant that the ramp
+  //      can't progress while shocked.
+  //
+  // Display: ◎ N.Ns countdown (DEADEYE_CHARGE_TIME - elapsed). Same
+  // .toFixed(1)+'s' format as dash-cd / hw-cd / cloak (sub-5s timers
+  // get one decimal of precision). Icon ◎ matches the AIM badge above
+  // and the perk-card glyph at content.js:4594. Colour #887744 is the
+  // dimmed half-saturation pair of the active #ffee88 (mirrors
+  // LAST_STAND's #886622-vs-#ffaa00 active-vs-cooldown saturation
+  // contrast); the shared icon carries the buff identity and the
+  // saturation tells the state.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx'): the
+  // 1.0s charge time is hard-coded in BOTH the HUD label (literal `1`
+  // below) AND the entities.js DEADEYE_CHARGE_TIME constant. The
+  // companion test parses entities.js and asserts the content.js
+  // literal matches, so a future re-tune (e.g. 0.75s charge) trips the
+  // test and forces both sites to be updated in lockstep.
+  //
+  // NaN defence: although the gate's `(player._steadyChargeTime || 0) > 0`
+  // short-circuits when chargeTime is undefined/0, the countdown formula
+  // also wraps the input in `(... || 0)` so a future refactor that
+  // moved the gate or split the predicate cannot leak NaN into the
+  // toFixed call (which would render the literal string "NaNs").
+  if (player.perks && player.perks.DEADEYE && !player._steadyReady
+      && (player._steadyChargeTime || 0) > 0) {
+    const remaining = Math.max(0, 1 - (player._steadyChargeTime || 0));
+    fx.push({ id: 'deadeye', icon: '◎', label: remaining.toFixed(1)+'s', colour: '#887744' });
+  }
+  // Second Wind available — extended in PR (after PR #286) to also
+  // surface the META second_wind upgrade (meta/upgrades.js:31, "Revive
+  // once per floor at 1 HP when lethally hit"). The PERK version
+  // (player.perks.SECOND_WIND, tracked via player.secondWindUsed) and
+  // the META version (player.metaFlags.second_wind, tracked via
+  // player._metaSecondWindUsed) fire independently per
+  // meta/behavior.js:99 ("Parallel to the legacy SECOND_WIND perk —
+  // they fire independently."). Both feel identical to the player as
+  // an "I have one revive available" indicator. Pre-this-PR the badge
+  // ONLY surfaced the perk version — META owners saw NO HUD signal
+  // that the safety net was armed. Mirrors the PR #284 regenerator
+  // gate extension: OR-compose ownership-and-not-yet-used predicates
+  // for each independent system; share a single badge id since the
+  // player only cares about "do I have a revive ready or not."
+  const _perkSW = player.perks.SECOND_WIND && !player.secondWindUsed;
+  const _metaSW = player.metaFlags
+    && (player.metaFlags.second_wind | 0) > 0
+    && !player._metaSecondWindUsed;
+  if (_perkSW || _metaSW) {
     fx.push({ id: 'second-wind', icon: '↺', label: 'LIFE', colour: '#00ddff' });
+  }
+  // HOT_HAND streak active — perk rewards consecutive hits on the SAME
+  // target with +5% damage per stack (capped at +30% / 6 stacks). The
+  // streak resets on target-switch or after HOT_HAND_WINDOW (3s) without
+  // a hit (entities.js:12017-12023). Without an HUD indicator the buff
+  // accumulates invisibly: players see damage numbers tick up but can't
+  // tell why or when they're "in the zone." Surfaces the multiplier the
+  // NEXT hit will receive (NOT the current stack count) so the readout
+  // is actionable without the player needing to mentally compute the
+  // formula.
+  //
+  // Display: ♨ ×1.05 ... ×1.30 (clamped at 6 stacks). The perk's icon ♨
+  // matches the perk-card glyph at content.js:4397.
+  //
+  // Gates: perk owned + active timer (mirrors the LAST_STAND pattern from
+  // PRs #276/#278). Defensive `player.perks &&` null-check matches the
+  // codebase pattern. Streak gate (> 0) is technically redundant given
+  // timer > 0 implies streak > 0 (both set together in takeDamage at
+  // entities.js:1898-1900), but defends against a future regression that
+  // sets the timer without incrementing the streak.
+  if (player.perks && player.perks.HOT_HAND && player._hotHandTimer > 0
+      && player._hotHandStreak > 0) {
+    const stacks = Math.min(player._hotHandStreak | 0, 6);
+    const mul = (1 + stacks * 0.05).toFixed(2);
+    fx.push({ id: 'hot-hand', icon: '♨', label: '×' + mul, colour: '#ff5522' });
+  }
+  // MOMENTUM meta-upgrade — damage-bonus window after any kill. Set to 3s
+  // on Enemy.die via NEON.behavior.onKillRefreshMomentum (entities.js
+  // ~L2016), ticks down via NEON.behavior.tickMomentum in Player.update
+  // (entities.js:12025). Bonus = +15% per level (max level 2 → +30%) and
+  // is applied through computeOutgoingDmgMul at meta/behavior.js:42.
+  //
+  // Without an HUD indicator the buff fires invisibly: players see bigger
+  // damage numbers right after a kill but have no signal that the bonus
+  // is active, no countdown, and no level readout. Mirrors the LAST_STAND
+  // and HOT_HAND patterns (timer-driven, .toFixed(1)+'s' label NOT used
+  // here — see below).
+  //
+  // Display: ▶ ×N.NN where N.NN = (1 + 0.15 * level).toFixed(2). At
+  // level 1: ×1.15. At level 2: ×1.30. Same multiplier-readout style as
+  // HOT_HAND (PR #280) so the player learns "this badge = damage buff
+  // multiplier" once and applies the convention everywhere.
+  //
+  // Gates (mirror HOT_HAND):
+  //   player.metaFlags && metaFlags.momentum > 0 — defensive null-check
+  //     on metaFlags (legacy player shapes may lack it) + level-owned
+  //     gate (zero-level players don't see the badge).
+  //   player._momentumTimer > 0 — the active-window gate.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx', PR
+  // #280): the +15% per-level rate (0.15) is defined in
+  // meta/behavior.js:42. The HUD label uses a literal 0.15 — a future
+  // re-tune in behavior.js would silently desync the readout. The
+  // companion test (tests/momentum-hud.test.js) parses behavior.js and
+  // asserts the literals match.
+  if (player.metaFlags && (player.metaFlags.momentum | 0) > 0
+      && (player._momentumTimer || 0) > 0) {
+    const lv = player.metaFlags.momentum | 0;
+    const mul = (1 + 0.15 * lv).toFixed(2);
+    fx.push({ id: 'momentum', icon: '▶', label: '×' + mul, colour: '#ff8844' });
+  }
+  // OVERDRIVE perk — score-combo-driven damage buff. Perk piggybacks on the
+  // existing combo system (combo.count auto-clears via COMBO_WINDOW=3s, so
+  // no per-frame accumulator is introduced — see tests/overdrive.test.js
+  // 'OVERDRIVE does not introduce a new player accumulator'). Bonus formula
+  // at entities.js:11339-11343:
+  //   if (c >= 2) bonus = Math.min(0.30, (c - 1) * 0.03)
+  //   atk *= 1 + bonus
+  // → +3% per combo level above 1, capped at +30% (combo 11+).
+  //
+  // Pre-PR there was NO HUD signal. The perk-card description ("Score combo
+  // buffs damage") tells the player the bonus EXISTS but never reveals its
+  // CURRENT magnitude — combo.count is HUD-visible (render.js:1041+1297) but
+  // the OVERDRIVE multiplier it implies is invisible. Players learn the
+  // formula by inference from damage numbers, which is the same UX gap that
+  // PRs #276 (LAST_STAND), #280 (HOT_HAND), #282 (MOMENTUM), #284 (REGEN),
+  // and #300 (RETRIBUTION) all closed for their respective buffs.
+  //
+  // Display: `❯ ×N.NN` — multiplier-readout style (matches HOT_HAND / MOMENTUM
+  // PRs #280/#282). Range: combo 2 → ×1.03, combo 11+ → ×1.30 (cap). Icon ❯
+  // and colour #ff00c8 match the perk-card glyph at content.js:4540 — so the
+  // badge is visually identifiable as "the OVERDRIVE buff" the player picked.
+  //
+  // Gates:
+  //   player.perks &&            — defensive null-check; legacy player shapes
+  //                                may lack a .perks object (mirrors HOT_HAND
+  //                                / MOMENTUM / RETRIBUTION pattern).
+  //   player.perks.OVERDRIVE &&  — perk-ownership; non-owners never see badge.
+  //   combo.count >= 2           — same active-bonus gate as the multiplier
+  //                                site at entities.js:11340 — the predicate
+  //                                MUST match the bonus site (a stale gate
+  //                                would surface a phantom badge without a
+  //                                live multiplier or vice versa). The
+  //                                tests/overdrive-hud.test.js alignment test
+  //                                strict-equals the badge gate against the
+  //                                multiplier gate after normalisation, so a
+  //                                future change on either side that breaks
+  //                                the contract fails loudly.
+  //
+  // No defensive `typeof combo` guard: combo is module-scope const at
+  // content.js:2626 (declared in this same file). entities.js needs the
+  // `typeof combo !== 'undefined'` guard because it runs in a separate
+  // script tag and combo is a cross-file global; here it is local.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx' + PR #280
+  // pattern): the per-step rate (0.03) and cap (0.30) are hard-coded in BOTH
+  // entities.js (the multiplier) and the HUD label below. The companion test
+  // tests/overdrive-hud.test.js extracts both literals from entities.js and
+  // asserts the content.js label uses the same numeric values, so a future
+  // re-tune (e.g. +5% per level, +50% cap) trips the test and forces both
+  // sites to be updated in lockstep.
+  if (player.perks && player.perks.OVERDRIVE && combo.count >= 2) {
+    const c = combo.count;
+    const mul = (1 + Math.min(0.30, (c - 1) * 0.03)).toFixed(2);
+    fx.push({ id: 'overdrive', icon: '❯', label: '×' + mul, colour: '#ff00c8' });
+  }
+  // SURGE meta-upgrade — counter for "every 8th shot deals +100% damage"
+  // (meta/upgrades.js:36, maxLevel 1). Counter mutated in
+  // consumeSurgeShot at meta/behavior.js:51-59 — increments on EVERY
+  // shot (not every hit), fires multiplier (1 + 1.0 * surgeLv) when
+  // count % 8 === 0. Pre-PR there was NO HUD signal — players had no
+  // way to anticipate the next surge shot, leading to wasted surges
+  // on weak/missed shots.
+  //
+  // Display: ⊙ N/8 where N = _surgeShotCount % 8. Same convention as
+  // floor-modifier counter HUD (OVERCHARGE/WINDFALL/SIGNAL_BOOST/REVERB
+  // all show N/5). After surge fires the count rolls to 0/8; at 7/8 the
+  // next shot will surge.
+  //
+  // Gates: metaFlags-ownership only. The counter ticks unconditionally
+  // (every shot, regardless of ownership), so a level-zero player has
+  // _surgeShotCount > 0 but no badge. This means the moment they pick
+  // up the surge upgrade mid-run, the badge appears immediately at the
+  // current count progress — no "warmup" required to display.
+  //
+  // Cross-file desync defence (per stored memory 'HUD status fx', PRs
+  // #280/#282/#284): the modulo period (8) is hard-coded in BOTH the
+  // HUD label (content.js) AND the surge-firing gate (meta/behavior.js
+  // :55). The companion test parses behavior.js and asserts the
+  // content.js HUD literal matches.
+  if (player.metaFlags && (player.metaFlags.surge | 0) > 0) {
+    const cnt = (player._surgeShotCount | 0) % 8;
+    fx.push({ id: 'surge', icon: '⊙', label: cnt + '/8', colour: '#ffcc44' });
   }
   // Augment count
   const augCount = Object.keys(player.augments || {}).length;
@@ -1887,9 +3291,121 @@ function getStatusEffects(player) {
   if (hasAugment('REACTIVE_ARMOR') && player.reactiveArmorCD > 0) {
     fx.push({ id: 'reactive-cd', icon: '💥', label: Math.ceil(player.reactiveArmorCD)+'s', colour: '#993322' });
   }
+  // LAST_STAND clutch window active — perk has a 5s window where the player
+  // takes 50% damage AND deals 75% extra damage (entities.js:11326 + :11536).
+  // Without an HUD indicator the window fires invisibly: players see their
+  // HP survive a hit they expected to die from, then die on the next hit
+  // because they didn't know to press the advantage. Mirrors the
+  // adrenalineTimer pattern (timer-driven, seconds-remaining label, icon-
+  // and-colour signature). Only the ACTIVE window is surfaced in this PR
+  // — the 60s post-window cooldown could be added in a follow-up; this PR
+  // closes the immediate "invisible buff" UX gap. Defensive `player.perks`
+  // null-check matches the codebase pattern for nullable nested fields.
+  if (player.perks && player.perks.LAST_STAND && player.lastStandTimer > 0) {
+    fx.push({ id: 'last-stand', icon: '✦', label: player.lastStandTimer.toFixed(1)+'s', colour: '#ffaa00' });
+  } else if (player.perks && player.perks.LAST_STAND && player.lastStandCD > 0) {
+    // LAST_STAND post-window cooldown — perk owned but on the 60s recharge
+    // after a clutch trigger. Surfaces tactical info: at low HP, the player
+    // needs to know whether the safety-net will fire on the next near-death
+    // hit or not. Pre-this-PR (after PR #276) the active window was visible
+    // but the recharge was invisible — players couldn't tell "ready vs
+    // recharging" without remembering the last trigger time.
+    //
+    // ELSE-IF (not a second IF): mutually exclusive with the active-window
+    // branch above. When the perk just triggered, BOTH lastStandTimer > 0
+    // AND lastStandCD > 0 (entities.js:11529-11530 sets both simultaneously).
+    // Showing both badges would be HUD noise; the active window takes
+    // priority because it's the more actionable state.
+    //
+    // Math.ceil over toFixed(1): the 60s cooldown is too long for sub-second
+    // precision to feel meaningful (matches reactive-cd's pattern at
+    // content.js:2358). Players want a coarse "how long until ready"
+    // readout, not a 0.1s ticker.
+    //
+    // Dim amber colour (#886622) distinguishes from the bright #ffaa00
+    // active-window colour — same icon ✦ keeps the visual identity, the
+    // saturation tells the state.
+    fx.push({ id: 'last-stand-cd', icon: '✦', label: Math.ceil(player.lastStandCD)+'s', colour: '#886622' });
+  }
+  // RETRIBUTION clutch window active — perk gives +50% outgoing damage for
+  // 3s after taking damage (entities.js:11349 multiplier; trigger at
+  // entities.js:11568 sets retributionTimer = 3 inside takeDamage when actual
+  // damage > 0). Without an HUD indicator the buff fires invisibly: players
+  // see damage numbers tick up after a hit-trade but have no signal that the
+  // window is active and no countdown until expiry. Mirrors the
+  // adrenalineTimer / lastStandTimer pattern (timer-driven, .toFixed(1)+'s'
+  // label, perk-gated) — RETRIBUTION's 3s window is the same scale as
+  // LAST_STAND's 5s clutch window so the same display format applies.
+  //
+  // Display: ☄ N.Ns — icon ☄ matches the perk-card glyph at content.js:4512;
+  // colour #ff2266 matches the perk-card colour exactly so the badge ties
+  // visually to the perk it represents (mirrors LAST_STAND's ✦ icon match).
+  //
+  // Gates: perk owned + active timer. Defensive `player.perks &&` null-check
+  // matches the codebase pattern for nullable nested fields. Timer > 0 is
+  // the active-window predicate (mirrors entities.js:11349's multiplier
+  // gate exactly, so the badge appears iff the bonus is being applied).
+  //
+  // Cross-file alignment: the perk-card colour at content.js:4512 ('#ff2266')
+  // and the multiplier at entities.js:11349 (×1.5) are the source of truth.
+  // The badge intentionally does NOT show the multiplier in the label —
+  // RETRIBUTION's bonus is fixed at +50% regardless of stacks/state, so
+  // showing a static "×1.50" every tick would be informational redundancy.
+  // The countdown is the actionable signal; the icon+colour identify the
+  // buff type at a glance.
+  if (player.perks && player.perks.RETRIBUTION && player.retributionTimer > 0) {
+    fx.push({ id: 'retribution', icon: '☄', label: player.retributionTimer.toFixed(1)+'s', colour: '#ff2266' });
+  }
+  // GLASS_CANNON active — passive +30% ATK / +25% incoming damage trade.
+  // Pre-PR there was NO HUD signal of the trade. Players took 25% extra
+  // direct damage with no visual cue that GLASS_CANNON was the cause —
+  // same "invisible always-on perk" UX gap that PRs #276 (LAST_STAND),
+  // #280 (HOT_HAND), #282 (MOMENTUM), #284 (REGEN), #300 (RETRIBUTION),
+  // #302 (OVERDRIVE), #304 (DEADEYE charging), and #318 (BULWARK) all
+  // closed for their respective buffs/debuffs.
+  //
+  // Gate predicate is pure perk-ownership: GLASS_CANNON has no state
+  // (no timer, no stacks, no HP threshold) — owning the perk IS the
+  // active condition. The gate matches the offensive multiplier site
+  // at entities.js:11661 EXACTLY (after defensive `player.perks &&`
+  // short-circuit + receiver normalisation). The defensive-cost site
+  // at entities.js:11838 has an additional `!options.ignoreDefense`
+  // conjunct (env-DoT-damage-gate, see that block's comment) — that
+  // is intentionally NOT mirrored in the badge gate because the
+  // badge represents "you OWN the perk", not "you are CURRENTLY
+  // taking direct damage". The cross-file alignment test asserts
+  // both: (a) badge ≡ offensive site, (b) defensive-site delta is
+  // exactly the env-DoT exemption clause.
+  //
+  // Defensive `player.perks &&` short-circuit: legacy player shapes
+  // (test sandboxes, save migrations) may bypass the ctor and lack
+  // a .perks object. The earlier ENERGY_SHIELD branch at
+  // content.js:2292 unguarded-derefs player.perks, so a real call
+  // without .perks already crashes before reaching this gate — the
+  // guard here is defense-in-depth (per PR #300/#302/#304/#318
+  // reviewer convention for new HUD badges).
+  //
+  // Icon ⟁ matches the perk-card glyph at content.js:4718; colour
+  // #ff66aa matches the perk-card colour exactly (cross-file desync
+  // defence per stored memory 'HUD status fx'). Label 'GLASS' mirrors
+  // the action-word style of PRISTINE 'PRIME' / BERSERKER 'RAGE' /
+  // BULWARK 'WARD' (single short noun) and echoes the perk name so
+  // the badge is visually identifiable as GLASS_CANNON-the-perk.
+  if (player.perks && player.perks.GLASS_CANNON) {
+    fx.push({ id: 'glass-cannon', icon: '⟁', label: 'GLASS', colour: '#ff66aa' });
+  }
   // Disruption field debuff
   if (player.disruptionFieldActive) {
     fx.push({ id: 'disrupted', icon: '⊘', label: 'DISRUPTED', colour: '#ff44aa' });
+  }
+  // Toxic pool slow debuff — 30% movement penalty while standing in toxic.
+  // Mirrors the disruption-field treatment so both ground-hazard slows are
+  // visible to the player. Suppressed during dash since the slow is bypassed.
+  // Use the exact same predicate as the movement gate (entities.js:8362
+  // `dashTimer <= 0`) so the HUD never lies about whether the slow is live —
+  // `!(x > 0)` and `x <= 0` diverge for NaN/undefined dashTimer.
+  if (player.toxicSlowActive && player.dashTimer <= 0) {
+    fx.push({ id: 'toxic-slow', icon: '☣', label: 'TOXIC', colour: '#88ff44' });
   }
   // Holo Decoy active
   if (hackwareEffects.some(f => f.type === 'hologram')) {
@@ -1925,9 +3441,31 @@ function drawStatusBar(player) {
   if (ids.length === 0) return;
 
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
-  const y = layout.hudTop - (hasKeys ? 32 : 16);
-  const fs = layout.compact ? 8 : 9;
-  const maxX = W - 130 - safeRight; // stop before minimap area
+  // Vertical anchor for the badge row, sitting ABOVE the HUD bar.
+  // The hasKeys offset (32) and no-keys offset (16) both scale with
+  // `settings.textScale` so this row tracks the corresponding key
+  // indicator row in render.js drawHUD (which scales its font 12 +
+  // gap-above-HUD 18 + stride 55 by the same setting). Without this
+  // proportional scaling, at textScale 1.3× the larger key text
+  // baseline rises into the badge bottom edge — caught by gpt-5.3-codex
+  // adversarial review of this PR.
+  // Floors keep the no-keys case from collapsing into the HUD at 0.85×
+  // (12) and the hasKeys case from collapsing into the keys row (24).
+  const badgeYOffset = hasKeys
+    ? Math.max(24, Math.round(32 * settings.textScale))
+    : Math.max(12, Math.round(16 * settings.textScale));
+  const y = layout.hudTop - badgeYOffset;
+  // Settings-scaled font size. `settings.textScale` is one of
+  // TEXT_SCALE_STEPS (0.85 / 1.0 / 1.15 / 1.3); the badge height/width
+  // both derive from `fs` (height = fs+6, width = measureText+8) so
+  // scaling the font naturally rescales the whole badge box.
+  const fs = Math.max(6, Math.round((layout.compact ? 8 : 9) * settings.textScale));
+  // Reserve room for the corner minimap. The minimap is also
+  // settings-scaled (`settings.minimapScale`); `Math.round(120 * scale)`
+  // matches the MW formula in render.js drawMinimap so the badge strip
+  // never overlaps the bigger minimap when the player scales it up.
+  const minimapReserve = Math.round(120 * settings.minimapScale) + 10;
+  const maxX = W - minimapReserve - safeRight; // stop before minimap area
   let x = 14 + safeLeft;
 
   ctx.save();
@@ -2975,18 +4513,35 @@ function generateFloor(floorNum) {
 function updateLighting(dungeon, px, py) {
   const map = dungeon.map;
   const mod = _CG.modifier;
-  const r = mod === 'BLACKOUT' ? 5 : 9;
+  const baseR = mod === 'BLACKOUT' ? 5 : 9;
+  // RECON meta upgrade (src/meta/save.js applyMetaToPlayer): sensorRadiusMult
+  // scales the player FOV radius. Same loop also writes dungeon.visited (line
+  // ~3468) so this widens both the lit area AND the minimap reveal — matching
+  // the upgrade contract '+20% sensor radius (minimap reveal) per level'.
+  // Set once at run start; constant for the run; included in the cache key
+  // (_fovSensor) defensively in case any future mechanic mutates it mid-run.
+  // Sanitize aggressively: corrupted/tampered save data can deliver NaN /
+  // Infinity / strings via _CG.player.sensorRadiusMult (the field flows through
+  // saveGame's explicit enum but localStorage is user-writable); without the
+  // isFinite + bounds check, NaN would blank the FOV and Infinity would hang
+  // the per-tile loop.
+  let sensorMult = (_CG.player && _CG.player.sensorRadiusMult) || 1;
+  if (!Number.isFinite(sensorMult) || sensorMult <= 0) sensorMult = 1;
+  if (sensorMult > 8) sensorMult = 8;
+  const r = Math.max(1, Math.round(baseR * sensorMult));
   const tx = Math.floor(px), ty = Math.floor(py);
   // Incremental FOV (Phase 2b): if the player is still on the same floor tile
   // and the modifier hasn't changed and no map mutation flagged dirty, the
   // previous frame's light/visible grids are still correct. Skip recompute.
   if (!dungeon._fovDirty &&
       dungeon._fovTx === tx && dungeon._fovTy === ty &&
-      dungeon._fovMod === mod) {
+      dungeon._fovMod === mod &&
+      dungeon._fovSensor === sensorMult) {
     return;
   }
   dungeon._fovDirty = false;
   dungeon._fovTx = tx; dungeon._fovTy = ty; dungeon._fovMod = mod;
+  dungeon._fovSensor = sensorMult;
   // Clear light and visible each frame (per-row typed-array fill)
   for (let y = 0; y < MAP_H; y++) {
     dungeon.light[y].fill(0);
@@ -3116,6 +4671,9 @@ class Projectile {
   /** @type {any} */ targetY;
   /** @type {any} */ maxPierces;
   /** @type {any} */ isAllyTurret;
+  /** @type {any} */ fromPlayerShot;
+  /** @type {any} */ _isReverbEcho;
+  /** @type {any} */ _timeMul;
   /**
    * @param {any} x
    * @param {any} y
@@ -3186,8 +4744,15 @@ class Projectile {
     this.targetY = 0;
     this.ownerType = null;
     this.isAllyTurret = false;
+    this.fromPlayerShot = false;
+    this._isReverbEcho = false;
     this._owner = /** @type {any} */ (null);
     this.isCrit = false;
+    // Pool-reset: a recycled projectile slot must NOT inherit a
+    // _timeMul=0.5 from a prior occupant that died inside a
+    // TIME_DILATION zone. Without this reset, the next shot fired
+    // from the same slot would crawl at half speed.
+    this._timeMul = 1;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
     else if (!this._affixes) this._affixes = /** @type {any[]} */ ([]);
   }
@@ -3215,7 +4780,17 @@ class Projectile {
     }
           /** @type {any} */ const prevX=this.x;
           /** @type {any} */ const prevY=this.y;
-    const mx=this.dx*this.spd*dt, my=this.dy*this.spd*dt;
+    // TIME_DILATION temporal field (content.js time_field branch in
+    // updateHackwareEffects) sets this._timeMul to 0.5 each frame
+    // for enemy projectiles inside the radius, and back to 1 when
+    // outside. The expiry branch + the activation dedup both restore
+    // any leftover slowed projectiles. Default to 1 so projectiles
+    // never touched by a field move at full speed. Multiply BOTH the
+    // x/y delta AND the travelled accumulator so range budget ticks
+    // at the same slowed rate (otherwise a slowed projectile would
+    // exhaust its maxRange before traversing the slowed distance).
+    const tmul = this._timeMul || 1;
+    const mx=this.dx*this.spd*tmul*dt, my=this.dy*this.spd*tmul*dt;
     this.x+=mx; this.y+=my;
     this.travelled+=Math.sqrt(mx*mx+my*my);
     if (this.travelled>=this.maxRange) {
@@ -3297,6 +4872,7 @@ class Projectile {
             this.dx = -this.dx;
             this.dy = -this.dy;
             this.fromPlayer = false;
+            this.fromPlayerShot = false;
             this.dmg = Math.round(this.dmg * 0.6);
             this.ownerType = 'Reflected';
             this.hitEnemies = new Set();
@@ -3333,7 +4909,7 @@ class Projectile {
             }
             this.dead = true; return;
           }
-          e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[] });
+          e.takeDamage(this.dmg, { name:this.weaponName, effects:this._effects||[], affixes:this._affixes||[], fromPlayerShot: this.fromPlayerShot === true });
           if (this.isCrit) spawnDmgText(e.x, e.y - 0.3, 'CRIT!', '#ffdd00');
           spawnParticles(this.x,this.y,'BLOOD','#ff3333',4);
           this.hitEnemies.add(e);
@@ -3342,6 +4918,39 @@ class Projectile {
       }
     } else if (!this.isGrenade && !this.isAllyTurret) {
       // Normal enemy projectiles damage player (grenades don't — they create zones)
+      // PARRY perk: while dashing, enemy projectiles touching the player are
+      // reflected back at full damage (skill-tied — requires precise dash timing).
+      // Mirrors the REFLECTOR enemy-side reflect at line ~3418, but enemy→player.
+      // Gated on dashTimer specifically (not cloak / spawn-grace) so the perk
+      // only rewards active dash timing, not passive immunity windows.
+      if (player.perks.PARRY && player.dashTimer > 0 && dist(this.x,this.y,player.x,player.y)<0.5) {
+        this.dx = -this.dx;
+        this.dy = -this.dy;
+        this.fromPlayer = true;
+        this.fromPlayerShot = false;
+        this.ownerType = 'Parry';
+        this._owner = null;
+        this.weaponName = 'Parry';
+        this.hitEnemies = new Set();
+        this.maxPierces = 0;
+        this.piercing = false;
+        this.homing = null;
+        this.bouncesLeft = 0;
+        this._hasRicochet = false;
+        this.travelled = 0;
+        this._effects = /** @type {any[]} */ ([]);
+        this._affixes = /** @type {any[]} */ ([]);
+        this.isCrit = false;
+        this.colour = '#aaffee';
+        // TIME_DILATION ownership-flip cleanup — see REVERSE_POLARITY
+        // mirror at ~L1153 for the rationale. A parried bullet that
+        // was slowed by a time_field needs _timeMul snapped back to 1
+        // so the player's reflected shot doesn't crawl at half speed.
+        this._timeMul = 1;
+        spawnParticles(this.x, this.y, 'SPARK', '#aaffee', 8);
+        audio.reflect();
+        return;
+      }
       // Cloaked player: projectiles pass through
       if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
         const dealt = player.takeDamage(this.dmg, this.ownerType || 'Projectile');
@@ -3643,10 +5252,47 @@ const UPGRADES = [
      // entities.js:690 kill credits): scale by difficulty creditMul so
      // NIGHTMARE (0.85) and EASY (1.2) don't break the economy.
      const diffMul = (typeof getDiff === 'function') ? (getDiff().creditMul || 1) : 1;
-     const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul));
+     // SCAVENGER meta upgrade (src/meta/save.js applyMetaToPlayer):
+     // bonusCreditPerPickup is a flat per-pickup additive bonus (+1 CR per
+     // upgrade level). Added AFTER rounding/clamp so the bonus is always
+     // exactly the upgrade level value (not subject to metaMul / siphon /
+     // diffMul). This matches the upgrade contract '+1 credit per pickup
+     // per level' (src/meta/upgrades.js:39). Sanitize against corrupted
+     // localStorage: bonusCreditPerPickup must be a finite non-negative
+     // integer; clamp to a sane upper bound (32) to defend against
+     // tampered save data injecting Infinity / very large values.
+     let bonus = (p && p.bonusCreditPerPickup) || 0;
+     if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
+     if (bonus > 32) bonus = 32;
+     bonus = Math.floor(bonus);
+     const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul)) + bonus;
      p.credits = (p.credits || 0) + amt;
      // Mirror kill-credit telemetry: a floating "+N CR" so the player sees it.
      if (typeof spawnDmgText === 'function') spawnDmgText(p.x, p.y, '+' + amt + ' CR', '#ffd700');
+   }},
+  // Tactical Drop — random temporary boost. Reuses NEON.boosts (the vendor
+  // boost system) so floor-duration buffs (COMBAT_STIM/REFLEX_BOOSTER/
+  // CRIT_MATRIX/RECON_PING) and instant grants (SHIELD_DRIVER) integrate
+  // automatically with combat math, HUD, save/load. Per "loot philosophy":
+  // temporary effects are explicitly OK as drops — only persistent power
+  // (saws/sentries/regen) is forbidden. Excluded from the vendor pool
+  // (filterVendorPool in src/meta/boosts.js) because vendors already sell
+  // each boost individually at known prices; a flat-priced random pick
+  // would be either strictly worse or an arbitrage loop. Rarity 25 sits
+  // below MED_PACK/CREDIT_CACHE so it stays a "treat" pickup.
+  {id:'TACTICAL_DROP', name:'Tactical Drop', desc:'Random combat boost', colour:'#ff8800', rarity:25, persistent:false,
+   fn: (/** @type {any} */ p)=>{
+     if (typeof NEON === 'undefined' || !NEON.boosts || !NEON.boosts.rollDropBoost) return;
+     const id = NEON.boosts.rollDropBoost();
+     if (!id) return;
+     const b = NEON.boosts.BOOSTS && NEON.boosts.BOOSTS[id];
+     NEON.boosts.applyBoost(p, id);
+     // Activation feedback — burst + audio + floating label so the player
+     // sees WHAT they got (random pick is opaque otherwise).
+     if (typeof spawnParticles === 'function') spawnParticles(p.x, p.y, 'EXPLOSION', (b && b.colour) || '#ff8800', 12);
+     if (typeof audio !== 'undefined' && audio.hackwareCloak) { try { audio.hackwareCloak(); } catch(_){} }
+     if (b && _CG && _CG.msg) _CG.msg(b.icon + ' ' + b.name + ' ACTIVE', b.colour);
+     if (typeof spawnDmgText === 'function' && b) spawnDmgText(p.x, p.y, b.icon + ' ' + b.name, b.colour);
    }},
   // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
@@ -3782,6 +5428,17 @@ const PERK_POOL = {
   EXPLOSIVE_KILLS: { name:'Explosive Kills',  icon:'💥', desc:'Enemies explode on death',            colour:'#ff6600' },
   MULTI_SHOT:      { name:'Multi-Shot',       icon:'⫸', desc:'Fire an extra 60%-damage projectile', colour:'#cc44ff' },
   SECOND_WIND:     { name:'Second Wind',      icon:'↺', desc:'Revive once per floor at 30% HP',     colour:'#00ddff' },
+  PARRY:           { name:'Phase Parry',      icon:'⇄', desc:'Dash reflects enemy shots',           colour:'#aaffee' },
+  LAST_STAND:      { name:'Last Stand',       icon:'⚔', desc:'Hit to ≤10% HP: +75% dmg, −50% taken (5s, 60s CD)', colour:'#ffcc00' },
+  PRISTINE:        { name:'Pristine',          icon:'✧', desc:'+25% damage at or above 90% HP',       colour:'#88ffee' },
+  STRIDE:          { name:'Stride',           icon:'⇶', desc:'Continuous movement: +5% ATK / sec (max 5)', colour:'#00ffaa' },
+  DEADEYE:         { name:'Deadeye',          icon:'◎', desc:'Stand still 1s: next shot deals +50% damage', colour:'#ffee88' },
+  OVERDRIVE:       { name:'Overdrive',         icon:'❯', desc:'Score combo buffs damage (+3%/level, max +30%)', colour:'#ff00c8' },
+  RETRIBUTION:     { name:'Retribution',       icon:'☄', desc:'Take damage: +50% ATK for 3s',          colour:'#ff2266' },
+  GLASS_CANNON:    { name:'Glass Cannon',      icon:'⟁', desc:'+30% damage dealt, +25% damage taken',  colour:'#ff66aa' },
+  BULWARK:         { name:'Bulwark',           icon:'◈', desc:'−15% damage taken at or above 75% HP',   colour:'#88ccff' },
+  EXPLOITER:       { name:'Exploiter',         icon:'🎯', desc:'+25% damage to enemies with status effects', colour:'#ff8844' },
+  HOT_HAND:        { name:'Hot Hand',           icon:'♨', desc:'Consecutive hits on same target: +5% per stack (max +30%)', colour:'#ff5522' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
 const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
@@ -3838,6 +5495,9 @@ const AUGMENTS = {
   KINETIC_AMPLIFIER:{ name:'Kinetic Amplifier',    icon:'🚀', colour:'#ff8800', desc:'+20% projectile speed' },
   TEMPORAL_DILATION:{ name:'Temporal Dilation',     icon:'⏳', colour:'#88ccff', desc:'All enemies 15% slower' },
   REACTIVE_ARMOR:   { name:'Reactive Armor',        icon:'💥', colour:'#ff6644', desc:'When hit, emit damage pulse' },
+  EMERGENCY_CACHE:  { name:'Emergency Cache',       icon:'🔋', colour:'#88ffaa', desc:'Enter floor <30% HP: heal to 50%' },
+  KINETIC_DAMPER:   { name:'Kinetic Damper',        icon:'⚙', colour:'#5588aa', desc:'−20% damage from direct hits' },
+  BIOFILTER:        { name:'Biofilter',             icon:'🧪', colour:'#aaffcc', desc:'−50% burn DoT and hazard tile damage' },
 };
 const AUGMENT_KEYS = Object.keys(AUGMENTS);
 /**
@@ -4228,6 +5888,10 @@ function generateShopItems(floor, player, dungeon) {
     const bid = 'BOOST_' + bk;
     if (usedIds.has(bid)) continue;
     const b = NEON.boosts.BOOSTS[bk];
+    // Skip non-vendor boosts (mob-drop only — e.g. HARVEST_SURGE has no
+    // price; selling it would NaN the cost and break the rule that mob
+    // drops are earned not purchased).
+    if (!b || typeof b.price !== 'number') continue;
     pool.push({
       id: bid, name: b.name, desc: b.desc, colour: b.colour,
       price: b.price + Math.floor(floor * 2), // mild floor scaling keeps late-game meaningful
@@ -4266,6 +5930,238 @@ function generateShopItems(floor, player, dungeon) {
     pool.push({ ...wo, price: 70 + floor * 6 });
   }
   return pool.slice(0, 3).map(item => ({ ...item, sold: false }));
+}
+
+// HARVESTER drop — pulses, decays after 5s if uncollected. Picking it up
+// applies HARVEST_SURGE (+50% damage for 8s — see src/meta/boosts.js). Shape
+// is a diamond core wrapped in a pulsing surge ring so it's distinguishable
+// at a glance from a plain Item or KeyItem; orange-amber palette matches the
+// HARVESTER mob's body colour for source attribution.
+class HarvestPickup {
+  /**
+   * @param {any} x
+   * @param {any} y
+   */
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHarvest = true;
+    // Decays after 5s if uncollected. Tracks remaining time so the draw
+    // branch can flash + alpha-fade in the last second to telegraph imminent
+    // expiry — the player decides whether the dash is worth it.
+    this.ttl = 5;
+  }
+  /** @param {any} dt */
+  update(dt) {
+    this.bob += dt * 3.5;
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.6);
+    // Last-second urgency: rapid alpha flicker once ttl < 1.0.
+    const urgent = this.ttl < 1.0;
+    const flick = urgent ? (0.3 + 0.7 * Math.abs(Math.sin(this.bob * 14))) : 1;
+    ctx.save();
+    ctx.shadowBlur = 10 + 12 * pulse;
+    ctx.shadowColor = '#ff9933';
+    ctx.globalAlpha = (0.7 + 0.3 * pulse) * flick;
+    // Outer surge ring — clearly different from Item's static diamond.
+    ctx.strokeStyle = '#ffcc66';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    // Inner diamond core
+    ctx.fillStyle = '#ff9933';
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-3.5, -3.5, 7, 7);
+    ctx.restore();
+  }
+}
+
+// MagpieHoard — hoard pickup dropped by MAGPIE on death. Grants the
+// total credit value the thief banked across all the items it consumed
+// during its life. Hand-rolled (instead of reusing CREDIT_CACHE)
+// because CREDIT_CACHE.fn() recomputes the amount from current floor +
+// meta multipliers — which would be wrong here: we want to refund the
+// EXACT value the thief banked. Auto-collected via an `isHoard` branch
+// in game.js's pickup loop (mirrors the isHarvest pattern). The pickup
+// sits on the floor visibly so the player has to actually walk to the
+// thief's death spot — a small "go fetch" beat that makes the kill
+// feel earned. No TTL: hoard pickups persist for the rest of the
+// floor (so a long detour to clear other enemies first doesn't lose
+// the recovery).
+class MagpieHoard {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {number} amt   credit value to grant on pickup
+   */
+  constructor(x, y, amt) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHoard = true;
+    this.amt = Math.max(0, Math.round(amt || 0));
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 3; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.5);
+    ctx.save();
+    ctx.shadowBlur = 10 + 12 * pulse;
+    ctx.shadowColor = '#ffd700';
+    ctx.globalAlpha = 0.75 + 0.25 * pulse;
+    // Outer ring — pale silver-blue (MAGPIE colour) so the player
+    // recognises it as "the thief's hoard" at a glance.
+    ctx.strokeStyle = '#cceeff';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    // Inner gold square — currency glyph.
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(sx - 3, sy - 3, 6, 6);
+    ctx.restore();
+  }
+}
+
+// VaultCoin — credit pickup ejected by VAULTMASTER. Two flavours, both
+// constructed via `new VaultCoin(x, y, amt)`:
+//   - per-hit ejection (small): amt = VAULTMASTER_COIN_AMT (5)
+//   - on-death jackpot (large): amt = VAULTMASTER_JACKPOT_AMT (25)
+// Visual scales with amt so the player reads "small drop" vs "fat
+// jackpot" at a glance. Auto-collected via the `isHoard` branch in
+// game.js's pickup loop (mirrors MagpieHoard); also flagged isHoard so
+// MAGPIE's loot-scan filter excludes it (`if (it.isHoard) continue;`
+// at entities.js aiMagpie ~2315) — otherwise a passing thief could
+// vacuum the vault drops mid-fight, which would feel like a bug
+// rather than counterplay. Hand-rolled (instead of reusing CREDIT_CACHE
+// or the Item-with-CREDIT-type approach) for the same reason as
+// MagpieHoard: we want a fixed, exact amount granted on collection,
+// not a floor-recomputed value. No TTL — coins persist for the rest
+// of the floor so milking-then-clearing-the-room-first is a valid
+// economic play (matches MagpieHoard's no-TTL choice for the same
+// "earn the recovery" beat). Distinct visual from MagpieHoard:
+// pure gold ring + inner gold core (no MAGPIE silver-blue), so the
+// player reads vault-drops as a different economic source.
+class VaultCoin {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {number} amt   credit value to grant on pickup
+   */
+  constructor(x, y, amt) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isHoard = true;
+    this.amt = Math.max(0, Math.round(amt || 0));
+    // Visual size hint — used to scale the ring radius. Coin (5cr) reads
+    // as small + abundant; jackpot (25cr) reads as fat + singular.
+    this._big = this.amt >= 15;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 3; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.5);
+    const ringR = (this._big ? 7 : 4.5) + (this._big ? 1.5 : 1) * pulse;
+    const coreSz = this._big ? 6 : 4;
+    ctx.save();
+    ctx.shadowBlur = (this._big ? 12 : 7) + 10 * pulse;
+    ctx.shadowColor = '#ffd700';
+    ctx.globalAlpha = 0.75 + 0.25 * pulse;
+    // Outer ring — pure gold (distinct from MagpieHoard's silver-blue
+    // ring, so the player reads "vault loot" not "thief loot").
+    ctx.strokeStyle = '#ffe680';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, ringR);
+    // Inner gold core.
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(sx - coreSz / 2, sy - coreSz / 2, coreSz, coreSz);
+    ctx.restore();
+  }
+}
+
+// SHOCK_PULSE pickup — defensive panic-button consumable. Auto-collected on
+// player contact (mirrors HealthPack-style pickup feedback). Discharges an
+// AoE knockback + brief stun centred on the player. NON-DAMAGING — the
+// payoff is positional / tempo (panic-eject a swarm, regain footing) rather
+// than DPS. Distinct from MAGPIE/VAULTMASTER pickups (currency) and
+// HARVESTER pickup (timed buff): this one has an immediate spatial/control
+// effect and no lingering boost.
+//
+// Design notes:
+//  - Floor-gated to floor 3+ via populateFloor placement (matches mines).
+//  - Spawn rate ~30% per floor with a once-per-floor cap (rare panic
+//    button, not a stack-and-spam consumable).
+//  - LOS-gated knockback so enemies behind walls aren't shoved around the
+//    geometry. Same gate other AoE helpers use (LEAPER shockwave, mine
+//    explode), keeps "what you can see is what you affect" parity.
+//  - Bosses: brief stun (boss stunTimer cap = 0.3s already enforced
+//    elsewhere) but NO knockback — boss positioning is a designed
+//    encounter constraint and shoving them breaks arena flow.
+//  - No TTL — sits on the floor until claimed (matches MagpieHoard /
+//    VaultCoin choice; the player decides when to use it).
+const SHOCK_PULSE_RADIUS = 5.0;       // tiles
+const SHOCK_PULSE_STUN   = 1.0;       // seconds (capped to 0.3 for bosses by takeDamage path; we apply directly)
+const SHOCK_PULSE_BOSS_STUN = 0.3;    // explicit shorter cap for bosses
+const SHOCK_PULSE_KNOCK  = 2.5;       // tiles of impulse displacement
+class ShockPulsePickup {
+  /**
+   * @param {any} x
+   * @param {any} y
+   */
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.dead = false;
+    this.bob = Math.random() * TWO_PI;
+    this.isShockPulse = true;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 4; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    if (this.dead) return;
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const bobY = Math.sin(this.bob) * 3;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.5 + 0.5 * Math.sin(this.bob * 1.4);
+    ctx.save();
+    ctx.shadowBlur = 10 + 14 * pulse;
+    ctx.shadowColor = '#66e0ff';
+    ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    // Two concentric arc rings — "stored shockwave" silhouette, distinct
+    // from VaultCoin's solid gold ring + core and HarvestPickup's diamond.
+    ctx.strokeStyle = '#aaf0ff';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    ctx.strokeStyle = '#66e0ff';
+    ctx.lineWidth = 1;
+    NEON.draw.circleStroke(ctx, sx, sy, 3.5 + 0.8 * pulse);
+    // Central spark — small bright dot.
+    ctx.fillStyle = '#e8faff';
+    ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    ctx.restore();
+  }
 }
 
 class Item {

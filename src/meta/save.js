@@ -266,8 +266,15 @@
         f.regenerator = level;
         break;
       case 'trauma_kit':
-        // Start each run with `level` nano-medic consumables.
+        // Reinterpreted from "start each run with N nano-medic consumables"
+        // (no boost-inventory system exists) → seed `level` panic-button
+        // auto-heal charges. NEON.behavior.tryTraumaKit consumes one
+        // charge each time the player drops below 25% maxHp from a
+        // non-lethal hit, healing 40% maxHp. startingNanoMedics is kept
+        // for stat-readout / save-back-compat; _nanoMedicCharges is the
+        // live runtime counter.
         player.startingNanoMedics = (player.startingNanoMedics || 0) + level;
+        player._nanoMedicCharges = (player._nanoMedicCharges || 0) + level;
         f.trauma_kit = level;
         break;
       case 'second_wind':
@@ -298,6 +305,17 @@
         f.ghostwalk = level;
         break;
       case 'hacktool':
+        // Reinterpreted from "Start with 1 extra hackware slot (3→4)"
+        // (the game has only ONE hackware slot — multi-slot would require
+        // extensive rewrites of render, input, and cooldown tracking) →
+        // pre-equip a RANDOM hackware module at run start. The seeding
+        // itself happens in src/game.js startGame after applyMetaToPlayer
+        // (HACKWARE lives in src/content.js; the meta layer must not hard-
+        // depend on entity data — same pattern as STARTING_GEAR which uses
+        // the buildWeaponFn injection). Here we only set the metaFlag so
+        // the seeding site can opt-in. The legacy hackwareSlots write is
+        // kept for save back-compat (field is persisted by saveGame and
+        // restored by continueGame; harmless when unread).
         player.hackwareSlots = (player.hackwareSlots || 3) + level;
         f.hacktool = level;
         break;

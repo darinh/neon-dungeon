@@ -1,0 +1,136 @@
+name: cache-version-bump
+
+# Auto-bumps the service worker cache key on push to develop. Eliminates the
+# artificial merge-conflict cascade that hand-edited `const CACHE = 'neon-
+# dungeon-vNNN'` was creating across parallel PRs.
+#
+# Conventional-commits → bump size:
+#   - "BREAKING CHANGE" or "!:" anywhere in the head commit message → +10 (major-ish)
+#   - leading "feat:" / "feat(scope):"                              → +2  (minor)
+#   - anything else (fix:, chore:, docs:, refactor:, test:, perf:)  → +1  (patch)
+#
+# Loop guard: skip if the head commit was made by github-actions[bot] OR if the
+# commit message STARTS with the bot's auto-bump prefix. The two-condition
+# guard is intentional belt-and-suspenders: github.actor catches almost
+# every case, but the startsWith check is robust against a hypothetical
+# scenario where someone pushes the bot's chore branch under a different
+# actor (e.g. a manual recovery). startsWith() avoids the body-text false
+# positive that bit PR #179: an earlier form used contains() against the
+# whole message and silently skipped any merge whose body mentioned the
+# string '[skip cache-bump]' in prose. GHA expressions don't have a
+# split() / first-line function, so we anchor on the bot's commit
+# subject prefix instead.
+
+on:
+  push:
+    branches: [develop]
+
+# Serialize cache-bump runs per branch so two near-simultaneous develop
+# pushes don't race to create competing bump PRs against the same `current`
+# version (the second would fail because sw.js has already advanced).
+concurrency:
+  group: cache-bump-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    if: "${{ github.actor != 'github-actions[bot]' && !startsWith(github.event.head_commit.message, 'chore(cache): bump sw cache') }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute bump size from commit message
+        id: size
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$MSG" | grep -qE 'BREAKING CHANGE|!:'; then
+            echo "delta=10" >> "$GITHUB_OUTPUT"
+            echo "kind=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -qE '^feat(\(.+\))?:'; then
+            echo "delta=2" >> "$GITHUB_OUTPUT"
+            echo "kind=feat" >> "$GITHUB_OUTPUT"
+          else
+            echo "delta=1" >> "$GITHUB_OUTPUT"
+            echo "kind=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump cache version in sw.js
+        id: bump
+        run: |
+          set -euo pipefail
+          current=$(grep -oE "neon-dungeon-v([0-9]+)" sw.js | head -1 | sed 's/neon-dungeon-v//')
+          if [ -z "$current" ]; then
+            echo "::error::could not parse current cache version from sw.js"
+            exit 1
+          fi
+          delta=${{ steps.size.outputs.delta }}
+          next=$((current + delta))
+          echo "current=$current next=$next delta=$delta kind=${{ steps.size.outputs.kind }}"
+          # In-place replace ONLY the CACHE = '...' line (single source of truth).
+          sed -i "s/const CACHE = 'neon-dungeon-v${current}';/const CACHE = 'neon-dungeon-v${next}';/" sw.js
+          # Verify exactly one occurrence changed.
+          if ! grep -q "const CACHE = 'neon-dungeon-v${next}';" sw.js; then
+            echo "::error::sw.js cache key did not update; current=$current next=$next"
+            grep -n "neon-dungeon-v" sw.js || true
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Open and merge PR with the bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet sw.js; then
+            echo "no change to sw.js — skipping commit"
+            exit 0
+          fi
+          # The 'develop' branch ruleset requires every change to land via a
+          # PR (direct push is rejected with GH013). On a *personal* repo we
+          # can't add the GitHub Actions Integration as a bypass actor
+          # (org-only API), so the bot opens a tiny single-file PR with the
+          # bump and immediately squash-merges it. The ruleset has 0
+          # required reviews and no required checks, so the merge succeeds
+          # synchronously without human involvement.
+          #
+          # The squash commit's title carries the [skip cache-bump] marker
+          # so the resulting push to develop won't re-trigger this
+          # workflow (the if-condition above filters on it).
+          BRANCH="chore/cache-bump-${{ steps.bump.outputs.next }}-${{ github.run_id }}-${{ github.run_attempt }}"
+          TITLE="chore(cache): bump sw cache to v${{ steps.bump.outputs.next }} (${{ steps.size.outputs.kind }}) [skip cache-bump]"
+          BODY=$(printf 'Auto-bumped from v%s → v%s in response to commit %s.\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>' \
+            '${{ steps.bump.outputs.current }}' '${{ steps.bump.outputs.next }}' '${{ github.event.head_commit.id }}')
+          # Clean up the chore branch + any open PR if anything past this
+          # point fails (gh pr create works but gh pr merge errors, etc.),
+          # so failed runs don't leave orphan branches and dangling PRs
+          # piling up in the repo. Idempotent: failure to find a PR or
+          # branch is silently ignored.
+          cleanup() {
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+              echo "::warning::cache-bump failed (exit $rc) — cleaning up branch/PR"
+              gh pr close "$BRANCH" --delete-branch 2>/dev/null || true
+              git push origin --delete "$BRANCH" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add sw.js
+          git commit -m "$TITLE" -m "$BODY"
+          git push origin "$BRANCH"
+          gh pr create --base develop --head "$BRANCH" --title "$TITLE" --body "$BODY"
+          # Squash-merge so develop's history stays linear and the [skip
+          # cache-bump] marker is preserved in the resulting commit
+          # message. --delete-branch keeps the branch list tidy.
+          gh pr merge "$BRANCH" --squash --delete-branch --subject "$TITLE" --body "$BODY"

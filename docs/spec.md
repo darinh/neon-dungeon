@@ -1876,21 +1876,33 @@ CONTINUE menu item shows the save's difficulty.
 
 ### Floor Modifiers (floor 2+, non-boss)
 
-Each qualifying floor randomly receives one gameplay modifier from a pool of eight.
+Each qualifying floor randomly receives one gameplay modifier from a pool of twenty.
 Floor 1 (settle-in) and biome-final boss floors (3, 6, 9, 12, 15) never have modifiers. Modifier is
 rolled on floor entry, saved in the checkpoint, and restored on continue. No
 SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 
-| Modifier   | Icon | Description                    | Colour    | Effect |
-|------------|------|--------------------------------|-----------|--------|
-| BLACKOUT   | ◐    | Emergency lights only          | `#4466aa` | Player torch radius 9→5 (enemy AI unaffected) |
-| SWARM      | ⚠    | Alert — all units respond      | `#ff6644` | ×1.5 enemy count per room (area-capped), ×0.6 enemy HP |
-| FORTIFIED  | 🛡   | Reinforced patrols             | `#66eeff` | ×1.4 enemy HP, ×1.3 item drop rate |
-| VOLATILE   | 💥   | Unstable power cells           | `#ff4422` | Enemies explode on death: 15 + floor×2 AoE damage in 2-tile radius (LOS-gated); no chain reactions; player rewards normal but AoE-killed enemies don't chain |
-| SCRAMBLED  | ⌁    | Targeting interference         | `#cc44ff` | +0.15 added to weapon spread on all player shots |
-| OVERCLOCK  | ⚡   | System overclock detected      | `#ffcc00` | ×1.2 all movement speed (player + enemies) and ×1.2 enemy fire rates (÷1.2 attack/shoot cooldowns) |
-| CORROSIVE  | ☣    | Toxic atmosphere               | `#44ff22` | All player damage taken +2 flat (applied after DEF and min-1 clamp; effective minimum damage = 3; skipped when `ignoreDefense`). Kill credits ×1.5 (stacks multiplicatively with CREDIT_SIPHON) |
-| CHARGED    | ⊕    | Supercharged projectiles       | `#aaccff` | All projectile speeds ×1.4 (player + enemy). Player projectile damage ×1.2 (applies to sentry drone and plasma orb) |
+| Modifier      | Icon | Description                                          | Colour    | Effect |
+|---------------|------|------------------------------------------------------|-----------|--------|
+| BLACKOUT      | ◐    | Emergency lights only                                | `#4466aa` | Player torch radius 9→5 (enemy AI unaffected) |
+| SWARM         | ⚠    | Alert — all units respond                            | `#ff6644` | ×1.5 enemy count per room (area-capped), ×0.6 enemy HP |
+| FORTIFIED     | 🛡   | Reinforced patrols                                   | `#66eeff` | ×1.4 enemy HP, ×1.3 item drop rate |
+| VOLATILE      | 💥   | Unstable power cells                                 | `#ff4422` | Enemies explode on death: 15 + floor×2 AoE damage in 2-tile radius (LOS-gated); no chain reactions; player rewards normal but AoE-killed enemies don't chain |
+| SCRAMBLED     | ⌁    | Targeting interference                               | `#cc44ff` | +0.15 added to weapon spread on all player shots |
+| OVERCLOCK     | ⚡   | System overclock detected                            | `#ffcc00` | ×1.2 all movement speed (player + enemies) and ×1.2 enemy fire rates (÷1.2 attack/shoot cooldowns) |
+| CORROSIVE     | ☣    | Toxic atmosphere                                     | `#44ff22` | All player damage taken +2 flat (applied after DEF and min-1 clamp; effective minimum damage = 3; skipped when `ignoreDefense`). Kill credits ×1.5 (stacks multiplicatively with CREDIT_SIPHON) |
+| CHARGED       | ⊕    | Supercharged projectiles                             | `#aaccff` | All projectile speeds ×1.4 (player + enemy). Player projectile damage ×1.2 (applies to sentry drone and plasma orb) |
+| FRAGILE       | ❖    | Glass-cannon protocol                                | `#ff88cc` | All damage (player → enemy and enemy → player) amplified — high-risk, high-reward floor where every hit is decisive |
+| HUNTER        | ◎    | Sensors lock stationary prey                         | `#ff8844` | Enemies gain a sight bonus when player is stationary (anti-camping); player must keep moving to evade detection |
+| REGENERATIVE  | ✚    | Patrols self-repair when uncontested                 | `#44ddaa` | Enemies regenerate HP after `_regenTimer` elapses without taking damage; resets on any damage (incl. burn/poison DoT). Anti-chip-and-retreat |
+| CASCADE       | ♥    | Defeats nearby release medical pulse                 | `#44ff88` | First positive modifier. Each enemy defeat heals the player +5 HP via on-kill pulse (pre-PR floor pool) |
+| OVERCHARGE    | ⚡   | Every 5th shot guaranteed crit                       | `#ffee66` | Counter `player._overchargeShots` increments per shot; every 5th shot forces a critical (bonus damage from crit multiplier). Run-scoped persistent counter |
+| WINDFALL      | ◆    | Every 5th defeat drops a bonus core                  | `#a866ff` | Counter `player._windfallKills` increments per qualifying defeat (!shard, !summon); every 5th drops a bonus +1 core. Run-scoped persistent counter |
+| SIGNAL_BOOST  | ↻    | Every 5th defeat resets hackware                     | `#00ddff` | Counter `player._signalBoostKills` increments per qualifying defeat; every 5th resets `player.hackwareCooldown` to 0 (only when `player.hackware` truthy). Run-scoped persistent counter |
+| REVERB        | ♪    | Every 5th shot fires a free echo                     | `#ff66cc` | Counter `player._reverbShots` increments per shot; every 5th fires a free echo of the same shot intent (ranged: duplicate fan; melee: duplicate AoE). Echo inherits `forceCrit` + `finalMetaMul` but does NOT recurse. Run-scoped persistent counter |
+| QUARTERMASTER | ▣    | First defeat in each room drops a bonus core         | `#ffaa44` | Per-ROOM one-shot. `room._qmHarvested` flag set on first qualifying defeat in each room (no saveGame plumbing — dungeon regenerates on Continue, accepting the save-resume re-harvest exploit) |
+| AUTONOMY      | ⚙    | Hackware cooldowns reduced 25% on this floor         | `#88ff44` | First passive % modifier. `player.hackwareCooldown = hw.cooldown * (OVERCLOCKER ? 0.7 : 1) * (AUTONOMY ? 0.75 : 1)` — multiplicative with OVERCLOCKER augment for ×0.525 combined |
+| CHAINREACT    | ⚡   | Chained defeats within 1.5s award bonus credits      | `#ff8866` | First timer-window modifier. `player._chainBuffTimer` countdown ticked by dt in Player.update; on qualifying defeat: if window > 0 award +15 CR; always refresh window to 1.5s. HUD shows `' ⚡'` glyph while window alive |
+| MAGNETISM     | ⊛    | Item pickup radius increased 50% on this floor       | `#bb88ff` | Affects item pickups only (not core drops — separate magnet system in `src/meta/cores.js`). Multiplies pickup radius by 1.5 at game.js:1602; stacks multiplicatively with MAGNETIC_FIELD augment ×2 → ×3 combined |
 
 **Implementation hooks:**
 - BLACKOUT: `updateLighting()` torch radius conditional on `game.modifier`.
