@@ -43,6 +43,18 @@ test('expanded minimap elite legend derives entries from ELITE_AFFIX_KEYS / ELIT
   assert.match(helper, /aff\.label/);
 });
 
+test('expanded minimap modifier legend derives the active floor modifier from getMod()', () => {
+  const helper = extractBlock(RENDER, /function\s+expandedActiveModifierLegendItems\s*\(\s*\)\s*\{/);
+  assert.ok(helper, 'expandedActiveModifierLegendItems helper must be locatable');
+  assert.match(helper, /_RG\.modifier/,
+    'modifier legend should render only when the current floor has an active modifier');
+  assert.match(helper, /getMod\s*\(\s*\)/,
+    'modifier legend must use getMod() instead of duplicating FLOOR_MODIFIERS lookup logic');
+  assert.match(helper, /mod\.colour/);
+  assert.match(helper, /mod\.icon/);
+  assert.match(helper, /mod\.label/);
+});
+
 test('expanded minimap draws a labelled elite legend using the shared wrapping helper', () => {
   const drawBody = extractBlock(RENDER, /function\s+drawExpandedMinimap\s*\([^)]*\)\s*\{/);
   assert.ok(drawBody, 'drawExpandedMinimap must be locatable');
@@ -56,12 +68,30 @@ test('expanded minimap draws a labelled elite legend using the shared wrapping h
     'elite legend should use the same wrapping helper as the base map legend');
 });
 
-test('elite legend helper is module-scope before drawExpandedMinimap', () => {
+test('expanded minimap draws a labelled active modifier legend after the elite legend', () => {
+  const drawBody = extractBlock(RENDER, /function\s+drawExpandedMinimap\s*\([^)]*\)\s*\{/);
+  assert.ok(drawBody, 'drawExpandedMinimap must be locatable');
+  assert.match(drawBody, /const\s+modifierLegend\s*=\s*expandedActiveModifierLegendItems\s*\(\s*\)/,
+    'expanded map must request active modifier legend entries');
+  assert.match(drawBody, /fillText\s*\(\s*['"]MOD:/,
+    'expanded map must label the active modifier row');
+  assert.match(drawBody, /drawExpandedLegendItems\s*\(\s*modifierLegend\s*,/,
+    'modifier legend should use the same wrapping helper as the base map and elite legends');
+  assert.match(drawBody,
+    /nextLegendY\s*=\s*drawExpandedLegendItems\s*\(\s*eliteLegend\s*,[\s\S]*?const\s+modifierLegend/,
+    'modifier row must be positioned after the rendered elite legend so wrapped elite entries do not overlap it');
+});
+
+test('expanded minimap legend helpers are module-scope before drawExpandedMinimap', () => {
   const helperIdx = RENDER.indexOf('function expandedEliteAffixLegendItems');
+  const modifierHelperIdx = RENDER.indexOf('function expandedActiveModifierLegendItems');
   const drawIdx = RENDER.indexOf('function drawExpandedMinimap');
-  assert.ok(helperIdx >= 0 && drawIdx >= 0, 'helper and drawExpandedMinimap must exist');
+  assert.ok(helperIdx >= 0 && modifierHelperIdx >= 0 && drawIdx >= 0,
+    'legend helpers and drawExpandedMinimap must exist');
   assert.ok(helperIdx < drawIdx,
     'expandedEliteAffixLegendItems must be module-scope, not recreated inside drawExpandedMinimap');
+  assert.ok(modifierHelperIdx < drawIdx,
+    'expandedActiveModifierLegendItems must be module-scope, not recreated inside drawExpandedMinimap');
 });
 
 test('every elite affix still provides legend metadata', () => {

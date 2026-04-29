@@ -129,6 +129,16 @@ function expandedEliteAffixLegendItems() {
 }
 
 /**
+ * @returns {Array<[string, string]>}
+ */
+function expandedActiveModifierLegendItems() {
+  if (!_RG.modifier || typeof getMod !== 'function') return [];
+  const mod = /** @type {any} */ (getMod());
+  if (!mod || !mod.colour || !mod.icon || !mod.label) return [];
+  return [[mod.colour, `${mod.icon} ${mod.label}`]];
+}
+
+/**
  * Piercing Heart weapon-affix HUD progress suffix — appended to the HUD
  * weapon-name readout when the active weapon carries the PIERCING_HEART
  * suffix affix ("of Piercing Heart"). Without this indicator, players
@@ -2556,13 +2566,20 @@ function drawExpandedMinimap(dungeon, player) {
     ['#44ffcc','■ Event'], ['#ff6633','■ Challenge']
   ];
   const legendLineH = Math.max(12, lFs + 4);
-  const nextLegendY = drawExpandedLegendItems(legend, legendX, legendY, mx + mw, legendLineH);
+  let nextLegendY = drawExpandedLegendItems(legend, legendX, legendY, mx + mw, legendLineH);
   const eliteLegend = expandedEliteAffixLegendItems();
   if (eliteLegend.length) {
     ctx.fillStyle = '#666688';
     ctx.fillText('ELITES:', legendX, nextLegendY);
     const eliteStartX = legendX + ctx.measureText('ELITES:').width + 10;
-    drawExpandedLegendItems(eliteLegend, eliteStartX, nextLegendY, mx + mw, legendLineH);
+    nextLegendY = drawExpandedLegendItems(eliteLegend, eliteStartX, nextLegendY, mx + mw, legendLineH);
+  }
+  const modifierLegend = expandedActiveModifierLegendItems();
+  if (modifierLegend.length) {
+    ctx.fillStyle = '#666688';
+    ctx.fillText('MOD:', legendX, nextLegendY);
+    const modifierStartX = legendX + ctx.measureText('MOD:').width + 10;
+    drawExpandedLegendItems(modifierLegend, modifierStartX, nextLegendY, mx + mw, legendLineH);
   }
 
   ctx.restore();

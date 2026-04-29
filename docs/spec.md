@@ -3498,7 +3498,9 @@ Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
   secret rooms are never shown. ECHO_MAPPER augment reveals layout as dimmed
   tiles (same as small minimap). The legend includes a dynamic `ELITES:` row
   sourced from `ELITE_AFFIXES`, so affix-coloured elite dots can be decoded
-  from the map. Dismissed with `Tab` or `Escape` (desktop) or
+  from the map. On floors with an active modifier, a dynamic `MOD:` row is
+  sourced through `getMod()` and shows the current modifier icon + label in
+  its modifier colour. Dismissed with `Tab` or `Escape` (desktop) or
   any tap (touch). Cleared automatically on floor
   transitions, state changes, and run start/end. `Tab` is a reserved UI key and
   cannot be rebound.
