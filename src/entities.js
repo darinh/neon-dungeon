@@ -11997,6 +11997,8 @@ class Player {
   /** @type {any} */ regenTimer;
   /** @type {any} */ _repairTicksLeft;
   /** @type {any} */ _repairTickTimer;
+  /** @type {any} */ bubbleHp;
+  /** @type {any} */ bubbleTimer;
   /** @type {any} */ roomsCleared;
   /** @type {any} */ score;
   /** @type {any} */ secondWindUsed;
@@ -12126,6 +12128,19 @@ class Player {
     // logic next to HP_REGEN block in update(); activation in content.js.
     this._repairTicksLeft=0;
     this._repairTickTimer=0;
+    // SHIELD_BUBBLE hackware: multi-hit damage-pool absorption. bubbleHp
+    // is the remaining absorption pool (0..35), bubbleTimer is the
+    // expiry countdown (0..6 seconds). Drain logic in takeDamage @
+    // ~12385 (BEFORE the one-shot SHIELD DRIVER boost / ENERGY_SHIELD
+    // perk so an active bubble preserves those rare reserves). Tick
+    // logic next to the REPAIR_PROTOCOL HoT block in update() — a
+    // dt-based decrement so 30/60/120fps expire identically. Self-
+    // clearing (hp drains to 0 OR timer expires; either zeroes both).
+    // NOT serialized — like cloakTimer/repairTicksLeft, transient run-
+    // state buffs are lost on Continue (consistent with the existing
+    // hackware-buff convention). Wiped on death/respawn (new Player()).
+    this.bubbleHp=0;
+    this.bubbleTimer=0;
     this.secondWindUsed=false;  // SECOND_WIND: used this floor?
     // LAST_STAND perk: clutch defensive window. lastStandTimer counts down
     // an active 5s buff (+75% outgoing dmg via effectiveAtk, ×0.5 incoming
@@ -12367,6 +12382,92 @@ class Player {
     const options = opts || {};
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
     if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
+    // SHIELD_BUBBLE hackware: multi-hit damage-pool absorption. Drains
+    // BEFORE the one-shot SHIELD DRIVER boost / ENERGY_SHIELD perk so
+    // an active bubble preserves those rare reserves (a player who
+    // pre-emptively pops bubble before a known damage spike must not
+    // burn their one-shot defenses too — that would invert the active
+    // vs passive trade-off). Drain-and-pass mirrors the SHIELDED enemy
+    // affix at entities.js:1448-1450 — `absorbed = min(bubbleHp, dmg);
+    // bubbleHp -= absorbed; dmg -= absorbed`. Residual passes through
+    // to the one-shot defenses below; if the shot fully drains the
+    // bubble AND has leftover dmg the one-shot perks/boost still fire
+    // on the residual (defense-in-depth).
+    //
+    // GATES (in evaluation order):
+    //   - !options.ignoreShield: env-DoT ticks (Plasma burnDps*dt,
+    //     Toxic toxDps*dt, Arc Grid, Disruption Field, Frost Patch,
+    //     Proximity Mine ignoreDefense path, CRAWLER burn DoT) all
+    //     pass ignoreShield:true. They MUST bypass the bubble — a
+    //     35hp pool would evaporate in <1s of plasma contact at
+    //     60fps, trivialising the defense AND the env hazards both.
+    //     Same gate the existing one-shot defenses use; consistent.
+    //   - !options.ignoreInvincible: same rationale (env DoTs pass
+    //     this too) plus a defense-in-depth catch in case a future
+    //     hazard sets only ignoreInvincible (current code: no such
+    //     hazard exists, but the gate matches the SHIELD DRIVER block
+    //     below to keep the contract aligned).
+    //   - dmg > 0: a 0-dmg hit (already-mitigated) shouldn't tick
+    //     the bubble at all. Defense-in-depth — current callers don't
+    //     pass dmg=0 but the guard costs nothing and prevents a
+    //     future regression where a chained mitigation reduces dmg
+    //     to 0 before reaching this layer.
+    //
+    // Visual feedback: spawnDmgText 'ABSORB N' shows the player
+    // exactly how much the bubble ate. audio.shieldBreak() fires
+    // ONLY on full drain (bubble hp dropped to 0 from this hit) so
+    // partial absorbs are silent — otherwise a sustained-fire enemy
+    // would spam the break sound. Self-zero on bubbleHp <= 0:
+    // bubbleTimer also clears so the Player.update tick doesn't see
+    // a half-cleared state. Note: small absorbs that DON'T break the
+    // bubble fire NO audio — this is an intentional design choice
+    // (the visible ring already conveys ongoing absorption; an
+    // additional sound per partial hit would be noise). Subtle but
+    // important for sustained-fire enemy patterns (e.g. AUTOGUN
+    // bursts) where 6+ ticks/second would otherwise machine-gun the
+    // shieldBreak audio.
+    if (!options.ignoreShield && !options.ignoreInvincible && this.bubbleHp > 0 && dmg > 0) {
+      const absorbed = Math.min(this.bubbleHp, dmg);
+      this.bubbleHp -= absorbed;
+      dmg -= absorbed;
+      spawnDmgText(this.x, this.y, 'ABSORB ' + absorbed, '#e0e0ff');
+      if (this.bubbleHp <= 0) {
+        this.bubbleHp = 0;
+        this.bubbleTimer = 0;
+        audio.shieldBreak();
+        spawnParticles(this.x, this.y, 'EXPLOSION', '#e0e0ff', 12);
+        _EG.msg('⊚ BUBBLE BROKEN', '#e0e0ff');
+        triggerShake(2, 0.10);
+      }
+      // Full absorb — short-circuit and return 0 (NOT absorbed). The
+      // takeDamage return value is the contract used by callers to
+      // detect "real damage landed on the player": CRAWLER burn
+      // (entities.js:3083), SAPPER boost drain (entities.js:3097),
+      // SNIPER shock (content.js:5179), SIPHON lifesteal (content.js:
+      // 5185), CHARGER knockback (entities.js:6111), laser shock
+      // (entities.js:11181) ALL gate on `dealt > 0`. Returning a
+      // positive `absorbed` would incorrectly trigger every one of
+      // those on-hit effects on a bubble-absorbed hit — burn DoTs
+      // would tick, the bubble would lose its purpose. The existing
+      // SHIELD DRIVER (~12461) and ENERGY_SHIELD (~12474) full-absorb
+      // paths both `return 0` for the same reason; the bubble must
+      // mirror that contract. Caught by all 3 adversarial reviewers
+      // (gpt-5.3-codex / claude-opus-4.6 / gpt-5.5) as HIGH severity.
+      //
+      // hitsBlocked counter is incremented ONLY on full-absorb (here)
+      // — gpt-5.5 review caught a double-count bug if we incremented
+      // earlier: a partial bubble absorb would increment, then if the
+      // residual hit fully consumed SHIELD DRIVER or ENERGY_SHIELD
+      // those layers ALSO increment hitsBlocked, inflating the run-
+      // recap stat (displayed in game.js:5543 / 5622). Restricting
+      // increment to full absorbs keeps the semantics aligned with
+      // the existing one-shot defenses (which only ever increment on
+      // a complete block).
+      if (dmg <= 0) {
+        this.hitsBlocked = (this.hitsBlocked|0) + 1;
+        return 0;
+      }
+    }
     // UNCHAINED #38: SHIELD DRIVER boost — one-shot absorb. Consumed before
     // the ENERGY_SHIELD perk so a stacked player uses the cheap boost first.
     // Skip consumption when caller bypasses i-frames (env hazard DoT ticks
@@ -13112,6 +13213,29 @@ class Player {
       this._repairTickTimer = 0;
     }
 
+    // SHIELD_BUBBLE hackware: dt-decrement the bubble timer. When timer
+    // reaches 0 (bubble expired without being fully drained), zero
+    // bubbleHp too AND emit a "BUBBLE EXPIRED" floater so the player
+    // sees the buff drop. NOT gated on hp>0 (consistent with cloakTimer
+    // ticking through death — the buff just disappears with the player;
+    // no observable effect either way since a dead player doesn't get
+    // hit again). The hp<=0 short-circuit in the takeDamage drain path
+    // ALREADY zeroes both fields synchronously when the bubble breaks
+    // from a hit; this branch only handles the timer-expiry path.
+    // Self-clearing — no loadFloor reset needed (transient buff timer
+    // mirrors cloakTimer/lastStandTimer pattern).
+    if (this.bubbleTimer > 0) {
+      this.bubbleTimer -= dt;
+      if (this.bubbleTimer <= 0) {
+        this.bubbleTimer = 0;
+        if (this.bubbleHp > 0) {
+          this.bubbleHp = 0;
+          spawnDmgText(this.x, this.y, 'BUBBLE EXPIRED', '#e0e0ff');
+          spawnParticles(this.x, this.y, 'SPARK', '#e0e0ff', 6);
+        }
+      }
+    }
+
     let spd=modSpeed(this.spd+(this.speedBoost||0)+(this.permSpeedBonus||0));
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
@@ -13407,6 +13531,49 @@ class Player {
       ctx.shadowBlur=12; ctx.shadowColor='#4488ff';
       ctx.lineWidth=1.5;
       NEON.draw.circleStroke(ctx, sx, sy, 12);
+      ctx.restore();
+    }
+    // SHIELD_BUBBLE hackware: cyan ring around player. Opacity scales
+    // with REMAINING fraction of bubbleHp (35 max) so a near-broken
+    // bubble looks visually weaker — gives the player a clear at-a-
+    // glance read on remaining absorption capacity. Radius pulses on
+    // a slower phase than the ENERGY_SHIELD perk ring (0.006 vs 0.004
+    // rad/ms) so a player with BOTH active sees TWO distinguishable
+    // rings at different cadences (no visual collision). Drawn AFTER
+    // the perk ring so the bubble layers on top — the active hackware
+    // is the more transient signal and benefits from being on top.
+    // Colour #66ddff matches the catalog colour exactly so the icon-
+    // to-effect mapping is visually consistent. Slightly LARGER radius
+    // (14 vs perk's 12) so the two rings are visually distinct when
+    // both active. Defensive guard: render only when both bubbleHp > 0
+    // AND bubbleTimer > 0 (in case future code zeros only one of the
+    // two — current code zeros both atomically but the AND guard is
+    // free defense-in-depth).
+    if (this.bubbleHp > 0 && this.bubbleTimer > 0) {
+      ctx.save();
+      const frac = Math.max(0.15, this.bubbleHp / 35);
+      const pulse = 0.10 * Math.sin(performance.now() * 0.006);
+      // Clamp to [0, 1]. At low bubbleHp (frac ≤ 0.33), the base
+      // value 0.30 * frac drops below the pulse amplitude (0.10) and
+      // the sum could go negative on the trough of the sin wave. Per
+      // the HTML Canvas spec, setting globalAlpha to a value outside
+      // [0, 1] is IGNORED, leaving the property at its previous value
+      // (1.0 after ctx.save() restored from the outer context). The
+      // result: the ring would render at FULL OPACITY for ~42% of the
+      // pulse cycle at hp=1 — a jarring bright flash exactly when
+      // the player wants smooth fade-out feedback. Clamping at the
+      // assignment is the canonical defense (Math.max(0, ...) plus
+      // an upper Math.min(1, ...) for symmetry, even though the
+      // upper bound isn't reachable here). Caught by claude-opus-4.6
+      // + gpt-5.5 reviews as MEDIUM severity. Mirrors the burn
+      // indicator pattern at ~13543 which uses 0.35 ± 0.15 = always-
+      // positive arithmetic (0.20-0.50) — but clamping is the more
+      // robust defense than relying on arithmetic invariants.
+      ctx.globalAlpha = Math.max(0, Math.min(1, 0.30 * frac + pulse));
+      ctx.strokeStyle = '#e0e0ff';
+      ctx.shadowBlur = 14; ctx.shadowColor = '#e0e0ff';
+      ctx.lineWidth = 2.0;
+      NEON.draw.circleStroke(ctx, sx, sy, 14);
       ctx.restore();
     }
     // Burn indicator — flickering orange underglow

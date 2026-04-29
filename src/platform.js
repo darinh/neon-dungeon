@@ -2188,6 +2188,24 @@ const audio = (() => {
       noise(0.08, t, 0.06, 6000, bus, { filterType: 'highpass', q: 0.8 });
       osc('sine',      120,   60, 0.06, t + 0.03,  0.18);
     },
+    hackwareShieldBubble() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.4, 0.7);
+      // Defensive activation — soft ascending shimmer + warm sub.
+      // Sits in the same energetic family as shieldRestore() (the
+      // existing perk-restore chime) but stretched longer (180ms vs
+      // ~120ms) and pitched lower at the start so the ear reads it as
+      // "force field engaged" rather than "small charge restored".
+      // Distinct from hackwareCloak (pure shimmer w/ no body) by the
+      // sub layer, and from hackwareRepair (single triangle ping) by
+      // the layered ascending arpeggio. Higher wet/dry (0.7) gives
+      // the bubble a literal "enclosed-space" reverb tail.
+      osc('sine',     350, 750,  0.18, t,          0.22, bus);
+      osc('triangle', 500, 1050, 0.14, t + 0.04,   0.18, bus);
+      osc('sine',     700, 1300, 0.08, t + 0.10,   0.14, bus);
+      // Sub thump anchors the activation
+      osc('sine',     180,  90,  0.20, t,          0.18);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
