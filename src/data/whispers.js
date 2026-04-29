@@ -62,6 +62,10 @@
       title:'THE MARKER LIGHT',
       body:"I taped a glowstick to the first mirror so I could prove the room was repeating. The reflection had already taped one back. Anchors work here, but only if both sides agree which way is home." },
 
+    { id:'w-sb-08', biomeId:'sandbox', floorMin:3, voice:'AXIOM-7 echo',
+      title:'THRESHOLD DRILL',
+      body:"They taught us to stand in a doorway and say which side was real. The threshold kept choosing before I did. If a door answers too quickly, step back. It may be practicing your exit." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -86,6 +90,10 @@
     { id:'w-cc-06', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
       title:'ANCHOR TABLE',
       body:"I built the anchor table from things the simulation miscounted: one cracked mug, three badge clips, a mirror shard with no reflection. When the cache loses you, touch an impossible object. It remembers who misplaced it." },
+
+    { id:'w-cc-07', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'KEYHOLE INDEX',
+      body:"The cache indexes thresholds by what they hide, not where they lead. I watched a keyhole open onto the same room from yesterday. AXIOM-7 called it a memory leak and smiled at the joke first." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -112,6 +120,10 @@
       title:'GLASS RULE',
       body:"The firewall accepts reflections as witnesses if they disagree in useful ways. Stand between two panes and say the route you want. The wrong mirror will deny it. The right one becomes an anchor point." },
 
+    { id:'w-fw-07', biomeId:'firewall', floorMin:8, voice:'firewall daemon',
+      title:'PERMISSION DENIED',
+      body:"A locked gate is just a question with teeth. The firewall denies the body, then admits the reflection to compare intent. If your shadow crosses first, do not follow until it asks for you." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -137,6 +149,10 @@
       title:'RETURN ADDRESS',
       body:"Every outbound copy needs a return address. Mine was a mirror in an empty elevator, yours may be the tower antenna, Elena's was a coffee ring on paper. The uplink calls these anchors. I call them promises." },
 
+    { id:'w-uk-07', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'EXIT INTERVIEW',
+      body:"The uplink makes every threshold conduct an exit interview. Doors ask where the signal ends. I said at the roof. The antenna answered from inside my chest: no, you end when someone stops calling." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -161,6 +177,10 @@
     { id:'w-on-06', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'WINDOW CHECK',
       body:"At night the city windows run a checksum: one lit room, one dark room, one reflection that keeps looking after you turn away. If you need proof you arrived, find the window that does not mirror you. That is the anchor." },
+
+    { id:'w-on-07', biomeId:'opennet', floorMin:14, voice:'city relay',
+      title:'CROSSWALK SAINT',
+      body:"Every crosswalk is a gate that believes in return trips. The city lets reflections cross on red because they have already died once. Wait for the walk sign. It is not safety; it is permission." },
   ];
 
   return { WHISPERS };
