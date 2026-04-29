@@ -729,6 +729,7 @@ const HACKWARE = {
   EMP_LINE:     { name:'EMP Line',     desc:'Stun beam: 8t pierce, disables electronics', colour:'#00eecc', icon:'═', cooldown:11 },
   CHRONO_LURE:  { name:'Chrono Lure',  desc:'Marker pulls & stuns enemies after 1s arming', colour:'#ff22aa', icon:'◔', cooldown:13 },
   TIME_DILATION:{ name:'Time Dilation',desc:'4s temporal field: enemies & their bullets crawl', colour:'#6644ff', icon:'⧖', cooldown:14 },
+  DATA_SPIKE:   { name:'Data Spike',   desc:'Pierce-beam: 60 dmg (+50% vs elites & bosses)', colour:'#ff4488', icon:'➤', cooldown:12 },
 };
 const HACKWARE_KEYS = Object.keys(HACKWARE);
 
@@ -1534,6 +1535,135 @@ function activateHackware(player) {
       _CG.msg('⧖ TIME DILATION ENGAGED', '#6644ff');
       break;
     }
+    case 'DATA_SPIKE': {
+      // Single-target burst-damage pierce beam — fills the missing
+      // anti-priority-target niche. Existing damage hackware spread
+      // damage across many enemies (NANO_SWARM = 6 nanites homing,
+      // STATIC_FIELD = zone DoT, DECOY_TURRET = sustained turret).
+      // Nothing in the catalog deletes a single elite/boss. DATA_SPIKE
+      // is the dedicated precision option: 60 dmg base, +50% vs
+      // elite/boss (=90), pierces all enemies in a 10t lane. The
+      // pierce keeps it useful in waves; the elite/boss bonus is the
+      // intended payoff. Cooldown 12s sits above EMP_LINE (11s) and
+      // matches STATIC_FIELD (12s) — slower than the panic-button
+      // EMP family because it's damage, not CC.
+      //
+      // EMP_LINE is the closest sibling (also a directional beam) but
+      // the design poles are inverted: EMP_LINE = 8t reach, 0.7 width,
+      // pure stun + electronics-disable, no damage. DATA_SPIKE = 10t
+      // reach, 0.5 width (precision), pure damage + elite/boss bonus,
+      // no stun, no electronics-disable. Players choose: lock down a
+      // crowd (EMP_LINE) or delete the priority threat (DATA_SPIKE).
+      audio.hackwareDataSpike();
+      // Aim direction: mirror EMP_LINE / BLINK pattern. Mouse aim →
+      // norm() → player.facing fallback → respect lockAimToMove. The
+      // fallback covers click-on-self (norm of zero vector returns
+      // [0,0]); without it the beam silently no-ops at point-blank.
+      let ddx, ddy;
+      if (settings.lockAimToMove) {
+        ddx = player.facing.x; ddy = player.facing.y;
+      } else {
+        const camD = getCamera(player);
+        const ax = (mouse.x + camD.x) / TILE - player.x;
+        const ay = (mouse.y + camD.y) / TILE - player.y;
+        [ddx, ddy] = norm(ax, ay);
+        if (!ddx && !ddy) { ddx = player.facing.x; ddy = player.facing.y; }
+      }
+      // Wall-stop sweep — same pattern as EMP_LINE / BLINK / shock pulse.
+      // Step 0.25 prevents 1-tile-wall tunneling at this granularity
+      // (40 sub-checks across a 10t reach). The beam halts at the first
+      // non-isPassable tile so locked doors, sealed boss entrances
+      // (which flip to T.WALL on seal), and voids all stop the spike.
+      const MAX_LEN = 10, STEP_D = 0.25;
+      const STEPS_D = Math.ceil(MAX_LEN / STEP_D);
+      let endX = player.x, endY = player.y;
+      if (map) {
+        for (let s = 1; s <= STEPS_D; s++) {
+          const tx = player.x + ddx * s * STEP_D;
+          const ty = player.y + ddy * s * STEP_D;
+          const fxK = Math.floor(tx), fyK = Math.floor(ty);
+          if (fxK < 0 || fyK < 0 || fxK >= MAP_W || fyK >= MAP_H) break;
+          if (!isPassable(map[fyK][fxK])) break;
+          endX = tx; endY = ty;
+        }
+      }
+      // Point-to-segment squared distance — inlined so the per-enemy
+      // hot loop stays allocation-free. Identical structure to EMP_LINE
+      // (returns Infinity for "behind the player" so the directional
+      // beam can't hit enemies BEHIND the firing position via the
+      // unclamped-t-clamped-to-0 backwards-bubble class).
+      const ex = endX - player.x, ey = endY - player.y;
+      const segLen2 = ex * ex + ey * ey;
+      /** @param {number} px @param {number} py */
+      const segDist2 = (px, py) => {
+        if (segLen2 < 1e-6) {
+          const ddx2 = px - player.x, ddy2 = py - player.y;
+          return ddx2 * ddx2 + ddy2 * ddy2;
+        }
+        const apx = px - player.x, apy = py - player.y;
+        const tRaw = (apx * ex + apy * ey) / segLen2;
+        if (tRaw < 0) return Infinity;
+        const t = Math.min(1, tRaw);
+        const cx = player.x + ex * t, cy = player.y + ey * t;
+        const ddx2 = px - cx, ddy2 = py - cy;
+        return ddx2 * ddx2 + ddy2 * ddy2;
+      };
+      // WIDTH 0.5 (vs EMP_LINE's 0.7) — the spike reads as a precision
+      // tool, narrower hitbox than the EMP sweep. Squared for the loop.
+      const WIDTH = 0.5;
+      const WIDTH_SQ = WIDTH * WIDTH;
+      // Damage application loop. Mirror EMP_LINE's loop shape (LOS gate,
+      // _wrPhased exception path) but apply takeDamage instead of stun.
+      // Phase semantics:
+      //   - WRAITH/TUNNELLER while _wrPhased: takeDamage() at
+      //     entities.js:1893 returns 0 with 'PHASED' floater. We do NOT
+      //     bypass phase here (unlike EMP_BURST/EMP_LINE which DO
+      //     bypass to force materialise). DATA_SPIKE is kinetic damage,
+      //     not a system disruption — the EMP family is the explicit
+      //     hard counter to phase. Reaching phased mobs is a deliberate
+      //     EMP-only privilege; if DATA_SPIKE shared it the EMP niche
+      //     would erode.
+      //   - MIMIC: do NOT skip _disguised (unlike EMP variants which
+      //     skip to avoid revealing). takeDamage's revealMimic() call
+      //     at entities.js:1913 fires the standard reveal — players
+      //     SHOULD be able to surface a disguised mimic with damage,
+      //     and DATA_SPIKE is damage. Consistent with how player
+      //     projectiles already reveal mimics.
+      // LOS gate (mandatory): segDist2 alone admits enemies on the far
+      // side of a thin wall the beam BARELY missed. hasLOS is the
+      // canonical guard used by EMP_LINE and the wider damage surface.
+      const BASE_DMG = 60;
+      const ELITE_BOSS_MUL = 1.5;
+      let hits = 0;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (segDist2(e.x, e.y) > WIDTH_SQ) continue;
+        if (!map || !hasLOS(player.x, player.y, e.x, e.y, map)) continue;
+        // Inline the bonus into the takeDamage arg so a contributor
+        // can't decoy the multiplier with a flat const elsewhere
+        // (mirrors the inlined ternary pattern EMP_LINE uses for stun
+        // duration — opus-4.7 r1 finding 5 on PR #209).
+        const dmg = Math.round(BASE_DMG * ((e.isBoss || e.elite) ? ELITE_BOSS_MUL : 1));
+        const dealt = e.takeDamage(dmg, { name: 'Data Spike', isProc: false });
+        if (dealt > 0) hits++;
+        spawnParticles(e.x, e.y, 'SPARK', '#ff4488', 4);
+      }
+      // No electronics-disable surface — DATA_SPIKE is damage, not EMP.
+      // Players who memorised "EMP family disables turrets/lasers" get a
+      // clean separation: damage tool != system disruptor. Keeping the
+      // surface narrow also means the catalog has clear axis coverage:
+      // EMP_LINE for electronics, DATA_SPIKE for raw damage.
+      hackwareEffects.push({ type:'data_spike', x1:player.x, y1:player.y, x2:endX, y2:endY, age:0, maxAge:0.4 });
+      spawnParticles(player.x, player.y, 'EXPLOSION', '#ff4488', 12);
+      spawnParticles(endX, endY, 'SPARK', '#ff4488', 8);
+      triggerShake(3, 0.15);
+      if (hits > 0) {
+        _CG.msg('➤ DATA SPIKE ×' + hits, '#ff4488');
+      } else {
+        _CG.msg('➤ DATA SPIKE', '#ff4488');
+      }
+      break;
+    }
   }
 }
 
@@ -1970,6 +2100,28 @@ function drawHackwareEffects(camX, camY) {
       ctx.globalAlpha = fade * 0.95;
       ctx.strokeStyle = '#ccfff0';
       ctx.lineWidth = 2.5 * fade + 0.5;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
+      ctx.restore();
+    }
+    if (fx.type === 'data_spike') {
+      // Twin-stroke beam — same visual grammar as emp_line but recoloured
+      // hot-pink (#ff4488) so it reads as DAMAGE, not EMP. Inner core
+      // brightens to near-white (#ffd0e0) on the pink axis to match
+      // the "energy lance" silhouette. Slightly tighter line widths
+      // than emp_line (inner 2.0 vs 2.5, outer 6 vs 8) — the spike is
+      // a precision tool, the line is an area sweep.
+      const fade = 1 - (fx.age / fx.maxAge);
+      const x1 = fx.x1 * TILE - camX, y1 = fx.y1 * TILE - camY;
+      const x2 = fx.x2 * TILE - camX, y2 = fx.y2 * TILE - camY;
+      ctx.save();
+      ctx.globalAlpha = fade * 0.35;
+      ctx.strokeStyle = '#ff4488';
+      ctx.shadowBlur = 18; ctx.shadowColor = '#ff4488';
+      ctx.lineWidth = 6 * fade;
+      NEON.draw.line(ctx, x1, y1, x2, y2);
+      ctx.globalAlpha = fade * 0.95;
+      ctx.strokeStyle = '#ffd0e0';
+      ctx.lineWidth = 2.0 * fade + 0.5;
       NEON.draw.line(ctx, x1, y1, x2, y2);
       ctx.restore();
     }

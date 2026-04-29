@@ -2171,6 +2171,23 @@ const audio = (() => {
       osc('sine',     180, 110, 0.08, t + 0.05,  0.65, bus);
       noise(0.04, t, 0.45, 800, bus, { filterType: 'lowpass', q: 0.6 });
     },
+    hackwareDataSpike() {
+      const c = getCtx(); const t = c.currentTime;
+      const bus = wetDry(1, 0.2, 0.3);
+      // Precision pierce — sharp metallic chirp + tight high-frequency
+      // crackle. Distinct from hackwareEMPLine (sweeping rising sine
+      // 300→1400Hz with sawtooth) which is broader and longer. The
+      // spike opens with a snap chirp (1600→2800Hz over 60ms), layers
+      // a brief square attack for the "data" tonal bite, and a noise
+      // pop for the impact. Lower wet/dry than EMP variants — the
+      // spike is a focused hit, not a sweeping disruption, so it
+      // shouldn't ring out as long. The brief sub-tone at the tail
+      // grounds the high-end stack so it doesn't feel weightless.
+      osc('triangle', 1600, 2800, 0.06, t,         0.10, bus);
+      osc('square',   2200, 1100, 0.04, t + 0.01,  0.08, bus);
+      noise(0.08, t, 0.06, 6000, bus, { filterType: 'highpass', q: 0.8 });
+      osc('sine',      120,   60, 0.06, t + 0.03,  0.18);
+    },
     playerBurn() {
       const c = getCtx(); const t = c.currentTime;
       // Fire crackle — short burst of noise + warm sub tone
