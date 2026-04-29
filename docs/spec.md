@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 41 entries. Every biome has at least
-eight whispers after the black-ice lockdown bundle (`w-sb-09`, `w-cc-08`,
-`w-fw-08`, `w-uk-08`, `w-on-08`), which reframes black ice as a defensive
-quarantine instinct: frightening, cold, and dangerous, but sometimes protecting
-names and memories the loop would otherwise erase.
+Authored whisper content currently ships 46 entries. Every biome has at least
+nine whispers after the negative-floor bundle (`w-sb-10`, `w-cc-09`,
+`w-fw-09`, `w-uk-09`, `w-on-09`), which follows the failed compiles and
+below-sandbox rumours seeded by earlier whispers into a hidden underworld of
+discarded operatives, downlinks, and transit routes the facility denies exist.
 
 ---
 
