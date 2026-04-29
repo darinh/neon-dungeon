@@ -3334,11 +3334,11 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 56 entries. Every biome has at least
-eleven whispers after the ghost-route wayfinding bundle (`w-sb-12`, `w-cc-11`,
-`w-fw-11`, `w-uk-11`, `w-on-11`), which extends the deep-cache dead-drop thread
-into hidden paths, firewall detours, uplink pings, and city transit signals for
-discarded operatives the facility keeps misrouting.
+Authored whisper content currently ships 61 entries. Every biome has at least
+twelve whispers after the mirror-fault bundle (`w-sb-13`, `w-cc-12`,
+`w-fw-12`, `w-uk-12`, `w-on-12`), which extends the reflection/anchor thread
+into delayed mirrors, cached reflection indexes, glass exceptions, antenna
+doubles, and city storefront windows for versions of AXIOM-7 that answer late.
 
 ---
 
