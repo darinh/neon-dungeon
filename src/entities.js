@@ -1977,6 +1977,57 @@ class Enemy {
         }
       }
     }
+    // PROXIMITY floor modifier: enemies within 4 tiles of the player take
+    // +30% damage on this floor. Applied at the same chokepoint as MARK,
+    // EXPLOITER, and HOT_HAND above — BEFORE shield/shieldGen/NEXUS DR —
+    // so the bonus follows the standard mitigation pipeline. Multiplicative
+    // on top of MARK/EXPLOITER/HOT_HAND by design (each gates on
+    // independent state).
+    //
+    // Gates:
+    //   _EG.modifier === 'PROXIMITY' — modifier-roll only; off-floor and
+    //     other-modifier runs see no behavior change. Reads via the
+    //     _EG proxy so floor swaps and tests-without-game-bound-state
+    //     both resolve correctly (mirrors REGENERATIVE/CASCADE/WINDFALL/
+    //     SIGNAL_BOOST sites above and below).
+    //   !_isProc — chain/ricochet/explode procs that EXPLICITLY pass
+    //     `{ isProc: true }` don't double-dip the bonus (same convention
+    //     as MARK and EXPLOITER). NOTE: legacy string-context proc paths
+    //     (e.g. 'Explosion', 'Neural Feedback', 'Volatile Elite' at
+    //     entities.js ~2651/2679/2727) become _pctx=null → _isProc=false,
+    //     so they DO receive the PROXIMITY amp — exactly matching the
+    //     EXPLOITER precedent. This is intentional: those legacy proc
+    //     ctxs are environmental/secondary damage that the player
+    //     positionally chose to be near, so the close-range bonus is
+    //     thematically apt. A future refactor that converts those paths
+    //     to object ctx with `isProc:true` would correctly tighten BOTH
+    //     EXPLOITER and PROXIMITY in lockstep.
+    //   _EG.player + dist(player, this) < 4 — radius gate. Math.sqrt
+    //     returns a finite non-negative number for any finite dx/dy, so
+    //     no NaN propagation. Player x/y are world-tile coordinates
+    //     (same units as enemy x/y), so the 4-tile literal is unitless
+    //     world-distance.
+    //
+    // Note: ally-turret / Plasma Orb / Sentry Drone hits also pass through
+    // Enemy.takeDamage. They benefit from PROXIMITY when the ENEMY they
+    // hit is within 4 tiles of the player (regardless of where the shot
+    // originated) — by design. The modifier rewards the player for
+    // POSITIONING (where they stand relative to enemies), not for
+    // attribution (who fired the shot). This matches the EXPLOITER
+    // precedent: any direct hit on a status-debuffed enemy gets the
+    // bonus, regardless of damage source.
+    {
+      const _pctx = typeof hitCtx === 'string' ? null : hitCtx;
+      const _isProc = !!(_pctx && _pctx.isProc);
+      if (!_isProc && _EG.modifier === 'PROXIMITY' && _EG.player) {
+        const _pdx = _EG.player.x - this.x;
+        const _pdy = _EG.player.y - this.y;
+        const _pdist = Math.sqrt(_pdx * _pdx + _pdy * _pdy);
+        if (_pdist < 4) {
+          dmg = Math.round(dmg * 1.30);
+        }
+      }
+    }
     // HOT_HAND perk: per-target consecutive-hit damage stack. Applied at
     // the same chokepoint as MARK and EXPLOITER above — BEFORE shield/
     // shieldGen/NEXUS DR — so the bonus follows the standard mitigation
