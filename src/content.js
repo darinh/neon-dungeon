@@ -4178,7 +4178,7 @@ function generateFloor(floorNum) {
       t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
-      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE ||
+      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
       t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
@@ -4327,13 +4327,17 @@ function generateFloor(floorNum) {
         const tx = r.x + rndInt(1, r.w-2);
         const ty = r.y + rndInt(1, r.h-2);
         if (map[ty][tx] === T.FLOOR) {
-          // Trap mix: 60% spike (damage), 25% slow (impede), 15% shock
-          // (movement-suppress). Shock is the rarest because it commits
-          // the player in place — over-spawning trivialises rooms.
+          // Trap mix: 55% spike (damage), 22% slow (impede), 13% shock
+          // (movement-suppress), 10% repulsor (positional knockback).
+          // Status hazards (shock, repulsor) stay rare because they commit
+          // the player in place / displace them — over-spawning trivialises
+          // rooms. Repulsor is the rarest because adjacent repulsors can
+          // chain a forced detour that's hard to plan around.
           const roll = Math.random();
-          map[ty][tx] = roll < 0.60 ? T.TRAP_SPIKE
-                      : roll < 0.85 ? T.TRAP_SLOW
-                      : T.SHOCK_TILE;
+          map[ty][tx] = roll < 0.55 ? T.TRAP_SPIKE
+                      : roll < 0.77 ? T.TRAP_SLOW
+                      : roll < 0.90 ? T.SHOCK_TILE
+                      : T.REPULSOR;
         }
       }
     }

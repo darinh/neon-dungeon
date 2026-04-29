@@ -851,6 +851,48 @@ function drawWorld(dungeon, camX, camY) {
           }
           break;
         }
+        case T.REPULSOR: {
+          // Kinetic emitter plate — flat dark base + pulsing cyan radial
+          // arrows pointing outward from the centre. Visually distinct
+          // from SHOCK_TILE (yellow coil ring) and ARC (cyan fill on
+          // damage phase): REPULSOR shows a steady ring of four short
+          // outward-pointing strokes, always legible so the player can
+          // route around it. Pulse synced per-tile so adjacent repulsors
+          // breathe together (unlike SHOCK_TILE which uses tx/ty offsets).
+          ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
+          // Dark inner plate
+          ctx.globalAlpha = brightness * 0.55;
+          ctx.fillStyle='#0e2030';
+          ctx.fillRect(sx+2,sy+2,TILE-4,TILE-4);
+          // Outer cyan ring — base outline
+          const rPulse = 0.45 + 0.25 * Math.sin(lastTime/200 + tx*0.9 + ty*1.3);
+          ctx.globalAlpha = brightness * rPulse;
+          ctx.shadowBlur = 6; ctx.shadowColor = '#44ddff';
+          ctx.strokeStyle = '#44ddff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sx+3.5, sy+3.5, TILE-7, TILE-7);
+          // Four outward arrows (top/right/bottom/left) — short strokes
+          // from inner ring to outer edge, telegraphing "this pushes you
+          // out".
+          ctx.globalAlpha = brightness * (0.6 + 0.3 * rPulse);
+          ctx.beginPath();
+          const cx = sx + TILE/2, cy = sy + TILE/2;
+          const innerR = TILE/2 - 4, outerR = TILE/2 - 1;
+          // up
+          ctx.moveTo(cx, cy - innerR); ctx.lineTo(cx, cy - outerR);
+          // down
+          ctx.moveTo(cx, cy + innerR); ctx.lineTo(cx, cy + outerR);
+          // left
+          ctx.moveTo(cx - innerR, cy); ctx.lineTo(cx - outerR, cy);
+          // right
+          ctx.moveTo(cx + innerR, cy); ctx.lineTo(cx + outerR, cy);
+          ctx.stroke();
+          // Bright centre core dot — steady (the emitter)
+          ctx.globalAlpha = brightness * 0.7;
+          ctx.fillStyle = '#aaeeff';
+          ctx.fillRect(sx+TILE/2-1, sy+TILE/2-1, 2, 2);
+          break;
+        }
         case T.PLASMA: {
           ctx.fillStyle=pal.floor; ctx.fillRect(sx,sy,TILE,TILE);
           // Animated orange glow with pulsing brightness
@@ -1873,7 +1915,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
       if (tile === T.WALL || tile === T.CRACKED) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2275,7 +2317,7 @@ function drawExpandedMinimap(dungeon, player) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
-      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';

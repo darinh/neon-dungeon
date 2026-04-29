@@ -386,7 +386,7 @@ const game = {
          */
         const isSafeSpawn = (t) => isPassable(t) &&
           t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
-          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE;
+          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE && t !== T.REPULSOR;
         const near =
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
@@ -2246,6 +2246,93 @@ const game = {
         player.trapCooldown = 3.0;
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
+      } else if (tile===T.REPULSOR && !isPlayerDamageImmune()) {
+        // REPULSOR_TILE: positional hazard — boots the player back in the
+        // direction they ENTERED FROM. NO HP damage; the cost is positional
+        // commitment + the routing detour.
+        //
+        // Direction source: OPPOSITE of the player's movement delta this
+        // frame. player._prevX / _prevY are captured at the start of
+        // Player.update (entities.js:12845) BEFORE any movement, so by the
+        // time this trap-trigger runs, (player.x - player._prevX,
+        // player.y - player._prevY) is the actual movement vector for the
+        // frame. Negating it gives the way they CAME — the natural "push
+        // back" direction.
+        //
+        // Why not player.facing? Codex r1 caught it: player.facing is
+        // overwritten EVERY frame by the aim-assist + mouse-aim handlers
+        // (game.js:1531/1544). It's an aim vector, not a movement vector.
+        // Knockback derived from facing pushes opposite to AIM — a player
+        // shooting at an enemy across the room would get launched INTO
+        // the enemy on stepping on a repulsor.
+        //
+        // Why not (player.x - tileCentre)? Codex r2 caught it: on a frame
+        // hitch (large dt), the player can move past the tile centre in a
+        // single step, flipping the centre-relative offset and pushing
+        // them DEEPER instead of back. Movement-delta is hitch-stable.
+        //
+        // Fallback chain handles the degenerate "no movement this frame"
+        // case (gravity-well-cancellation, collision-zeroed entries, etc.):
+        // tile-centre delta first (still useful when player nudged onto
+        // tile by a non-movement source), then opposite-of-facing as a
+        // last-resort best guess.
+        //
+        // PUSH = 0.95 (≤ 1.0): displacement strictly less than one tile.
+        // This bounds the per-axis isPassable check to ADJACENT cells only,
+        // making tunnel-through-wall impossible — codex r2 caught that
+        // PUSH > 1.0 with endpoint-only checks lets the player skip a
+        // 1-tile-wide wall when destination cell happens to be passable.
+        // 0.95 still reads as a kick (player visibly leaves the tile) but
+        // keeps the swept check trivial and correct.
+        //
+        // Wall-aware swept knockback: per-axis isPassable check (mirrors
+        // CHARGER mob convention at entities.js:6062) PLUS a combined
+        // diagonal-cell check (codex r1: per-axis individually passable +
+        // diagonal cell wall = corner-wedge clip). When the diagonal cell
+        // is blocked but one axis is passable, slide along the wall on
+        // that axis only — never commit a write that lands in a wall.
+        // Damage-immune frames bypass — matches PLASMA/ARC/TOXIC/SHOCK.
+        // trapCooldown 1.2s prevents adjacent-repulsor ping-pong.
+        //
+        // BRANCH ORDERING: this branch must precede the T.SHOCK_TILE branch
+        // because tests/shock-tile.test.js extracts the SHOCK_TILE body via
+        // a non-greedy regex (`[\s\S]*?\}\s*\n`) that requires SHOCK_TILE
+        // to be the LAST branch in the chain (`} else if` doesn't match
+        // `\}\s*\n`, so the regex would walk PAST any subsequent branch).
+        // Behaviour is identical regardless of order — trapCooldown gates
+        // single-fire per re-entry. Pinned by the structural test
+        // 'REPULSOR branch precedes SHOCK_TILE branch' so a future reorder
+        // can't silently break shock-tile.test.js.
+        let kxr = (player._prevX !== undefined ? player._prevX : player.x) - player.x;
+        let kyr = (player._prevY !== undefined ? player._prevY : player.y) - player.y;
+        if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
+          kxr = player.x - (tx + 0.5);
+          kyr = player.y - (ty + 0.5);
+        }
+        if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
+          const fxr = (player.facing && player.facing.x) || 0;
+          const fyr = (player.facing && player.facing.y) || 0;
+          kxr = -fxr; kyr = -fyr;
+          if (kxr === 0 && kyr === 0) { kxr = -1; kyr = 0; }
+        }
+        const klen = Math.hypot(kxr, kyr) || 1;
+        kxr /= klen; kyr /= klen;
+        const PUSH = 0.95;
+        const nxr = player.x + kxr * PUSH, nyr = player.y + kyr * PUSH;
+        const fxK = Math.floor(nxr), fyK = Math.floor(player.y);
+        const xfK = Math.floor(player.x), yfK = Math.floor(nyr);
+        const dxK = Math.floor(nxr), dyK = Math.floor(nyr);
+        const map = this.dungeon.map;
+        const canX = fxK >= 0 && fxK < MAP_W && fyK >= 0 && fyK < MAP_H && isPassable(map[fyK][fxK]);
+        const canY = xfK >= 0 && xfK < MAP_W && yfK >= 0 && yfK < MAP_H && isPassable(map[yfK][xfK]);
+        const canDiag = dxK >= 0 && dxK < MAP_W && dyK >= 0 && dyK < MAP_H && isPassable(map[dyK][dxK]);
+        if (canX && canY && canDiag) { player.x = nxr; player.y = nyr; }
+        else if (canX) { player.x = nxr; }
+        else if (canY) { player.y = nyr; }
+        player.trapCooldown = 1.2;
+        this.msg('Repulsor!','#44ddff');
+        spawnParticles(player.x, player.y, 'SPARK', '#44ddff', 6);
+        audio.repulsor();
       } else if (tile===T.SHOCK_TILE && !isPlayerDamageImmune()) {
         // SHOCK_TILE: brief movement-suppress hazard. Reuses the existing
         // player.shockTimer primitive (already wired in entities.js to zero
