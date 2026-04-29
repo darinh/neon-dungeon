@@ -2346,6 +2346,7 @@ const FLOOR_MODIFIERS = {
   KINETIC:   { label:'KINETIC',   desc:'Inertial primer — dash cooldown -30%', colour:'#88ddff', icon:'»' },
   PRIMED:    { label:'PRIMED',    desc:'Smartlink — first shot in each room crits', colour:'#ffaa00', icon:'◎' },
   JAMMED:    { label:'JAMMED',    desc:'Signal jammed — hackware cooldowns increased 25%', colour:'#cc6644', icon:'⊘' },
+  PROXIMITY: { label:'PROXIMITY', desc:'Close-range bonus — enemies within 4t take +30% damage', colour:'#ff66aa', icon:'◉' },
 };
 const MODIFIER_KEYS = Object.keys(FLOOR_MODIFIERS);
 function getMod() { return _CG.modifier && FLOOR_MODIFIERS[_CG.modifier] || null; }
