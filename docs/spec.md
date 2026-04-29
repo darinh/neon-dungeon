@@ -3334,10 +3334,10 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 21 entries. Every biome has at least
-four whispers after the echo-thread bundle (`w-sb-05`, `w-cc-04`, `w-fw-04`,
-`w-uk-04`, `w-on-04`), which extends the AXIOM-7 copy/voice motif from the
-sandbox voice test through the cache, complex, wilds, and grid.
+Authored whisper content currently ships 26 entries. Every biome has at least
+five whispers after the signal-memory bundle (`w-sb-06`, `w-cc-05`,
+`w-fw-05`, `w-uk-05`, `w-on-05`), which extends the AXIOM-7 copy/voice motif
+into facility signal routing, stored memory, and the city relay.
 
 ---
 
@@ -4426,3 +4426,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v130.0  | GENESIS lore-thread extension: `LORE_ENTRIES` grows from 27 to 32 authored terminal fragments, adding five late-arc documents that foreground the GENESIS_LEGACY predecessor voice, Voss's concealment of GENESIS inside OMEGA, and ambiguous facility behavior around SL-4/SL-7/SL-9/SL-10. New `tests/lore-genesis-thread.test.js` pins the exact 32-entry canary, regression floor, duplicate/length sanity, and GENESIS-thread continuity for the current tail entries. |
 | v131.0  | Expanded minimap elite-affix legend: `drawExpandedMinimap()` now renders a dynamic `ELITES:` row below the base map legend using `ELITE_AFFIX_KEYS` / `ELITE_AFFIXES` metadata, so affix-coloured elite dots are readable without duplicating the affix catalog. Added `tests/elite-minimap-legend.test.js` to pin dynamic metadata use, module-scope helper placement, draw wiring, and required affix label/colour/icon fields. |
 | v132.0  | Secret-room whisper echo-thread bundle: `WHISPERS` grows to 21 entries with one new biome-gated fragment per biome (`w-sb-05`, `w-cc-04`, `w-fw-04`, `w-uk-04`, `w-on-04`) connecting the AXIOM-7 voice/copy motif from the sandbox voice test through the city reflection payoff. Added `tests/whispers-bundle-3.test.js` to pin metadata, picker eligibility, per-biome >=4 coverage, progress floor, and echo/copy vocabulary continuity. |
+| v133.0  | Secret-room whisper signal-memory bundle: `WHISPERS` grows to 26 entries with one new biome-gated fragment per biome (`w-sb-06`, `w-cc-05`, `w-fw-05`, `w-uk-05`, `w-on-05`) extending the voice/copy motif into signal routing, stored memories, firewall checksums, uplink delay, and city relay echoes. Added `tests/whispers-bundle-4.test.js` to pin metadata, picker eligibility, per-biome >=5 coverage, progress floor, and signal/memory vocabulary continuity. |

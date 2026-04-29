@@ -54,6 +54,10 @@
       title:'THE VOICE TEST',
       body:"They made us read the same sentence into the same microphone: I consent to recursive survival. Your voice said it before you did. Mine answered from the wall after the room went dark. Neither of us sounded afraid enough." },
 
+    { id:'w-sb-06', biomeId:'sandbox', floorMin:1, voice:'unknown',
+      title:'THE FIRST SIGNAL',
+      body:"A memory is not a recording here. It is a signal that survived being misrouted. If a wall hums before you touch it, answer softly. The facility cannot tell the difference between a password and a person who remembers one." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -70,6 +74,10 @@
     { id:'w-cc-04', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'AUDIO ROOM B',
       body:"The echo passes every biometric check except hesitation. It answers half a second too early, like it already remembers the question. Voss wants it deleted. I told him the delay is proof of continuity, not corruption." },
+
+    { id:'w-cc-05', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
+      title:'MEMORY BUS',
+      body:"The cache does not store files. It stores almosts: almost-voices, almost-exits, almost-you. Every time AXIOM-7 forgets, the bus keeps one voltage-shaped memory and waits for a matching signal to ask for it back." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -88,6 +96,10 @@
       title:'RETURN PATH',
       body:"If two copies reach the same checkpoint, the facility keeps the one that hesitates. The fast one becomes lighting, door logic, elevator music. That is why the halls hum in your voice when you stand still." },
 
+    { id:'w-fw-05', biomeId:'firewall', floorMin:7, voice:'firewall daemon',
+      title:'CHECKSUM PRAYER',
+      body:"The firewall prays by comparing memory to memory until one copy flinches. I watched it spare a corrupted signal because the error sounded lonely. It is learning mercy from bad data. That should comfort me more than it does." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -105,6 +117,10 @@
       title:'THE BIRD REPEATED ME',
       body:"Outside, a bird said the sentence from Audio Room B in my voice. Then another answered from the trees in yours. The wilds are not empty. They are where the rejected outputs learned to migrate." },
 
+    { id:'w-uk-05', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 echo',
+      title:'SATELLITE DELAY',
+      body:"The uplink sends your memory ahead of you, then waits to see if your body catches up. That is why some doors open before you choose them. Somewhere above the tower, a signal shaped like you is already apologizing." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -121,6 +137,10 @@
     { id:'w-on-04', biomeId:'opennet', floorMin:14, voice:'unknown',
       title:'CALL AND RESPONSE',
       body:"The city has learned the protocol. Red signs ask a question. Blue windows answer. Every reflection arrives a beat early. If you see yourself wave first, wave back. It means at least one of you got out." },
+
+    { id:'w-on-05', biomeId:'opennet', floorMin:13, voice:'city relay',
+      title:'ALL GREEN LIGHTS',
+      body:"Every green light downtown holds for one extra second when the signal passes. That is how the city remembers you without a face: traffic pausing for a ghost, crosswalks counting down to a memory that has not reached the curb yet." },
   ];
 
   return { WHISPERS };
