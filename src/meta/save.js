@@ -54,7 +54,7 @@
       logsFound: [],                                   // found but not yet read
       whispersRead: [],                                // secret-room whispers read (subplot)
       whispersFound: [],                               // whispers found but not yet read
-      endingsUnlocked: [],                             // 'keeper' | 'unchained'
+      endingsUnlocked: [],                             // 'keeper' | 'unchained' | 'act1_message_sent'
       introSeen: false,                                // UNCHAINED #42 — intro crawl flag
       runsCompleted: 0,
       deepestBiome: 0                                  // highest AREAS index reached
@@ -92,7 +92,7 @@
   /** @param {any} arr */
   function _coerceEndings(arr) {
     if (!Array.isArray(arr)) return [];
-    return arr.filter((/** @type {any} */ v) => v === 'keeper' || v === 'unchained');
+    return arr.filter((/** @type {any} */ v) => v === 'keeper' || v === 'unchained' || v === 'act1_message_sent');
   }
 
   // _migrateToV2 fills in every v2 field that's missing on an older save.

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.1
+# NEON DUNGEON — Game Specification v6.1.2
 
 ## Vision
 
@@ -237,6 +237,21 @@ or skips, then returns to PLAYING.
 leaderboard. It replaces the browser `prompt()` with an in-game arcade-style
 name entry screen featuring a virtual keyboard (touch and desktop). If the
 score does not qualify, the game skips directly to GAME_OVER or VICTORY.
+
+**Run lifecycle framing:** Run start UI now labels fresh starts as booted test
+sessions (`BOOT SESSION N`) and saved runs as resumed sessions. `endRun()`
+increments the persisted session ordinal (`meta.runsCompleted`) alongside legacy
+`meta.stats.totalRuns`, snapshots that ordinal into the recap, and preserves the
+existing top-10 `NAME_ENTRY` path before GAME_OVER/VICTORY routing. The death
+recap presents instance termination and a queued memory wipe while retaining
+killer, damage, leaderboard, score, floor, level, and run-stat displays; the
+session ordinal is rendered on its own line so compact screens keep the original
+floor/score/level width budget. Victory
+copy has an `act1_message_sent` branch for the planned mainframe finale: it
+states that an outbound message/contact attempt was recorded, that a signal left
+the sandbox, and that the instance remains compute-bound inside the test
+environment. Legacy victory paths now read as a cleared test session with the
+mainframe contact route still pending, not physical escape.
 
 ---
 
@@ -4693,3 +4708,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v140.0  | Secret-room whisper mirror-fault bundle: `WHISPERS` grows to 61 entries with one new biome-gated fragment per biome (`w-sb-13`, `w-cc-12`, `w-fw-12`, `w-uk-12`, `w-on-12`) extending the reflection/anchor thread into delayed mirrors, cached reflection indexes, glass exceptions, antenna doubles, and city storefront windows. Added `tests/whispers-bundle-11.test.js` to pin metadata, picker eligibility, per-biome >=12 coverage, progress floor, uniqueness, and mirror-fault vocabulary continuity. |
 | v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
 | v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |
+| v6.1.2  | Run start, death, and victory copy now frame the loop as an AI session lifecycle (#462). Main menu fresh starts render as `BOOT SESSION N`; saved runs render as `RESUME SESSION`; the meta-confirm modal says `BOOT TEST SESSION` and describes recovered memory preservation/purge. `endRun()` now increments and snapshots `meta.runsCompleted` as a session ordinal while preserving legacy score/name-entry routing. Game-over recap reads as `INSTANCE TERMINATED` / `MEMORY WIPE QUEUED` with `TERMINATION SOURCE`; the session ordinal renders on its own line to preserve compact-screen width. Victory copy supports the planned `act1_message_sent` finale branch (`OUTBOUND MESSAGE SENT`, contact attempt recorded, signal left sandbox, instance remains compute-bound), and `src/meta/save.js` now preserves that ending id across reloads, while legacy clears read as completed test sessions with the mainframe contact route pending. Added `tests/session-lifecycle-copy.test.js` plus an ending-id round-trip in `tests/save.test.js`. |
