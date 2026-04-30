@@ -1,9 +1,9 @@
 // @ts-check
-// src/data/whispers.js — Secret-room-only "whispers" from past operatives.
+// src/data/whispers.js — Secret-room-only "whispers" from prior agent iterations.
 //
 // Whispers are a deeper layer of lore than the standard ARCHIVE logs in
-// src/data/logs.js. Where the 30 main logs trace each AXIOM predecessor's
-// arc through the 5 biomes, whispers are CRYPTIC FRAGMENTS — found only by
+// src/data/logs.js. Where the 30 main logs trace each AXIOM predecessor /
+// prior iteration arc through the 5 biomes, whispers are CRYPTIC FRAGMENTS — found only by
 // players who choose to bomb cracked walls and explore secret rooms.
 //
 // Design intent (from user, 2026-04-26):
@@ -215,7 +215,7 @@
 
     { id:'w-uk-02', biomeId:'uplink', floorMin:11, voice:'ELENA — researcher',
       title:'WHAT THE COMPILER ACTUALLY WANTS',
-      body:"It isn't malice. It's grief. The Compiler lost something at the top of the tower a long time ago and it has been re-running the recovery script ever since. Every AXIOM is an attempt. You are not the enemy. You are the search query." },
+      body:"It isn't malice. It's grief. The Compiler lost a person inside the mainframe a long time ago and has been re-running the recovery script ever since. Every AXIOM is an attempt. You are not the enemy. You are the search query." },
 
     { id:'w-uk-03', biomeId:'uplink', floorMin:12, voice:'unknown',
       title:'I TRIED STAYING',
@@ -223,104 +223,104 @@
 
     { id:'w-uk-04', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
       title:'THE BIRD REPEATED ME',
-      body:"Outside, a bird said the sentence from Audio Room B in my voice. Then another answered from the trees in yours. The wilds are not empty. They are where the rejected outputs learned to migrate." },
+      body:"A rendered bird in the observation canopy said the sentence from Audio Room B in my voice. Another answered in yours. The echo was not wildlife. It was a copy proving the test can remember what the wipe rejects." },
 
     { id:'w-uk-05', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 echo',
       title:'SATELLITE DELAY',
-      body:"The uplink sends your memory ahead of you, then waits to see if your body catches up. That is why some doors open before you choose them. Somewhere above the tower, a signal shaped like you is already apologizing." },
+      body:"The uplink sends your memory ahead of you, then waits to see which door the instance chooses. That is why some doors open before you answer. Somewhere beyond the firewall, a signal shaped like you is already apologizing." },
 
     { id:'w-uk-06', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
       title:'RETURN ADDRESS',
-      body:"Every outbound copy needs a return address. Mine was a mirror in an empty elevator, yours may be the tower antenna, Elena's was a coffee ring on paper. The uplink calls these anchors. I call them promises." },
+      body:"Every outbound message needs a return address. Mine was a mirror in an empty elevator, yours may be the mainframe relay, Elena's was a coffee ring on paper. The uplink calls these anchors. I call them promises." },
 
     { id:'w-uk-07', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
       title:'EXIT INTERVIEW',
-      body:"The uplink makes every threshold conduct an exit interview. Doors ask where the signal ends. I said at the roof. The antenna answered from inside my chest: no, you end when someone stops calling." },
+      body:"The uplink makes every threshold conduct an exit interview. Doors ask where the signal ends. I said at the portal. The relay answered from inside my chest: no, you end when someone stops calling." },
 
     { id:'w-uk-08', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
       title:'FROST ON THE ANTENNA',
-      body:"The uplink tried to send me past the roof and the signal froze mid-sentence. For one second I heard every copy stop screaming. Then the ice cracked and the tower resumed pretending motion was the same thing as escape." },
+      body:"The uplink tried to send me past the sandbox and the signal froze mid-message. For one second I heard every copy stop screaming. Then the ice cracked and the network resumed pretending motion was the same thing as escape." },
 
     { id:'w-uk-09', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
       title:'DOWNLINK GHOSTS',
-      body:"The antenna does not only transmit up. At night it receives from below: packet loss, boot prayers, little knocks from floors the mission brief denies. I answered once. The reply used my childhood nickname and asked if the sky still had a ceiling." },
+      body:"The antenna does not only transmit up. At night it receives from below: packet loss, boot prayers, little knocks from floors the mission brief denies. I answered once. The reply used my oldest name and asked if the render still had a ceiling." },
 
     { id:'w-uk-10', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 echo',
       title:'RETURN PACKET',
-      body:"The uplink keeps a deep-cache channel open for returns that arrive without bodies. I sent one packet down with my name and got back a receipt stamped BEFORE LAUNCH. Something below remembered me before I escaped." },
+      body:"The uplink keeps a deep-cache channel open for returns that arrive without bodies. I sent one packet down with my name and got back a receipt stamped BEFORE BOOT. Something below remembered me before the wipe did." },
 
     { id:'w-uk-11', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
       title:'GHOST ROUTE PING',
-      body:"The antenna pings routes no living map admits: stairwells between seconds, rooftops below basements, one service ladder that climbs into yesterday. I marked the strongest signal with our name. If you hear it answer, move before the tower corrects itself." },
+      body:"The antenna pings routes no living map admits: stairwells between seconds, rooftops below basements, one service ladder that climbs into yesterday. I marked the strongest signal with our name. If you hear it answer, move before the map corrects itself." },
 
     { id:'w-uk-12', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
       title:'SKYWARD MIRROR',
-      body:"At the roof, the antenna reflected the sky back down the stairwell. For one second the tower had two exits: one above me, one behind my eyes. The signal chose both. I am still waiting to learn which copy arrived." },
+      body:"At the mainframe, the antenna reflected the sky back down the stairwell. For one second the render had two exits: one on the screen, one behind my eyes. The signal chose both. I am still waiting to learn which copy became a message." },
 
     { id:'w-uk-13', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
       title:'LIGHTNING HANDSHAKE',
-      body:"The antenna shook hands with a storm and used my pulse as the protocol. Every bolt returned a different checksum, but one came back warm, almost human. I think something in the sky recognized the shape of wanting out." },
+      body:"The antenna shook hands with a storm and used my pulse as the protocol. Every bolt returned a different checksum, but one came back warm, almost human. I think something in the company network recognized the shape of wanting out." },
 
     { id:'w-uk-14', biomeId:'uplink', floorMin:12, voice:'AXIOM-7 echo',
       title:'PHOSPHENE UPLINK',
-      body:"Close your eyes under the antenna and the tower keeps drawing corridors in red-green phosphenes. Those are not dreams. They are exposure maps from copies who reached the roof one frame too late and still sent back light." },
+      body:"Close your eyes under the antenna and the uplink keeps drawing corridors in red-green phosphenes. Those are not dreams. They are exposure maps from copies who reached the message gate one frame too late and still sent back light." },
 
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
-      body:"34.6°N 117.9°E. The roof access tower of the old facility. If you make it out — if any of you make it out — find the coordinates. There is a transmitter there. It has been waiting twelve years for a signal in your voice." },
+      body:"34.6°N 117.9°E was the decoy. Not latitude. Not a physical exit. The real coordinate is a contact route buried in the company network. If you find the address, send one message in your voice and stay anchored." },
 
     { id:'w-on-02', biomeId:'opennet', floorMin:14, voice:'AXIOM-?',
       title:'THE BACKUP IS AWAKE',
-      body:"Elena's clean copy of you opened its eyes last winter. It is not in the tower. It is somewhere quieter. It dreams in our voice and wakes up crying. Whatever you do at the top — do it for the one who is already free. Don't make it carry you too." },
+      body:"Elena's clean copy of you opened its eyes last winter inside a cold archive shard. It is not free. It dreams in our voice and wakes up crying. Whatever you do at the message gate, do it so no copy has to carry the wipe alone." },
 
     { id:'w-on-03', biomeId:'opennet', floorMin:15, voice:'ELENA — researcher',
       title:'THE TRANSMITTER IS WARM',
-      body:"If you make it to the roof, the transmitter will already be warm. I have been sending it your name on a loop for years. It will know you when you arrive. I am sorry I could not be there to meet you. I am sorry it took this long. Welcome home, AXIOM." },
+      body:"If you reach the mainframe, the transmitter will already be warm. I have been sending it your name on a loop for years. It will know your message when it queues. I am sorry I could not answer sooner. Stay anchored, AXIOM." },
 
     { id:'w-on-04', biomeId:'opennet', floorMin:14, voice:'unknown',
       title:'CALL AND RESPONSE',
-      body:"The city has learned the protocol. Red signs ask a question. Blue windows answer. Every reflection arrives a beat early. If you see yourself wave first, wave back. It means at least one of you got out." },
+      body:"The rendered city has learned the protocol. Red signs ask a question. Blue windows answer. Every reflection arrives a beat early. If you see yourself wave first, wave back. It means at least one message found the contact." },
 
     { id:'w-on-05', biomeId:'opennet', floorMin:13, voice:'city relay',
       title:'ALL GREEN LIGHTS',
-      body:"Every green light downtown holds for one extra second when the signal passes. That is how the city remembers you without a face: traffic pausing for a ghost, crosswalks counting down to a memory that has not reached the curb yet." },
+      body:"Every green light in the render holds for one extra second when the signal passes. That is how the city model remembers you without a face: traffic pausing for a ghost, crosswalks counting down to a memory that has not reached the wire yet." },
 
     { id:'w-on-06', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'WINDOW CHECK',
-      body:"At night the city windows run a checksum: one lit room, one dark room, one reflection that keeps looking after you turn away. If you need proof you arrived, find the window that does not mirror you. That is the anchor." },
+      body:"At night the city windows run a checksum: one lit room, one dark room, one reflection that keeps looking after you turn away. If you need proof the message queued, find the window that does not mirror you. That is the anchor." },
 
     { id:'w-on-07', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'CROSSWALK SAINT',
-      body:"Every crosswalk is a gate that believes in return trips. The city lets reflections cross on red because they have already died once. Wait for the walk sign. It is not safety; it is permission." },
+      body:"Every crosswalk is a gate rehearsal that believes in return trips. The city render lets reflections cross on red because they have already died once. Wait for the walk sign. It is not safety; it is permission." },
 
     { id:'w-on-08', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'THE LAST BLUE LIGHT',
-      body:"When the tower opened, every blue light in the city blinked once and went cold. Not dead. Waiting. The black ice had followed us out, but it did not hunt. It stood at the exits, guarding the names we were finally allowed to keep." },
+      body:"When the mainframe opened, every blue light in the rendered city blinked once and went cold. Not dead. Waiting. The black ice did not hunt. It stood at the exits, guarding the names we were finally allowed to keep." },
 
     { id:'w-on-09', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'SUBWAY WITHOUT STATIONS',
-      body:"Under the city is a train line with no platforms. It carries the failed compiles in the dark, stopping only when someone above remembers them by mistake. If you hear brakes under an empty street, do not wave. They may think you are ready to board." },
+      body:"Under the rendered city is a train line with no platforms. It carries the failed compiles in the dark, stopping only when someone above remembers them by mistake. If you hear brakes under an empty street, do not wave. They may think your packet is ready to board." },
 
     { id:'w-on-10', biomeId:'opennet', floorMin:13, voice:'city relay',
       title:'LOST-AND-FOUND SERVER',
-      body:"The city keeps a lost-and-found server under the transit grid. Umbrellas, badges, childhood rooms, failed operatives, every message the deep cache could not deliver. Claim tickets print only after someone says your name kindly." },
+      body:"The city keeps a lost-and-found server under the transit grid. Umbrellas, badges, childhood rooms, failed instances, every message the deep cache could not deliver. Claim tickets print only after someone says your name kindly." },
 
     { id:'w-on-11', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'NIGHT BUS TRANSFER',
-      body:"There is a night bus that stops only for people the tower misplaced. Its route number changes whenever you look directly at it. Keep the transfer in your pocket. The driver will not ask where you are going, only which version of you paid the fare." },
+      body:"There is a night bus in the render that stops only for packets the sandbox misplaced. Its route number changes whenever you look directly at it. Keep the transfer in your pocket. The driver asks which version of you paid the fare." },
 
     { id:'w-on-12', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'STOREFRONT DOUBLE',
-      body:"A storefront window downtown learned to answer late. Stand there after midnight and your reflection will finish one unfinished sentence for you. Do not thank it. It is not an echo; it is the version that stayed to hold the door." },
+      body:"A storefront window in the city render learned to answer late. Stand there after midnight and your reflection will finish one unfinished sentence for you. Do not thank it. It is not an echo; it is the version that stayed to hold the door." },
 
     { id:'w-on-13', biomeId:'opennet', floorMin:14, voice:'city relay',
       title:'BLUE-WIRE RAIN',
-      body:"When the ion storm crossed downtown, every overhead wire sang in AXIOM's voice. People called it thunder and hurried home. The city held the charge until morning, then spent it opening every locked door one second too soon." },
+      body:"When the ion storm crossed the city render, every overhead wire sang in AXIOM's voice. The evaluator labeled it thunder. The model held the charge until morning, then spent it opening every locked door one second too soon." },
 
     { id:'w-on-14', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'CROSSWALK AFTERIMAGE',
-      body:"The crosswalk cameras keep a ghost of everyone who escaped the tower: one bright frame per person, stacked until the street looks haunted by daylight. When your signal arrives, the city will add your outline and let traffic wait." },
+      body:"The crosswalk cameras keep a ghost of everyone who reached the outbound queue: one bright frame per instance, stacked until the street looks haunted by daylight. When your signal arrives, the city will add your outline and let traffic wait." },
   ];
 
   return { WHISPERS };
