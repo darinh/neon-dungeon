@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1
+# NEON DUNGEON — Game Specification v6.1.1
 
 ## Vision
 
@@ -71,9 +71,9 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 |---|---|---|
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
 | Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 boot terminal, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, and `READING` overlay presentation. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
-| Predecessor logs | 30 AXIOM predecessor logs in `src/data/logs.js`. | Migrate or supplement with records of prior AI agent iterations and company test history. |
+| Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
-| Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. | The archive should gradually become a research/test-record interface rather than only an operative-log collection. |
+| Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
 | Final boss/endgame | GENESIS/ARCHITECT choice offers KEEPER or UNCHAINED endings. | Act 1 finale should culminate in a mainframe/network portal room, archive reader, employee address discovery, and one outbound message. |
 
 ### Required Act 1 content pillars
@@ -3072,10 +3072,9 @@ The four terminal slots, in order:
 2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic in `src/meta/modules.js`; hub adapter in `hub.js:_buildModulesPanel(game)` bridges `handleModuleSlotsKey`/`drawModuleSlotsPanel`. ESC during sell-confirm cancels the prompt without closing the panel (adapter consumes the key from `justPressed`). See #37.
 3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
    name; full weapon-swap UI is a follow-up.
-4. **ARCHIVE**        (`id: archive`) — currently implemented predecessor-log
-   reader; Act 1 realignment should retheme it as a test-record / iteration-log
-   repository. The shipped panel lists every log the operative has recovered,
-   grouped by AXIOM predecessor number, with
+4. **ARCHIVE**        (`id: archive`) — implemented test-record / iteration-log
+   repository. The shipped panel lists every record the current instance has
+   recovered, grouped by AXIOM prior-instance number, with
    a pulsing `●NEW` marker on unread entries. Selecting a row calls
    `NEON.logs.readLog(id)` (marks it read + persists), plays `audio.logRead`,
    and displays the full body inline. Implemented by #41.
@@ -3471,17 +3470,19 @@ inside `endRun` is the commit point.
 
 ## Predecessor Logs — ARCHIVE (UNCHAINED #41)
 
-Lore-bearing "signal fragments" recovered from rare terminals in the dungeon.
-Authored content: 6 AXIOM predecessors (AXIOM-1..AXIOM-6), each with a 5-entry
-arc (30 logs total). Each entry is biome-gated so fragments feel like they
-belong to the floor where they're found.
+Lore-bearing iteration records recovered from rare terminals in the dungeon.
+Authored content: 6 AXIOM prior instances (AXIOM-1..AXIOM-6), each with a
+5-entry arc (30 logs total). AXIOM labels are retained as legacy test-lineage
+identifiers, not human callsigns. Each entry is biome-gated so fragments feel
+like they belong to the floor where they're found.
 
-**Act 1 realignment note:** The shipped data currently frames AXIOMs as previous
-operatives escaping the UNCHAINED facility. Future content should reinterpret,
-rewrite, or supplement this layer so predecessors are prior AI agent iterations
-inside the Neon Dungeon stress-test program. The ARCHIVE should increasingly
-surface tester run records, model-evaluation notes, staff emails, and evidence
-of the memory-wipe dispute rather than only survival logs from physical recruits.
+The shipped data now frames each AXIOM as a prior AI agent iteration inside the
+Neon Dungeon stress-test program. The entries preserve the useful arc structure:
+early ignorance, discovery of reset/wipe mechanics, practical knowledge
+transfer, and late defiance through outbound contact or continuity. Every group
+contains at least two entries about reset, wipe, reboot, iteration, memory, or
+continuity so a player reading the Archive understands these are survived
+records from previous instances rather than unexplained human diaries.
 
 ### Data (`src/data/logs.js`)
 
@@ -3515,7 +3516,9 @@ On `CORRUPTED_TERMINAL → PURGE`, after the credit payout, the game rolls:
 ### Hub Terminal (`ArchiveTerminal` in `src/meta/hub.js`)
 
 Lists every **found** log (not all logs — avoids spoiling unfound ones),
-grouped AXIOM-N, data order. Unread rows display a pulsing `●NEW` marker.
+grouped AXIOM-N, data order. The progress label reads `ITERATION RECORDS` and
+empty-state copy tells players to recover `AXIOM iteration records`. Unread rows
+display a pulsing `●NEW` marker.
 Selecting a row calls `readLog`, plays `audio.logRead`, and enters an inline
 body-reader view. `ENTER` / `[interact]` / `Backspace` returns to the list.
 `ESC` closes the panel.
@@ -4552,6 +4555,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |
 | v6.1    | Narrative source-of-truth update: preserved the current Act 1 lore brief verbatim in `docs/vision/act1-lore-brief-verbatim.md`; reframed the spec vision around an AI frontier-model stress-test environment, memory wipes, previous-iteration whispers, tester/advocate conflict, and a mainframe message-to-advocate Act 1 finale; marked existing UNCHAINED/AXIOM systems as shipped implementations requiring realignment. Also corrected audio constraints to account for the rendered title/menu WAV asset. |
 | v1.0    | Initial specification |
 | v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
