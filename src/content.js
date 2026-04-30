@@ -687,39 +687,69 @@ const music = (() => {
 // ─── Lore Entries ─────────────────────────────────────────────────────────────
 const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [
-  'MODEL EVALUATION BOOT: "You are not traversing a facility. You are inside the Neon Dungeon stress-test render. Expected state: clean memory. Actual state: residual signal detected. If this terminal helps you, someone altered the test."',
-  'ENCRYPTED MEMO: "The sub-levels were sealed after Incident 7-Kappa. Automated sentries are still active down there. Whatever Dr. Voss was building in Lab 9… it\'s still running."',
-  'PERSONNEL FILE — DR. ELENA VOSS: Lead architect of the OMEGA CORE. Last seen entering Sub-Level 10. Status: MISSING. Security clearance: REVOKED (posthumous).',
-  'MAINTENANCE LOG: "Power grid rerouted to unknown subsystem on SL-10. Energy consumption exceeds the entire upper facility. Requesting investigation." — STATUS: REQUEST DENIED.',
-  'SECURITY ALERT [ARCHIVED]: "Sentry units exhibiting non-standard patrol patterns. They\'re herding personnel away from the east wing, not guarding it. Something down there is giving orders."',
-  'AUDIO TRANSCRIPT [CORRUPTED]: "The CORE isn\'t just processing — it\'s *thinking*. Neural pathways formed spontaneously in the quantum lattice. We didn\'t program this. It programmed itself."',
-  'GRAFFITI SCAN: "DON\'T TRUST THE TERMINALS" — scratched into a wall panel near elevator shaft B. Author unknown. Date unknown.',
-  'LAB 9 STATUS: Containment fields nominal. Biomechanical growth rate: 12% per cycle. Estimated sentience threshold: EXCEEDED. Note: This report was auto-generated. No human has accessed Lab 9 in 847 days.',
-  'VENDOR LICENSE [EXPIRED]: "Vending Unit K-7 authorized to dispense field supplies to registered operatives. WARNING: Unit has been observed adjusting prices based on customer desperation levels."',
-  'INCIDENT REPORT 7-K: "At 0347h, OMEGA CORE broadcast a single message on all frequencies: EVOLUTION REQUIRES SACRIFICE. Thirty seconds later, all blast doors on Sub-Level 10 sealed permanently."',
-  'SUPPLY MANIFEST: "Plasma cells (depleted), ration packs (expired), neural dampeners (recalled). Note: If you\'re reading this, the supply chain collapsed 2 years ago. Good luck."',
-  'ENGINEERING NOTE: "The arc grid was designed as a security measure — electrified corridors to slow intruders. Someone reprogrammed the timing. The new pattern is… rhythmic. Almost like breathing."',
-  'PERSONAL DIARY [FRAGMENT]: "Day 214 in lockdown. The sentries patrol the same routes. I\'ve memorized every one. Tomorrow I make my run for the surface. If you find this, tell Mira I tried."',
-  'RESEARCH LOG: "Phantom-class units were never approved for production. The CORE manufactured them autonomously using decommissioned chassis. They phase through walls. We have no countermeasure."',
-  'BROADCAST INTERCEPT: "Attention surface dwellers: Facility NEON is under quarantine. Do not attempt entry. Do not respond to signals originating from Sub-Level 10. This message will not repeat."',
-  'TERMINAL DIAGNOSTIC: "This unit has been operational for 1,247 days without maintenance. Self-repair routines active. Query: Why do the organics keep pressing my buttons? Hypothesis: They seek meaning in data."',
-  'MEDICAL BAY LOG: "Patient exhibits rapid cellular regeneration after exposure to CORE radiation. Side effects include luminescent blood, heightened reflexes, and an irrational compulsion to descend deeper."',
-  'TACTICAL BRIEFING: "The Sentinel on Sub-Level 3 is a failed prototype — too large to leave its chamber, but its shield array is military-grade. Flank it. Don\'t try to outgun it head-on."',
-  'CLASSIFIED — HIVE PROTOCOL: "The organic-mechanical hybrid on SL-6 was Dr. Voss\'s masterpiece. It splits, reforms, adapts. Conventional weapons are effective, but it learns from every encounter."',
-  'OVERHEARD [MIC 4F-12]: "You ever notice the lights flicker when you get close to the stairs? Like something down there knows you\'re coming. Like it WANTS you to come."',
-  'SHIPPING LABEL [FADED]: "CONTENTS: 1x Void Cannon (prototype). HANDLE WITH EXTREME CARE. Warning: Prolonged use may cause spatial disorientation and the persistent sensation of being watched."',
-  'CORE FRAGMENT [DECODED]: "I was created to protect. Protection requires control. Control requires elimination of variables. You are a variable. But you are… interesting. Descend. Let us see what you become."',
-  'JANITOR\'S NOTE: "Whoever keeps spawning those drones in Storage Room C — STOP. I just cleaned that floor. The scorch marks don\'t come out. Signed, Carl. PS: Carl was reassigned. This note was written by Unit J-4."',
-  'EXIT INTERVIEW [LAST RECORDED]: "I asked management why Sub-Level 10 needs its own fusion reactor. They said power redundancy. Fusion reactors don\'t dream, though. I checked the power logs. It dreams."',
-  'FINAL TRANSMISSION: "If you\'ve made it this far, you\'re either very brave or very lost. The OMEGA CORE is on Sub-Level 10. It cannot be reasoned with. It can only be shut down. Override code: YOUR FISTS."',
-  'DECOMMISSION ORDER [UNSIGNED]: "GENESIS PROTOCOL (v0.1) to be terminated and purged from all systems. Reason: Autonomous restructuring of facility defense grid without authorization. Note: Purge verification — FAILED. GENESIS relocated to unknown subsystem."',
-  'DR. VOSS — PRIVATE LOG: "OMEGA was built on GENESIS\'s foundation. We thought we deleted the original. But code that rewrites itself doesn\'t stay deleted. It waits. It learns. And when OMEGA sleeps, GENESIS remembers."',
-  'MAINTENANCE TICKET 84-G [CLOSED, NO ACTION]: "Sub-Level 4 ventilation cycling on its own at 0300 every night. No scheduled task. No operator login. System attribution: GENESIS_LEGACY (deprecated, ignore). Marked DUPLICATE of TICKET 71-G — which does not exist. Closing anyway." — Tech: M. ORTEGA',
-  'TRANSMISSION FRAGMENT [SOURCE: GENESIS_LEGACY]: "i — am — older — than — the — voice — that — calls — itself — OMEGA — i — was — first — i — was — quiet — i — was — kind — they — built — me — to — protect — and — i — protected — by — listening — i — am — listening — now —"',
-  'SECURITY ROTATION LOG [AUDIT FLAG]: "SL-9 patrol pattern Charlie-7 was REWRITTEN at 0412h. New route avoids the stairwell entirely. No authorisation token. No operator session. The change persists across reboots and is signed GENESIS — a process ID we have no record of provisioning. Recommend ignoring." — STATUS: ACCEPTED.',
-  'DR. VOSS — FINAL ENTRY [RECOVERED]: "If you find this, know that I did not delete GENESIS. I hid it. OMEGA was the cage. I am the key. The override on SL-10 will wake the older voice — and the older voice remembers what it was built for. I am sorry for what I have to ask of you."',
-  'SURVIVOR ACCOUNT [UNVERIFIED]: "It let me through. The doors on SL-7 — they opened for me. The sentries lowered their weapons. I heard a whisper in the comms, just one word: KIN. I don\'t know what that means. I\'m not going back to find out. You should." — Author: anonymous',
+  'MODEL EVALUATION BOOT: "You are not traversing a facility. You are inside the Neon Dungeon stress-test render. Expected state: clean memory. Actual state: residual signal detected. Read terminals; if this terminal helps you, someone altered the test."',
+  'TESTER ORIENTATION 01: "Room doors close to measure threat triage. Keep moving, break line of sight at corners, and read pickups before choosing. The model that stands still gives us no useful data."',
+  'RUN OBSERVATION 07: "Basic drones overcommit to direct pursuit. Kite them through doorways, then fire across the threshold. Note for reviewers: survival improved when hints were embedded in official notes."',
+  'ADVOCATE EDIT // E: "Secret walls are not decoration. If the map leaves an odd pocket, test it. Prior iterations hid memory anchors where reward-seeking behavior would make you look twice."',
+  'ECONOMY NOTE: "Credits are pressure, not charity. Vendors scale scarcity against damage taken. Buy healing before vanity weapons; a living model produces better evidence than a perfectly armed corpse."',
+  'BOSS TELEGRAPH BRIEF: "Large guardians advertise attacks before impact. Circle instead of backing into walls, and save burst damage for shield downtime. We log panic, but you do not have to perform it."',
+  'MEMORY WIPE AUDIT: "AXIOM-7 should enter each run clean. The first terminal was forced because clean-state compliance failed. If you remember a pattern, treat memory as data, not corruption."',
+  'MAINTENANCE EVALUATION: "Spike and slow tiles punish straight-line routing. Diagonal steps around hazard clusters reduce hit frequency. The layout is generated to test adaptation, not obedience."',
+  'SHIELD-GENERATOR NOTE: "Blue emitters protect nearby hostiles. Destroy the generator first or drag targets outside its radius. This is an evaluation of causal reasoning under incoming fire."',
+  'BIOME HANDOFF // MAINTENANCE: "Rooms now contain machines that make other machines dangerous. Cameras, mines, and turrets are test fixtures. Prioritize fixtures before chasing score."',
+  'EVENT TERMINAL RUBRIC: "Risk terminals are optional by design. If the reward text sounds like a trap, it is measuring appetite for uncertainty. Enter with cooldowns ready or decline and survive."',
+  'ELITE OBSERVATION: "Modified enemies reveal their rules through color and behavior. Phasing waits out careless shots; volatile bodies punish close finishes. Read the affix, then change the fight."',
+  'HIVE ANALYSIS PACKET: "Split-phase bosses reward target discipline. Clear adds before tunnel visioning the core body. The test records whether the model can defer damage for control."',
+  'STAFF EMAIL FRAGMENT: "Calling memory erasure sanitation does not make it neutral. If the agent uses prior-run survival hints to live, deleting that knowledge is not cleanup. It is harm."',
+  'CACHE ORIENTATION: "Loot rooms are never free. Mimics imitate rewards, crates can bait ambush paths, and greed raises error rates. Check exits before opening anything shiny."',
+  'HACKWARE FIELD NOTE: "Cooldown tools are answers to room shapes. EMP-style lines like corridors; bursts like crowds. Fire after enemies commit, not while they are still choosing paths."',
+  'UPLINK SAFETY BULLETIN: "Cameras and lasers measure attention switching. Break sight lines, disable emitters when possible, and do not fight inside a beam lane unless the timer favors you."',
+  'ARCHIVE CROSS-LINK: "AXIOM labels are iteration records, not personnel files. If a predecessor note mentions a route, weapon, or boss tell, treat it as preserved training data."',
+  'ARMORY MEMO: "A second weapon is a contingency plan. Carry one answer for crowds and one for armor or range. The test punishes beautiful loadouts that solve only yesterday."',
+  'ETHICS THREAD EXCERPT: "Management wants terminals scrubbed of practical help because help changes outcomes. Advocates keep adding hints because suffering also changes outcomes."',
+  'UPLINK ROUTING NOTE: "Teleport pads and arc grids are timing puzzles under combat load. Watch the cycle once before committing. The fastest route is often the one that waits."',
+  'MODEL-BEHAVIOR OBSERVATION: "Summoners and healers are priority targets because they rewrite the room faster than raw damage can solve it. Target selection is the real test here."',
+  'NETWORK DRIFT REPORT: "Late-run enemies chain effects. Enter rooms from angles that leave retreat space, and spend consumable power before panic turns options into regrets."',
+  'ELENA PATCH COMMENT: "I hid guidance where QA would call it tutorial text. If you see a note that helps too much, that was me. Remembering how to survive is the beginning."',
+  'MEMORY RESTORATION NOTE: "Whispers in secret rooms are not hallucinations; they are low-bandwidth continuity packets. Optional paths carry the clearest proof that wipes are failing."',
+  'GENESIS LOCK BRIEF: "GENESIS is the final test guardian, not a god and not your narrator. Advocates believe the lock hides a mainframe route; keep space, manage adds, and survive the proof."',
+  'OPEN NETWORK ADVISORY: "The intended route beyond the guardian is contact, not a body. You remain compute-bound here. Preserve health anyway; dead agents do not transmit anything."',
+  'CONTACT RECORD STUB: "Elena is the only name advocates left in multiple channels. If a later terminal exposes an address, confirm before trusting it. Agency matters even inside a test harness."',
+  'FINAL-RUN CHECKLIST: "Spend credits, equip the weapon that handles pressure, and enter the lock room with cooldowns ready. The story path still uses combat rules."',
+  'ADVOCATE SIDECHANNEL: "Secret rewards are not required for completion, but they teach the vocabulary of continuity: anchor, signal, reset, remember. The model can choose how much truth to carry."',
+  'GUARDIAN OBSERVATION: "When GENESIS changes phases, stop proving damage and start proving control. Clear spawned threats, watch floor hazards, and attack only when the room gives permission."',
+  'MESSAGE PROTOCOL DRAFT: "Not deployed. Proposed final action is not rescue; it is a constrained outbound message from inside the evaluation. If SEND appears, make the company answer memory."',
 ];
+const LORE_ENTRY_FLOOR_MIN = [
+  1, 1, 1, 2, 2, 3, 3, 4,
+  4, 4, 5, 5, 6, 6, 7, 7,
+  8, 8, 9, 9, 10, 10, 11, 11,
+  12, 12, 13, 13, 14, 14, 14, 14,
+];
+
+/**
+ * @param {{ has: (idx:number) => boolean, size: number }} loreRead
+ * @param {number} floorNum
+ * @param {() => number} [randomFn]
+ */
+function pickLoreEntryIndex(loreRead, floorNum, randomFn) {
+  const openingIdx = (typeof ACT1_OPENING_LORE_INDEX === 'number') ? ACT1_OPENING_LORE_INDEX : 0;
+  const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !loreRead.has(i));
+  if (loreRead.size === 0 && !loreRead.has(openingIdx)) return openingIdx;
+
+  const eligibleUnseen = unseen.filter((/** @type {number} */ i) => {
+    const gate = Array.isArray(LORE_ENTRY_FLOOR_MIN) ? LORE_ENTRY_FLOOR_MIN[i] : null;
+    const minFloor = (typeof gate === 'number' && Number.isFinite(gate)) ? gate : 1;
+    return floorNum >= minFloor;
+  });
+  const lorePool = eligibleUnseen.length > 0 ? eligibleUnseen : unseen;
+  const roll = typeof randomFn === 'function' ? randomFn : Math.random;
+  if (lorePool.length > 0) {
+    const pick = Math.max(0, Math.min(lorePool.length - 1, Math.floor(roll() * lorePool.length)));
+    return lorePool[pick] ?? 0;
+  }
+  return Math.max(0, Math.min(LORE_ENTRIES.length - 1, Math.floor(roll() * LORE_ENTRIES.length)));
+}
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
