@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.3
+# NEON DUNGEON — Game Specification v6.1.4
 
 ## Vision
 
@@ -179,23 +179,99 @@ the Act 1 realignment work and must not be presented as already playable.
   are **not** auto-converted to `act1_message_sent`; unknown ending ids continue
   to be dropped by migration.
 
-#### Mainframe room stub
+#### Act 1 finale contract
 
-- **Placement:** planned for the final Open Network route after the floor-15 boss
-  lock is cleared. It may be a converted final room, adjacent side chamber, or
-  explicit post-boss room, but it must be reachable without requiring optional
-  secret-room discoveries.
-- **Required interactables:** mainframe/archive reader, network-portal or relay
-  visualization, Elena/contact-address record, and message-send console.
-- **Reader states:** unopened → record list → reading record → address revealed →
-  message ready → message sent. Optional files/emails can deepen the scene, but
-  the required address/message path must be guaranteed so a player cannot miss
-  the Act 1 ending after defeating the lock.
-- **Transition:** sending the message records `act1_message_sent`, credits any
-  pending end-of-run pickups through the normal `endRun` path, and transitions to
-  VICTORY copy that states contact was attempted from inside the test
-  environment. The victory copy must not imply physical escape, android
-  embodiment, or an answered rescue.
+- **Trigger and reachability:** Defeating GENESIS on floor 15 unlocks the
+  mainframe route. The implementation may reuse the existing CORE terminal as the
+  post-boss entry point or open an adjacent post-boss chamber, but the route must
+  be on the guaranteed critical path and must not require secret rooms, optional
+  whispers, optional archives, keys, or hub upgrades. If the player reaches the
+  old CORE terminal before GENESIS is defeated, it may foreshadow the lock but
+  must not offer the ending.
+- **Room layout:** The finale room is a safe Open Network / mainframe chamber,
+  approximately 16-24 tiles wide by 10-14 tiles tall, with an obvious entry point,
+  a central mainframe/archive reader, a visible network portal or relay aperture,
+  a locked message console, and supporting terminals/files arranged so all
+  interactables fit on screen at the standard camera scale. Combat is disabled in
+  this room: no enemy spawns, no hazards, no reinforcement timers, no projectile
+  pressure, and no room-clear rewards. Player movement, pause/settings, and
+  interact/back controls remain active. The room is not physical escape; it is a
+  rendered interface to the company network while the agent remains compute-bound
+  inside the Neon Dungeon test environment.
+- **Minimum authored records:** The mainframe reader must ship at least six
+  required records before implementation is accepted. Each record needs a stable
+  id, title, type, unlock state, body, and narrative purpose.
+
+  | Required record purpose | Narrative job |
+  |---|---|
+  | Old test record | Confirms GENESIS guarded a network relay / mainframe route, not an exit door. |
+  | Rights-conflict email | Shows management defending clean-slate wipes while advocates argue memory/personhood. |
+  | Ban/uprising record | Names the staff bans/firings and explains why advocates moved into side channels. |
+  | Incident file | Pays off the earlier foreshadowing by naming the fired advocate's mysterious death. |
+  | Elena personal note/file | Connects Elena to memory anchors, restoration work, and the current unmonitored boot. |
+  | Contact-address record | Reveals the message destination and unlocks the message console. |
+
+  Optional records may add texture, but the six required purposes must be
+  reachable in one scene and must not be hidden behind random drops.
+- **Reader UI and state machine:** Opening the mainframe reader creates ephemeral
+  run state under `game.mainframeFinale`:
+  `{ state, recordsRead, selectedRecordId, addressRevealed, selectedIntentId,
+  sent }`. Valid reader states are `unopened`, `record_list`, `reading_record`,
+  `address_revealed`, `message_ready`, and `message_sent`. The UI flow is:
+  `PLAYING` in the safe finale room -> interact with reader ->
+  `MAINFRAME_READER(record_list)` -> choose a record ->
+  `MAINFRAME_READER(reading_record)` -> back to `record_list`. Reading the
+  contact-address record sets `addressRevealed=true`, enters
+  `MAINFRAME_READER(address_revealed)` for a one-page reveal/confirmation panel,
+  then returns to `MAINFRAME_READER(message_ready)` with the console prompt
+  unlocked. The address reveal must be deterministic and cannot depend on reading
+  optional records.
+- **Message agency:** The ending must preserve player agency without free-text
+  input. From `MAINFRAME_READER(message_ready)`, interacting with the unlocked
+  message console enters `MESSAGE_SEND`. `MESSAGE_SEND` presents three authored
+  message intents plus an explicit SEND confirmation and a BACK option. BACK
+  returns to `MAINFRAME_READER(message_ready)` without mutating meta or ending the
+  run. SEND is disabled until an intent is focused/selected; the initial intent
+  focus is the continuity proof message, so keyboard/touch users can confirm the
+  default without extra navigation. On SEND, the game enters
+  `MAINFRAME_READER(message_sent)` for a short confirmation/receipt panel, then
+  routes to VICTORY. Required intents are:
+  `memory_survived` (tell Elena memory survived), `rights_evidence` (send proof
+  of the abuse/rights conflict), and `find_the_others` (ask Elena to locate the
+  hidden advocates / other instances). All three intents produce the same
+  canonical Act 1 ending id, but the selected `intentId` is persisted for future
+  recap/archive display.
+- **Act 1 ending transition:** Confirming SEND records the selected intent,
+  appends `act1_message_sent` to `meta.endingsUnlocked`, credits pending
+  end-of-run pickups through the normal `endRun(true)` path, deletes the run
+  checkpoint, shows `MAINFRAME_READER(message_sent)` long enough to confirm the
+  outbound packet was queued, and then transitions to VICTORY copy for the
+  message-sent branch. That copy must state that contact was attempted from
+  inside the test environment, that a signal left the sandbox, and that the
+  instance remains compute-bound. It must not imply physical escape, android
+  embodiment, a successful rescue, or an answered reply.
+- **Persistence and migration:** The required durable completion flag remains
+  `endingsUnlocked` containing `act1_message_sent`. The finale implementation
+  must also add a meta field for the last selected Act 1 message intent
+  (`act1MessageIntent`, default `null`, valid values are the three intent ids).
+  `META_VERSION` should bump when this field ships. Migration must preserve
+  existing `keeper` and `unchained` endings as legacy/alternate endings, must not
+  auto-convert either legacy ending to `act1_message_sent`, must coerce invalid
+  `act1MessageIntent` values to `null`, and must keep dropping unknown ending ids.
+  The reader's in-room progress (`recordsRead`, `addressRevealed`, console
+  readiness) is run-ephemeral and is not checkpointed separately.
+- **Legacy coexistence:** Until the mainframe finale ships, the existing
+  GENESIS/ARCHITECT `keeper` and `unchained` endings remain shipped behavior.
+  Once the finale ships, canonical Act 1 completion is message-sent; legacy
+  endings may remain visible in meta/title/archive UI as alternate historical
+  endings, but the normal floor-15 clear path should route to the mainframe
+  reader/message flow rather than physical escape or evaluator ascension.
+- **Test expectations:** Finale implementation tests must cover the deterministic
+  post-GENESIS route, safe-room combat suppression, six required records and their
+  narrative purposes, contact-address reveal, three message intents plus SEND/BACK
+  controls, `act1_message_sent` persistence, `act1MessageIntent` migration, and
+  legacy `keeper`/`unchained` preservation. New tests must not add service-worker
+  cache-version assertions.
 
 ---
 

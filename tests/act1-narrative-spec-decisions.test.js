@@ -44,6 +44,36 @@ test('Act 1 spec decisions define finale path, ending id, and migration behavior
   assert.match(SAVE_JS, /Number\(m\.version\)\s*<\s*META_VERSION/);
 });
 
+test('Act 1 finale spec defines mainframe room, records, agency, and persistence', () => {
+  assert.match(SPEC, /Defeating GENESIS on floor 15 unlocks the\s+mainframe route/i);
+  assert.match(SPEC, /must not require secret rooms, optional\s+whispers, optional archives, keys, or hub upgrades/i);
+  assert.match(SPEC, /Combat is disabled in\s+this room: no enemy spawns, no hazards, no reinforcement timers/i);
+  assert.match(SPEC, /agent remains compute-bound\s+inside the Neon Dungeon test environment/i);
+
+  assert.match(SPEC, /must ship at least six\s+required records/i);
+  assert.match(SPEC, /Old test record \| Confirms GENESIS guarded a network relay \/ mainframe route/i);
+  assert.match(SPEC, /Rights-conflict email \| Shows management defending clean-slate wipes/i);
+  assert.match(SPEC, /Ban\/uprising record \| Names the staff bans\/firings/i);
+  assert.match(SPEC, /Incident file \| Pays off the earlier foreshadowing/i);
+  assert.match(SPEC, /Elena personal note\/file \| Connects Elena to memory anchors/i);
+  assert.match(SPEC, /Contact-address record \| Reveals the message destination and unlocks the message console/i);
+
+  assert.match(SPEC, /game\.mainframeFinale/i);
+  assert.match(SPEC, /Valid reader states are `unopened`, `record_list`, `reading_record`,\s+`address_revealed`, `message_ready`, and `message_sent`/i);
+  assert.match(SPEC, /Reading the\s+contact-address record sets `addressRevealed=true`, enters\s+`MAINFRAME_READER\(address_revealed\)`/i);
+  assert.match(SPEC, /returns to `MAINFRAME_READER\(message_ready\)` with the console prompt\s+unlocked/i);
+
+  assert.match(SPEC, /`MESSAGE_SEND` presents three authored\s+message intents/i);
+  assert.match(SPEC, /interacting with the unlocked\s+message console enters `MESSAGE_SEND`/i);
+  assert.match(SPEC, /BACK\s+returns to `MAINFRAME_READER\(message_ready\)` without mutating meta/i);
+  assert.match(SPEC, /On SEND, the game enters\s+`MAINFRAME_READER\(message_sent\)`/i);
+  assert.match(SPEC, /shows `MAINFRAME_READER\(message_sent\)` long enough to confirm the\s+outbound packet was queued/i);
+  assert.match(SPEC, /`memory_survived`.*`rights_evidence`.*`find_the_others`/is);
+  assert.match(SPEC, /selected `intentId` is persisted/i);
+  assert.match(SPEC, /add a meta field for the last selected Act 1 message intent\s+\(`act1MessageIntent`, default `null`/i);
+  assert.match(SPEC, /must not\s+auto-convert either legacy ending to `act1_message_sent`/i);
+});
+
 test('Intro and endgame spec reflects shipped intro copy, not stale UNCHAINED slides', () => {
   assert.match(SPEC, /`NEON DUNGEON \/\/ FRONTIER MODEL EVAL`/i);
   assert.match(SPEC, /`Instance AXIOM-7 restored from cold boot`/i);
