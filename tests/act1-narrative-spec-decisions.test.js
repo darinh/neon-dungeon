@@ -23,7 +23,8 @@ test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /intro crawl establishes the AI eval, memory\s+wipe expectation, residual memory, prior iterations, silent observer channel/i);
   assert.match(SPEC, /forced first lore terminal on floor 1\s+confirms the Neon Dungeon stress-test render/i);
 
-  assert.match(SPEC, /lore\s+terminal catalog must contain at least twelve Act 1-aligned tester\/run-artifact\s+entries/i);
+  assert.match(SPEC, /lore\s+terminal catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
+  assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random\s+lore selection by floor band/i);
   assert.match(SPEC, /predecessor\/archive logs must preserve the 30 persisted ids/i);
   assert.match(SPEC, /whispers must keep the 71 shipped ids and at least fourteen\s+entries per biome/i);
   assert.match(SPEC, /Open Network\s+whisper set must retain at least three finale-critical entries/i);

@@ -52,11 +52,8 @@ test('first lore entry is the Act 1 opening pillar terminal content', () => {
 
 test('first lore terminal read is forced to the opening pillar before random lore', () => {
   assert.match(GAME,
-    /const\s+openingIdx\s*=\s*\(typeof\s+ACT1_OPENING_LORE_INDEX\s*===\s*'number'\)\s*\?\s*ACT1_OPENING_LORE_INDEX\s*:\s*0\s*;/,
-    'game.js must resolve ACT1_OPENING_LORE_INDEX before selecting lore');
-  assert.match(GAME,
-    /player\.loreRead\.size\s*===\s*0\s*&&\s*!player\.loreRead\.has\(openingIdx\)[\s\S]*\?\s*openingIdx[\s\S]*unseen\.length\s*>\s*0/,
-    'first lore read must choose openingIdx before falling back to random unseen lore');
+    /pickLoreEntryIndex\(player\.loreRead,\s*this\.floor,\s*Math\.random\)/,
+    'game.js must delegate lore selection to the floor-gated picker');
 });
 
 test('floor 1 places an accessible lore terminal in the spawn room', () => {

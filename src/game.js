@@ -2104,11 +2104,7 @@ const game = {
 
     if (tile===T.LORE) {
       if (jp(km('interact'))) {
-        const openingIdx = (typeof ACT1_OPENING_LORE_INDEX === 'number') ? ACT1_OPENING_LORE_INDEX : 0;
-        const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !player.loreRead.has(i));
-        const idx = (player.loreRead.size === 0 && !player.loreRead.has(openingIdx))
-          ? openingIdx
-          : unseen.length > 0 ? (unseen[Math.floor(Math.random() * unseen.length)] ?? 0) : Math.floor(Math.random() * LORE_ENTRIES.length);
+        const idx = pickLoreEntryIndex(player.loreRead, this.floor, Math.random);
         player.loreRead.add(idx);
         this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;

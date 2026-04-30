@@ -70,7 +70,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
-| Lore terminals | In-run `T.LORE` terminals and event terminals already pause into `READING`. | Terminals should primarily show tester instructions, previous-run notes, test observations, and practical hints that double as lore. |
+| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 boot terminal, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, and `READING` overlay presentation. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
 | Predecessor logs | 30 AXIOM predecessor logs in `src/data/logs.js`. | Migrate or supplement with records of prior AI agent iterations and company test history. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. | The archive should gradually become a research/test-record interface rather than only an operative-log collection. |
@@ -134,12 +134,13 @@ the Act 1 realignment work and must not be presented as already playable.
   entries reinforce that prior iterations and advocates caused the session to
   start without supervision. A HUD/system notification is optional polish, not a
   required narrative gate.
-- **Minimum density targets for the completed Act 1 pass:** the intro must carry
-  all five opening facts (corporate stress-test environment, AI model identity,
-  expected memory wipe, absent tester observation, prior iterations); the lore
-  terminal catalog must contain at least twelve Act 1-aligned tester/run-artifact
-  entries, with the floor-1 boot terminal guaranteed and at least two qualifying
-  entries per biome; predecessor/archive logs must preserve the 30 persisted ids
+- **Minimum density targets for the completed Act 1 pass:** the intro carries
+   all five opening facts (corporate stress-test environment, AI model identity,
+   expected memory wipe, absent tester observation, prior iterations); the shipped
+   lore terminal catalog contains 32 Act 1-aligned tester/run-artifact entries,
+   with the floor-1 boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random
+   lore selection by floor band, and at least two qualifying entries per biome;
+   predecessor/archive logs must preserve the 30 persisted ids
   while making every AXIOM group readable as prior AI iterations, with at least
   two entries per group explicitly about reset, wipe, reboot, iteration, or
   memory continuity; whispers must keep the 71 shipped ids and at least fourteen
