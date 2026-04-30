@@ -222,8 +222,8 @@
     },
   };
 
-  // ARCHIVE — predecessor-log reader (#41). Lists every log the operative has
-  // found, grouped by AXIOM predecessor. Unread logs are marked with a pulsing
+  // ARCHIVE — prior-instance record reader (#41/#460). Lists every log the
+  // current instance has found, grouped by AXIOM lineage. Unread logs use a
   // ●. Select to read → plays audio.logRead + marks as read + displays body.
   const ArchiveTerminal = {
     id: 'archive',
@@ -236,7 +236,7 @@
     onOpen() { this._sel = 0; this._scroll = 0; this._reading = null; this._t = 0; },
     onClose() { this._reading = null; },
     _getFoundList() {
-      // Returns mixed list: AXIOM logs first (grouped by predecessor), then
+      // Returns mixed list: AXIOM iteration records first (grouped by lineage), then
       // WHISPERS (the secret-room subplot — see src/data/whispers.js). Each
       // entry is discriminated by `kind` so the row render + reading pane
       // can switch on it. Only FOUND entries are included so unfound ones
@@ -370,7 +370,7 @@
       try { progress = NEON.logs.progress(); } catch (_) {}
       ctx.fillStyle = '#888ab0';
       ctx.font = '11px monospace';
-      ctx.fillText('SIGNAL FRAGMENTS: ' + progress.read + '/' + progress.total, x + w / 2, y + 44);
+      ctx.fillText('ITERATION RECORDS: ' + progress.read + '/' + progress.total, x + w / 2, y + 44);
 
       // Whispers progress (secret-room subplot — see src/data/whispers.js).
       // Shown as a separate counter so the player can tell at a glance there's
@@ -413,7 +413,7 @@
         ctx.fillStyle = '#555577';
         ctx.font = '11px monospace';
         ctx.fillText('Purge rare terminals in the dungeon to', x + w / 2, y + h / 2 + 10);
-        ctx.fillText('recover AXIOM predecessor logs.', x + w / 2, y + h / 2 + 26);
+        ctx.fillText('recover AXIOM iteration records.', x + w / 2, y + h / 2 + 26);
         return;
       }
 
@@ -442,7 +442,7 @@
           ctx.fillStyle = isWhisper ? 'rgba(204,153,238,0.14)' : 'rgba(57,255,20,0.12)';
           ctx.fillRect(x + 8, ry - 12, w - 16, rowH - 2);
         }
-        // Prefix: 'AXIOM-N' for logs, 'WHISPER' for the secret-room subplot.
+        // Prefix: 'AXIOM-N' for iteration records, 'WHISPER' for the secret-room subplot.
         ctx.fillStyle = sel ? rowAccent : (isWhisper ? '#7755aa' : '#666688');
         ctx.fillText(isWhisper ? 'WHISPER' : ('AXIOM-' + entry.axiom), x + 14, ry);
         // Title.
@@ -478,7 +478,7 @@
       ctx.font = '11px monospace';
       const prefix = isWhisper
         ? ('WHISPER · ' + (entry.whisper.voice || 'unknown'))
-        : ('AXIOM-' + entry.axiom);
+        : ('AXIOM-' + entry.axiom + ' · PRIOR INSTANCE');
       ctx.fillText(prefix, x + 14, y + 64);
       ctx.fillStyle = accent;
       ctx.font = '14px monospace';

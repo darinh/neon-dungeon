@@ -6,6 +6,40 @@ const path = require('node:path');
 
 const hub = require(path.resolve(__dirname, '..', 'src', 'meta', 'hub.js'));
 
+function makeTextCtx() {
+  const calls = [];
+  return {
+    calls,
+    save() {},
+    restore() {},
+    fillRect() {},
+    strokeRect() {},
+    fillText(text) { calls.push(String(text)); },
+    measureText(text) { return { width: String(text).length * 7 }; },
+  };
+}
+
+function withArchiveGlobals(meta, fn) {
+  const prev = globalThis.NEON;
+  globalThis.NEON = {
+    save: { loadMeta: () => meta },
+    logs: {
+      progress: () => ({ read: (meta.logsRead || []).length, total: 30 }),
+      groupedByAxiom: () => [
+        { axiom: 1, logs: [
+          { id: 'a1-01', title: 'FIRST LOG', body: 'Cold boot iteration memory record.' },
+        ] },
+      ],
+      readLog() {},
+    },
+    whispers: {
+      progress: () => ({ read: 0, total: 0 }),
+      groupedByBiome: () => [],
+    },
+  };
+  try { return fn(); } finally { globalThis.NEON = prev; }
+}
+
 function fakeGame(floor) {
   return {
     state: 'PLAYING',
@@ -51,6 +85,30 @@ test('terminals conform to the parallel-safety panel API', () => {
   }
   const ids = terms.map(t => t.id);
   assert.deepEqual(ids, ['upgrade', 'modules', 'armory', 'archive']);
+});
+
+test('archive terminal copy frames logs as iteration records', () => {
+  withArchiveGlobals({ logsFound: [], logsRead: [] }, () => {
+    const archive = hub.buildTerminals()[3];
+    archive.onOpen();
+    const ctx = makeTextCtx();
+    archive.draw(ctx, 0, 0, 320, 220);
+    assert.ok(ctx.calls.includes('ITERATION RECORDS: 0/30'));
+    assert.ok(ctx.calls.includes('recover AXIOM iteration records.'));
+    assert.ok(!ctx.calls.includes('recover AXIOM predecessor logs.'));
+  });
+});
+
+test('archive terminal keeps AXIOM grouping and unread marker', () => {
+  withArchiveGlobals({ logsFound: ['a1-01'], logsRead: [] }, () => {
+    const archive = hub.buildTerminals()[3];
+    archive.onOpen();
+    const ctx = makeTextCtx();
+    archive.draw(ctx, 0, 0, 320, 220);
+    assert.ok(ctx.calls.includes('AXIOM-1'));
+    assert.ok(ctx.calls.includes('FIRST LOG'));
+    assert.ok(ctx.calls.includes('●NEW'));
+  });
 });
 
 test('updateHub advances selector with ArrowRight via injected input', () => {
