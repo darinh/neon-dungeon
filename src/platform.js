@@ -433,7 +433,10 @@ onOrientationChange();
 // downstream consumers (game.js, render.js, content.js).
 const _input = /** @type {any} */ (NEON).input.createEngine({
   win: window,
-  onKeyDown: (/** @type {any} */ e) => { lastKey = e.key; },
+  onKeyDown: (/** @type {any} */ e) => {
+    lastKey = e.key;
+    resumeInteractiveAudio();
+  },
 });
 _input.attach();
 const keys = _input.keys;
@@ -443,6 +446,16 @@ const mouse = { x: W/2, y: H/2, down: false };
 let lastKey = '';
 /** @type {any} */
 let nameEntryTap = null;
+
+function resumeInteractiveAudio() {
+  audio.resume();
+  const menuMusicState = _G.state === 'MENU' || _G.state === 'ARCHIVES' ||
+    (_G.state === 'SETTINGS' && _G._settingsFrom === 'MENU');
+  if (menuMusicState) {
+    try { if (typeof music !== 'undefined') music.resume(); } catch (_) {}
+  }
+}
+
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   // Pointer events arrive in CSS px → map to canvas BACKING px → then
@@ -456,7 +469,7 @@ canvas.addEventListener('mousemove', e => {
   mouse.x = (e.clientX - r.left) * canvas.width  / r.width  / _wz;
   mouse.y = (e.clientY - r.top)  * canvas.height / r.height / _wz;
 });
-canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); audio.resume(); });
+canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); resumeInteractiveAudio(); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 window.addEventListener('mouseup',   e => { mouse.down = false; });
 // Scroll wheel: weapon belt cycling
@@ -543,7 +556,7 @@ function hitBtn(cx, cy, btn) {
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  audio.resume();
+  resumeInteractiveAudio();
   // check if any touch hit the fullscreen dismiss button first
   let dismissed = false;
   for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
@@ -992,6 +1005,7 @@ const audio = (() => {
     setMusicVolume(/** @type {number} */ v) {
       settings.musicVol = v;
       _eng.setMusicVolume(v);
+      try { if (typeof music !== 'undefined' && music.setVolume) music.setVolume(v); } catch (_) {}
     },
     getMusicBus() { return _eng.getMusicBus(); },
     shoot(/** @type {boolean} */ isPlayer, /** @type {any} */ weapon = null) {
