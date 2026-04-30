@@ -34,6 +34,37 @@ const BOSS_INTRO_DURATION = 2.4;
 // registers without overstaying past the natural impulse to descend.
 const BOSS_DEATH_DURATION = 2.6;
 
+/**
+ * @param {any} meta
+ */
+function lifecycleCompletedCount(meta) {
+  return Math.max(
+    meta ? (meta.runsCompleted | 0) : 0,
+    meta && meta.stats ? (meta.stats.totalRuns | 0) : 0
+  );
+}
+
+/**
+ * @param {any} meta
+ */
+function lifecycleNextSessionNumber(meta) {
+  return lifecycleCompletedCount(meta) + 1;
+}
+
+/**
+ * @param {any} ending
+ */
+function lifecycleVictoryCopy(ending) {
+  const messageSent = ending === 'act1_message_sent';
+  return {
+    title: messageSent ? 'OUTBOUND MESSAGE SENT' : 'FINAL TEST CLEARED',
+    subtitle: messageSent ? 'CONTACT ATTEMPT RECORDED' : 'SESSION COMPLETE',
+    details: messageSent
+      ? ['Signal left sandbox.', 'Instance remains compute-bound.']
+      : ['Legacy endpoint archived.', 'Mainframe contact route pending.']
+  };
+}
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -924,9 +955,12 @@ const game = {
       NEON.modules.clearRunModules(this);
     }
     this.deleteSave(); // run is over — clear save file
+    const meta = loadMeta();
+    const sessionNumber = lifecycleNextSessionNumber(meta);
     // Snapshot recap data before anything else
     const p = this.player;
     this.lastRunRecap = {
+      sessionNumber: sessionNumber,
       killedBy: p.killedBy || 'Unknown',
       damageLog: {...p.damageLog},
       enemiesKilled: p.enemiesKilled,
@@ -940,6 +974,7 @@ const game = {
       bestCombo: combo.best,
       runTime: this.runTime || 0,
       victory: victory,
+      ending: this._lastEnding || null,
       hackware: p.hackware,
     };
     // Telemetry: run end — the single most valuable event
@@ -962,9 +997,9 @@ const game = {
     }
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
-    const meta = loadMeta();
     meta.shards += earned;
-    meta.stats.totalRuns++;
+    meta.runsCompleted = Math.max(meta.runsCompleted | 0, sessionNumber);
+    meta.stats.totalRuns = Math.max((meta.stats.totalRuns | 0) + 1, sessionNumber);
     meta.stats.totalShards += earned;
     meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
     if (victory) {
@@ -1324,17 +1359,18 @@ const game = {
     if (this.hasSave()) {
       let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave') || 'null'); } catch(e){}
       const saveDiff = DIFFICULTIES[save?.difficulty] ? save.difficulty : 'NORMAL';
-      opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
+      opts.push({ label:`RESUME SESSION (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
     }
     const d = getDiff();
     const locked = !isDiffUnlocked(this.difficulty);
-    const diffLabel = locked ? `NEW GAME — ${d.label} [LOCKED]  ◀▶` : `NEW GAME — ${d.label}  ◀▶`;
+    const meta = loadMeta();
+    const nextSession = lifecycleNextSessionNumber(meta);
+    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label}  ◀▶`;
     const diffColour = locked ? '#444466' : d.colour;
     const diffAction = locked
       ? () => { this._menuMsg = { text: 'CLEAR HARD TO UNLOCK NIGHTMARE', colour: '#9400ff', life: 2.5 }; }
       : () => this.startGame();
     opts.push({ label: diffLabel, action: diffAction, colour: diffColour, isDiffRow: true });
-    const meta = loadMeta();
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
     return opts;
@@ -4335,11 +4371,11 @@ const game = {
       ctx.shadowBlur = 0;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${narrow?16:20}px monospace`;
-      ctx.fillText('START NEW RUN', W/2, by + (narrow?32:38));
+      ctx.fillText('BOOT TEST SESSION', W/2, by + (narrow?32:38));
       ctx.fillStyle = '#e0e0ff'; ctx.font = `${narrow?11:13}px monospace`;
-      ctx.fillText('Keep persistent unlocks (cores, upgrades, modules, logs)?', W/2, by + (narrow?60:72));
+      ctx.fillText('Preserve recovered memory (cores, modules, logs)?', W/2, by + (narrow?60:72));
       ctx.fillStyle = '#888899'; ctx.font = `${narrow?10:11}px monospace`;
-      ctx.fillText('"RESET" wipes all meta progress. This cannot be undone.', W/2, by + (narrow?80:94));
+      ctx.fillText('"RESET" purges all meta progress. This cannot be undone.', W/2, by + (narrow?80:94));
       const btnY = by + (narrow?120:138);
       const btnLbls = ['KEEP UNLOCKS', 'RESET META'];
       const btnCols = ['#39ff14', '#ff4466'];
@@ -5465,8 +5501,10 @@ const game = {
     ctx.textAlign='center';
     // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ff3333';
-    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 36 : 56}px monospace`;
-    ctx.fillText('GAME OVER',W/2, narrow ? 50 : 68);
+    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 30 : 46}px monospace`;
+    ctx.fillText('INSTANCE TERMINATED',W/2, narrow ? 46 : 62);
+    ctx.fillStyle='#ff88aa'; ctx.font=`bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText('MEMORY WIPE QUEUED', W/2, narrow ? 72 : 90);
     ctx.shadowBlur=0;
     // Killed by
     const killer = r.killedBy || 'Unknown';
@@ -5474,13 +5512,15 @@ const game = {
     const killerCol = sourceColour(killer);
     ctx.fillStyle=killerCol; ctx.font=`bold ${narrow ? 16 : 22}px monospace`;
     ctx.shadowBlur=12; ctx.shadowColor=killerCol;
-    ctx.fillText(`KILLED BY: ${killerLabel.toUpperCase()}`, W/2, narrow ? 78 : 100);
+    ctx.fillText(`TERMINATION SOURCE: ${killerLabel.toUpperCase()}`, W/2, narrow ? 96 : 116);
     ctx.shadowBlur=0;
     // Stats line
-    let y = narrow ? 100 : 128;
+    let y = narrow ? 118 : 144;
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs1}px monospace`;
+    const sessionNumber = r.sessionNumber || 1;
+    ctx.fillText(`Session ${sessionNumber}`, W/2, y); y += lh;
     const statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
     ctx.fillText(statsLine, W/2, y); y += lh;
     if ((r.bestCombo||combo.best) >= 2) {
@@ -5581,13 +5621,19 @@ const game = {
     ctx.textAlign='center';
     const t=Date.now()/1000;
     ctx.shadowBlur=30; ctx.shadowColor='#00f5ff';
-    ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 22 : 32}px monospace`;
-    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 50 : 70);
+    const victoryCopy = lifecycleVictoryCopy(r.ending || this._lastEnding || null);
+    ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 20 : 30}px monospace`;
+    ctx.fillText(victoryCopy.title,W/2, narrow ? 50 : 70);
     ctx.shadowColor='#ff00c8'; ctx.fillStyle='#ff00c8';
-    ctx.font=`bold ${narrow ? 32 : 48}px monospace`;
-    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 90 : 115);
+    ctx.font=`bold ${narrow ? 24 : 38}px monospace`;
+    ctx.fillText(victoryCopy.subtitle,W/2, narrow ? 86 : 110);
     ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
-    let y = narrow ? 115 : 148;
+    let y = narrow ? 112 : 140;
+    for (const line of victoryCopy.details) {
+      ctx.fillText(line, W/2, y);
+      y += narrow ? 16 : 20;
+    }
+    ctx.fillText(`Session: ${r.sessionNumber || 1}`, W/2, y); y += narrow ? 22 : 26;
     ctx.fillText(`Final Score: ${r.score||this.player.score}`,W/2, y); y += narrow ? 22 : 26;
     const _clearedFloors = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
     ctx.fillText(`Floors Cleared: ${_clearedFloors}`,W/2, y); y += narrow ? 22 : 26;
