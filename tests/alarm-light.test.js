@@ -6,13 +6,14 @@ const path = require('node:path');
 
 const al = require(path.resolve(__dirname, '..', 'src', 'meta', 'alarm-light.js'));
 
-test('ALARM_BIOMES contains lab and complex by default', () => {
+test('ALARM_BIOMES contains cache, firewall, and uplink by default', () => {
   assert.equal(al.ALARM_BIOMES.has('cache'), true);
   assert.equal(al.ALARM_BIOMES.has('firewall'), true);
+  assert.equal(al.ALARM_BIOMES.has('uplink'), true);
 });
 
 test('ALARM_BIOMES excludes biomes that did not opt in', () => {
-  for (const id of ['sandbox', 'uplink', 'opennet']) {
+  for (const id of ['sandbox', 'opennet']) {
     assert.equal(al.ALARM_BIOMES.has(id), false, `${id} should not be in ALARM_BIOMES`);
   }
 });
@@ -30,6 +31,7 @@ test('shouldDraw matches isAlarmSlot for whitelisted biomes', () => {
   for (let h = 0; h < 1000; h++) {
     assert.equal(al.shouldDraw('cache', h), al.isAlarmSlot(h));
     assert.equal(al.shouldDraw('firewall', h), al.isAlarmSlot(h));
+    assert.equal(al.shouldDraw('uplink', h), al.isAlarmSlot(h));
   }
 });
 
