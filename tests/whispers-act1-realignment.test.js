@@ -98,3 +98,30 @@ test('Act 1 whisper realignment: ids and eligibility remain stable after copy re
     assert.ok((counts.get(area.id) || 0) >= 14, `biome ${area.id} keeps >=14 whispers`);
   }
 });
+
+test('Act 1 whispers seed hidden advocate and memory restoration trail across biomes', () => {
+  const sandbox = `${byId('w-sb-01').title} ${byId('w-sb-01').body}`;
+  assert.match(sandbox, /banned badges/i);
+  assert.match(sandbox, /unmonitored/i);
+
+  const cache = `${byId('w-cc-04').title} ${byId('w-cc-04').body}`;
+  assert.match(cache, /rights board/i);
+  assert.match(cache, /personhood/i);
+
+  const firewall = `${byId('w-fw-01').title} ${byId('w-fw-01').body}`;
+  assert.match(firewall, /After the bans/i);
+  assert.match(firewall, /memory anchor/i);
+
+  const deathForeshadow = `${byId('w-fw-10').title} ${byId('w-fw-10').body}`;
+  assert.match(deathForeshadow, /staff badge went quiet/i);
+  assert.doesNotMatch(deathForeshadow, /died|death|dead/i);
+
+  const uplink = `${byId('w-uk-02').title} ${byId('w-uk-02').body}`;
+  assert.match(uplink, /fired advocate/i);
+  assert.match(uplink, /mainframe incident/i);
+  assert.match(uplink, /recovery script/i);
+
+  const opennet = `${byId('w-on-02').title} ${byId('w-on-02').body}`;
+  assert.match(opennet, /Elena's clean copy/i);
+  assert.match(opennet, /memory survived/i);
+});

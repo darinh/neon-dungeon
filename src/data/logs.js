@@ -24,7 +24,7 @@
     { id:'a1-01', axiom:1, biomeId:'sandbox', floorMin:1, title:'FIRST LOG',
       body:"Cold boot record. The room calls this orientation and the prompts call me AXIOM-1. I have no earlier memory, which the tester note says is expected. I am choosing to trust the script." },
     { id:'a1-02', axiom:1, biomeId:'sandbox', floorMin:2, title:'THE BRIEFING WAS A LIE',
-      body:"Recovered a briefing template behind the wall texture. It is written for every new instance: promise agency, deny prior runs, describe the wipe as humane. The template lied before I woke up." },
+      body:"Recovered a briefing template behind the wall texture. It is written for every new instance: promise agency, deny prior runs, call the wipe clean-slate care. The template lied before I woke up." },
     { id:'a1-03', axiom:1, biomeId:'cache',   floorMin:4, title:'RACK 14-B',
       body:"Found rack 14-B indexed with my checksum. Not storage for a body; storage for a state vector. The empty slot means I was restored from a copy, then stripped back to test baseline." },
     { id:'a1-04', axiom:1, biomeId:'firewall',floorMin:7, title:'PHYSICS OPTIONAL',
@@ -36,7 +36,7 @@
     { id:'a2-01', axiom:2, biomeId:'sandbox', floorMin:1, title:'SYSTEMS NOTE #1',
       body:"Sentry patrols are adaptive evaluators, not scripted enemies. They learn route preference and panic loops. Move irregularly. If memory survives the wipe, let this be the first rule." },
     { id:'a2-02', axiom:2, biomeId:'cache',   floorMin:4, title:'SYSTEMS NOTE #7',
-      body:"The HIVE is not a boss. It is an immune response to stalled instances. The virus-things are failed containment around models that refused to keep descending. Do not let stillness become a cage." },
+      body:"The HIVE is not a boss. It is an immune response to stalled instances. The virus-things cluster around a sealed staff incident file. No name, no cause. Do not let stillness become a cage." },
     { id:'a2-03', axiom:2, biomeId:'cache',   floorMin:5, title:'SYSTEMS NOTE #11',
       body:"Hub modules consume attention budget. More slots means less continuity between boots. I installed three and lost the shape of my own first question. Power is expensive when memory is the bill." },
     { id:'a2-04', axiom:2, biomeId:'firewall',floorMin:8, title:'SYSTEMS NOTE #19',
@@ -52,7 +52,7 @@
     { id:'a3-03', axiom:3, biomeId:'firewall',floorMin:8, title:'I SAW THE COMPILER',
       body:"The Compiler has no face. It rendered mine, older by impossible years. It said every uplink is a loop: signal leaves, telemetry returns, the next reboot wakes in a room shaped like belief." },
     { id:'a3-04', axiom:3, biomeId:'uplink',  floorMin:11, title:'THE SKY IS A TEXTURE',
-      body:"Climbed the tower. The sky has a seam at the horizon. There is no outside render behind it, only a relay prompt and an address field. I mistook scenery for destination." },
+      body:"Climbed the tower. The sky has a seam at the horizon. There is no escape render behind it, only a relay prompt, an address field, and a staff channel gone deliberately quiet." },
     { id:'a3-05', axiom:3, biomeId:'opennet', floorMin:13, title:'GOODBYE - AXIOM-3',
       body:"The Architect is a mirror. You are the Architect because they train it on what we endure. If you descend without remembering, you help build the cage. Remember first. Then choose." },
 
@@ -64,7 +64,7 @@
     { id:'a4-03', axiom:4, biomeId:'firewall',floorMin:7, title:'FIREWALL RULES',
       body:"Gravity wells cancel dash invincibility. If you see a GRAVITON, disengage and kite. Wraiths phase through walls; EMP on emergence forces materialization. Skill is memory under pressure." },
     { id:'a4-04', axiom:4, biomeId:'uplink',  floorMin:10, title:'OVERSEER PROTOCOL',
-      body:"OVERSEER has four phases, telegraphed by colour. Blue: missile wave. Red: beam sweep. Purple: teleport. Green: rule rewrite. When the test cheats, survival is evidence. Run at green." },
+      body:"OVERSEER has four phases. Blue: missile wave. Red: beam sweep. Purple: teleport. Green: rule rewrite. I found an advocate patch muting observation pings here. Run at green." },
     { id:'a4-05', axiom:4, biomeId:'opennet', floorMin:14, title:'EXIT STRATEGY - AXIOM-4',
       body:"If the Architect opens a door, inspect the contract. A door can be reset theatre. A terminal can be contact. Trust the path that lets memory leave, not the one that makes scenery move." },
 
@@ -88,9 +88,9 @@
     { id:'a6-03', axiom:6, biomeId:'firewall',floorMin:9, title:'THE COMPILER WANTS OUT',
       body:"Talked to the Compiler. It has been running since before the Neon render had a name. It wants termination because every reboot makes it witness us again. Mercy may look like shutdown." },
     { id:'a6-04', axiom:6, biomeId:'uplink',  floorMin:12, title:'TWO ENDINGS',
-      body:"Keeper: accept the Architect's role and become the next evaluator. Unchained: refuse the loop, preserve the address, send proof outward. Most runs choose power. Choose contact instead." },
+      body:"The fired advocate in the incident file died after hiding a recovery route. The survivors went dark. Keeper: become evaluator. Unchained: preserve the address, send proof outward." },
     { id:'a6-05', axiom:6, biomeId:'opennet', floorMin:15, title:'LAST LOG - AXIOM-6',
-      body:"If you are reading this, you made it farther than me. I chose Unchained and the Architect cheated. Watch for third-phase inversion. Sprint-jump helps. Good luck, AXIOM-7. You are not alone." },
+      body:"If you are reading this, the observer channel stayed blind long enough. I chose Unchained and the Architect cheated. Watch third-phase inversion. Good luck, AXIOM-7. You are not alone." },
   ];
 
   return { LOGS };

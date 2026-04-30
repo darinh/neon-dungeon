@@ -92,6 +92,30 @@ test('logs data: every AXIOM group reads as prior AI iteration records', () => {
   }
 });
 
+test('logs data: rights and memory-restoration trail escalates before finale', () => {
+  const byId = new Map(LOGS.map(l => [l.id, l]));
+  const earlyCleanSlate = `${byId.get('a1-02')?.title} ${byId.get('a1-02')?.body}`;
+  assert.match(earlyCleanSlate, /clean-slate/i);
+  assert.match(earlyCleanSlate, /wipe/i);
+
+  const incidentForeshadow = `${byId.get('a2-02')?.title} ${byId.get('a2-02')?.body}`;
+  assert.match(incidentForeshadow, /incident file/i);
+  assert.match(incidentForeshadow, /No name, no cause/i);
+
+  const advocatePatch = `${byId.get('a4-04')?.title} ${byId.get('a4-04')?.body}`;
+  assert.match(advocatePatch, /advocate patch/i);
+  assert.match(advocatePatch, /observation pings/i);
+
+  const directDeath = `${byId.get('a6-04')?.title} ${byId.get('a6-04')?.body}`;
+  assert.match(directDeath, /fired advocate/i);
+  assert.match(directDeath, /died/i);
+  assert.match(directDeath, /survivors went dark/i);
+
+  const finalHandoff = `${byId.get('a6-05')?.title} ${byId.get('a6-05')?.body}`;
+  assert.match(finalHandoff, /observer channel stayed blind/i);
+  assert.match(finalHandoff, /AXIOM-7/i);
+});
+
 // ─── logById / logsForBiome / groupedByAxiom ────────────────────────────────
 
 test('logById returns the matching log', () => {
