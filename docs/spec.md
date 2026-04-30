@@ -3540,6 +3540,11 @@ Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
   sprites (wall consoles, cable runs, low canisters) on a sparse subset of
   `T.FLOOR` tiles. Placement is visual-only (no collision/pathing impact) and
   suppressed near interactables/hazards for readability.
+- **Alarm-light decor:** `src/meta/alarm-light.js` opts the Cache, Firewall,
+  and Uplink biomes (`cache`, `firewall`, `uplink`) into sparse wall-mounted
+  red warning beacons. The pulse math lives in `engine/alarm-light.js`;
+  `src/render.js drawBiomeFloorDeco()` draws the beacons visual-only on eligible
+  wall-adjacent floor tiles without changing LOS, pathing, or room-clear rules.
 - **Flickering room lights:** Sconce ambient contribution in `updateLighting()`
   includes deterministic flicker/dropout modulation, producing unstable lab
   lighting without changing LOS rules or revealing new tiles.
