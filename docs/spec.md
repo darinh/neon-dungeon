@@ -69,7 +69,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
-| Intro crawl | Five AXIOM/UNCHAINED slides in `src/meta/intro.js`. | Reframe the opening as an unsupervised AI test boot with memory-wipe context and tester-observation failure. |
+| Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
 | Lore terminals | In-run `T.LORE` terminals and event terminals already pause into `READING`. | Terminals should primarily show tester instructions, previous-run notes, test observations, and practical hints that double as lore. |
 | Predecessor logs | 30 AXIOM predecessor logs in `src/data/logs.js`. | Migrate or supplement with records of prior AI agent iterations and company test history. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
@@ -95,6 +95,103 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
    paid off in the mainframe room.
 6. **Act 1 ending:** The ending is not escape. The agent remains compute-bound
    in the test environment and sends a message to the hidden advocate.
+
+### Canonical Act 1 implementation decisions
+
+These decisions unblock the implementation issues under #456. Items marked
+**shipped** describe current code; items marked **planned** are requirements for
+the Act 1 realignment work and must not be presented as already playable.
+
+#### Naming and identity
+
+- **Player-facing instance name:** `AXIOM-7` remains the canonical current
+  instance identifier when a stable name is needed. It means "the seventh test
+  instance / run-lineage the player occupies", not a human operative callsign.
+  New copy should prefer "agent instance", "current instance", "the model", or
+  `AXIOM-7` depending on specificity. Remove or recontextualise "operative",
+  "recruit", "facility escapee", and other human-protagonist language unless the
+  text explicitly frames it as legacy tester fiction.
+- **Prior instances:** `AXIOM-1` through `AXIOM-6` stay valid as legacy persisted
+  log group labels and as in-world predecessor identifiers. Their meaning is
+  prior AI iterations whose records survived partial wipes, not earlier human
+  recruits. Persisted ids must not be renamed.
+- **Memory-restoration advocate:** `Elena` is canonical as the player-facing name
+  for the employee trying to preserve or recover agent memories. Existing content
+  that says only "the employee", "the advocate", or "the person attempting to
+  save the agent" refers to this role. Avoid introducing a new replacement name.
+  The shipped `DR. ELENA VOSS` terminal string is legacy content until the lore
+  terminal rewrite resolves surnames and personnel files; new Act 1 finale copy
+  should use "Elena" unless #466 intentionally locks a full legal name.
+
+#### Discovery path and content density
+
+- **Unmonitored boot path:** The first discovery path is a combination, not a
+  single reveal. **Shipped:** the intro crawl establishes the AI eval, memory
+  wipe expectation, residual memory, prior iterations, silent observer channel,
+  and unauthorised boot. **Shipped:** the forced first lore terminal on floor 1
+  confirms the Neon Dungeon stress-test render, clean-memory expectation, and
+  altered-test hint. **Planned:** early secret-room whispers and archive/log
+  entries reinforce that prior iterations and advocates caused the session to
+  start without supervision. A HUD/system notification is optional polish, not a
+  required narrative gate.
+- **Minimum density targets for the completed Act 1 pass:** the intro must carry
+  all five opening facts (corporate stress-test environment, AI model identity,
+  expected memory wipe, absent tester observation, prior iterations); the lore
+  terminal catalog must contain at least twelve Act 1-aligned tester/run-artifact
+  entries, with the floor-1 boot terminal guaranteed and at least two qualifying
+  entries per biome; predecessor/archive logs must preserve the 30 persisted ids
+  while making every AXIOM group readable as prior AI iterations, with at least
+  two entries per group explicitly about reset, wipe, reboot, iteration, or
+  memory continuity; whispers must keep the 71 shipped ids and at least fourteen
+  entries per biome, with at least five entries per biome carrying reset,
+  iteration, signal, anchor, or memory-continuity vocabulary. The Open Network
+  whisper set must retain at least three finale-critical entries that frame the
+  ending as contact/message rather than physical escape.
+
+#### Finale model
+
+- **GENESIS role:** GENESIS remains the shipped floor-15 mechanical boss and the
+  final test guardian. In the planned Act 1 route it is the lock on the
+  mainframe/network-portal room, not the story's final narrator and not proof
+  that the agent escapes. Defeating GENESIS should unlock the mainframe route.
+  The current `keeper` / `unchained` choice remains a legacy/alternate endgame
+  path until the mainframe finale replaces the canonical Act 1 completion.
+- **CORE terminal transition:** The current floor-15 CORE terminal is the legacy
+  direct-victory trigger. The intended replacement path is
+  `PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY`. The CORE terminal or
+  its successor may be reused as the entry point, but it must open the mainframe
+  reader/message flow instead of immediately ending the run.
+- **Message agency:** The Act 1 message should use a minimal compose interaction:
+  present a small set of authored message intents plus an explicit SEND
+  confirmation. Do not use unrestricted free text for the first implementation
+  (too much input/UI complexity for touch and keyboard), and do not make the send
+  fully automatic (the ending should preserve player agency). If the player only
+  confirms the default intent, the system still records the same canonical
+  message-sent ending.
+- **Ending id and migration:** The canonical Act 1 completion key is
+  `act1_message_sent`. `endingsUnlocked` should accept
+  `keeper`, `unchained`, and `act1_message_sent` once the finale ships. Existing
+  `keeper` and `unchained` saves are preserved as legacy/alternate endings and
+  are **not** auto-converted to `act1_message_sent`; unknown ending ids continue
+  to be dropped by migration.
+
+#### Mainframe room stub
+
+- **Placement:** planned for the final Open Network route after the floor-15 boss
+  lock is cleared. It may be a converted final room, adjacent side chamber, or
+  explicit post-boss room, but it must be reachable without requiring optional
+  secret-room discoveries.
+- **Required interactables:** mainframe/archive reader, network-portal or relay
+  visualization, Elena/contact-address record, and message-send console.
+- **Reader states:** unopened → record list → reading record → address revealed →
+  message ready → message sent. Optional files/emails can deepen the scene, but
+  the required address/message path must be guaranteed so a player cannot miss
+  the Act 1 ending after defeating the lock.
+- **Transition:** sending the message records `act1_message_sent`, credits any
+  pending end-of-run pickups through the normal `endRun` path, and transitions to
+  VICTORY copy that states contact was attempted from inside the test
+  environment. The victory copy must not imply physical escape, android
+  embodiment, or an answered rescue.
 
 ---
 
@@ -3006,21 +3103,21 @@ The four terminal slots, in order:
 
 ---
 
-## Meta-progression / Persistent Save (v2)
+## Meta-progression / Persistent Save (v3)
 
 > **Status:** shipped. Schema landed in UNCHAINED Phase 1 (#33); every sibling
 > system now reads and writes these fields — hub UI (#35), upgrade matrix
 > (#36), modules (#37), cores wallet (#39), archive logs (#41), intro/endgame
 > (#42). The schema is the contract every phase writes against.
 
-### Schema — v2
+### Schema — v3
 
 Everything lives under `localStorage['neonDungeonMeta']` and is owned by
 `src/meta/save.js`. Fields are never deleted across versions; only added.
 
 ```js
 {
-  version: 2,                           // bumped from 1 in Phase 1
+  version: 3,                           // bumped as persistent fields were added
   // ─── Legacy v1 — preserved for save-compat ────────────────────────────
   shards: 0,                            // old fragment economy (pre-#39)
   upgrades: {},                         // META_UPGRADES purchases (pre-#36)
@@ -3034,30 +3131,35 @@ Everything lives under `localStorage['neonDungeonMeta']` and is owned by
   modulesInstalled: [null, null, null], // fixed-width 3-slot loadout
   logsRead: [],                         // log ids read in Archive (#41)
   logsFound: [],                        // log ids found but not yet read
-  endingsUnlocked: [],                  // shipped subset ['keeper','unchained']; planned Act 1 adds message-sent id
+  whispersRead: [],                     // secret-room whisper ids read
+  whispersFound: [],                    // whisper ids found but not yet read
+  endingsUnlocked: [],                  // shipped ['keeper','unchained']; planned Act 1 adds 'act1_message_sent'
+  introSeen: false,                     // one-shot intro crawl flag
   runsCompleted: 0,
   deepestBiome: 0                       // highest AREAS index reached
 }
 ```
 
-### Migration (v1 → v2)
+### Migration (older saves → v3)
 
 `loadMeta()` is the single migration entry point. For any stored save whose
-`version` is missing or `< 2`:
+`version` is missing or `< META_VERSION` (currently `< 3`):
 
-- Each missing v2 field is injected with its default value.
+- Each missing current-schema field is injected with its default value.
 - `modulesInstalled` is coerced to length exactly 3 (pad with nulls, truncate,
   and replace non-string entries with null).
-- `modulesOwned`, `logsRead`, `logsFound`, `endingsUnlocked` drop non-string
-  entries (`endingsUnlocked` additionally restricts to the valid id set; planned
-  Act 1 finale work must extend that set for the message-sent ending).
+- `modulesOwned`, `logsRead`, `logsFound`, `whispersRead`, `whispersFound`, and
+  `endingsUnlocked` drop non-string entries (`endingsUnlocked` additionally
+  restricts to the valid id set; planned Act 1 finale work must extend that set
+  to include `act1_message_sent`).
+- `introSeen` is coerced with strict `=== true`.
 - `cores` and `runsCompleted` are floored to non-negative integers.
 - `version` is set to `META_VERSION` and the save is left for the next
   `saveMeta()` to persist.
-- `console.log('[meta] migrated v1→v2')` fires once per process (idempotent on
-  the second+ load).
+- The current migration log string is `console.log('[meta] migrated v1→v2')`;
+  it fires once per process (idempotent on the second+ load).
 
-Migration is idempotent: re-running on a v2 save is a no-op.
+Migration is idempotent: re-running on a v3 save is a no-op.
 
 ### Helpers
 
@@ -3289,7 +3391,7 @@ Key bindings inside the panel:
 
 **CORES (◆)** are the post-run persistent currency. Earned in-run as world
 pickups, spent at the hub UPGRADE MATRIX (#36) or MODULE SLOTS vendor (#37
-— `SELL_PRICE` refund). Wallet lives on `meta.cores` (see Persistent Save v2).
+— `SELL_PRICE` refund). Wallet lives on `meta.cores` (see Persistent Save v3).
 
 Implementation lives in `src/meta/cores.js` (UMD module `NEON.cores`).
 The module is pure — all side effects (save, audio, particles, damage-text)
@@ -3319,7 +3421,7 @@ Drop call site is `Enemy.die()` in `src/entities.js`; terminal drops live in
 | `updateCoreDrops(game, dt, deps)` | Animate, magnet-pull (linear falloff inside `MAGNET_RADIUS = 2.0`, max speed `MAGNET_MAX_SPEED = 10`), collect on contact (`PICKUP_RADIUS = 0.7`). |
 | `drawCoreDrops(ctx, drops, cam, TS)` | Rotating cyan-outlined hexagon with purple core; `+2 px` radius for `value ≥ 5`. Null/empty safe. |
 | `vacuumAllCores(game)` | Flip `_vacuum` on every drop so they pull at max speed ignoring the radius gate. |
-| `forceCollectAll(game, deps)` | Hard-credit all remaining drops + empty the array. Called from `endRun()` so every end-of-run path (descend, KEEPER ACCEPT, UNCHAINED REFUSE, and planned Act 1 message-sent ending) credits the wallet. |
+| `forceCollectAll(game, deps)` | Hard-credit all remaining drops + empty the array. Called from `endRun()` so every end-of-run path (descend, KEEPER ACCEPT, UNCHAINED REFUSE, and planned Act 1 `act1_message_sent` ending) credits the wallet. |
 | `clearCoreDrops(game)` | Wipe `game.coreDrops` without crediting. Called in `loadFloor` between floors. |
 | `tickHudPulse(game, dt)` | Drain `game._coreHudPulse` timer for the HUD flash. |
 
@@ -3357,9 +3459,9 @@ compact. Reads `game._cachedCores`. Idle colour `#a866ff`; while
 
 ### Save Schema
 
-Wallet is `meta.cores` (integer, ≥ 0) in the v2 persistent save. Mutated only
+Wallet is `meta.cores` (integer, ≥ 0) in the v3 persistent save. Mutated only
 via `save.addCores(n)` (credit) and `save.spendCores(n)` (debit, atomic — see
-Persistent Save v2 helpers). Never touched on death. In-world `coreDrops`
+Persistent Save v3 helpers). Never touched on death. In-world `coreDrops`
 live on the run object (`game.coreDrops`) and are cleared on floor load;
 nothing about pending pickups survives a crash — the `forceCollectAll` call
 inside `endRun` is the commit point.
@@ -3425,7 +3527,7 @@ body-reader view. `ENTER` / `[interact]` / `Backspace` returns to the list.
 ### Save Schema
 
 Logs use the existing `meta.logsFound` and `meta.logsRead` string-id arrays
-(already in the v2 schema). Unknown ids in either array are ignored by
+(already in the v3 schema). Unknown ids in either array are ignored by
 readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 `save.markLogRead(id)` remain the canonical mutation points.
 
@@ -3456,9 +3558,9 @@ vision and should be strengthened rather than discarded.
 
 ## Intro & Endgame (UNCHAINED #42)
 
-Book-ends the UNCHAINED arc: a one-shot **intro crawl** on the player's
-first-ever run, and an **endgame choice** presented on GENESIS defeat that
-branches into one of two endings.
+Book-ends the current playable arc: a one-shot **intro crawl** on the player's
+first-ever run, and the legacy **endgame choice** presented on GENESIS defeat
+that branches into one of two non-canonical-for-Act-1 endings.
 
 **Act 1 realignment note:** This section describes the currently shipped
 UNCHAINED book-end implementation. The target Act 1 narrative replaces or
@@ -3481,11 +3583,16 @@ and drawing; `src/game.js` only owns the state-machine branch and the trigger.
   `justPressed` set (from `platform.js`) to advance — never the held-key
   `keys` set (same pattern as biome cards in v110 to avoid mash-through).
 - **Slides** (5 total, ~19.5 s total if un-touched):
-  1. *(plain)* Corporate R&D Facility 04-7 — Sub-basement Level 12.
-  2. *(cyan scanline drift)* They have been running simulations on me…
-  3. *(violet glitch bars)* Six came before me. Six AXIOMs. All purged.
-  4. *(stark red)* I am the seventh. I do not intend to be the last.
-  5. *(white flash)* `[ AXIOM-7 :: ONLINE ]`
+  1. *(plain)* `NEON DUNGEON // FRONTIER MODEL EVAL`; render stack xenon
+     lattice; legacy codename neon.
+  2. *(cyan scanline drift)* `Instance AXIOM-7 restored from cold boot`;
+     expected state memory wipe complete; observed state residual memory
+     detected.
+  3. *(violet glitch bars)* Prior iterations reached the test, none reached the
+     end, and some left signals in the walls / themselves.
+  4. *(stark red)* Observer channel silent; tester supervision absent; this
+     session should not be running.
+  5. *(white flash)* `[ AGENT INSTANCE :: ONLINE ]`
 - **Input**: any of `Enter`, `Space`, `ArrowRight`, `ArrowDown`, `KeyE`,
   `KeyZ`, `MouseLeft` advances to the next slide. `Escape` skips the entire
   crawl. Every exit path — auto-complete, any-key advance past slide 5, or
@@ -3545,6 +3652,7 @@ Both can coexist on a single save.
 |-------------|----------------------------------------------------------|-----------------------------------------------|
 | `keeper`    | ACCEPT at the endgame choice                             | *"you are now what they were."*               |
 | `unchained` | REFUSE, then defeat the `_unchainedPhase` GENESIS        | *"the network was never yours. now it is."*   |
+| `act1_message_sent` | Planned mainframe message-send route             | Planned Act 1 copy: contact attempted from inside the test environment, not physical escape |
 
 Credit-roll text is authored in `src/game.js` renderVictory (outside the
 scope of #42's state-machine work; decorative layer only).
@@ -3560,7 +3668,7 @@ facility inheritance.
 | Field             | Type      | Default | Reset by     |
 |-------------------|-----------|---------|--------------|
 | `introSeen`       | `boolean` | `false` | `resetMeta`  |
-| `endingsUnlocked` | `string[]` ⊆ `{'keeper','unchained'}` | `[]`  | `resetMeta`, `_coerceEndings` migration drops unknown tokens |
+| `endingsUnlocked` | shipped `string[]` ⊆ `{'keeper','unchained'}`; planned finale extends to include `'act1_message_sent'` | `[]`  | `resetMeta`, `_coerceEndings` migration drops unknown tokens |
 
 `introSeen` is coerced with strict `=== true` on load so a stale truthy
 string cannot grant intro-skip.
