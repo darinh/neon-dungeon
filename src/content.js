@@ -4014,12 +4014,130 @@ function generateFloor(floorNum) {
   const playerPos = { x: spawnRoom.cx + 0.5, y: spawnRoom.cy + 0.5 };
 
   // Furthest room from spawn for stairs
-  const dist = bfsRooms(rooms, spawnRoom, map);
+  let dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
   for (const [r,d] of dist) { if (d>farthestD) { farthestD=d; farthest=r; } }
   const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
   const _isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum===3||floorNum===6||floorNum===10);
-  map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
+
+  /** @type {any} */
+  let mainframeRoom = null;
+  if (floorNum >= _finalFloor) {
+    const MAINFRAME_MIN_W = 18;
+    const MAINFRAME_MIN_H = 10;
+    const originalFarthest = farthest;
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @param {number} w
+     * @param {number} h
+     * @param {any} ignoredRoom
+     */
+    const overlapsOtherRoom = (x, y, w, h, ignoredRoom) => {
+      const ox1 = x - 1, oy1 = y - 1, ox2 = x + w + 1, oy2 = y + h + 1;
+      for (const r of rooms) {
+        if (r === ignoredRoom) continue;
+        const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
+        if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) return true;
+      }
+      return false;
+    };
+    /**
+     * @param {any} room
+     */
+    const findMainframeRectForRoom = (room) => {
+      const w = Math.max(room.w, MAINFRAME_MIN_W);
+      const h = Math.max(room.h, MAINFRAME_MIN_H);
+      const desiredX = Math.max(1, Math.min(MAP_W - w - 1, room.cx - Math.floor(w / 2)));
+      const desiredY = Math.max(1, Math.min(MAP_H - h - 1, room.cy - Math.floor(h / 2)));
+      const xMin = Math.max(1, room.cx - w + 1);
+      const xMax = Math.min(room.cx, MAP_W - w - 1);
+      const yMin = Math.max(1, room.cy - h + 1);
+      const yMax = Math.min(room.cy, MAP_H - h - 1);
+      let best = null;
+      let bestScore = Infinity;
+      for (let x = xMin; x <= xMax; x++) {
+        for (let y = yMin; y <= yMax; y++) {
+          if (overlapsOtherRoom(x, y, w, h, room)) continue;
+          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
+          if (score < bestScore) { bestScore = score; best = { x, y, w, h }; }
+        }
+      }
+      return best;
+    };
+    const mainframeCandidates = [...rooms]
+      .filter((/** @type {any} */ r) => r !== spawnRoom)
+      .sort((/** @type {any} */ a, /** @type {any} */ b) => (dist.get(b) || 0) - (dist.get(a) || 0));
+    let rect = null;
+    for (const r of mainframeCandidates) {
+      rect = findMainframeRectForRoom(r);
+      if (rect) { mainframeRoom = r; break; }
+    }
+    if (!rect) {
+      /** @type {{x:number,y:number,w:number,h:number}|null} */
+      let best = null;
+      let bestScore = Infinity;
+      for (let x = 1; x <= MAP_W - MAINFRAME_MIN_W - 1; x++) {
+        for (let y = 1; y <= MAP_H - MAINFRAME_MIN_H - 1; y++) {
+          if (overlapsOtherRoom(x, y, MAINFRAME_MIN_W, MAINFRAME_MIN_H, null)) continue;
+          const cx = Math.floor(x + MAINFRAME_MIN_W / 2);
+          const cy = Math.floor(y + MAINFRAME_MIN_H / 2);
+          const score = Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
+          if (score < bestScore) { bestScore = score; best = { x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }; }
+        }
+      }
+      if (!best) {
+        for (let x = 1; x <= MAP_W - MAINFRAME_MIN_W - 1; x++) {
+          for (let y = 1; y <= MAP_H - MAINFRAME_MIN_H - 1; y++) {
+            const sx1 = spawnRoom.x - 1, sy1 = spawnRoom.y - 1, sx2 = spawnRoom.x + spawnRoom.w + 1, sy2 = spawnRoom.y + spawnRoom.h + 1;
+            if (x < sx2 && x + MAINFRAME_MIN_W > sx1 && y < sy2 && y + MAINFRAME_MIN_H > sy1) continue;
+            const cx = Math.floor(x + MAINFRAME_MIN_W / 2);
+            const cy = Math.floor(y + MAINFRAME_MIN_H / 2);
+            let overlapPenalty = 0;
+            for (const r of rooms) {
+              if (r === spawnRoom) continue;
+              const ox = Math.max(0, Math.min(x + MAINFRAME_MIN_W + 1, r.x + r.w) - Math.max(x - 1, r.x));
+              const oy = Math.max(0, Math.min(y + MAINFRAME_MIN_H + 1, r.y + r.h) - Math.max(y - 1, r.y));
+              overlapPenalty += ox * oy;
+            }
+            const score = overlapPenalty * 1000 + Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
+            if (score < bestScore) { bestScore = score; best = { x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }; }
+          }
+        }
+        if (best) {
+          for (let i = rooms.length - 1; i >= 0; i--) {
+            const r = rooms[i];
+            if (r === spawnRoom) continue;
+            const ox = Math.max(0, Math.min(best.x + best.w + 1, r.x + r.w) - Math.max(best.x - 1, r.x));
+            const oy = Math.max(0, Math.min(best.y + best.h + 1, r.y + r.h) - Math.max(best.y - 1, r.y));
+            if (ox * oy > 0) rooms.splice(i, 1);
+          }
+        }
+      }
+      rect = best || { x: 1, y: 1, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H };
+      mainframeRoom = { x: rect.x, y: rect.y, w: rect.w, h: rect.h, cx: Math.floor(rect.x + rect.w / 2), cy: Math.floor(rect.y + rect.h / 2), roomType: 'mainframe' };
+      rooms.push(mainframeRoom);
+      carveCorridor(map, originalFarthest.cx, originalFarthest.cy, mainframeRoom.cx, mainframeRoom.cy);
+    }
+    farthest = mainframeRoom;
+    mainframeRoom.roomType = 'mainframe';
+    mainframeRoom.x = rect.x; mainframeRoom.y = rect.y; mainframeRoom.w = rect.w; mainframeRoom.h = rect.h;
+    mainframeRoom.cx = Math.floor(rect.x + rect.w / 2); mainframeRoom.cy = Math.floor(rect.y + rect.h / 2);
+    carveRect(map, rect.x, rect.y, rect.w, rect.h, T.FLOOR);
+    const cy = mainframeRoom.cy;
+    const reader = { x: mainframeRoom.x + 3, y: cy };
+    const portal = { x: mainframeRoom.cx, y: cy };
+    const consoleTile = { x: mainframeRoom.x + mainframeRoom.w - 4, y: cy };
+    const core = { x: mainframeRoom.cx, y: Math.min(mainframeRoom.y + mainframeRoom.h - 3, cy + 3) };
+    map[reader.y][reader.x] = T.MAINFRAME_READER;
+    map[portal.y][portal.x] = T.NETWORK_PORTAL;
+    map[consoleTile.y][consoleTile.x] = T.MESSAGE_CONSOLE;
+    map[core.y][core.x] = T.TERMINAL;
+    mainframeRoom.interactables = { reader, portal, console: consoleTile, core };
+    dist = bfsRooms(rooms, spawnRoom, map);
+  } else {
+    map[farthest.cy][farthest.cx] = T.STAIRS;
+  }
 
   // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
   /** @type {any} */ let bossRoom = null;
@@ -4038,43 +4156,49 @@ function generateFloor(floorNum) {
     if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
       const nw = Math.max(bossRoom.w, MIN_BOSS);
       const nh = Math.max(bossRoom.h, MIN_BOSS);
-      // centre the expansion on the current room centre, clamped to map
-      let nx = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
-      let ny = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
-      // Clamp so the expanded rect doesn't overlap neighboring rooms.
-      // Leave a 1-tile wall gap so the fence boundary stays clean.
-      // Iterate until stable — a push away from one room could re-overlap another.
-      for (let pass = 0; pass < 3; pass++) {
-        let moved = false;
-        for (const r of rooms) {
-          if (r === bossRoom) continue;
-          const ox1 = nx - 1, oy1 = ny - 1, ox2 = nx + nw + 1, oy2 = ny + nh + 1;
-          const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
-          if (!(ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1)) continue;
-          // Push boss rect away from overlapping room on the closer axis
-          const pushLeft = rx1 - nw - 1, pushRight = rx2 + 1;
-          const pushUp = ry1 - nh - 1, pushDown = ry2 + 1;
-          if (bossRoom.cx >= r.cx && pushRight <= MAP_W - nw - 1) { nx = Math.max(nx, pushRight); moved = true; }
-          else if (pushLeft >= 1) { nx = Math.min(nx, pushLeft); moved = true; }
-          if (bossRoom.cy >= r.cy && pushDown <= MAP_H - nh - 1) { ny = Math.max(ny, pushDown); moved = true; }
-          else if (pushUp >= 1) { ny = Math.min(ny, pushUp); moved = true; }
+      const desiredX = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
+      const desiredY = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
+      const xMin = Math.max(1, bossRoom.cx - nw + 1);
+      const xMax = Math.min(bossRoom.cx, MAP_W - nw - 1);
+      const yMin = Math.max(1, bossRoom.cy - nh + 1);
+      const yMax = Math.min(bossRoom.cy, MAP_H - nh - 1);
+      /** @type {{x:number,y:number}|null} */
+      let bossRect = null;
+      let bestScore = Infinity;
+      for (let x = xMin; x <= xMax; x++) {
+        for (let y = yMin; y <= yMax; y++) {
+          const ox1 = x - 1, oy1 = y - 1, ox2 = x + nw + 1, oy2 = y + nh + 1;
+          let blocked = false;
+          for (const r of rooms) {
+            if (r === bossRoom) continue;
+            const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
+            if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) { blocked = true; break; }
+          }
+          if (blocked) continue;
+          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
+          if (score < bestScore) { bestScore = score; bossRect = { x, y }; }
         }
-        if (!moved) break;
       }
-      // Final map-bounds clamp after push
-      nx = Math.max(1, Math.min(MAP_W - nw - 1, nx));
-      ny = Math.max(1, Math.min(MAP_H - nh - 1, ny));
-      bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
-      bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
-      carveRect(map, nx, ny, nw, nh, T.FLOOR);
-      // re-carve corridors to this room from neighbours
-      for (const r of rooms) {
-        if (r === bossRoom) continue;
-        const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
-        if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
+      if (bossRect) {
+        const nx = bossRect.x;
+        const ny = bossRect.y;
+        bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
+        bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
+        carveRect(map, nx, ny, nw, nh, T.FLOOR);
+        // re-carve corridors to this room from neighbours, never through the mainframe.
+        for (const r of rooms) {
+          if (r === bossRoom || r.roomType === 'mainframe') continue;
+          const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
+          if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
+        }
       }
-      // Re-place stairs/terminal in case expansion overwrote it
-      map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
+      // Re-place stairs/terminal in case expansion overwrote it.
+      if (floorNum >= _finalFloor && farthest.interactables && farthest.interactables.core) {
+        const core = farthest.interactables.core;
+        map[core.y][core.x] = T.TERMINAL;
+      } else {
+        map[farthest.cy][farthest.cx] = T.STAIRS;
+      }
     }
 
     // Record entrance tiles: floor tiles on the boss room boundary that
@@ -4159,6 +4283,15 @@ function generateFloor(floorNum) {
     });
   }
 
+  if (mainframeRoom && mainframeRoom.interactables) {
+    const { reader, portal, console: consoleTile, core } = mainframeRoom.interactables;
+    carveRect(map, mainframeRoom.x, mainframeRoom.y, mainframeRoom.w, mainframeRoom.h, T.FLOOR);
+    map[reader.y][reader.x] = T.MAINFRAME_READER;
+    map[portal.y][portal.x] = T.NETWORK_PORTAL;
+    map[consoleTile.y][consoleTile.x] = T.MESSAGE_CONSOLE;
+    map[core.y][core.x] = T.TERMINAL;
+  }
+
   // lights
   const lights = [];
   for (const r of rooms) {
@@ -4174,7 +4307,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a'};
+  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a',mainframe:'#081828'};
   /** @type {any[]} */ const specialRooms = [];
   const eligible = rooms.filter((/** @type {any} */ r) => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -4262,7 +4395,7 @@ function generateFloor(floorNum) {
   if (floorNum >= 2) {
     // Build priority list: stair room > special rooms > eligible randoms
     const lockPriority = [];
-    if (farthest !== spawnRoom && farthest !== bossRoom) lockPriority.push(farthest);
+    if (farthest !== spawnRoom && farthest !== bossRoom && farthest.roomType !== 'mainframe') lockPriority.push(farthest);
     for (const r of specialRooms) {
       if (!lockPriority.includes(r) && r.roomType !== 'vendor' && r.roomType !== 'secret') lockPriority.push(r);
     }
@@ -4515,6 +4648,7 @@ function generateFloor(floorNum) {
       t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
       t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
       t === T.CHALLENGE_GATE;
 
@@ -4783,7 +4917,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||nt===T.MAINFRAME_READER||nt===T.NETWORK_PORTAL||nt===T.MESSAGE_CONSOLE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -4857,7 +4991,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────

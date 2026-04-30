@@ -26,7 +26,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24, MAINFRAME_READER:25, NETWORK_PORTAL:26, MESSAGE_CONSOLE:27 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 /** @type {Record<string, string>} */
@@ -588,7 +588,7 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (_G.state !== 'PLAYING' && _G.state !== 'FADE') {
       if (_G.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE') {
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'MAINFRAME_READER') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -982,7 +982,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 
 // Tile helpers
 /** @param {any} t */
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR||t===T.MAINFRAME_READER||t===T.NETWORK_PORTAL||t===T.MESSAGE_CONSOLE; }
 /** @param {any} t */
 function isSeeThrough(t) {
   return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
