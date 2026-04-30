@@ -435,7 +435,7 @@ const _input = /** @type {any} */ (NEON).input.createEngine({
   win: window,
   onKeyDown: (/** @type {any} */ e) => {
     lastKey = e.key;
-    resumeInteractiveAudio();
+    resumeInteractiveAudio(e.key === 'Enter' || e.code === 'Enter');
   },
 });
 _input.attach();
@@ -447,13 +447,25 @@ let lastKey = '';
 /** @type {any} */
 let nameEntryTap = null;
 
-function resumeInteractiveAudio() {
+function menuTitleNeedsGestureUnlock() {
+  if (_G.state !== 'MENU' || _G._menuTitleUnlockConsumed) return false;
+  try {
+    return typeof music !== 'undefined' && music && music.isTitlePlaying && !music.isTitlePlaying();
+  } catch (_) {
+    return false;
+  }
+}
+
+/** @param {boolean} consumeMenuActivation */
+function resumeInteractiveAudio(consumeMenuActivation) {
+  const consumeTitleUnlock = consumeMenuActivation && menuTitleNeedsGestureUnlock();
   audio.resume();
   const menuMusicState = _G.state === 'MENU' || _G.state === 'ARCHIVES' ||
     (_G.state === 'SETTINGS' && _G._settingsFrom === 'MENU');
   if (menuMusicState) {
     try { if (typeof music !== 'undefined') music.resume(); } catch (_) {}
   }
+  if (consumeTitleUnlock) _G._menuTitleUnlockPending = true;
 }
 
 canvas.addEventListener('mousemove', e => {
@@ -469,7 +481,7 @@ canvas.addEventListener('mousemove', e => {
   mouse.x = (e.clientX - r.left) * canvas.width  / r.width  / _wz;
   mouse.y = (e.clientY - r.top)  * canvas.height / r.height / _wz;
 });
-canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); resumeInteractiveAudio(); });
+canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); resumeInteractiveAudio(true); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 window.addEventListener('mouseup',   e => { mouse.down = false; });
 // Scroll wheel: weapon belt cycling
@@ -556,7 +568,8 @@ function hitBtn(cx, cy, btn) {
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  resumeInteractiveAudio();
+  const consumeTitleUnlock = menuTitleNeedsGestureUnlock();
+  resumeInteractiveAudio(false);
   // check if any touch hit the fullscreen dismiss button first
   let dismissed = false;
   for (let _i = 0; _i < e.changedTouches.length; _i++) { const t = e.changedTouches[_i]; if (!t) continue;
@@ -674,8 +687,9 @@ canvas.addEventListener('touchstart', e => {
         if (opts[hit]?.isDiffRow) {
           if (cx < W * 0.35) justPressed.add('ArrowLeft');
           else if (cx > W * 0.65) justPressed.add('ArrowRight');
-          else justPressed.add('Enter');
+          else { if (consumeTitleUnlock) _G._menuTitleUnlockPending = true; justPressed.add('Enter'); }
         } else {
+          if (consumeTitleUnlock) _G._menuTitleUnlockPending = true;
           justPressed.add('Enter');
         }
       }

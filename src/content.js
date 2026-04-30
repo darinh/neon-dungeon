@@ -30,7 +30,7 @@ const music = (() => {
   let motifCursor = 0;
 
   const TITLE_THEME_SRC = './assets/audio/title-theme.wav';
-  const TITLE_THEME_GAIN = 0.85;
+  const TITLE_THEME_GAIN = 0.28;
 
   // Layer gain nodes
   /** @type {any} */ let droneG = null;
@@ -669,6 +669,10 @@ const music = (() => {
 
     stop() {
       this.setState('idle');
+    },
+
+    isTitlePlaying() {
+      return titleWanted && !!titleAudio && !titleAudio.paused;
     },
 
     /**

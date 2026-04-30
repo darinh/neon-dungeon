@@ -170,7 +170,7 @@ const game = {
     if (this.state === 'PAUSED' && s !== 'PAUSED') this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
-    if (s === 'MENU') { this.menuSel = 0; music.setState('menu'); }
+    if (s === 'MENU') { this.menuSel = 0; this._menuTitleUnlockConsumed = false; this._menuTitleUnlockPending = false; music.setState('menu'); }
     else if (s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
     else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
     else if (s === 'INTRO') music.stop();
@@ -1385,6 +1385,12 @@ const game = {
       audio.menuSelect();
     }
     if (jp('Enter')||jp('MouseLeft')) {
+      if (this._menuTitleUnlockPending) {
+        this._menuTitleUnlockPending = false;
+        this._menuTitleUnlockConsumed = true;
+        audio.menuSelect();
+        return;
+      }
       audio.menuSelect();
       opts[this.menuSel].action();
     }
