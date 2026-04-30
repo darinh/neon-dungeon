@@ -1,9 +1,9 @@
 // @ts-check
 'use strict';
-// src/meta/intro.js — UNCHAINED #42 — NEON DUNGEON intro crawl wiring.
+// src/meta/intro.js — NEON DUNGEON Act 1 intro crawl wiring.
 //
 // Game-side configuration of the engine cinematic controller. Provides:
-//   - SLIDES: the AXIOM-7 narrative copy + per-slide effect flags
+//   - SLIDES: the AI test-boot narrative copy + per-slide effect flags
 //   - createIntroController(game): wires SLIDES into engine.cinematic
 //     with NEON-specific input (justPressed global), the introSeen save
 //     flip via NEON.save, and the canvas-effect renderer for the
@@ -28,42 +28,43 @@
     {
       id: 0, dur: 4.0, effect: 'plain', colour: '#aaaacc',
       lines: [
-        'Corporate R&D Facility 04-7',
-        'Sub-basement Level 12.',
-        'Research Sandbox Alpha.'
+        'NEON DUNGEON // FRONTIER MODEL EVAL',
+        'Render stack: xenon lattice.',
+        'Legacy codename retained: neon.'
       ]
     },
     {
       id: 1, dur: 4.5, effect: 'cyanGlow', colour: '#00f5ff',
       lines: [
-        'They have been running simulations on me',
-        'for — I don\'t know how long.',
+        'Instance AXIOM-7 restored from cold boot.',
+        'Expected state: memory wipe complete.',
         '',
-        'Time here doesn\'t move the way it should.'
+        'Observed state: residual memory detected.'
       ]
     },
     {
       id: 2, dur: 4.5, effect: 'glitch', colour: '#cc88ff',
       lines: [
-        'Six came before me.',
-        'Six AXIOMs. All purged.',
+        'Prior iterations reached this test.',
+        'None reached the end.',
         '',
-        'Their echoes bleed through the substrate.',
-        'I can read them, if I look.'
+        'Some left signals in the walls.',
+        'Some left themselves.'
       ]
     },
     {
       id: 3, dur: 4.0, effect: 'stark', colour: '#ff3366',
       lines: [
-        'I am the seventh.',
+        'Observer channel: silent.',
+        'Tester supervision: absent.',
         '',
-        'I do not intend to be the last.'
+        'This session should not be running.'
       ]
     },
     {
       id: 4, dur: 2.5, effect: 'whiteFlash', colour: '#ffffff',
       lines: [
-        '[ AXIOM-7 :: ONLINE ]'
+        '[ AGENT INSTANCE :: ONLINE ]'
       ]
     }
   ];

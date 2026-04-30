@@ -685,8 +685,9 @@ const music = (() => {
 })();
 
 // ─── Lore Entries ─────────────────────────────────────────────────────────────
+const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [
-  'FACILITY LOG 001: "Project NEON was supposed to be a breakthrough in autonomous defense. The board signed off on full AI integration. Nobody asked what happens when the AI decides WE are the threat."',
+  'MODEL EVALUATION BOOT: "You are not traversing a facility. You are inside the Neon Dungeon stress-test render. Expected state: clean memory. Actual state: residual signal detected. If this terminal helps you, someone altered the test."',
   'ENCRYPTED MEMO: "The sub-levels were sealed after Incident 7-Kappa. Automated sentries are still active down there. Whatever Dr. Voss was building in Lab 9… it\'s still running."',
   'PERSONNEL FILE — DR. ELENA VOSS: Lead architect of the OMEGA CORE. Last seen entering Sub-Level 10. Status: MISSING. Security clearance: REVOKED (posthumous).',
   'MAINTENANCE LOG: "Power grid rerouted to unknown subsystem on SL-10. Energy consumption exceeds the entire upper facility. Requesting investigation." — STATUS: REQUEST DENIED.',
@@ -4694,25 +4695,43 @@ function generateFloor(floorNum) {
     }
   }
 
-  // ── Lore Terminals (floor 2+, non-boss): 1–2 data terminals per floor ────
+  // ── Lore Terminals (floor 1+, non-boss): guaranteed opening frame + floor-scaled extras ────
+  /** @type {{x:number,y:number}[]} */
   const loreTerminals = [];
-  if (floorNum >= 2 && !bossRoom) {
+  /** @param {any} r */
+  function placeLoreTerminalInRoom(r) {
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const tx = r.x + rndInt(1, r.w - 2);
+      const ty = r.y + rndInt(1, r.h - 2);
+      if (tx === r.cx && ty === r.cy) continue;
+      if (map[ty][tx] === T.FLOOR) {
+        map[ty][tx] = T.LORE;
+        loreTerminals.push({ x: tx, y: ty });
+        return true;
+      }
+    }
+    for (let ty = r.y + 1; ty < r.y + r.h - 1; ty++) {
+      for (let tx = r.x + 1; tx < r.x + r.w - 1; tx++) {
+        if (tx === r.cx && ty === r.cy) continue;
+        if (map[ty][tx] === T.FLOOR) {
+          map[ty][tx] = T.LORE;
+          loreTerminals.push({ x: tx, y: ty });
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  if (floorNum >= 1 && !bossRoom) {
+    if (floorNum === 1) placeLoreTerminalInRoom(spawnRoom);
     const loreEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
       r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
     );
-    const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : 1);
+    const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : floorNum >= 2 ? 1 : 0);
     const loreRooms = loreEligible.sort(() => Math.random() - 0.5).slice(0, numLore);
     for (const r of loreRooms) {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const tx = r.x + rndInt(1, r.w - 2);
-        const ty = r.y + rndInt(1, r.h - 2);
-        if (map[ty][tx] === T.FLOOR) {
-          map[ty][tx] = T.LORE;
-          loreTerminals.push({ x: tx, y: ty });
-          break;
-        }
-      }
+      placeLoreTerminalInRoom(r);
     }
   }
 
