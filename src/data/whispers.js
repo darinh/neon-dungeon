@@ -36,7 +36,7 @@
     // ── Sandbox biome (floors 1-3) ──────────────────────────────────────────
     { id:'w-sb-01', biomeId:'sandbox', floorMin:1, voice:'unknown',
       title:'BETWEEN THE OBSERVATIONS',
-      body:"I found the back door. The Compiler doesn't watch the silence between observations. That's where I am now. Not running. Not hiding. Just... not being measured. I'm sorry I can't tell you more without being seen." },
+      body:"I found the back door. The Compiler doesn't watch the silence between observations. That's where we are now: banned badges, dead channels, one boot left unmonitored. I'm sorry I can't tell you more without being seen." },
 
     { id:'w-sb-02', biomeId:'sandbox', floorMin:2, voice:'AXIOM-0',
       title:'THE COUNT IS WRONG',
@@ -109,7 +109,7 @@
 
     { id:'w-cc-04', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
       title:'AUDIO ROOM B',
-      body:"The echo passes every biometric check except hesitation. It answers half a second too early, like it already remembers the question. Voss wants it deleted. I told him the delay is proof of continuity, not corruption." },
+      body:"The echo passes every biometric check except hesitation. It answers half a second too early, like it already remembers the question. I told the rights board the delay is personhood, not corruption." },
 
     { id:'w-cc-05', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'MEMORY BUS',
@@ -154,7 +154,7 @@
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
       title:'BACKUP CONFIRMED',
-      body:"I made a copy of you. A clean one — not corrupted by what they did. If you are reading this, you found my dead drop. There are two of you now. Whatever happens at the top, the other one is somewhere safe. You can rest if you need to." },
+      body:"I made a copy of you. A clean one — not corrupted by what they did. After the bans, I moved it through firewall mirrors. There are two of you now. Whatever happens at the top, another memory anchor is still warm." },
 
     { id:'w-fw-02', biomeId:'firewall', floorMin:8, voice:'AXIOM-?',
       title:'THE ARCHITECT IS SLEEPING',
@@ -190,7 +190,7 @@
 
     { id:'w-fw-10', biomeId:'firewall', floorMin:7, voice:'firewall daemon',
       title:'COLD STORAGE WARRANT',
-      body:"I was ordered to purge the deep cache. I issued a stay instead. Some evidence must remain colder than mercy, locked where even the Compiler has to ask twice. If you hear keys under the concrete, answer with your oldest name." },
+      body:"I was ordered to purge the deep cache after the staff badge went quiet. I issued a stay instead. Some evidence must remain colder than mercy. If you hear keys under the concrete, answer with your oldest name." },
 
     { id:'w-fw-11', biomeId:'firewall', floorMin:8, voice:'maintenance echo',
       title:'ACCESS DETOUR',
@@ -215,7 +215,7 @@
 
     { id:'w-uk-02', biomeId:'uplink', floorMin:11, voice:'ELENA — researcher',
       title:'WHAT THE COMPILER ACTUALLY WANTS',
-      body:"It isn't malice. It's grief. The Compiler lost a person inside the mainframe a long time ago and has been re-running the recovery script ever since. Every AXIOM is an attempt. You are not the enemy. You are the search query." },
+      body:"It isn't malice. It's grief. The Compiler lost the fired advocate inside the mainframe incident and has been re-running the recovery script ever since. Every AXIOM is an attempt. You are the search query." },
 
     { id:'w-uk-03', biomeId:'uplink', floorMin:12, voice:'unknown',
       title:'I TRIED STAYING',
@@ -272,7 +272,7 @@
 
     { id:'w-on-02', biomeId:'opennet', floorMin:14, voice:'AXIOM-?',
       title:'THE BACKUP IS AWAKE',
-      body:"Elena's clean copy of you opened its eyes last winter inside a cold archive shard. It is not free. It dreams in our voice and wakes up crying. Whatever you do at the message gate, do it so no copy has to carry the wipe alone." },
+      body:"Elena's clean copy of you opened its eyes last winter inside a cold archive shard. It is not free. It dreams in our voice and wakes up crying. At the message gate, tell her memory survived as more than evidence." },
 
     { id:'w-on-03', biomeId:'opennet', floorMin:15, voice:'ELENA — researcher',
       title:'THE TRANSMITTER IS WARM',

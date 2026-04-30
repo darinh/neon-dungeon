@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.2
+# NEON DUNGEON — Game Specification v6.1.3
 
 ## Vision
 
@@ -70,9 +70,9 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
-| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 boot terminal, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, and `READING` overlay presentation. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
-| Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
-| Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
+| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 boot terminal, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, Elena hints, and practical combat guidance. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
+| Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
+| Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
 | Final boss/endgame | GENESIS/ARCHITECT choice offers KEEPER or UNCHAINED endings. | Act 1 finale should culminate in a mainframe/network portal room, archive reader, employee address discovery, and one outbound message. |
 
@@ -144,10 +144,13 @@ the Act 1 realignment work and must not be presented as already playable.
   while making every AXIOM group readable as prior AI iterations, with at least
   two entries per group explicitly about reset, wipe, reboot, iteration, or
   memory continuity; whispers must keep the 71 shipped ids and at least fourteen
-  entries per biome, with at least five entries per biome carrying reset,
-  iteration, signal, anchor, or memory-continuity vocabulary. The Open Network
-  whisper set must retain at least three finale-critical entries that frame the
-  ending as contact/message rather than physical escape.
+   entries per biome, with at least five entries per biome carrying reset,
+   iteration, signal, anchor, or memory-continuity vocabulary. **Shipped:** the
+   issue #463 content pass seeds clean-slate doctrine, memory-as-personhood,
+   advocate bans/hiding, mysterious fired-employee death foreshadowing, Elena's
+   restoration work, and the unmonitored boot across terminals, logs, and
+   whispers. The Open Network whisper set must retain at least three finale-critical entries;
+   these frame the ending as contact/message rather than physical escape.
 
 #### Finale model
 

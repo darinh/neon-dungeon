@@ -28,6 +28,9 @@ test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /predecessor\/archive logs must preserve the 30 persisted ids/i);
   assert.match(SPEC, /whispers must keep the 71 shipped ids and at least fourteen\s+entries per biome/i);
   assert.match(SPEC, /Open Network\s+whisper set must retain at least three finale-critical entries/i);
+  assert.match(SPEC, /issue #463 content pass seeds clean-slate doctrine/i);
+  assert.match(SPEC, /memory-as-personhood,\s+advocate bans\/hiding, mysterious fired-employee death foreshadowing/i);
+  assert.match(SPEC, /Elena's\s+restoration work, and the unmonitored boot across terminals, logs, and\s+whispers/i);
 });
 
 test('Act 1 spec decisions define finale path, ending id, and migration behavior', () => {
