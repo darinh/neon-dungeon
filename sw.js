@@ -42,6 +42,7 @@ const ASSETS = [
   './src/entities.js',
   './src/render.js',
   './src/game.js',
+  './assets/audio/title-theme.wav',
   './icon-192x192.png',
   './icon-512x512.png',
   './icon-192x192-maskable.png',

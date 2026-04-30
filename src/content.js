@@ -23,8 +23,14 @@ const music = (() => {
   let paused = false;
   /** @type {any} */ let hatBuf = null;
   /** @type {any} */ let airBuf = null;
+  /** @type {any} */ let titleAudio = null;
+  let titleWanted = false;
+  let titleRetryAt = 0;
   let droneGen = 0;
   let motifCursor = 0;
+
+  const TITLE_THEME_SRC = './assets/audio/title-theme.wav';
+  const TITLE_THEME_GAIN = 0.85;
 
   // Layer gain nodes
   /** @type {any} */ let droneG = null;
@@ -201,6 +207,48 @@ const music = (() => {
       g.gain.cancelScheduledValues(t);
       g.gain.setValueAtTime(g.gain.value, t);
       g.gain.linearRampToValueAtTime(tgt[i], t + dur);
+    }
+  }
+
+  function syncTitleVolume() {
+    if (!titleAudio) return;
+    titleAudio.volume = clamp(settings.musicVol * TITLE_THEME_GAIN, 0, 1);
+  }
+
+  function ensureTitleAudio() {
+    if (titleAudio || typeof Audio === 'undefined') return titleAudio;
+    titleAudio = new Audio(TITLE_THEME_SRC);
+    titleAudio.loop = true;
+    titleAudio.preload = 'auto';
+    syncTitleVolume();
+    return titleAudio;
+  }
+
+  /**
+   * @param {boolean} force
+   */
+  function tryPlayTitle(force) {
+    if (!titleWanted) return;
+    const a = ensureTitleAudio();
+    if (!a) return;
+    syncTitleVolume();
+    if (!a.paused) return;
+    const now = Date.now();
+    if (!force && now < titleRetryAt) return;
+    const p = a.play();
+    if (p && typeof p.then === 'function') {
+      p.then(() => { titleRetryAt = 0; }).catch(() => { titleRetryAt = Date.now() + 1000; });
+    }
+  }
+
+  /** @param {boolean} reset */
+  function stopTitle(reset) {
+    titleWanted = false;
+    titleRetryAt = 0;
+    if (!titleAudio) return;
+    titleAudio.pause();
+    if (reset) {
+      try { titleAudio.currentTime = 0; } catch (_) {}
     }
   }
 
@@ -525,6 +573,19 @@ const music = (() => {
      * @param {any} s
      */
     setState(s) {
+      if (s === 'menu') {
+        if (state !== 'idle') {
+          state = 'idle';
+          paused = false;
+          rampGains(0.6);
+          const gen = ++droneGen;
+          setTimeout(() => { if (state === 'idle' && droneGen === gen) stopDrone(); }, 900);
+        }
+        titleWanted = true;
+        tryPlayTitle(false);
+        return;
+      }
+      stopTitle(true);
       const next = TARGETS[s] ? s : 'idle';
       if (next === state) return;
       ensureInit();
@@ -566,6 +627,10 @@ const music = (() => {
     },
 
     resume() {
+      if (titleWanted) {
+        tryPlayTitle(true);
+        return;
+      }
       if (!ctx || !paused) return;
       paused = false;
       nextStep = ctx.currentTime + 0.06;
@@ -573,6 +638,10 @@ const music = (() => {
     },
 
     tick() {
+      if (titleWanted) {
+        tryPlayTitle(false);
+        return;
+      }
       if (!ctx || state === 'idle' || paused) return;
       // Don't schedule audio while context is suspended/interrupted (iOS)
       if (ctx.state !== 'running') return;
@@ -600,6 +669,13 @@ const music = (() => {
 
     stop() {
       this.setState('idle');
+    },
+
+    /**
+     * @param {number} _v
+     */
+    setVolume(_v) {
+      syncTitleVolume();
     }
   };
 })();

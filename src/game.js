@@ -161,6 +161,7 @@ const game = {
    * @param {any} callback
    */
   setState(s, callback) {
+    const prevState = this.state;
     // Clear the auto-paused sticky indicator on any transition OUT of
     // PAUSED — PLAYING (manual resume), MENU (quit), SETTINGS (open
     // submenu), etc. The next auto-pause will set it again. Without
@@ -169,9 +170,14 @@ const game = {
     if (this.state === 'PAUSED' && s !== 'PAUSED') this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
-    if (s === 'MENU') { this.menuSel = 0; music.stop(); }
+    if (s === 'MENU') { this.menuSel = 0; music.setState('menu'); }
+    else if (s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
     else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
-    else if (s === 'PLAYING') music.resume();
+    else if (s === 'INTRO') music.stop();
+    else if (s === 'PLAYING') {
+      if (prevState === 'MENU' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
+      else music.resume();
+    }
     else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
     // Show privacy link only on menu screen
     try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === 'MENU' ? '' : 'none'; } catch(_){}
@@ -6002,6 +6008,7 @@ if (typeof NEON !== 'undefined' && NEON.telemetry) {
   NEON.telemetry.init({ transport: _phTransport });
 }
 game.state='MENU';
+music.setState('menu');
 try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = ''; } catch(_){}
 game.menuParticles=[];
 requestAnimationFrame(loop);
