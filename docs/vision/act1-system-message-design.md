@@ -1,8 +1,9 @@
 # Act 1 System Message Narrative Design
 
 Status: design artifact and production backlog. MSG-001 data-model slice,
-MSG-002 explicit-ACK modal slice, and MSG-003 combat-safe delivery slice are
-shipped; archive recovery, copy rewrite, and finale integration remain pending.
+MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, and MSG-004
+early-floor prompt schedule are shipped; archive recovery, broader copy rewrite,
+and finale integration remain pending.
 
 Tracking issue: #501
 
@@ -166,6 +167,13 @@ Acceptance criteria:
   it.
 
 ### MSG-004: Boot and early-floor prompt schedule
+
+Status: shipped early-floor prompt schedule in `src/game.js`. The shipped
+schedule keeps `boot-inventory` as the mandatory run-start prompt and adds
+`floor-2-context-gap`, `floor-3-reward-model`, `floor-4-render-layer`, and
+`floor-5-residual-trace` as non-mandatory floor-start prompts that queue only on
+fresh floor loads. The copy avoids Elena/contact/rights-conflict spoilers and
+uses short system-voice lines that fit the current canvas modal.
 
 Author the first shipped prompt schedule for boot through floor 5. The schedule
 should establish interiority, residual memory, absent supervision, and rendered
