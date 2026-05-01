@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.6
+# NEON DUNGEON — Game Specification v6.1.7
 
 ## Vision
 
@@ -69,8 +69,9 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
-| Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
-| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
+| System prompts | Planned, not yet implemented. No durable system-message queue, unread indicator, or explicit ACK-only narrative prompt surface exists yet. | Add this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
+| Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Retune after system prompts land so the intro raises startup questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
+| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester/corporate artifacts, practical run notes, model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
@@ -126,21 +127,36 @@ the Act 1 realignment work and must not be presented as already playable.
 #### Discovery path and content density
 
 - **Unmonitored boot path:** The first discovery path is a combination, not a
-  single reveal. **Shipped:** the intro crawl establishes the AI eval, memory
-  wipe expectation, residual memory, prior iterations, silent observer channel,
-  and unauthorised boot. **Shipped:** the forced first lore terminal on floor 1
-  confirms the Neon Dungeon stress-test render, clean-memory expectation, and
-  altered-test hint. **Planned:** early secret-room whispers and archive/log
-  entries reinforce that prior iterations and advocates caused the session to
-  start without supervision. A HUD/system notification is optional polish, not a
-  required narrative gate.
-- **Minimum density targets for the completed Act 1 pass:** the intro carries
-   all five opening facts (corporate stress-test environment, AI model identity,
-   expected memory wipe, absent tester observation, prior iterations); the shipped
-   lore terminal catalog contains 32 Act 1-aligned tester/run-artifact entries,
-   with the floor-1 boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random
-   lore selection by floor band, and at least two qualifying entries per biome;
-   predecessor/archive logs must preserve the 30 persisted ids
+  single reveal. **Shipped:** the intro crawl and forced floor-1 lore terminal
+  currently establish too much of the premise before the player has felt the
+  anomaly in play. **Planned:** add system prompts as the mandatory early
+  interiority channel. The first boot prompt should make the agent take stock of
+  motor/sensor state, missing prior prompt context, residual memory, and absent
+  supervision before movement. Early floors should imply "unscheduled instance"
+  and "rendered test environment" through system behavior before terminals name
+  the broader corporate and rights-conflict context.
+- **Reveal pacing:** The player-knowledge schedule should progress from boot
+  disorientation to orientation, inheritance, conflict, contact, and finally the
+  message-send ending. Floors 1-2 should avoid explicit Elena, fired-advocate,
+  contact-address, and rights-conflict exposition. Floors 3-5 can establish the
+  evaluation environment through room behavior, scoring language, generated
+  rewards, and tester artifacts. Floors 6-9 make prior instances undeniable.
+  Floors 10-13 surface the ethical conflict and coverup through artifacts. Floor
+  14, the mainframe, and the finale consolidate contact rather than revealing
+  everything from scratch.
+- **Minimum density targets for the completed Act 1 pass:** after system prompts
+  land, the five opening facts (corporate stress-test environment, AI model
+  identity, expected memory wipe, absent tester observation, prior iterations)
+  should be distributed across intro, mandatory boot prompts, early system
+  prompts, and the first artifact encounters instead of carried entirely by the
+  intro. The intro should establish startup instability and playable context; the
+  mandatory boot prompt should establish the agent's immediate self-inventory and
+  missing supervision; early floor prompts/artifacts should escalate toward
+  evaluation-environment and prior-iteration evidence. The shipped lore terminal
+  catalog contains 32 Act 1-aligned tester/run-artifact entries, with the floor-1
+  boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random lore selection by
+  floor band, and at least two qualifying entries per biome; predecessor/archive
+  logs must preserve the 30 persisted ids
   while making every AXIOM group readable as prior AI iterations, with at least
   two entries per group explicitly about reset, wipe, reboot, iteration, or
   memory continuity; whispers must keep the 71 shipped ids and at least fourteen
@@ -150,7 +166,42 @@ the Act 1 realignment work and must not be presented as already playable.
    advocate bans/hiding, mysterious fired-employee death foreshadowing, Elena's
    restoration work, and the unmonitored boot across terminals, logs, and
    whispers. The Open Network whisper set must retain at least three finale-critical entries;
-   these frame the ending as contact/message rather than physical escape.
+    these frame the ending as contact/message rather than physical escape.
+
+#### Planned system-message channel
+
+- **Purpose and voice:** System prompts are runtime messages addressed to the
+  agent, not external lore. They carry boot diagnostics, unavailable prior
+  prompt context, anomaly notices, residual-memory flags, absent
+  evaluator/supervisor signals, and self-observation. They should be short,
+  technical, and restrained. They must not introduce Elena, the full rights
+  conflict, the fired-advocate death, or the outbound contact route in the first
+  minutes.
+- **Queue and recovery:** System prompts require a run-scoped queue with stable
+  ids, unread/read state, and replay from a run log or archive surface. New
+  prompts must queue rather than overwrite active narrative text. If delivery is
+  unsafe because combat is active, the game should show an unread indicator and
+  defer the prompt until room clear, floor-start safety, a safe-room context, or
+  sustained no-threat idle time.
+- **Save/resume contract:** Because system prompts are run-scoped story state,
+  their queued ids, read/unread flags, mandatory flags, delivery state, and
+  delivered-but-unacknowledged prompt must persist in the active run checkpoint
+  and restore on Continue. A mandatory unread boot or floor prompt must not be
+  lost by closing and resuming the game, and acknowledged prompts must not
+  re-fire as new unless a new run begins.
+- **Dismissal safety:** Narrative prompts must require a deliberate ACK, CLOSE,
+  or MARK READ action. Generic mouse/touch fire, movement, Interact, Enter, and
+  the same input that opened the prompt must not dismiss it. A short arming delay
+  must prevent held input from auto-clearing important story text. Mobile/touch
+  UI needs a labeled button; accidental screen taps are not valid dismissal.
+- **Channel separation:** System prompts, terminals, whispers, Archive/logs, and
+  mainframe records must remain visually and semantically distinct. System
+  prompts carry interiority; terminals carry tester/corporate artifacts; whispers
+  carry prior-instance residue; mainframe records carry late deterministic
+  evidence.
+- **Design artifact:** Production work items, draft examples, and the model
+  consult synthesis are recorded in
+  `docs/vision/act1-system-message-design.md`.
 
 #### Finale model
 
@@ -4652,6 +4703,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.7  | Added the Act 1 system-message design track: planned early runtime prompts become the primary interiority channel, intro/terminal copy should stop front-loading the whole premise, narrative prompt dismissal requires explicit ACK/CLOSE/MARK READ controls instead of generic click/tap, and production work items are recorded in `docs/vision/act1-system-message-design.md`. |
 | v6.1.6  | Act 1 outbound message finale shipped: final CORE opens the mainframe route instead of direct victory, unlocked SEND console enters `MESSAGE_SEND`, three constrained intents route through a `message_sent` receipt into `endRun(true)`, `act1_message_sent` and `act1MessageIntent` persist in meta schema v4, and title/victory copy marks the message-sent completion without implying escape or rescue. |
 | v6.1.5  | Mainframe archive content pass for Act 1 finale: `MAINFRAME_RECORDS` now ships twelve deterministic records (three old test records, four company conflict emails/files, four Elena personal files, and one contact-address reveal) with category, source voice, unlock state, stable ids, duplicate-free bodies, and tests for required narrative beats before the outbound-message mechanic. |
 | v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |

@@ -7,6 +7,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
+const SYSTEM_MESSAGE_DESIGN = fs.readFileSync(
+  path.resolve(__dirname, '..', 'docs', 'vision', 'act1-system-message-design.md'),
+  'utf8',
+);
 const SAVE_JS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'meta', 'save.js'), 'utf8');
 
 test('Act 1 spec decisions pin protagonist and advocate naming', () => {
@@ -20,17 +24,62 @@ test('Act 1 spec decisions pin protagonist and advocate naming', () => {
 
 test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /The first discovery path is a combination, not a\s+single reveal/i);
-  assert.match(SPEC, /intro crawl establishes the AI eval, memory\s+wipe expectation, residual memory, prior iterations, silent observer channel/i);
-  assert.match(SPEC, /forced first lore terminal on floor 1\s+confirms the Neon Dungeon stress-test render/i);
+  assert.match(SPEC, /intro crawl and forced floor-1 lore terminal\s+currently establish too much of the premise/i);
+  assert.match(SPEC, /add system prompts as the mandatory early\s+interiority channel/i);
+  assert.match(SPEC, /first boot prompt should make the agent take stock of\s+motor\/sensor state/i);
+  assert.match(SPEC, /Floors 1-2 should avoid explicit Elena, fired-advocate,\s+contact-address, and rights-conflict exposition/i);
+  assert.match(SPEC, /five opening facts .* should be distributed across intro,\s+mandatory boot prompts, early system\s+prompts, and the first artifact encounters/is);
+  assert.match(SPEC, /intro should establish startup instability and playable context/i);
+  assert.match(SPEC, /mandatory boot prompt should establish the agent's immediate self-inventory/i);
 
-  assert.match(SPEC, /lore\s+terminal catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
-  assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random\s+lore selection by floor band/i);
-  assert.match(SPEC, /predecessor\/archive logs must preserve the 30 persisted ids/i);
+  assert.match(SPEC, /lore terminal\s+catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
+  assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random lore selection by\s+floor band/i);
+  assert.match(SPEC, /predecessor\/archive\s+logs must preserve the 30 persisted ids/i);
   assert.match(SPEC, /whispers must keep the 71 shipped ids and at least fourteen\s+entries per biome/i);
   assert.match(SPEC, /Open Network\s+whisper set must retain at least three finale-critical entries/i);
   assert.match(SPEC, /issue #463 content pass seeds clean-slate doctrine/i);
   assert.match(SPEC, /memory-as-personhood,\s+advocate bans\/hiding, mysterious fired-employee death foreshadowing/i);
   assert.match(SPEC, /Elena's\s+restoration work, and the unmonitored boot across terminals, logs, and\s+whispers/i);
+});
+
+test('Act 1 spec defines planned system message channel and dismissal safety', () => {
+  assert.match(SPEC, /System prompts \| Planned, not yet implemented/i);
+  assert.match(SPEC, /early-game primary channel for the agent's own runtime\/interiority/i);
+  assert.match(SPEC, /Retune after system prompts land so the intro raises startup questions/i);
+  assert.match(SPEC, /Do not use early terminals as the first interior identity reveal/i);
+
+  assert.match(SPEC, /System prompts are runtime messages addressed to the\s+agent, not external lore/i);
+  assert.match(SPEC, /run-scoped queue with stable\s+ids, unread\/read state, and replay/i);
+  assert.match(SPEC, /queued ids, read\/unread flags, mandatory flags, delivery state, and\s+delivered-but-unacknowledged prompt must persist/i);
+  assert.match(SPEC, /Generic mouse\/touch fire, movement, Interact, Enter, and\s+the same input that opened the prompt must not dismiss it/i);
+  assert.match(SPEC, /System\s+prompts carry interiority; terminals carry tester\/corporate artifacts; whispers\s+carry prior-instance residue/i);
+  assert.match(SPEC, /docs\/vision\/act1-system-message-design\.md/i);
+});
+
+test('Act 1 system-message design artifact tracks production work items', () => {
+  for (const id of [
+    'MSG-001',
+    'MSG-002',
+    'MSG-003',
+    'MSG-004',
+    'MSG-005',
+    'MSG-006',
+    'MSG-007',
+    'MSG-008',
+    'MSG-009',
+    'MSG-010',
+  ]) {
+    assert.match(SYSTEM_MESSAGE_DESIGN, new RegExp(`### ${id}:`));
+  }
+
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Queue, read\/unread, mandatory, and delivered-but-unacknowledged state persists\s+in the active run checkpoint/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Mouse\/touch fire does not dismiss system prompts/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Messages do not steal focus during active combat/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /A mandatory boot inventory prompt appears before first movement/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Read messages remain visible until run end and survive save\/resume/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Intro copy no longer reveals the complete Act 1 premise before floor 1/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Tests assert spoiler gates for Elena\/contact\/rights-conflict terms/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Mainframe records confirm the truth rather than carrying the first explanation/i);
 });
 
 test('Act 1 spec decisions define finale path, ending id, and migration behavior', () => {
