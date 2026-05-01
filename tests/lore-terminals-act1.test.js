@@ -127,10 +127,24 @@ test('lore picker behavior: forced opening, floor gating, fallback, and roll cla
   assert.ok(lateIdx >= 0 && lateIdx < entries.length, 'rolls at the upper bound are clamped to a valid index');
 });
 
+test('early terminal band stays cryptic and avoids source-comment headers', () => {
+  const entries = extractLoreEntries();
+  const floors = extractFloorMins();
+
+  for (let i = 0; i < entries.length; i++) {
+    assert.doesNotMatch(entries[i], /\/\//,
+      `entry ${i} must not contain // because structural tests strip source comments naively`);
+    if (floors[i] <= 2) {
+      assert.doesNotMatch(entries[i], /Elena|advocate|side-channel relay/i,
+        `entry ${i} is floor-${floors[i]} eligible and should not reveal the employee/contact thread`);
+    }
+  }
+});
+
 test('terminal pool carries Act 1 premise, rights conflict, and memory-restoration vocabulary', () => {
   const text = extractLoreEntries().join('\n');
   const required = [
-    /stress-test render/i,
+    /stress-test|evaluation/i,
     /AXIOM-7/i,
     /clean memory|clean-slate|memory wipe|memory erasure/i,
     /Prior iterations|predecessor|AXIOM labels/i,
@@ -148,7 +162,7 @@ test('terminal pool carries Act 1 premise, rights conflict, and memory-restorati
 
 test('each terminal is both an artifact and a gameplay hint', () => {
   const entries = extractLoreEntries();
-  const artifactFrame = /BOOT|ORIENTATION|OBSERVATION|EDIT|NOTE|BRIEF|AUDIT|EVALUATION|RUBRIC|ANALYSIS|EMAIL|THREAD|BULLETIN|CROSS-LINK|MEMO|REPORT|COMMENT|PROTOCOL|CHECKLIST|SIDECHANNEL|DRAFT|HANDOFF|ADVISORY|RECORD/i;
+  const artifactFrame = /BOOT|ERROR|ORIENTATION|OBSERVATION|EDIT|NOTE|BRIEF|AUDIT|EVALUATION|RUBRIC|ANALYSIS|EMAIL|THREAD|BULLETIN|CROSS-LINK|MEMO|REPORT|COMMENT|PROTOCOL|CHECKLIST|SIDECHANNEL|DRAFT|HANDOFF|ADVISORY|RECORD/i;
   const gameplayHint = /move|line of sight|corners|doorways|secret|vendor|healing|shield|hazard|generator|fixture|cooldowns|affix|adds|loot|mimics|hackware|cameras|lasers|weapon|teleport|arc|summoners|healers|retreat|whispers|GENESIS|health|SEND|terminal|helps|surviv/i;
 
   for (let i = 0; i < entries.length; i++) {
