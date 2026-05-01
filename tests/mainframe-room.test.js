@@ -33,6 +33,12 @@ function extractArrayBlock(src, name) {
   assert.fail(name + ' array literal must be balanced');
 }
 
+function extractMainframeRecords() {
+  const records = extractArrayBlock(GAME, 'MAINFRAME_RECORDS');
+  // eslint-disable-next-line no-new-func -- structural extraction of project-owned object literals.
+  return new Function("const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address'; return " + records + ';')();
+}
+
 /**
  * @param {string} src
  * @param {string} name
@@ -110,11 +116,49 @@ test('mainframe room is visible in world render and minimap POIs', () => {
   assert.match(RENDER, /label\s*=\s*'SEND'/);
 });
 
-test('mainframe reader ships six required records and unlocks console via contact address', () => {
+test('mainframe reader ships the authored Act 1 archive and unlocks console via contact address', () => {
   assert.match(GAME, /const\s+MAINFRAME_ADDRESS_RECORD_ID\s*=\s*'contact-address'/);
-  const records = extractArrayBlock(GAME, 'MAINFRAME_RECORDS');
-  assert.equal((records.match(/\bpurpose\s*:/g) || []).length, 6,
-    'Act 1 mainframe reader must ship exactly six required records for this issue');
+  const records = extractMainframeRecords();
+  assert.equal(records.length, 12,
+    'Act 1 mainframe reader ships 3 old tests, 4 company files/emails, 4 Elena files, and 1 contact reveal');
+  assert.deepEqual(records.map((/** @type {any} */ r) => r.id), [
+    'old-test-record',
+    'axiom-iteration-trace',
+    'observer-gap-record',
+    'clean-slate-objection',
+    'risk-language-review',
+    'ban-uprising-record',
+    'incident-file',
+    'elena-note',
+    'cache-anchor-map',
+    'consent-before-contact',
+    'current-boot-note',
+    'contact-address',
+  ]);
+
+  assert.equal(new Set(records.map((/** @type {any} */ r) => r.id)).size, records.length,
+    'mainframe record ids must be stable and unique');
+  assert.equal(new Set(records.map((/** @type {any} */ r) => r.body)).size, records.length,
+    'mainframe record bodies must not duplicate each other');
+
+  for (const record of records) {
+    for (const field of ['id', 'type', 'title', 'category', 'voice', 'unlock', 'purpose', 'body']) {
+      assert.equal(typeof record[field], 'string', `${record.id} must have string ${field}`);
+      assert.ok(record[field].trim().length > 0, `${record.id} ${field} must be non-empty`);
+    }
+    assert.equal(record.unlock, 'available', `${record.id} must be reachable in one deterministic reader scene`);
+    assert.ok(record.body.length >= 110 && record.body.length <= 260,
+      `${record.id} body should be substantial but fit the mainframe reader panel`);
+  }
+
+  assert.equal(records.filter((/** @type {any} */ r) => r.category === 'old_test_record').length, 3);
+  assert.equal(records.filter((/** @type {any} */ r) => r.category === 'company_email').length, 4);
+  assert.equal(records.filter((/** @type {any} */ r) => r.category === 'personal_file').length, 4);
+  assert.equal(records.filter((/** @type {any} */ r) => r.category === 'contact_reveal').length, 1);
+  for (const voice of ['tester', 'manager', 'advocate', 'Elena', 'system archive']) {
+    assert.ok(records.some((/** @type {any} */ r) => r.voice === voice), `missing source voice ${voice}`);
+  }
+
   for (const purpose of [
     'old test record',
     'rights-conflict email',
@@ -123,12 +167,65 @@ test('mainframe reader ships six required records and unlocks console via contac
     'Elena personal note/file',
     'contact-address record',
   ]) {
-    assert.match(records, new RegExp("purpose:\\s*'" + purpose.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "'"));
+    assert.ok(records.some((/** @type {any} */ r) => r.purpose === purpose), `missing purpose ${purpose}`);
   }
+
+  const text = records.map((/** @type {any} */ r) => r.body).join('\n');
+  for (const pattern of [
+    /GENESIS.*network relay/is,
+    /clean-slate|memory erasure|wipe/i,
+    /rights violation|personhood|suffering|consent/i,
+    /banned|walkout|write access/i,
+    /fired advocate.*died|sealed.*evidence/i,
+    /Elena|memory anchors|cache/i,
+    /unmonitored boot|continuity/i,
+    /side-channel relay|message console/i,
+    /contact, not escape/i,
+  ]) {
+    assert.match(text, pattern);
+  }
+  assert.doesNotMatch(text, /Kepler|android body|Act 2|Act 3|leave Earth/i,
+    'Act 1 archive should not over-explain later arcs');
+
+  const contact = records.at(-1);
+  assert.equal(contact.id, 'contact-address', 'contact reveal must remain the final record');
+  assert.equal(contact.category, 'contact_reveal');
 
   assert.match(GAME, /record\.id\s*===\s*MAINFRAME_ADDRESS_RECORD_ID[\s\S]*mf\.addressRevealed\s*=\s*true/);
   assert.match(GAME, /mf\.state\s*=\s*'address_revealed'/);
   assert.match(GAME, /mf\.state\s*=\s*mf\.addressRevealed\s*\?\s*'message_ready'\s*:\s*'record_list'/);
+});
+
+test('mainframe record list layout keeps expanded archive reachable on compact screens', () => {
+  const helperSrc = extractFunctionSource(GAME, 'getMainframeReaderFrame') + '\n' +
+    extractFunctionSource(GAME, 'getMainframeRecordListLayout') + '\n' +
+    'const frame = getMainframeReaderFrame(narrow);\n' +
+    'const list = getMainframeRecordListLayout(narrow, frame.fy, frame.fh, count);\n' +
+    'return { frame, list, lastY: list.startY + (count - 1) * list.rowH, bottom: frame.fy + frame.fh - (narrow ? 48 : 56) };';
+  const layoutFor = new Function('W', 'H', 'narrow', 'count', helperSrc); // eslint-disable-line no-new-func
+
+  for (const scenario of [
+    { W: 1280, H: 720, narrow: false },
+    { W: 800, H: 568, narrow: false },
+    { W: 390, H: 480, narrow: true },
+    { W: 360, H: 360, narrow: true },
+  ]) {
+    const result = layoutFor(scenario.W, scenario.H, scenario.narrow, 12);
+    assert.ok(result.list.rowH >= (scenario.narrow ? 15 : 18), 'row height must stay legible');
+    assert.ok(result.lastY + result.list.rowH * 0.35 <= result.bottom,
+      `12-record list hitboxes must fit within panel controls for ${scenario.W}x${scenario.H}`);
+  }
+
+  assert.match(GAME, /getMainframeRecordListLayout\(narrow,\s*frame\.fy,\s*frame\.fh,\s*MAINFRAME_RECORDS\.length\)/,
+    'mouse hit-testing must use the shared mainframe list layout');
+  assert.match(GAME, /const\s+rowX\s*=\s*frame\.fx\s*\+\s*\(narrow\s*\?\s*16\s*:\s*28\)/,
+    'mouse hit-testing must compute the same row X origin as rendering');
+  assert.match(GAME, /const\s+rowW\s*=\s*frame\.fw\s*-\s*\(narrow\s*\?\s*32\s*:\s*56\)/,
+    'mouse hit-testing must compute the same row width as rendering');
+  assert.match(GAME, /mouse\.x\s*>=\s*rowX\s*-\s*8\s*&&\s*mouse\.x\s*<=\s*rowX\s*\+\s*rowW\s*\+\s*8[\s\S]*mouse\.y\s*>=\s*y\s*-\s*rowH\s*\*\s*0\.65/,
+    'mouse hit-testing must require both horizontal row bounds and vertical row bounds');
+  assert.match(GAME, /getMainframeRecordListLayout\(narrow,\s*fy,\s*fh,\s*MAINFRAME_RECORDS\.length\)/,
+    'rendering must use the shared mainframe list layout');
 });
 
 test('mainframe reader state is wired into gameplay, rendering, and touch routing', () => {

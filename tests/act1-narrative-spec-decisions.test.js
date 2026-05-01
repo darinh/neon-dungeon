@@ -50,7 +50,9 @@ test('Act 1 finale spec defines mainframe room, records, agency, and persistence
   assert.match(SPEC, /Combat is disabled in\s+this room: no enemy spawns, no hazards, no reinforcement timers/i);
   assert.match(SPEC, /agent remains compute-bound\s+inside the Neon Dungeon test environment/i);
 
-  assert.match(SPEC, /must ship at least six\s+required records/i);
+  assert.match(SPEC, /ships twelve deterministic records/i);
+  assert.match(SPEC, /three old test records, four company conflict emails\/files,\s+four Elena\s+personal notes\/files, and one final contact-address reveal/i);
+  assert.match(SPEC, /stable id, title, type, category, source voice, unlock state, body, and\s+narrative purpose/i);
   assert.match(SPEC, /Old test record \| Confirms GENESIS guarded a network relay \/ mainframe route/i);
   assert.match(SPEC, /Rights-conflict email \| Shows management defending clean-slate wipes/i);
   assert.match(SPEC, /Ban\/uprising record \| Names the staff bans\/firings/i);

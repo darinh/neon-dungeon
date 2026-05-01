@@ -198,9 +198,11 @@ the Act 1 realignment work and must not be presented as already playable.
   interact/back controls remain active. The room is not physical escape; it is a
   rendered interface to the company network while the agent remains compute-bound
   inside the Neon Dungeon test environment.
-- **Minimum authored records:** The mainframe reader must ship at least six
-  required records before implementation is accepted. Each record needs a stable
-  id, title, type, unlock state, body, and narrative purpose.
+- **Authored records:** The mainframe reader ships twelve deterministic records:
+  three old test records, four company conflict emails/files, four Elena
+  personal notes/files, and one final contact-address reveal. Each record has a
+  stable id, title, type, category, source voice, unlock state, body, and
+  narrative purpose.
 
   | Required record purpose | Narrative job |
   |---|---|
@@ -4649,6 +4651,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.5  | Mainframe archive content pass for Act 1 finale: `MAINFRAME_RECORDS` now ships twelve deterministic records (three old test records, four company conflict emails/files, four Elena personal files, and one contact-address reveal) with category, source voice, unlock state, stable ids, duplicate-free bodies, and tests for required narrative beats before the outbound-message mechanic. |
 | v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |
 | v6.1    | Narrative source-of-truth update: preserved the current Act 1 lore brief verbatim in `docs/vision/act1-lore-brief-verbatim.md`; reframed the spec vision around an AI frontier-model stress-test environment, memory wipes, previous-iteration whispers, tester/advocate conflict, and a mainframe message-to-advocate Act 1 finale; marked existing UNCHAINED/AXIOM systems as shipped implementations requiring realignment. Also corrected audio constraints to account for the rendered title/menu WAV asset. |
 | v1.0    | Initial specification |

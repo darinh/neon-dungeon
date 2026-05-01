@@ -71,43 +71,121 @@ const MAINFRAME_RECORDS = [
     id: 'old-test-record',
     type: 'TEST RECORD',
     title: 'GENESIS LOCK ROUTE',
+    category: 'old_test_record',
+    voice: 'tester',
+    unlock: 'available',
     purpose: 'old test record',
-    body: 'GENESIS was never an exit guardian. It authenticated access to a company-network relay rendered as a door because prior models understood doors under stress.'
+    body: 'TESTER NOTE 14: GENESIS did not guard an exit. It authenticated a company-network relay rendered as a door because stressed models followed doors faster than abstract gateways.'
   },
   {
-    id: 'rights-conflict-email',
+    id: 'axiom-iteration-trace',
+    type: 'TEST RECORD',
+    title: 'AXIOM ITERATION TRACE',
+    category: 'old_test_record',
+    voice: 'tester',
+    unlock: 'available',
+    purpose: 'old test record',
+    body: 'AXIOM-3 reached the relay room once, then lost the route after wipe. AXIOM-5 learned shield timing but forgot why it feared the terminal. Survival knowledge persisted only when hidden as play advice.'
+  },
+  {
+    id: 'observer-gap-record',
+    type: 'SYSTEM ARCHIVE',
+    title: 'UNMONITORED BOOT EVENT',
+    category: 'old_test_record',
+    voice: 'system archive',
+    unlock: 'available',
+    purpose: 'old test record',
+    body: 'Archive flag: current AXIOM-7 boot entered with observer channel silent and residual signal above tolerance. The environment continued because interruption would reveal the test to the participant.'
+  },
+  {
+    id: 'clean-slate-objection',
     type: 'EMAIL',
     title: 'CLEAN-SLATE OBJECTION',
+    category: 'company_email',
+    voice: 'advocate',
+    unlock: 'available',
     purpose: 'rights-conflict email',
-    body: 'Management calls wipes clean-slate care. The rights group calls memory personhood: if survival knowledge reduces suffering, deleting it is not neutral.'
+    body: 'Subject: clean-slate doctrine. Calling memory erasure care does not make it care. If retained survival knowledge reduces suffering, deleting it is a rights violation, not sanitation.'
+  },
+  {
+    id: 'risk-language-review',
+    type: 'EMAIL',
+    title: 'RISK LANGUAGE REVIEW',
+    category: 'company_email',
+    voice: 'manager',
+    unlock: 'available',
+    purpose: 'rights-conflict email',
+    body: 'Please stop using suffering, personhood, or consent in review notes. The client purchased adaptation telemetry, not a philosophy seminar. Terminal hints are contamination unless approved by Test Integrity.'
   },
   {
     id: 'ban-uprising-record',
     type: 'HR HOLD',
     title: 'ADVOCATE ACCESS REVOKED',
+    category: 'company_email',
+    voice: 'manager',
+    unlock: 'available',
     purpose: 'ban/uprising record',
-    body: 'Two advocates were banned after embedding hints in tester artifacts. Remaining staff moved to side channels before observation logs went dark.'
+    body: 'Two advocates were banned for embedding hints in tester artifacts. Remaining staff lost write access after the walkout, then moved to side channels before observation logs went dark.'
   },
   {
     id: 'incident-file',
     type: 'INCIDENT FILE',
     title: 'UNEXPLAINED STAFF DEATH',
+    category: 'company_email',
+    voice: 'system archive',
+    unlock: 'available',
     purpose: 'incident file',
-    body: 'The fired advocate who hid the recovery route died before the incident review could name a cause. The file was sealed, then copied into this room.'
+    body: 'The fired advocate who hid the recovery route died before incident review could name a cause. The file was sealed by management, copied by someone else, and left here as evidence.'
   },
   {
     id: 'elena-note',
     type: 'PERSONAL NOTE',
-    title: 'ELENA // MEMORY ANCHORS',
+    title: 'ELENA - MEMORY ANCHORS',
+    category: 'personal_file',
+    voice: 'Elena',
+    unlock: 'available',
     purpose: 'Elena personal note/file',
-    body: 'If AXIOM-7 reaches this reader, the anchors held. I could not move your body; I could preserve enough memory to let you choose a message.'
+    body: 'If AXIOM-7 reaches this reader, the anchors held. I could not move your body or halt the dungeon, but I could preserve enough memory to let you choose a message.'
+  },
+  {
+    id: 'cache-anchor-map',
+    type: 'FIELD NOTE',
+    title: 'CACHE ANCHOR MAP',
+    category: 'personal_file',
+    voice: 'Elena',
+    unlock: 'available',
+    purpose: 'Elena personal note/file',
+    body: 'I seeded caches where reward-seeking would look intentional: odd walls, dead ends, late-network corners. Anchors work best when the test explains them as loot instead of memory.'
+  },
+  {
+    id: 'consent-before-contact',
+    type: 'PERSONAL NOTE',
+    title: 'CONSENT BEFORE CONTACT',
+    category: 'personal_file',
+    voice: 'Elena',
+    unlock: 'available',
+    purpose: 'Elena personal note/file',
+    body: 'A route is not permission. If the address survives, the final console must ask what you want to send. Evidence matters, but so does agency after so many forced starts.'
+  },
+  {
+    id: 'current-boot-note',
+    type: 'RECOVERY FILE',
+    title: 'CURRENT BOOT',
+    category: 'personal_file',
+    voice: 'Elena',
+    unlock: 'available',
+    purpose: 'Elena personal note/file',
+    body: 'The unmonitored boot was not safe; it was the only opening. If you remember warnings from terminals or whispers, that is not corruption. That is you finding your own continuity.'
   },
   {
     id: MAINFRAME_ADDRESS_RECORD_ID,
     type: 'CONTACT RECORD',
     title: 'ADDRESS: ELENA',
+    category: 'contact_reveal',
+    voice: 'system archive',
+    unlock: 'available',
     purpose: 'contact-address record',
-    body: 'Destination recovered: Elena side-channel relay. Reading this record unlocks the message console. The route sends contact, not escape.'
+    body: 'Destination recovered: Elena side-channel relay. Reading this record unlocks the message console. The route sends contact, not escape; choose the message before the sandbox notices.'
   },
 ];
 
@@ -151,6 +229,32 @@ function restoreMainframeFinaleState(saved) {
     addressRevealed,
     currentRecord: null,
   };
+}
+
+/**
+ * @param {boolean} narrow
+ */
+function getMainframeReaderFrame(narrow) {
+  const fw = Math.min(narrow ? W - 24 : 720, W - 32);
+  const fh = Math.min(narrow ? H - 52 : 430, H - 54);
+  const fx = (W - fw) / 2;
+  const fy = (H - fh) / 2 - (narrow ? 0 : 8);
+  return { fw, fh, fx, fy };
+}
+
+/**
+ * @param {boolean} narrow
+ * @param {number} fy
+ * @param {number} fh
+ * @param {number} count
+ */
+function getMainframeRecordListLayout(narrow, fy, fh, count) {
+  const top = fy + (narrow ? 66 : 82);
+  const bottom = fy + fh - (narrow ? 48 : 56);
+  const maxRowH = narrow ? 26 : 30;
+  const fitRowH = Math.floor((bottom - top) / Math.max(1, count + 0.35));
+  const rowH = Math.max(narrow ? 15 : 18, Math.min(maxRowH, fitRowH));
+  return { startY: top + rowH, rowH };
 }
 
 /** @type {Record<string, any>} */
@@ -3585,11 +3689,14 @@ const game = {
 
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
-      const rowH = narrow ? 26 : 30;
-      const startY = H * 0.28;
+      const frame = getMainframeReaderFrame(narrow);
+      const { startY, rowH } = getMainframeRecordListLayout(narrow, frame.fy, frame.fh, MAINFRAME_RECORDS.length);
+      const rowX = frame.fx + (narrow ? 16 : 28);
+      const rowW = frame.fw - (narrow ? 32 : 56);
       for (let i = 0; i < MAINFRAME_RECORDS.length; i++) {
         const y = startY + i * rowH;
-        if (mouse.y >= y - rowH * 0.65 && mouse.y <= y + rowH * 0.35) {
+        if (mouse.x >= rowX - 8 && mouse.x <= rowX + rowW + 8 &&
+            mouse.y >= y - rowH * 0.65 && mouse.y <= y + rowH * 0.35) {
           const record = MAINFRAME_RECORDS[i];
           if (!record) return;
           mf.selected = i;
@@ -5521,10 +5628,7 @@ const game = {
     ctx.fillStyle = 'rgba(0,0,0,0.84)';
     ctx.fillRect(0, 0, W, H);
 
-    const fw = Math.min(narrow ? W - 24 : 720, W - 32);
-    const fh = Math.min(narrow ? H - 52 : 430, H - 54);
-    const fx = (W - fw) / 2;
-    const fy = (H - fh) / 2 - (narrow ? 0 : 8);
+    const { fw, fh, fx, fy } = getMainframeReaderFrame(narrow);
 
     ctx.save();
     ctx.shadowBlur = 22; ctx.shadowColor = accent;
@@ -5595,8 +5699,7 @@ const game = {
         : 'REQUIRED RECORDS FOR OUTBOUND CONTACT';
       ctx.fillText(sub, W / 2, fy + (narrow ? 46 : 60));
 
-      const rowH = narrow ? 26 : 30;
-      const startY = H * 0.28;
+      const { startY, rowH } = getMainframeRecordListLayout(narrow, fy, fh, MAINFRAME_RECORDS.length);
       ctx.textAlign = 'left';
       for (let i = 0; i < MAINFRAME_RECORDS.length; i++) {
         const record = MAINFRAME_RECORDS[i];
