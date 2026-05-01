@@ -111,6 +111,45 @@ test('archive terminal keeps AXIOM grouping and unread marker', () => {
   });
 });
 
+test('archive terminal recovers acknowledged current-run system prompts', () => {
+  withArchiveGlobals({ logsFound: [], logsRead: [] }, () => {
+    const archive = hub.buildTerminals()[3];
+    const g = fakeGame(2);
+    g.systemMessages = {
+      entries: [
+        {
+          id: 'boot-inventory',
+          event: 'run_start',
+          state: 'read',
+          sequence: 0,
+          lines: ['[ instance online ]', 'inventory yourself before you move.'],
+        },
+        {
+          id: 'floor-3-reward-model',
+          event: 'floor_start',
+          state: 'queued',
+          sequence: 1,
+          lines: ['combat sample accepted.'],
+        },
+      ],
+    };
+    archive.onOpen(g);
+    const ctx = makeTextCtx();
+    archive.draw(ctx, 0, 0, 360, 240);
+    assert.ok(ctx.calls.includes('SYSTEM PROMPTS: 1'));
+    assert.ok(ctx.calls.includes('SYSTEM'));
+    assert.ok(ctx.calls.includes('boot-inventory'));
+    assert.ok(!ctx.calls.includes('floor-3-reward-model'),
+      'queued/unacknowledged prompts must not be spoiled in the archive');
+
+    archive.onTap(20, 78, { x: 0, y: 0, w: 360, h: 240 }, g);
+    const readCtx = makeTextCtx();
+    archive.draw(readCtx, 0, 0, 360, 240);
+    assert.ok(readCtx.calls.includes('SYSTEM · run_start'));
+    assert.ok(readCtx.calls.some((line) => line.includes('inventory yourself')));
+  });
+});
+
 test('updateHub advances selector with ArrowRight via injected input', () => {
   const g = fakeGame(1);
   hub.enterHub(g);

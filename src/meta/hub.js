@@ -232,16 +232,18 @@
     _sel: 0,
     _scroll: 0,
     _reading: null, // log being read (body view)
+    _game: /** @type {any} */ (null),
     _t: 0,
-    onOpen() { this._sel = 0; this._scroll = 0; this._reading = null; this._t = 0; },
-    onClose() { this._reading = null; },
+    /** @param {any} game */
+    onOpen(game) { this._sel = 0; this._scroll = 0; this._reading = null; this._game = game || null; this._t = 0; },
+    onClose() { this._reading = null; this._game = null; },
     _getFoundList() {
       // Returns mixed list: AXIOM iteration records first (grouped by lineage), then
-      // WHISPERS (the secret-room subplot — see src/data/whispers.js). Each
-      // entry is discriminated by `kind` so the row render + reading pane
-      // can switch on it. Only FOUND entries are included so unfound ones
-      // aren't spoiled.
-      /** @type {Array<{kind:'log',axiom:any,log:any,read:boolean}|{kind:'whisper',whisper:any,read:boolean}>} */
+      // WHISPERS (the secret-room subplot — see src/data/whispers.js), then
+      // acknowledged current-run system prompts. Each entry is discriminated by
+      // `kind` so the row render + reading pane can switch on it. Only FOUND or
+      // READ entries are included so unfired ones aren't spoiled.
+      /** @type {Array<{kind:'log',axiom:any,log:any,read:boolean}|{kind:'whisper',whisper:any,read:boolean}|{kind:'system',message:any,read:boolean}>} */
       const out = [];
       try {
         const meta = NEON.save.loadMeta();
@@ -271,6 +273,17 @@
           }
         }
       } catch (_) { /* ignore */ }
+      try {
+        const game = /** @type {any} */ (this._game);
+        const state = game && typeof game.ensureSystemMessages === 'function'
+          ? game.ensureSystemMessages()
+          : game && game.systemMessages;
+        const entries = state && Array.isArray(state.entries) ? state.entries.slice() : [];
+        entries.sort((/** @type {any} */ a, /** @type {any} */ b) => (a.sequence || 0) - (b.sequence || 0));
+        for (const message of entries) {
+          if (message && message.state === 'read') out.push({ kind: 'system', message, read: true });
+        }
+      } catch (_) { /* ignore */ }
       return out;
     },
     /** @param {number} dt */
@@ -298,7 +311,7 @@
           try {
             if (entry.kind === 'whisper' && NEON && NEON.whispers) {
               NEON.whispers.readWhisper(entry.whisper.id);
-            } else if (entry.log) {
+            } else if (entry.kind === 'log' && entry.log) {
               NEON.logs.readLog(entry.log.id);
             }
           } catch (_) {}
@@ -323,7 +336,8 @@
       }
       const list = this._getFoundList();
       if (list.length === 0) return;
-      const headerH = 72, footerH = 24, rowH = 18;  // headerH matches _drawList
+      const hasSystem = list.some((entry) => entry.kind === 'system');
+      const headerH = hasSystem ? 84 : 72, footerH = 24, rowH = 18;  // headerH matches _drawList
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));
       // _drawList paints each row's hilite at (x+8, ry-12, w-16, rowH-2)
@@ -339,7 +353,7 @@
         try {
           if (entry.kind === 'whisper' && NEON && NEON.whispers) {
             NEON.whispers.readWhisper(entry.whisper.id);
-          } else if (entry.log) {
+          } else if (entry.kind === 'log' && entry.log) {
             NEON.logs.readLog(entry.log.id);
           }
         } catch (_) {}
@@ -382,6 +396,12 @@
         ctx.font = '10px monospace';
         ctx.fillText('WHISPERS: ' + wprog.read + '/' + wprog.total, x + w / 2, y + 58);
       }
+      const systemCount = this._getFoundList().filter((entry) => entry.kind === 'system').length;
+      if (systemCount > 0) {
+        ctx.fillStyle = '#00f5ff';
+        ctx.font = '10px monospace';
+        ctx.fillText('SYSTEM PROMPTS: ' + systemCount, x + w / 2, y + (wprog.total > 0 ? 70 : 58));
+      }
 
       // Body.
       if (this._reading) {
@@ -419,7 +439,8 @@
 
       // Scroll window.
       const rowH = 18;
-      const headerH = 72;  // 56 base + 16 for the WHISPERS counter line
+      const hasSystem = list.some((entry) => entry.kind === 'system');
+      const headerH = hasSystem ? 84 : 72;  // 56 base + counter lines
       const footerH = 24;
       const listH = h - headerH - footerH;
       const rowsVisible = Math.max(3, Math.floor(listH / rowH));
@@ -435,19 +456,22 @@
         const entry = /** @type {any} */ (list[i]);
         const sel = (i === this._sel);
         const isWhisper = entry.kind === 'whisper';
+        const isSystem = entry.kind === 'system';
         // Whisper rows use the violet accent matching the WhisperItem render
-        // and the WHISPERS counter line above. Logs keep the green accent.
-        const rowAccent = isWhisper ? '#cc99ee' : accent;
+        // and the WHISPERS counter line above. System rows use cyan; logs keep
+        // the green accent.
+        const rowAccent = isSystem ? '#00f5ff' : isWhisper ? '#cc99ee' : accent;
         if (sel) {
-          ctx.fillStyle = isWhisper ? 'rgba(204,153,238,0.14)' : 'rgba(57,255,20,0.12)';
+          ctx.fillStyle = isSystem ? 'rgba(0,245,255,0.13)' : isWhisper ? 'rgba(204,153,238,0.14)' : 'rgba(57,255,20,0.12)';
           ctx.fillRect(x + 8, ry - 12, w - 16, rowH - 2);
         }
-        // Prefix: 'AXIOM-N' for iteration records, 'WHISPER' for the secret-room subplot.
-        ctx.fillStyle = sel ? rowAccent : (isWhisper ? '#7755aa' : '#666688');
-        ctx.fillText(isWhisper ? 'WHISPER' : ('AXIOM-' + entry.axiom), x + 14, ry);
+        // Prefix: 'AXIOM-N' for iteration records, 'WHISPER' for secret-room residue,
+        // 'SYSTEM' for acknowledged current-run prompts.
+        ctx.fillStyle = sel ? rowAccent : (isSystem ? '#338899' : isWhisper ? '#7755aa' : '#666688');
+        ctx.fillText(isSystem ? 'SYSTEM' : isWhisper ? 'WHISPER' : ('AXIOM-' + entry.axiom), x + 14, ry);
         // Title.
-        const title = isWhisper ? entry.whisper.title : entry.log.title;
-        ctx.fillStyle = sel ? '#ffffff' : (entry.read ? '#9999bb' : (isWhisper ? '#e8d5ff' : '#e0e0ff'));
+        const title = isSystem ? entry.message.id : isWhisper ? entry.whisper.title : entry.log.title;
+        ctx.fillStyle = sel ? '#ffffff' : (entry.read ? '#9999bb' : (isSystem ? '#d8f8ff' : isWhisper ? '#e8d5ff' : '#e0e0ff'));
         ctx.fillText(title, x + 92, ry);
         // Unread marker — pulsing ● on right.
         if (!entry.read) {
@@ -472,24 +496,27 @@
     _drawReading(ctx, x, y, w, h) {
       const entry = /** @type {any} */ (this._reading);
       const isWhisper = entry && entry.kind === 'whisper';
-      const accent = isWhisper ? '#cc99ee' : this._accent;
+      const isSystem = entry && entry.kind === 'system';
+      const accent = isSystem ? '#00f5ff' : isWhisper ? '#cc99ee' : this._accent;
       ctx.textAlign = 'left';
-      ctx.fillStyle = isWhisper ? '#7755aa' : '#666688';
+      ctx.fillStyle = isSystem ? '#338899' : isWhisper ? '#7755aa' : '#666688';
       ctx.font = '11px monospace';
-      const prefix = isWhisper
+      const prefix = isSystem
+        ? ('SYSTEM · ' + (entry.message.event || 'run'))
+        : isWhisper
         ? ('WHISPER · ' + (entry.whisper.voice || 'unknown'))
         : ('AXIOM-' + entry.axiom + ' · PRIOR INSTANCE');
       ctx.fillText(prefix, x + 14, y + 64);
       ctx.fillStyle = accent;
       ctx.font = '14px monospace';
-      const title = isWhisper ? entry.whisper.title : entry.log.title;
+      const title = isSystem ? entry.message.id : isWhisper ? entry.whisper.title : entry.log.title;
       ctx.fillText(title, x + 14, y + 82);
 
       // Wrap body.
-      ctx.fillStyle = isWhisper ? '#e8d5ff' : '#c0c0e0';
+      ctx.fillStyle = isSystem ? '#d8f8ff' : isWhisper ? '#e8d5ff' : '#c0c0e0';
       ctx.font = '12px monospace';
       const maxW = w - 28;
-      const body = isWhisper ? entry.whisper.body : entry.log.body;
+      const body = isSystem ? (entry.message.lines || []).join(' ') : isWhisper ? entry.whisper.body : entry.log.body;
       const words = String(body || '').split(' ');
       let line = '';
       let yy = y + 108;
