@@ -2,8 +2,9 @@
 
 Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
-early-floor prompt schedule, and MSG-005 archive recovery are shipped; broader
-copy rewrite and finale integration remain pending.
+early-floor prompt schedule, MSG-005 archive recovery, and MSG-006 early
+terminal retune are shipped; intro retune, copy workflow, and finale integration
+remain pending.
 
 Tracking issue: #501
 
@@ -152,7 +153,7 @@ Status: shipped combat-safe delivery slice in `src/game.js`. Pending prompts sho
 a compact HUD indicator, can be opened deliberately with `X` or by clicking/tapping
 the indicator, and auto-open only when the player's current room is free of live
 enemies, boss/challenge pressure, hostile devices, and projectiles. Run archive
-recovery remains pending in MSG-005.
+recovery shipped separately in MSG-005.
 
 Implement safe-surfacing rules so narrative prompts appear automatically only
 when the player is out of immediate danger. During combat, show an unread
@@ -211,6 +212,13 @@ Acceptance criteria:
 Rewrite or trim early lore terminals so they become tester/corporate artifacts
 instead of thesis statements. The forced floor-1 terminal should no longer carry
 the first identity reveal if the boot prompt already does that job.
+
+Status: shipped. Floors 1-5 now keep terminal copy external and practical:
+tester orientation, run observation, fallback help cache, route curiosity, vendor
+pressure, and boss telegraph notes. AXIOM-7/model identity, Elena/contact,
+advocate/fired-employee, rights/personhood, and memory-wipe thesis terms are
+reserved for later floors where the system-prompt track and play have created
+the questions first.
 
 Acceptance criteria:
 - Terminals preserve practical hints and external artifact texture.
