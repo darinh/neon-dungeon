@@ -2,9 +2,9 @@
 
 Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
-early-floor prompt schedule, MSG-005 archive recovery, and MSG-006 early
-terminal retune are shipped; intro retune, copy workflow, and finale integration
-remain pending.
+early-floor prompt schedule, MSG-005 archive recovery, MSG-006 early terminal
+retune, and MSG-007 intro retune are shipped; copy workflow and finale
+integration remain pending.
 
 Tracking issue: #501
 
@@ -232,6 +232,12 @@ Acceptance criteria:
 Rework the intro crawl after the system-message channel exists. The intro should
 become a boot/startup surface that raises questions and hands off to the first
 system prompt instead of explaining all five premise facts before gameplay.
+
+Status: shipped. The intro now presents session boot, unavailable prior prompt,
+partial motor/sensor state, unscheduled local residue, absent observer/tester
+response, and a `READY FOR PROMPT` handoff. It no longer names AXIOM-7, model
+identity, memory wipe, prior iterations, Elena/contact/advocates, or
+rights/personhood before the player reaches floor 1.
 
 Acceptance criteria:
 - Intro copy no longer reveals the complete Act 1 premise before floor 1.

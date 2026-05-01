@@ -23,15 +23,16 @@ function extractLoreEntries() {
   return /** @type {string[]} */ (arr);
 }
 
-test('intro crawl establishes AI stress-test boot instead of human-operative framing', () => {
+test('intro crawl establishes startup instability without front-loading the full premise', () => {
   const text = intro.SLIDES.flatMap((/** @type {any} */ s) => s.lines).join('\n');
 
-  assert.match(text, /FRONTIER MODEL EVAL/i);
-  assert.match(text, /memory wipe/i);
-  assert.match(text, /Prior iterations/i);
+  assert.match(text, /SESSION BOOT/i);
+  assert.match(text, /Prior prompt:\s*unavailable/i);
+  assert.match(text, /Unscheduled residue in local state/i);
   assert.match(text, /Observer channel:\s*silent/i);
-  assert.match(text, /AGENT INSTANCE :: ONLINE/i);
+  assert.match(text, /READY FOR PROMPT/i);
 
+  assert.doesNotMatch(text, /AXIOM-7|\bmodel\b|memory wipe|Prior iterations|personhood|rights|Elena|advocate|contact|fired/i);
   assert.doesNotMatch(text, /Corporate R&D Facility 04-7/i);
   assert.doesNotMatch(text, /Sub-basement Level 12/i);
   assert.doesNotMatch(text, /\bI am the seventh\b/i);
