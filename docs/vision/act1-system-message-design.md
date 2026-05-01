@@ -1,8 +1,8 @@
 # Act 1 System Message Narrative Design
 
-Status: design artifact and production backlog. MSG-001 data-model slice is
-shipped; presentation, dismissal, safe delivery, copy rewrite, and finale
-integration remain pending.
+Status: design artifact and production backlog. MSG-001 data-model slice and
+MSG-002 explicit-ACK modal slice are shipped; unread indicators, combat-safe
+delivery, archive recovery, copy rewrite, and finale integration remain pending.
 
 Tracking issue: #501
 
@@ -125,6 +125,12 @@ Acceptance criteria:
 - Message ids are stable enough for tests and future save/archive references.
 
 ### MSG-002: Explicit acknowledgement and dismissal safety
+
+Status: shipped explicit-ACK modal slice for system prompts in `src/game.js`.
+Delivered prompts use the `SYSTEM_MESSAGE` state, render over the playfield,
+require `X` or a hit-tested ACK button, and use a short arming delay. Broader
+audits of legacy `READING`, `MAINFRAME_READER`, and intro dismissal behavior
+remain pending.
 
 Replace generic narrative-overlay dismissal for system prompts with a deliberate
 ACK/CLOSE/MARK READ action and touch button. This work should also audit
