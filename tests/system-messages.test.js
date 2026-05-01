@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
+const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
 const DESIGN = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'vision', 'act1-system-message-design.md'), 'utf8');
 
@@ -98,13 +99,17 @@ function systemMessageGameHarness() {
     extractFunctionSource(GAME, 'serializeSystemMessagesState') + '\n' +
     'return ({\n' +
     '  saveCalls: 0,\n' +
+    '  state: "PLAYING",\n' +
+    '  setState(state) { this.state = state; },\n' +
     '  saveGame() { this.saveCalls++; this.saved = serializeSystemMessagesState(this.systemMessages); },\n' +
     '  ' + extractObjectMethodSource(GAME, 'ensureSystemMessages') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'queueSystemMessage') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageDelivered') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageRead') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'unreadSystemMessageCount') + ',\n' +
-    '  ' + extractObjectMethodSource(GAME, 'getActiveSystemMessage') + '\n' +
+    '  ' + extractObjectMethodSource(GAME, 'getActiveSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'openNextSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_finishIntro') + '\n' +
     '});';
   // eslint-disable-next-line no-new-func -- behavioural harness for project-owned queue methods.
   return new Function(helperSrc)();
@@ -226,6 +231,43 @@ test('system message game methods enforce queued-to-delivered-to-read behavior',
   assert.equal(game.saveCalls, 3);
 });
 
+test('system message modal delivery opens before play and arms explicit ACK only', () => {
+  const game = systemMessageGameHarness();
+  game.queueSystemMessage('boot-inventory');
+
+  assert.equal(game.openNextSystemMessage('PLAYING'), true);
+  assert.equal(game.state, 'SYSTEM_MESSAGE');
+  assert.equal(game.systemMessageReturnState, 'PLAYING');
+  assert.equal(game.systemMessageAckTimer, 0.25);
+  assert.equal(game.getActiveSystemMessage().id, 'boot-inventory');
+  assert.equal(game.saveCalls, 2, 'opening the modal persists delivered active prompt state');
+
+  assert.match(GAME, /case 'SYSTEM_MESSAGE':\s*this\.updateSystemMessage\(dt\);\s*break;/,
+    'SYSTEM_MESSAGE state must have a dedicated update path');
+  assert.match(GAME, /case 'SYSTEM_MESSAGE':\s*this\.renderPlaying\(\);\s*this\.renderSystemMessage\(\);\s*break;/,
+    'SYSTEM_MESSAGE state must render over the playfield');
+  assert.match(GAME, /updateSystemMessage\(dt\)[\s\S]*this\.systemMessageAckTimer\s*=\s*Math\.max\(0,[\s\S]*if\s*\(this\.systemMessageAckTimer\s*>\s*0\)\s*return;/,
+    'ACK input must be armed after a short delay so the opener cannot dismiss the prompt');
+  assert.match(GAME, /if\s*\(jp\('KeyX'\)\s*\|\|\s*mouseAck\)[\s\S]*this\.markSystemMessageRead\(active\.id\)/,
+    'only the dedicated X key or ACK button should mark a system prompt read');
+  assert.doesNotMatch(extractObjectMethodSource(GAME, 'updateSystemMessage'), /jp\('Enter'\)|jp\(km\('interact'\)\)|jp\(km\('shoot'\)\)|jp\('Escape'\)/,
+    'Enter, Interact, fire, and Escape must not dismiss system prompts');
+  assert.match(PLATFORM, /_G\.state === 'SYSTEM_MESSAGE'/,
+    'touch input must route coordinates to the modal instead of using global any-tap confirm');
+});
+
+test('intro completion hands off to mandatory system message before play', () => {
+  const game = systemMessageGameHarness();
+  game.queueSystemMessage('boot-inventory');
+  game._intro = { done: true };
+
+  game._finishIntro();
+
+  assert.equal(game._intro, null);
+  assert.equal(game.state, 'SYSTEM_MESSAGE');
+  assert.equal(game.getActiveSystemMessage().id, 'boot-inventory');
+});
+
 test('system message queue is wired into start, save, and continue contracts', () => {
   assert.match(GAME, /systemMessages:\s*restoreSystemMessagesState\(null\)/);
   assert.match(GAME, /ensureSystemMessages\(\)[\s\S]*restoreSystemMessagesState\(this\.systemMessages\)/);
@@ -234,14 +276,21 @@ test('system message queue is wired into start, save, and continue contracts', (
   assert.match(GAME, /markSystemMessageRead\(id\)[\s\S]*entry\.state\s*!==\s*'delivered'[\s\S]*entry\.state\s*=\s*'read'[\s\S]*state\.activeId\s*=\s*null/);
   assert.match(GAME, /this\.systemMessages\s*=\s*restoreSystemMessagesState\(null\)[\s\S]*this\.loadFloor\(startFloor,\s*undefined,\s*true\)[\s\S]*this\.queueSystemMessage\('boot-inventory'\)[\s\S]*if\s*\(!opts\.skipIntro/,
     'fresh runs must queue the mandatory boot prompt before intro/play can hand control to the player');
+  assert.match(extractObjectMethodSource(GAME, '_finishIntro'), /if\s*\(!this\.openNextSystemMessage\('PLAYING'\)\)\s*this\.setState\('PLAYING'\)/,
+    'intro completion must hand off to the boot prompt before normal PLAYING control');
+  assert.match(extractObjectMethodSource(GAME, 'startGame'), /if\s*\(!this\.openNextSystemMessage\('PLAYING'\)\)\s*this\.setState\('PLAYING'\)/,
+    'after intro or intro-skipped start, the boot prompt opens before normal PLAYING control');
   assert.match(GAME, /systemMessages:\s*serializeSystemMessagesState\(this\.systemMessages\)/);
-  assert.match(GAME, /this\.loadFloor\(save\.floor\|\|1,\s*savedMod,\s*true\)[\s\S]*this\.systemMessages\s*=\s*restoreSystemMessagesState\(save\.systemMessages\)[\s\S]*this\.saveGame\(\)/,
+  assert.match(GAME, /this\.loadFloor\(save\.floor\|\|1,\s*savedMod,\s*true\)[\s\S]*this\.systemMessages\s*=\s*restoreSystemMessagesState\(save\.systemMessages\)[\s\S]*this\.saveGame\(\)[\s\S]*openNextSystemMessage\('PLAYING'\)/,
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect MSG-001 shipped scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001/MSG-002 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
-  assert.match(SPEC, /No system-prompt overlay, unread indicator, explicit ACK UI, combat-safe delivery/i);
+  assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
+  assert.match(SPEC, /No unread indicator, combat-safe delivery/i);
   assert.match(DESIGN, /MSG-001: System message data model and queue/i);
   assert.match(DESIGN, /Status: shipped data-model slice/i);
+  assert.match(DESIGN, /MSG-002: Explicit acknowledgement and dismissal safety/i);
+  assert.match(DESIGN, /Status: shipped explicit-ACK modal slice/i);
 });

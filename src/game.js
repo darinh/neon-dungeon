@@ -343,6 +343,19 @@ function serializeSystemMessagesState(systemMessages) {
   };
 }
 
+/** @param {boolean} narrow */
+function getSystemMessageLayout(narrow) {
+  const panelW = Math.min(narrow ? W - 24 : 680, W - 32);
+  const panelH = Math.min(narrow ? H - 48 : 340, H - 48);
+  const px = (W - panelW) / 2;
+  const py = (H - panelH) / 2;
+  const ackW = narrow ? 118 : 140;
+  const ackH = 36;
+  const ackX = W / 2 - ackW / 2;
+  const ackY = py + panelH - (narrow ? 52 : 58);
+  return { panelW, panelH, px, py, ackX, ackY, ackW, ackH };
+}
+
 /**
  * @param {any} mf
  */
@@ -514,6 +527,8 @@ const game = {
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   mainframeFinale: null, // ephemeral Act 1 finale reader state
   systemMessages: restoreSystemMessagesState(null), // run-scoped system prompt queue
+  systemMessageReturnState: 'PLAYING',
+  systemMessageAckTimer: 0,
   _lastAct1MessageIntent: null,
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
@@ -593,6 +608,21 @@ const game = {
     const state = this.ensureSystemMessages();
     if (!state.activeId) return null;
     return state.entries.find((/** @type {any} */ entry) => entry.id === state.activeId && entry.state === 'delivered') || null;
+  },
+
+  /** @param {string} [returnState] */
+  openNextSystemMessage(returnState) {
+    const state = this.ensureSystemMessages();
+    let entry = this.getActiveSystemMessage();
+    if (!entry) {
+      entry = state.entries.find((/** @type {any} */ msg) => msg.state === 'queued') || null;
+      if (entry) entry = this.markSystemMessageDelivered(entry.id);
+    }
+    if (!entry) return false;
+    this.systemMessageReturnState = returnState || 'PLAYING';
+    this.systemMessageAckTimer = 0.25;
+    this.setState('SYSTEM_MESSAGE');
+    return true;
   },
 
   // Rebuild the packed-index Set of sealed entrance tiles. Called whenever
@@ -1055,15 +1085,15 @@ const game = {
     // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
     // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
     // introSeen back to false, so it replays on a true new start.
-    // opts.skipIntro is used when the intro controller itself finishes
-    // and re-enters startGame to reach 'PLAYING'.
+    // opts.skipIntro is used by tests and legacy callers that need to bypass
+    // the crawl while still passing through the system-prompt handoff.
     if (!opts.skipIntro && !meta.introSeen &&
         typeof NEON !== 'undefined' && NEON.intro) {
       this._intro = NEON.intro.createIntroController(this);
       this.setState('INTRO');
       return;
     }
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
   },
 
   openSeedSetup() {
@@ -1124,14 +1154,14 @@ const game = {
   // to complete the startGame transition into PLAYING.
   _finishIntro() {
     this._intro = null;
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
   },
 
   /**
    * @param {any} dt
    */
   updateIntro(dt) {
-    if (!this._intro) { this.setState('PLAYING'); return; }
+    if (!this._intro) { if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING'); return; }
     this._intro.update(dt);
     if (this._intro.done) this._finishIntro();
   },
@@ -1841,7 +1871,7 @@ const game = {
     }
     this.systemMessages = restoreSystemMessagesState(save.systemMessages);
     this.saveGame();
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
 
@@ -1863,6 +1893,7 @@ const game = {
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
+      case 'SYSTEM_MESSAGE': this.updateSystemMessage(dt); break;
       case 'MAINFRAME_READER': this.updateMainframeReader(dt); break;
       case 'MESSAGE_SEND':     this.updateMessageSend(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
@@ -3940,6 +3971,28 @@ const game = {
     }
   },
 
+  /** @param {number} dt */
+  updateSystemMessage(dt) {
+    const active = this.getActiveSystemMessage();
+    if (!active) {
+      this.setState(this.systemMessageReturnState || 'PLAYING');
+      return;
+    }
+    this.systemMessageAckTimer = Math.max(0, (this.systemMessageAckTimer || 0) - dt);
+    if (this.systemMessageAckTimer > 0) return;
+
+    const narrow = layout.compact;
+    const box = getSystemMessageLayout(narrow);
+    const mouseAck = jp('MouseLeft') &&
+      mouse.x >= box.ackX && mouse.x <= box.ackX + box.ackW &&
+      mouse.y >= box.ackY && mouse.y <= box.ackY + box.ackH;
+    if (jp('KeyX') || mouseAck) {
+      this.markSystemMessageRead(active.id);
+      audio.menuSelect();
+      this.setState(this.systemMessageReturnState || 'PLAYING');
+    }
+  },
+
   ensureMainframeFinale() {
     if (!this.mainframeFinale) {
       this.mainframeFinale = { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, selectedIntentId:null, messageSent:false, messageSentTimer:0, currentRecord:null };
@@ -4939,6 +4992,7 @@ const game = {
         case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
         case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
         case 'READING':        this.renderPlaying(); this.renderReading(); break;
+        case 'SYSTEM_MESSAGE': this.renderPlaying(); this.renderSystemMessage(); break;
         case 'MAINFRAME_READER': this.renderPlaying(); this.renderMainframeReader(); break;
         case 'MESSAGE_SEND': this.renderPlaying(); this.renderMessageSend(); break;
         case 'ARCHIVES':  this.renderArchives(); break;
@@ -6157,6 +6211,91 @@ const game = {
     ctx.fillText(closeText, W / 2, fy + fh - (narrow ? 10 : 14));
     ctx.globalAlpha = 1;
 
+    ctx.restore();
+  },
+
+  renderSystemMessage() {
+    const active = this.getActiveSystemMessage();
+    if (!active) return;
+    const narrow = layout.compact;
+    const layoutBox = getSystemMessageLayout(narrow);
+    const { panelW, panelH, px, py, ackX, ackY, ackW, ackH } = layoutBox;
+    const accent = '#00f5ff';
+    const bodyFont = narrow ? 12 : 15;
+    const lineH = bodyFont + 6;
+    const topY = py + (narrow ? 32 : 42);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.86)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = accent;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectStroke(ctx, px, py, panelW, panelH, 10);
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(4,12,24,0.96)';
+    NEON.draw.roundRect(ctx, px, py, panelW, panelH, 10);
+    ctx.fillStyle = 'rgba(0,245,255,0.035)';
+    for (let sy = py; sy < py + panelH; sy += 4) ctx.fillRect(px, sy, panelW, 1);
+
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText('SYSTEM PROMPT', W / 2, topY);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#6688aa';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(active.event + ' · ' + active.id, W / 2, topY + (narrow ? 18 : 24));
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#d8f8ff';
+    ctx.font = `${bodyFont}px monospace`;
+    const maxTextW = panelW - 48;
+    const lines = [];
+    for (const rawLine of active.lines) {
+      const words = String(rawLine || '').split(' ');
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxTextW) {
+          if (line) lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      lines.push('');
+    }
+    if (lines[lines.length - 1] === '') lines.pop();
+    const textX = px + 24;
+    let y = topY + (narrow ? 48 : 64);
+    const textBottom = ackY - 18;
+    for (const line of lines) {
+      if (y > textBottom) break;
+      ctx.fillText(line, textX, y);
+      y += line ? lineH : Math.floor(lineH * 0.75);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = this.systemMessageAckTimer > 0 ? 'rgba(0,245,255,0.08)' : 'rgba(0,245,255,0.16)';
+    ctx.strokeStyle = this.systemMessageAckTimer > 0 ? 'rgba(0,245,255,0.28)' : 'rgba(0,245,255,0.7)';
+    ctx.lineWidth = 1.5;
+    NEON.draw.roundRectFillStroke(ctx, ackX, ackY, ackW, ackH, 6);
+    ctx.fillStyle = this.systemMessageAckTimer > 0 ? '#6688aa' : '#d8f8ff';
+    ctx.font = `bold ${narrow ? 13 : 15}px monospace`;
+    ctx.fillText('ACK  [X]', W / 2, ackY + 23);
+
+    ctx.fillStyle = '#6688aa';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText('Clicks outside this button do nothing.', W / 2, py + panelH - 16);
     ctx.restore();
   },
 
