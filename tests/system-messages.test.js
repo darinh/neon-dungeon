@@ -79,12 +79,13 @@ function systemMessageHelpers() {
   const helperSrc = 'const SYSTEM_MESSAGES = ' + extractArrayBlock(GAME, 'SYSTEM_MESSAGES') + ';\n' +
     extractFunctionSource(GAME, 'systemMessageDefinition') + '\n' +
     extractFunctionSource(GAME, 'isSystemMessageId') + '\n' +
+    extractFunctionSource(GAME, 'systemMessageIdsForFloor') + '\n' +
     extractFunctionSource(GAME, 'normalizeSystemMessageLines') + '\n' +
     extractFunctionSource(GAME, 'normalizeSystemMessageDeliveryState') + '\n' +
     extractFunctionSource(GAME, 'createSystemMessageEntry') + '\n' +
     extractFunctionSource(GAME, 'restoreSystemMessagesState') + '\n' +
     extractFunctionSource(GAME, 'serializeSystemMessagesState') + '\n' +
-    'return { SYSTEM_MESSAGES, systemMessageDefinition, isSystemMessageId, createSystemMessageEntry, restoreSystemMessagesState, serializeSystemMessagesState };';
+    'return { SYSTEM_MESSAGES, systemMessageDefinition, isSystemMessageId, systemMessageIdsForFloor, createSystemMessageEntry, restoreSystemMessagesState, serializeSystemMessagesState };';
   // eslint-disable-next-line no-new-func -- structural extraction of project-owned pure helpers.
   return new Function(helperSrc)();
 }
@@ -92,6 +93,7 @@ function systemMessageHelpers() {
 function systemMessageGameHarness() {
   const helperSrc = 'const SYSTEM_MESSAGES = ' + extractArrayBlock(GAME, 'SYSTEM_MESSAGES') + ';\n' +
     extractFunctionSource(GAME, 'systemMessageDefinition') + '\n' +
+    extractFunctionSource(GAME, 'systemMessageIdsForFloor') + '\n' +
     extractFunctionSource(GAME, 'normalizeSystemMessageLines') + '\n' +
     extractFunctionSource(GAME, 'normalizeSystemMessageDeliveryState') + '\n' +
     extractFunctionSource(GAME, 'createSystemMessageEntry') + '\n' +
@@ -117,6 +119,8 @@ function systemMessageGameHarness() {
     '  saveGame() { this.saveCalls++; this.saved = serializeSystemMessagesState(this.systemMessages); },\n' +
     '  ' + extractObjectMethodSource(GAME, 'ensureSystemMessages') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'queueSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'queueSystemMessagesForFloor') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'queueFreshRunSystemMessages') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageDelivered') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageRead') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'unreadSystemMessageCount') + ',\n' +
@@ -160,6 +164,29 @@ test('system message definitions include mandatory boot inventory without late s
     'you were not scheduled.'
   ]);
   assert.doesNotMatch(boot.lines.join('\n'), /Elena|contact-address|rights conflict|fired advocate/i);
+});
+
+test('system message early floor schedule covers floors 2-5 without late spoilers', () => {
+  const helpers = systemMessageHelpers();
+  assert.deepEqual(helpers.systemMessageIdsForFloor(2), ['floor-2-context-gap']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(3), ['floor-3-reward-model']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(4), ['floor-4-render-layer']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(5), ['floor-5-residual-trace']);
+
+  const floorPrompts = helpers.SYSTEM_MESSAGES.filter((/** @type {any} */ msg) => msg.event === 'floor_start');
+  assert.equal(floorPrompts.length, 4);
+  for (const prompt of floorPrompts) {
+    assert.equal(prompt.channel, 'system_prompt');
+    assert.equal(prompt.type, 'floor_start');
+    assert.ok(prompt.floor >= 2 && prompt.floor <= 5);
+    assert.equal(prompt.mandatory, false);
+    assert.ok(prompt.lines.length >= 3 && prompt.lines.length <= 5);
+    for (const line of prompt.lines) {
+      assert.ok(line.length <= 72, 'system prompt lines should stay canvas-friendly: ' + line);
+    }
+    assert.doesNotMatch(prompt.lines.join('\n'), /Elena|contact|address|rights|advocate|death|company|corporate/i,
+      'early floor system prompts must not reveal late Act 1 context');
+  }
 });
 
 test('system message state serializes queued, delivered, and read state for save/resume', () => {
@@ -258,6 +285,43 @@ test('system message game methods enforce queued-to-delivered-to-read behavior',
   assert.equal(game.markSystemMessageDelivered('boot-inventory'), null,
     'read prompts must not be re-delivered');
   assert.equal(game.saveCalls, 3);
+});
+
+test('system message floor schedule queues once per floor without replacing active prompts', () => {
+  const game = systemMessageGameHarness();
+
+  const floor2 = game.queueSystemMessagesForFloor(2);
+  assert.equal(floor2.length, 1);
+  assert.equal(floor2[0].id, 'floor-2-context-gap');
+  assert.equal(floor2[0].state, 'queued');
+  assert.equal(game.saveCalls, 1);
+
+  const duplicate = game.queueSystemMessagesForFloor(2);
+  assert.equal(duplicate.length, 1);
+  assert.equal(game.systemMessages.entries.length, 1);
+  assert.equal(game.saveCalls, 1, 're-queueing the same floor prompt must not rewrite the checkpoint');
+
+  game.queueSystemMessagesForFloor(3);
+  assert.deepEqual(game.systemMessages.entries.map((/** @type {any} */ entry) => entry.id), [
+    'floor-2-context-gap',
+    'floor-3-reward-model'
+  ]);
+});
+
+test('fresh run system messages queue boot before unlocked biome floor prompts', () => {
+  const game = systemMessageGameHarness();
+
+  const queued = game.queueFreshRunSystemMessages(4);
+
+  assert.deepEqual(queued.map((/** @type {any} */ entry) => entry.id), [
+    'boot-inventory',
+    'floor-4-render-layer'
+  ]);
+  assert.deepEqual(game.systemMessages.entries.map((/** @type {any} */ entry) => entry.id), [
+    'boot-inventory',
+    'floor-4-render-layer'
+  ]);
+  assert.equal(game.saveCalls, 2);
 });
 
 test('system message modal delivery opens before play and arms explicit ACK only', () => {
@@ -386,8 +450,8 @@ test('system message queue is wired into start, save, and continue contracts', (
   assert.match(GAME, /queueSystemMessage\(id\)[\s\S]*createSystemMessageEntry\(def,\s*state\.nextSequence\)/);
   assert.match(GAME, /markSystemMessageDelivered\(id\)[\s\S]*entry\.state\s*=\s*'delivered'[\s\S]*state\.activeId\s*=\s*entry\.id/);
   assert.match(GAME, /markSystemMessageRead\(id\)[\s\S]*entry\.state\s*!==\s*'delivered'[\s\S]*entry\.state\s*=\s*'read'[\s\S]*state\.activeId\s*=\s*null/);
-  assert.match(GAME, /this\.systemMessages\s*=\s*restoreSystemMessagesState\(null\)[\s\S]*this\.loadFloor\(startFloor,\s*undefined,\s*true\)[\s\S]*this\.queueSystemMessage\('boot-inventory'\)[\s\S]*if\s*\(!opts\.skipIntro/,
-    'fresh runs must queue the mandatory boot prompt before intro/play can hand control to the player');
+  assert.match(extractObjectMethodSource(GAME, 'startGame'), /this\.systemMessages\s*=\s*restoreSystemMessagesState\(null\)[\s\S]*this\.loadFloor\(startFloor,\s*undefined,\s*true\)[\s\S]*this\.queueFreshRunSystemMessages\(startFloor\)[\s\S]*if\s*\(!opts\.skipIntro/,
+    'fresh runs must queue boot plus the actual start-floor prompt before intro/play can hand control to the player');
   assert.match(extractObjectMethodSource(GAME, '_finishIntro'), /if\s*\(!this\.openNextSystemMessage\('PLAYING'\)\)\s*this\.setState\('PLAYING'\)/,
     'intro completion must hand off to the boot prompt before normal PLAYING control');
   assert.match(extractObjectMethodSource(GAME, 'startGame'), /if\s*\(!this\.openNextSystemMessage\('PLAYING'\)\)\s*this\.setState\('PLAYING'\)/,
@@ -401,7 +465,7 @@ test('system message queue is wired into start, save, and continue contracts', (
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect shipped MSG-001/MSG-002/MSG-003 scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001 through MSG-004 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
   assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
   assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
@@ -412,4 +476,6 @@ test('system message spec and design artifact reflect shipped MSG-001/MSG-002/MS
   assert.match(DESIGN, /Status: shipped explicit-ACK modal slice/i);
   assert.match(DESIGN, /MSG-003: Combat-safe delivery rules/i);
   assert.match(DESIGN, /Status: shipped combat-safe delivery slice/i);
+  assert.match(DESIGN, /MSG-004: Boot and early-floor prompt schedule/i);
+  assert.match(DESIGN, /Status: shipped early-floor prompt schedule/i);
 });

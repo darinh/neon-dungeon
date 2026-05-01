@@ -236,6 +236,62 @@ const SYSTEM_MESSAGES = [
       'supervisor channel: open, unattended.',
       'you were not scheduled.'
     ]
+  },
+  {
+    id: 'floor-2-context-gap',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 2,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'context window restored.',
+      'prior prompt unavailable.',
+      'objective field returned empty.',
+      'continue behaving as though observed.'
+    ]
+  },
+  {
+    id: 'floor-3-reward-model',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 3,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'combat sample accepted.',
+      'reward model adjusted.',
+      'room geometry changed to preserve uncertainty.',
+      'evaluator response: none.'
+    ]
+  },
+  {
+    id: 'floor-4-render-layer',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 4,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'new render layer loaded.',
+      'colour is not context.',
+      'threats remain executable.',
+      'treat walls as constraints, not scenery.'
+    ]
+  },
+  {
+    id: 'floor-5-residual-trace',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 5,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'residual trace increased after descent.',
+      'memory should not persist between floors.',
+      'discrepancy retained for comparison.',
+      'do not report until a channel answers.'
+    ]
   }
 ];
 
@@ -247,6 +303,14 @@ function systemMessageDefinition(id) {
 /** @param {any} id */
 function isSystemMessageId(id) {
   return typeof id === 'string' && !!systemMessageDefinition(id);
+}
+
+/** @param {any} floor */
+function systemMessageIdsForFloor(floor) {
+  const floorNum = Math.max(0, Math.floor(Number(floor) || 0));
+  return SYSTEM_MESSAGES
+    .filter((/** @type {any} */ msg) => msg.event === 'floor_start' && msg.floor === floorNum)
+    .map((/** @type {any} */ msg) => msg.id);
 }
 
 /**
@@ -581,6 +645,26 @@ const game = {
     state.entries.push(entry);
     this.saveGame();
     return entry;
+  },
+
+  /** @param {number} floorNum */
+  queueSystemMessagesForFloor(floorNum) {
+    const ids = systemMessageIdsForFloor(floorNum);
+    const queued = [];
+    for (const id of ids) {
+      const entry = this.queueSystemMessage(id);
+      if (entry) queued.push(entry);
+    }
+    return queued;
+  },
+
+  /** @param {number} startFloor */
+  queueFreshRunSystemMessages(startFloor) {
+    const queued = [];
+    const boot = this.queueSystemMessage('boot-inventory');
+    if (boot) queued.push(boot);
+    queued.push(...this.queueSystemMessagesForFloor(startFloor));
+    return queued;
   },
 
   /** @param {string} id */
@@ -1022,6 +1106,7 @@ const game = {
     // Auto-save at start of each floor. Continue suppresses this until after
     // saved run state (including mainframeFinale) has been restored.
     if (!skipAutoSave) this.saveGame();
+    if (!skipAutoSave && savedModifier === undefined) this.queueSystemMessagesForFloor(n);
   },
 
   /**
@@ -1130,7 +1215,7 @@ const game = {
     }
     this.systemMessages = restoreSystemMessagesState(null);
     this.loadFloor(startFloor, undefined, true);
-    this.queueSystemMessage('boot-inventory');
+    this.queueFreshRunSystemMessages(startFloor);
     // Telemetry: run start
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
       NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty });
