@@ -1,8 +1,8 @@
 # Act 1 System Message Narrative Design
 
-Status: design artifact and production backlog. MSG-001 data-model slice and
-MSG-002 explicit-ACK modal slice are shipped; unread indicators, combat-safe
-delivery, archive recovery, copy rewrite, and finale integration remain pending.
+Status: design artifact and production backlog. MSG-001 data-model slice,
+MSG-002 explicit-ACK modal slice, and MSG-003 combat-safe delivery slice are
+shipped; archive recovery, copy rewrite, and finale integration remain pending.
 
 Tracking issue: #501
 
@@ -146,6 +146,12 @@ Acceptance criteria:
 - A short arming delay is covered by tests.
 
 ### MSG-003: Combat-safe delivery rules
+
+Status: shipped combat-safe delivery slice in `src/game.js`. Pending prompts show
+a compact HUD indicator, can be opened deliberately with `X` or by clicking/tapping
+the indicator, and auto-open only when the player's current room is free of live
+enemies, boss/challenge pressure, hostile devices, and projectiles. Run archive
+recovery remains pending in MSG-005.
 
 Implement safe-surfacing rules so narrative prompts appear automatically only
 when the player is out of immediate danger. During combat, show an unread

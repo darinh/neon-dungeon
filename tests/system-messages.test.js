@@ -97,9 +97,22 @@ function systemMessageGameHarness() {
     extractFunctionSource(GAME, 'createSystemMessageEntry') + '\n' +
     extractFunctionSource(GAME, 'restoreSystemMessagesState') + '\n' +
     extractFunctionSource(GAME, 'serializeSystemMessagesState') + '\n' +
+    'const enemies = [];\n' +
+    'const projectiles = [];\n' +
+    'const beacons = [];\n' +
+    'const cameras = [];\n' +
+    'const wallTurrets = [];\n' +
+    'const mines = [];\n' +
+    'const lasers = [];\n' +
+    'function enemiesInRoomIter(room) { return enemies.filter(e => e.room === room); }\n' +
     'return ({\n' +
     '  saveCalls: 0,\n' +
     '  state: "PLAYING",\n' +
+    '  player: { x: 2, y: 2 },\n' +
+    '  dungeon: { rooms: [{ x: 0, y: 0, w: 5, h: 5 }] },\n' +
+    '  bossAlive: false,\n' +
+    '  challengeSealed: false,\n' +
+    '  _testThreats: { enemies, projectiles, beacons, cameras, wallTurrets, mines, lasers },\n' +
     '  setState(state) { this.state = state; },\n' +
     '  saveGame() { this.saveCalls++; this.saved = serializeSystemMessagesState(this.systemMessages); },\n' +
     '  ' + extractObjectMethodSource(GAME, 'ensureSystemMessages') + ',\n' +
@@ -107,12 +120,28 @@ function systemMessageGameHarness() {
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageDelivered') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'markSystemMessageRead') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'unreadSystemMessageCount') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'hasPendingSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'hitSystemMessageIndicator') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'getActiveSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'getSystemMessagePlayerRoom') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'systemMessageThreatActive') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'canAutoOpenSystemMessage') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'openPendingSystemMessage') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'openNextSystemMessage') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, '_finishIntro') + '\n' +
     '});';
   // eslint-disable-next-line no-new-func -- behavioural harness for project-owned queue methods.
   return new Function(helperSrc)();
+}
+
+function systemMessageIndicatorLayoutHarness() {
+  const src = extractFunctionSource(GAME, 'getSystemMessageIndicatorLayout') + '\n' +
+    'return function compute(input) {\n' +
+    '  W = input.W; H = input.H; safeLeft = input.safeLeft; safeTop = input.safeTop; layout = input.layout;\n' +
+    '  return getSystemMessageIndicatorLayout(input.narrow);\n' +
+    '};';
+  // eslint-disable-next-line no-new-func -- structural extraction of a pure layout helper.
+  return new Function('let W, H, safeLeft, safeTop, layout;\n' + src)();
 }
 
 test('system message definitions include mandatory boot inventory without late spoilers', () => {
@@ -268,6 +297,89 @@ test('intro completion hands off to mandatory system message before play', () =>
   assert.equal(game.getActiveSystemMessage().id, 'boot-inventory');
 });
 
+test('system message combat-safe delivery defers automatic opening until safe', () => {
+  const game = systemMessageGameHarness();
+  const room = game.dungeon.rooms[0];
+  game.queueSystemMessage('boot-inventory');
+  game._testThreats.enemies.push({ room, dead: false, _disguised: false });
+
+  assert.equal(game.systemMessageThreatActive(), true);
+  assert.equal(game.canAutoOpenSystemMessage(), false);
+  assert.equal(game.openPendingSystemMessage(false), false,
+    'queued prompts must not automatically steal focus while enemies threaten the current room');
+  assert.equal(game.state, 'PLAYING');
+  assert.equal(game.getActiveSystemMessage(), null);
+
+  assert.equal(game.openPendingSystemMessage(true), true,
+    'the explicit prompt action can open the queue even when combat is active');
+  assert.equal(game.state, 'SYSTEM_MESSAGE');
+  assert.equal(game.getActiveSystemMessage().id, 'boot-inventory');
+});
+
+test('system message combat-safe delivery scopes projectile danger to current room', () => {
+  const game = systemMessageGameHarness();
+  game.queueSystemMessage('boot-inventory');
+  game._testThreats.projectiles.push({ x: 10, y: 10, dead: false });
+
+  assert.equal(game.systemMessageThreatActive(), false,
+    'a projectile outside the current room should not suppress safe automatic prompt delivery');
+  game._testThreats.projectiles.push({ x: 2, y: 2, dead: false });
+  assert.equal(game.systemMessageThreatActive(), true,
+    'a live projectile inside the current room should defer automatic prompt delivery');
+});
+
+test('system message combat-safe delivery treats armed devices as current-room threats', () => {
+  const game = systemMessageGameHarness();
+  const room = game.dungeon.rooms[0];
+  game.queueSystemMessage('boot-inventory');
+
+  game._testThreats.mines.push({ room, dead: false, state: 'armed', revealed: false });
+  assert.equal(game.systemMessageThreatActive(), true,
+    'armed mines in the current room should defer automatic prompt delivery');
+  game._testThreats.mines.length = 0;
+
+  game._testThreats.lasers.push({ room, dead: false, disabled: false, active: true });
+  assert.equal(game.systemMessageThreatActive(), true,
+    'active laser tripwires in the current room should defer automatic prompt delivery');
+  game._testThreats.lasers.length = 0;
+
+  game._testThreats.lasers.push({ room, dead: false, disabled: true, active: true });
+  assert.equal(game.systemMessageThreatActive(), false,
+    'disabled laser tripwires should not suppress automatic prompt delivery');
+});
+
+test('system message combat-safe delivery auto-opens when current room is safe', () => {
+  const game = systemMessageGameHarness();
+  game.queueSystemMessage('boot-inventory');
+
+  assert.equal(game.systemMessageThreatActive(), false);
+  assert.equal(game.canAutoOpenSystemMessage(), true);
+  assert.equal(game.openPendingSystemMessage(false), true);
+  assert.equal(game.state, 'SYSTEM_MESSAGE');
+  assert.equal(game.getActiveSystemMessage().id, 'boot-inventory');
+});
+
+test('system message unread indicator layout stays visible above the bottom HUD', () => {
+  const compute = systemMessageIndicatorLayoutHarness();
+  for (const scenario of [
+    { narrow: false, W: 800, H: 600, safeLeft: 0, safeTop: 0, layout: { hudTop: 560 } },
+    { narrow: true, W: 390, H: 700, safeLeft: 0, safeTop: 0, layout: { hudTop: 642 } },
+  ]) {
+    const box = compute(scenario);
+    assert.ok(box.x >= 0, 'indicator x must be on-screen');
+    assert.ok(box.y >= 0, 'indicator y must be on-screen');
+    assert.ok(box.x + box.w <= scenario.W, 'indicator right edge must be on-screen');
+    assert.ok(box.y + box.h <= scenario.layout.hudTop,
+      'indicator must sit above the bottom HUD instead of being clipped by it');
+    assert.ok(box.x < scenario.W / 2,
+      'indicator should stay away from right-side touch action buttons and minimap controls');
+    assert.ok(box.y < scenario.layout.hudTop - 120,
+      'indicator should stay high enough to avoid bottom touch action buttons');
+  }
+  assert.match(PLATFORM, /hitSystemMessageIndicator[\s\S]*justPressed\.add\('MouseLeft'\)[\s\S]*if \(hitBtn\(cx,cy,BTNS\.E\)\)/,
+    'touch input should prioritize the prompt indicator before action buttons and joystick routing');
+});
+
 test('system message queue is wired into start, save, and continue contracts', () => {
   assert.match(GAME, /systemMessages:\s*restoreSystemMessagesState\(null\)/);
   assert.match(GAME, /ensureSystemMessages\(\)[\s\S]*restoreSystemMessagesState\(this\.systemMessages\)/);
@@ -280,17 +392,24 @@ test('system message queue is wired into start, save, and continue contracts', (
     'intro completion must hand off to the boot prompt before normal PLAYING control');
   assert.match(extractObjectMethodSource(GAME, 'startGame'), /if\s*\(!this\.openNextSystemMessage\('PLAYING'\)\)\s*this\.setState\('PLAYING'\)/,
     'after intro or intro-skipped start, the boot prompt opens before normal PLAYING control');
+  assert.match(extractObjectMethodSource(GAME, 'updatePlaying'), /jp\('KeyX'\)[\s\S]*openPendingSystemMessage\(true\)[\s\S]*openPendingSystemMessage\(false\)/,
+    'PLAYING must support deliberate prompt opening and safe automatic surfacing');
+  assert.match(extractObjectMethodSource(GAME, 'renderSystemMessageIndicator'), /PROMPT \[X\]/,
+    'pending prompts need an in-HUD unread indicator');
   assert.match(GAME, /systemMessages:\s*serializeSystemMessagesState\(this\.systemMessages\)/);
   assert.match(GAME, /this\.loadFloor\(save\.floor\|\|1,\s*savedMod,\s*true\)[\s\S]*this\.systemMessages\s*=\s*restoreSystemMessagesState\(save\.systemMessages\)[\s\S]*this\.saveGame\(\)[\s\S]*openNextSystemMessage\('PLAYING'\)/,
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect shipped MSG-001/MSG-002 scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001/MSG-002/MSG-003 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
   assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
-  assert.match(SPEC, /No unread indicator, combat-safe delivery/i);
+  assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
+  assert.match(SPEC, /No archive\/recovery surface/i);
   assert.match(DESIGN, /MSG-001: System message data model and queue/i);
   assert.match(DESIGN, /Status: shipped data-model slice/i);
   assert.match(DESIGN, /MSG-002: Explicit acknowledgement and dismissal safety/i);
   assert.match(DESIGN, /Status: shipped explicit-ACK modal slice/i);
+  assert.match(DESIGN, /MSG-003: Combat-safe delivery rules/i);
+  assert.match(DESIGN, /Status: shipped combat-safe delivery slice/i);
 });

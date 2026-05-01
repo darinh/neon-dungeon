@@ -356,6 +356,16 @@ function getSystemMessageLayout(narrow) {
   return { panelW, panelH, px, py, ackX, ackY, ackW, ackH };
 }
 
+/** @param {boolean} narrow */
+function getSystemMessageIndicatorLayout(narrow) {
+  const w = narrow ? 92 : 132;
+  const h = narrow ? 22 : 26;
+  const x = safeLeft + (narrow ? 8 : 14);
+  const targetY = safeTop + (narrow ? 92 : 82);
+  const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  return { x, y, w, h };
+}
+
 /**
  * @param {any} mf
  */
@@ -600,10 +610,65 @@ const game = {
     return state.entries.filter((/** @type {any} */ entry) => entry.state !== 'read').length;
   },
 
+  hasPendingSystemMessage() {
+    return this.unreadSystemMessageCount() > 0;
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  hitSystemMessageIndicator(x, y) {
+    if (!this.hasPendingSystemMessage()) return false;
+    const box = getSystemMessageIndicatorLayout(layout.compact);
+    return x >= box.x && x <= box.x + box.w &&
+      y >= box.y && y <= box.y + box.h;
+  },
+
   getActiveSystemMessage() {
     const state = this.ensureSystemMessages();
     if (!state.activeId) return null;
     return state.entries.find((/** @type {any} */ entry) => entry.id === state.activeId && entry.state === 'delivered') || null;
+  },
+
+  getSystemMessagePlayerRoom() {
+    if (!this.player || !this.dungeon || !Array.isArray(this.dungeon.rooms)) return null;
+    const px = this.player.x, py = this.player.y;
+    for (const room of this.dungeon.rooms) {
+      if (px >= room.x && px < room.x + room.w && py >= room.y && py < room.y + room.h) return room;
+    }
+    return null;
+  },
+
+  systemMessageThreatActive() {
+    const room = this.getSystemMessagePlayerRoom();
+    if (!room) return true;
+    if (this.bossAlive || this.challengeSealed) return true;
+    for (const projectile of projectiles) {
+      if (!projectile.dead &&
+          projectile.x >= room.x && projectile.x < room.x + room.w &&
+          projectile.y >= room.y && projectile.y < room.y + room.h) return true;
+    }
+    for (const enemy of enemiesInRoomIter(room)) {
+      if (!enemy.dead && !enemy._disguised) return true;
+    }
+    if (beacons.some((/** @type {any} */ b) => !b.dead && b.room === room)) return true;
+    if (cameras.some((/** @type {any} */ c) => !c.dead && c.state === 'alerted' && c.room === room)) return true;
+    if (wallTurrets.some((/** @type {any} */ wt) => !wt.dead && !wt.hacked && wt.room === room)) return true;
+    if (mines.some((/** @type {any} */ m) => !m.dead && m.room === room && (m.state === 'armed' || m.revealed))) return true;
+    if (lasers.some((/** @type {any} */ l) => !l.dead && l.room === room && !l.disabled && l.active)) return true;
+    return false;
+  },
+
+  canAutoOpenSystemMessage() {
+    return this.hasPendingSystemMessage() && !this.systemMessageThreatActive();
+  },
+
+  /** @param {boolean} [force] */
+  openPendingSystemMessage(force) {
+    if (!this.hasPendingSystemMessage()) return false;
+    if (!force && !this.canAutoOpenSystemMessage()) return false;
+    return this.openNextSystemMessage('PLAYING');
   },
 
   /** @param {string} [returnState] */
@@ -1972,6 +2037,13 @@ const game = {
     }
     if (jp('Tab')) { this.mapExpanded = true; justPressed.clear(); return; }
 
+    if (this.hasPendingSystemMessage()) {
+      const clickedIndicator = jp('MouseLeft') && this.hitSystemMessageIndicator(mouse.x, mouse.y);
+      if (jp('KeyX') || clickedIndicator) {
+        if (this.openPendingSystemMessage(true)) { justPressed.clear(); return; }
+      }
+    }
+
     player.update(dt,dungeon.map);
 
     // ── REAPER aggression tracking: detect player room change BEFORE the
@@ -2468,6 +2540,8 @@ const game = {
     } else {
       this.enemyDiedThisFrame = false;
     }
+
+    if (this.openPendingSystemMessage(false)) { justPressed.clear(); return; }
 
     // update lighting
     const _ptLight = perfEnabled() ? performance.now() : 0;
@@ -5374,6 +5448,8 @@ const game = {
     // nonzero timers (boss one-shot mid-intro), the death overlay wins.
     drawBossDeathOverlay();
 
+    this.renderSystemMessageIndicator();
+
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.
     const _boostPills = (typeof NEON !== 'undefined' && NEON.boosts)
@@ -6122,6 +6198,31 @@ const game = {
     ctx.fillStyle = '#6688aa';
     ctx.font = `${narrow ? 9 : 11}px monospace`;
     ctx.fillText('Clicks outside this button do nothing.', W / 2, py + panelH - 16);
+    ctx.restore();
+  },
+
+  renderSystemMessageIndicator() {
+    const count = this.unreadSystemMessageCount();
+    if (count <= 0 || this.state !== 'PLAYING') return;
+    const narrow = layout.compact;
+    const box = getSystemMessageIndicatorLayout(narrow);
+    const safe = this.canAutoOpenSystemMessage();
+    const accent = safe ? '#00f5ff' : '#6688aa';
+
+    ctx.save();
+    ctx.globalAlpha = safe ? 0.96 : 0.82;
+    ctx.fillStyle = safe ? 'rgba(0,245,255,0.12)' : 'rgba(42,54,72,0.75)';
+    ctx.strokeStyle = safe ? 'rgba(0,245,255,0.7)' : 'rgba(102,136,170,0.55)';
+    ctx.lineWidth = 1;
+    NEON.draw.roundRectFillStroke(ctx, box.x, box.y, box.w, box.h, 5);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = safe ? 8 : 0;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.font = `bold ${narrow ? 10 : 12}px monospace`;
+    ctx.fillText((count > 1 ? count + ' ' : '') + 'PROMPT [X]', box.x + box.w / 2, box.y + (narrow ? 15 : 18));
+    ctx.shadowBlur = 0;
     ctx.restore();
   },
 
