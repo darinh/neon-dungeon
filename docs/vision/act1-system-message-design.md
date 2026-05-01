@@ -1,9 +1,9 @@
 # Act 1 System Message Narrative Design
 
 Status: design artifact and production backlog. MSG-001 data-model slice,
-MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, and MSG-004
-early-floor prompt schedule are shipped; archive recovery, broader copy rewrite,
-and finale integration remain pending.
+MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
+early-floor prompt schedule, and MSG-005 archive recovery are shipped; broader
+copy rewrite and finale integration remain pending.
 
 Tracking issue: #501
 
@@ -189,6 +189,11 @@ Acceptance criteria:
   canvas UI.
 
 ### MSG-005: Message archive/recovery surface
+
+Status: shipped in THE GAP ARCHIVE (`src/meta/hub.js`). Acknowledged current-run
+system prompts appear as distinct `SYSTEM` rows and can be reopened after ACK.
+Queued or delivered-but-unacknowledged prompts remain hidden so the archive does
+not spoil future beats or bypass the explicit acknowledgement flow.
 
 Add a way to reopen read system prompts from the current run. This can be a
 pause-menu entry, archive tab, or run-log panel, but it must be available after
