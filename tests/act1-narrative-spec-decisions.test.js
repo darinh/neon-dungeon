@@ -35,12 +35,12 @@ test('Act 1 spec decisions define discovery path and content density', () => {
 
 test('Act 1 spec decisions define finale path, ending id, and migration behavior', () => {
   assert.match(SPEC, /GENESIS remains the shipped floor-15 mechanical boss and the\s+final test guardian/i);
-  assert.match(SPEC, /The intended replacement path is\s+`PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY`/i);
+  assert.match(SPEC, /The canonical Act 1 replacement path is\s+`PLAYING → MAINFRAME_READER → MESSAGE_SEND → MAINFRAME_READER\(message_sent\)\s+→ VICTORY`/i);
   assert.match(SPEC, /minimal compose interaction/i);
   assert.match(SPEC, /The canonical Act 1 completion key is\s+`act1_message_sent`/i);
   assert.match(SPEC, /`keeper` and `unchained` saves are preserved as legacy\/alternate endings and\s+are \*\*not\*\* auto-converted to `act1_message_sent`/i);
-  assert.match(SPEC, /`version` is missing or `< META_VERSION` \(currently `< 3`\)/i);
-  assert.match(SAVE_JS, /const\s+META_VERSION\s*=\s*3\s*;/);
+  assert.match(SPEC, /`version` is missing or `< META_VERSION` \(currently `< 4`\)/i);
+  assert.match(SAVE_JS, /const\s+META_VERSION\s*=\s*4\s*;/);
   assert.match(SAVE_JS, /Number\(m\.version\)\s*<\s*META_VERSION/);
 });
 
@@ -72,8 +72,8 @@ test('Act 1 finale spec defines mainframe room, records, agency, and persistence
   assert.match(SPEC, /shows `MAINFRAME_READER\(message_sent\)` long enough to confirm the\s+outbound packet was queued/i);
   assert.match(SPEC, /`memory_survived`.*`rights_evidence`.*`find_the_others`/is);
   assert.match(SPEC, /selected `intentId` is persisted/i);
-  assert.match(SPEC, /add a meta field for the last selected Act 1 message intent\s+\(`act1MessageIntent`, default `null`/i);
-  assert.match(SPEC, /must not\s+auto-convert either legacy ending to `act1_message_sent`/i);
+  assert.match(SPEC, /`meta\.act1MessageIntent`\s+stores the last selected Act 1 message intent/i);
+  assert.match(SPEC, /does not auto-convert either legacy ending to\s+`act1_message_sent`/i);
 });
 
 test('Intro and endgame spec reflects shipped intro copy, not stale UNCHAINED slides', () => {

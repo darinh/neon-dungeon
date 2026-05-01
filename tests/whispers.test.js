@@ -164,6 +164,6 @@ test('save schema: defaultMeta includes whispersFound and whispersRead arrays', 
   assert.equal(m.whispersRead.length, 0);
 });
 
-test('save schema: META_VERSION bumped to 3 (whispers fields added)', () => {
-  assert.equal(save.META_VERSION, 3);
+test('save schema: META_VERSION is at least 3 (whispers fields added)', () => {
+  assert.ok(save.META_VERSION >= 3);
 });

@@ -32,8 +32,9 @@
   // Current meta schema version. Bumped whenever defaultMeta() grows new
   // persistent fields. loadMeta() migrates older saves forward; it never
   // migrates backward (older builds simply ignore unknown fields).
-  const META_VERSION = 3;
+  const META_VERSION = 4;
   const MODULE_SLOTS = 3;
+  const ACT1_MESSAGE_INTENT_IDS = ['memory_survived', 'rights_evidence', 'find_the_others'];
 
   function defaultMeta() {
     return {
@@ -55,6 +56,7 @@
       whispersRead: [],                                // secret-room whispers read (subplot)
       whispersFound: [],                               // whispers found but not yet read
       endingsUnlocked: [],                             // 'keeper' | 'unchained' | 'act1_message_sent'
+      act1MessageIntent: null,                         // last Act 1 message intent id
       introSeen: false,                                // UNCHAINED #42 — intro crawl flag
       runsCompleted: 0,
       deepestBiome: 0                                  // highest AREAS index reached
@@ -95,7 +97,12 @@
     return arr.filter((/** @type {any} */ v) => v === 'keeper' || v === 'unchained' || v === 'act1_message_sent');
   }
 
-  // _migrateToV2 fills in every v2 field that's missing on an older save.
+  /** @param {any} id */
+  function _coerceAct1MessageIntent(id) {
+    return (typeof id === 'string' && ACT1_MESSAGE_INTENT_IDS.includes(id)) ? id : null;
+  }
+
+  // _migrateToV2 fills in every UNCHAINED/current field that's missing on an older save.
   // Mutates and returns the passed object. Idempotent.
   /** @param {any} m */
   function _migrateToV2(m) {
@@ -117,6 +124,7 @@
     m.whispersRead    = _coerceIntArray(m.whispersRead);
     m.whispersFound   = _coerceIntArray(m.whispersFound);
     m.endingsUnlocked = _coerceEndings(m.endingsUnlocked);
+    m.act1MessageIntent = _coerceAct1MessageIntent(m.act1MessageIntent);
     m.introSeen = (m.introSeen === true);
     if (m.runsCompleted == null) m.runsCompleted = 0;
     if (m.deepestBiome == null)  m.deepestBiome = 0;
@@ -126,7 +134,7 @@
     m.version = META_VERSION;
     if (wasOlder && !_migrationLogged) {
       _migrationLogged = true;
-      try { if (typeof console !== 'undefined' && console.log) console.log('[meta] migrated v1→v2'); } catch (_) { /* ignore */ }
+      try { if (typeof console !== 'undefined' && console.log) console.log('[meta] migrated to current schema'); } catch (_) { /* ignore */ }
     }
     return m;
   }
@@ -455,7 +463,7 @@
   }
 
   return {
-    META_UPGRADES, DIFF_UNLOCK_REQS, STORAGE_KEY, META_VERSION, MODULE_SLOTS, defaultMeta,
+    META_UPGRADES, DIFF_UNLOCK_REQS, STORAGE_KEY, META_VERSION, MODULE_SLOTS, ACT1_MESSAGE_INTENT_IDS, defaultMeta,
     loadMeta, saveMeta, getMetaLevel, isDiffUnlocked,
     calcRunShards, applyMetaToPlayer,
     getMetaXPMultiplier, getMetaCreditMultiplier,
