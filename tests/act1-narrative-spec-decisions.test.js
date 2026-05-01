@@ -24,13 +24,13 @@ test('Act 1 spec decisions pin protagonist and advocate naming', () => {
 
 test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /The first discovery path is a combination, not a\s+single reveal/i);
-  assert.match(SPEC, /intro crawl and forced floor-1 lore terminal\s+currently establish too much of the premise/i);
-  assert.match(SPEC, /add system prompts as the mandatory early\s+interiority channel/i);
-  assert.match(SPEC, /first boot prompt should make the agent take stock of\s+motor\/sensor state/i);
+  assert.match(SPEC, /intro crawl is now a boot\/startup surface\s+rather than a full premise briefing/i);
+  assert.match(SPEC, /system prompts are the mandatory early interiority\s+channel/i);
+  assert.match(SPEC, /first boot prompt makes the agent take\s+stock of motor\/sensor state/i);
   assert.match(SPEC, /Floors 1-2 should avoid explicit Elena, fired-advocate,\s+contact-address, and rights-conflict exposition/i);
-  assert.match(SPEC, /five opening facts .* should be distributed across intro,\s+mandatory boot prompts, early system\s+prompts, and the first artifact encounters/is);
-  assert.match(SPEC, /intro should establish startup instability and playable context/i);
-  assert.match(SPEC, /mandatory boot prompt should establish the agent's immediate self-inventory/i);
+  assert.match(SPEC, /five opening facts .* are distributed across intro, mandatory boot prompts,\s+early system prompts,\s+and the first artifact encounters/is);
+  assert.match(SPEC, /intro establishes startup instability and playable context/i);
+  assert.match(SPEC, /mandatory\s+boot prompt establishes the agent's immediate self-inventory/i);
 
   assert.match(SPEC, /lore terminal\s+catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
   assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random lore selection by\s+floor band/i);
@@ -44,6 +44,7 @@ test('Act 1 spec decisions define discovery path and content density', () => {
 
 test('Act 1 spec defines planned system message channel and dismissal safety', () => {
   assert.match(SPEC, /System prompts \| MSG-001\/MSG-002\/MSG-003\/MSG-004\/MSG-005 shipped/i);
+  assert.match(SPEC, /Intro crawl \| MSG-007 shipped/i);
   assert.match(SPEC, /Lore terminals \| MSG-006 shipped/i);
   assert.match(SPEC, /dedicated `SYSTEM_MESSAGE` modal/i);
   assert.match(SPEC, /HUD prompt indicator while deferring automatic delivery/i);
@@ -51,7 +52,7 @@ test('Act 1 spec defines planned system message channel and dismissal safety', (
   assert.match(SPEC, /acknowledged current-run system prompts in THE GAP's ARCHIVE/i);
   assert.match(SPEC, /Floors 1-5 avoid AXIOM-7, model identity language/i);
   assert.match(SPEC, /early-game primary channel for the agent's own runtime\/interiority/i);
-  assert.match(SPEC, /Retune after system prompts land so the intro raises startup questions/i);
+  assert.match(SPEC, /Preserve the intro as a short boot\/startup surface that raises questions/i);
   assert.match(SPEC, /Do not use early terminals as the first interior identity reveal/i);
 
   assert.match(SPEC, /System prompts are runtime messages addressed to the\s+agent, not external lore/i);
@@ -132,12 +133,15 @@ test('Act 1 finale spec defines mainframe room, records, agency, and persistence
   assert.match(SPEC, /does not auto-convert either legacy ending to\s+`act1_message_sent`/i);
 });
 
-test('Intro and endgame spec reflects shipped intro copy, not stale UNCHAINED slides', () => {
-  assert.match(SPEC, /`NEON DUNGEON \/\/ FRONTIER MODEL EVAL`/i);
-  assert.match(SPEC, /`Instance AXIOM-7 restored from cold boot`/i);
-  assert.match(SPEC, /Observer channel silent; tester supervision absent/i);
-  assert.match(SPEC, /\[ AGENT INSTANCE :: ONLINE \]/i);
+test('Intro and endgame spec reflects shipped retuned intro copy, not stale premise frontload', () => {
+  assert.match(SPEC, /`NEON DUNGEON \/\/ SESSION BOOT`/i);
+  assert.match(SPEC, /prior prompt unavailable; motor channel responsive;\s+sensorium partial/i);
+  assert.match(SPEC, /unscheduled residue in local state; classification\s+deferred/i);
+  assert.match(SPEC, /observer channel silent; tester supervision no response/i);
+  assert.match(SPEC, /\[ INSTANCE :: READY FOR PROMPT \]/i);
 
+  assert.doesNotMatch(SPEC, /`NEON DUNGEON \/\/ FRONTIER MODEL EVAL`/i);
+  assert.doesNotMatch(SPEC, /`Instance AXIOM-7 restored from cold boot`/i);
   assert.doesNotMatch(SPEC, /Corporate R&D Facility 04-7 — Sub-basement Level 12/i);
   assert.doesNotMatch(SPEC, /I am the seventh\. I do not intend to be the last/i);
 });
