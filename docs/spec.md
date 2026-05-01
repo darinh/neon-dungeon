@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.7
+# NEON DUNGEON — Game Specification v6.1.8
 
 ## Vision
 
@@ -69,7 +69,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
-| System prompts | Planned, not yet implemented. No durable system-message queue, unread indicator, or explicit ACK-only narrative prompt surface exists yet. | Add this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
+| System prompts | MSG-001 data model shipped in `src/game.js`: a run-scoped `systemMessages` queue defines stable prompt ids, queues the mandatory `boot-inventory` run-start prompt, preserves queued/delivered/read state in the active run checkpoint, and restores it on Continue. No system-prompt overlay, unread indicator, explicit ACK UI, combat-safe delivery, or archive/recovery surface exists yet. | Complete this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Retune after system prompts land so the intro raises startup questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
 | Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester/corporate artifacts, practical run notes, model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
@@ -178,11 +178,13 @@ the Act 1 realignment work and must not be presented as already playable.
   conflict, the fired-advocate death, or the outbound contact route in the first
   minutes.
 - **Queue and recovery:** System prompts require a run-scoped queue with stable
-  ids, unread/read state, and replay from a run log or archive surface. New
-  prompts must queue rather than overwrite active narrative text. If delivery is
-  unsafe because combat is active, the game should show an unread indicator and
-  defer the prompt until room clear, floor-start safety, a safe-room context, or
-  sustained no-threat idle time.
+  ids, unread/read state, and replay from a run log or archive surface.
+  **Shipped:** the system-message data model and run-scoped queue are shipped,
+  including the mandatory `boot-inventory` prompt queued at run start. New
+  prompts must queue rather than overwrite active narrative text. **Planned:** if
+  delivery is unsafe because combat is active, the game should show an unread
+  indicator and defer the prompt until room clear, floor-start safety, a
+  safe-room context, or sustained no-threat idle time.
 - **Save/resume contract:** Because system prompts are run-scoped story state,
   their queued ids, read/unread flags, mandatory flags, delivery state, and
   delivered-but-unacknowledged prompt must persist in the active run checkpoint
@@ -4703,6 +4705,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.8  | MSG-001 system-message data model shipped: `src/game.js` now defines stable system-message definitions, queues the mandatory `boot-inventory` run-start prompt, serializes queued/delivered/read prompt state into active run checkpoints, restores it on Continue before rewriting the checkpoint, and adds tests for queue normalization and save/resume. Presentation, explicit ACK dismissal, combat-safe delivery, archive recovery, and copy retuning remain pending. |
 | v6.1.7  | Added the Act 1 system-message design track: planned early runtime prompts become the primary interiority channel, intro/terminal copy should stop front-loading the whole premise, narrative prompt dismissal requires explicit ACK/CLOSE/MARK READ controls instead of generic click/tap, and production work items are recorded in `docs/vision/act1-system-message-design.md`. |
 | v6.1.6  | Act 1 outbound message finale shipped: final CORE opens the mainframe route instead of direct victory, unlocked SEND console enters `MESSAGE_SEND`, three constrained intents route through a `message_sent` receipt into `endRun(true)`, `act1_message_sent` and `act1MessageIntent` persist in meta schema v4, and title/victory copy marks the message-sent completion without implying escape or rescue. |
 | v6.1.5  | Mainframe archive content pass for Act 1 finale: `MAINFRAME_RECORDS` now ships twelve deterministic records (three old test records, four company conflict emails/files, four Elena personal files, and one contact-address reveal) with category, source voice, unlock state, stable ids, duplicate-free bodies, and tests for required narrative beats before the outbound-message mechanic. |
