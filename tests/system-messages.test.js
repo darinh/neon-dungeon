@@ -465,7 +465,7 @@ test('system message queue is wired into start, save, and continue contracts', (
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect shipped MSG-001 through MSG-006 scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001 through MSG-007 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
   assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
   assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
@@ -482,4 +482,6 @@ test('system message spec and design artifact reflect shipped MSG-001 through MS
   assert.match(DESIGN, /Status: shipped in THE GAP ARCHIVE/i);
   assert.match(DESIGN, /MSG-006: Terminal pool retune/i);
   assert.match(DESIGN, /Status: shipped\. Floors 1-5 now keep terminal copy external and practical/i);
+  assert.match(DESIGN, /MSG-007: Intro retune/i);
+  assert.match(DESIGN, /Status: shipped\. The intro now presents session boot/i);
 });
