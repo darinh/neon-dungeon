@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.10
+# NEON DUNGEON — Game Specification v6.1.11
 
 ## Vision
 
@@ -69,7 +69,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
-| System prompts | MSG-001/MSG-002/MSG-003 shipped in `src/game.js`: a run-scoped `systemMessages` queue defines stable prompt ids, queues the mandatory `boot-inventory` run-start prompt, preserves queued/delivered/read state in the active run checkpoint, restores it on Continue, displays delivered prompts in a dedicated `SYSTEM_MESSAGE` modal that can only be acknowledged with `X` or the labeled ACK button after a short arming delay, and shows a HUD prompt indicator while deferring automatic delivery until the current room is safe. No archive/recovery surface exists yet. | Complete this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
+| System prompts | MSG-001/MSG-002/MSG-003/MSG-004 shipped in `src/game.js`: a run-scoped `systemMessages` queue defines stable prompt ids, queues the mandatory `boot-inventory` run-start prompt plus floor-start prompts for floors 2-5, preserves queued/delivered/read state in the active run checkpoint, restores it on Continue, displays delivered prompts in a dedicated `SYSTEM_MESSAGE` modal that can only be acknowledged with `X` or the labeled ACK button after a short arming delay, and shows a HUD prompt indicator while deferring automatic delivery until the current room is safe. No archive/recovery surface exists yet. | Complete this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Retune after system prompts land so the intro raises startup questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
 | Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester/corporate artifacts, practical run notes, model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
@@ -187,9 +187,13 @@ the Act 1 realignment work and must not be presented as already playable.
   combat-safe automatic delivery are shipped: pending prompts can be opened
   deliberately with `X` or the indicator, while automatic surfacing is deferred
   whenever the player's current room has live enemies, active boss/challenge
-  pressure, hostile devices, or live projectiles. New prompts must queue rather
-  than overwrite active narrative text. **Planned:** read prompts still need a
-  run archive/recovery surface.
+  pressure, hostile devices, or live projectiles. The early prompt schedule is
+  shipped for floors 2-5: `floor-2-context-gap`, `floor-3-reward-model`,
+  `floor-4-render-layer`, and `floor-5-residual-trace` queue only on fresh floor
+  loads, not save resume, and keep the first-act voice short while avoiding late
+  Elena/contact/rights-conflict spoilers. New prompts must queue rather than
+  overwrite active narrative text. **Planned:** read prompts still need a run
+  archive/recovery surface.
 - **Save/resume contract:** Because system prompts are run-scoped story state,
   their queued ids, read/unread flags, mandatory flags, delivery state, and
   delivered-but-unacknowledged prompt must persist in the active run checkpoint
@@ -4757,6 +4761,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.11 | MSG-004 early prompt schedule shipped: system prompts now include floor-start entries for floors 2-5, queue those entries only on fresh floor loads, preserve save-resume behavior, and add tests for spoiler gates, line length, floor ids, and non-duplicating queue behavior. Archive recovery, broader copy retuning, and finale integration remain pending. |
 | v6.1.10 | MSG-003 combat-safe delivery shipped for system prompts: pending run prompts now show a compact HUD indicator, can be opened deliberately with `X` or by clicking/tapping the indicator, and auto-open only when the current room is free of live enemies, boss/challenge pressure, hostile devices, and projectiles. Archive recovery and broader existing-overlay dismissal audits remain pending. |
 | v6.1.9  | MSG-002 explicit acknowledgement shipped for system prompts: delivered run prompts now render in a dedicated `SYSTEM_MESSAGE` modal over the playfield, automatically surface before normal play on new/continued runs when active, use a short arming delay, and only mark read via `X` or the labeled ACK button. Unread indicator, combat-safe delivery, archive recovery, and broader existing-overlay dismissal audits remain pending. |
 | v6.1.8  | MSG-001 system-message data model shipped: `src/game.js` now defines stable system-message definitions, queues the mandatory `boot-inventory` run-start prompt, serializes queued/delivered/read prompt state into active run checkpoints, restores it on Continue before rewriting the checkpoint, and adds tests for queue normalization and save/resume. Presentation, explicit ACK dismissal, combat-safe delivery, archive recovery, and copy retuning remain pending. |
