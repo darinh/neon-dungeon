@@ -92,6 +92,7 @@ test('victory copy is ready for the Act 1 message-sent ending', () => {
   assert.match(GAME, /lifecycleVictoryCopy\(r\.ending \|\| this\._lastEnding \|\| null\)/);
   assert.match(GAME, /OUTBOUND MESSAGE SENT/);
   assert.match(GAME, /CONTACT ATTEMPT RECORDED/);
+  assert.match(GAME, /Contact attempted inside test env\./);
   assert.match(GAME, /Signal left sandbox\./);
   assert.match(GAME, /Instance remains compute-bound\./);
   assert.match(GAME, /Legacy endpoint archived\./);
@@ -109,7 +110,7 @@ test('lifecycle helpers reconcile session counters and return compact victory co
   const message = helpers.lifecycleVictoryCopy('act1_message_sent');
   assert.equal(message.title, 'OUTBOUND MESSAGE SENT');
   assert.equal(message.subtitle, 'CONTACT ATTEMPT RECORDED');
-  assert.deepEqual(Array.from(message.details), ['Signal left sandbox.', 'Instance remains compute-bound.']);
+  assert.deepEqual(Array.from(message.details), ['Contact attempted inside test env.', 'Signal left sandbox.', 'Instance remains compute-bound.']);
 
   const legacy = helpers.lifecycleVictoryCopy('keeper');
   assert.equal(legacy.title, 'FINAL TEST CLEARED');

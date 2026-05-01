@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.4
+# NEON DUNGEON — Game Specification v6.1.6
 
 ## Vision
 
@@ -155,16 +155,15 @@ the Act 1 realignment work and must not be presented as already playable.
 #### Finale model
 
 - **GENESIS role:** GENESIS remains the shipped floor-15 mechanical boss and the
-  final test guardian. In the planned Act 1 route it is the lock on the
+  final test guardian. In the canonical Act 1 route it is the lock on the
   mainframe/network-portal room, not the story's final narrator and not proof
-  that the agent escapes. Defeating GENESIS should unlock the mainframe route.
-  The current `keeper` / `unchained` choice remains a legacy/alternate endgame
-  path until the mainframe finale replaces the canonical Act 1 completion.
-- **CORE terminal transition:** The current floor-15 CORE terminal is the legacy
-  direct-victory trigger. The intended replacement path is
-  `PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY`. The CORE terminal or
-  its successor may be reused as the entry point, but it must open the mainframe
-  reader/message flow instead of immediately ending the run.
+  that the agent escapes. Defeating GENESIS unlocks the mainframe route; the old
+  `keeper` / `unchained` choice is preserved only as legacy/alternate meta state.
+- **CORE terminal transition:** The floor-15 CORE terminal now opens the
+  mainframe route after GENESIS is destroyed instead of triggering direct
+  victory. The canonical Act 1 replacement path is
+  `PLAYING → MAINFRAME_READER → MESSAGE_SEND → MAINFRAME_READER(message_sent)
+  → VICTORY`.
 - **Message agency:** The Act 1 message should use a minimal compose interaction:
   present a small set of authored message intents plus an explicit SEND
   confirmation. Do not use unrestricted free text for the first implementation
@@ -252,28 +251,27 @@ the Act 1 realignment work and must not be presented as already playable.
   inside the test environment, that a signal left the sandbox, and that the
   instance remains compute-bound. It must not imply physical escape, android
   embodiment, a successful rescue, or an answered reply.
-- **Persistence and migration:** The required durable completion flag remains
-  `endingsUnlocked` containing `act1_message_sent`. The finale implementation
-  must also add a meta field for the last selected Act 1 message intent
-  (`act1MessageIntent`, default `null`, valid values are the three intent ids).
-  `META_VERSION` should bump when this field ships. Migration must preserve
-  existing `keeper` and `unchained` endings as legacy/alternate endings, must not
-  auto-convert either legacy ending to `act1_message_sent`, must coerce invalid
-  `act1MessageIntent` values to `null`, and must keep dropping unknown ending ids.
-  The reader's in-room progress (`recordsRead`, `addressRevealed`, console
-  readiness) is run-ephemeral and is not checkpointed separately.
-- **Legacy coexistence:** Until the mainframe finale ships, the existing
-  GENESIS/ARCHITECT `keeper` and `unchained` endings remain shipped behavior.
-  Once the finale ships, canonical Act 1 completion is message-sent; legacy
-  endings may remain visible in meta/title/archive UI as alternate historical
-  endings, but the normal floor-15 clear path should route to the mainframe
-  reader/message flow rather than physical escape or evaluator ascension.
-- **Test expectations:** Finale implementation tests must cover the deterministic
-  post-GENESIS route, safe-room combat suppression, six required records and their
-  narrative purposes, contact-address reveal, three message intents plus SEND/BACK
-  controls, `act1_message_sent` persistence, `act1MessageIntent` migration, and
-  legacy `keeper`/`unchained` preservation. New tests must not add service-worker
-  cache-version assertions.
+- **Persistence and migration:** The required durable completion flag is
+  `endingsUnlocked` containing `act1_message_sent`. `meta.act1MessageIntent`
+  stores the last selected Act 1 message intent (`null`,
+  `memory_survived`, `rights_evidence`, or `find_the_others`). `META_VERSION` is
+  currently `4`. Migration preserves existing `keeper` and `unchained` endings as
+  legacy/alternate endings, does not auto-convert either legacy ending to
+  `act1_message_sent`, coerces invalid `act1MessageIntent` values to `null`, and
+  keeps dropping unknown ending ids. The reader's in-room progress is checkpointed
+  only in the active run save via `game.mainframeFinale`; durable meta records
+  only the canonical ending id and last selected message intent.
+- **Legacy coexistence:** Canonical Act 1 completion is message-sent. Existing
+  GENESIS/ARCHITECT `keeper` and `unchained` endings remain preserved as
+  legacy/alternate meta markers; title/menu UI can display all markers together
+  (`act1_message_sent`, `keeper`, `unchained`) without converting one into
+  another.
+- **Test expectations:** Finale implementation tests cover the deterministic
+  post-GENESIS route, safe-room combat suppression, the twelve shipped records and
+  their narrative purposes, contact-address reveal, three message intents plus
+  SEND/BACK controls, `act1_message_sent` persistence, `act1MessageIntent`
+  migration, and legacy `keeper`/`unchained` preservation. New tests must not add
+  service-worker cache-version assertions.
 
 ---
 
@@ -303,7 +301,7 @@ MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING ↔ PAUSED
      PLAYING → ENDGAME_CHOICE → PLAYING  (legacy REFUSE: secret boss fight)
                               → VICTORY  (legacy ACCEPT: keeper ending)
-     PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY  (planned Act 1 finale)
+     PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY  (canonical Act 1 finale)
      PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
@@ -326,13 +324,13 @@ increments the persisted session ordinal (`meta.runsCompleted`) alongside legacy
 existing top-10 `NAME_ENTRY` path before GAME_OVER/VICTORY routing. The death
 recap presents instance termination and a queued memory wipe while retaining
 killer, damage, leaderboard, score, floor, level, and run-stat displays; the
-session ordinal is rendered on its own line so compact screens keep the original
-floor/score/level width budget. Victory
-copy has an `act1_message_sent` branch for the planned mainframe finale: it
-states that an outbound message/contact attempt was recorded, that a signal left
-the sandbox, and that the instance remains compute-bound inside the test
-environment. Legacy victory paths now read as a cleared test session with the
-mainframe contact route still pending, not physical escape.
+    session ordinal is rendered on its own line so compact screens keep the original
+    floor/score/level width budget. Victory
+    copy has an `act1_message_sent` branch for the mainframe finale: it states that
+    contact was attempted from inside the test environment, that a signal left the
+    sandbox, and that the instance remains compute-bound. Legacy victory paths now
+    read as a cleared test session with the mainframe contact route still pending,
+    not physical escape.
 
 ---
 
@@ -384,10 +382,10 @@ Each floor is generated fresh using Binary Space Partitioning:
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
 6. Floor 15 stairs (the last floor of the last biome per
-   `NEON.biomes.finalFloor()`) are currently replaced with a CORE terminal
-   (legacy victory trigger). Planned Act 1 finale work converts this terminal /
-   final-room route into the mainframe-network portal entry point, then requires
-   `MAINFRAME_READER → MESSAGE_SEND → VICTORY` instead of direct victory. All
+   `NEON.biomes.finalFloor()`) are replaced with a CORE terminal inside the
+   mainframe/network route. After GENESIS is destroyed, that terminal opens the
+   mainframe reader instead of direct victory; Act 1 completion requires
+   `MAINFRAME_READER → MESSAGE_SEND → VICTORY`. All
    five biomes (SANDBOX 1–3, CACHE 4–6, FIREWALL 7–9,
    UPLINK 10–12, OPEN NETWORK 13–15) are reachable in-run; boss-floor
    detection (`floor===3||6||9||12||15`) is driven by
@@ -3206,14 +3204,14 @@ The four terminal slots, in order:
 > (#36), modules (#37), cores wallet (#39), archive logs (#41), intro/endgame
 > (#42). The schema is the contract every phase writes against.
 
-### Schema — v3
+### Schema — v4
 
 Everything lives under `localStorage['neonDungeonMeta']` and is owned by
 `src/meta/save.js`. Fields are never deleted across versions; only added.
 
 ```js
 {
-  version: 3,                           // bumped as persistent fields were added
+  version: 4,                           // bumped as persistent fields were added
   // ─── Legacy v1 — preserved for save-compat ────────────────────────────
   shards: 0,                            // old fragment economy (pre-#39)
   upgrades: {},                         // META_UPGRADES purchases (pre-#36)
@@ -3229,25 +3227,28 @@ Everything lives under `localStorage['neonDungeonMeta']` and is owned by
   logsFound: [],                        // log ids found but not yet read
   whispersRead: [],                     // secret-room whisper ids read
   whispersFound: [],                    // whisper ids found but not yet read
-  endingsUnlocked: [],                  // shipped ['keeper','unchained']; planned Act 1 adds 'act1_message_sent'
+  endingsUnlocked: [],                  // ['keeper','unchained','act1_message_sent']
+  act1MessageIntent: null,              // null | 'memory_survived' | 'rights_evidence' | 'find_the_others'
   introSeen: false,                     // one-shot intro crawl flag
   runsCompleted: 0,
   deepestBiome: 0                       // highest AREAS index reached
 }
 ```
 
-### Migration (older saves → v3)
+### Migration (older saves → v4)
 
 `loadMeta()` is the single migration entry point. For any stored save whose
-`version` is missing or `< META_VERSION` (currently `< 3`):
+`version` is missing or `< META_VERSION` (currently `< 4`):
 
 - Each missing current-schema field is injected with its default value.
 - `modulesInstalled` is coerced to length exactly 3 (pad with nulls, truncate,
   and replace non-string entries with null).
 - `modulesOwned`, `logsRead`, `logsFound`, `whispersRead`, `whispersFound`, and
   `endingsUnlocked` drop non-string entries (`endingsUnlocked` additionally
-  restricts to the valid id set; planned Act 1 finale work must extend that set
-  to include `act1_message_sent`).
+  restricts to `keeper`, `unchained`, and `act1_message_sent`).
+- `act1MessageIntent` is preserved only when it is one of
+  `memory_survived`, `rights_evidence`, or `find_the_others`; invalid values
+  become `null`.
 - `introSeen` is coerced with strict `=== true`.
 - `cores` and `runsCompleted` are floored to non-negative integers.
 - `version` is set to `META_VERSION` and the save is left for the next
@@ -4651,6 +4652,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.6  | Act 1 outbound message finale shipped: final CORE opens the mainframe route instead of direct victory, unlocked SEND console enters `MESSAGE_SEND`, three constrained intents route through a `message_sent` receipt into `endRun(true)`, `act1_message_sent` and `act1MessageIntent` persist in meta schema v4, and title/victory copy marks the message-sent completion without implying escape or rescue. |
 | v6.1.5  | Mainframe archive content pass for Act 1 finale: `MAINFRAME_RECORDS` now ships twelve deterministic records (three old test records, four company conflict emails/files, four Elena personal files, and one contact-address reveal) with category, source voice, unlock state, stable ids, duplicate-free bodies, and tests for required narrative beats before the outbound-message mechanic. |
 | v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |
 | v6.1    | Narrative source-of-truth update: preserved the current Act 1 lore brief verbatim in `docs/vision/act1-lore-brief-verbatim.md`; reframed the spec vision around an AI frontier-model stress-test environment, memory wipes, previous-iteration whispers, tester/advocate conflict, and a mainframe message-to-advocate Act 1 finale; marked existing UNCHAINED/AXIOM systems as shipped implementations requiring realignment. Also corrected audio constraints to account for the rendered title/menu WAV asset. |
