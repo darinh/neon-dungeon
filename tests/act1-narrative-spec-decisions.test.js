@@ -43,9 +43,10 @@ test('Act 1 spec decisions define discovery path and content density', () => {
 });
 
 test('Act 1 spec defines planned system message channel and dismissal safety', () => {
-  assert.match(SPEC, /System prompts \| MSG-001\/MSG-002 shipped/i);
+  assert.match(SPEC, /System prompts \| MSG-001\/MSG-002\/MSG-003 shipped/i);
   assert.match(SPEC, /dedicated `SYSTEM_MESSAGE` modal/i);
-  assert.match(SPEC, /No unread indicator, combat-safe delivery/i);
+  assert.match(SPEC, /HUD prompt indicator while deferring automatic delivery/i);
+  assert.match(SPEC, /No archive\/recovery surface/i);
   assert.match(SPEC, /early-game primary channel for the agent's own runtime\/interiority/i);
   assert.match(SPEC, /Retune after system prompts land so the intro raises startup questions/i);
   assert.match(SPEC, /Do not use early terminals as the first interior identity reveal/i);
