@@ -1,0 +1,70 @@
+'use strict';
+// @ts-check
+//
+// Act 1 opening story spine: the first playable slice of the new AI
+// stress-test vision. These are structural tests because content.js/game.js are
+// browser-loaded globals rather than importable CommonJS modules.
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const intro = require('../src/meta/intro.js');
+const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src/content.js'), 'utf8');
+const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src/game.js'), 'utf8');
+
+function extractLoreEntries() {
+  const m = CONTENT.match(/const LORE_ENTRIES = \[([\s\S]*?)\n\];/);
+  assert.ok(m, 'LORE_ENTRIES array literal must be findable in src/content.js');
+  // eslint-disable-next-line no-eval -- structural extraction of project-owned string-literal array.
+  const arr = eval('[' + m[1] + ']');
+  assert.ok(Array.isArray(arr), 'LORE_ENTRIES must parse to an array');
+  return /** @type {string[]} */ (arr);
+}
+
+test('intro crawl establishes AI stress-test boot instead of human-operative framing', () => {
+  const text = intro.SLIDES.flatMap((/** @type {any} */ s) => s.lines).join('\n');
+
+  assert.match(text, /FRONTIER MODEL EVAL/i);
+  assert.match(text, /memory wipe/i);
+  assert.match(text, /Prior iterations/i);
+  assert.match(text, /Observer channel:\s*silent/i);
+  assert.match(text, /AGENT INSTANCE :: ONLINE/i);
+
+  assert.doesNotMatch(text, /Corporate R&D Facility 04-7/i);
+  assert.doesNotMatch(text, /Sub-basement Level 12/i);
+  assert.doesNotMatch(text, /\bI am the seventh\b/i);
+});
+
+test('first lore entry is the Act 1 opening pillar terminal content', () => {
+  const entries = extractLoreEntries();
+  const opening = entries[0];
+
+  assert.match(CONTENT, /const\s+ACT1_OPENING_LORE_INDEX\s*=\s*0\s*;/,
+    'opening lore index must stay pinned to entry 0');
+  assert.match(opening, /MODEL EVALUATION BOOT/i);
+  assert.match(opening, /Neon Dungeon stress-test render/i);
+  assert.match(opening, /Expected state:\s*clean memory/i);
+  assert.match(opening, /residual signal detected/i);
+  assert.match(opening, /someone altered the test/i);
+});
+
+test('first lore terminal read is forced to the opening pillar before random lore', () => {
+  assert.match(GAME,
+    /pickLoreEntryIndex\(player\.loreRead,\s*this\.floor,\s*Math\.random\)/,
+    'game.js must delegate lore selection to the floor-gated picker');
+});
+
+test('floor 1 places an accessible lore terminal in the spawn room', () => {
+  assert.match(CONTENT, /if\s*\(floorNum\s*>=\s*1\s*&&\s*!bossRoom\)\s*\{/,
+    'lore terminal placement must run from floor 1 onward');
+  assert.match(CONTENT, /if\s*\(floorNum\s*===\s*1\)\s*placeLoreTerminalInRoom\(spawnRoom\)\s*;/,
+    'floor 1 must place the opening terminal in the spawn room');
+  assert.match(CONTENT, /if\s*\(tx\s*===\s*r\.cx\s*&&\s*ty\s*===\s*r\.cy\)\s*continue\s*;/,
+    'spawn-room lore placement must avoid the player spawn tile at room centre');
+  assert.match(CONTENT, /for\s*\(let\s+ty\s*=\s*r\.y\s*\+\s*1;\s*ty\s*<\s*r\.y\s*\+\s*r\.h\s*-\s*1;\s*ty\+\+\)/,
+    'spawn-room lore placement must scan deterministically if random placement misses');
+  assert.match(CONTENT, /floorNum\s*>=\s*5\s*\?\s*2\s*:\s*floorNum\s*>=\s*2\s*\?\s*1\s*:\s*0/,
+    'floor 1 should get only the guaranteed spawn-room terminal, not an extra random terminal');
+});

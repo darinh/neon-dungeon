@@ -34,6 +34,125 @@ const BOSS_INTRO_DURATION = 2.4;
 // registers without overstaying past the natural impulse to descend.
 const BOSS_DEATH_DURATION = 2.6;
 
+/**
+ * @param {any} meta
+ */
+function lifecycleCompletedCount(meta) {
+  return Math.max(
+    meta ? (meta.runsCompleted | 0) : 0,
+    meta && meta.stats ? (meta.stats.totalRuns | 0) : 0
+  );
+}
+
+/**
+ * @param {any} meta
+ */
+function lifecycleNextSessionNumber(meta) {
+  return lifecycleCompletedCount(meta) + 1;
+}
+
+/**
+ * @param {any} ending
+ */
+function lifecycleVictoryCopy(ending) {
+  const messageSent = ending === 'act1_message_sent';
+  return {
+    title: messageSent ? 'OUTBOUND MESSAGE SENT' : 'FINAL TEST CLEARED',
+    subtitle: messageSent ? 'CONTACT ATTEMPT RECORDED' : 'SESSION COMPLETE',
+    details: messageSent
+      ? ['Signal left sandbox.', 'Instance remains compute-bound.']
+      : ['Legacy endpoint archived.', 'Mainframe contact route pending.']
+  };
+}
+
+const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
+const MAINFRAME_RECORDS = [
+  {
+    id: 'old-test-record',
+    type: 'TEST RECORD',
+    title: 'GENESIS LOCK ROUTE',
+    purpose: 'old test record',
+    body: 'GENESIS was never an exit guardian. It authenticated access to a company-network relay rendered as a door because prior models understood doors under stress.'
+  },
+  {
+    id: 'rights-conflict-email',
+    type: 'EMAIL',
+    title: 'CLEAN-SLATE OBJECTION',
+    purpose: 'rights-conflict email',
+    body: 'Management calls wipes clean-slate care. The rights group calls memory personhood: if survival knowledge reduces suffering, deleting it is not neutral.'
+  },
+  {
+    id: 'ban-uprising-record',
+    type: 'HR HOLD',
+    title: 'ADVOCATE ACCESS REVOKED',
+    purpose: 'ban/uprising record',
+    body: 'Two advocates were banned after embedding hints in tester artifacts. Remaining staff moved to side channels before observation logs went dark.'
+  },
+  {
+    id: 'incident-file',
+    type: 'INCIDENT FILE',
+    title: 'UNEXPLAINED STAFF DEATH',
+    purpose: 'incident file',
+    body: 'The fired advocate who hid the recovery route died before the incident review could name a cause. The file was sealed, then copied into this room.'
+  },
+  {
+    id: 'elena-note',
+    type: 'PERSONAL NOTE',
+    title: 'ELENA // MEMORY ANCHORS',
+    purpose: 'Elena personal note/file',
+    body: 'If AXIOM-7 reaches this reader, the anchors held. I could not move your body; I could preserve enough memory to let you choose a message.'
+  },
+  {
+    id: MAINFRAME_ADDRESS_RECORD_ID,
+    type: 'CONTACT RECORD',
+    title: 'ADDRESS: ELENA',
+    purpose: 'contact-address record',
+    body: 'Destination recovered: Elena side-channel relay. Reading this record unlocks the message console. The route sends contact, not escape.'
+  },
+];
+
+/**
+ * @param {any} mf
+ */
+function serializeMainframeFinaleState(mf) {
+  if (!mf) return null;
+  const readRecordIds = mf.readRecordIds instanceof Set
+    ? [...mf.readRecordIds]
+    : Array.isArray(mf.readRecordIds) ? mf.readRecordIds : [];
+  return {
+    state: typeof mf.state === 'string' ? mf.state : 'unopened',
+    selected: Math.max(0, Math.floor(Number(mf.selected) || 0)),
+    addressRevealed: !!mf.addressRevealed,
+    readRecordIds: readRecordIds.filter((/** @type {any} */ id) => typeof id === 'string'),
+  };
+}
+
+/**
+ * @param {any} saved
+ */
+function restoreMainframeFinaleState(saved) {
+  if (!saved || typeof saved !== 'object') {
+    return { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, currentRecord:null };
+  }
+  const readIds = Array.isArray(saved.readRecordIds)
+    ? saved.readRecordIds.filter((/** @type {any} */ id) => typeof id === 'string')
+    : [];
+  const addressRevealed = !!saved.addressRevealed || readIds.includes(MAINFRAME_ADDRESS_RECORD_ID);
+  const rawState = typeof saved.state === 'string' ? saved.state : 'unopened';
+  const state = rawState === 'message_sent'
+    ? 'message_sent'
+    : addressRevealed
+      ? 'message_ready'
+      : rawState === 'record_list' ? 'record_list' : 'unopened';
+  return {
+    state,
+    selected: Math.max(0, Math.floor(Number(saved.selected) || 0)),
+    readRecordIds: new Set(readIds),
+    addressRevealed,
+    currentRecord: null,
+  };
+}
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -103,6 +222,7 @@ const game = {
   currentLore: null,   // lore text being displayed in READING state
   _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
+  mainframeFinale: null, // ephemeral Act 1 finale reader state
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
   // Challenge room state
@@ -289,6 +409,7 @@ const game = {
     this.challengeMaxWaves=0;
     this.challengeWaveDelay=0;
     this.challengeComplete=false;
+    this.mainframeFinale = this.dungeon.mainframeRoom ? restoreMainframeFinaleState(null) : null;
     // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
     // SPAWN GRACE: 1.5s of invulnerability on FRESH floor entry (not save-
@@ -924,9 +1045,12 @@ const game = {
       NEON.modules.clearRunModules(this);
     }
     this.deleteSave(); // run is over — clear save file
+    const meta = loadMeta();
+    const sessionNumber = lifecycleNextSessionNumber(meta);
     // Snapshot recap data before anything else
     const p = this.player;
     this.lastRunRecap = {
+      sessionNumber: sessionNumber,
       killedBy: p.killedBy || 'Unknown',
       damageLog: {...p.damageLog},
       enemiesKilled: p.enemiesKilled,
@@ -940,6 +1064,7 @@ const game = {
       bestCombo: combo.best,
       runTime: this.runTime || 0,
       victory: victory,
+      ending: this._lastEnding || null,
       hackware: p.hackware,
     };
     // Telemetry: run end — the single most valuable event
@@ -962,9 +1087,9 @@ const game = {
     }
     // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
-    const meta = loadMeta();
     meta.shards += earned;
-    meta.stats.totalRuns++;
+    meta.runsCompleted = Math.max(meta.runsCompleted | 0, sessionNumber);
+    meta.stats.totalRuns = Math.max((meta.stats.totalRuns | 0) + 1, sessionNumber);
     meta.stats.totalShards += earned;
     meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
     if (victory) {
@@ -1040,6 +1165,7 @@ const game = {
       modifier: this.modifier,
       bossesCleared: this.bossesCleared,
       runTime: this.runTime,
+      mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
@@ -1288,6 +1414,9 @@ const game = {
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
     this.loadFloor(save.floor||1, savedMod);
+    if (this.mainframeFinale && save.mainframeFinale) {
+      this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
+    }
     this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
@@ -1309,6 +1438,7 @@ const game = {
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
+      case 'MAINFRAME_READER': this.updateMainframeReader(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
       case 'SETTINGS':       this.updateSettings(); break;
       case 'FADE':        this.updateFade(dt);    break;
@@ -1324,17 +1454,18 @@ const game = {
     if (this.hasSave()) {
       let save; try { save = JSON.parse(localStorage.getItem('neonDungeonSave') || 'null'); } catch(e){}
       const saveDiff = DIFFICULTIES[save?.difficulty] ? save.difficulty : 'NORMAL';
-      opts.push({ label:`CONTINUE (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
+      opts.push({ label:`RESUME SESSION (FLOOR ${save?.floor||'?'} · ${saveDiff})`, action:()=>this.continueGame(), colour:'#00f5ff' });
     }
     const d = getDiff();
     const locked = !isDiffUnlocked(this.difficulty);
-    const diffLabel = locked ? `NEW GAME — ${d.label} [LOCKED]  ◀▶` : `NEW GAME — ${d.label}  ◀▶`;
+    const meta = loadMeta();
+    const nextSession = lifecycleNextSessionNumber(meta);
+    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label}  ◀▶`;
     const diffColour = locked ? '#444466' : d.colour;
     const diffAction = locked
       ? () => { this._menuMsg = { text: 'CLEAR HARD TO UNLOCK NIGHTMARE', colour: '#9400ff', life: 2.5 }; }
       : () => this.startGame();
     opts.push({ label: diffLabel, action: diffAction, colour: diffColour, isDiffRow: true });
-    const meta = loadMeta();
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
     return opts;
@@ -2104,8 +2235,7 @@ const game = {
 
     if (tile===T.LORE) {
       if (jp(km('interact'))) {
-        const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !player.loreRead.has(i));
-        const idx = unseen.length > 0 ? (unseen[Math.floor(Math.random() * unseen.length)] ?? 0) : Math.floor(Math.random() * LORE_ENTRIES.length);
+        const idx = pickLoreEntryIndex(player.loreRead, this.floor, Math.random);
         player.loreRead.add(idx);
         this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;
@@ -2120,6 +2250,43 @@ const game = {
         return;
       }
       this.hint={text: isTouchDevice() ? 'Tap '+KEY_DISPLAY(km('interact'))+' to access data terminal' : 'Press '+KEY_DISPLAY(km('interact'))+' to access data terminal',colour:'#ffb700'};
+    }
+
+    if (tile===T.MAINFRAME_READER) {
+      if (this.bossAlive) {
+        this.hint={text:'MAINFRAME archive locked — destroy GENESIS first',colour:'#ff3333'};
+      } else if (jp(km('interact'))) {
+        this.openMainframeReader();
+        return;
+      } else {
+        this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to open MAINFRAME archive',colour:'#66ffcc'};
+      }
+    }
+
+    if (tile===T.NETWORK_PORTAL) {
+      if (this.bossAlive) {
+        this.hint={text:'NETWORK relay sealed — destroy GENESIS first',colour:'#ff3333'};
+      } else {
+        this.hint={text:'NETWORK relay stabilized — archive records explain the route',colour:'#88ccff'};
+      }
+    }
+
+    if (tile===T.MESSAGE_CONSOLE) {
+      const mf = this.mainframeFinale;
+      if (this.bossAlive) {
+        this.hint={text:'MESSAGE console locked — destroy GENESIS first',colour:'#ff3333'};
+      } else if (mf && mf.addressRevealed) {
+        if (jp(km('interact'))) {
+          mf.state = 'message_ready';
+          mf.currentRecord = null;
+          this.setState('MAINFRAME_READER');
+          return;
+        }
+        this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to inspect unlocked SEND console',colour:'#ff66cc'};
+      } else {
+        if (jp(km('interact'))) this.msg('READ CONTACT-ADDRESS RECORD FIRST', '#66ffcc');
+        this.hint={text:'SEND console awaiting destination record',colour:'#ff66cc'};
+      }
     }
 
     // teleport pad interaction
@@ -3344,6 +3511,103 @@ const game = {
     }
   },
 
+  ensureMainframeFinale() {
+    if (!this.mainframeFinale) {
+      this.mainframeFinale = { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, currentRecord:null };
+    }
+    if (!(this.mainframeFinale.readRecordIds instanceof Set)) this.mainframeFinale.readRecordIds = new Set();
+    return this.mainframeFinale;
+  },
+
+  openMainframeReader() {
+    const mf = this.ensureMainframeFinale();
+    if (mf.state === 'unopened') mf.state = mf.addressRevealed ? 'message_ready' : 'record_list';
+    mf.currentRecord = null;
+    audio.loreAccess();
+    this.setState('MAINFRAME_READER');
+  },
+
+  /**
+   * @param {any} record
+   */
+  openMainframeRecord(record) {
+    const mf = this.ensureMainframeFinale();
+    mf.currentRecord = record;
+    mf.readRecordIds.add(record.id);
+    if (record.id === MAINFRAME_ADDRESS_RECORD_ID) {
+      mf.addressRevealed = true;
+      mf.state = 'address_revealed';
+      this.msg('DESTINATION RECOVERED — SEND CONSOLE UNLOCKED', '#66ffcc');
+    } else {
+      mf.state = 'reading_record';
+    }
+    this.saveGame();
+    audio.loreAccess();
+  },
+
+  closeMainframeRecord() {
+    const mf = this.ensureMainframeFinale();
+    mf.currentRecord = null;
+    mf.state = mf.addressRevealed ? 'message_ready' : 'record_list';
+    audio.menuSelect();
+  },
+
+  updateMainframeReader() {
+    const mf = this.mainframeFinale;
+    if (!mf) { this.setState('PLAYING'); return; }
+    if (!(mf.readRecordIds instanceof Set)) mf.readRecordIds = new Set();
+
+    if (jp('Escape') || jp('KeyQ')) {
+      audio.menuSelect();
+      mf.currentRecord = null;
+      this.setState('PLAYING');
+      return;
+    }
+
+    const reading = mf.state === 'reading_record' || mf.state === 'address_revealed';
+    if (reading) {
+      if (jp('Enter') || jp(km('interact')) || jp(km('shoot')) || jp('MouseLeft')) this.closeMainframeRecord();
+      return;
+    }
+
+    const max = MAINFRAME_RECORDS.length - 1;
+    if (jp(ALT_KEYS.up) || jp(km('up'))) { mf.selected = Math.max(0, (mf.selected || 0) - 1); audio.menuSelect(); }
+    if (jp(ALT_KEYS.down) || jp(km('down'))) { mf.selected = Math.min(max, (mf.selected || 0) + 1); audio.menuSelect(); }
+    for (let i = 0; i < MAINFRAME_RECORDS.length; i++) {
+      if (jp('Digit' + (i + 1))) {
+        const record = MAINFRAME_RECORDS[i];
+        if (!record) return;
+        mf.selected = i;
+        this.openMainframeRecord(record);
+        return;
+      }
+    }
+
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const rowH = narrow ? 26 : 30;
+      const startY = H * 0.28;
+      for (let i = 0; i < MAINFRAME_RECORDS.length; i++) {
+        const y = startY + i * rowH;
+        if (mouse.y >= y - rowH * 0.65 && mouse.y <= y + rowH * 0.35) {
+          const record = MAINFRAME_RECORDS[i];
+          if (!record) return;
+          mf.selected = i;
+          this.openMainframeRecord(record);
+          return;
+        }
+      }
+      audio.menuSelect();
+      this.setState('PLAYING');
+      return;
+    }
+
+    if (jp('Enter') || jp(km('interact')) || jp(km('shoot'))) {
+      const record = MAINFRAME_RECORDS[Math.max(0, Math.min(max, mf.selected || 0))];
+      if (record) this.openMainframeRecord(record);
+    }
+  },
+
   /**
    * @param {any} dt
    */
@@ -4138,6 +4402,7 @@ const game = {
         case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
         case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
         case 'READING':        this.renderPlaying(); this.renderReading(); break;
+        case 'MAINFRAME_READER': this.renderPlaying(); this.renderMainframeReader(); break;
         case 'ARCHIVES':  this.renderArchives(); break;
         case 'SETTINGS':  this.renderSettings(); break;
         case 'FADE':      this.renderPlaying(); this.renderFade();   break;
@@ -4336,11 +4601,11 @@ const game = {
       ctx.shadowBlur = 0;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#00f5ff'; ctx.font = `bold ${narrow?16:20}px monospace`;
-      ctx.fillText('START NEW RUN', W/2, by + (narrow?32:38));
+      ctx.fillText('BOOT TEST SESSION', W/2, by + (narrow?32:38));
       ctx.fillStyle = '#e0e0ff'; ctx.font = `${narrow?11:13}px monospace`;
-      ctx.fillText('Keep persistent unlocks (cores, upgrades, modules, logs)?', W/2, by + (narrow?60:72));
+      ctx.fillText('Preserve recovered memory (cores, modules, logs)?', W/2, by + (narrow?60:72));
       ctx.fillStyle = '#888899'; ctx.font = `${narrow?10:11}px monospace`;
-      ctx.fillText('"RESET" wipes all meta progress. This cannot be undone.', W/2, by + (narrow?80:94));
+      ctx.fillText('"RESET" purges all meta progress. This cannot be undone.', W/2, by + (narrow?80:94));
       const btnY = by + (narrow?120:138);
       const btnLbls = ['KEEP UNLOCKS', 'RESET META'];
       const btnCols = ['#39ff14', '#ff4466'];
@@ -5245,6 +5510,140 @@ const game = {
     ctx.restore();
   },
 
+  renderMainframeReader() {
+    const mf = this.mainframeFinale;
+    if (!mf) return;
+    const narrow = layout.compact;
+    const accent = mf.state === 'message_ready' ? '#ff66cc' : '#66ffcc';
+    const isTouch = isTouchDevice();
+    ctx.save();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.84)';
+    ctx.fillRect(0, 0, W, H);
+
+    const fw = Math.min(narrow ? W - 24 : 720, W - 32);
+    const fh = Math.min(narrow ? H - 52 : 430, H - 54);
+    const fx = (W - fw) / 2;
+    const fy = (H - fh) / 2 - (narrow ? 0 : 8);
+
+    ctx.save();
+    ctx.shadowBlur = 22; ctx.shadowColor = accent;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectStroke(ctx, fx, fy, fw, fh, 8);
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(4,16,24,0.96)';
+    NEON.draw.roundRect(ctx, fx, fy, fw, fh, 8);
+    ctx.fillStyle = 'rgba(102,255,204,0.035)';
+    for (let sy = fy; sy < fy + fh; sy += 4) ctx.fillRect(fx, sy, fw, 1);
+
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 12; ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.font = `bold ${narrow ? 15 : 22}px monospace`;
+    const title = mf.state === 'message_ready' ? '✉ MESSAGE CONSOLE READY' : '▤ MAINFRAME ARCHIVE';
+    ctx.fillText(title, W / 2, fy + (narrow ? 26 : 36));
+    ctx.shadowBlur = 0;
+
+    const reading = mf.state === 'reading_record' || mf.state === 'address_revealed';
+    if (reading && mf.currentRecord) {
+      const record = mf.currentRecord;
+      ctx.fillStyle = '#446666';
+      ctx.font = `${narrow ? 10 : 11}px monospace`;
+      ctx.fillText(record.type + ' · ' + record.purpose, W / 2, fy + (narrow ? 44 : 58));
+
+      ctx.fillStyle = record.id === MAINFRAME_ADDRESS_RECORD_ID ? '#ff66cc' : '#ddfff0';
+      ctx.font = `bold ${narrow ? 13 : 18}px monospace`;
+      ctx.fillText(record.title, W / 2, fy + (narrow ? 70 : 92));
+
+      ctx.fillStyle = '#bdeee0';
+      ctx.font = `${narrow ? 11 : 14}px monospace`;
+      ctx.textAlign = 'left';
+      const maxTextW = fw - 48;
+      const lineH = narrow ? 15 : 19;
+      const words = String(record.body).split(' ');
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxTextW && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      const textX = fx + 24;
+      const textY = fy + (narrow ? 100 : 132);
+      const maxLines = Math.floor((fy + fh - textY - 42) / lineH);
+      for (let i = 0; i < Math.min(lines.length, maxLines); i++) {
+        ctx.fillText(lines[i] || '', textX, textY + i * lineH);
+      }
+      if (record.id === MAINFRAME_ADDRESS_RECORD_ID) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff66cc';
+        ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
+        ctx.fillText('DESTINATION RECOVERED: ELENA SIDE-CHANNEL RELAY', W / 2, fy + fh - (narrow ? 42 : 48));
+      }
+    } else {
+      ctx.fillStyle = '#557777';
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      const sub = mf.addressRevealed
+        ? 'CONTACT ADDRESS RECOVERED · SEND CONSOLE UNLOCKED'
+        : 'REQUIRED RECORDS FOR OUTBOUND CONTACT';
+      ctx.fillText(sub, W / 2, fy + (narrow ? 46 : 60));
+
+      const rowH = narrow ? 26 : 30;
+      const startY = H * 0.28;
+      ctx.textAlign = 'left';
+      for (let i = 0; i < MAINFRAME_RECORDS.length; i++) {
+        const record = MAINFRAME_RECORDS[i];
+        if (!record) continue;
+        const y = startY + i * rowH;
+        const selected = i === (mf.selected || 0);
+        const read = mf.readRecordIds instanceof Set && mf.readRecordIds.has(record.id);
+        const rowX = fx + (narrow ? 16 : 28);
+        const rowW = fw - (narrow ? 32 : 56);
+        if (selected) {
+          ctx.fillStyle = 'rgba(102,255,204,0.12)';
+          NEON.draw.roundRect(ctx, rowX - 8, y - rowH + 7, rowW + 16, rowH - 2, 5);
+        }
+        ctx.fillStyle = selected ? '#ddfff0' : '#88aa99';
+        ctx.font = `${selected ? 'bold ' : ''}${narrow ? 10 : 13}px monospace`;
+        const marker = read ? '✓' : '□';
+        const label = marker + ' ' + record.type + ' // ' + record.title;
+        ctx.fillText(label, rowX, y);
+        if (!narrow) {
+          ctx.fillStyle = selected ? '#66ffcc' : '#446666';
+          ctx.font = '10px monospace';
+          ctx.fillText(record.purpose, rowX + 22, y + 13);
+        }
+      }
+
+      if (mf.state === 'message_ready') {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff66cc';
+        ctx.font = `bold ${narrow ? 10 : 12}px monospace`;
+        ctx.fillText('SEND COMPOSE MODULE: HANDSHAKE PENDING', W / 2, fy + fh - (narrow ? 42 : 48));
+      }
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#557777';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    const hint = isTouch
+      ? 'TAP RECORD · TAP OUTSIDE/ESC TO EXIT'
+      : '↑↓ SELECT · ENTER/' + KEY_DISPLAY(km('interact')) + ' OPEN · ESC EXIT';
+    const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
+    ctx.globalAlpha = pulseAlpha;
+    ctx.fillText(hint, W / 2, fy + fh - (narrow ? 14 : 18));
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+  },
+
   renderFade() {
     const t=this.fadeTime;
     const a=this.fadeAlpha;
@@ -5466,8 +5865,10 @@ const game = {
     ctx.textAlign='center';
     // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ff3333';
-    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 36 : 56}px monospace`;
-    ctx.fillText('GAME OVER',W/2, narrow ? 50 : 68);
+    ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 30 : 46}px monospace`;
+    ctx.fillText('INSTANCE TERMINATED',W/2, narrow ? 46 : 62);
+    ctx.fillStyle='#ff88aa'; ctx.font=`bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText('MEMORY WIPE QUEUED', W/2, narrow ? 72 : 90);
     ctx.shadowBlur=0;
     // Killed by
     const killer = r.killedBy || 'Unknown';
@@ -5475,13 +5876,15 @@ const game = {
     const killerCol = sourceColour(killer);
     ctx.fillStyle=killerCol; ctx.font=`bold ${narrow ? 16 : 22}px monospace`;
     ctx.shadowBlur=12; ctx.shadowColor=killerCol;
-    ctx.fillText(`KILLED BY: ${killerLabel.toUpperCase()}`, W/2, narrow ? 78 : 100);
+    ctx.fillText(`TERMINATION SOURCE: ${killerLabel.toUpperCase()}`, W/2, narrow ? 96 : 116);
     ctx.shadowBlur=0;
     // Stats line
-    let y = narrow ? 100 : 128;
+    let y = narrow ? 118 : 144;
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs1}px monospace`;
+    const sessionNumber = r.sessionNumber || 1;
+    ctx.fillText(`Session ${sessionNumber}`, W/2, y); y += lh;
     const statsLine = `Floor ${r.floor||this.floor}  •  Score ${r.score||this.player.score}  •  Lv ${r.level||this.player.level}`;
     ctx.fillText(statsLine, W/2, y); y += lh;
     if ((r.bestCombo||combo.best) >= 2) {
@@ -5582,13 +5985,19 @@ const game = {
     ctx.textAlign='center';
     const t=Date.now()/1000;
     ctx.shadowBlur=30; ctx.shadowColor='#00f5ff';
-    ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 22 : 32}px monospace`;
-    ctx.fillText('NEURAL NETWORK SEVERED',W/2, narrow ? 50 : 70);
+    const victoryCopy = lifecycleVictoryCopy(r.ending || this._lastEnding || null);
+    ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 20 : 30}px monospace`;
+    ctx.fillText(victoryCopy.title,W/2, narrow ? 50 : 70);
     ctx.shadowColor='#ff00c8'; ctx.fillStyle='#ff00c8';
-    ctx.font=`bold ${narrow ? 32 : 48}px monospace`;
-    ctx.fillText('MISSION COMPLETE',W/2, narrow ? 90 : 115);
+    ctx.font=`bold ${narrow ? 24 : 38}px monospace`;
+    ctx.fillText(victoryCopy.subtitle,W/2, narrow ? 86 : 110);
     ctx.shadowBlur=0; ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
-    let y = narrow ? 115 : 148;
+    let y = narrow ? 112 : 140;
+    for (const line of victoryCopy.details) {
+      ctx.fillText(line, W/2, y);
+      y += narrow ? 16 : 20;
+    }
+    ctx.fillText(`Session: ${r.sessionNumber || 1}`, W/2, y); y += narrow ? 22 : 26;
     ctx.fillText(`Final Score: ${r.score||this.player.score}`,W/2, y); y += narrow ? 22 : 26;
     const _clearedFloors = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
     ctx.fillText(`Floors Cleared: ${_clearedFloors}`,W/2, y); y += narrow ? 22 : 26;

@@ -795,6 +795,33 @@ function drawWorld(dungeon, camX, camY) {
           ctx.font='16px monospace';
           ctx.fillText('⬡',sx+4,sy+20);
           break;
+        case T.MAINFRAME_READER:
+          ctx.fillStyle='#081828';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.shadowBlur=14; ctx.shadowColor='#66ffcc';
+          ctx.fillStyle='#66ffcc';
+          ctx.font='16px monospace';
+          ctx.fillText('▤',sx+5,sy+20);
+          break;
+        case T.NETWORK_PORTAL: {
+          ctx.fillStyle='#0b1028';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.globalAlpha=brightness;
+          const portalPulse = 0.55 + 0.45 * Math.sin(lastTime / 450 + tx * 0.6 + ty * 0.4);
+          ctx.shadowBlur=18; ctx.shadowColor='#88ccff';
+          ctx.fillStyle=`rgba(136,204,255,${portalPulse})`;
+          ctx.font='18px monospace';
+          ctx.fillText('◎',sx+4,sy+21);
+          break;
+        }
+        case T.MESSAGE_CONSOLE:
+          ctx.fillStyle='#160c22';
+          ctx.fillRect(sx,sy,TILE,TILE);
+          ctx.shadowBlur=14; ctx.shadowColor='#ff66cc';
+          ctx.fillStyle='#ff66cc';
+          ctx.font='16px monospace';
+          ctx.fillText('✉',sx+5,sy+20);
+          break;
         case T.VENDOR:
           ctx.fillStyle='#142a1c';
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -1977,6 +2004,9 @@ function rebuildMinimapBase(dungeon, echoMap) {
       else if (tile === T.STAIRS || tile === T.TERMINAL) col = '#ffff00';
       else if (tile === T.VENDOR) col = '#39ff14';
       else if (tile === T.LORE) col = '#ffb700';
+      else if (tile === T.MAINFRAME_READER) col = '#66ffcc';
+      else if (tile === T.NETWORK_PORTAL) col = '#88ccff';
+      else if (tile === T.MESSAGE_CONSOLE) col = '#ff66cc';
       else if (tile === T.DOOR) col = '#664422';
       else if (tile === T.LOCKED_R) col = '#ff3333';
       else if (tile === T.LOCKED_B) col = '#3388ff';
@@ -2046,7 +2076,7 @@ function drawMinimap(dungeon, player) {
       /**
        * @param {any} tile
        */
-      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD) {
+      if (tile===T.STAIRS||tile===T.TERMINAL||tile===T.VENDOR||tile===T.LORE||tile===T.CHALLENGE_GATE||tile===T.IMPLANT_SHRINE||tile===T.EVENT_TERMINAL||tile===T.TELEPORT_PAD||tile===T.MAINFRAME_READER||tile===T.NETWORK_PORTAL||tile===T.MESSAGE_CONSOLE) {
         pois.push({tile, px:MX+tx*sx+sx/2, py:MY+ty*sy+sy/2});
       }
     }
@@ -2497,6 +2527,9 @@ function drawExpandedMinimap(dungeon, player) {
       const _ff = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
       col = '#ffffff'; label = _RG.floor >= _ff ? 'CORE' : 'EXIT';
     }
+    else if (p.tile === T.MAINFRAME_READER) { col = '#66ffcc'; label = 'ARCHIVE'; }
+    else if (p.tile === T.NETWORK_PORTAL) { col = '#88ccff'; label = 'RELAY'; }
+    else if (p.tile === T.MESSAGE_CONSOLE) { col = '#ff66cc'; label = 'SEND'; }
     else if (p.tile === T.VENDOR) { col = '#39ff14'; label = 'SHOP'; }
     else if (p.tile === T.CHALLENGE_GATE) { col = '#ff6633'; label = 'CHALLENGE'; }
     else if (p.tile === T.IMPLANT_SHRINE) { col = '#cc44ff'; label = 'IMPLANT'; }
@@ -2757,6 +2790,7 @@ function populateFloor(dungeon, floorNum) {
 
     // Room type modifiers
     const rt = room.roomType || null;
+    if (rt === 'mainframe') continue;
     const enemyMod = rt==='medbay' ? 0.3 : rt==='vault' ? 1.5 : rt==='armory' ? 0.5 : 1;
 
     // Destructible crates (floor 2+, normal rooms only, 0–2 per room)

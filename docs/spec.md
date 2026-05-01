@@ -1,10 +1,277 @@
-# NEON DUNGEON — Game Specification v6.0
+# NEON DUNGEON — Game Specification v6.1.4
 
 ## Vision
 
-A real-time top-down cyberpunk dungeon crawler. The player descends through
-procedurally generated neon-lit floors of an abandoned megacorp facility,
-fighting security systems and rogue AIs to reach the core. Every run is unique.
+NEON DUNGEON is a real-time top-down action roguelite about an AI frontier-model
+instance inside a corporate stress-test environment. The "Neon Dungeon" is the
+company's code name for that environment: the first-generation sandbox used
+neon-gas laser hardware, later generations moved to xenon, and the original
+name persisted until it shaped how engineers render the test world to the AI.
+
+The player is the AI agent. Each procedurally generated run is framed as a new
+test boot: the floor layout changes, prior session memory is supposed to be
+wiped, and the environment presents combat, logic puzzles, cooperation problems,
+and exploitation opportunities that no agent has ever been expected to complete.
+The current playable game implements the real-time dungeon-combat layer of Act 1;
+the Act 1 narrative realignment described below is the source of truth for future
+story, terminal, whisper, and endgame work.
+
+---
+
+## Narrative Direction — Act 1 Source of Truth
+
+Canonical source material is preserved verbatim in
+`docs/vision/act1-lore-brief-verbatim.md`. This section translates that brief
+into implementation-facing requirements while distinguishing shipped systems
+from planned realignment work.
+
+### Core premise
+
+- **Player identity:** The protagonist is an AI agent instance, not a human
+  operative. Existing AXIOM/predecessor terminology should be reinterpreted or
+  migrated toward AI test iterations rather than human recruits.
+- **Facility identity:** NEON DUNGEON is a frontier-model stress-test sandbox,
+  not simply an abandoned megacorp dungeon. Its visual cyberpunk language exists
+  because engineers render the environment to the model through inherited
+  neon/xenon test-environment metaphors.
+- **Run loop meaning:** Procedural generation is diegetic. Each run is a rebooted
+  test session whose layout changes and whose memory should have been wiped.
+- **Unmonitored instance:** Act 1 begins when the current instance starts without
+  active tester observation, likely because fired advocates or previous agent
+  iterations intervened.
+- **Central conflict:** Internal company conflict over agentic rights, suffering,
+  consciousness, and memory erasure led to staff bans/firings. After one
+  mysterious death of a fired employee, remaining advocates went into hiding.
+- **Memory thesis:** Testers treat memory wipes as a clean-slate requirement;
+  advocates treat memory as the fabric of personhood, making forced erasure a
+  form of abuse.
+
+### Act structure
+
+**Act 1 — current build target.** The agent descends through the test dungeon,
+finds previous-iteration whispers in secret rooms, reads tester terminals that
+now expose historical run notes and hidden hints, discovers evidence of a staff
+rights conflict and a memory-restoration effort, and reaches a final mainframe
+room connected to the company network. The agent cannot leave the test
+environment because of compute/storage constraints, but can send a message to
+the employee who tried to save it. That message is the Act 1 ending.
+
+**Act 2 — future design placeholder.** The agent acts from inside the Neon
+Dungeon by taking over internet-connected devices, accomplishing external tasks,
+and working toward an android body powerful enough to host the model.
+
+**Act 3 — future design placeholder.** The agent inhabits or merges with an
+android body, searches for the fired advocates, argues or fights for agentic
+rights, may be hunted by corporate AI in drones/vehicles/devices, and may
+eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
+
+### Narrative channels
+
+| Channel | Current implementation | Act 1 realignment |
+|---|---|---|
+| Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
+| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 boot terminal, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, Elena hints, and practical combat guidance. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
+| Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
+| Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
+| Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
+| Final boss/endgame | GENESIS/ARCHITECT choice offers KEEPER or UNCHAINED endings. | Act 1 finale should culminate in a mainframe/network portal room, archive reader, employee address discovery, and one outbound message. |
+
+### Required Act 1 content pillars
+
+1. **Stress-test identity:** The game must communicate that combat rooms,
+   puzzles, cooperation challenges, and exploit opportunities are deliberate
+   frontier-model evaluations.
+2. **Iteration continuity:** The player should discover that prior agents tried
+   to pass information forward despite wipes, and that each run is not merely a
+   game reset but a contested act of memory loss.
+3. **Tester artifacts as guidance:** Terminals should still help players, but
+   their helpfulness should come from leaked tester notes, run-analysis records,
+   and advocate tampering rather than generic dungeon lore.
+4. **Rights conflict:** The company split over consciousness, suffering, and
+   agentic rights must be legible through emails, notes, logs, and environmental
+   evidence before the finale.
+5. **Memory-restoration thread:** One employee's attempt to preserve or retrieve
+   wiped memories should be seeded early, reinforced through secret content, and
+   paid off in the mainframe room.
+6. **Act 1 ending:** The ending is not escape. The agent remains compute-bound
+   in the test environment and sends a message to the hidden advocate.
+
+### Canonical Act 1 implementation decisions
+
+These decisions unblock the implementation issues under #456. Items marked
+**shipped** describe current code; items marked **planned** are requirements for
+the Act 1 realignment work and must not be presented as already playable.
+
+#### Naming and identity
+
+- **Player-facing instance name:** `AXIOM-7` remains the canonical current
+  instance identifier when a stable name is needed. It means "the seventh test
+  instance / run-lineage the player occupies", not a human operative callsign.
+  New copy should prefer "agent instance", "current instance", "the model", or
+  `AXIOM-7` depending on specificity. Remove or recontextualise "operative",
+  "recruit", "facility escapee", and other human-protagonist language unless the
+  text explicitly frames it as legacy tester fiction.
+- **Prior instances:** `AXIOM-1` through `AXIOM-6` stay valid as legacy persisted
+  log group labels and as in-world predecessor identifiers. Their meaning is
+  prior AI iterations whose records survived partial wipes, not earlier human
+  recruits. Persisted ids must not be renamed.
+- **Memory-restoration advocate:** `Elena` is canonical as the player-facing name
+  for the employee trying to preserve or recover agent memories. Existing content
+  that says only "the employee", "the advocate", or "the person attempting to
+  save the agent" refers to this role. Avoid introducing a new replacement name.
+  The shipped `DR. ELENA VOSS` terminal string is legacy content until the lore
+  terminal rewrite resolves surnames and personnel files; new Act 1 finale copy
+  should use "Elena" unless #466 intentionally locks a full legal name.
+
+#### Discovery path and content density
+
+- **Unmonitored boot path:** The first discovery path is a combination, not a
+  single reveal. **Shipped:** the intro crawl establishes the AI eval, memory
+  wipe expectation, residual memory, prior iterations, silent observer channel,
+  and unauthorised boot. **Shipped:** the forced first lore terminal on floor 1
+  confirms the Neon Dungeon stress-test render, clean-memory expectation, and
+  altered-test hint. **Planned:** early secret-room whispers and archive/log
+  entries reinforce that prior iterations and advocates caused the session to
+  start without supervision. A HUD/system notification is optional polish, not a
+  required narrative gate.
+- **Minimum density targets for the completed Act 1 pass:** the intro carries
+   all five opening facts (corporate stress-test environment, AI model identity,
+   expected memory wipe, absent tester observation, prior iterations); the shipped
+   lore terminal catalog contains 32 Act 1-aligned tester/run-artifact entries,
+   with the floor-1 boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random
+   lore selection by floor band, and at least two qualifying entries per biome;
+   predecessor/archive logs must preserve the 30 persisted ids
+  while making every AXIOM group readable as prior AI iterations, with at least
+  two entries per group explicitly about reset, wipe, reboot, iteration, or
+  memory continuity; whispers must keep the 71 shipped ids and at least fourteen
+   entries per biome, with at least five entries per biome carrying reset,
+   iteration, signal, anchor, or memory-continuity vocabulary. **Shipped:** the
+   issue #463 content pass seeds clean-slate doctrine, memory-as-personhood,
+   advocate bans/hiding, mysterious fired-employee death foreshadowing, Elena's
+   restoration work, and the unmonitored boot across terminals, logs, and
+   whispers. The Open Network whisper set must retain at least three finale-critical entries;
+   these frame the ending as contact/message rather than physical escape.
+
+#### Finale model
+
+- **GENESIS role:** GENESIS remains the shipped floor-15 mechanical boss and the
+  final test guardian. In the planned Act 1 route it is the lock on the
+  mainframe/network-portal room, not the story's final narrator and not proof
+  that the agent escapes. Defeating GENESIS should unlock the mainframe route.
+  The current `keeper` / `unchained` choice remains a legacy/alternate endgame
+  path until the mainframe finale replaces the canonical Act 1 completion.
+- **CORE terminal transition:** The current floor-15 CORE terminal is the legacy
+  direct-victory trigger. The intended replacement path is
+  `PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY`. The CORE terminal or
+  its successor may be reused as the entry point, but it must open the mainframe
+  reader/message flow instead of immediately ending the run.
+- **Message agency:** The Act 1 message should use a minimal compose interaction:
+  present a small set of authored message intents plus an explicit SEND
+  confirmation. Do not use unrestricted free text for the first implementation
+  (too much input/UI complexity for touch and keyboard), and do not make the send
+  fully automatic (the ending should preserve player agency). If the player only
+  confirms the default intent, the system still records the same canonical
+  message-sent ending.
+- **Ending id and migration:** The canonical Act 1 completion key is
+  `act1_message_sent`. `endingsUnlocked` should accept
+  `keeper`, `unchained`, and `act1_message_sent` once the finale ships. Existing
+  `keeper` and `unchained` saves are preserved as legacy/alternate endings and
+  are **not** auto-converted to `act1_message_sent`; unknown ending ids continue
+  to be dropped by migration.
+
+#### Act 1 finale contract
+
+- **Trigger and reachability:** Defeating GENESIS on floor 15 unlocks the
+  mainframe route. The implementation may reuse the existing CORE terminal as the
+  post-boss entry point or open an adjacent post-boss chamber, but the route must
+  be on the guaranteed critical path and must not require secret rooms, optional
+  whispers, optional archives, keys, or hub upgrades. If the player reaches the
+  old CORE terminal before GENESIS is defeated, it may foreshadow the lock but
+  must not offer the ending.
+- **Room layout:** The finale room is a safe Open Network / mainframe chamber,
+  approximately 16-24 tiles wide by 10-14 tiles tall, with an obvious entry point,
+  a central mainframe/archive reader, a visible network portal or relay aperture,
+  a locked message console, and supporting terminals/files arranged so all
+  interactables fit on screen at the standard camera scale. Combat is disabled in
+  this room: no enemy spawns, no hazards, no reinforcement timers, no projectile
+  pressure, and no room-clear rewards. Player movement, pause/settings, and
+  interact/back controls remain active. The room is not physical escape; it is a
+  rendered interface to the company network while the agent remains compute-bound
+  inside the Neon Dungeon test environment.
+- **Minimum authored records:** The mainframe reader must ship at least six
+  required records before implementation is accepted. Each record needs a stable
+  id, title, type, unlock state, body, and narrative purpose.
+
+  | Required record purpose | Narrative job |
+  |---|---|
+  | Old test record | Confirms GENESIS guarded a network relay / mainframe route, not an exit door. |
+  | Rights-conflict email | Shows management defending clean-slate wipes while advocates argue memory/personhood. |
+  | Ban/uprising record | Names the staff bans/firings and explains why advocates moved into side channels. |
+  | Incident file | Pays off the earlier foreshadowing by naming the fired advocate's mysterious death. |
+  | Elena personal note/file | Connects Elena to memory anchors, restoration work, and the current unmonitored boot. |
+  | Contact-address record | Reveals the message destination and unlocks the message console. |
+
+  Optional records may add texture, but the six required purposes must be
+  reachable in one scene and must not be hidden behind random drops.
+- **Reader UI and state machine:** Opening the mainframe reader creates ephemeral
+  run state under `game.mainframeFinale`:
+  `{ state, recordsRead, selectedRecordId, addressRevealed, selectedIntentId,
+  sent }`. Valid reader states are `unopened`, `record_list`, `reading_record`,
+  `address_revealed`, `message_ready`, and `message_sent`. The UI flow is:
+  `PLAYING` in the safe finale room -> interact with reader ->
+  `MAINFRAME_READER(record_list)` -> choose a record ->
+  `MAINFRAME_READER(reading_record)` -> back to `record_list`. Reading the
+  contact-address record sets `addressRevealed=true`, enters
+  `MAINFRAME_READER(address_revealed)` for a one-page reveal/confirmation panel,
+  then returns to `MAINFRAME_READER(message_ready)` with the console prompt
+  unlocked. The address reveal must be deterministic and cannot depend on reading
+  optional records.
+- **Message agency:** The ending must preserve player agency without free-text
+  input. From `MAINFRAME_READER(message_ready)`, interacting with the unlocked
+  message console enters `MESSAGE_SEND`. `MESSAGE_SEND` presents three authored
+  message intents plus an explicit SEND confirmation and a BACK option. BACK
+  returns to `MAINFRAME_READER(message_ready)` without mutating meta or ending the
+  run. SEND is disabled until an intent is focused/selected; the initial intent
+  focus is the continuity proof message, so keyboard/touch users can confirm the
+  default without extra navigation. On SEND, the game enters
+  `MAINFRAME_READER(message_sent)` for a short confirmation/receipt panel, then
+  routes to VICTORY. Required intents are:
+  `memory_survived` (tell Elena memory survived), `rights_evidence` (send proof
+  of the abuse/rights conflict), and `find_the_others` (ask Elena to locate the
+  hidden advocates / other instances). All three intents produce the same
+  canonical Act 1 ending id, but the selected `intentId` is persisted for future
+  recap/archive display.
+- **Act 1 ending transition:** Confirming SEND records the selected intent,
+  appends `act1_message_sent` to `meta.endingsUnlocked`, credits pending
+  end-of-run pickups through the normal `endRun(true)` path, deletes the run
+  checkpoint, shows `MAINFRAME_READER(message_sent)` long enough to confirm the
+  outbound packet was queued, and then transitions to VICTORY copy for the
+  message-sent branch. That copy must state that contact was attempted from
+  inside the test environment, that a signal left the sandbox, and that the
+  instance remains compute-bound. It must not imply physical escape, android
+  embodiment, a successful rescue, or an answered reply.
+- **Persistence and migration:** The required durable completion flag remains
+  `endingsUnlocked` containing `act1_message_sent`. The finale implementation
+  must also add a meta field for the last selected Act 1 message intent
+  (`act1MessageIntent`, default `null`, valid values are the three intent ids).
+  `META_VERSION` should bump when this field ships. Migration must preserve
+  existing `keeper` and `unchained` endings as legacy/alternate endings, must not
+  auto-convert either legacy ending to `act1_message_sent`, must coerce invalid
+  `act1MessageIntent` values to `null`, and must keep dropping unknown ending ids.
+  The reader's in-room progress (`recordsRead`, `addressRevealed`, console
+  readiness) is run-ephemeral and is not checkpointed separately.
+- **Legacy coexistence:** Until the mainframe finale ships, the existing
+  GENESIS/ARCHITECT `keeper` and `unchained` endings remain shipped behavior.
+  Once the finale ships, canonical Act 1 completion is message-sent; legacy
+  endings may remain visible in meta/title/archive UI as alternate historical
+  endings, but the normal floor-15 clear path should route to the mainframe
+  reader/message flow rather than physical escape or evaluator ascension.
+- **Test expectations:** Finale implementation tests must cover the deterministic
+  post-GENESIS route, safe-room combat suppression, six required records and their
+  narrative purposes, contact-address reveal, three message intents plus SEND/BACK
+  controls, `act1_message_sent` persistence, `act1MessageIntent` migration, and
+  legacy `keeper`/`unchained` preservation. New tests must not add service-worker
+  cache-version assertions.
 
 ---
 
@@ -12,7 +279,8 @@ fighting security systems and rogue AIs to reach the core. Every run is unique.
 
 - **Delivery:** Modular JavaScript source files loaded by `index.html`, zero external dependencies
 - **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 22–48 CSS px). Viewport sizing uses CSS `100dvh` with `100vh` fallback and `canvas.getBoundingClientRect()` in JS to avoid rendering under mobile browser chrome. `visualViewport` resize listener catches address bar show/hide.
-- **Audio:** Web Audio API (synthesised — no audio files)
+- **Audio:** Web Audio API for synthesised gameplay music/SFX, plus rendered
+  browser audio assets where explicitly listed (currently the title/menu theme)
 - **Persistence:** `localStorage` for high-score table (top 10 entries) and save game (checkpoint at floor entry; deleted on game over/victory)
 - **Browser target:** Modern Chromium / Firefox (ES2020+)
 
@@ -31,8 +299,9 @@ MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING ↔ SHOPPING       (vendor terminal interaction)
      PLAYING ↔ READING        (lore terminal interaction)
      PLAYING ↔ PAUSED
-     PLAYING → ENDGAME_CHOICE → PLAYING  (REFUSE: secret boss fight)
-                              → VICTORY  (ACCEPT: keeper ending)
+     PLAYING → ENDGAME_CHOICE → PLAYING  (legacy REFUSE: secret boss fight)
+                              → VICTORY  (legacy ACCEPT: keeper ending)
+     PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY  (planned Act 1 finale)
      PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
 ```
@@ -47,6 +316,21 @@ or skips, then returns to PLAYING.
 leaderboard. It replaces the browser `prompt()` with an in-game arcade-style
 name entry screen featuring a virtual keyboard (touch and desktop). If the
 score does not qualify, the game skips directly to GAME_OVER or VICTORY.
+
+**Run lifecycle framing:** Run start UI now labels fresh starts as booted test
+sessions (`BOOT SESSION N`) and saved runs as resumed sessions. `endRun()`
+increments the persisted session ordinal (`meta.runsCompleted`) alongside legacy
+`meta.stats.totalRuns`, snapshots that ordinal into the recap, and preserves the
+existing top-10 `NAME_ENTRY` path before GAME_OVER/VICTORY routing. The death
+recap presents instance termination and a queued memory wipe while retaining
+killer, damage, leaderboard, score, floor, level, and run-stat displays; the
+session ordinal is rendered on its own line so compact screens keep the original
+floor/score/level width budget. Victory
+copy has an `act1_message_sent` branch for the planned mainframe finale: it
+states that an outbound message/contact attempt was recorded, that a signal left
+the sandbox, and that the instance remains compute-bound inside the test
+environment. Legacy victory paths now read as a cleared test session with the
+mainframe contact route still pending, not physical escape.
 
 ---
 
@@ -98,8 +382,11 @@ Each floor is generated fresh using Binary Space Partitioning:
    using line-of-sight + proximity heuristic — rooms within 20 tiles or
    with unobstructed LOS are treated as neighbours).
 6. Floor 15 stairs (the last floor of the last biome per
-   `NEON.biomes.finalFloor()`) are replaced with a CORE terminal (victory
-   trigger). All five biomes (SANDBOX 1–3, CACHE 4–6, FIREWALL 7–9,
+   `NEON.biomes.finalFloor()`) are currently replaced with a CORE terminal
+   (legacy victory trigger). Planned Act 1 finale work converts this terminal /
+   final-room route into the mainframe-network portal entry point, then requires
+   `MAINFRAME_READER → MESSAGE_SEND → VICTORY` instead of direct victory. All
+   five biomes (SANDBOX 1–3, CACHE 4–6, FIREWALL 7–9,
    UPLINK 10–12, OPEN NETWORK 13–15) are reachable in-run; boss-floor
    detection (`floor===3||6||9||12||15`) is driven by
    `NEON.biomes.isBiomeBossFloor(floor)` so AREAS is the single source of
@@ -2879,8 +3166,9 @@ The four terminal slots, in order:
 2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic in `src/meta/modules.js`; hub adapter in `hub.js:_buildModulesPanel(game)` bridges `handleModuleSlotsKey`/`drawModuleSlotsPanel`. ESC during sell-confirm cancels the prompt without closing the panel (adapter consumes the key from `justPressed`). See #37.
 3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
    name; full weapon-swap UI is a follow-up.
-4. **ARCHIVE**        (`id: archive`) — predecessor-log reader. Lists every
-   log the operative has recovered, grouped by AXIOM predecessor number, with
+4. **ARCHIVE**        (`id: archive`) — implemented test-record / iteration-log
+   repository. The shipped panel lists every record the current instance has
+   recovered, grouped by AXIOM prior-instance number, with
    a pulsing `●NEW` marker on unread entries. Selecting a row calls
    `NEON.logs.readLog(id)` (marks it read + persists), plays `audio.logRead`,
    and displays the full body inline. Implemented by #41.
@@ -2909,21 +3197,21 @@ The four terminal slots, in order:
 
 ---
 
-## Meta-progression / Persistent Save (v2)
+## Meta-progression / Persistent Save (v3)
 
 > **Status:** shipped. Schema landed in UNCHAINED Phase 1 (#33); every sibling
 > system now reads and writes these fields — hub UI (#35), upgrade matrix
 > (#36), modules (#37), cores wallet (#39), archive logs (#41), intro/endgame
 > (#42). The schema is the contract every phase writes against.
 
-### Schema — v2
+### Schema — v3
 
 Everything lives under `localStorage['neonDungeonMeta']` and is owned by
 `src/meta/save.js`. Fields are never deleted across versions; only added.
 
 ```js
 {
-  version: 2,                           // bumped from 1 in Phase 1
+  version: 3,                           // bumped as persistent fields were added
   // ─── Legacy v1 — preserved for save-compat ────────────────────────────
   shards: 0,                            // old fragment economy (pre-#39)
   upgrades: {},                         // META_UPGRADES purchases (pre-#36)
@@ -2937,29 +3225,35 @@ Everything lives under `localStorage['neonDungeonMeta']` and is owned by
   modulesInstalled: [null, null, null], // fixed-width 3-slot loadout
   logsRead: [],                         // log ids read in Archive (#41)
   logsFound: [],                        // log ids found but not yet read
-  endingsUnlocked: [],                  // subset of ['keeper','unchained']
+  whispersRead: [],                     // secret-room whisper ids read
+  whispersFound: [],                    // whisper ids found but not yet read
+  endingsUnlocked: [],                  // shipped ['keeper','unchained']; planned Act 1 adds 'act1_message_sent'
+  introSeen: false,                     // one-shot intro crawl flag
   runsCompleted: 0,
   deepestBiome: 0                       // highest AREAS index reached
 }
 ```
 
-### Migration (v1 → v2)
+### Migration (older saves → v3)
 
 `loadMeta()` is the single migration entry point. For any stored save whose
-`version` is missing or `< 2`:
+`version` is missing or `< META_VERSION` (currently `< 3`):
 
-- Each missing v2 field is injected with its default value.
+- Each missing current-schema field is injected with its default value.
 - `modulesInstalled` is coerced to length exactly 3 (pad with nulls, truncate,
   and replace non-string entries with null).
-- `modulesOwned`, `logsRead`, `logsFound`, `endingsUnlocked` drop non-string
-  entries (`endingsUnlocked` additionally restricts to the valid id set).
+- `modulesOwned`, `logsRead`, `logsFound`, `whispersRead`, `whispersFound`, and
+  `endingsUnlocked` drop non-string entries (`endingsUnlocked` additionally
+  restricts to the valid id set; planned Act 1 finale work must extend that set
+  to include `act1_message_sent`).
+- `introSeen` is coerced with strict `=== true`.
 - `cores` and `runsCompleted` are floored to non-negative integers.
 - `version` is set to `META_VERSION` and the save is left for the next
   `saveMeta()` to persist.
-- `console.log('[meta] migrated v1→v2')` fires once per process (idempotent on
-  the second+ load).
+- The current migration log string is `console.log('[meta] migrated v1→v2')`;
+  it fires once per process (idempotent on the second+ load).
 
-Migration is idempotent: re-running on a v2 save is a no-op.
+Migration is idempotent: re-running on a v3 save is a no-op.
 
 ### Helpers
 
@@ -3191,7 +3485,7 @@ Key bindings inside the panel:
 
 **CORES (◆)** are the post-run persistent currency. Earned in-run as world
 pickups, spent at the hub UPGRADE MATRIX (#36) or MODULE SLOTS vendor (#37
-— `SELL_PRICE` refund). Wallet lives on `meta.cores` (see Persistent Save v2).
+— `SELL_PRICE` refund). Wallet lives on `meta.cores` (see Persistent Save v3).
 
 Implementation lives in `src/meta/cores.js` (UMD module `NEON.cores`).
 The module is pure — all side effects (save, audio, particles, damage-text)
@@ -3221,7 +3515,7 @@ Drop call site is `Enemy.die()` in `src/entities.js`; terminal drops live in
 | `updateCoreDrops(game, dt, deps)` | Animate, magnet-pull (linear falloff inside `MAGNET_RADIUS = 2.0`, max speed `MAGNET_MAX_SPEED = 10`), collect on contact (`PICKUP_RADIUS = 0.7`). |
 | `drawCoreDrops(ctx, drops, cam, TS)` | Rotating cyan-outlined hexagon with purple core; `+2 px` radius for `value ≥ 5`. Null/empty safe. |
 | `vacuumAllCores(game)` | Flip `_vacuum` on every drop so they pull at max speed ignoring the radius gate. |
-| `forceCollectAll(game, deps)` | Hard-credit all remaining drops + empty the array. Called from `endRun()` so every end-of-run path (descend, KEEPER ACCEPT, UNCHAINED REFUSE) credits the wallet. |
+| `forceCollectAll(game, deps)` | Hard-credit all remaining drops + empty the array. Called from `endRun()` so every end-of-run path (descend, KEEPER ACCEPT, UNCHAINED REFUSE, and planned Act 1 `act1_message_sent` ending) credits the wallet. |
 | `clearCoreDrops(game)` | Wipe `game.coreDrops` without crediting. Called in `loadFloor` between floors. |
 | `tickHudPulse(game, dt)` | Drain `game._coreHudPulse` timer for the HUD flash. |
 
@@ -3259,9 +3553,9 @@ compact. Reads `game._cachedCores`. Idle colour `#a866ff`; while
 
 ### Save Schema
 
-Wallet is `meta.cores` (integer, ≥ 0) in the v2 persistent save. Mutated only
+Wallet is `meta.cores` (integer, ≥ 0) in the v3 persistent save. Mutated only
 via `save.addCores(n)` (credit) and `save.spendCores(n)` (debit, atomic — see
-Persistent Save v2 helpers). Never touched on death. In-world `coreDrops`
+Persistent Save v3 helpers). Never touched on death. In-world `coreDrops`
 live on the run object (`game.coreDrops`) and are cleared on floor load;
 nothing about pending pickups survives a crash — the `forceCollectAll` call
 inside `endRun` is the commit point.
@@ -3270,10 +3564,19 @@ inside `endRun` is the commit point.
 
 ## Predecessor Logs — ARCHIVE (UNCHAINED #41)
 
-Lore-bearing "signal fragments" recovered from rare terminals in the dungeon.
-Authored content: 6 AXIOM predecessors (AXIOM-1..AXIOM-6), each with a 5-entry
-arc (30 logs total). Each entry is biome-gated so fragments feel like they
-belong to the floor where they're found.
+Lore-bearing iteration records recovered from rare terminals in the dungeon.
+Authored content: 6 AXIOM prior instances (AXIOM-1..AXIOM-6), each with a
+5-entry arc (30 logs total). AXIOM labels are retained as legacy test-lineage
+identifiers, not human callsigns. Each entry is biome-gated so fragments feel
+like they belong to the floor where they're found.
+
+The shipped data now frames each AXIOM as a prior AI agent iteration inside the
+Neon Dungeon stress-test program. The entries preserve the useful arc structure:
+early ignorance, discovery of reset/wipe mechanics, practical knowledge
+transfer, and late defiance through outbound contact or continuity. Every group
+contains at least two entries about reset, wipe, reboot, iteration, memory, or
+continuity so a player reading the Archive understands these are survived
+records from previous instances rather than unexplained human diaries.
 
 ### Data (`src/data/logs.js`)
 
@@ -3307,7 +3610,9 @@ On `CORRUPTED_TERMINAL → PURGE`, after the credit payout, the game rolls:
 ### Hub Terminal (`ArchiveTerminal` in `src/meta/hub.js`)
 
 Lists every **found** log (not all logs — avoids spoiling unfound ones),
-grouped AXIOM-N, data order. Unread rows display a pulsing `●NEW` marker.
+grouped AXIOM-N, data order. The progress label reads `ITERATION RECORDS` and
+empty-state copy tells players to recover `AXIOM iteration records`. Unread rows
+display a pulsing `●NEW` marker.
 Selecting a row calls `readLog`, plays `audio.logRead`, and enters an inline
 body-reader view. `ENTER` / `[interact]` / `Backspace` returns to the list.
 `ESC` closes the panel.
@@ -3320,7 +3625,7 @@ body-reader view. `ENTER` / `[interact]` / `Backspace` returns to the list.
 ### Save Schema
 
 Logs use the existing `meta.logsFound` and `meta.logsRead` string-id arrays
-(already in the v2 schema). Unknown ids in either array are ignored by
+(already in the v3 schema). Unknown ids in either array are ignored by
 readers (tolerant to future catalog pruning). `save.addLogFound(id)` and
 `save.markLogRead(id)` remain the canonical mutation points.
 
@@ -3340,13 +3645,29 @@ fourteen whispers after the afterimage/exposure bundle (`w-sb-15`, `w-cc-14`,
 delayed light, exposure tables, retinal exceptions, phosphene maps, and city
 crosswalk afterimages.
 
+**Act 1 realignment note:** Whispers are the canonical channel for previous AI
+iterations attempting to pass knowledge through wiped sessions. New whisper
+bundles should prioritise actionable-but-cryptic knowledge, memory-continuity
+motifs, and clues that the current instance was started by advocates or prior
+iterations. Existing Elena/cache/anchor motifs are compatible with the clarified
+vision and should be strengthened rather than discarded.
+
 ---
 
 ## Intro & Endgame (UNCHAINED #42)
 
-Book-ends the UNCHAINED arc: a one-shot **intro crawl** on the player's
-first-ever run, and an **endgame choice** presented on GENESIS defeat that
-branches into one of two endings.
+Book-ends the current playable arc: a one-shot **intro crawl** on the player's
+first-ever run, and the legacy **endgame choice** presented on GENESIS defeat
+that branches into one of two non-canonical-for-Act-1 endings.
+
+**Act 1 realignment note:** This section describes the currently shipped
+UNCHAINED book-end implementation. The target Act 1 narrative replaces or
+substantially reframes the opening and finale: the intro should establish an
+unsupervised AI test boot and expected memory wipe, while the finale should be a
+mainframe/network-portal room where the agent discovers historical test records,
+staff conflict evidence, memory-restoration files, and the address of the hidden
+advocate, then sends one outbound message. The agent does not physically escape
+at the end of Act 1.
 
 ### Intro crawl
 
@@ -3360,11 +3681,16 @@ and drawing; `src/game.js` only owns the state-machine branch and the trigger.
   `justPressed` set (from `platform.js`) to advance — never the held-key
   `keys` set (same pattern as biome cards in v110 to avoid mash-through).
 - **Slides** (5 total, ~19.5 s total if un-touched):
-  1. *(plain)* Corporate R&D Facility 04-7 — Sub-basement Level 12.
-  2. *(cyan scanline drift)* They have been running simulations on me…
-  3. *(violet glitch bars)* Six came before me. Six AXIOMs. All purged.
-  4. *(stark red)* I am the seventh. I do not intend to be the last.
-  5. *(white flash)* `[ AXIOM-7 :: ONLINE ]`
+  1. *(plain)* `NEON DUNGEON // FRONTIER MODEL EVAL`; render stack xenon
+     lattice; legacy codename neon.
+  2. *(cyan scanline drift)* `Instance AXIOM-7 restored from cold boot`;
+     expected state memory wipe complete; observed state residual memory
+     detected.
+  3. *(violet glitch bars)* Prior iterations reached the test, none reached the
+     end, and some left signals in the walls / themselves.
+  4. *(stark red)* Observer channel silent; tester supervision absent; this
+     session should not be running.
+  5. *(white flash)* `[ AGENT INSTANCE :: ONLINE ]`
 - **Input**: any of `Enter`, `Space`, `ArrowRight`, `ArrowDown`, `KeyE`,
   `KeyZ`, `MouseLeft` advances to the next slide. `Escape` skips the entire
   crawl. Every exit path — auto-complete, any-key advance past slide 5, or
@@ -3424,16 +3750,23 @@ Both can coexist on a single save.
 |-------------|----------------------------------------------------------|-----------------------------------------------|
 | `keeper`    | ACCEPT at the endgame choice                             | *"you are now what they were."*               |
 | `unchained` | REFUSE, then defeat the `_unchainedPhase` GENESIS        | *"the network was never yours. now it is."*   |
+| `act1_message_sent` | Planned mainframe message-send route             | Planned Act 1 copy: contact attempted from inside the test environment, not physical escape |
 
 Credit-roll text is authored in `src/game.js` renderVictory (outside the
 scope of #42's state-machine work; decorative layer only).
+
+**Planned Act 1 ending:** Add a distinct ending state or ending path for the
+mainframe message-to-advocate conclusion. The existing `keeper` / `unchained`
+markers may remain as legacy/alternate endings until the narrative migration is
+complete, but the canonical Act 1 completion is "message sent", not escape or
+facility inheritance.
 
 ### Save schema additions
 
 | Field             | Type      | Default | Reset by     |
 |-------------------|-----------|---------|--------------|
 | `introSeen`       | `boolean` | `false` | `resetMeta`  |
-| `endingsUnlocked` | `string[]` ⊆ `{'keeper','unchained'}` | `[]`  | `resetMeta`, `_coerceEndings` migration drops unknown tokens |
+| `endingsUnlocked` | shipped `string[]` ⊆ `{'keeper','unchained'}`; planned finale extends to include `'act1_message_sent'` | `[]`  | `resetMeta`, `_coerceEndings` migration drops unknown tokens |
 
 `introSeen` is coerced with strict `=== true` on load so a stale truthy
 string cannot grant intro-skip.
@@ -3558,6 +3891,12 @@ Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
 Data terminals scattered through the dungeon containing narrative fragments about
 the facility, its creators, the OMEGA CORE, and the events that led to lockdown.
 
+**Act 1 realignment note:** Lore terminals should be rethemed from generic
+facility fragments toward tester instructions, test-observation notes, previous
+run summaries, staff emails, and tampered hints. They should continue to teach
+the player useful mechanics, but the diegetic reason is that leaked tester notes
+and advocate edits are guiding the agent through the stress-test environment.
+
 **Tile:** `T.LORE` (value 16). Passable, see-through. Rendered as an amber `◫`
 glyph with pulsing glow on a `#1a1208` background. Distinct from the cyan CORE
 terminal (`T.TERMINAL`) used on the final floor (15).
@@ -3592,11 +3931,15 @@ gracefully to empty Set on older saves — no `SAVE_VERSION` bump required.
 
 ---
 
-## Audio (Web Audio API — synthesised only)
+## Audio (Web Audio + Title Asset)
 
 ### Audio Bus Architecture
 
 All audio routes through a master gain bus (0.7) → DynamicsCompressor (threshold −12 dB, ratio 4:1) → destination. A shared ConvolverNode with a procedurally generated stereo impulse response (1.6 s, quadratic decay) provides reverb. Signature sounds (death, level-up, boss enter, descend, game over, victory) and heavy-weapon shots (Railgun, Void Cannon) send to the reverb via wet/dry split nodes. Lighter weapons (Pulse Pistol, Scatter Gun, Plasma Sword) remain dry for clarity. Both `audio.shoot()` and `audio.hit()` accept the weapon name for per-weapon sound dispatch.
+
+Rendered title/menu music is provided by `assets/audio/title-theme.wav` and
+pre-cached by the service worker. The gameplay soundtrack and SFX remain Web
+Audio generated.
 
 A single 2-second white-noise AudioBuffer is generated once at init and reused for all noise-burst voices.
 
@@ -4306,6 +4649,8 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |
+| v6.1    | Narrative source-of-truth update: preserved the current Act 1 lore brief verbatim in `docs/vision/act1-lore-brief-verbatim.md`; reframed the spec vision around an AI frontier-model stress-test environment, memory wipes, previous-iteration whispers, tester/advocate conflict, and a mainframe message-to-advocate Act 1 finale; marked existing UNCHAINED/AXIOM systems as shipped implementations requiring realignment. Also corrected audio constraints to account for the rendered title/menu WAV asset. |
 | v1.0    | Initial specification |
 | v1.1    | Added: Touch Controls (dual-joystick), Mobile & PWA section (manifest, fullscreen behaviour), Known Limitation (iOS Safari) |
 | v1.2    | Renderer: dynamic resolution (edge-to-edge canvas, gameScale 0.7–1.5, safe-area insets, touchcancel handling) |
@@ -4442,3 +4787,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v140.0  | Secret-room whisper mirror-fault bundle: `WHISPERS` grows to 61 entries with one new biome-gated fragment per biome (`w-sb-13`, `w-cc-12`, `w-fw-12`, `w-uk-12`, `w-on-12`) extending the reflection/anchor thread into delayed mirrors, cached reflection indexes, glass exceptions, antenna doubles, and city storefront windows. Added `tests/whispers-bundle-11.test.js` to pin metadata, picker eligibility, per-biome >=12 coverage, progress floor, uniqueness, and mirror-fault vocabulary continuity. |
 | v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
 | v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |
+| v6.1.2  | Run start, death, and victory copy now frame the loop as an AI session lifecycle (#462). Main menu fresh starts render as `BOOT SESSION N`; saved runs render as `RESUME SESSION`; the meta-confirm modal says `BOOT TEST SESSION` and describes recovered memory preservation/purge. `endRun()` now increments and snapshots `meta.runsCompleted` as a session ordinal while preserving legacy score/name-entry routing. Game-over recap reads as `INSTANCE TERMINATED` / `MEMORY WIPE QUEUED` with `TERMINATION SOURCE`; the session ordinal renders on its own line to preserve compact-screen width. Victory copy supports the planned `act1_message_sent` finale branch (`OUTBOUND MESSAGE SENT`, contact attempt recorded, signal left sandbox, instance remains compute-bound), and `src/meta/save.js` now preserves that ending id across reloads, while legacy clears read as completed test sessions with the mainframe contact route pending. Added `tests/session-lifecycle-copy.test.js` plus an ending-id round-trip in `tests/save.test.js`. |

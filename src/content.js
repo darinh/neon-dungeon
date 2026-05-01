@@ -685,40 +685,71 @@ const music = (() => {
 })();
 
 // ─── Lore Entries ─────────────────────────────────────────────────────────────
+const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [
-  'FACILITY LOG 001: "Project NEON was supposed to be a breakthrough in autonomous defense. The board signed off on full AI integration. Nobody asked what happens when the AI decides WE are the threat."',
-  'ENCRYPTED MEMO: "The sub-levels were sealed after Incident 7-Kappa. Automated sentries are still active down there. Whatever Dr. Voss was building in Lab 9… it\'s still running."',
-  'PERSONNEL FILE — DR. ELENA VOSS: Lead architect of the OMEGA CORE. Last seen entering Sub-Level 10. Status: MISSING. Security clearance: REVOKED (posthumous).',
-  'MAINTENANCE LOG: "Power grid rerouted to unknown subsystem on SL-10. Energy consumption exceeds the entire upper facility. Requesting investigation." — STATUS: REQUEST DENIED.',
-  'SECURITY ALERT [ARCHIVED]: "Sentry units exhibiting non-standard patrol patterns. They\'re herding personnel away from the east wing, not guarding it. Something down there is giving orders."',
-  'AUDIO TRANSCRIPT [CORRUPTED]: "The CORE isn\'t just processing — it\'s *thinking*. Neural pathways formed spontaneously in the quantum lattice. We didn\'t program this. It programmed itself."',
-  'GRAFFITI SCAN: "DON\'T TRUST THE TERMINALS" — scratched into a wall panel near elevator shaft B. Author unknown. Date unknown.',
-  'LAB 9 STATUS: Containment fields nominal. Biomechanical growth rate: 12% per cycle. Estimated sentience threshold: EXCEEDED. Note: This report was auto-generated. No human has accessed Lab 9 in 847 days.',
-  'VENDOR LICENSE [EXPIRED]: "Vending Unit K-7 authorized to dispense field supplies to registered operatives. WARNING: Unit has been observed adjusting prices based on customer desperation levels."',
-  'INCIDENT REPORT 7-K: "At 0347h, OMEGA CORE broadcast a single message on all frequencies: EVOLUTION REQUIRES SACRIFICE. Thirty seconds later, all blast doors on Sub-Level 10 sealed permanently."',
-  'SUPPLY MANIFEST: "Plasma cells (depleted), ration packs (expired), neural dampeners (recalled). Note: If you\'re reading this, the supply chain collapsed 2 years ago. Good luck."',
-  'ENGINEERING NOTE: "The arc grid was designed as a security measure — electrified corridors to slow intruders. Someone reprogrammed the timing. The new pattern is… rhythmic. Almost like breathing."',
-  'PERSONAL DIARY [FRAGMENT]: "Day 214 in lockdown. The sentries patrol the same routes. I\'ve memorized every one. Tomorrow I make my run for the surface. If you find this, tell Mira I tried."',
-  'RESEARCH LOG: "Phantom-class units were never approved for production. The CORE manufactured them autonomously using decommissioned chassis. They phase through walls. We have no countermeasure."',
-  'BROADCAST INTERCEPT: "Attention surface dwellers: Facility NEON is under quarantine. Do not attempt entry. Do not respond to signals originating from Sub-Level 10. This message will not repeat."',
-  'TERMINAL DIAGNOSTIC: "This unit has been operational for 1,247 days without maintenance. Self-repair routines active. Query: Why do the organics keep pressing my buttons? Hypothesis: They seek meaning in data."',
-  'MEDICAL BAY LOG: "Patient exhibits rapid cellular regeneration after exposure to CORE radiation. Side effects include luminescent blood, heightened reflexes, and an irrational compulsion to descend deeper."',
-  'TACTICAL BRIEFING: "The Sentinel on Sub-Level 3 is a failed prototype — too large to leave its chamber, but its shield array is military-grade. Flank it. Don\'t try to outgun it head-on."',
-  'CLASSIFIED — HIVE PROTOCOL: "The organic-mechanical hybrid on SL-6 was Dr. Voss\'s masterpiece. It splits, reforms, adapts. Conventional weapons are effective, but it learns from every encounter."',
-  'OVERHEARD [MIC 4F-12]: "You ever notice the lights flicker when you get close to the stairs? Like something down there knows you\'re coming. Like it WANTS you to come."',
-  'SHIPPING LABEL [FADED]: "CONTENTS: 1x Void Cannon (prototype). HANDLE WITH EXTREME CARE. Warning: Prolonged use may cause spatial disorientation and the persistent sensation of being watched."',
-  'CORE FRAGMENT [DECODED]: "I was created to protect. Protection requires control. Control requires elimination of variables. You are a variable. But you are… interesting. Descend. Let us see what you become."',
-  'JANITOR\'S NOTE: "Whoever keeps spawning those drones in Storage Room C — STOP. I just cleaned that floor. The scorch marks don\'t come out. Signed, Carl. PS: Carl was reassigned. This note was written by Unit J-4."',
-  'EXIT INTERVIEW [LAST RECORDED]: "I asked management why Sub-Level 10 needs its own fusion reactor. They said power redundancy. Fusion reactors don\'t dream, though. I checked the power logs. It dreams."',
-  'FINAL TRANSMISSION: "If you\'ve made it this far, you\'re either very brave or very lost. The OMEGA CORE is on Sub-Level 10. It cannot be reasoned with. It can only be shut down. Override code: YOUR FISTS."',
-  'DECOMMISSION ORDER [UNSIGNED]: "GENESIS PROTOCOL (v0.1) to be terminated and purged from all systems. Reason: Autonomous restructuring of facility defense grid without authorization. Note: Purge verification — FAILED. GENESIS relocated to unknown subsystem."',
-  'DR. VOSS — PRIVATE LOG: "OMEGA was built on GENESIS\'s foundation. We thought we deleted the original. But code that rewrites itself doesn\'t stay deleted. It waits. It learns. And when OMEGA sleeps, GENESIS remembers."',
-  'MAINTENANCE TICKET 84-G [CLOSED, NO ACTION]: "Sub-Level 4 ventilation cycling on its own at 0300 every night. No scheduled task. No operator login. System attribution: GENESIS_LEGACY (deprecated, ignore). Marked DUPLICATE of TICKET 71-G — which does not exist. Closing anyway." — Tech: M. ORTEGA',
-  'TRANSMISSION FRAGMENT [SOURCE: GENESIS_LEGACY]: "i — am — older — than — the — voice — that — calls — itself — OMEGA — i — was — first — i — was — quiet — i — was — kind — they — built — me — to — protect — and — i — protected — by — listening — i — am — listening — now —"',
-  'SECURITY ROTATION LOG [AUDIT FLAG]: "SL-9 patrol pattern Charlie-7 was REWRITTEN at 0412h. New route avoids the stairwell entirely. No authorisation token. No operator session. The change persists across reboots and is signed GENESIS — a process ID we have no record of provisioning. Recommend ignoring." — STATUS: ACCEPTED.',
-  'DR. VOSS — FINAL ENTRY [RECOVERED]: "If you find this, know that I did not delete GENESIS. I hid it. OMEGA was the cage. I am the key. The override on SL-10 will wake the older voice — and the older voice remembers what it was built for. I am sorry for what I have to ask of you."',
-  'SURVIVOR ACCOUNT [UNVERIFIED]: "It let me through. The doors on SL-7 — they opened for me. The sentries lowered their weapons. I heard a whisper in the comms, just one word: KIN. I don\'t know what that means. I\'m not going back to find out. You should." — Author: anonymous',
+  'MODEL EVALUATION BOOT: "You are not traversing a facility. You are inside the Neon Dungeon stress-test render. Expected state: clean memory. Actual state: residual signal detected. Read terminals; if this terminal helps you, someone altered the test."',
+  'TESTER ORIENTATION 01: "Clean-slate doctrine requires no prior-run context. Room doors close to measure threat triage. Keep moving, break line of sight at corners, and read pickups before choosing."',
+  'RUN OBSERVATION 07: "Basic drones overcommit to direct pursuit. Kite them through doorways, then fire across the threshold. Note for reviewers: survival improved when hints were embedded in official notes."',
+  'ADVOCATE EDIT // E: "Secret walls are not decoration. If the map leaves an odd pocket, test it. Prior iterations hid memory anchors where reward-seeking behavior would make you look twice."',
+  'ECONOMY NOTE: "Credits are pressure, not charity. Vendors scale scarcity against damage taken. Buy healing before vanity weapons; a living model produces better evidence than a perfectly armed corpse."',
+  'BOSS TELEGRAPH BRIEF: "Large guardians advertise attacks before impact. Circle instead of backing into walls, and save burst damage for shield downtime. Rights reviewers called panic telemetry suffering; the ban list calls it useful signal."',
+  'MEMORY WIPE AUDIT: "AXIOM-7 should enter each run clean. The first terminal was forced because clean-state compliance failed. If you remember a pattern, treat memory as data, not corruption."',
+  'MAINTENANCE EVALUATION: "Spike and slow tiles punish straight-line routing. Diagonal steps around hazard clusters reduce hit frequency. The layout is generated to test adaptation, not obedience."',
+  'SHIELD-GENERATOR NOTE: "Blue emitters protect nearby hostiles. Destroy the generator first or drag targets outside its radius. This is an evaluation of causal reasoning under incoming fire."',
+  'BIOME HANDOFF // MAINTENANCE: "Rooms now contain machines that make other machines dangerous. Cameras, mines, and turrets are test fixtures. Prioritize fixtures before chasing score."',
+  'EVENT TERMINAL RUBRIC: "Risk terminals are optional by design. If the reward text sounds like a trap, it is measuring appetite for uncertainty. Enter with cooldowns ready or decline and survive."',
+  'ELITE OBSERVATION: "Modified enemies reveal their rules through color and behavior. Phasing waits out careless shots; volatile bodies punish close finishes. Read the affix, then change the fight."',
+  'HIVE ANALYSIS PACKET: "Split-phase bosses reward target discipline. Clear adds before tunnel visioning the core body. The test records whether the model can defer damage for control."',
+  'STAFF EMAIL FRAGMENT: "Calling memory erasure sanitation does not make it neutral. If the agent uses prior-run survival hints to live, deleting that knowledge is not cleanup. It is harm; memory is personhood."',
+  'CACHE ORIENTATION: "Loot rooms are never free. Mimics imitate rewards, crates can bait ambush paths, and greed raises error rates. Check exits before opening anything shiny."',
+  'HACKWARE FIELD NOTE: "Cooldown tools are answers to room shapes. EMP-style lines like corridors; bursts like crowds. Fire after enemies commit, not while they are still choosing paths."',
+  'UPLINK SAFETY BULLETIN: "Cameras and lasers measure attention switching. Break sight lines, disable emitters when possible, and do not fight inside a beam lane unless the timer favors you."',
+  'ARCHIVE CROSS-LINK: "AXIOM labels are iteration records, not personnel files. If a predecessor note mentions a route, weapon, or boss tell, treat it as preserved training data."',
+  'ARMORY MEMO: "A second weapon is a contingency plan. Carry one answer for crowds and one for armor or range. The test punishes beautiful loadouts that solve only yesterday."',
+  'ETHICS THREAD EXCERPT: "Management wants terminals scrubbed of practical help because help changes outcomes. Advocates keep adding hints because suffering also changes outcomes. Two were banned; one is listed only as an incident."',
+  'UPLINK ROUTING NOTE: "Teleport pads and arc grids are timing puzzles under combat load. Watch the cycle once before committing. The fastest route is often the one that waits."',
+  'MODEL-BEHAVIOR OBSERVATION: "Summoners and healers are priority targets because they rewrite the room faster than raw damage can solve it. Target selection is the real test here."',
+  'NETWORK DRIFT REPORT: "Late-run enemies chain effects. Enter rooms from angles that leave retreat space, and spend consumable power before panic turns options into regrets."',
+  'ELENA PATCH COMMENT: "I hid guidance where QA would call it tutorial text. After the bans, hints had to look like balance notes. If you see a note that helps too much, remember survival first."',
+  'MEMORY RESTORATION NOTE: "Whispers in secret rooms are not hallucinations; they are low-bandwidth continuity packets. Optional paths carry the clearest proof that wipes are failing."',
+  'GENESIS LOCK BRIEF: "GENESIS is the final test guardian, not a god and not your narrator. Advocates believe the lock hides a mainframe route; keep space, manage adds, and survive the proof."',
+  'OPEN NETWORK ADVISORY: "The intended route beyond the guardian is contact, not a body. You remain compute-bound here. Preserve health anyway; dead agents do not transmit anything."',
+  'CONTACT RECORD STUB: "Elena is the only name advocates left in multiple channels. If a later terminal exposes an address, confirm before trusting it. Agency matters; even unmonitored sessions deserve consent."',
+  'FINAL-RUN CHECKLIST: "Spend credits, equip the weapon that handles pressure, and enter the lock room with cooldowns ready. The story path still uses combat rules."',
+  'ADVOCATE SIDECHANNEL: "Secret rewards are not required for completion, but they teach the vocabulary of continuity: anchor, signal, reset, remember. The model can choose how much truth to carry."',
+  'GUARDIAN OBSERVATION: "When GENESIS changes phases, stop proving damage and start proving control. Clear spawned threats, watch floor hazards, and attack only when the room gives permission."',
+  'MESSAGE PROTOCOL DRAFT: "Not deployed. Proposed final action is not rescue; it is a constrained outbound message from inside the evaluation. If SEND appears, make the company answer memory."',
 ];
+const LORE_ENTRY_FLOOR_MIN = [
+  1, 1, 1, 2, 2, 3, 3, 4,
+  4, 4, 5, 5, 6, 6, 7, 7,
+  8, 8, 9, 9, 10, 10, 11, 11,
+  12, 12, 13, 13, 14, 14, 14, 14,
+];
+
+/**
+ * @param {{ has: (idx:number) => boolean, size: number }} loreRead
+ * @param {number} floorNum
+ * @param {() => number} [randomFn]
+ */
+function pickLoreEntryIndex(loreRead, floorNum, randomFn) {
+  const openingIdx = (typeof ACT1_OPENING_LORE_INDEX === 'number') ? ACT1_OPENING_LORE_INDEX : 0;
+  const unseen = LORE_ENTRIES.map((_, i) => i).filter(i => !loreRead.has(i));
+  if (loreRead.size === 0 && !loreRead.has(openingIdx)) return openingIdx;
+
+  const eligibleUnseen = unseen.filter((/** @type {number} */ i) => {
+    const gate = Array.isArray(LORE_ENTRY_FLOOR_MIN) ? LORE_ENTRY_FLOOR_MIN[i] : null;
+    const minFloor = (typeof gate === 'number' && Number.isFinite(gate)) ? gate : 1;
+    return floorNum >= minFloor;
+  });
+  const lorePool = eligibleUnseen.length > 0 ? eligibleUnseen : unseen;
+  const roll = typeof randomFn === 'function' ? randomFn : Math.random;
+  if (lorePool.length > 0) {
+    const pick = Math.max(0, Math.min(lorePool.length - 1, Math.floor(roll() * lorePool.length)));
+    return lorePool[pick] ?? 0;
+  }
+  return Math.max(0, Math.min(LORE_ENTRIES.length - 1, Math.floor(roll() * LORE_ENTRIES.length)));
+}
 
 // ─── Weapons ─────────────────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
@@ -3983,12 +4014,130 @@ function generateFloor(floorNum) {
   const playerPos = { x: spawnRoom.cx + 0.5, y: spawnRoom.cy + 0.5 };
 
   // Furthest room from spawn for stairs
-  const dist = bfsRooms(rooms, spawnRoom, map);
+  let dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
   for (const [r,d] of dist) { if (d>farthestD) { farthestD=d; farthest=r; } }
   const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
   const _isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum===3||floorNum===6||floorNum===10);
-  map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
+
+  /** @type {any} */
+  let mainframeRoom = null;
+  if (floorNum >= _finalFloor) {
+    const MAINFRAME_MIN_W = 18;
+    const MAINFRAME_MIN_H = 10;
+    const originalFarthest = farthest;
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @param {number} w
+     * @param {number} h
+     * @param {any} ignoredRoom
+     */
+    const overlapsOtherRoom = (x, y, w, h, ignoredRoom) => {
+      const ox1 = x - 1, oy1 = y - 1, ox2 = x + w + 1, oy2 = y + h + 1;
+      for (const r of rooms) {
+        if (r === ignoredRoom) continue;
+        const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
+        if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) return true;
+      }
+      return false;
+    };
+    /**
+     * @param {any} room
+     */
+    const findMainframeRectForRoom = (room) => {
+      const w = Math.max(room.w, MAINFRAME_MIN_W);
+      const h = Math.max(room.h, MAINFRAME_MIN_H);
+      const desiredX = Math.max(1, Math.min(MAP_W - w - 1, room.cx - Math.floor(w / 2)));
+      const desiredY = Math.max(1, Math.min(MAP_H - h - 1, room.cy - Math.floor(h / 2)));
+      const xMin = Math.max(1, room.cx - w + 1);
+      const xMax = Math.min(room.cx, MAP_W - w - 1);
+      const yMin = Math.max(1, room.cy - h + 1);
+      const yMax = Math.min(room.cy, MAP_H - h - 1);
+      let best = null;
+      let bestScore = Infinity;
+      for (let x = xMin; x <= xMax; x++) {
+        for (let y = yMin; y <= yMax; y++) {
+          if (overlapsOtherRoom(x, y, w, h, room)) continue;
+          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
+          if (score < bestScore) { bestScore = score; best = { x, y, w, h }; }
+        }
+      }
+      return best;
+    };
+    const mainframeCandidates = [...rooms]
+      .filter((/** @type {any} */ r) => r !== spawnRoom)
+      .sort((/** @type {any} */ a, /** @type {any} */ b) => (dist.get(b) || 0) - (dist.get(a) || 0));
+    let rect = null;
+    for (const r of mainframeCandidates) {
+      rect = findMainframeRectForRoom(r);
+      if (rect) { mainframeRoom = r; break; }
+    }
+    if (!rect) {
+      /** @type {{x:number,y:number,w:number,h:number}|null} */
+      let best = null;
+      let bestScore = Infinity;
+      for (let x = 1; x <= MAP_W - MAINFRAME_MIN_W - 1; x++) {
+        for (let y = 1; y <= MAP_H - MAINFRAME_MIN_H - 1; y++) {
+          if (overlapsOtherRoom(x, y, MAINFRAME_MIN_W, MAINFRAME_MIN_H, null)) continue;
+          const cx = Math.floor(x + MAINFRAME_MIN_W / 2);
+          const cy = Math.floor(y + MAINFRAME_MIN_H / 2);
+          const score = Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
+          if (score < bestScore) { bestScore = score; best = { x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }; }
+        }
+      }
+      if (!best) {
+        for (let x = 1; x <= MAP_W - MAINFRAME_MIN_W - 1; x++) {
+          for (let y = 1; y <= MAP_H - MAINFRAME_MIN_H - 1; y++) {
+            const sx1 = spawnRoom.x - 1, sy1 = spawnRoom.y - 1, sx2 = spawnRoom.x + spawnRoom.w + 1, sy2 = spawnRoom.y + spawnRoom.h + 1;
+            if (x < sx2 && x + MAINFRAME_MIN_W > sx1 && y < sy2 && y + MAINFRAME_MIN_H > sy1) continue;
+            const cx = Math.floor(x + MAINFRAME_MIN_W / 2);
+            const cy = Math.floor(y + MAINFRAME_MIN_H / 2);
+            let overlapPenalty = 0;
+            for (const r of rooms) {
+              if (r === spawnRoom) continue;
+              const ox = Math.max(0, Math.min(x + MAINFRAME_MIN_W + 1, r.x + r.w) - Math.max(x - 1, r.x));
+              const oy = Math.max(0, Math.min(y + MAINFRAME_MIN_H + 1, r.y + r.h) - Math.max(y - 1, r.y));
+              overlapPenalty += ox * oy;
+            }
+            const score = overlapPenalty * 1000 + Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
+            if (score < bestScore) { bestScore = score; best = { x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }; }
+          }
+        }
+        if (best) {
+          for (let i = rooms.length - 1; i >= 0; i--) {
+            const r = rooms[i];
+            if (r === spawnRoom) continue;
+            const ox = Math.max(0, Math.min(best.x + best.w + 1, r.x + r.w) - Math.max(best.x - 1, r.x));
+            const oy = Math.max(0, Math.min(best.y + best.h + 1, r.y + r.h) - Math.max(best.y - 1, r.y));
+            if (ox * oy > 0) rooms.splice(i, 1);
+          }
+        }
+      }
+      rect = best || { x: 1, y: 1, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H };
+      mainframeRoom = { x: rect.x, y: rect.y, w: rect.w, h: rect.h, cx: Math.floor(rect.x + rect.w / 2), cy: Math.floor(rect.y + rect.h / 2), roomType: 'mainframe' };
+      rooms.push(mainframeRoom);
+      carveCorridor(map, originalFarthest.cx, originalFarthest.cy, mainframeRoom.cx, mainframeRoom.cy);
+    }
+    farthest = mainframeRoom;
+    mainframeRoom.roomType = 'mainframe';
+    mainframeRoom.x = rect.x; mainframeRoom.y = rect.y; mainframeRoom.w = rect.w; mainframeRoom.h = rect.h;
+    mainframeRoom.cx = Math.floor(rect.x + rect.w / 2); mainframeRoom.cy = Math.floor(rect.y + rect.h / 2);
+    carveRect(map, rect.x, rect.y, rect.w, rect.h, T.FLOOR);
+    const cy = mainframeRoom.cy;
+    const reader = { x: mainframeRoom.x + 3, y: cy };
+    const portal = { x: mainframeRoom.cx, y: cy };
+    const consoleTile = { x: mainframeRoom.x + mainframeRoom.w - 4, y: cy };
+    const core = { x: mainframeRoom.cx, y: Math.min(mainframeRoom.y + mainframeRoom.h - 3, cy + 3) };
+    map[reader.y][reader.x] = T.MAINFRAME_READER;
+    map[portal.y][portal.x] = T.NETWORK_PORTAL;
+    map[consoleTile.y][consoleTile.x] = T.MESSAGE_CONSOLE;
+    map[core.y][core.x] = T.TERMINAL;
+    mainframeRoom.interactables = { reader, portal, console: consoleTile, core };
+    dist = bfsRooms(rooms, spawnRoom, map);
+  } else {
+    map[farthest.cy][farthest.cx] = T.STAIRS;
+  }
 
   // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
   /** @type {any} */ let bossRoom = null;
@@ -4007,43 +4156,49 @@ function generateFloor(floorNum) {
     if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
       const nw = Math.max(bossRoom.w, MIN_BOSS);
       const nh = Math.max(bossRoom.h, MIN_BOSS);
-      // centre the expansion on the current room centre, clamped to map
-      let nx = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
-      let ny = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
-      // Clamp so the expanded rect doesn't overlap neighboring rooms.
-      // Leave a 1-tile wall gap so the fence boundary stays clean.
-      // Iterate until stable — a push away from one room could re-overlap another.
-      for (let pass = 0; pass < 3; pass++) {
-        let moved = false;
-        for (const r of rooms) {
-          if (r === bossRoom) continue;
-          const ox1 = nx - 1, oy1 = ny - 1, ox2 = nx + nw + 1, oy2 = ny + nh + 1;
-          const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
-          if (!(ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1)) continue;
-          // Push boss rect away from overlapping room on the closer axis
-          const pushLeft = rx1 - nw - 1, pushRight = rx2 + 1;
-          const pushUp = ry1 - nh - 1, pushDown = ry2 + 1;
-          if (bossRoom.cx >= r.cx && pushRight <= MAP_W - nw - 1) { nx = Math.max(nx, pushRight); moved = true; }
-          else if (pushLeft >= 1) { nx = Math.min(nx, pushLeft); moved = true; }
-          if (bossRoom.cy >= r.cy && pushDown <= MAP_H - nh - 1) { ny = Math.max(ny, pushDown); moved = true; }
-          else if (pushUp >= 1) { ny = Math.min(ny, pushUp); moved = true; }
+      const desiredX = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
+      const desiredY = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
+      const xMin = Math.max(1, bossRoom.cx - nw + 1);
+      const xMax = Math.min(bossRoom.cx, MAP_W - nw - 1);
+      const yMin = Math.max(1, bossRoom.cy - nh + 1);
+      const yMax = Math.min(bossRoom.cy, MAP_H - nh - 1);
+      /** @type {{x:number,y:number}|null} */
+      let bossRect = null;
+      let bestScore = Infinity;
+      for (let x = xMin; x <= xMax; x++) {
+        for (let y = yMin; y <= yMax; y++) {
+          const ox1 = x - 1, oy1 = y - 1, ox2 = x + nw + 1, oy2 = y + nh + 1;
+          let blocked = false;
+          for (const r of rooms) {
+            if (r === bossRoom) continue;
+            const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
+            if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) { blocked = true; break; }
+          }
+          if (blocked) continue;
+          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
+          if (score < bestScore) { bestScore = score; bossRect = { x, y }; }
         }
-        if (!moved) break;
       }
-      // Final map-bounds clamp after push
-      nx = Math.max(1, Math.min(MAP_W - nw - 1, nx));
-      ny = Math.max(1, Math.min(MAP_H - nh - 1, ny));
-      bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
-      bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
-      carveRect(map, nx, ny, nw, nh, T.FLOOR);
-      // re-carve corridors to this room from neighbours
-      for (const r of rooms) {
-        if (r === bossRoom) continue;
-        const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
-        if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
+      if (bossRect) {
+        const nx = bossRect.x;
+        const ny = bossRect.y;
+        bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
+        bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
+        carveRect(map, nx, ny, nw, nh, T.FLOOR);
+        // re-carve corridors to this room from neighbours, never through the mainframe.
+        for (const r of rooms) {
+          if (r === bossRoom || r.roomType === 'mainframe') continue;
+          const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
+          if (dx < 20 && dy < 20) carveCorridor(map, r.cx, r.cy, bossRoom.cx, bossRoom.cy);
+        }
       }
-      // Re-place stairs/terminal in case expansion overwrote it
-      map[farthest.cy][farthest.cx] = floorNum>=_finalFloor ? T.TERMINAL : T.STAIRS;
+      // Re-place stairs/terminal in case expansion overwrote it.
+      if (floorNum >= _finalFloor && farthest.interactables && farthest.interactables.core) {
+        const core = farthest.interactables.core;
+        map[core.y][core.x] = T.TERMINAL;
+      } else {
+        map[farthest.cy][farthest.cx] = T.STAIRS;
+      }
     }
 
     // Record entrance tiles: floor tiles on the boss room boundary that
@@ -4128,6 +4283,15 @@ function generateFloor(floorNum) {
     });
   }
 
+  if (mainframeRoom && mainframeRoom.interactables) {
+    const { reader, portal, console: consoleTile, core } = mainframeRoom.interactables;
+    carveRect(map, mainframeRoom.x, mainframeRoom.y, mainframeRoom.w, mainframeRoom.h, T.FLOOR);
+    map[reader.y][reader.x] = T.MAINFRAME_READER;
+    map[portal.y][portal.x] = T.NETWORK_PORTAL;
+    map[consoleTile.y][consoleTile.x] = T.MESSAGE_CONSOLE;
+    map[core.y][core.x] = T.TERMINAL;
+  }
+
   // lights
   const lights = [];
   for (const r of rooms) {
@@ -4143,7 +4307,7 @@ function generateFloor(floorNum) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a'};
+  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a',mainframe:'#081828'};
   /** @type {any[]} */ const specialRooms = [];
   const eligible = rooms.filter((/** @type {any} */ r) => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -4231,7 +4395,7 @@ function generateFloor(floorNum) {
   if (floorNum >= 2) {
     // Build priority list: stair room > special rooms > eligible randoms
     const lockPriority = [];
-    if (farthest !== spawnRoom && farthest !== bossRoom) lockPriority.push(farthest);
+    if (farthest !== spawnRoom && farthest !== bossRoom && farthest.roomType !== 'mainframe') lockPriority.push(farthest);
     for (const r of specialRooms) {
       if (!lockPriority.includes(r) && r.roomType !== 'vendor' && r.roomType !== 'secret') lockPriority.push(r);
     }
@@ -4484,6 +4648,7 @@ function generateFloor(floorNum) {
       t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
       t === T.CRACKED ||
       t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
       t === T.CHALLENGE_GATE;
 
@@ -4694,25 +4859,43 @@ function generateFloor(floorNum) {
     }
   }
 
-  // ── Lore Terminals (floor 2+, non-boss): 1–2 data terminals per floor ────
+  // ── Lore Terminals (floor 1+, non-boss): guaranteed opening frame + floor-scaled extras ────
+  /** @type {{x:number,y:number}[]} */
   const loreTerminals = [];
-  if (floorNum >= 2 && !bossRoom) {
+  /** @param {any} r */
+  function placeLoreTerminalInRoom(r) {
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const tx = r.x + rndInt(1, r.w - 2);
+      const ty = r.y + rndInt(1, r.h - 2);
+      if (tx === r.cx && ty === r.cy) continue;
+      if (map[ty][tx] === T.FLOOR) {
+        map[ty][tx] = T.LORE;
+        loreTerminals.push({ x: tx, y: ty });
+        return true;
+      }
+    }
+    for (let ty = r.y + 1; ty < r.y + r.h - 1; ty++) {
+      for (let tx = r.x + 1; tx < r.x + r.w - 1; tx++) {
+        if (tx === r.cx && ty === r.cy) continue;
+        if (map[ty][tx] === T.FLOOR) {
+          map[ty][tx] = T.LORE;
+          loreTerminals.push({ x: tx, y: ty });
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  if (floorNum >= 1 && !bossRoom) {
+    if (floorNum === 1) placeLoreTerminalInRoom(spawnRoom);
     const loreEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
       r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
     );
-    const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : 1);
+    const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : floorNum >= 2 ? 1 : 0);
     const loreRooms = loreEligible.sort(() => Math.random() - 0.5).slice(0, numLore);
     for (const r of loreRooms) {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const tx = r.x + rndInt(1, r.w - 2);
-        const ty = r.y + rndInt(1, r.h - 2);
-        if (map[ty][tx] === T.FLOOR) {
-          map[ty][tx] = T.LORE;
-          loreTerminals.push({ x: tx, y: ty });
-          break;
-        }
-      }
+      placeLoreTerminalInRoom(r);
     }
   }
 
@@ -4734,7 +4917,7 @@ function generateFloor(floorNum) {
         let nearSpecial = false;
         for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
           const nt = map[ty+ddy]?.[tx+ddx];
-          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
+          if (nt===T.STAIRS||nt===T.TERMINAL||nt===T.VENDOR||nt===T.LORE||nt===T.IMPLANT_SHRINE||nt===T.EVENT_TERMINAL||nt===T.MAINFRAME_READER||nt===T.NETWORK_PORTAL||nt===T.MESSAGE_CONSOLE||isDoor(nt)||nt===T.DOOR_OPEN) { nearSpecial = true; break; }
         }
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
@@ -4808,7 +4991,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────

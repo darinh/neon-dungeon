@@ -53,6 +53,18 @@ test('saveMeta / loadMeta round-trip', () => {
   save._setStorageForTests(null);
 });
 
+test('saveMeta / loadMeta preserves shipped and planned ending ids', () => {
+  const storage = makeFakeStorage();
+  save._setStorageForTests(storage);
+  const out = save.defaultMeta();
+  out.endingsUnlocked = ['keeper', 'unchained', 'act1_message_sent'];
+  save.saveMeta(out);
+
+  const back = save.loadMeta();
+  assert.deepEqual(back.endingsUnlocked, ['keeper', 'unchained', 'act1_message_sent']);
+  save._setStorageForTests(null);
+});
+
 test('loadMeta survives corrupt JSON', () => {
   save._setStorageForTests(makeFakeStorage({ neonDungeonMeta: 'not-json{' }));
   const m = save.loadMeta();
@@ -270,7 +282,7 @@ test('loadMeta coerces garbage UNCHAINED fields to safe shapes', () => {
       modulesInstalled: ['M_ONE', 99, 'M_TWO', 'M_EXTRA'],  // too long + junk
       logsRead: 'nope',
       logsFound: ['LOG_A', {}, 'LOG_B'],
-      endingsUnlocked: ['keeper', 'bogus', 'unchained'],
+      endingsUnlocked: ['keeper', 'bogus', 'unchained', 'act1_message_sent'],
       runsCompleted: -3
     })
   }));
@@ -284,7 +296,7 @@ test('loadMeta coerces garbage UNCHAINED fields to safe shapes', () => {
   assert.equal(m.modulesInstalled[2], 'M_TWO');
   assert.deepEqual(m.logsRead, []);
   assert.deepEqual(m.logsFound, ['LOG_A', 'LOG_B']);
-  assert.deepEqual(m.endingsUnlocked, ['keeper', 'unchained']);
+  assert.deepEqual(m.endingsUnlocked, ['keeper', 'unchained', 'act1_message_sent']);
   assert.equal(m.runsCompleted, 0);
   save._setStorageForTests(null);
 });

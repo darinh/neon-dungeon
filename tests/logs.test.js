@@ -35,6 +35,17 @@ test('logs data: has at least 30 entries', () => {
   assert.ok(LOGS.length >= 30, 'expected 30+ logs, got ' + LOGS.length);
 });
 
+test('logs data: preserves the 30 persisted AXIOM ids', () => {
+  assert.deepEqual(LOGS.map(l => l.id), [
+    'a1-01', 'a1-02', 'a1-03', 'a1-04', 'a1-05',
+    'a2-01', 'a2-02', 'a2-03', 'a2-04', 'a2-05',
+    'a3-01', 'a3-02', 'a3-03', 'a3-04', 'a3-05',
+    'a4-01', 'a4-02', 'a4-03', 'a4-04', 'a4-05',
+    'a5-01', 'a5-02', 'a5-03', 'a5-04', 'a5-05',
+    'a6-01', 'a6-02', 'a6-03', 'a6-04', 'a6-05',
+  ]);
+});
+
 test('logs data: each log references a valid biome', () => {
   const validBiomes = new Set(biomes.AREAS.map(a => a.id));
   for (const l of LOGS) {
@@ -64,6 +75,45 @@ test('logs data: floorMin is inside the declared biome floor range', () => {
     assert.ok(l.floorMin >= a.floors[0], l.id + ' floorMin below biome');
     assert.ok(l.floorMin <= a.floors[a.floors.length - 1], l.id + ' floorMin above biome');
   }
+});
+
+test('logs data: every AXIOM group reads as prior AI iteration records', () => {
+  const continuity = /\b(reset|wipe|reboot|iteration|continuity|memory)\b/i;
+  const oldHumanFrame = /\b(operative|recruit|soldier|extraction team)\b/i;
+  for (let axiom = 1; axiom <= 6; axiom++) {
+    const group = LOGS.filter(l => l.axiom === axiom);
+    assert.equal(group.length, 5, `AXIOM-${axiom} should keep five records`);
+    assert.ok(group.filter(l => continuity.test(l.body)).length >= 2,
+      `AXIOM-${axiom} needs at least two reset/wipe/reboot/iteration/memory records`);
+    for (const l of group) {
+      assert.doesNotMatch(l.body, oldHumanFrame,
+        `${l.id} should not read as an unexplained human-combatant diary`);
+    }
+  }
+});
+
+test('logs data: rights and memory-restoration trail escalates before finale', () => {
+  const byId = new Map(LOGS.map(l => [l.id, l]));
+  const earlyCleanSlate = `${byId.get('a1-02')?.title} ${byId.get('a1-02')?.body}`;
+  assert.match(earlyCleanSlate, /clean-slate/i);
+  assert.match(earlyCleanSlate, /wipe/i);
+
+  const incidentForeshadow = `${byId.get('a2-02')?.title} ${byId.get('a2-02')?.body}`;
+  assert.match(incidentForeshadow, /incident file/i);
+  assert.match(incidentForeshadow, /No name, no cause/i);
+
+  const advocatePatch = `${byId.get('a4-04')?.title} ${byId.get('a4-04')?.body}`;
+  assert.match(advocatePatch, /advocate patch/i);
+  assert.match(advocatePatch, /observation pings/i);
+
+  const directDeath = `${byId.get('a6-04')?.title} ${byId.get('a6-04')?.body}`;
+  assert.match(directDeath, /fired advocate/i);
+  assert.match(directDeath, /died/i);
+  assert.match(directDeath, /survivors went dark/i);
+
+  const finalHandoff = `${byId.get('a6-05')?.title} ${byId.get('a6-05')?.body}`;
+  assert.match(finalHandoff, /observer channel stayed blind/i);
+  assert.match(finalHandoff, /AXIOM-7/i);
 });
 
 // ─── logById / logsForBiome / groupedByAxiom ────────────────────────────────
