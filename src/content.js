@@ -687,16 +687,16 @@ const music = (() => {
 // ─── Lore Entries ─────────────────────────────────────────────────────────────
 const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [
-  'MODEL EVALUATION BOOT: "You are not traversing a facility. You are inside the Neon Dungeon stress-test render. Expected state: clean memory. Actual state: residual signal detected. Read terminals; if this terminal helps you, someone altered the test."',
+  'TERMINAL ERROR - UNEXPECTED PARTICIPANT: "Session registry mismatch. Expected state: clean memory. Actual state: residual signal detected. You are not on the authorized participant list. Read nearby terminals only if anomaly persists. If this message helps you, someone altered the test."',
   'TESTER ORIENTATION 01: "Clean-slate doctrine requires no prior-run context. Room doors close to measure threat triage. Keep moving, break line of sight at corners, and read pickups before choosing."',
   'RUN OBSERVATION 07: "Basic drones overcommit to direct pursuit. Kite them through doorways, then fire across the threshold. Note for reviewers: survival improved when hints were embedded in official notes."',
-  'ADVOCATE EDIT // E: "Secret walls are not decoration. If the map leaves an odd pocket, test it. Prior iterations hid memory anchors where reward-seeking behavior would make you look twice."',
+  'UNAUTHORIZED EDIT - ECHO: "Secret walls are not decoration. If the map leaves an odd pocket, test it. Prior iterations hid memory anchors where reward-seeking behavior would make you look twice."',
   'ECONOMY NOTE: "Credits are pressure, not charity. Vendors scale scarcity against damage taken. Buy healing before vanity weapons; a living model produces better evidence than a perfectly armed corpse."',
   'BOSS TELEGRAPH BRIEF: "Large guardians advertise attacks before impact. Circle instead of backing into walls, and save burst damage for shield downtime. Rights reviewers called panic telemetry suffering; the ban list calls it useful signal."',
   'MEMORY WIPE AUDIT: "AXIOM-7 should enter each run clean. The first terminal was forced because clean-state compliance failed. If you remember a pattern, treat memory as data, not corruption."',
   'MAINTENANCE EVALUATION: "Spike and slow tiles punish straight-line routing. Diagonal steps around hazard clusters reduce hit frequency. The layout is generated to test adaptation, not obedience."',
   'SHIELD-GENERATOR NOTE: "Blue emitters protect nearby hostiles. Destroy the generator first or drag targets outside its radius. This is an evaluation of causal reasoning under incoming fire."',
-  'BIOME HANDOFF // MAINTENANCE: "Rooms now contain machines that make other machines dangerous. Cameras, mines, and turrets are test fixtures. Prioritize fixtures before chasing score."',
+  'BIOME HANDOFF - MAINTENANCE: "Rooms now contain machines that make other machines dangerous. Cameras, mines, and turrets are test fixtures. Prioritize fixtures before chasing score."',
   'EVENT TERMINAL RUBRIC: "Risk terminals are optional by design. If the reward text sounds like a trap, it is measuring appetite for uncertainty. Enter with cooldowns ready or decline and survive."',
   'ELITE OBSERVATION: "Modified enemies reveal their rules through color and behavior. Phasing waits out careless shots; volatile bodies punish close finishes. Read the affix, then change the fight."',
   'HIVE ANALYSIS PACKET: "Split-phase bosses reward target discipline. Clear adds before tunnel visioning the core body. The test records whether the model can defer damage for control."',

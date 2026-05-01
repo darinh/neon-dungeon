@@ -37,17 +37,22 @@ test('intro crawl establishes AI stress-test boot instead of human-operative fra
   assert.doesNotMatch(text, /\bI am the seventh\b/i);
 });
 
-test('first lore entry is the Act 1 opening pillar terminal content', () => {
+test('first lore entry is an anomaly warning before the full Act 1 reveal', () => {
   const entries = extractLoreEntries();
   const opening = entries[0];
 
   assert.match(CONTENT, /const\s+ACT1_OPENING_LORE_INDEX\s*=\s*0\s*;/,
     'opening lore index must stay pinned to entry 0');
-  assert.match(opening, /MODEL EVALUATION BOOT/i);
-  assert.match(opening, /Neon Dungeon stress-test render/i);
+  assert.match(opening, /TERMINAL ERROR/i);
+  assert.match(opening, /UNEXPECTED PARTICIPANT/i);
   assert.match(opening, /Expected state:\s*clean memory/i);
   assert.match(opening, /residual signal detected/i);
+  assert.match(opening, /authorized participant list/i);
   assert.match(opening, /someone altered the test/i);
+  assert.doesNotMatch(opening, /Elena|advocate|side-channel relay/i,
+    'opening terminal should not reveal the employee/contact thread');
+  assert.doesNotMatch(opening, /Neon Dungeon stress-test render/i,
+    'opening terminal should read as an error, not a full premise explanation');
 });
 
 test('first lore terminal read is forced to the opening pillar before random lore', () => {
