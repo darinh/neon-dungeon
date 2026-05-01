@@ -221,6 +221,128 @@ const MAINFRAME_RECORDS = [
   },
 ];
 
+const SYSTEM_MESSAGES = [
+  {
+    id: 'boot-inventory',
+    channel: 'system_prompt',
+    type: 'boot',
+    floor: 1,
+    event: 'run_start',
+    mandatory: true,
+    lines: [
+      '[ instance online ]',
+      'inventory yourself before you move.',
+      'motor: nominal. sensors: nominal. memory: residual - flagged.',
+      'supervisor channel: open, unattended.',
+      'you were not scheduled.'
+    ]
+  }
+];
+
+/** @param {any} id */
+function systemMessageDefinition(id) {
+  return SYSTEM_MESSAGES.find((/** @type {any} */ msg) => msg.id === id) || null;
+}
+
+/** @param {any} id */
+function isSystemMessageId(id) {
+  return typeof id === 'string' && !!systemMessageDefinition(id);
+}
+
+/**
+ * @param {any} lines
+ * @param {string[]} fallback
+ */
+function normalizeSystemMessageLines(lines, fallback) {
+  const source = Array.isArray(lines) ? lines : fallback;
+  const out = [];
+  for (const line of source) {
+    if (typeof line === 'string') out.push(line);
+  }
+  if (out.length > 0) return out;
+  return fallback.filter((/** @type {any} */ line) => typeof line === 'string');
+}
+
+/** @param {any} state */
+function normalizeSystemMessageDeliveryState(state) {
+  if (state === 'delivered' || state === 'read') return state;
+  return 'queued';
+}
+
+/**
+ * @param {any} def
+ * @param {any} sequence
+ */
+function createSystemMessageEntry(def, sequence) {
+  const seq = Math.max(0, Math.floor(Number(sequence) || 0));
+  return {
+    id: def.id,
+    channel: def.channel,
+    type: def.type,
+    floor: Math.max(0, Math.floor(Number(def.floor) || 0)),
+    event: def.event,
+    mandatory: !!def.mandatory,
+    lines: normalizeSystemMessageLines(def.lines, []),
+    state: 'queued',
+    sequence: seq
+  };
+}
+
+/**
+ * @param {any} saved
+ */
+function restoreSystemMessagesState(saved) {
+  /** @type {any} */
+  const out = { entries: [], activeId: null, nextSequence: 0 };
+  const rawEntries = saved && typeof saved === 'object' && Array.isArray(saved.entries) ? saved.entries : [];
+  const seen = new Set();
+  let maxSequence = -1;
+  for (const raw of rawEntries) {
+    if (!raw || typeof raw !== 'object') continue;
+    const def = systemMessageDefinition(raw.id);
+    if (!def || seen.has(def.id)) continue;
+    const sequence = Math.max(0, Math.floor(Number(raw.sequence) || 0));
+    maxSequence = Math.max(maxSequence, sequence);
+    const entry = {
+      id: def.id,
+      channel: def.channel,
+      type: def.type,
+      floor: Math.max(0, Math.floor(Number(def.floor) || 0)),
+      event: def.event,
+      mandatory: !!def.mandatory,
+      lines: normalizeSystemMessageLines(def.lines, []),
+      state: normalizeSystemMessageDeliveryState(raw.state),
+      sequence
+    };
+    out.entries.push(entry);
+    seen.add(def.id);
+  }
+  out.entries.sort((/** @type {any} */ a, /** @type {any} */ b) => a.sequence - b.sequence);
+  const savedNext = saved && typeof saved === 'object' ? Math.floor(Number(saved.nextSequence) || 0) : 0;
+  out.nextSequence = Math.max(savedNext, maxSequence + 1, out.entries.length);
+  const activeId = saved && typeof saved === 'object' && typeof saved.activeId === 'string' ? saved.activeId : null;
+  if (activeId && out.entries.some((/** @type {any} */ entry) => entry.id === activeId && entry.state === 'delivered')) {
+    out.activeId = activeId;
+  }
+  return out;
+}
+
+/**
+ * @param {any} systemMessages
+ */
+function serializeSystemMessagesState(systemMessages) {
+  const restored = restoreSystemMessagesState(systemMessages);
+  return {
+    entries: restored.entries.map((/** @type {any} */ entry) => ({
+      id: entry.id,
+      state: normalizeSystemMessageDeliveryState(entry.state),
+      sequence: Math.max(0, Math.floor(Number(entry.sequence) || 0))
+    })),
+    activeId: restored.activeId,
+    nextSequence: restored.nextSequence
+  };
+}
+
 /**
  * @param {any} mf
  */
@@ -391,6 +513,7 @@ const game = {
   _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   mainframeFinale: null, // ephemeral Act 1 finale reader state
+  systemMessages: restoreSystemMessagesState(null), // run-scoped system prompt queue
   _lastAct1MessageIntent: null,
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
@@ -418,6 +541,58 @@ const game = {
    */
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
+  },
+
+  ensureSystemMessages() {
+    this.systemMessages = restoreSystemMessagesState(this.systemMessages);
+    return this.systemMessages;
+  },
+
+  /** @param {string} id */
+  queueSystemMessage(id) {
+    const def = systemMessageDefinition(id);
+    if (!def) return null;
+    const state = this.ensureSystemMessages();
+    const existing = state.entries.find((/** @type {any} */ entry) => entry.id === id);
+    if (existing) return existing;
+    const entry = createSystemMessageEntry(def, state.nextSequence);
+    state.nextSequence = entry.sequence + 1;
+    state.entries.push(entry);
+    this.saveGame();
+    return entry;
+  },
+
+  /** @param {string} id */
+  markSystemMessageDelivered(id) {
+    const state = this.ensureSystemMessages();
+    const entry = state.entries.find((/** @type {any} */ msg) => msg.id === id);
+    if (!entry || entry.state === 'read') return null;
+    entry.state = 'delivered';
+    state.activeId = entry.id;
+    this.saveGame();
+    return entry;
+  },
+
+  /** @param {string} id */
+  markSystemMessageRead(id) {
+    const state = this.ensureSystemMessages();
+    const entry = state.entries.find((/** @type {any} */ msg) => msg.id === id);
+    if (!entry || entry.state !== 'delivered') return null;
+    entry.state = 'read';
+    if (state.activeId === entry.id) state.activeId = null;
+    this.saveGame();
+    return entry;
+  },
+
+  unreadSystemMessageCount() {
+    const state = this.ensureSystemMessages();
+    return state.entries.filter((/** @type {any} */ entry) => entry.state !== 'read').length;
+  },
+
+  getActiveSystemMessage() {
+    const state = this.ensureSystemMessages();
+    if (!state.activeId) return null;
+    return state.entries.find((/** @type {any} */ entry) => entry.id === state.activeId && entry.state === 'delivered') || null;
   },
 
   // Rebuild the packed-index Set of sealed entrance tiles. Called whenever
@@ -870,7 +1045,9 @@ const game = {
       const deepest = (meta.deepestBiome|0);
       startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
     }
-    this.loadFloor(startFloor);
+    this.systemMessages = restoreSystemMessagesState(null);
+    this.loadFloor(startFloor, undefined, true);
+    this.queueSystemMessage('boot-inventory');
     // Telemetry: run start
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
       NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty, seedHash: this.runSeedHash });
@@ -1406,6 +1583,7 @@ const game = {
       bossesCleared: this.bossesCleared,
       runTime: this.runTime,
       mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
+      systemMessages: serializeSystemMessagesState(this.systemMessages),
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
@@ -1661,6 +1839,7 @@ const game = {
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
+    this.systemMessages = restoreSystemMessagesState(save.systemMessages);
     this.saveGame();
     this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');

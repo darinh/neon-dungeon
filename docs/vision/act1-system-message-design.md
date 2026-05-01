@@ -1,6 +1,8 @@
 # Act 1 System Message Narrative Design
 
-Status: design artifact and production backlog. Not yet implemented.
+Status: design artifact and production backlog. MSG-001 data-model slice is
+shipped; presentation, dismissal, safe delivery, copy rewrite, and finale
+integration remain pending.
 
 Tracking issue: #501
 
@@ -102,6 +104,12 @@ you will anyway.
 ## Production work items
 
 ### MSG-001: System message data model and queue
+
+Status: shipped data-model slice in `src/game.js`. The current implementation
+defines stable system-message ids, queues the mandatory `boot-inventory` prompt
+at run start, preserves queued/delivered/read state in active run checkpoints,
+and restores it on Continue. It does not yet display system prompts; that belongs
+to MSG-002 and MSG-003.
 
 Build a run-scoped system-message model with stable ids, channel/type, floor or
 event gates, body lines, unread/read state, and delivery state. Messages must
