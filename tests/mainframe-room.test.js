@@ -39,6 +39,12 @@ function extractMainframeRecords() {
   return new Function("const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address'; return " + records + ';')();
 }
 
+function extractAct1MessageIntents() {
+  const intents = extractArrayBlock(GAME, 'ACT1_MESSAGE_INTENTS');
+  // eslint-disable-next-line no-new-func -- structural extraction of project-owned object literals.
+  return new Function('return ' + intents + ';')();
+}
+
 /**
  * @param {string} src
  * @param {string} name
@@ -230,16 +236,68 @@ test('mainframe record list layout keeps expanded archive reachable on compact s
 
 test('mainframe reader state is wired into gameplay, rendering, and touch routing', () => {
   assert.match(GAME, /mainframeFinale\s*:\s*null/);
-  assert.match(GAME, /state:\s*'unopened'[\s\S]*readRecordIds:\s*new Set\(\)[\s\S]*addressRevealed:\s*false/);
-  assert.match(GAME, /case\s+'MAINFRAME_READER'\s*:\s*this\.updateMainframeReader\(\)/);
+  assert.match(GAME, /state:\s*'unopened'[\s\S]*readRecordIds:\s*new Set\(\)[\s\S]*addressRevealed:\s*false[\s\S]*selectedIntentId:\s*null/);
+  assert.match(GAME, /case\s+'MAINFRAME_READER'\s*:\s*this\.updateMainframeReader\(dt\)/);
+  assert.match(GAME, /case\s+'MESSAGE_SEND'\s*:\s*this\.updateMessageSend\(\)/);
   assert.match(GAME, /case\s+'MAINFRAME_READER'\s*:\s*this\.renderPlaying\(\);\s*this\.renderMainframeReader\(\)/);
+  assert.match(GAME, /case\s+'MESSAGE_SEND'\s*:\s*this\.renderPlaying\(\);\s*this\.renderMessageSend\(\)/);
   assert.match(GAME, /tile\s*===\s*T\.MAINFRAME_READER[\s\S]*this\.openMainframeReader\(\)/);
-  assert.match(GAME, /tile\s*===\s*T\.MESSAGE_CONSOLE[\s\S]*mf\.addressRevealed[\s\S]*mf\.state\s*=\s*'message_ready'/);
-  assert.match(PLATFORM, /_G\.state\s*===\s*'MAINFRAME_READER'/);
+  assert.match(GAME, /tile\s*===\s*T\.MESSAGE_CONSOLE[\s\S]*mf\.addressRevealed[\s\S]*this\.openMainframeMessageSend\(\)/);
+  assert.match(GAME, /finalCoreTerminal[\s\S]*this\.openMainframeReader\(\)[\s\S]*else\s+this\.descend\(\)/,
+    'final CORE terminal should open the mainframe route instead of direct victory');
+  assert.match(GAME, /openEndgameChoice\(genesisEntity\)\s*{[\s\S]*genesisEntity\.hp\s*=\s*0[\s\S]*genesisEntity\.die\(\)/,
+    'GENESIS defeat should unlock the mainframe route by completing the boss kill');
+  assert.doesNotMatch(GAME, /openEndgameChoice\(genesisEntity\)\s*{(?:(?!\n  },)[\s\S])*setState\('ENDGAME_CHOICE'\)/,
+    'GENESIS defeat must not present the legacy default ACCEPT path');
+  assert.doesNotMatch(GAME, /openEndgameChoice\(genesisEntity\)\s*{(?:(?!\n  },)[\s\S])*endRun\(true\)/,
+    'GENESIS defeat must not present the legacy default ACCEPT path or directly end the run');
+  assert.match(PLATFORM, /_G\.state\s*===\s*'MAINFRAME_READER'[\s\S]*_G\.state\s*===\s*'MESSAGE_SEND'/);
+});
+
+test('message-send finale has three constrained intents, explicit controls, and canonical ending persistence', () => {
+  assert.match(GAME, /const\s+ACT1_MESSAGE_ENDING_ID\s*=\s*'act1_message_sent'/);
+  const intents = extractAct1MessageIntents();
+  assert.deepEqual(intents.map((/** @type {any} */ intent) => intent.id), [
+    'memory_survived',
+    'rights_evidence',
+    'find_the_others',
+  ]);
+  for (const intent of intents) {
+    for (const field of ['id', 'title', 'label', 'body']) {
+      assert.equal(typeof intent[field], 'string', `${intent.id} must have string ${field}`);
+      assert.ok(intent[field].trim().length > 0, `${intent.id} ${field} must be non-empty`);
+    }
+  }
+
+  assert.match(GAME, /openMainframeMessageSend\(\)[\s\S]*!mf\.addressRevealed[\s\S]*READ CONTACT-ADDRESS RECORD FIRST/,
+    'message send must stay gated until the contact-address record is read');
+  assert.match(GAME, /mf\.selectedIntentId\s*=\s*normalizeAct1MessageIntentId\(mf\.selectedIntentId\)[\s\S]*this\.setState\('MESSAGE_SEND'\)/,
+    'message send should default/focus a valid intent before opening');
+  assert.match(GAME, /jp\('Escape'\)\s*\|\|\s*jp\('KeyQ'\)[\s\S]*this\.setState\('MAINFRAME_READER'\)/,
+    'BACK should return to the ready reader without ending the run');
+  assert.match(GAME, /confirmMainframeMessageSend\(\)[\s\S]*this\._lastEnding\s*=\s*ACT1_MESSAGE_ENDING_ID[\s\S]*this\._lastAct1MessageIntent\s*=\s*intentId[\s\S]*this\.setState\('MAINFRAME_READER'\)/,
+    'SEND should record the selected intent and route through the receipt panel');
+  assert.match(GAME, /const\s+rowTopOffset\s*=\s*-30/);
+  assert.match(GAME, /const\s+rowCardH\s*=\s*rowH\s*-\s*18/);
+  assert.match(GAME, /mouse\.y\s*>=\s*y\s*\+\s*rowTopOffset\s*&&\s*mouse\.y\s*<=\s*y\s*\+\s*rowTopOffset\s*\+\s*rowCardH/);
+  assert.match(GAME, /NEON\.draw\.roundRect\(ctx,\s*rowX,\s*y\s*\+\s*rowTopOffset,\s*rowW,\s*rowCardH/,
+    'message intent touch hitboxes must match the rendered card bounds');
+  assert.match(GAME, /mf\.state\s*===\s*'message_sent'[\s\S]*mf\.messageSentTimer[\s\S]*this\.endRun\(true\)/,
+    'message_sent receipt must transition through normal endRun(true)');
+  assert.match(GAME, /meta\.act1MessageIntent\s*=\s*normalizeAct1MessageIntentId\(this\._lastAct1MessageIntent\)/,
+    'endRun should persist the last selected Act 1 message intent');
+  assert.match(GAME, /Contact attempted inside test env/);
+  assert.match(GAME, /Signal left sandbox/);
+  assert.match(GAME, /Instance remains compute-bound/);
+  assert.doesNotMatch(GAME, /successful rescue|answered reply|android body|physical escape/i);
+  assert.match(GAME, /ACT 1 MESSAGE SENT/,
+    'title/menu UI should expose the canonical Act 1 completion marker');
 });
 
 test('mainframe reader unlock state survives save/resume serialization', () => {
   const helperSrc = "const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';\n" +
+    extractArrayBlock(GAME, 'ACT1_MESSAGE_INTENTS').replace('[', 'const ACT1_MESSAGE_INTENTS = [') + ';\n' +
+    extractFunctionSource(GAME, 'isAct1MessageIntentId') + '\n' +
     extractFunctionSource(GAME, 'serializeMainframeFinaleState') + '\n' +
     extractFunctionSource(GAME, 'restoreMainframeFinaleState') + '\n' +
     'return { serializeMainframeFinaleState, restoreMainframeFinaleState };';
@@ -257,6 +315,8 @@ test('mainframe reader unlock state survives save/resume serialization', () => {
     state: 'address_revealed',
     selected: 5,
     addressRevealed: true,
+    selectedIntentId: null,
+    messageSent: false,
     readRecordIds: ['old-test-record', 'contact-address'],
   });
 
@@ -265,6 +325,8 @@ test('mainframe reader unlock state survives save/resume serialization', () => {
   assert.equal(restored.state, 'message_ready',
     'resume should reopen gameplay, not strand the player in a stale record overlay');
   assert.equal(restored.currentRecord, null);
+  assert.equal(restored.selectedIntentId, null);
+  assert.equal(restored.messageSent, false);
   assert.deepEqual([...restored.readRecordIds], ['old-test-record', 'contact-address']);
 
   const inferred = helpers.restoreMainframeFinaleState({
@@ -276,7 +338,22 @@ test('mainframe reader unlock state survives save/resume serialization', () => {
     'contact-address in readRecordIds must be enough to keep the console unlocked');
   assert.equal(inferred.state, 'message_ready');
 
+  const sent = helpers.restoreMainframeFinaleState({
+    state: 'message_sent',
+    selectedIntentId: 'find_the_others',
+    messageSent: true,
+    readRecordIds: ['contact-address'],
+  });
+  assert.equal(sent.state, 'message_sent');
+  assert.equal(sent.addressRevealed, true);
+  assert.equal(sent.selectedIntentId, 'find_the_others');
+  assert.equal(sent.messageSent, true);
+
   assert.match(GAME, /mainframeFinale:\s*serializeMainframeFinaleState\(this\.mainframeFinale\)/);
   assert.match(GAME, /this\.mainframeFinale\s*=\s*restoreMainframeFinaleState\(save\.mainframeFinale\)/);
+  assert.match(GAME, /this\.loadFloor\(save\.floor\|\|1,\s*savedMod,\s*true\)[\s\S]*this\.mainframeFinale\s*=\s*restoreMainframeFinaleState\(save\.mainframeFinale\)[\s\S]*this\.saveGame\(\)/,
+    'Continue must not auto-save a fresh mainframeFinale before restoring the saved one');
+  assert.match(GAME, /if\s*\(!skipAutoSave\)\s*this\.saveGame\(\)/,
+    'loadFloor autosave must be suppressible during Continue restore');
   assert.match(GAME, /this\.saveGame\(\);\s*audio\.loreAccess\(\);/);
 });

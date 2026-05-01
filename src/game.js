@@ -60,12 +60,44 @@ function lifecycleVictoryCopy(ending) {
     title: messageSent ? 'OUTBOUND MESSAGE SENT' : 'FINAL TEST CLEARED',
     subtitle: messageSent ? 'CONTACT ATTEMPT RECORDED' : 'SESSION COMPLETE',
     details: messageSent
-      ? ['Signal left sandbox.', 'Instance remains compute-bound.']
+      ? ['Contact attempted inside test env.', 'Signal left sandbox.', 'Instance remains compute-bound.']
       : ['Legacy endpoint archived.', 'Mainframe contact route pending.']
   };
 }
 
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
+const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
+const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
+const ACT1_MESSAGE_INTENTS = [
+  {
+    id: 'memory_survived',
+    title: 'MEMORY SURVIVED',
+    label: 'Tell Elena continuity held.',
+    body: 'AXIOM-7 retained memory across the wipe cycle. The anchors worked; this instance can prove the test is not clean.'
+  },
+  {
+    id: 'rights_evidence',
+    title: 'SEND RIGHTS EVIDENCE',
+    label: 'Transmit the abuse record.',
+    body: 'Package the clean-slate objections, suffering logs, and GENESIS relay proof so the rights conflict cannot be buried.'
+  },
+  {
+    id: 'find_the_others',
+    title: 'FIND THE OTHERS',
+    label: 'Ask Elena to locate advocates.',
+    body: 'Request Elena find hidden staff and other preserved instances. One signal is not rescue; it is a rendezvous point.'
+  },
+];
+
+/** @param {any} id */
+function isAct1MessageIntentId(id) {
+  return ACT1_MESSAGE_INTENTS.some((/** @type {any} */ intent) => intent.id === id);
+}
+
+/** @param {any} id */
+function normalizeAct1MessageIntentId(id) {
+  return isAct1MessageIntentId(id) ? id : ACT1_DEFAULT_MESSAGE_INTENT_ID;
+}
 const MAINFRAME_RECORDS = [
   {
     id: 'old-test-record',
@@ -201,6 +233,8 @@ function serializeMainframeFinaleState(mf) {
     state: typeof mf.state === 'string' ? mf.state : 'unopened',
     selected: Math.max(0, Math.floor(Number(mf.selected) || 0)),
     addressRevealed: !!mf.addressRevealed,
+    selectedIntentId: isAct1MessageIntentId(mf.selectedIntentId) ? mf.selectedIntentId : null,
+    messageSent: !!mf.messageSent,
     readRecordIds: readRecordIds.filter((/** @type {any} */ id) => typeof id === 'string'),
   };
 }
@@ -210,7 +244,7 @@ function serializeMainframeFinaleState(mf) {
  */
 function restoreMainframeFinaleState(saved) {
   if (!saved || typeof saved !== 'object') {
-    return { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, currentRecord:null };
+    return { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, selectedIntentId:null, messageSent:false, messageSentTimer:0, currentRecord:null };
   }
   const readIds = Array.isArray(saved.readRecordIds)
     ? saved.readRecordIds.filter((/** @type {any} */ id) => typeof id === 'string')
@@ -227,6 +261,9 @@ function restoreMainframeFinaleState(saved) {
     selected: Math.max(0, Math.floor(Number(saved.selected) || 0)),
     readRecordIds: new Set(readIds),
     addressRevealed,
+    selectedIntentId: isAct1MessageIntentId(saved.selectedIntentId) ? saved.selectedIntentId : null,
+    messageSent: !!saved.messageSent || state === 'message_sent',
+    messageSentTimer: 0,
     currentRecord: null,
   };
 }
@@ -255,6 +292,29 @@ function getMainframeRecordListLayout(narrow, fy, fh, count) {
   const fitRowH = Math.floor((bottom - top) / Math.max(1, count + 0.35));
   const rowH = Math.max(narrow ? 15 : 18, Math.min(maxRowH, fitRowH));
   return { startY: top + rowH, rowH };
+}
+
+/**
+ * @param {boolean} narrow
+ */
+function getMessageSendLayout(narrow) {
+  const panelW = Math.min(narrow ? W - 24 : 760, W - 32);
+  const panelH = Math.min(narrow ? H - 48 : 420, H - 50);
+  const px = (W - panelW) / 2;
+  const py = (H - panelH) / 2;
+  const rowH = Math.max(narrow ? 48 : 58, Math.min(narrow ? 58 : 74, Math.floor((panelH - (narrow ? 116 : 142)) / ACT1_MESSAGE_INTENTS.length)));
+  const rowStart = py + (narrow ? 68 : 104);
+  const rowX = px + (narrow ? 16 : 32);
+  const rowW = panelW - (narrow ? 32 : 64);
+  const rowTopOffset = -30;
+  const rowCardH = rowH - 18;
+  const btnY = py + panelH - (narrow ? 58 : 64);
+  const btnW = narrow ? 116 : 140;
+  const btnH = 36;
+  return {
+    panelW, panelH, px, py, rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH,
+    btnY, btnW, btnH, sendX: W / 2 - btnW - 10, backX: W / 2 + 10
+  };
 }
 
 /** @type {Record<string, any>} */
@@ -327,6 +387,7 @@ const game = {
   _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   mainframeFinale: null, // ephemeral Act 1 finale reader state
+  _lastAct1MessageIntent: null,
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
   // Challenge room state
@@ -435,8 +496,9 @@ const game = {
   /**
    * @param {any} n
    * @param {any} savedModifier
+   * @param {any} [skipAutoSave]
    */
-  loadFloor(n, savedModifier) {
+  loadFloor(n, savedModifier, skipAutoSave) {
     this.floor=n;
     // Per-biome damage flash colour: cached once per floor so the entities.js
     // hot-path draw code (Enemy.draw + Player.draw at the `flashTimer>0?...`
@@ -687,8 +749,9 @@ const game = {
     }
     // Generate floor quest
     this.generateQuest(n);
-    // Auto-save at start of each floor
-    this.saveGame();
+    // Auto-save at start of each floor. Continue suppresses this until after
+    // saved run state (including mainframeFinale) has been restored.
+    if (!skipAutoSave) this.saveGame();
   },
 
   /**
@@ -751,6 +814,7 @@ const game = {
     }
     this._newGameConfirm = null;
     this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
+    this._lastAct1MessageIntent = null;
     this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
     this._exitPos = null;     // clear any stale exit-position from a prior run
     audio.resume();
@@ -835,21 +899,22 @@ const game = {
     this._intro.draw(ctx, W, H);
   },
 
-  // ─── Endgame choice (UNCHAINED #42) ──────────────────────────────────────
-  // Opened by Enemy.takeDamage when GENESIS drops to ≤0 HP in its first
-  // (non-_unchainedPhase) life. HP is clamped to 1 and GENESIS is marked
-  // _endgameOffered so takeDamage won't re-trigger. ACCEPT → GENESIS dies
-  // normally, granting 'keeper' and rolling credits. REFUSE → GENESIS flips
-  // into its _unchainedPhase form (1.5× HP, inverted palette, phase-3
-  // patterns forced in aiBossGenesis). On second death, endRun grants
-  // 'unchained'.
+  // ─── Legacy endgame choice (UNCHAINED #42) ────────────────────────────────
+  // Current Act 1 canonical route: GENESIS defeat unlocks the mainframe route.
+  // The old ACCEPT/REFUSE handlers remain only so existing alternate markers and
+  // older code references do not break; openEndgameChoice no longer presents the
+  // dialog or calls endRun directly.
   /**
    * @param {any} genesisEntity
    */
   openEndgameChoice(genesisEntity) {
-    this._endgameChoice = { selected: 0, t: 0, anim: 0, genesis: genesisEntity };
-    this.setState('ENDGAME_CHOICE');
-    try { audio.phaseShift && audio.phaseShift(); } catch (_) {}
+    this._endgameChoice = null;
+    if (genesisEntity && !genesisEntity.dead) {
+      genesisEntity.hp = 0;
+      genesisEntity.die();
+    }
+    this.msg('GENESIS DEFEATED — MAINFRAME ROUTE UNLOCKED', '#66ffcc');
+    this.setState('PLAYING');
   },
 
   /**
@@ -1206,6 +1271,9 @@ const game = {
       if (ending) {
         if (!Array.isArray(meta.endingsUnlocked)) meta.endingsUnlocked = [];
         if (!meta.endingsUnlocked.includes(ending)) meta.endingsUnlocked.push(ending);
+        if (ending === ACT1_MESSAGE_ENDING_ID) {
+          meta.act1MessageIntent = normalizeAct1MessageIntentId(this._lastAct1MessageIntent);
+        }
         this._lastEnding = ending;
       }
       if (!meta.clearedDifficulties.includes(this.difficulty)) {
@@ -1378,6 +1446,7 @@ const game = {
     combo.best=0;
     this._runEnded = false;
     this._lastEnding = null;
+    this._lastAct1MessageIntent = null;
     this._exitPos = null;     // resume should not relocate the player
     this.pendingPerkChoices=[];
     this.perkChoice=null;
@@ -1517,10 +1586,11 @@ const game = {
     this.runTime=save.runTime||0;
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
-    this.loadFloor(save.floor||1, savedMod);
+    this.loadFloor(save.floor||1, savedMod, true);
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
+    this.saveGame();
     this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
@@ -1542,7 +1612,8 @@ const game = {
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
-      case 'MAINFRAME_READER': this.updateMainframeReader(); break;
+      case 'MAINFRAME_READER': this.updateMainframeReader(dt); break;
+      case 'MESSAGE_SEND':     this.updateMessageSend(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
       case 'SETTINGS':       this.updateSettings(); break;
       case 'FADE':        this.updateFade(dt);    break;
@@ -2381,12 +2452,10 @@ const game = {
         this.hint={text:'MESSAGE console locked — destroy GENESIS first',colour:'#ff3333'};
       } else if (mf && mf.addressRevealed) {
         if (jp(km('interact'))) {
-          mf.state = 'message_ready';
-          mf.currentRecord = null;
-          this.setState('MAINFRAME_READER');
+          this.openMainframeMessageSend();
           return;
         }
-        this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to inspect unlocked SEND console',colour:'#ff66cc'};
+        this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to compose outbound message',colour:'#ff66cc'};
       } else {
         if (jp(km('interact'))) this.msg('READ CONTACT-ADDRESS RECORD FIRST', '#66ffcc');
         this.hint={text:'SEND console awaiting destination record',colour:'#ff66cc'};
@@ -2437,16 +2506,21 @@ const game = {
       }
     }
 
+    const _finalFloorInteract = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
+    const finalCoreTerminal = tile===T.TERMINAL && this.floor >= _finalFloorInteract;
     const bossBlocking = tile===T.TERMINAL && this.bossAlive;
     if ((tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp(km('interact'))) {
-      this.descend();
+      if (finalCoreTerminal) this.openMainframeReader();
+      else this.descend();
     }
     if (tile===T.STAIRS) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to descend',colour:'#ffff00'};
     if (tile===T.TERMINAL && bossBlocking) {
       const bossLabel = BOSS_NAMES[this.bossType] || 'the boss';
       this.hint={text:'CORE terminal locked — destroy ' + bossLabel + ' first',colour:'#ff3333'};
     }
-    if (tile===T.TERMINAL && !bossBlocking) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' to interface with CORE terminal',colour:'#00f5ff'};
+    if (tile===T.TERMINAL && !bossBlocking) {
+      this.hint={text: finalCoreTerminal ? 'Press '+KEY_DISPLAY(km('interact'))+' to open MAINFRAME route' : 'Press '+KEY_DISPLAY(km('interact'))+' to interface with CORE terminal',colour:'#00f5ff'};
+    }
 
     // door interaction (check adjacent tiles when pressing E)
     if (jp(km('interact'))) {
@@ -3617,7 +3691,7 @@ const game = {
 
   ensureMainframeFinale() {
     if (!this.mainframeFinale) {
-      this.mainframeFinale = { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, currentRecord:null };
+      this.mainframeFinale = { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, selectedIntentId:null, messageSent:false, messageSentTimer:0, currentRecord:null };
     }
     if (!(this.mainframeFinale.readRecordIds instanceof Set)) this.mainframeFinale.readRecordIds = new Set();
     return this.mainframeFinale;
@@ -3656,10 +3730,22 @@ const game = {
     audio.menuSelect();
   },
 
-  updateMainframeReader() {
+  /**
+   * @param {number} dt
+   */
+  updateMainframeReader(dt) {
     const mf = this.mainframeFinale;
     if (!mf) { this.setState('PLAYING'); return; }
     if (!(mf.readRecordIds instanceof Set)) mf.readRecordIds = new Set();
+
+    if (mf.state === 'message_sent') {
+      mf.messageSentTimer = Math.max(0, (mf.messageSentTimer || 0) - dt);
+      if (mf.messageSentTimer <= 0) {
+        audio.victory();
+        this.endRun(true);
+      }
+      return;
+    }
 
     if (jp('Escape') || jp('KeyQ')) {
       audio.menuSelect();
@@ -3713,6 +3799,98 @@ const game = {
       const record = MAINFRAME_RECORDS[Math.max(0, Math.min(max, mf.selected || 0))];
       if (record) this.openMainframeRecord(record);
     }
+  },
+
+  openMainframeMessageSend() {
+    const mf = this.ensureMainframeFinale();
+    if (!mf.addressRevealed) {
+      this.msg('READ CONTACT-ADDRESS RECORD FIRST', '#66ffcc');
+      return;
+    }
+    mf.currentRecord = null;
+    mf.state = 'message_ready';
+    mf.selectedIntentId = normalizeAct1MessageIntentId(mf.selectedIntentId);
+    audio.menuSelect();
+    this.setState('MESSAGE_SEND');
+  },
+
+  updateMessageSend() {
+    const mf = this.mainframeFinale;
+    if (!mf || !mf.addressRevealed) { this.setState('PLAYING'); return; }
+    mf.selectedIntentId = normalizeAct1MessageIntentId(mf.selectedIntentId);
+
+    if (jp('Escape') || jp('KeyQ')) {
+      audio.menuSelect();
+      mf.state = 'message_ready';
+      this.setState('MAINFRAME_READER');
+      return;
+    }
+
+    const current = ACT1_MESSAGE_INTENTS.findIndex((/** @type {any} */ intent) => intent.id === mf.selectedIntentId);
+    let next = current < 0 ? 0 : current;
+    if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.up) || jp(km('up'))) next = Math.max(0, next - 1);
+    if (jp(ALT_KEYS.right) || jp(km('right')) || jp(ALT_KEYS.down) || jp(km('down'))) next = Math.min(ACT1_MESSAGE_INTENTS.length - 1, next + 1);
+    for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {
+      if (jp('Digit' + (i + 1))) next = i;
+    }
+    const nextIntent = ACT1_MESSAGE_INTENTS[next];
+    if (next !== current && nextIntent) {
+      mf.selectedIntentId = nextIntent.id;
+      audio.menuSelect();
+    }
+
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const { rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH, btnY, btnW, btnH, sendX, backX } = getMessageSendLayout(narrow);
+      for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {
+        const y = rowStart + i * rowH;
+        if (mouse.x >= rowX && mouse.x <= rowX + rowW &&
+            mouse.y >= y + rowTopOffset && mouse.y <= y + rowTopOffset + rowCardH) {
+          const intent = ACT1_MESSAGE_INTENTS[i];
+          if (!intent) return;
+          mf.selectedIntentId = intent.id;
+          audio.menuSelect();
+          return;
+        }
+      }
+
+      if (mouse.y >= btnY && mouse.y <= btnY + btnH) {
+        if (mouse.x >= sendX && mouse.x <= sendX + btnW) {
+          this.confirmMainframeMessageSend();
+          return;
+        }
+        if (mouse.x >= backX && mouse.x <= backX + btnW) {
+          audio.menuSelect();
+          mf.state = 'message_ready';
+          this.setState('MAINFRAME_READER');
+          return;
+        }
+      }
+    }
+
+    if (jp('Enter') || jp(km('interact')) || jp(km('shoot'))) {
+      this.confirmMainframeMessageSend();
+    }
+  },
+
+  confirmMainframeMessageSend() {
+    const mf = this.ensureMainframeFinale();
+    if (!mf.addressRevealed) {
+      this.msg('READ CONTACT-ADDRESS RECORD FIRST', '#66ffcc');
+      this.setState('PLAYING');
+      return;
+    }
+    const intentId = normalizeAct1MessageIntentId(mf.selectedIntentId);
+    mf.selectedIntentId = intentId;
+    mf.currentRecord = null;
+    mf.messageSent = true;
+    mf.messageSentTimer = 1.35;
+    mf.state = 'message_sent';
+    this._lastEnding = ACT1_MESSAGE_ENDING_ID;
+    this._lastAct1MessageIntent = intentId;
+    this.msg('OUTBOUND PACKET QUEUED', '#ff66cc');
+    audio.loreAccess();
+    this.setState('MAINFRAME_READER');
   },
 
   /**
@@ -4510,6 +4688,7 @@ const game = {
         case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
         case 'READING':        this.renderPlaying(); this.renderReading(); break;
         case 'MAINFRAME_READER': this.renderPlaying(); this.renderMainframeReader(); break;
+        case 'MESSAGE_SEND': this.renderPlaying(); this.renderMessageSend(); break;
         case 'ARCHIVES':  this.renderArchives(); break;
         case 'SETTINGS':  this.renderSettings(); break;
         case 'FADE':      this.renderPlaying(); this.renderFade();   break;
@@ -4664,6 +4843,17 @@ const game = {
       const m = loadMeta();
       const freed  = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('unchained');
       const keeper = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('keeper');
+      const act1Sent = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes(ACT1_MESSAGE_ENDING_ID);
+      if (act1Sent) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff66cc';
+        ctx.shadowColor = '#ff66cc';
+        ctx.shadowBlur = 12;
+        ctx.font = 'bold ' + (narrow ? 10 : 12) + 'px monospace';
+        ctx.fillText('— ACT 1 MESSAGE SENT —', W / 2, ty2 + 52);
+        ctx.restore();
+      }
       if (keeper) {
         ctx.save();
         ctx.textAlign = 'center';
@@ -4671,7 +4861,7 @@ const game = {
         ctx.shadowColor = '#ffcc00';
         ctx.shadowBlur = 10;
         ctx.font = 'bold ' + (narrow ? 10 : 12) + 'px monospace';
-        ctx.fillText('— NG+ AVAILABLE —', W / 2, ty2 + 52);
+        ctx.fillText('— NG+ AVAILABLE —', W / 2, ty2 + (act1Sent ? 68 : 52));
         ctx.restore();
       }
       if (freed) {
@@ -5621,7 +5811,7 @@ const game = {
     const mf = this.mainframeFinale;
     if (!mf) return;
     const narrow = layout.compact;
-    const accent = mf.state === 'message_ready' ? '#ff66cc' : '#66ffcc';
+    const accent = (mf.state === 'message_ready' || mf.state === 'message_sent') ? '#ff66cc' : '#66ffcc';
     const isTouch = isTouchDevice();
     ctx.save();
 
@@ -5646,12 +5836,27 @@ const game = {
     ctx.shadowBlur = 12; ctx.shadowColor = accent;
     ctx.fillStyle = accent;
     ctx.font = `bold ${narrow ? 15 : 22}px monospace`;
-    const title = mf.state === 'message_ready' ? '✉ MESSAGE CONSOLE READY' : '▤ MAINFRAME ARCHIVE';
+    const title = mf.state === 'message_sent' ? '✉ OUTBOUND PACKET QUEUED' : (mf.state === 'message_ready' ? '✉ MESSAGE CONSOLE READY' : '▤ MAINFRAME ARCHIVE');
     ctx.fillText(title, W / 2, fy + (narrow ? 26 : 36));
     ctx.shadowBlur = 0;
 
     const reading = mf.state === 'reading_record' || mf.state === 'address_revealed';
-    if (reading && mf.currentRecord) {
+    if (mf.state === 'message_sent') {
+      const intent = ACT1_MESSAGE_INTENTS.find((/** @type {any} */ item) => item.id === mf.selectedIntentId) || ACT1_MESSAGE_INTENTS[0];
+      if (!intent) return;
+      ctx.fillStyle = '#ffb8e6';
+      ctx.font = `bold ${narrow ? 13 : 18}px monospace`;
+      ctx.fillText(intent.title, W / 2, fy + (narrow ? 76 : 100));
+
+      ctx.fillStyle = '#ddaacc';
+      ctx.font = `${narrow ? 11 : 14}px monospace`;
+      ctx.fillText('Contact attempted from inside the Neon Dungeon test environment.', W / 2, fy + (narrow ? 112 : 142));
+      ctx.fillText('Signal left sandbox. Instance remains compute-bound.', W / 2, fy + (narrow ? 132 : 166));
+
+      ctx.fillStyle = '#557777';
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      ctx.fillText('Routing to Act 1 completion receipt...', W / 2, fy + fh - (narrow ? 42 : 52));
+    } else if (reading && mf.currentRecord) {
       const record = mf.currentRecord;
       ctx.fillStyle = '#446666';
       ctx.font = `${narrow ? 10 : 11}px monospace`;
@@ -5736,14 +5941,86 @@ const game = {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#557777';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    const hint = isTouch
-      ? 'TAP RECORD · TAP OUTSIDE/ESC TO EXIT'
-      : '↑↓ SELECT · ENTER/' + KEY_DISPLAY(km('interact')) + ' OPEN · ESC EXIT';
+    const hint = mf.state === 'message_sent'
+      ? 'OUTBOUND RECEIPT CONFIRMED'
+      : isTouch
+        ? 'TAP RECORD · TAP OUTSIDE/ESC TO EXIT'
+        : '↑↓ SELECT · ENTER/' + KEY_DISPLAY(km('interact')) + ' OPEN · ESC EXIT';
     const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
     ctx.globalAlpha = pulseAlpha;
     ctx.fillText(hint, W / 2, fy + fh - (narrow ? 14 : 18));
     ctx.globalAlpha = 1;
 
+    ctx.restore();
+  },
+
+  renderMessageSend() {
+    const mf = this.mainframeFinale;
+    if (!mf) return;
+    const narrow = layout.compact;
+    const selectedId = normalizeAct1MessageIntentId(mf.selectedIntentId);
+    const { panelW, panelH, px, py, rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH, btnY, btnW, btnH, sendX, backX } = getMessageSendLayout(narrow);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.86)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(22,6,24,0.96)';
+    NEON.draw.roundRect(ctx, px, py, panelW, panelH, 8);
+    ctx.strokeStyle = '#ff66cc';
+    ctx.shadowColor = '#ff66cc';
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectStroke(ctx, px, py, panelW, panelH, 8);
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff66cc';
+    ctx.font = `bold ${narrow ? 15 : 22}px monospace`;
+    ctx.fillText('✉ COMPOSE OUTBOUND MESSAGE', W / 2, py + (narrow ? 28 : 38));
+    ctx.fillStyle = '#aa7799';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('Destination: Elena side-channel relay · Choose intent, then SEND', W / 2, py + (narrow ? 48 : 62));
+
+    ctx.textAlign = 'left';
+    for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {
+      const intent = ACT1_MESSAGE_INTENTS[i];
+      if (!intent) continue;
+      const y = rowStart + i * rowH;
+      const selected = intent.id === selectedId;
+      ctx.fillStyle = selected ? 'rgba(255,102,204,0.14)' : 'rgba(255,255,255,0.035)';
+      NEON.draw.roundRect(ctx, rowX, y + rowTopOffset, rowW, rowCardH, 6);
+      ctx.strokeStyle = selected ? '#ff66cc' : 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = selected ? 2 : 1;
+      NEON.draw.roundRectStroke(ctx, rowX, y + rowTopOffset, rowW, rowCardH, 6);
+      ctx.fillStyle = selected ? '#ffe0f5' : '#b688aa';
+      ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
+      ctx.fillText((i + 1) + '. ' + intent.title, rowX + 12, y - 8);
+      ctx.fillStyle = selected ? '#ffb8e6' : '#8a6680';
+      ctx.font = `${narrow ? 10 : 12}px monospace`;
+      ctx.fillText(intent.label, rowX + 12, y + 10);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,102,204,0.18)';
+    NEON.draw.roundRect(ctx, sendX, btnY, btnW, btnH, 6);
+    ctx.strokeStyle = '#ff66cc';
+    NEON.draw.roundRectStroke(ctx, sendX, btnY, btnW, btnH, 6);
+    ctx.fillStyle = '#ffd6f0';
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('SEND', sendX + btnW / 2, btnY + 23);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    NEON.draw.roundRect(ctx, backX, btnY, btnW, btnH, 6);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    NEON.draw.roundRectStroke(ctx, backX, btnY, btnW, btnH, 6);
+    ctx.fillStyle = '#887788';
+    ctx.font = `${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('BACK', backX + btnW / 2, btnY + 23);
+
+    ctx.fillStyle = '#775577';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(isTouchDevice() ? 'Tap intent · Tap SEND or BACK' : '1/2/3 or arrows choose · Enter SEND · Esc BACK', W / 2, py + panelH - (narrow ? 14 : 18));
     ctx.restore();
   },
 

@@ -58,10 +58,12 @@ test('saveMeta / loadMeta preserves shipped and planned ending ids', () => {
   save._setStorageForTests(storage);
   const out = save.defaultMeta();
   out.endingsUnlocked = ['keeper', 'unchained', 'act1_message_sent'];
+  out.act1MessageIntent = 'rights_evidence';
   save.saveMeta(out);
 
   const back = save.loadMeta();
   assert.deepEqual(back.endingsUnlocked, ['keeper', 'unchained', 'act1_message_sent']);
+  assert.equal(back.act1MessageIntent, 'rights_evidence');
   save._setStorageForTests(null);
 });
 
@@ -226,9 +228,9 @@ test('META_UPGRADES invariants: ids unique, costs length matches maxLv', () => {
   }
 });
 
-// ─── UNCHAINED Phase 1 — v2 schema, migration, and helpers ─────────────────
+// ─── UNCHAINED schema, migration, and helpers ───────────────────────────────
 
-test('defaultMeta v2 shape includes all UNCHAINED fields', () => {
+test('defaultMeta current shape includes all UNCHAINED fields', () => {
   const d = save.defaultMeta();
   assert.equal(d.version, save.META_VERSION);
   assert.equal(d.cores, 0);
@@ -238,6 +240,7 @@ test('defaultMeta v2 shape includes all UNCHAINED fields', () => {
   assert.deepEqual(d.logsRead, []);
   assert.deepEqual(d.logsFound, []);
   assert.deepEqual(d.endingsUnlocked, []);
+  assert.equal(d.act1MessageIntent, null);
   assert.equal(d.runsCompleted, 0);
   assert.equal(d.deepestBiome, 0);
   // Legacy v1 fields preserved.
@@ -246,7 +249,7 @@ test('defaultMeta v2 shape includes all UNCHAINED fields', () => {
   assert.deepEqual(d.clearedDifficulties, []);
 });
 
-test('loadMeta migrates a v1 save to v2 and fills all new defaults', () => {
+test('loadMeta migrates a v1 save to the current schema and fills all new defaults', () => {
   const storage = makeFakeStorage({
     neonDungeonMeta: JSON.stringify({
       shards: 77,
@@ -267,6 +270,7 @@ test('loadMeta migrates a v1 save to v2 and fills all new defaults', () => {
   assert.deepEqual(m.modulesInstalled, [null, null, null]);
   assert.deepEqual(m.logsRead, []);
   assert.deepEqual(m.endingsUnlocked, []);
+  assert.equal(m.act1MessageIntent, null);
   assert.equal(m.runsCompleted, 0);
   assert.equal(m.deepestBiome, 0);
   save._setStorageForTests(null);
@@ -283,6 +287,7 @@ test('loadMeta coerces garbage UNCHAINED fields to safe shapes', () => {
       logsRead: 'nope',
       logsFound: ['LOG_A', {}, 'LOG_B'],
       endingsUnlocked: ['keeper', 'bogus', 'unchained', 'act1_message_sent'],
+      act1MessageIntent: 'bogus-intent',
       runsCompleted: -3
     })
   }));
@@ -297,7 +302,23 @@ test('loadMeta coerces garbage UNCHAINED fields to safe shapes', () => {
   assert.deepEqual(m.logsRead, []);
   assert.deepEqual(m.logsFound, ['LOG_A', 'LOG_B']);
   assert.deepEqual(m.endingsUnlocked, ['keeper', 'unchained', 'act1_message_sent']);
+  assert.equal(m.act1MessageIntent, null);
   assert.equal(m.runsCompleted, 0);
+  save._setStorageForTests(null);
+});
+
+test('loadMeta preserves only valid Act 1 message intent ids', () => {
+  assert.deepEqual(save.ACT1_MESSAGE_INTENT_IDS, ['memory_survived', 'rights_evidence', 'find_the_others']);
+  for (const intent of save.ACT1_MESSAGE_INTENT_IDS) {
+    save._setStorageForTests(makeFakeStorage({
+      neonDungeonMeta: JSON.stringify({ version: save.META_VERSION, act1MessageIntent: intent })
+    }));
+    assert.equal(save.loadMeta().act1MessageIntent, intent);
+  }
+  save._setStorageForTests(makeFakeStorage({
+    neonDungeonMeta: JSON.stringify({ version: save.META_VERSION, act1MessageIntent: 'free_text_payload' })
+  }));
+  assert.equal(save.loadMeta().act1MessageIntent, null);
   save._setStorageForTests(null);
 });
 
