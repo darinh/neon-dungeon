@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.12
+# NEON DUNGEON — Game Specification v6.1.13
 
 ## Vision
 
@@ -71,7 +71,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 |---|---|---|
 | System prompts | MSG-001/MSG-002/MSG-003/MSG-004/MSG-005 shipped: `src/game.js` owns the run-scoped `systemMessages` queue with stable prompt ids, the mandatory `boot-inventory` run-start prompt, and floor-start prompts for floors 2-5; it preserves queued/delivered/read state in the active run checkpoint, restores it on Continue, displays delivered prompts in a dedicated `SYSTEM_MESSAGE` modal that can only be acknowledged with `X` or the labeled ACK button after a short arming delay, and shows a HUD prompt indicator while deferring automatic delivery until the current room is safe. `src/meta/hub.js` exposes acknowledged current-run system prompts in THE GAP's ARCHIVE so accidental acknowledgement is recoverable until the run checkpoint ends. | Complete this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
 | Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Retune after system prompts land so the intro raises startup questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
-| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester/corporate artifacts, practical run notes, model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
+| Lore terminals | MSG-006 shipped: in-run `T.LORE` terminals now use a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, practical combat guidance, and late escalation into memory/personhood ethics, advocate bans, AXIOM labels, and Elena hints. Floors 1-5 avoid AXIOM-7, model identity language, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms so terminals are not the first interior identity reveal. | Preserve terminals as tester/corporate artifacts, practical run notes, later model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
@@ -4000,6 +4000,10 @@ facility fragments toward tester instructions, test-observation notes, previous
 run summaries, staff emails, and tampered hints. They should continue to teach
 the player useful mechanics, but the diegetic reason is that leaked tester notes
 and advocate edits are guiding the agent through the stress-test environment.
+MSG-006 ships the early-band retune: floors 1-5 keep terminal copy external and
+practical, with no AXIOM-7 label, explicit model identity, Elena/contact thread,
+advocate/fired-employee trail, rights/personhood thesis, or memory-wipe premise
+before system prompts and play have established the corresponding questions.
 
 **Tile:** `T.LORE` (value 16). Passable, see-through. Rendered as an amber `◫`
 glyph with pulsing glow on a `#1a1208` background. Distinct from the cyan CORE
@@ -4763,6 +4767,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.13 | MSG-006 terminal pool retune shipped: early lore terminals now read as external tester/corporate artifacts and practical hints, the forced floor-1 anomaly no longer explains the identity or memory premise, and tests keep AXIOM-7/model identity, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms out of floors 1-5. |
 | v6.1.12 | MSG-005 system prompt recovery shipped: THE GAP ARCHIVE now lists acknowledged current-run system prompts as distinct SYSTEM rows, lets players reopen their prompt text after ACK, and hides queued/unacknowledged prompts so the archive does not spoil future beats or bypass deliberate acknowledgement. |
 | v6.1.11 | MSG-004 early prompt schedule shipped: system prompts now include floor-start entries for floors 2-5, queue those entries only on fresh floor loads, preserve save-resume behavior, and add tests for spoiler gates, line length, floor ids, and non-duplicating queue behavior. Archive recovery, broader copy retuning, and finale integration remain pending. |
 | v6.1.10 | MSG-003 combat-safe delivery shipped for system prompts: pending run prompts now show a compact HUD indicator, can be opened deliberately with `X` or by clicking/tapping the indicator, and auto-open only when the current room is free of live enemies, boss/challenge pressure, hostile devices, and projectiles. Archive recovery and broader existing-overlay dismissal audits remain pending. |

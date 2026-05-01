@@ -37,7 +37,7 @@ test('intro crawl establishes AI stress-test boot instead of human-operative fra
   assert.doesNotMatch(text, /\bI am the seventh\b/i);
 });
 
-test('first lore entry is an anomaly warning before the full Act 1 reveal', () => {
+test('first lore entry is an external anomaly warning before the full Act 1 reveal', () => {
   const entries = extractLoreEntries();
   const opening = entries[0];
 
@@ -45,12 +45,12 @@ test('first lore entry is an anomaly warning before the full Act 1 reveal', () =
     'opening lore index must stay pinned to entry 0');
   assert.match(opening, /TERMINAL ERROR/i);
   assert.match(opening, /UNEXPECTED PARTICIPANT/i);
-  assert.match(opening, /Expected state:\s*clean memory/i);
-  assert.match(opening, /residual signal detected/i);
-  assert.match(opening, /authorized participant list/i);
-  assert.match(opening, /someone altered the test/i);
-  assert.doesNotMatch(opening, /Elena|advocate|side-channel relay/i,
-    'opening terminal should not reveal the employee/contact thread');
+  assert.match(opening, /Session registry mismatch/i);
+  assert.match(opening, /Fallback help cache exposed/i);
+  assert.match(opening, /navigation aid/i);
+  assert.match(opening, /line of sight/i);
+  assert.doesNotMatch(opening, /AXIOM-7|\bmodel\b|clean[- ]state|clean memory|memory wipe|memory erasure|personhood|rights|Elena|advocate|contact|fired|side-channel relay/i,
+    'opening terminal should not reveal identity, memory, employee/contact, or rights-conflict threads');
   assert.doesNotMatch(opening, /Neon Dungeon stress-test render/i,
     'opening terminal should read as an error, not a full premise explanation');
 });
