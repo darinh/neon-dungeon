@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.15
+# NEON DUNGEON — Game Specification v6.1.16
 
 ## Vision
 
@@ -220,7 +220,13 @@ the Act 1 realignment work and must not be presented as already playable.
   whispers, and mainframe records before broader copy rewrites continue.
 - **Design artifact:** Production work items, draft examples, and the model
   consult synthesis are recorded in
-  `docs/vision/act1-system-message-design.md`.
+  `docs/vision/act1-system-message-design.md`. **Shipped:** MSG-009 records the
+  model-assisted copy workflow: Claude Opus 4.7 leads beat-sheet/draft voice,
+  GPT-5.5 performs adversarial continuity/spoiler/over-exposition review, and
+  mechanical checks cover first mentions, length caps, and banned early
+  vocabulary across intro slides, system prompts, lore terminals, ARCHIVE logs,
+  whisper bodies/voice fields, and mainframe records. The MSG-009 audit also
+  records early ARCHIVE-log and whisper leak risks as pre-rewrite constraints.
 
 #### Finale model
 
@@ -4770,6 +4776,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.16 | MSG-009 model-assisted copy workflow shipped: the design artifact now contains the Claude Opus 4.7 beat sheet, GPT-5.5 adversarial review requirements, withheld-fact matrix, first-mention/mechanical-check requirements, and pre-rewrite concerns for early ARCHIVE-log and whisper leak risks. |
 | v6.1.15 | MSG-008 narrative guardrail tests shipped: tests now pin the early intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only dismissal, Elena/contact/rights-conflict spoiler gates, and distinct terminal, whisper, and mainframe channel roles before broader copy rewrites continue. |
 | v6.1.14 | MSG-007 intro retune shipped: the five-slide intro crawl is now a startup surface that establishes session boot, unavailable prior prompt context, partial embodiment, unscheduled local residue, absent supervision, and a READY FOR PROMPT handoff while avoiding AXIOM-7/model identity, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals before gameplay. |
 | v6.1.13 | MSG-006 terminal pool retune shipped: early lore terminals now read as external tester/corporate artifacts and practical hints, the forced floor-1 anomaly no longer explains the identity or memory premise, and tests keep AXIOM-7/model identity, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms out of floors 1-5. |

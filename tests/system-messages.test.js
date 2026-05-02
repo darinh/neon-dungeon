@@ -465,7 +465,7 @@ test('system message queue is wired into start, save, and continue contracts', (
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect shipped MSG-001 through MSG-008 scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001 through MSG-009 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
   assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
   assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
@@ -486,4 +486,7 @@ test('system message spec and design artifact reflect shipped MSG-001 through MS
   assert.match(DESIGN, /Status: shipped\. The intro now presents session boot/i);
   assert.match(DESIGN, /MSG-008: Narrative guardrail tests/i);
   assert.match(DESIGN, /Status: shipped\. `tests\/act1-narrative-guardrails\.test\.js` pins/i);
+  assert.match(DESIGN, /MSG-009: Model-assisted copy workflow/i);
+  assert.match(DESIGN, /Status: shipped as a production workflow and pre-rewrite audit/i);
+  assert.match(DESIGN, /Claude Opus 4\.7[\s\S]*GPT-5\.5[\s\S]*Mechanical checks/i);
 });
