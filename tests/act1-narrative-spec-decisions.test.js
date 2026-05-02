@@ -93,6 +93,8 @@ test('Act 1 system-message design artifact tracks production work items', () => 
   assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-009 beat sheet for the shipped early stack/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Pre-rewrite concerns discovered by the cascade/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Produce a first-mention report/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-010: Finale integration pass/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Status: shipped as integration guardrails/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Mainframe records confirm the truth rather than carrying the first explanation/i);
 });
 
@@ -133,6 +135,8 @@ test('Act 1 finale spec defines mainframe room, records, agency, and persistence
   assert.match(SPEC, /BACK\s+returns to `MAINFRAME_READER\(message_ready\)` without mutating meta/i);
   assert.match(SPEC, /On SEND, the game enters\s+`MAINFRAME_READER\(message_sent\)`/i);
   assert.match(SPEC, /shows `MAINFRAME_READER\(message_sent\)` long enough to confirm the\s+outbound packet was queued/i);
+  assert.match(SPEC, /MSG-010 guardrails verify that the mainframe archive,\s+message-send intents, receipt panel, and Act 1 victory copy consolidate seeded\s+facts/i);
+  assert.match(SPEC, /ending remains a contact attempt with the\s+signal leaving the sandbox and the instance still compute-bound/i);
   assert.match(SPEC, /`memory_survived`.*`rights_evidence`.*`find_the_others`/is);
   assert.match(SPEC, /selected `intentId` is persisted/i);
   assert.match(SPEC, /`meta\.act1MessageIntent`\s+stores the last selected Act 1 message intent/i);
