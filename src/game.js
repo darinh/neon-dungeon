@@ -549,6 +549,7 @@ function cloneFloorSnapshotValue(value, seen, depth) {
   if (value == null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'undefined') return undefined;
   if (value instanceof Set) return undefined;
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) return Array.from(/** @type {any} */ (value));
   if (d > 6) return undefined;
   const visited = seen || new WeakSet();
   if (typeof value === 'object') {
@@ -572,6 +573,58 @@ function cloneFloorSnapshotValue(value, seen, depth) {
     return out;
   }
   return undefined;
+}
+
+/**
+ * @param {any} row
+ * @param {any} [fallback]
+ * @returns {number[] | null}
+ */
+function floorSnapshotNumericRowValues(row, fallback) {
+  const expectedCols = fallback && typeof fallback.length === 'number' ? fallback.length : 0;
+  if (Array.isArray(row) || (ArrayBuffer.isView(row) && !(row instanceof DataView))) {
+    const rowLength = /** @type {ArrayLike<any>} */ (/** @type {any} */ (row)).length;
+    if (expectedCols && rowLength < expectedCols) return null;
+    return Array.from(/** @type {ArrayLike<any>} */ (row), (/** @type {any} */ v) => Number(v) || 0);
+  }
+  if (row && typeof row === 'object') {
+    const keys = Object.keys(row)
+      .filter((k) => /^\d+$/.test(k))
+      .sort((a, b) => Number(a) - Number(b));
+    if (keys.length) {
+      const width = expectedCols || (Number(keys[keys.length - 1]) + 1);
+      for (let i = 0; i < width; i++) {
+        if (!Object.prototype.hasOwnProperty.call(row, String(i))) return null;
+      }
+      const values = [];
+      for (let i = 0; i < width; i++) values.push(Number(row[String(i)]) || 0);
+      return values;
+    }
+  }
+  if (fallback && (Array.isArray(fallback) || (ArrayBuffer.isView(fallback) && !(fallback instanceof DataView)))) {
+    return Array.from(/** @type {ArrayLike<any>} */ (fallback), (/** @type {any} */ v) => Number(v) || 0);
+  }
+  return null;
+}
+
+/**
+ * @param {any} savedGrid
+ * @param {any} currentGrid
+ * @param {any} RowCtor
+ */
+function restoreNumericFloorGrid(savedGrid, currentGrid, RowCtor) {
+  if (!Array.isArray(savedGrid)) return currentGrid;
+  const expectedRows = currentGrid && typeof currentGrid.length === 'number' ? currentGrid.length : savedGrid.length;
+  if (savedGrid.length < expectedRows) return currentGrid;
+  /** @type {any[]} */
+  const restored = [];
+  for (let y = 0; y < savedGrid.length; y++) {
+    const values = floorSnapshotNumericRowValues(savedGrid[y], currentGrid && currentGrid[y]);
+    if (!values) return currentGrid;
+    restored.push(new RowCtor(values));
+  }
+  if (restored.length < expectedRows) return currentGrid;
+  return restored;
 }
 
 /**
@@ -713,10 +766,10 @@ function replaceFloorArray(target, saved, restore) {
 function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
   if (!dungeon || !savedDungeon) return;
   if (Array.isArray(savedDungeon.map)) dungeon.map = savedDungeon.map;
-  if (Array.isArray(savedDungeon.visited)) dungeon.visited = savedDungeon.visited;
-  if (Array.isArray(savedDungeon.light)) dungeon.light = savedDungeon.light;
-  if (Array.isArray(savedDungeon.visible)) dungeon.visible = savedDungeon.visible;
-  if (Array.isArray(savedDungeon.secretMask)) dungeon.secretMask = savedDungeon.secretMask;
+  if (Array.isArray(savedDungeon.visited)) dungeon.visited = restoreNumericFloorGrid(savedDungeon.visited, dungeon.visited, Uint8Array);
+  if (Array.isArray(savedDungeon.light)) dungeon.light = restoreNumericFloorGrid(savedDungeon.light, dungeon.light, Float32Array);
+  if (Array.isArray(savedDungeon.visible)) dungeon.visible = restoreNumericFloorGrid(savedDungeon.visible, dungeon.visible, Uint8Array);
+  if (Array.isArray(savedDungeon.secretMask)) dungeon.secretMask = restoreNumericFloorGrid(savedDungeon.secretMask, dungeon.secretMask, Uint8Array);
   if (Array.isArray(savedDungeon.rooms) && Array.isArray(dungeon.rooms)) {
     for (let i = 0; i < savedDungeon.rooms.length && i < dungeon.rooms.length; i++) {
       if (savedDungeon.rooms[i]) Object.assign(dungeon.rooms[i], savedDungeon.rooms[i]);
