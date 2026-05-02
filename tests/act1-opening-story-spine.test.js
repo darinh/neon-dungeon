@@ -57,7 +57,7 @@ test('first lore entry is an anomaly warning before the full Act 1 reveal', () =
 
 test('first lore terminal read is forced to the opening pillar before random lore', () => {
   assert.match(GAME,
-    /pickLoreEntryIndex\(player\.loreRead,\s*this\.floor,\s*Math\.random\)/,
+    /pickLoreEntryIndex\(player\.loreRead,\s*this\.floor,\s*\(\)\s*=>\s*rand\('event'\)\)/,
     'game.js must delegate lore selection to the floor-gated picker');
 });
 

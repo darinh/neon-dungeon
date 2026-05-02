@@ -60,13 +60,13 @@ test('TETHER aiTether method exists with the correct signature', () => {
 });
 
 test('TETHER spawn init block sets _teLashPhase', () => {
-  // Stagger via Math.random() so a clustered pack doesn't pulse in
+  // Stagger via cosmetic RNG so a clustered pack doesn't pulse in
   // lock-step (mirrors SAPPER / MAGPIE init pattern).
   const block = ENTITIES.match(/if\s*\(type\s*===\s*'TETHER'\)[\s\S]{0,300}\}/);
   assert.ok(block, 'TETHER init block missing');
   assert.match(block[0], /_teLashPhase\s*=/, 'TETHER must initialise _teLashPhase');
-  assert.match(block[0], /Math\.random\(\)/,
-    'TETHER init must stagger _teLashPhase with Math.random()');
+  assert.match(block[0], /rand\('cosmetic'\)/,
+    'TETHER init must stagger _teLashPhase with the cosmetic RNG');
 });
 
 test('TETHER excluded from elite affix roll', () => {

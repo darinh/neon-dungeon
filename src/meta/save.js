@@ -217,8 +217,8 @@
   // applyMetaToPlayer mutates the passed player object. buildWeaponFn is
   // optional — browser falls through to the global `buildWeapon`. This avoids
   // a hard import dependency between the meta layer and the weapon data layer.
-  /** @param {any} player @param {any} [buildWeaponFn] */
-  function applyMetaToPlayer(player, buildWeaponFn) {
+  /** @param {any} player @param {any} [buildWeaponFn] @param {() => number} [randomFn] */
+  function applyMetaToPlayer(player, buildWeaponFn, randomFn) {
     const m = loadMeta();
     const u = m.upgrades;
     if (u.VITAL_BOOST)   { player.maxHp += u.VITAL_BOOST * 10; player.hp = player.maxHp; }
@@ -227,7 +227,8 @@
       const bw = buildWeaponFn || (typeof buildWeapon !== 'undefined' ? buildWeapon : null);
       if (bw) {
         const pool = ['SCATTER_GUN','RAILGUN','PLASMA_SWORD','VOID_CANNON'];
-        const _sgw = bw(pool[Math.floor(Math.random() * pool.length)], []);
+        const rng = randomFn || (typeof rand !== 'undefined' ? () => rand('loot') : Math.random);
+        const _sgw = bw(pool[Math.floor(rng() * pool.length)], []);
         if (player.equipWeapon) player.equipWeapon(_sgw);
         else player.weapon = _sgw;
       }

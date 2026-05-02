@@ -52,10 +52,10 @@ test('SPECTRE spawn init block sets _spState and _spTimer', () => {
   assert.ok(block, 'SPECTRE init block missing');
   assert.match(block[0], /_spState\s*=\s*'phase'/, 'SPECTRE must start in phase');
   assert.match(block[0], /_spTimer\s*=/, 'SPECTRE must initialise _spTimer');
-  // Stagger the timer with Math.random so a clustered spawn doesn't
+  // Stagger the timer with seeded spawn RNG so a clustered spawn doesn't
   // manifest in unison — the player should be able to pick off one per
   // window even when grouped.
-  assert.match(block[0], /Math\.random\(\)/, 'SPECTRE init must stagger _spTimer with Math.random()');
+  assert.match(block[0], /rand\('spawn'\)/, 'SPECTRE init must stagger _spTimer with the seeded spawn RNG');
   // Must also set phaseImmune so the FIRST frame after spawn (before AI
   // ticks) is correctly invulnerable. Otherwise a hit on the spawn frame
   // bypasses the phase contract.

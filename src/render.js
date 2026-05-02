@@ -2750,7 +2750,7 @@ function populateFloor(dungeon, floorNum) {
   // capped at 1 placement per floor (rare panic button, not a stack-and-
   // spam consumable). Placement uses the same room-eligibility shape as
   // mines (interior tile, not adjacent to other props).
-  const _shockPulseRoll = floorNum >= 3 && Math.random() < 0.30;
+  const _shockPulseRoll = floorNum >= 3 && rand('spawn') < 0.30;
   let _shockPulsePlaced = !_shockPulseRoll;
 
   for (let i=0;i<dungeon.rooms.length;i++) {
@@ -2769,7 +2769,7 @@ function populateFloor(dungeon, floorNum) {
       // rather than silently drift from the AREAS table.
       const area = (typeof NEON !== 'undefined' && NEON.biomes) ? NEON.biomes.areaForFloor(floorNum) : null;
       const pool = area && Array.isArray(area.bossPool) && area.bossPool.length ? area.bossPool : null;
-      const btype=pool?pool[Math.floor(Math.random()*pool.length)]:null;
+      const btype=pool?pool[rndInt(0, pool.length - 1, 'spawn')]:null;
       if (!btype && typeof console !== 'undefined' && console.warn) {
         console.warn('[#34] biome boss pool missing for floor', floorNum, '— NEON.biomes not loaded?');
       }
@@ -2828,7 +2828,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Alarm beacons (floor 4+, normal rooms only, ~40% chance, 0–1 per room)
-    if (floorNum >= 4 && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.4) {
+    if (floorNum >= 4 && !rt && room.w >= 5 && room.h >= 5 && rand('spawn') < 0.4) {
       const bx = room.x + rndInt(2, room.w - 3) + 0.5;
       const by = room.y + rndInt(2, room.h - 3) + 0.5;
       const btx = Math.floor(bx), bty = Math.floor(by);
@@ -2839,7 +2839,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Proximity mines (floor 3+, normal rooms only, ~40% chance, 0–1 per room)
-    if (floorNum >= 3 && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.4) {
+    if (floorNum >= 3 && !rt && room.w >= 5 && room.h >= 5 && rand('spawn') < 0.4) {
       const mx = room.x + rndInt(2, room.w - 3) + 0.5;
       const my = room.y + rndInt(2, room.h - 3) + 0.5;
       const mtx = Math.floor(mx), mty = Math.floor(my);
@@ -2857,7 +2857,7 @@ function populateFloor(dungeon, floorNum) {
     // flag declared above the room loop). 1/3 chance per eligible normal
     // room until a successful placement caps the floor's allotment. Same
     // tile-spacing checks as mines so two pickups don't visually stack.
-    if (!_shockPulsePlaced && !rt && room.w >= 5 && room.h >= 5 && Math.random() < 0.34) {
+    if (!_shockPulsePlaced && !rt && room.w >= 5 && room.h >= 5 && rand('spawn') < 0.34) {
       const sx = room.x + rndInt(2, room.w - 3) + 0.5;
       const sy = room.y + rndInt(2, room.h - 3) + 0.5;
       const stx = Math.floor(sx), sty = Math.floor(sy);
@@ -2930,7 +2930,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Shield generators (floor 5+, normal rooms with ≥3 enemies, ~30% chance, not in beacon rooms)
-    if (floorNum >= 5 && !rt && spawnedCount >= 3 && room.w >= 5 && room.h >= 5 && Math.random() < 0.3) {
+    if (floorNum >= 5 && !rt && spawnedCount >= 3 && room.w >= 5 && room.h >= 5 && rand('spawn') < 0.3) {
       const hasBeacon = beacons.some(b => b.room === room);
       if (!hasBeacon) {
         const gx = room.x + rndInt(2, room.w - 3) + 0.5;
@@ -2949,7 +2949,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Security cameras (floor 4+, normal rooms, ~30% chance, not in beacon rooms, room ≥6×6)
-    if (floorNum >= 4 && !rt && room.w >= 6 && room.h >= 6 && Math.random() < 0.3) {
+    if (floorNum >= 4 && !rt && room.w >= 6 && room.h >= 6 && rand('spawn') < 0.3) {
       const hasBeacon = beacons.some(b => b.room === room);
       if (!hasBeacon) {
         // Find valid wall mount points: interior floor tile adjacent to solid wall, not near doors/corners
@@ -3004,7 +3004,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Laser tripwires (floor 3+, normal rooms, ~25% chance, not in beacon/camera rooms, room ≥ 5 wide or tall)
-    if (floorNum >= 3 && !rt && (room.w >= 5 || room.h >= 5) && Math.random() < 0.25) {
+    if (floorNum >= 3 && !rt && (room.w >= 5 || room.h >= 5) && rand('spawn') < 0.25) {
       const hasBeacon = beacons.some(b => b.room === room);
       const hasCamera = cameras.some(c => c.room === room);
       if (!hasBeacon && !hasCamera) {
@@ -3103,7 +3103,7 @@ function populateFloor(dungeon, floorNum) {
           if (!tooClose) for (const mn of mines) { if (dist(pick.x1, pick.y1, mn.x, mn.y) < 1.5 || dist(pick.x2, pick.y2, mn.x, mn.y) < 1.5) { tooClose = true; break; } }
           if (!tooClose) for (const g of shieldGens) { if (dist(pick.x1, pick.y1, g.x, g.y) < 1.5 || dist(pick.x2, pick.y2, g.x, g.y) < 1.5) { tooClose = true; break; } }
           if (!tooClose) {
-            const cycling = Math.random() < 0.2;
+            const cycling = rand('spawn') < 0.2;
             lasers.push(createLaser(pick.x1, pick.y1, pick.x2, pick.y2, floorNum, room, pick.axis, cycling));
           }
         }
@@ -3111,7 +3111,7 @@ function populateFloor(dungeon, floorNum) {
     }
 
     // Wall turrets (floor 5+, normal rooms, ~25% chance, not in camera rooms, room ≥6×6)
-    if (floorNum >= 5 && !rt && room.w >= 6 && room.h >= 6 && Math.random() < 0.25) {
+    if (floorNum >= 5 && !rt && room.w >= 6 && room.h >= 6 && rand('spawn') < 0.25) {
       const hasCamera = cameras.some(c => c.room === room);
       if (!hasCamera) {
         // Reuse camera wall-mount algorithm: interior floor adjacent to wall, not near doors/corners
@@ -3209,7 +3209,7 @@ function populateFloor(dungeon, floorNum) {
   const isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum === 3 || floorNum === 6 || floorNum === 10);
 
   // Mimic spawn (floor 7+, non-boss, 50% chance, max 1 per floor)
-  if (floorNum >= 7 && !isBossFloor && Math.random() < 0.5) {
+  if (floorNum >= 7 && !isBossFloor && rand('spawn') < 0.5) {
     const mimicRooms = dungeon.rooms.filter(/** @param {any} r */ r =>
       r !== dungeon.spawnRoom && r !== dungeon.bossRoom &&
       !r.roomType && r.w * r.h >= 16

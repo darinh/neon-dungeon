@@ -47,9 +47,9 @@ test('RESONATOR spawn init block sets state + charge stagger', () => {
   // randomised) so a clustered spawn doesn't telegraph in unison.
   const re = /if\s*\(type\s*===\s*'RESONATOR'\)[\s\S]{0,500}_rsState\s*=\s*'idle'[\s\S]{0,400}_rsCharge\s*=/;
   assert.match(ENTITIES, re, 'RESONATOR init must set _rsState=idle and randomised _rsCharge');
-  // Stagger = some Math.random() involvement — otherwise a pack fires together
+  // Stagger = seeded spawn RNG involvement — otherwise a pack fires together
   const init = ENTITIES.match(/if\s*\(type\s*===\s*'RESONATOR'\)[\s\S]{0,500}\}/);
-  assert.ok(init && /Math\.random\(\)/.test(init[0]), 'RESONATOR init must stagger _rsCharge');
+  assert.ok(init && /rand\('spawn'\)/.test(init[0]), 'RESONATOR init must stagger _rsCharge with the seeded spawn RNG');
 });
 
 test('RESONATOR is excluded from the elite affix roll', () => {
@@ -261,4 +261,3 @@ test('aiResonator lock guards against zero-aim (player on apex)', () => {
   assert.match(aiBody, /dLock\s*>\s*[\d.]+\s*&&\s*dLock\s*<=?\s*RESONATOR_RANGE/,
     'aiResonator must guard the lock with a positive minimum distance');
 });
-
