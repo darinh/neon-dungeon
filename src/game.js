@@ -65,6 +65,11 @@ function lifecycleVictoryCopy(ending) {
   };
 }
 
+/** @param {any} value */
+function sanitizeSeedSetupSeed(value) {
+  return String(value == null ? '' : value).replace(/[^A-Za-z0-9 _.\-:]/g, '').slice(0, 64);
+}
+
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
 const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
 const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
@@ -1248,7 +1253,7 @@ const game = {
 
   openSeedSetup() {
     this.seedSetup = {
-      seed: normalizeSeed(this._pendingStartSeed || makeRandomSeed()),
+      seed: sanitizeSeedSetupSeed(normalizeSeed(this._pendingStartSeed || makeRandomSeed())),
       selected: 0,
       cursorBlink: 0
     };
@@ -1257,7 +1262,7 @@ const game = {
 
   randomizeSeedSetup() {
     this.seedSetup = this.seedSetup || { seed: '', selected: 0, cursorBlink: 0 };
-    this.seedSetup.seed = makeRandomSeed();
+    this.seedSetup.seed = sanitizeSeedSetupSeed(makeRandomSeed());
     audio.menuSelect();
   },
 
@@ -1297,6 +1302,13 @@ const game = {
       if (ss.selected === 1) { this.randomizeSeedSetup(); return; }
       if (ss.selected === 2) { audio.menuSelect(); this.setState('MENU'); return; }
     }
+  },
+
+  /** @param {any} value */
+  setSeedSetupSeed(value) {
+    const ss = this.seedSetup || (this.seedSetup = { seed: '', selected: 0, cursorBlink: 0 });
+    ss.seed = sanitizeSeedSetupSeed(value);
+    return ss.seed;
   },
 
   // UNCHAINED #42 — called by updateIntro when the crawl finishes or is
@@ -5209,20 +5221,43 @@ const game = {
   },
 
   /**
-   * @param {number} x
-   * @param {number} y
+   * @returns {{panelW:number,panelH:number,panelX:number,panelY:number,fieldX:number,fieldY:number,fieldW:number,fieldH:number,btnY:number,btnH:number,gap:number,btnW:number}}
    */
-  seedSetupHitTest(x, y) {
+  seedSetupLayout() {
     const narrow = layout.compact;
     const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
+    const panelH = Math.min(narrow ? H - 70 : 390, H - 48);
     const panelX = (W - panelW) / 2;
+    const panelY = (H - panelH) / 2;
+    const fieldW = panelW - (narrow ? 34 : 70);
+    const fieldH = narrow ? 46 : 56;
+    const fieldX = (W - fieldW) / 2;
+    const fieldY = panelY + (narrow ? 96 : 126);
     const btnY = H * (narrow ? 0.70 : 0.68);
     const btnH = narrow ? 34 : 40;
     const gap = narrow ? 8 : 12;
     const btnW = (panelW - gap * 2) / 3;
+    return { panelW, panelH, panelX, panelY, fieldX, fieldY, fieldW, fieldH, btnY, btnH, gap, btnW };
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  seedSetupFieldHitTest(x, y) {
+    const r = this.seedSetupLayout();
+    return x >= r.fieldX && x <= r.fieldX + r.fieldW && y >= r.fieldY && y <= r.fieldY + r.fieldH;
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  seedSetupHitTest(x, y) {
+    const r = this.seedSetupLayout();
     for (let i = 0; i < 3; i++) {
-      const bx = panelX + i * (btnW + gap);
-      if (x >= bx && x <= bx + btnW && y >= btnY && y <= btnY + btnH) return i;
+      const bx = r.panelX + i * (r.btnW + r.gap);
+      if (x >= bx && x <= bx + r.btnW && y >= r.btnY && y <= r.btnY + r.btnH) return i;
     }
     return -1;
   },
@@ -5232,6 +5267,7 @@ const game = {
     const narrow = layout.compact;
     const d = getDiff();
     const t = Date.now() / 1000;
+    const r = this.seedSetupLayout();
     ctx.save();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#071018';
@@ -5243,52 +5279,40 @@ const game = {
     for (let y = 0; y < H; y += 36) NEON.draw.line(ctx, 0, y, W, y);
     ctx.globalAlpha = 1;
 
-    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
-    const panelH = Math.min(narrow ? H - 70 : 390, H - 48);
-    const panelX = (W - panelW) / 2;
-    const panelY = (H - panelH) / 2;
     ctx.fillStyle = 'rgba(4,8,18,0.86)';
     ctx.strokeStyle = '#00f5ff';
     ctx.lineWidth = 2;
     ctx.shadowBlur = 22;
     ctx.shadowColor = '#00f5ff';
-    NEON.draw.roundRectFillStroke(ctx, panelX, panelY, panelW, panelH, 10);
+    NEON.draw.roundRectFillStroke(ctx, r.panelX, r.panelY, r.panelW, r.panelH, 10);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#00f5ff';
     ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
-    ctx.fillText('RUN SEED', W / 2, panelY + (narrow ? 42 : 58));
+    ctx.fillText('RUN SEED', W / 2, r.panelY + (narrow ? 42 : 58));
     ctx.fillStyle = d.colour;
     ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
-    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, panelY + (narrow ? 66 : 86));
+    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, r.panelY + (narrow ? 66 : 86));
 
-    const fieldW = panelW - (narrow ? 34 : 70);
-    const fieldH = narrow ? 46 : 56;
-    const fieldX = (W - fieldW) / 2;
-    const fieldY = panelY + (narrow ? 96 : 126);
     ctx.fillStyle = 'rgba(0,245,255,0.07)';
     ctx.strokeStyle = '#224466';
     ctx.lineWidth = 1;
-    NEON.draw.roundRectFillStroke(ctx, fieldX, fieldY, fieldW, fieldH, 6);
+    NEON.draw.roundRectFillStroke(ctx, r.fieldX, r.fieldY, r.fieldW, r.fieldH, 6);
     const cursor = (Math.floor((ss.cursorBlink || 0) * 2) % 2) === 0 ? '_' : ' ';
     const seedText = (ss.seed || '') + cursor;
     ctx.fillStyle = '#e0faff';
     ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
-    ctx.fillText(seedText, W / 2, fieldY + (narrow ? 29 : 36));
+    ctx.fillText(seedText, W / 2, r.fieldY + (narrow ? 29 : 36));
 
     ctx.fillStyle = '#668899';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, fieldY + fieldH + (narrow ? 22 : 28));
-    ctx.fillText(narrow ? 'Type on desktop, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, fieldY + fieldH + (narrow ? 38 : 46));
+    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, r.fieldY + r.fieldH + (narrow ? 22 : 28));
+    ctx.fillText(narrow ? 'Tap seed to edit, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, r.fieldY + r.fieldH + (narrow ? 38 : 46));
 
-    const btnY = H * (narrow ? 0.70 : 0.68);
-    const btnH = narrow ? 34 : 40;
-    const gap = narrow ? 8 : 12;
-    const btnW = (panelW - gap * 2) / 3;
     const labels = ['START', 'RANDOMIZE', 'BACK'];
     const colours = ['#39ff14', '#ffb700', '#888899'];
     for (let i = 0; i < 3; i++) {
-      const bx = panelX + i * (btnW + gap);
+      const bx = r.panelX + i * (r.btnW + r.gap);
       const selected = ss.selected === i;
       const col = colours[i] || '#888899';
       ctx.fillStyle = selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
@@ -5296,16 +5320,16 @@ const game = {
       ctx.lineWidth = selected ? 2 : 1;
       ctx.shadowBlur = selected ? 16 : 0;
       ctx.shadowColor = col;
-      NEON.draw.roundRectFillStroke(ctx, bx, btnY, btnW, btnH, 6);
+      NEON.draw.roundRectFillStroke(ctx, bx, r.btnY, r.btnW, r.btnH, 6);
       ctx.shadowBlur = 0;
       ctx.fillStyle = selected ? col : '#6f7890';
       ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
-      ctx.fillText(labels[i] || '', bx + btnW / 2, btnY + (narrow ? 22 : 26));
+      ctx.fillText(labels[i] || '', bx + r.btnW / 2, r.btnY + (narrow ? 22 : 26));
     }
 
     ctx.fillStyle = '#445566';
     ctx.font = `${narrow ? 9 : 11}px monospace`;
-    ctx.fillText(isTouchDevice() ? 'Tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, panelY + panelH - (narrow ? 18 : 24));
+    ctx.fillText(isTouchDevice() ? 'Tap seed to type · tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, r.panelY + r.panelH - (narrow ? 18 : 24));
     ctx.restore();
   },
 

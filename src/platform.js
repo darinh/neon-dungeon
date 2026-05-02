@@ -426,11 +426,11 @@ onOrientationChange();
 // ─── Input ───────────────────────────────────────────────────────────────────
 // Phase C1b: keyboard event wiring + held-keys/justPressed/justReleased state
 // live in engine/input.js (NEON.input.createEngine factory). Host owns content-
-// layer state: `lastKey` (name-entry text capture, see game.js NAME_ENTRY) and
-// `nameEntryTap` (touch hit-test relay). We layer those onto the engine via
-// the onKeyDown callback. clearJust() wraps engine.clearJust() and also nulls
-// host state so the existing one-call-per-frame contract is preserved for all
-// downstream consumers (game.js, render.js, content.js).
+// layer state: `lastKey` (text capture), `nameEntryTap` (touch hit-test relay),
+// and a hidden seed input that gives mobile browsers a real focus target so
+// they show the OS keyboard for the canvas-rendered seed field. clearJust()
+// wraps engine.clearJust() and also nulls host state so the existing one-call-
+// per-frame contract is preserved for all downstream consumers.
 const _input = /** @type {any} */ (NEON).input.createEngine({
   win: window,
   onKeyDown: (/** @type {any} */ e) => {
@@ -446,6 +446,79 @@ const mouse = { x: W/2, y: H/2, down: false };
 let lastKey = '';
 /** @type {any} */
 let nameEntryTap = null;
+/** @type {HTMLInputElement | null} */
+let seedSetupInput = null;
+
+/** @returns {string} */
+function currentSeedSetupSeed() {
+  return _G.seedSetup && typeof _G.seedSetup.seed === 'string' ? _G.seedSetup.seed : '';
+}
+
+/** @returns {HTMLInputElement} */
+function ensureSeedSetupInput() {
+  if (seedSetupInput) return seedSetupInput;
+  const el = document.createElement('input');
+  el.type = 'text';
+  el.inputMode = 'text';
+  el.autocomplete = 'off';
+  el.autocapitalize = 'none';
+  el.spellcheck = false;
+  el.maxLength = 64;
+  el.setAttribute('aria-label', 'Run seed');
+  el.style.position = 'fixed';
+  el.style.left = '0';
+  el.style.top = '0';
+  el.style.width = '1px';
+  el.style.height = '1px';
+  el.style.opacity = '0.01';
+  el.style.border = '0';
+  el.style.padding = '0';
+  el.style.background = 'transparent';
+  el.style.color = 'transparent';
+  el.style.fontSize = '16px';
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = '-1';
+  el.addEventListener('input', () => {
+    if (_G.state !== 'SEED_SETUP') return;
+    const value = typeof _G.setSeedSetupSeed === 'function' ? _G.setSeedSetupSeed(el.value) : el.value;
+    if (el.value !== value) el.value = value;
+  });
+  el.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      el.blur();
+      justPressed.add('Enter');
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      el.blur();
+      justPressed.add('Escape');
+    }
+  });
+  el.addEventListener('keyup', e => {
+    e.stopPropagation();
+  });
+  document.body.appendChild(el);
+  seedSetupInput = el;
+  return el;
+}
+
+/**
+ * @param {number} clientX
+ * @param {number} clientY
+ */
+function focusSeedSetupInput(clientX, clientY) {
+  const el = ensureSeedSetupInput();
+  el.value = currentSeedSetupSeed();
+  el.style.left = Math.max(0, Math.round(clientX)) + 'px';
+  el.style.top = Math.max(0, Math.round(clientY)) + 'px';
+  el.focus();
+  el.setSelectionRange(el.value.length, el.value.length);
+}
+
+function blurSeedSetupInput() {
+  if (seedSetupInput && document.activeElement === seedSetupInput) seedSetupInput.blur();
+}
 
 function menuTitleNeedsGestureUnlock() {
   if (_G.state !== 'MENU' || _G._menuTitleUnlockConsumed) return false;
@@ -589,6 +662,11 @@ canvas.addEventListener('touchstart', e => {
     if (_G.state !== 'PLAYING' && _G.state !== 'FADE') {
       if (_G.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
       if (_G.state === 'SEED_SETUP') {
+        if (typeof _G.seedSetupFieldHitTest === 'function' && _G.seedSetupFieldHitTest(cx, cy)) {
+          focusSeedSetupInput(t.clientX, t.clientY);
+          continue;
+        }
+        blurSeedSetupInput();
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
         continue;
@@ -912,7 +990,12 @@ function drawTouchUI() {
 
 /** @param {string} code */
 function jp(code) { return justPressed.has(code); }
-function clearJust() { _input.clearJust(); lastKey=''; nameEntryTap=null; }
+function clearJust() {
+  _input.clearJust();
+  lastKey='';
+  nameEntryTap=null;
+  if (_G.state !== 'SEED_SETUP') blurSeedSetupInput();
+}
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 // Math/RNG primitives moved to engine/math.js (Phase C1a). They are mounted as

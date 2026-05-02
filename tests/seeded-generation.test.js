@@ -80,3 +80,16 @@ test('touch input routes seed setup taps through the seed screen hit-test path',
   assert.match(PLATFORM, /_G\.state === 'SEED_SETUP'[\s\S]*justPressed\.add\('MouseLeft'\)/);
   assert.match(GAME, /seedSetupHitTest\(mouse\.x, mouse\.y\)/);
 });
+
+test('mobile seed setup exposes a real text input for the OS keyboard', () => {
+  assert.match(GAME, /sanitizeSeedSetupSeed\(value\)/);
+  assert.match(GAME, /setSeedSetupSeed\(value\)[\s\S]*sanitizeSeedSetupSeed\(value\)/);
+  assert.match(GAME, /seedSetupFieldHitTest\(x, y\)[\s\S]*seedSetupLayout\(\)/);
+  assert.match(GAME, /Tap seed to edit, or use RANDOMIZE\./);
+
+  assert.match(PLATFORM, /document\.createElement\('input'\)/);
+  assert.match(PLATFORM, /el\.inputMode = 'text'/);
+  assert.match(PLATFORM, /el\.addEventListener\('input'[\s\S]*_G\.setSeedSetupSeed\(el\.value\)/);
+  assert.match(PLATFORM, /el\.addEventListener\('keydown'[\s\S]*e\.stopPropagation\(\)/);
+  assert.match(PLATFORM, /_G\.seedSetupFieldHitTest\(cx, cy\)[\s\S]*focusSeedSetupInput\(t\.clientX, t\.clientY\)/);
+});
