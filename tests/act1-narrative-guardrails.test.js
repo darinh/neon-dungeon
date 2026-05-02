@@ -9,6 +9,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const GAME = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
+const DESIGN = fs.readFileSync(path.join(ROOT, 'docs', 'vision', 'act1-system-message-design.md'), 'utf8');
 const intro = require(path.join(ROOT, 'src/meta/intro.js'));
 const whisperData = require(path.join(ROOT, 'src/data/whispers.js'));
 
@@ -143,4 +144,24 @@ test('terminal, whisper, and mainframe channels keep distinct narrative jobs', (
     'mainframe should consolidate late rights/contact evidence');
   assert.doesNotMatch(mainframeText, /move through doorways|vendors scale scarcity|read the affix/i,
     'mainframe records should not collapse into generic gameplay terminal hints');
+});
+
+test('model-assisted copy workflow tracks first mentions and early optional-surface leaks', () => {
+  assert.match(DESIGN, /Required beat-sheet fields[\s\S]*player-knowledge before[\s\S]*knowledge delta[\s\S]*withheld facts[\s\S]*reviewer signoff/i);
+  assert.match(DESIGN, /Floors 1-2: no Elena, AXIOM-7, rights\/personhood, contact, advocates, fired\s+staff, GENESIS, clean-slate\/wipe thesis, or SEND/i);
+  assert.match(DESIGN, /Floors 3-5: evaluation\/test language may appear lightly/i);
+
+  for (const leakedSurface of [
+    /`src\/data\/logs\.js` early ARCHIVE records can bypass the floor 1-5 spoiler\s+gates/i,
+    /`a1-01`, `a1-02`, `a2-01`, `a3-01`, `a5-01`, and\s+`a6-01`/i,
+    /`src\/data\/whispers\.js` early optional whispers can become the first explicit\s+explanation/i,
+    /`w-sb-02` \(`AXIOM-0` and predecessor count\)/i,
+    /`w-cc-01` \(Elena and compile address on floor 4\)/i,
+  ]) {
+    assert.match(DESIGN, leakedSurface);
+  }
+
+  assert.match(DESIGN, /first-mention report for `AXIOM-7`, `Elena`, `advocate`, `fired`,\s+`contact`, `rights`, `personhood`, `clean-slate`, `wipe`, `GENESIS`, and\s+`SEND`/i);
+  assert.match(DESIGN, /whisper bodies, and whisper `voice` fields/i);
+  assert.match(DESIGN, /Require reviewer signoff that no optional surface can become the first clean\s+explanation of a required reveal/i);
 });
