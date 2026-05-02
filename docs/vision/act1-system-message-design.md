@@ -3,8 +3,8 @@
 Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
 early-floor prompt schedule, MSG-005 archive recovery, MSG-006 early terminal
-retune, and MSG-007 intro retune are shipped; copy workflow and finale
-integration remain pending.
+retune, MSG-007 intro retune, and MSG-008 narrative guardrail tests are shipped;
+copy workflow and finale integration remain pending.
 
 Tracking issue: #501
 
@@ -248,6 +248,11 @@ Acceptance criteria:
 
 Add tests that pin the reveal architecture and UX safety rules before broad copy
 rewrites land.
+
+Status: shipped. `tests/act1-narrative-guardrails.test.js` pins the early
+intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only
+dismissal, Elena/contact/rights-conflict spoiler gates, and the separate channel
+roles for terminals, whispers, and mainframe records.
 
 Acceptance criteria:
 - Tests assert system prompts are the early interiority channel.

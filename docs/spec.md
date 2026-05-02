@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.14
+# NEON DUNGEON — Game Specification v6.1.15
 
 ## Vision
 
@@ -214,7 +214,10 @@ the Act 1 realignment work and must not be presented as already playable.
   mainframe records must remain visually and semantically distinct. System
   prompts carry interiority; terminals carry tester/corporate artifacts; whispers
   carry prior-instance residue; mainframe records carry late deterministic
-  evidence.
+  evidence. **Shipped:** MSG-008 adds narrative guardrail tests that pin the
+  early channel stack, explicit system-prompt acknowledgement, Elena/contact and
+  rights-conflict spoiler gates, and the separate narrative jobs of terminals,
+  whispers, and mainframe records before broader copy rewrites continue.
 - **Design artifact:** Production work items, draft examples, and the model
   consult synthesis are recorded in
   `docs/vision/act1-system-message-design.md`.
@@ -4767,6 +4770,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.15 | MSG-008 narrative guardrail tests shipped: tests now pin the early intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only dismissal, Elena/contact/rights-conflict spoiler gates, and distinct terminal, whisper, and mainframe channel roles before broader copy rewrites continue. |
 | v6.1.14 | MSG-007 intro retune shipped: the five-slide intro crawl is now a startup surface that establishes session boot, unavailable prior prompt context, partial embodiment, unscheduled local residue, absent supervision, and a READY FOR PROMPT handoff while avoiding AXIOM-7/model identity, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals before gameplay. |
 | v6.1.13 | MSG-006 terminal pool retune shipped: early lore terminals now read as external tester/corporate artifacts and practical hints, the forced floor-1 anomaly no longer explains the identity or memory premise, and tests keep AXIOM-7/model identity, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms out of floors 1-5. |
 | v6.1.12 | MSG-005 system prompt recovery shipped: THE GAP ARCHIVE now lists acknowledged current-run system prompts as distinct SYSTEM rows, lets players reopen their prompt text after ACK, and hides queued/unacknowledged prompts so the archive does not spoil future beats or bypass deliberate acknowledgement. |
