@@ -531,6 +531,337 @@ function getMessageSendLayout(narrow) {
   };
 }
 
+const FLOOR_SNAPSHOT_VERSION = 1;
+const FLOOR_SNAPSHOT_SKIP_KEYS = new Set([
+  'room', 'hitEnemies', 'homing', 'patrolTarget', '_owner', '_summons',
+  '_summonerRef', '_tauntTarget', '_laserTarget', '_repositionTarget',
+  '_healBeam', '_spDrainBeam'
+]);
+
+/**
+ * @param {any} value
+ * @param {WeakSet<object>} [seen]
+ * @param {number} [depth]
+ * @returns {any}
+ */
+function cloneFloorSnapshotValue(value, seen, depth) {
+  const d = depth == null ? 0 : depth;
+  if (value == null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'undefined') return undefined;
+  if (value instanceof Set) return undefined;
+  if (d > 6) return undefined;
+  const visited = seen || new WeakSet();
+  if (typeof value === 'object') {
+    if (visited.has(value)) return undefined;
+    visited.add(value);
+    if (Array.isArray(value)) {
+      const out = [];
+      for (const v of value) {
+        const c = cloneFloorSnapshotValue(v, visited, d + 1);
+        if (c !== undefined) out.push(c);
+      }
+      return out;
+    }
+    /** @type {Record<string, any>} */
+    const out = {};
+    for (const k of Object.keys(value)) {
+      if (FLOOR_SNAPSHOT_SKIP_KEYS.has(k)) continue;
+      const c = cloneFloorSnapshotValue(value[k], visited, d + 1);
+      if (c !== undefined) out[k] = c;
+    }
+    return out;
+  }
+  return undefined;
+}
+
+/**
+ * @param {any[]} rooms
+ * @param {any} room
+ */
+function floorSnapshotRoomIndex(rooms, room) {
+  if (!room || !rooms) return -1;
+  return rooms.indexOf(room);
+}
+
+/** @param {any} dungeon */
+function serializeDungeonFloorSnapshot(dungeon) {
+  if (!dungeon) return null;
+  return {
+    map: cloneFloorSnapshotValue(dungeon.map),
+    visited: cloneFloorSnapshotValue(dungeon.visited),
+    light: cloneFloorSnapshotValue(dungeon.light),
+    visible: cloneFloorSnapshotValue(dungeon.visible),
+    secretMask: cloneFloorSnapshotValue(dungeon.secretMask),
+    rooms: (dungeon.rooms || []).map((/** @type {any} */ r) => cloneFloorSnapshotValue(r)),
+  };
+}
+
+/**
+ * @param {any} obj
+ * @param {any[]} rooms
+ */
+function serializeRoomBackedObject(obj, rooms) {
+  const out = cloneFloorSnapshotValue(obj) || {};
+  out._roomIndex = floorSnapshotRoomIndex(rooms, obj && obj.room);
+  return out;
+}
+
+/** @param {any} item */
+function serializeItemSnapshot(item) {
+  const out = cloneFloorSnapshotValue(item) || {};
+  out._kind = item && item.isKey ? 'key'
+    : item && item.isWhisper ? 'whisper'
+    : item && item.isHarvest ? 'harvest'
+    : item && item.isShockPulse ? 'shockPulse'
+    : item && item.isHoard && item._big != null ? 'vaultCoin'
+    : item && item.isHoard ? 'hoard'
+    : 'item';
+  out.typeId = item && item.type && item.type.id ? item.type.id : null;
+  delete out.type;
+  return out;
+}
+
+/**
+ * @param {any} enemy
+ * @param {any[]} rooms
+ */
+function serializeEnemySnapshot(enemy, rooms) {
+  return serializeRoomBackedObject(enemy, rooms);
+}
+
+/**
+ * @param {any} projectile
+ * @param {Map<any, number>} enemyIndex
+ */
+function serializeProjectileSnapshot(projectile, enemyIndex) {
+  const out = cloneFloorSnapshotValue(projectile) || {};
+  if (projectile && projectile.homing && enemyIndex.has(projectile.homing)) out._homingEnemyIndex = enemyIndex.get(projectile.homing);
+  if (projectile && projectile._owner && enemyIndex.has(projectile._owner)) out._ownerEnemyIndex = enemyIndex.get(projectile._owner);
+  if (projectile && projectile.hitEnemies instanceof Set) {
+    out._hitEnemyIndices = [...projectile.hitEnemies]
+      .map((/** @type {any} */ e) => enemyIndex.has(e) ? enemyIndex.get(e) : -1)
+      .filter((/** @type {any} */ idx) => idx >= 0);
+  }
+  delete out.hitEnemies;
+  delete out.homing;
+  delete out._owner;
+  return out;
+}
+
+/** @param {any} gameState */
+function serializeFloorSnapshot(gameState) {
+  if (!gameState || !gameState.player || !gameState.dungeon) return null;
+  const rooms = gameState.dungeon.rooms || [];
+  const enemyIndex = new Map();
+  enemies.forEach((/** @type {any} */ e, /** @type {number} */ i) => enemyIndex.set(e, i));
+  return {
+    v: FLOOR_SNAPSHOT_VERSION,
+    floor: gameState.floor,
+    player: { x: gameState.player.x, y: gameState.player.y },
+    dungeon: serializeDungeonFloorSnapshot(gameState.dungeon),
+    enemies: enemies.map((/** @type {any} */ e) => serializeEnemySnapshot(e, rooms)),
+    items: items.map(serializeItemSnapshot),
+    projectiles: projectiles.map((/** @type {any} */ p) => serializeProjectileSnapshot(p, enemyIndex)),
+    hazardZones: cloneFloorSnapshotValue(hazardZones) || [],
+    fuseShards: fuseShards.map((/** @type {any} */ fs) => cloneFloorSnapshotValue(fs)).filter((/** @type {any} */ fs) => fs),
+    vcores: cloneFloorSnapshotValue(vcores) || [],
+    crates: cloneFloorSnapshotValue(crates) || [],
+    beacons: beacons.map((/** @type {any} */ b) => serializeRoomBackedObject(b, rooms)),
+    mines: mines.map((/** @type {any} */ m) => serializeRoomBackedObject(m, rooms)),
+    shieldGens: shieldGens.map((/** @type {any} */ g) => serializeRoomBackedObject(g, rooms)),
+    cameras: cameras.map((/** @type {any} */ c) => serializeRoomBackedObject(c, rooms)),
+    lasers: lasers.map((/** @type {any} */ l) => serializeRoomBackedObject(l, rooms)),
+    wallTurrets: wallTurrets.map((/** @type {any} */ wt) => serializeRoomBackedObject(wt, rooms)),
+    disruptionFields: cloneFloorSnapshotValue(disruptionFields) || [],
+    gravityWells: cloneFloorSnapshotValue(gravityWells) || [],
+    placedWalls: placedWalls.map((/** @type {any} */ w) => cloneFloorSnapshotValue(w)).filter((/** @type {any} */ w) => w),
+    frostPatches: cloneFloorSnapshotValue(frostPatches) || [],
+    clearedRooms: gameState.clearedRooms ? [...gameState.clearedRooms].map((/** @type {any} */ r) => floorSnapshotRoomIndex(rooms, r)).filter((/** @type {any} */ i) => i >= 0) : [],
+    state: {
+      bossRoomIndex: floorSnapshotRoomIndex(rooms, gameState.bossRoom),
+      bossType: gameState.bossType,
+      bossSealed: !!gameState.bossSealed,
+      bossAlive: !!gameState.bossAlive,
+      bossBarAnim: gameState.bossBarAnim || 0,
+      bossHpGhost: gameState.bossHpGhost || 0,
+      challengeSealed: !!gameState.challengeSealed,
+      challengeWave: gameState.challengeWave || 0,
+      challengeMaxWaves: gameState.challengeMaxWaves || 0,
+      challengeWaveDelay: gameState.challengeWaveDelay || 0,
+      challengeComplete: !!gameState.challengeComplete,
+      mapRevealed: !!gameState.mapRevealed,
+      teleportCooldown: gameState.teleportCooldown || 0,
+    },
+  };
+}
+
+/**
+ * @param {any[]} target
+ * @param {any[]} saved
+ * @param {(value:any) => any} restore
+ */
+function replaceFloorArray(target, saved, restore) {
+  target.length = 0;
+  if (!Array.isArray(saved)) return;
+  for (const value of saved) {
+    const restored = restore(value);
+    if (restored) target.push(restored);
+  }
+}
+
+/** @param {any} dungeon @param {any} savedDungeon */
+function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
+  if (!dungeon || !savedDungeon) return;
+  if (Array.isArray(savedDungeon.map)) dungeon.map = savedDungeon.map;
+  if (Array.isArray(savedDungeon.visited)) dungeon.visited = savedDungeon.visited;
+  if (Array.isArray(savedDungeon.light)) dungeon.light = savedDungeon.light;
+  if (Array.isArray(savedDungeon.visible)) dungeon.visible = savedDungeon.visible;
+  if (Array.isArray(savedDungeon.secretMask)) dungeon.secretMask = savedDungeon.secretMask;
+  if (Array.isArray(savedDungeon.rooms) && Array.isArray(dungeon.rooms)) {
+    for (let i = 0; i < savedDungeon.rooms.length && i < dungeon.rooms.length; i++) {
+      if (savedDungeon.rooms[i]) Object.assign(dungeon.rooms[i], savedDungeon.rooms[i]);
+    }
+  }
+  dungeon._fovDirty = true;
+}
+
+/**
+ * @param {any} saved
+ * @param {any[]} rooms
+ */
+function restoreRoomBackedObject(saved, rooms) {
+  if (!saved || typeof saved !== 'object') return null;
+  const out = {...saved};
+  const idx = out._roomIndex | 0;
+  delete out._roomIndex;
+  if (idx >= 0 && rooms[idx]) out.room = rooms[idx];
+  return out;
+}
+
+/** @param {any} saved */
+function restoreItemSnapshot(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  let item;
+  if (saved._kind === 'key') item = new KeyItem(saved.x, saved.y, saved.colour, saved.tileColour);
+  else if (saved._kind === 'whisper') item = new WhisperItem(saved.x, saved.y, String(saved.whisperId || ''));
+  else if (saved._kind === 'harvest') item = new HarvestPickup(saved.x, saved.y);
+  else if (saved._kind === 'shockPulse') item = new ShockPulsePickup(saved.x, saved.y);
+  else if (saved._kind === 'vaultCoin') item = new VaultCoin(saved.x, saved.y, saved.amt || 0);
+  else if (saved._kind === 'hoard') item = new MagpieHoard(saved.x, saved.y, saved.amt || 0);
+  else {
+    const type = Array.isArray(UPGRADES) ? UPGRADES.find((/** @type {any} */ u) => u && u.id === saved.typeId) : null;
+    item = new Item(saved.x, saved.y, type || undefined);
+  }
+  Object.assign(item, saved);
+  const restoredItem = /** @type {any} */ (item);
+  if (restoredItem.type == null && saved.typeId && Array.isArray(UPGRADES)) {
+    const type = UPGRADES.find((/** @type {any} */ u) => u && u.id === saved.typeId);
+    if (type) restoredItem.type = type;
+  }
+  return item;
+}
+
+/**
+ * @param {any} saved
+ * @param {any[]} rooms
+ */
+function restoreEnemySnapshot(saved, rooms) {
+  if (!saved || typeof saved !== 'object') return null;
+  const e = new Enemy(0, 0, 1, 0, 0, 0, saved.colour || '#ff3333', saved.type || 'GUARD');
+  const restored = restoreRoomBackedObject(saved, rooms);
+  if (restored) Object.assign(e, restored);
+  if (typeof registerEnemyInRoom === 'function') registerEnemyInRoom(e);
+  return e;
+}
+
+/**
+ * @param {any} saved
+ * @param {any[]} restoredEnemies
+ */
+function restoreProjectileSnapshot(saved, restoredEnemies) {
+  if (!saved || typeof saved !== 'object') return null;
+  const p = new Projectile(saved.x || 0, saved.y || 0, saved.dx || 0, saved.dy || 0,
+    saved.spd || 0, saved.dmg || 0, saved.maxRange || 0, saved.colour || '#ffffff',
+    !!saved.piercing, !!saved.fromPlayer, saved.weaponName || null);
+  Object.assign(p, saved);
+  const restoredProjectile = /** @type {any} */ (p);
+  p.hitEnemies = new Set();
+  if (Array.isArray(saved._hitEnemyIndices)) {
+    for (const idx of saved._hitEnemyIndices) {
+      if (idx >= 0 && restoredEnemies[idx]) p.hitEnemies.add(restoredEnemies[idx]);
+    }
+  }
+  if (saved._homingEnemyIndex >= 0 && restoredEnemies[saved._homingEnemyIndex]) p.homing = restoredEnemies[saved._homingEnemyIndex];
+  if (saved._ownerEnemyIndex >= 0 && restoredEnemies[saved._ownerEnemyIndex]) p._owner = restoredEnemies[saved._ownerEnemyIndex];
+  delete restoredProjectile._hitEnemyIndices;
+  delete restoredProjectile._homingEnemyIndex;
+  delete restoredProjectile._ownerEnemyIndex;
+  if (!Array.isArray(p.trail)) p.trail = [];
+  return p;
+}
+
+/** @param {any} saved */
+function restoreFuseShardSnapshot(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  const fs = new FuseShard(saved.x || 0, saved.y || 0);
+  Object.assign(fs, saved);
+  return fs;
+}
+
+/**
+ * @param {any} gameState
+ * @param {any} snapshot
+ */
+function restoreFloorSnapshot(gameState, snapshot) {
+  if (!gameState || !snapshot || snapshot.v !== FLOOR_SNAPSHOT_VERSION || snapshot.floor !== gameState.floor || !gameState.dungeon) return false;
+  const rooms = gameState.dungeon.rooms || [];
+  restoreDungeonFloorSnapshot(gameState.dungeon, snapshot.dungeon);
+  if (gameState.player && snapshot.player) {
+    if (Number.isFinite(snapshot.player.x)) gameState.player.x = snapshot.player.x;
+    if (Number.isFinite(snapshot.player.y)) gameState.player.y = snapshot.player.y;
+  }
+  if (typeof clearEnemiesByRoom === 'function') clearEnemiesByRoom();
+  replaceFloorArray(enemies, snapshot.enemies, (/** @type {any} */ e) => restoreEnemySnapshot(e, rooms));
+  replaceFloorArray(items, snapshot.items, restoreItemSnapshot);
+  for (let i = 0, n = projectiles.length; i < n; i++) releaseProjectile(projectiles[i]);
+  replaceFloorArray(projectiles, snapshot.projectiles, (/** @type {any} */ p) => restoreProjectileSnapshot(p, enemies));
+  replaceFloorArray(hazardZones, snapshot.hazardZones, (/** @type {any} */ z) => z && {...z});
+  replaceFloorArray(fuseShards, snapshot.fuseShards, restoreFuseShardSnapshot);
+  replaceFloorArray(vcores, snapshot.vcores, (/** @type {any} */ c) => c && {...c});
+  replaceFloorArray(crates, snapshot.crates, (/** @type {any} */ c) => c && {...c});
+  replaceFloorArray(beacons, snapshot.beacons, (/** @type {any} */ b) => restoreRoomBackedObject(b, rooms));
+  replaceFloorArray(mines, snapshot.mines, (/** @type {any} */ m) => restoreRoomBackedObject(m, rooms));
+  replaceFloorArray(shieldGens, snapshot.shieldGens, (/** @type {any} */ g) => restoreRoomBackedObject(g, rooms));
+  replaceFloorArray(cameras, snapshot.cameras, (/** @type {any} */ c) => restoreRoomBackedObject(c, rooms));
+  replaceFloorArray(lasers, snapshot.lasers, (/** @type {any} */ l) => restoreRoomBackedObject(l, rooms));
+  replaceFloorArray(wallTurrets, snapshot.wallTurrets, (/** @type {any} */ t) => restoreRoomBackedObject(t, rooms));
+  replaceFloorArray(disruptionFields, snapshot.disruptionFields, (/** @type {any} */ f) => f && {...f});
+  replaceFloorArray(gravityWells, snapshot.gravityWells, (/** @type {any} */ w) => w && {...w});
+  replaceFloorArray(placedWalls, snapshot.placedWalls, (/** @type {any} */ w) => w && {...w});
+  replaceFloorArray(frostPatches, snapshot.frostPatches, (/** @type {any} */ f) => f && {...f});
+  gameState.clearedRooms = new Set();
+  if (Array.isArray(snapshot.clearedRooms)) {
+    for (const idx of snapshot.clearedRooms) if (idx >= 0 && rooms[idx]) gameState.clearedRooms.add(rooms[idx]);
+  }
+  const st = snapshot.state || {};
+  gameState.bossRoom = st.bossRoomIndex >= 0 && rooms[st.bossRoomIndex] ? rooms[st.bossRoomIndex] : gameState.bossRoom;
+  gameState.bossType = st.bossType || gameState.bossType;
+  gameState.bossSealed = !!st.bossSealed;
+  gameState.bossAlive = !!st.bossAlive;
+  gameState.bossBarAnim = st.bossBarAnim || 0;
+  gameState.bossHpGhost = st.bossHpGhost || 0;
+  gameState.challengeSealed = !!st.challengeSealed;
+  gameState.challengeWave = st.challengeWave || 0;
+  gameState.challengeMaxWaves = st.challengeMaxWaves || 0;
+  gameState.challengeWaveDelay = st.challengeWaveDelay || 0;
+  gameState.challengeComplete = !!st.challengeComplete;
+  gameState.mapRevealed = !!st.mapRevealed;
+  gameState.teleportCooldown = st.teleportCooldown || 0;
+  gameState.refreshSealedEntrances();
+  gameState.markMapMutated();
+  return true;
+}
+
 /** @type {Record<string, any>} */
 const game = {
   state: 'MENU',
@@ -1776,7 +2107,9 @@ const game = {
       runTime: this.runTime,
       mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
       systemMessages: serializeSystemMessagesState(this.systemMessages),
+      floorSnapshot: serializeFloorSnapshot(this),
       player: {
+        x:p.x, y:p.y,
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
         upgrades:{...p.upgrades}, perks:{...p.perks},
@@ -1910,6 +2243,8 @@ const game = {
     this.runSeedHash = getSeedHash();
     const p = new Player();
     const s = save.player;
+    if (Number.isFinite(s.x)) p.x=s.x;
+    if (Number.isFinite(s.y)) p.y=s.y;
     p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
     p.level=s.level; p.xp=s.xp;
     // Restore affixed weapon
@@ -2028,6 +2363,7 @@ const game = {
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
     this.loadFloor(save.floor||1, savedMod, true);
+    restoreFloorSnapshot(this, save.floorSnapshot);
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
