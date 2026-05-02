@@ -40,11 +40,11 @@ test('MAGNETON has a stat row in spawnEnemy switch and is stationary, atk=0', ()
 
 test('MAGNETON spawn init block initialises pulse phase', () => {
   // _mgPulse must exist (used by draw branch) and ideally be staggered
-  // (Math.random() * TWO_PI) so a clustered spawn doesn't pulse in unison.
+  // (seeded cosmetic RNG * TWO_PI) so a clustered spawn doesn't pulse in unison.
   const re = /if\s*\(type\s*===\s*'MAGNETON'\)[\s\S]{0,400}_mgPulse\s*=/;
   assert.match(ENTITIES, re, 'MAGNETON init must set _mgPulse');
   const init = ENTITIES.match(/if\s*\(type\s*===\s*'MAGNETON'\)[\s\S]{0,400}\}/);
-  assert.ok(init && /Math\.random\(\)/.test(init[0]), 'MAGNETON init must stagger _mgPulse with Math.random()');
+  assert.ok(init && /rand\('cosmetic'\)/.test(init[0]), 'MAGNETON init must stagger _mgPulse with the cosmetic RNG');
 });
 
 test('MAGNETON is excluded from the elite affix roll', () => {

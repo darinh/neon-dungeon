@@ -85,13 +85,16 @@
   //   source='boss-genesis'   → guaranteed drop (+10 cores awarded separately
   //                             by the boss hook; see #39 follow-up).
   // Unknown sources: guaranteed drop (treated as boss-style).
-  /** @param {{source?: string}} [opts] */
+  /** @param {{source?: string, rng?: () => number}} [opts] */
   function rollModuleDrop(opts) {
     const source = (opts && opts.source) || '';
+    const rng = (opts && typeof opts.rng === 'function')
+      ? opts.rng
+      : (typeof rand !== 'undefined' ? () => rand('loot') : Math.random);
     if (source === 'rare-terminal') {
-      if (Math.random() >= RARE_TERMINAL_DROP_PCT) return null;
+      if (rng() >= RARE_TERMINAL_DROP_PCT) return null;
     }
-    return /** @type {{id:string}} */ (MODULES[Math.floor(Math.random() * MODULES.length)]).id;
+    return /** @type {{id:string}} */ (MODULES[Math.floor(rng() * MODULES.length)]).id;
   }
 
   // ─── Run-pickup (transient) ────────────────────────────────────────────────

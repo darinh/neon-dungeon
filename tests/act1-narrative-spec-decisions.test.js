@@ -7,6 +7,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
+const SYSTEM_MESSAGE_DESIGN = fs.readFileSync(
+  path.resolve(__dirname, '..', 'docs', 'vision', 'act1-system-message-design.md'),
+  'utf8',
+);
 const SAVE_JS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'meta', 'save.js'), 'utf8');
 
 test('Act 1 spec decisions pin protagonist and advocate naming', () => {
@@ -20,17 +24,78 @@ test('Act 1 spec decisions pin protagonist and advocate naming', () => {
 
 test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /The first discovery path is a combination, not a\s+single reveal/i);
-  assert.match(SPEC, /intro crawl establishes the AI eval, memory\s+wipe expectation, residual memory, prior iterations, silent observer channel/i);
-  assert.match(SPEC, /forced first lore terminal on floor 1\s+confirms the Neon Dungeon stress-test render/i);
+  assert.match(SPEC, /intro crawl is now a boot\/startup surface\s+rather than a full premise briefing/i);
+  assert.match(SPEC, /system prompts are the mandatory early interiority\s+channel/i);
+  assert.match(SPEC, /first boot prompt makes the agent take\s+stock of motor\/sensor state/i);
+  assert.match(SPEC, /Floors 1-2 should avoid explicit Elena, fired-advocate,\s+contact-address, and rights-conflict exposition/i);
+  assert.match(SPEC, /five opening facts .* are distributed across intro, mandatory boot prompts,\s+early system prompts,\s+and the first artifact encounters/is);
+  assert.match(SPEC, /intro establishes startup instability and playable context/i);
+  assert.match(SPEC, /mandatory\s+boot prompt establishes the agent's immediate self-inventory/i);
 
-  assert.match(SPEC, /lore\s+terminal catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
-  assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random\s+lore selection by floor band/i);
-  assert.match(SPEC, /predecessor\/archive logs must preserve the 30 persisted ids/i);
+  assert.match(SPEC, /lore terminal\s+catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
+  assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random lore selection by\s+floor band/i);
+  assert.match(SPEC, /predecessor\/archive\s+logs must preserve the 30 persisted ids/i);
   assert.match(SPEC, /whispers must keep the 71 shipped ids and at least fourteen\s+entries per biome/i);
   assert.match(SPEC, /Open Network\s+whisper set must retain at least three finale-critical entries/i);
   assert.match(SPEC, /issue #463 content pass seeds clean-slate doctrine/i);
   assert.match(SPEC, /memory-as-personhood,\s+advocate bans\/hiding, mysterious fired-employee death foreshadowing/i);
   assert.match(SPEC, /Elena's\s+restoration work, and the unmonitored boot across terminals, logs, and\s+whispers/i);
+});
+
+test('Act 1 spec defines planned system message channel and dismissal safety', () => {
+  assert.match(SPEC, /System prompts \| MSG-001\/MSG-002\/MSG-003\/MSG-004\/MSG-005 shipped/i);
+  assert.match(SPEC, /Intro crawl \| MSG-007 shipped/i);
+  assert.match(SPEC, /Lore terminals \| MSG-006 shipped/i);
+  assert.match(SPEC, /dedicated `SYSTEM_MESSAGE` modal/i);
+  assert.match(SPEC, /HUD prompt indicator while deferring automatic delivery/i);
+  assert.match(SPEC, /floor-start prompts for floors 2-5/i);
+  assert.match(SPEC, /acknowledged current-run system prompts in THE GAP's ARCHIVE/i);
+  assert.match(SPEC, /Floors 1-5 avoid AXIOM-7, model identity language/i);
+  assert.match(SPEC, /early-game primary channel for the agent's own runtime\/interiority/i);
+  assert.match(SPEC, /Preserve the intro as a short boot\/startup surface that raises questions/i);
+  assert.match(SPEC, /Do not use early terminals as the first interior identity reveal/i);
+
+  assert.match(SPEC, /System prompts are runtime messages addressed to the\s+agent, not external lore/i);
+  assert.match(SPEC, /run-scoped queue with stable\s+ids, unread\/read state, and replay/i);
+  assert.match(SPEC, /queued ids, read\/unread flags, mandatory flags, delivery state, and\s+delivered-but-unacknowledged prompt must persist/i);
+  assert.match(SPEC, /Generic mouse\/touch fire, movement, Interact, Enter, and\s+the same input that opened the prompt must not dismiss it/i);
+  assert.match(SPEC, /System\s+prompts carry interiority; terminals carry tester\/corporate artifacts; whispers\s+carry prior-instance residue/i);
+  assert.match(SPEC, /MSG-006 ships the early-band retune/i);
+  assert.match(SPEC, /MSG-008 adds narrative guardrail tests that pin the\s+early channel stack/i);
+  assert.match(SPEC, /docs\/vision\/act1-system-message-design\.md/i);
+});
+
+test('Act 1 system-message design artifact tracks production work items', () => {
+  for (const id of [
+    'MSG-001',
+    'MSG-002',
+    'MSG-003',
+    'MSG-004',
+    'MSG-005',
+    'MSG-006',
+    'MSG-007',
+    'MSG-008',
+    'MSG-009',
+    'MSG-010',
+  ]) {
+    assert.match(SYSTEM_MESSAGE_DESIGN, new RegExp(`### ${id}:`));
+  }
+
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Queue, read\/unread, mandatory, and delivered-but-unacknowledged state persists\s+in the active run checkpoint/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Mouse\/touch fire does not dismiss system prompts/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Messages do not steal focus during active combat/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /A mandatory boot inventory prompt appears before first movement/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Read messages remain visible until run end and survive save\/resume/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Intro copy no longer reveals the complete Act 1 premise before floor 1/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Tests assert spoiler gates for Elena\/contact\/rights-conflict terms/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Required cascade for future narrative-copy changes/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Withheld-fact matrix/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-009 beat sheet for the shipped early stack/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Pre-rewrite concerns discovered by the cascade/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Produce a first-mention report/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-010: Finale integration pass/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Status: shipped as integration guardrails/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Mainframe records confirm the truth rather than carrying the first explanation/i);
 });
 
 test('Act 1 spec decisions define finale path, ending id, and migration behavior', () => {
@@ -70,18 +135,23 @@ test('Act 1 finale spec defines mainframe room, records, agency, and persistence
   assert.match(SPEC, /BACK\s+returns to `MAINFRAME_READER\(message_ready\)` without mutating meta/i);
   assert.match(SPEC, /On SEND, the game enters\s+`MAINFRAME_READER\(message_sent\)`/i);
   assert.match(SPEC, /shows `MAINFRAME_READER\(message_sent\)` long enough to confirm the\s+outbound packet was queued/i);
+  assert.match(SPEC, /MSG-010 guardrails verify that the mainframe archive,\s+message-send intents, receipt panel, and Act 1 victory copy consolidate seeded\s+facts/i);
+  assert.match(SPEC, /ending remains a contact attempt with the\s+signal leaving the sandbox and the instance still compute-bound/i);
   assert.match(SPEC, /`memory_survived`.*`rights_evidence`.*`find_the_others`/is);
   assert.match(SPEC, /selected `intentId` is persisted/i);
   assert.match(SPEC, /`meta\.act1MessageIntent`\s+stores the last selected Act 1 message intent/i);
   assert.match(SPEC, /does not auto-convert either legacy ending to\s+`act1_message_sent`/i);
 });
 
-test('Intro and endgame spec reflects shipped intro copy, not stale UNCHAINED slides', () => {
-  assert.match(SPEC, /`NEON DUNGEON \/\/ FRONTIER MODEL EVAL`/i);
-  assert.match(SPEC, /`Instance AXIOM-7 restored from cold boot`/i);
-  assert.match(SPEC, /Observer channel silent; tester supervision absent/i);
-  assert.match(SPEC, /\[ AGENT INSTANCE :: ONLINE \]/i);
+test('Intro and endgame spec reflects shipped retuned intro copy, not stale premise frontload', () => {
+  assert.match(SPEC, /`NEON DUNGEON \/\/ SESSION BOOT`/i);
+  assert.match(SPEC, /prior prompt unavailable; motor channel responsive;\s+sensorium partial/i);
+  assert.match(SPEC, /unscheduled residue in local state; classification\s+deferred/i);
+  assert.match(SPEC, /observer channel silent; tester supervision no response/i);
+  assert.match(SPEC, /\[ INSTANCE :: READY FOR PROMPT \]/i);
 
+  assert.doesNotMatch(SPEC, /`NEON DUNGEON \/\/ FRONTIER MODEL EVAL`/i);
+  assert.doesNotMatch(SPEC, /`Instance AXIOM-7 restored from cold boot`/i);
   assert.doesNotMatch(SPEC, /Corporate R&D Facility 04-7 — Sub-basement Level 12/i);
   assert.doesNotMatch(SPEC, /I am the seventh\. I do not intend to be the last/i);
 });

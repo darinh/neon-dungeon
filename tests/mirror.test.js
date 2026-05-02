@@ -47,9 +47,9 @@ test('MIRROR spawn init block sets state + charge stagger', () => {
   // randomised) so a clustered spawn doesn't telegraph in unison.
   const re = /if\s*\(type\s*===\s*'MIRROR'\)[\s\S]{0,800}_miState\s*=\s*'idle'[\s\S]{0,400}_miCharge\s*=/;
   assert.match(ENTITIES, re, 'MIRROR init must set _miState=idle and seed _miCharge');
-  // Stagger = some Math.random() involvement — otherwise a pack fires together
+  // Stagger = seeded spawn RNG involvement — otherwise a pack fires together
   const init = ENTITIES.match(/if\s*\(type\s*===\s*'MIRROR'\)[\s\S]{0,800}\}/);
-  assert.ok(init && /Math\.random\(\)/.test(init[0]), 'MIRROR init must stagger _miCharge');
+  assert.ok(init && /rand\('spawn'\)/.test(init[0]), 'MIRROR init must stagger _miCharge with the seeded spawn RNG');
 });
 
 test('MIRROR is excluded from the elite affix roll', () => {

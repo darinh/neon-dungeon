@@ -1152,7 +1152,7 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
         spawnDmgText(_EG.player.x, _EG.player.y, '+' + heal, '#ff0066');
       }
     } else if (eff === 'chain') {
-      if (Math.random() < 0.20) {
+      if (rand('combat') < 0.20) {
         // Find nearest alive enemy within 3 tiles
         let best = null, bestD = 3;
         for (const e of enemies) {
@@ -1460,7 +1460,7 @@ function tickEnemyStatusEffects(enemy, dt) {
       // hidden-class transition cost. Caught by gpt-5.3-codex review
       // 2026-04-27.
       if (dmg > 0 && _EG.modifier === 'REGENERATIVE') enemy._regenTimer = 0;
-      if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
+      if (rand('cosmetic') < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
       if (enemy.hp <= 0 && !enemy.dead) {
         enemy.hp = 0;
         if (!enemy._lastHitCtx) enemy._lastHitCtx = { name:'Burn', isProc:true };
@@ -1502,7 +1502,7 @@ function tickEnemyStatusEffects(enemy, dt) {
       // absorb) and on the modifier so non-REGENERATIVE floors don't
       // pay the hidden-class transition cost.
       if (dmg > 0 && _EG.modifier === 'REGENERATIVE') enemy._regenTimer = 0;
-      if (Math.random() < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#88dd44', 1);
+      if (rand('cosmetic') < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#88dd44', 1);
       if (enemy.hp <= 0 && !enemy.dead) {
         enemy.hp = 0;
         // _lastHitCtx attribution: mirror burn — if no prior ctx, set
@@ -1554,7 +1554,7 @@ function tickEliteAffix(enemy, dt) {
     enemy.shieldRegenDelay += dt;
     if (enemy.shieldRegenDelay >= 2) {
       enemy.shieldHp = Math.min(enemy.shieldMax, enemy.shieldHp + 8 * dt);
-      if (Math.random() < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#4488ff', 1);
+      if (rand('cosmetic') < dt * 3) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#4488ff', 1);
     }
   }
   // BERSERKER: speed/attack multiplier scales with missing HP (up to +50%)
@@ -1562,7 +1562,7 @@ function tickEliteAffix(enemy, dt) {
   // REGENERATING: heal 2.5% maxHp per second
   if (aff === 'REGENERATING' && enemy.hp < enemy.maxHp) {
     enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.maxHp * 0.025 * dt);
-    if (Math.random() < dt * 2) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#22ff44', 1);
+    if (rand('cosmetic') < dt * 2) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#22ff44', 1);
   }
   // PHASING: cycle 0→4s, immune during 3→4
   if (aff === 'PHASING') {
@@ -1573,7 +1573,7 @@ function tickEliteAffix(enemy, dt) {
     if (enemy.phaseImmune && !wasImmune) audio.phaseShift();
   }
   // VOLATILE: pulsing orange particles (visual warning)
-  if (aff === 'VOLATILE' && Math.random() < dt * 1.5) {
+  if (aff === 'VOLATILE' && rand('cosmetic') < dt * 1.5) {
     spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff6600', 1);
   }
   // FRENZY: speed/attack boost from stacks (applied dynamically via frenzyMul())
@@ -1587,7 +1587,7 @@ function tickEliteAffix(enemy, dt) {
   // elite at a glance (mirrors VOLATILE's per-frame visual warning).
   if (aff === 'PREDATOR' && enemy.predatorBuffTimer > 0) {
     enemy.predatorBuffTimer = Math.max(0, enemy.predatorBuffTimer - dt);
-    if (Math.random() < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff0099', 1);
+    if (rand('cosmetic') < dt * 4) spawnParticles(enemy.x, enemy.y, 'MUZZLE', '#ff0099', 1);
   }
 }
 
@@ -1883,7 +1883,7 @@ class Enemy {
     this.patrolTarget=null;
     this.attackTimer=0;
     this.shootTimer=0;
-    this.bobAngle=Math.random()*TWO_PI;
+    this.bobAngle=rand('cosmetic')*TWO_PI;
     this.visible=true;
     this.teleportTimer=0;
     this.zigzag=0;
@@ -2210,7 +2210,7 @@ class Enemy {
     // already returned 0 above before reaching this point.
     if (this.type === 'VAULTMASTER' && actual > 0 && !this.dead && (this._vmHitICD || 0) <= 0) {
       this._vmHitICD = VAULTMASTER_HIT_ICD;
-      const ang = Math.random() * TWO_PI;
+      const ang = rand('loot') * TWO_PI;
       const ex = this.x + Math.cos(ang) * VAULTMASTER_EJECT_DIST;
       const ey = this.y + Math.sin(ang) * VAULTMASTER_EJECT_DIST;
       items.push(new VaultCoin(ex, ey, VAULTMASTER_COIN_AMT));
@@ -2260,7 +2260,7 @@ class Enemy {
     // MIMIC: guaranteed single drop (suppress normal roll)
     if (this.type === 'MIMIC') {
       items.push(new Item(this.x, this.y));
-    } else if (!this.isShard && !isSummon && Math.random()<dropRate) {
+    } else if (!this.isShard && !isSummon && rand('loot') < dropRate) {
       items.push(new Item(this.x,this.y));
     }
     // HARVESTER guaranteed temp-buff drop. Standing rule: mob drops are temp
@@ -2359,7 +2359,7 @@ class Enemy {
       if (this.isBoss) {
         coreVal = (this.type === 'GENESIS') ? 10 : 5;
       } else if (this.elite) {
-        coreVal = 1 + Math.floor(Math.random() * 2); // 1–2 uniform
+        coreVal = rndInt(1, 2, 'loot'); // 1–2 uniform
       }
       if (coreVal > 0) NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal);
     }
@@ -2376,7 +2376,7 @@ class Enemy {
     // is browser-only and can't crash node:test.
     const _sctx = this._lastHitCtx;
     if (_sctx && !_sctx.isProc && _sctx.effects && _sctx.effects.includes('salvage')
-        && !this.isShard && !isSummon && Math.random() < 0.10
+        && !this.isShard && !isSummon && rand('loot') < 0.10
         && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
       NEON.cores.spawnCoreDrop(game, this.x, this.y, 1);
       spawnParticles(this.x, this.y, 'MUZZLE', '#44ffcc', 4);
@@ -2396,7 +2396,7 @@ class Enemy {
     // are higher-value than a 1-CORE drop, so the curve self-balances.
     const _lctx = this._lastHitCtx;
     if (_lctx && !_lctx.isProc && _lctx.effects && _lctx.effects.includes('lucky')
-        && !this.isShard && !isSummon && Math.random() < 0.08) {
+        && !this.isShard && !isSummon && rand('loot') < 0.08) {
       items.push(new Item(this.x, this.y));
       spawnParticles(this.x, this.y, 'MUZZLE', '#ffdd66', 4);
     }
@@ -2444,7 +2444,7 @@ class Enemy {
       spawnDmgText(_EG.player.x, _EG.player.y, '+'+heal, '#ff3366');
     }
     // SCAVENGER_NANITES augment: 10% kill chance to heal 5 HP
-    if (hasAugment('SCAVENGER_NANITES') && !this.isShard && Math.random() < 0.10) {
+    if (hasAugment('SCAVENGER_NANITES') && !this.isShard && rand('loot') < 0.10) {
       _EG.player.hp = Math.min(_EG.player.maxHp, _EG.player.hp + 5);
       spawnDmgText(_EG.player.x, _EG.player.y, '+5', '#88ff44');
     }
@@ -2961,7 +2961,7 @@ class Enemy {
       }
       // SIPHON: drain beam visual continues fading during stun
       if (this._spDrainBeam) { this._spDrainBeam.t -= dt; if (this._spDrainBeam.t <= 0) this._spDrainBeam = null; }
-      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
+      if (rand('cosmetic') < dt * 6) spawnParticles(this.x, this.y, 'SPARK', '#00ddff', 1);
       // LEAPER airborne/recovery must complete even while stunned (can't freeze mid-air)
       if (this._lpState === 'airborne' || this._lpState === 'recovery') {
         this.aiLeaper(dt, player, map, 0, false);
@@ -3151,7 +3151,7 @@ class Enemy {
       // the player gets unambiguous feedback even on a small screen.
       if (dealt > 0 && this.type === 'SAPPER') {
         if (NEON.boosts && NEON.boosts.drainTimedBoost) {
-          const drained = NEON.boosts.drainTimedBoost(player, SAPPER_DRAIN_SECS);
+          const drained = NEON.boosts.drainTimedBoost(player, SAPPER_DRAIN_SECS, () => rand('combat'));
           if (drained) {
             spawnDmgText(player.x, player.y, '-' + SAPPER_DRAIN_SECS + 's', '#ddff44');
           }
@@ -3865,7 +3865,7 @@ class Enemy {
       // Close-range escape: reposition if player walks into us
       if (d < 2.5 && this._canTarget()) {
         this._phReposition(map, player);
-        this._phTimer = 1.5 + Math.random();
+        this._phTimer = 1.5 + rand('combat');
         return;
       }
       // Ready to attack: need LOS, target, and be in sweet range
@@ -3878,7 +3878,7 @@ class Enemy {
         return;
       }
       // Timer expired but can't attack — reset
-      if (this._phTimer <= 0) this._phTimer = 1.0 + Math.random() * 1.5;
+      if (this._phTimer <= 0) this._phTimer = 1.0 + rand('combat') * 1.5;
       return;
     }
 
@@ -3886,7 +3886,7 @@ class Enemy {
     if (this._phState === 'telegraph') {
       if (!los || !this._canTarget()) {
         this._phState = 'cloaked';
-        this._phTimer = 1.5 + Math.random();
+        this._phTimer = 1.5 + rand('combat');
         this.visible = false;
         return;
       }
@@ -3935,7 +3935,7 @@ class Enemy {
       }
       if (this._phTimer <= 0) {
         this._phState = 'cloaked';
-        this._phTimer = 2 + Math.random() * 2;
+        this._phTimer = 2 + rand('combat') * 2;
         this.visible = false;
         audio.phantomCloak();
         if (!los || d > 8) this._phReposition(map, player);
@@ -4090,8 +4090,8 @@ class Enemy {
       // Deploy disruption field (priority over shooting)
       if (this._dDeployTimer <= 0 && this._canTarget() && d > 2) {
         // Place field near player with small offset, validated to passable tile
-        const ox = (Math.random() - 0.5) * 1.5;
-        const oy = (Math.random() - 0.5) * 1.5;
+        const ox = (rand('combat') - 0.5) * 1.5;
+        const oy = (rand('combat') - 0.5) * 1.5;
         const fx = this._tx + ox, fy = this._ty + oy;
         const tx = Math.floor(fx), ty = Math.floor(fy);
         if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
@@ -4146,7 +4146,7 @@ class Enemy {
       this.x = Math.max(0.1, Math.min(MAP_W - 0.1, nx));
       this.y = Math.max(0.1, Math.min(MAP_H - 0.1, ny));
       // Ghost trail particle
-      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#66ffcc', 1);
+      if (rand('cosmetic') < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#66ffcc', 1);
       // Ready to emerge: close enough or timer expired
       if (this._wrTimer <= 0 || (d < 3 && this._canTarget())) {
         // Find nearest passable tile to emerge on — stay phased if none found
@@ -4168,7 +4168,7 @@ class Enemy {
       this._wrTimer -= dt;
       if (this._wrTimer <= 0) {
         this._wrState = 'corporeal';
-        this._wrTimer = 2.0 + Math.random();
+        this._wrTimer = 2.0 + rand('combat');
         this._wrPhased = false;
         this._wrFireTimer = 0.3; // brief delay before first shot
       }
@@ -4216,7 +4216,7 @@ class Enemy {
       this._wrTimer -= dt;
       if (this._wrTimer <= 0) {
         this._wrState = 'phased';
-        this._wrTimer = 2.0 + Math.random();
+        this._wrTimer = 2.0 + rand('combat');
         this._wrPhased = true;
       }
       return;
@@ -4232,8 +4232,8 @@ class Enemy {
     const tx = this._tx ?? player.x, ty = this._ty ?? player.y;
     let bestX = null, bestY = null, bestD = Infinity;
     for (let a = 0; a < 20; a++) {
-      const angle = Math.random() * TWO_PI;
-      const r = 1.5 + Math.random() * 2;
+      const angle = rand('combat') * TWO_PI;
+      const r = 1.5 + rand('combat') * 2;
       const nx = tx + Math.cos(angle) * r;
       const ny = ty + Math.sin(angle) * r;
       const txx = Math.floor(nx), tyy = Math.floor(ny);
@@ -4295,7 +4295,7 @@ class Enemy {
       this.x = Math.max(0.1, Math.min(MAP_W - 0.1, nx));
       this.y = Math.max(0.1, Math.min(MAP_H - 0.1, ny));
       // Dust trail particle puff at current tile (visible warning)
-      if (Math.random() < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
+      if (rand('cosmetic') < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
 
       // Surface when close to player or timer expires — only on a passable tile.
       const closeToTarget = d < 1.5 && this._canTarget();
@@ -4322,7 +4322,7 @@ class Enemy {
       this.x = this._tnTargetX;
       this.y = this._tnTargetY;
       // Steady dust spurts during telegraph
-      if (Math.random() < dt * 14) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
+      if (rand('cosmetic') < dt * 14) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
       if (this._tnTimer <= 0) {
         // Emerge: AoE damage at 1.4 tile radius (telegraphed for ~1s, fair).
         const aoeR = 1.4;
@@ -4355,7 +4355,7 @@ class Enemy {
       // Re-burrow when window expires
       if (this._tnTimer <= 0) {
         this._tnState = 'tunneling';
-        this._tnTimer = 1.5 + Math.random() * 1.0;
+        this._tnTimer = 1.5 + rand('combat') * 1.0;
         this._wrPhased = true;
         audio.wraithPhaseOut();
       }
@@ -5234,7 +5234,7 @@ class Enemy {
       // is low (1 per ~3 frames) so the visual is readable but not a
       // particle storm. The pre-commit telegraph is the canonical
       // counterplay surface — players need to SEE which tile to occupy.
-      if (this._aTarget && Math.random() < 0.33) {
+      if (this._aTarget && rand('cosmetic') < 0.33) {
         spawnParticles(this._aTarget.tx + 0.5, this._aTarget.ty + 0.5,
                        'SPARK', '#aa6633', 1);
       }
@@ -6198,7 +6198,7 @@ class Enemy {
       }
 
       // Charge trail particles
-      if (Math.random() < dt * 20) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
+      if (rand('cosmetic') < dt * 20) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
       return;
     }
 
@@ -6210,7 +6210,7 @@ class Enemy {
         return;
       }
       this._chgWindup -= dt;
-      if (Math.random() < dt * 10) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
+      if (rand('cosmetic') < dt * 10) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
       if (this._chgWindup <= 0) {
         this._chgState = 'charging';
         this._chgDur = 0.4;
@@ -6318,7 +6318,7 @@ class Enemy {
         return;
       }
       this._lpWindup -= dt;
-      if (Math.random() < dt * 12) spawnParticles(this.x, this.y, 'SPARK', '#22ff88', 1);
+      if (rand('cosmetic') < dt * 12) spawnParticles(this.x, this.y, 'SPARK', '#22ff88', 1);
       if (this._lpWindup <= 0) {
         // Validate landing tile: must be passable and have LOS from current pos
         const tx = Math.floor(this._lpTargetX), ty = Math.floor(this._lpTargetY);
@@ -6386,7 +6386,7 @@ class Enemy {
       // Rush directly toward player at full speed
       this.moveToward(this._tx, this._ty, this.spd, dt, map);
       // Trail particles — intensity ramps with proximity
-      if (Math.random() < dt * (6 + this._skProximity * 12))
+      if (rand('cosmetic') < dt * (6 + this._skProximity * 12))
         spawnParticles(this.x, this.y, 'SPARK', '#ffdd00', 1);
     } else {
       this.patrol(dt, map);
@@ -6760,8 +6760,8 @@ class Enemy {
       this.state = 'ATTACK';
       // Deploy gravity well near player (priority — gravitational, ignores cloak)
       if (this._gvDeployTimer <= 0 && d > 3) {
-        const ox = (Math.random() - 0.5) * 2;
-        const oy = (Math.random() - 0.5) * 2;
+        const ox = (rand('combat') - 0.5) * 2;
+        const oy = (rand('combat') - 0.5) * 2;
         const wx = this._tx + ox, wy = this._ty + oy;
         const tx = Math.floor(wx), ty = Math.floor(wy);
         if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
@@ -7227,7 +7227,7 @@ class Enemy {
         if (!e.dead && !e.isBoss) activeAdds++;
       }
       if (activeAdds < 8) {
-        const addType = Math.random() < 0.6 ? 'CRAWLER' : 'DRONE';
+        const addType = rand('combat') < 0.6 ? 'CRAWLER' : 'DRONE';
         const count = Math.min(this.phase >= 4 ? 3 : 2, 8 - activeAdds);
         for (let i = 0; i < count; i++) {
           const add = spawnEnemy(addType, this.x + rnd(-3, 3), this.y + rnd(-3, 3), _EG.floor, this.room, false);
@@ -7426,7 +7426,7 @@ class Enemy {
       const skipSlot = rndInt(0, ringCount - 1);
       for (let i = 0; i < ringCount; i++) {
         if (i === skipSlot) continue;
-        const a = (i / ringCount) * TWO_PI + (Math.random() * 0.15);
+        const a = (i / ringCount) * TWO_PI + (rand('combat') * 0.15);
         const rx = cx + Math.cos(a) * ringRadius;
         const ry = cy + Math.sin(a) * ringRadius;
         const clx = Math.max(this.room.x + 1, Math.min(this.room.x + this.room.w - 1, rx));
@@ -7542,8 +7542,8 @@ class Enemy {
       } else {
         // Surfacing telegraph: shaking mound + expanding warning ring.
         const prog = 1 - this._tnTimer / 1.0; // 0 → 1
-        const shakeX = (Math.random() - 0.5) * 2 * prog;
-        const shakeY = (Math.random() - 0.5) * 2 * prog;
+        const shakeX = (rand('cosmetic') - 0.5) * 2 * prog;
+        const shakeY = (rand('cosmetic') - 0.5) * 2 * prog;
         ctx.globalAlpha = 0.65 + prog * 0.3;
         ctx.shadowBlur = 12 + prog * 10;
         ctx.fillStyle = dustCol;
@@ -9436,7 +9436,7 @@ function pickEnemyType(floorNum) {
     weights.push({ type: t, w });
     total += w;
   }
-  let r = Math.random() * total;
+  let r = rand('spawn') * total;
   for (const { type, w } of weights) { r -= w; if (r <= 0) return type; }
   return 'GUARD';
 }
@@ -9572,7 +9572,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='PHANTOM') {
     e.visible=false;
     e._phState='cloaked';
-    e._phTimer=2+Math.random()*2;
+    e._phTimer=2+rand('spawn')*2;
     e._phBurstLeft=0;
     e._phBurstDelay=0;
     e._phAimDx=0; e._phAimDy=0;
@@ -9591,11 +9591,11 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='SUMMONER') { e._summonTimer=2.0; e._summons=[]; }
   if (type==='HEALER')   { e._healTimer=1.5; e._healBeam=null; }
   if (type==='CHARGER')  { e._chgState='idle'; e._chgDx=0; e._chgDy=0; e._chgWindup=0; e._chgDur=0; e._chgCooldown=1.5; }
-  if (type==='SCORCHER') { e._scTrailTimer=0.2; e._scStrafeSeed=rnd(0, TWO_PI); }
-  if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+Math.random(); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
-  if (type==='REFLECTOR'){ e._rfAngle=Math.random()*TWO_PI; }
+  if (type==='SCORCHER') { e._scTrailTimer=0.2; e._scStrafeSeed=rnd(0, TWO_PI, 'spawn'); }
+  if (type==='LEAPER')   { e._lpState='idle'; e._lpCooldown=1.0+rand('spawn'); e._lpWindup=0; e._lpAirTime=0; e._lpRecovery=0; e._lpTargetX=0; e._lpTargetY=0; e._lpFromX=0; e._lpFromY=0; e._lpHeight=0; }
+  if (type==='REFLECTOR'){ e._rfAngle=rand('spawn')*TWO_PI; }
   if (type==='DISRUPTOR'){ e._dDeployTimer=2.0; e._dFireTimer=1.0; e._dFields=[]; }
-  if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+Math.random(); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
+  if (type==='WRAITH')   { e._wrState='phased'; e._wrTimer=1.5+rand('spawn'); e._wrPhased=true; e._wrFireTimer=0; e._wrHitICD=0; }
   if (type==='NEXUS')    { e._nxLinks=[]; e._nxLinkTimer=0; e._nxFireTimer=1.0; }
   if (type==='SIPHON')   { e._spFireTimer=1.0; e._spFrenzy=false; e._spDrainBeam=null; }
   if (type==='GRAVITON') { e._gvDeployTimer=2.0; e._gvFireTimer=1.5; e._gvWells=[]; }
@@ -9603,10 +9603,10 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='PULSER')   { e._plState='idle'; e._plTimer=0; e._plCooldown=0; e._plAimDx=0; e._plAimDy=0; }
   if (type==='MIMIC')    {
     e._disguised=true; e._revealTimer=0; e._mimicBurstTimer=0;
-    e._mimicBob=Math.random()*TWO_PI;
+    e._mimicBob=rand('cosmetic')*TWO_PI;
     // Random item colour for disguise
     const itemColours=['#ff3366','#3399ff','#33ff99','#ffcc33','#cc66ff','#ff8844'];
-    e._mimicColour=itemColours[Math.floor(Math.random()*itemColours.length)];
+    e._mimicColour=itemColours[rndInt(0, itemColours.length - 1, 'spawn')];
   }
   if (type==='WARDEN') { e._chargeState='idle'; e._chargeDx=0; e._chargeDy=0; e._chargeWindup=0; e._chargeDur=0; }
   if (type==='TUNNELLER') {
@@ -9614,7 +9614,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // first surface. Reuses _wrPhased (the canonical "intangible" flag) so
     // every existing hit/projectile/heal check keeps working unchanged.
     e._tnState='tunneling';
-    e._tnTimer=1.5+Math.random()*0.8;   // initial burrow duration
+    e._tnTimer=1.5+rand('spawn')*0.8;   // initial burrow duration
     e._tnTargetX=x; e._tnTargetY=y;
     e._wrPhased=true;
   }
@@ -9623,7 +9623,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // unison. Cooldown range tuned so first lock is ~0.5–1.5s after spawn.
     e._ecState='idle';
     e._ecAimTimer=0;
-    e._ecCooldown=0.5+Math.random()*1.0;
+    e._ecCooldown=0.5+rand('spawn')*1.0;
     e._ecLockX=x; e._ecLockY=y;
   }
   if (type==='PROPHET') {
@@ -9633,7 +9633,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // player a beat longer to walk into the room before the first shot).
     e._prState='idle';
     e._prAimTimer=0;
-    e._prCooldown=0.6+Math.random()*1.0;
+    e._prCooldown=0.6+rand('spawn')*1.0;
     e._prLockX=x; e._prLockY=y;
   }
   if (type==='RESONATOR') {
@@ -9641,7 +9641,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // spawn doesn't telegraph in unison. First charge completes ~1.5–3s
     // after spawn (player gets a beat to read the room).
     e._rsState='idle';
-    e._rsCharge=1.5+Math.random()*1.5;
+    e._rsCharge=1.5+rand('spawn')*1.5;
     e._rsTele=0;
     e._rsRec=0;
     e._rsAimDx=0; e._rsAimDy=0;
@@ -9651,7 +9651,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // spawn doesn't telegraph in unison. First charge completes ~1.5–3s
     // after spawn (matches RESONATOR rhythm).
     e._miState='idle';
-    e._miCharge=1.5+Math.random()*1.5;
+    e._miCharge=1.5+rand('spawn')*1.5;
     e._miTele=0;
     e._miRec=0;
     e._miAimDx=0; e._miAimDy=0;
@@ -9691,7 +9691,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // read the room.
     e._cyState='idle';
     e._cyAimTimer=0;
-    e._cyCooldown=0.8+Math.random()*1.2;
+    e._cyCooldown=0.8+rand('spawn')*1.2;
     e._cyLockX=x; e._cyLockY=y;
   }
   if (type==='WARDLING') {
@@ -9717,14 +9717,14 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // owns). Stagger _cdSoloTimer so a clustered spawn doesn't telegraph
     // its first solo shot in unison.
     e._cdEid = ++_cdEidCounter;
-    e._cdSoloTimer = 0.5 + Math.random() * 1.5;
+    e._cdSoloTimer = 0.5 + rand('spawn') * 1.5;
     e._cdLinkICD = new Map();
   }
   if (type==='MAGNETON') {
     // Stationary projectile-bender. Only state needed is a cosmetic
     // pulse phase for the field-ring draw — drift it from a random seed
     // so a clustered spawn doesn't pulse in lock-step.
-    e._mgPulse = Math.random() * TWO_PI;
+    e._mgPulse = rand('cosmetic') * TWO_PI;
   }
   if (type==='SPECTRE') {
     // Phase/manifest cycler. Start in 'phase' (invulnerable, chasing,
@@ -9732,13 +9732,13 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // spawn doesn't manifest in unison — the player should be able to
     // pick off one spectre per manifest window even when grouped.
     e._spState = 'phase';
-    e._spTimer = SPECTRE_PHASE_DUR * (0.4 + 0.6 * Math.random());
+    e._spTimer = SPECTRE_PHASE_DUR * (0.4 + 0.6 * rand('spawn'));
     e.phaseImmune = true;
   }
   if (type==='SAPPER') {
     // Cosmetic pulse phase for the leech-tendril draw — drift it from
     // a random seed so a clustered spawn doesn't pulse in lock-step.
-    e._saPulse = Math.random() * TWO_PI;
+    e._saPulse = rand('cosmetic') * TWO_PI;
   }
   if (type==='MAGPIE') {
     // Loot-thief state: scan throttle (re-scan items[] every
@@ -9747,7 +9747,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // Stagger initial scan with a small random offset so a clustered
     // spawn doesn't all scan in lock-step — spreads the work across
     // frames and reads as "independent agents" rather than a swarm.
-    e._mgScanT = Math.random() * MAGPIE_SCAN_PERIOD;
+    e._mgScanT = rand('spawn') * MAGPIE_SCAN_PERIOD;
     e._mgTarget = null;
     e._mgStolenCr = 0;
   }
@@ -9755,7 +9755,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // Cosmetic pulse phase for the leash-coil draw + tether-pulse
     // halo — drift from a random seed so a clustered pack doesn't
     // pulse in lock-step.
-    e._teLashPhase = Math.random() * TWO_PI;
+    e._teLashPhase = rand('cosmetic') * TWO_PI;
   }
   if (type==='VAULTMASTER') {
     // Per-mob hit-throttle (decremented in update()): rate-limits coin
@@ -9764,7 +9764,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // draw — drift from a random seed so clustered spawns don't
     // pulse in lock-step.
     e._vmHitICD = 0;
-    e._vmPulse  = Math.random() * TWO_PI;
+    e._vmPulse  = rand('cosmetic') * TWO_PI;
   }
   if (type==='GULPER') {
     // Projectile-eating mid-tank. State machine + per-instance
@@ -9778,8 +9778,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // Initial aim: face origin. update() will smooth-lerp toward
     // player on first frame with LOS, so any starting value works
     // as long as it's a finite number.
-    e._glAimAngle = Math.random() * TWO_PI;
-    e._glPulse = Math.random() * TWO_PI;
+    e._glAimAngle = rand('spawn') * TWO_PI;
+    e._glPulse = rand('cosmetic') * TWO_PI;
   }
   if (type==='WATCHER') {
     // Stationary sweeping-cone lighthouse. Random initial sweep angle so
@@ -9788,7 +9788,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // phase. _wState starts in 'sweep' so the cone is immediately visible
     // (it's a passive telegraph by design — never hidden).
     e._wState = 'sweep';
-    e._wAng = Math.random() * Math.PI * 2;
+    e._wAng = rand('spawn') * Math.PI * 2;
     e._wLockAng = 0;
     e._wTele = 0;
     e._wRec = 0;
@@ -9805,7 +9805,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // the player entering range — fast enough to be a real threat,
     // slow enough that the player gets a free shot to learn what it does.
     e._aState = 'idle';
-    e._aIdle  = ARCHITECT_IDLE_BASE * (0.5 + Math.random() * 0.5);
+    e._aIdle  = ARCHITECT_IDLE_BASE * (0.5 + rand('spawn') * 0.5);
     e._aTele  = 0;
     e._aRec   = 0;
     // Currently targeted tile (during 'target' state). null otherwise.
@@ -9822,14 +9822,14 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // walks live NULLIFIERs each frame and sets player.hackwareJammed.
     // _nlPulse drifts so clustered spawns don't pulse in lock-step (visual
     // only, no gameplay coupling). Random offset on init.
-    e._nlPulse = Math.random() * TWO_PI;
+    e._nlPulse = rand('cosmetic') * TWO_PI;
   }
   if (type==='CONDUCTOR') { e._arcSpin=0; e._dischargeChannel=0; }
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
   // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && type !== 'NULLIFIER' && floorNum >= 3 && Math.random() < d.eliteRate) {
+  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && type !== 'NULLIFIER' && floorNum >= 3 && rand('spawn') < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;
@@ -9843,7 +9843,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
       e.shieldHp  = e.shieldMax;
     }
     if (e.eliteAffix === 'PHASING') {
-      e.phaseTimer = rnd(0, 3); // stagger start so not all phase together
+      e.phaseTimer = rnd(0, 3, 'spawn'); // stagger start so not all phase together
     }
   }
   registerEnemyInRoom(e);
@@ -9856,7 +9856,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
  * @param {any} [y]
  */
 function createVCore(x, y) {
-  return { x, y, primed: false, timer: 0, dead: false, bob: Math.random() * TWO_PI, glow: 0 };
+  return { x, y, primed: false, timer: 0, dead: false, bob: rand('cosmetic') * TWO_PI, glow: 0 };
 }
 
 /**
@@ -9870,7 +9870,7 @@ function primeVCoresInRadius(wx, wy, radius, map) {
     if (c.dead || c.primed) continue;
     if (dist(wx, wy, c.x, c.y) < radius && hasLOS(wx, wy, c.x, c.y, map)) {
       c.primed = true;
-      c.timer = 0.15 + Math.random() * 0.2; // stagger for chain cascade
+      c.timer = 0.15 + rand('combat') * 0.2; // stagger for chain cascade
       audio.corePrime();
     }
   }
@@ -10020,7 +10020,7 @@ function destroyCrate(c) {
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
   audio.crateBreak();
   // 25% chance to drop credits
-  if (Math.random() < 0.25) {
+  if (rand('loot') < 0.25) {
     const amt = _EG.floor * 4;
     _EG.player.credits = (_EG.player.credits || 0) + amt;
     spawnDmgText(c.tx + 0.5, c.ty + 0.2, '+' + amt + '◈', '#39ff14');
@@ -10170,7 +10170,7 @@ const BEACON_COUNTDOWN = 4; // seconds before reinforcements spawn
 function createBeacon(x, y, floor, room) {
   const maxHp = 10 + floor * 3;
   return { x, y, hp: maxHp, maxHp, active: false, timer: 0, dead: false,
-           room, floor, bob: Math.random() * TWO_PI, ringTimer: 0 };
+           room, floor, bob: rand('cosmetic') * TWO_PI, ringTimer: 0 };
 }
 
 /**
@@ -10355,7 +10355,7 @@ const MINE_FUSE_SHOT      = 0.3;  // shot-by-projectile fuse
 function createMine(x, y, floor, room) {
   const dmg = 12 + floor * 3;
   return { x, y, dmg, state: 'dormant', fuse: 0, revealed: false, dead: false,
-           room, floor, bob: Math.random() * TWO_PI, flash: 0 };
+           room, floor, bob: rand('cosmetic') * TWO_PI, flash: 0 };
 }
 
 /**
@@ -10505,7 +10505,7 @@ function triggerMinesInRadius(wx, wy, radius, map) {
     if (m.dead || m.state !== 'dormant') continue;
     if (dist(wx, wy, m.x, m.y) < radius && hasLOS(wx, wy, m.x, m.y, map)) {
       m.state = 'armed';
-      m.fuse = 0.1 + Math.random() * 0.15; // stagger for cascade
+      m.fuse = 0.1 + rand('combat') * 0.15; // stagger for cascade
       // No arm SFX for chain — the explosion is the feedback
     }
   }
@@ -10613,7 +10613,7 @@ const SHIELD_GEN_DR = 0.35; // 35% damage reduction to room enemies
  */
 function createShieldGen(x, y, floor, room) {
   const maxHp = 15 + floor * 4;
-  return { x, y, hp: maxHp, maxHp, dead: false, room, floor, bob: Math.random() * TWO_PI };
+  return { x, y, hp: maxHp, maxHp, dead: false, room, floor, bob: rand('cosmetic') * TWO_PI };
 }
 
 /**
@@ -10795,7 +10795,7 @@ function createCamera(x, y, floor, room, wallSide) {
     state: 'scanning',                // scanning | alerted | triggered
     alertTimer: 0,
     rearmCd: 0,                       // debounce after returning to scanning
-    bob: Math.random() * TWO_PI,
+    bob: rand('cosmetic') * TWO_PI,
   };
 }
 
@@ -11088,7 +11088,7 @@ function createLaser(x1, y1, x2, y2, floor, room, axis, cycling) {
     disableTimer: 0,
     rearmGrace: 0,
     _emitB: {},  // unique Map key for Static Field hitMap on emitter B
-    bob: Math.random() * TWO_PI,
+    bob: rand('cosmetic') * TWO_PI,
   };
 }
 
@@ -11393,7 +11393,7 @@ function drawLasers(camX, camY) {
 
     // Disabled sparking effect
     if (l.disabled) {
-      if (Math.random() < 0.1) {
+      if (rand('cosmetic') < 0.1) {
         spawnParticles(l.x1, l.y1, 'SPARK', '#00ddff', 1);
         spawnParticles(l.x2, l.y2, 'SPARK', '#00ddff', 1);
       }
@@ -11425,9 +11425,9 @@ function createWallTurret(x, y, floor, room, wallSide) {
     room, floor, wallSide,
     baseAngle: WALL_FACING[wallSide],
     scanAngle: WALL_FACING[wallSide], scanDir: 1,
-    shootTimer: 1.0 + Math.random(), // stagger first shots
+    shootTimer: 1.0 + rand('spawn'), // stagger first shots
     disabled: false, disableTimer: 0,
-    bob: Math.random() * TWO_PI,
+    bob: rand('cosmetic') * TWO_PI,
     hackFlash: 0, // brief glow on hack
   };
 }
@@ -12956,7 +12956,7 @@ class Player {
 
     if (w.melee) {
       // plasma sword arc
-      const meleeCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+      const meleeCrit = forceCrit || (critChance > 0 && rand('combat') < critChance);
       const meleeDmg = (w.dmg+this.effectiveAtk()) * (meleeCrit ? critMul : 1) * finalMetaMul;
       spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
       for (const e of enemies) {
@@ -12970,10 +12970,10 @@ class Player {
     } else {
       let lastProjSpd = 12;
       for (let i=0;i<w.count;i++) {
-        const spread=(Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
+        const spread=(rand('combat')-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
         const a=Math.atan2(dy,dx)+spread;
         const pdx=Math.cos(a), pdy=Math.sin(a);
-        const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+        const isCrit = forceCrit || (critChance > 0 && rand('combat') < critChance);
         const proj=new Projectile(
           this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*finalMetaMul,w.range,
           w.colour,!!w.piercing,true,w.name
@@ -12993,10 +12993,10 @@ class Player {
       }
       // MULTI_SHOT perk: fire a bonus 60%-damage projectile (ranged only)
       if (this.perks.MULTI_SHOT) {
-        const offAngle = (Math.random() < 0.5 ? -1 : 1) * 0.14; // ~8°
+        const offAngle = (rand('combat') < 0.5 ? -1 : 1) * 0.14; // ~8°
         const a = Math.atan2(dy, dx) + offAngle;
         const pdx = Math.cos(a), pdy = Math.sin(a);
-        const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+        const isCrit = forceCrit || (critChance > 0 && rand('combat') < critChance);
         const bonusDmg = Math.round((w.dmg + this.effectiveAtk()) * 0.6 * (isCrit ? critMul : 1) * finalMetaMul);
         const proj = new Projectile(this.x, this.y, pdx, pdy, 12, bonusDmg, w.range, w.colour, !!w.piercing, true, w.name);
         proj.isCrit = isCrit;
@@ -13035,7 +13035,7 @@ class Player {
     // the cue arrives slightly delayed (mirrors a literal echo).
     if (echoOnThisShot) {
       if (w.melee) {
-        const echoCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+        const echoCrit = forceCrit || (critChance > 0 && rand('combat') < critChance);
         const echoDmg = (w.dmg+this.effectiveAtk()) * (echoCrit ? critMul : 1) * finalMetaMul;
         spawnParticles(this.x+dx*1.5, this.y+dy*1.5,'EXPLOSION',w.colour,8);
         for (const e of enemies) {
@@ -13048,10 +13048,10 @@ class Player {
         }
       } else {
         for (let i = 0; i < w.count; i++) {
-          const spread = (Math.random()-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
+          const spread = (rand('combat')-0.5)*(w.spread + (_EG.modifier==='SCRAMBLED' ? 0.15 : 0));
           const a = Math.atan2(dy,dx) + spread;
           const pdx = Math.cos(a), pdy = Math.sin(a);
-          const isCrit = forceCrit || (critChance > 0 && Math.random() < critChance);
+          const isCrit = forceCrit || (critChance > 0 && rand('combat') < critChance);
           const proj = new Projectile(
             this.x,this.y,pdx,pdy,12,(w.dmg+this.effectiveAtk())*(isCrit?critMul:1)*finalMetaMul,w.range,
             w.colour,!!w.piercing,true,w.name
@@ -13178,7 +13178,7 @@ class Player {
     if (!this.disruptionFieldActive && !this.hackwareJammed) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
     if (this.cloakTimer > 0) {
       this.cloakTimer -= dt;
-      if (Math.random() < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#cc44ff', 1);
+      if (rand('cosmetic') < dt * 6) spawnParticles(this.x, this.y, 'MUZZLE', '#cc44ff', 1);
       if (this.cloakTimer <= 0) {
         this.cloakTimer = 0;
         audio.hackwareCloakEnd();
@@ -13195,14 +13195,14 @@ class Player {
         const bdmg = this.burnDps * tick;
         this.takeDamage(bdmg, 'Burn', { ignoreInvincible:true, ignoreImmunity:true, ignoreShield:true,
           ignoreDefense:true, skipHitInvincible:true, skipHitEffects:true, skipReactiveArmor:true });
-        if (Math.random() < tick * 5) spawnParticles(this.x, this.y, 'MUZZLE', '#ff6600', 1);
+        if (rand('cosmetic') < tick * 5) spawnParticles(this.x, this.y, 'MUZZLE', '#ff6600', 1);
       }
       if (this.burnTimer <= 0) { this.burnTimer = 0; this.burnDps = 0; }
     }
     // Player shock decay
     if (this.shockTimer > 0) {
       this.shockTimer -= dt;
-      if (Math.random() < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#ffee44', 1);
+      if (rand('cosmetic') < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#ffee44', 1);
       if (this.shockTimer <= 0) this.shockTimer = 0;
     }
     // Augment timers

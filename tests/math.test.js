@@ -10,7 +10,13 @@ const math = require(path.join(__dirname, '..', 'engine', 'math.js'));
 test('exports the documented surface', () => {
   assert.deepEqual(
     Object.keys(math).sort(),
-    ['clamp', 'dist', 'dist2', 'lerp', 'norm', 'rnd', 'rndInt'].sort()
+    [
+      'chance', 'clamp', 'clearSeed', 'createRng', 'dist', 'dist2',
+      'getSeed', 'getSeedHash', 'lerp', 'makeRandomSeed', 'norm',
+      'normalizeSeed', 'pick', 'rand', 'restoreStates', 'rnd', 'rndInt',
+      'setSeed', 'shuffleInPlace', 'snapshotStates', 'withDerivedRngStream',
+      'withRngStream'
+    ].sort()
   );
 });
 
@@ -85,4 +91,67 @@ test('rndInt: min == max returns min', () => {
   for (let i = 0; i < 100; i++) {
     assert.equal(math.rndInt(7, 7), 7);
   }
+});
+
+test('seeded RNG: same seed and stream produce the same sequence', () => {
+  const a = math.createRng('VAULT-42', 'world');
+  const b = math.createRng('VAULT-42', 'world');
+  const seqA = Array.from({ length: 8 }, () => a.next());
+  const seqB = Array.from({ length: 8 }, () => b.next());
+  assert.deepEqual(seqA, seqB);
+});
+
+test('seeded RNG: different streams diverge', () => {
+  const world = math.createRng('VAULT-42', 'world');
+  const loot = math.createRng('VAULT-42', 'loot');
+  assert.notDeepEqual(
+    Array.from({ length: 8 }, () => world.next()),
+    Array.from({ length: 8 }, () => loot.next())
+  );
+});
+
+test('active seeded RNG does not use Math.random for gameplay helpers', () => {
+  const original = Math.random;
+  Math.random = () => { throw new Error('Math.random should not be used by seeded helpers'); };
+  try {
+    math.setSeed('NO-FALLBACK');
+    assert.equal(typeof math.rand('world'), 'number');
+    assert.equal(typeof math.rnd(1, 2, 'loot'), 'number');
+    assert.ok(Number.isInteger(math.rndInt(1, 3, 'combat')));
+    assert.equal(typeof math.chance(0.5, 'event'), 'boolean');
+    assert.ok(['a', 'b', 'c'].includes(math.pick(['a', 'b', 'c'], 'loot')));
+    assert.deepEqual(math.shuffleInPlace([1, 2, 3], 'world').sort(), [1, 2, 3]);
+  } finally {
+    math.clearSeed();
+    Math.random = original;
+  }
+});
+
+test('derived streams do not perturb persistent stream snapshots', () => {
+  math.setSeed('DERIVED-STABILITY');
+  const before = math.snapshotStates();
+  const first = math.withDerivedRngStream('world:floor:3', () => [
+    math.rand('world'),
+    math.rndInt(1, 9, 'world'),
+    math.rand()
+  ]);
+  const after = math.snapshotStates();
+  const second = math.withDerivedRngStream('world:floor:3', () => [
+    math.rand('world'),
+    math.rndInt(1, 9, 'world'),
+    math.rand()
+  ]);
+  assert.deepEqual(first, second);
+  assert.deepEqual(after, before);
+  math.clearSeed();
+});
+
+test('snapshotStates excludes cosmetic-only RNG state', () => {
+  math.setSeed('COSMETIC-EPHEMERAL');
+  math.rand('cosmetic');
+  math.rand('world');
+  const states = math.snapshotStates();
+  assert.equal(Object.hasOwn(states, 'cosmetic'), false);
+  assert.equal(Object.hasOwn(states, 'world'), true);
+  math.clearSeed();
 });

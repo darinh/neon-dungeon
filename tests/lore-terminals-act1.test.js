@@ -138,6 +138,10 @@ test('early terminal band stays cryptic and avoids source-comment headers', () =
       assert.doesNotMatch(entries[i], /Elena|advocate|side-channel relay/i,
         `entry ${i} is floor-${floors[i]} eligible and should not reveal the employee/contact thread`);
     }
+    if (floors[i] <= 5) {
+      assert.doesNotMatch(entries[i], /AXIOM-7|\bmodel\b|clean[- ]state|clean memory|memory wipe|memory erasure|personhood|rights|Elena|advocate|contact|fired/i,
+        `entry ${i} is floor-${floors[i]} eligible and must not front-load identity, memory, contact, or rights-conflict reveals`);
+    }
   }
 });
 

@@ -90,7 +90,7 @@ test('LUCKY skips summons and shards (defense in depth)', () => {
     'LUCKY block must skip isSummon');
 });
 
-test('LUCKY rolls Math.random() < 0.08 (8% chance per qualifying kill)', () => {
+test('LUCKY rolls seeded loot RNG < 0.08 (8% chance per qualifying kill)', () => {
   // 8% is the design — slightly under SALVAGE's 10% because a full Item
   // (weapon/armour/perk pickup) is higher-value than a 1-CORE drop, so
   // the curve self-balances against an item-flooded floor. Pin the
@@ -98,8 +98,8 @@ test('LUCKY rolls Math.random() < 0.08 (8% chance per qualifying kill)', () => {
   const idx = ENTITIES_CODE.indexOf("effects.includes('lucky')");
   assert.ok(idx !== -1, 'lucky gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
-  assert.match(window, /Math\.random\(\)\s*<\s*0\.08/,
-    'LUCKY must roll Math.random() < 0.08 (8% chance)');
+  assert.match(window, /rand\('loot'\)\s*<\s*0\.08/,
+    'LUCKY must roll rand(\'loot\') < 0.08 (8% chance)');
 });
 
 test('LUCKY calls items.push(new Item(this.x, this.y)) and emits gold particle hint', () => {

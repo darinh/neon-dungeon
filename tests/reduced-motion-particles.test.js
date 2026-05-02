@@ -84,6 +84,7 @@ test('reduced-motion-particles: behavioral check — gate halves count when on, 
       TILE: 32,
       TWO_PI: Math.PI * 2,
       Math,
+      rand: () => 0.25,
       rnd: () => 1,                    // deterministic
       get acquired() { return acquired; },
     };
@@ -91,12 +92,12 @@ test('reduced-motion-particles: behavioral check — gate halves count when on, 
 
   const sandboxOff = makeSandbox(false);
   const fnOff = new Function( // eslint-disable-line no-new-func
-    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rnd',
+    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rand', 'rnd',
     body[0] + '\nreturn spawnParticles;'
   );
   const spawnParticlesOff = fnOff(
     sandboxOff._particleSystem, sandboxOff.settings, sandboxOff.TILE,
-    sandboxOff.TWO_PI, sandboxOff.Math, sandboxOff.rnd
+    sandboxOff.TWO_PI, sandboxOff.Math, sandboxOff.rand, sandboxOff.rnd
   );
   spawnParticlesOff(0, 0, 'EXPLOSION', '#fff', 30);
   assert.equal(sandboxOff.acquired, 30,
@@ -104,12 +105,12 @@ test('reduced-motion-particles: behavioral check — gate halves count when on, 
 
   const sandboxOn = makeSandbox(true);
   const fnOn = new Function( // eslint-disable-line no-new-func
-    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rnd',
+    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rand', 'rnd',
     body[0] + '\nreturn spawnParticles;'
   );
   const spawnParticlesOn = fnOn(
     sandboxOn._particleSystem, sandboxOn.settings, sandboxOn.TILE,
-    sandboxOn.TWO_PI, sandboxOn.Math, sandboxOn.rnd
+    sandboxOn.TWO_PI, sandboxOn.Math, sandboxOn.rand, sandboxOn.rnd
   );
   spawnParticlesOn(0, 0, 'EXPLOSION', '#fff', 30);
   assert.equal(sandboxOn.acquired, 15,
@@ -118,12 +119,12 @@ test('reduced-motion-particles: behavioral check — gate halves count when on, 
   // Edge case: a 1-particle burst stays at 1 (the floor).
   const sandboxFloor = makeSandbox(true);
   const fnFloor = new Function( // eslint-disable-line no-new-func
-    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rnd',
+    '_particleSystem', 'settings', 'TILE', 'TWO_PI', 'Math', 'rand', 'rnd',
     body[0] + '\nreturn spawnParticles;'
   );
   const spawnFloor = fnFloor(
     sandboxFloor._particleSystem, sandboxFloor.settings, sandboxFloor.TILE,
-    sandboxFloor.TWO_PI, sandboxFloor.Math, sandboxFloor.rnd
+    sandboxFloor.TWO_PI, sandboxFloor.Math, sandboxFloor.rand, sandboxFloor.rnd
   );
   spawnFloor(0, 0, 'MUZZLE', '#fff', 1);
   assert.equal(sandboxFloor.acquired, 1,

@@ -460,7 +460,7 @@ function menuTitleNeedsGestureUnlock() {
 function resumeInteractiveAudio(consumeMenuActivation) {
   const consumeTitleUnlock = consumeMenuActivation && menuTitleNeedsGestureUnlock();
   audio.resume();
-  const menuMusicState = _G.state === 'MENU' || _G.state === 'ARCHIVES' ||
+  const menuMusicState = _G.state === 'MENU' || _G.state === 'SEED_SETUP' || _G.state === 'ARCHIVES' ||
     (_G.state === 'SETTINGS' && _G._settingsFrom === 'MENU');
   if (menuMusicState) {
     try { if (typeof music !== 'undefined') music.resume(); } catch (_) {}
@@ -588,7 +588,12 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (_G.state !== 'PLAYING' && _G.state !== 'FADE') {
       if (_G.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND') {
+      if (_G.state === 'SEED_SETUP') {
+        mouse.x = cx; mouse.y = cy;
+        justPressed.add('MouseLeft');
+        continue;
+      }
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -730,6 +735,11 @@ canvas.addEventListener('touchstart', e => {
     // button priority
     // Expanded map: any tap closes (modal — takes priority)
     if (_G.mapExpanded) { justPressed.add('Tab'); continue; }
+    if (typeof _G.hitSystemMessageIndicator === 'function' && _G.hitSystemMessageIndicator(cx, cy)) {
+      mouse.x = cx; mouse.y = cy;
+      justPressed.add('MouseLeft');
+      continue;
+    }
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
     if (hitBtn(cx,cy,BTNS.F) && _G.player && _G.player.hackware) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }

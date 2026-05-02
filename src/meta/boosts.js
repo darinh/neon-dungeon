@@ -146,11 +146,10 @@
   // would stay enabled with no remaining time, which tickBoosts only cleans
   // up the next frame — safer to expire eagerly).
   //
-  // Defensive on missing/empty maps. Random selection uses the standard
-  // Math.random() (no injection seam needed — drain order doesn't affect
-  // any of our deterministic test paths).
-  /** @param {any} player @param {number} secs @returns {string | null} */
-  function drainTimedBoost(player, secs) {
+  // Defensive on missing/empty maps. Runtime game callers pass the active
+  // combat stream so SAPPER drain order is seed-stable.
+  /** @param {any} player @param {number} secs @param {() => number} [randomFn] @returns {string | null} */
+  function drainTimedBoost(player, secs, randomFn) {
     if (!player || !(secs > 0)) return null;
     const timers = player._boostTimers;
     if (!timers) return null;
@@ -161,7 +160,8 @@
       if ((timers[id] || 0) > 0) ids.push(id);
     }
     if (ids.length === 0) return null;
-    const pick = ids[Math.floor(Math.random() * ids.length)];
+    const rng = randomFn || (typeof rand !== 'undefined' ? () => rand('combat') : Math.random);
+    const pick = ids[Math.floor(rng() * ids.length)];
     if (!pick) return null;
     const remaining = (timers[pick] || 0) - secs;
     if (remaining <= 0) {

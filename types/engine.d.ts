@@ -227,10 +227,37 @@ declare global {
    * header.
    */
   interface EngineMathAPI {
+    /** Uniform float in `[0, 1)`, optionally from a named seed stream. */
+    rand(stream?: string): number;
     /** Uniform float in `[min, max)`. */
-    rnd(min: number, max: number): number;
+    rnd(min: number, max: number, stream?: string): number;
     /** Uniform int in `[min, max]` inclusive. */
-    rndInt(min: number, max: number): number;
+    rndInt(min: number, max: number, stream?: string): number;
+    /** True with probability `p`. */
+    chance(p: number, stream?: string): boolean;
+    /** Random array element, or undefined for an empty array. */
+    pick<T>(arr: T[], stream?: string): T | undefined;
+    /** Fisher-Yates shuffle in-place. */
+    shuffleInPlace<T>(arr: T[], stream?: string): T[];
+    normalizeSeed(input: unknown): string;
+    makeRandomSeed(): string;
+    createRng(seed: unknown, stream?: string, state?: number): {
+      seed: string;
+      stream: string;
+      next(): number;
+      rnd(min: number, max: number): number;
+      int(min: number, max: number): number;
+      state(): number;
+      setState(nextState: number): void;
+    };
+    setSeed(seed: unknown, states?: Record<string, number> | null): { seed: string; hash: number };
+    clearSeed(): void;
+    getSeed(): string | null;
+    getSeedHash(): number;
+    snapshotStates(): Record<string, number>;
+    restoreStates(states: Record<string, number>): void;
+    withRngStream<T>(name: string, fn: () => T): T;
+    withDerivedRngStream<T>(name: string, fn: () => T): T;
     /** Clamp `v` to `[lo, hi]`. */
     clamp(v: number, lo: number, hi: number): number;
     /** Euclidean distance between `(ax, ay)` and `(bx, by)`. */

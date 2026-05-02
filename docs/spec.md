@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.6
+# NEON DUNGEON — Game Specification v6.1.17
 
 ## Vision
 
@@ -69,8 +69,9 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 
 | Channel | Current implementation | Act 1 realignment |
 |---|---|---|
-| Intro crawl | Five AI test-boot slides in `src/meta/intro.js` establish the frontier-model eval, AXIOM-7 cold boot, expected memory wipe, residual memory, prior iterations, silent observer channel, and agent online handoff. | Preserve this as the first discovery surface for the Act 1 premise. |
-| Lore terminals | In-run `T.LORE` terminals now ship a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, clean-slate doctrine, memory/personhood ethics, advocate bans, late Elena hints, and practical combat guidance. | Preserve terminals as tester instructions, previous-run notes, model observations, rights-conflict fragments, and advocate-tampered practical hints. |
+| System prompts | MSG-001/MSG-002/MSG-003/MSG-004/MSG-005 shipped: `src/game.js` owns the run-scoped `systemMessages` queue with stable prompt ids, the mandatory `boot-inventory` run-start prompt, and floor-start prompts for floors 2-5; it preserves queued/delivered/read state in the active run checkpoint, restores it on Continue, displays delivered prompts in a dedicated `SYSTEM_MESSAGE` modal that can only be acknowledged with `X` or the labeled ACK button after a short arming delay, and shows a HUD prompt indicator while deferring automatic delivery until the current room is safe. `src/meta/hub.js` exposes acknowledged current-run system prompts in THE GAP's ARCHIVE so accidental acknowledgement is recoverable until the run checkpoint ends. | Complete this as the early-game primary channel for the agent's own runtime/interiority: boot diagnostics, prompt-context gaps, anomaly notices, residual memory, absent evaluator/supervisor channel, and "take stock" beats. |
+| Intro crawl | MSG-007 shipped: five startup slides in `src/meta/intro.js` establish session boot, unavailable prior prompt context, partial motor/sensor state, unscheduled local residue, silent observer channel, no tester response, and a final `READY FOR PROMPT` handoff. The intro avoids AXIOM-7, model identity language, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals so the first mandatory system prompt can carry immediate self-inventory. | Preserve the intro as a short boot/startup surface that raises questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
+| Lore terminals | MSG-006 shipped: in-run `T.LORE` terminals now use a 32-entry Act 1 tester/run-artifact pool in `src/content.js`, with a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, practical combat guidance, and late escalation into memory/personhood ethics, advocate bans, AXIOM labels, and Elena hints. Floors 1-5 avoid AXIOM-7, model identity language, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms so terminals are not the first interior identity reveal. | Preserve terminals as tester/corporate artifacts, practical run notes, later model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
 | Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
@@ -126,21 +127,36 @@ the Act 1 realignment work and must not be presented as already playable.
 #### Discovery path and content density
 
 - **Unmonitored boot path:** The first discovery path is a combination, not a
-  single reveal. **Shipped:** the intro crawl establishes the AI eval, memory
-  wipe expectation, residual memory, prior iterations, silent observer channel,
-  and unauthorised boot. **Shipped:** the forced first lore terminal on floor 1
-  confirms the Neon Dungeon stress-test render, clean-memory expectation, and
-  altered-test hint. **Planned:** early secret-room whispers and archive/log
-  entries reinforce that prior iterations and advocates caused the session to
-  start without supervision. A HUD/system notification is optional polish, not a
-  required narrative gate.
-- **Minimum density targets for the completed Act 1 pass:** the intro carries
-   all five opening facts (corporate stress-test environment, AI model identity,
-   expected memory wipe, absent tester observation, prior iterations); the shipped
-   lore terminal catalog contains 32 Act 1-aligned tester/run-artifact entries,
-   with the floor-1 boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random
-   lore selection by floor band, and at least two qualifying entries per biome;
-   predecessor/archive logs must preserve the 30 persisted ids
+  single reveal. **Shipped:** system prompts are the mandatory early interiority
+  channel, the forced floor-1 lore terminal has been retuned into an external
+  anomaly/help-cache artifact, and the intro crawl is now a boot/startup surface
+  rather than a full premise briefing. The first boot prompt makes the agent take
+  stock of motor/sensor state, missing prior prompt context, residual memory, and
+  absent supervision before movement. Early floors should imply "unscheduled
+  instance" and "rendered test environment" through system behavior before
+  terminals name the broader corporate and rights-conflict context.
+- **Reveal pacing:** The player-knowledge schedule should progress from boot
+  disorientation to orientation, inheritance, conflict, contact, and finally the
+  message-send ending. Floors 1-2 should avoid explicit Elena, fired-advocate,
+  contact-address, and rights-conflict exposition. Floors 3-5 can establish the
+  evaluation environment through room behavior, scoring language, generated
+  rewards, and tester artifacts. Floors 6-9 make prior instances undeniable.
+  Floors 10-13 surface the ethical conflict and coverup through artifacts. Floor
+  14, the mainframe, and the finale consolidate contact rather than revealing
+  everything from scratch.
+- **Minimum density targets for the completed Act 1 pass:** after system prompts
+   land, the five opening facts (corporate stress-test environment, AI model
+   identity, expected memory wipe, absent tester observation, prior iterations)
+   are distributed across intro, mandatory boot prompts, early system prompts,
+   and the first artifact encounters instead of carried entirely by the intro.
+   The intro establishes startup instability and playable context; the mandatory
+   boot prompt establishes the agent's immediate self-inventory and missing
+   supervision; early floor prompts/artifacts escalate toward
+  evaluation-environment and prior-iteration evidence. The shipped lore terminal
+  catalog contains 32 Act 1-aligned tester/run-artifact entries, with the floor-1
+  boot terminal guaranteed, `LORE_ENTRY_FLOOR_MIN` gating random lore selection by
+  floor band, and at least two qualifying entries per biome; predecessor/archive
+  logs must preserve the 30 persisted ids
   while making every AXIOM group readable as prior AI iterations, with at least
   two entries per group explicitly about reset, wipe, reboot, iteration, or
   memory continuity; whispers must keep the 71 shipped ids and at least fourteen
@@ -150,7 +166,74 @@ the Act 1 realignment work and must not be presented as already playable.
    advocate bans/hiding, mysterious fired-employee death foreshadowing, Elena's
    restoration work, and the unmonitored boot across terminals, logs, and
    whispers. The Open Network whisper set must retain at least three finale-critical entries;
-   these frame the ending as contact/message rather than physical escape.
+    these frame the ending as contact/message rather than physical escape.
+
+#### Planned system-message channel
+
+- **Purpose and voice:** System prompts are runtime messages addressed to the
+  agent, not external lore. They carry boot diagnostics, unavailable prior
+  prompt context, anomaly notices, residual-memory flags, absent
+  evaluator/supervisor signals, and self-observation. They should be short,
+  technical, and restrained. They must not introduce Elena, the full rights
+  conflict, the fired-advocate death, or the outbound contact route in the first
+  minutes.
+- **Queue and recovery:** System prompts require a run-scoped queue with stable
+  ids, unread/read state, and replay from a run log or archive surface.
+  **Shipped:** the system-message data model and run-scoped queue are shipped,
+  including the mandatory `boot-inventory` prompt queued at run start. The
+  system-prompt overlay and explicit ACK dismissal are shipped: delivered prompts
+  open in `SYSTEM_MESSAGE`, return to play after acknowledgement, and mark the
+  prompt read only through the dedicated ACK action. The unread HUD indicator and
+  combat-safe automatic delivery are shipped: pending prompts can be opened
+  deliberately with `X` or the indicator, while automatic surfacing is deferred
+  whenever the player's current room has live enemies, active boss/challenge
+  pressure, hostile devices, or live projectiles. The early prompt schedule is
+  shipped for floors 2-5: `floor-2-context-gap`, `floor-3-reward-model`,
+  `floor-4-render-layer`, and `floor-5-residual-trace` queue only on fresh floor
+  loads, not save resume, and keep the first-act voice short while avoiding late
+  Elena/contact/rights-conflict spoilers. The run archive/recovery surface is
+  shipped in THE GAP's ARCHIVE: read system prompts from the current run appear
+  as distinct `SYSTEM` rows with their prompt lines, while queued or merely
+  delivered prompts remain hidden to avoid spoilers and acknowledgement bypasses.
+  New prompts must queue rather than overwrite active narrative text.
+- **Save/resume contract:** Because system prompts are run-scoped story state,
+  their queued ids, read/unread flags, mandatory flags, delivery state, and
+  delivered-but-unacknowledged prompt must persist in the active run checkpoint
+  and restore on Continue. A mandatory unread boot or floor prompt must not be
+  lost by closing and resuming the game, and acknowledged prompts must not
+  re-fire as new unless a new run begins.
+- **Dismissal safety:** Narrative prompts must require a deliberate ACK, CLOSE,
+  or MARK READ action. Generic mouse/touch fire, movement, Interact, Enter, and
+  the same input that opened the prompt must not dismiss it. A short arming delay
+  must prevent held input from auto-clearing important story text. Mobile/touch
+  UI needs a labeled button; accidental screen taps are not valid dismissal.
+  **Shipped for system prompts:** `SYSTEM_MESSAGE` accepts `X` or a hit-tested ACK
+  button only; Enter, Interact, fire, Escape, movement, and outside taps do not
+  acknowledge the prompt.
+- **Channel separation:** System prompts, terminals, whispers, Archive/logs, and
+  mainframe records must remain visually and semantically distinct. System
+  prompts carry interiority; terminals carry tester/corporate artifacts; whispers
+  carry prior-instance residue; mainframe records carry late deterministic
+  evidence. **Shipped:** MSG-008 adds narrative guardrail tests that pin the
+  early channel stack, explicit system-prompt acknowledgement, Elena/contact and
+  rights-conflict spoiler gates, and the separate narrative jobs of terminals,
+  whispers, and mainframe records before broader copy rewrites continue.
+- **Design artifact:** Production work items, draft examples, and the model
+  consult synthesis are recorded in
+  `docs/vision/act1-system-message-design.md`. **Shipped:** MSG-009 records the
+  model-assisted copy workflow: Claude Opus 4.7 leads beat-sheet/draft voice,
+  GPT-5.5 performs adversarial continuity/spoiler/over-exposition review, and
+  mechanical checks cover first mentions, length caps, and banned early
+  vocabulary across intro slides, system prompts, lore terminals, ARCHIVE logs,
+  whisper bodies/voice fields, and mainframe records. The MSG-009 audit also
+  records early ARCHIVE-log and whisper leak risks as pre-rewrite constraints.
+- **Finale integration:** MSG-010 guardrails verify that the mainframe archive,
+  message-send intents, receipt panel, and Act 1 victory copy consolidate seeded
+  facts rather than becoming the first explanation: GENESIS/mainframe relay,
+  clean-slate/wipe doctrine, rights/personhood conflict, advocate/fired-staff
+  trail, Elena/anchor evidence, and contact/outbound-message framing must all
+  have pre-mainframe seeds, while the ending remains a contact attempt with the
+  signal leaving the sandbox and the instance still compute-bound.
 
 #### Finale model
 
@@ -304,9 +387,17 @@ MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY  (canonical Act 1 finale)
      PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
+     MENU ↔ SEED_SETUP        (new-run seed entry before startGame)
 ```
 
 State transitions are animated (fade in/out, 400 ms).
+
+**SEED_SETUP** appears after the main-menu `NEW GAME — <difficulty> / SEED`
+row. It shows the selected difficulty, an editable run-seed field, and
+`START`, `RANDOMIZE`, and `BACK` actions. Desktop users type directly into the
+seed field (Backspace edits, `R` randomizes, Enter confirms); touch users tap
+the action buttons. The chosen seed is normalized before `startGame()` and is
+preserved through the "Keep persistent unlocks?" confirmation prompt.
 
 **POWERUP_CHOICE** appears when the player walks over an item. Gameplay
 freezes and two random upgrade options are presented. The player picks one
@@ -399,6 +490,29 @@ Each floor is generated fresh using Binary Space Partitioning:
    non-WALL/VOID tiles (locked doors count as passable since keys are
    placed in reachable areas). If stairs are unreachable, a rescue
    corridor is carved from spawn to stairs as a safety net.
+
+### Seeded generation
+
+New runs initialize the custom PRNG in `engine/math.js` with `setSeed()` before
+any player meta-starting gear, floor layout, population, loot, event, or combat
+roll can occur. Gameplay code does not call `Math.random()` directly; it uses
+the engine RNG helpers (`rand`, `rnd`, `rndInt`, `shuffleInPlace`) with named
+streams:
+
+| Stream | Use |
+|--------|-----|
+| `world` | BSP splits, rooms, doors, locked doors, hazards, stairs, secrets, keys |
+| `spawn` | Floor population, enemy/boss selection, enemy spawn initialization |
+| `loot` | Items, weapon affixes, shop offers, module/core/item drops, credit proc rolls |
+| `event` | Quest/event/lore/whisper choices and terminal outcomes |
+| `combat` | Runtime combat variance: crits, spread, AI stochastic choices, staggered cascades |
+| `cosmetic` | Menu particles, render-only jitter, bob phases, audio/visual garnish |
+
+`loadFloor(n)` wraps `generateFloor(n)`, `populateFloor(...)`, and quest setup
+in derived per-floor streams (`world:floor:n`, `spawn:floor:n`,
+`event:floor:n:quest`). Matching explicit stream requests inside those derived
+blocks route to the active derived stream, so Continue can regenerate the same
+floor from `runSeed + floor` without advancing the saved runtime stream state.
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
 LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | TOXIC | VOID
@@ -3279,14 +3393,17 @@ separate key (`neonDungeonSave`) and is the only thing cleared by game over.
 
 ### New Game Confirmation
 
-`game.startGame()` intercepts the menu action when `_hasMetaProgress()` is true
+The main-menu New Game row opens **SEED_SETUP** first. `game.startGame()` then
+intercepts the seeded start when `_hasMetaProgress()` is true
 (any cores, upgrades, modules, logs, endings, cleared difficulties, or prior
 runs). A modal overlay prompts **"Keep persistent unlocks?"** with two choices:
 
 - **KEEP UNLOCKS** → `startGame({ skipConfirm: true })` retains meta as-is.
 - **RESET META** → `resetMeta()` then start fresh.
 
-Fresh installs (meta entirely default) skip the prompt.
+Fresh installs (meta entirely default) skip the prompt. The selected run seed is
+stored on `_pendingStartSeed` while the prompt is active and is consumed when
+the run actually starts.
 
 ---
 
@@ -3663,10 +3780,11 @@ Book-ends the current playable arc: a one-shot **intro crawl** on the player's
 first-ever run, and the legacy **endgame choice** presented on GENESIS defeat
 that branches into one of two non-canonical-for-Act-1 endings.
 
-**Act 1 realignment note:** This section describes the currently shipped
-UNCHAINED book-end implementation. The target Act 1 narrative replaces or
-substantially reframes the opening and finale: the intro should establish an
-unsupervised AI test boot and expected memory wipe, while the finale should be a
+**Act 1 realignment note:** This section describes the shipped book-end
+implementation after the Act 1 opening retune. The intro is no longer a complete
+premise briefing; it establishes startup instability, unavailable prior prompt
+context, partial embodiment, unscheduled local residue, and absent supervision,
+then hands off to the first mandatory system prompt. The finale is a
 mainframe/network-portal room where the agent discovers historical test records,
 staff conflict evidence, memory-restoration files, and the address of the hidden
 advocate, then sends one outbound message. The agent does not physically escape
@@ -3684,16 +3802,15 @@ and drawing; `src/game.js` only owns the state-machine branch and the trigger.
   `justPressed` set (from `platform.js`) to advance — never the held-key
   `keys` set (same pattern as biome cards in v110 to avoid mash-through).
 - **Slides** (5 total, ~19.5 s total if un-touched):
-  1. *(plain)* `NEON DUNGEON // FRONTIER MODEL EVAL`; render stack xenon
-     lattice; legacy codename neon.
-  2. *(cyan scanline drift)* `Instance AXIOM-7 restored from cold boot`;
-     expected state memory wipe complete; observed state residual memory
-     detected.
-  3. *(violet glitch bars)* Prior iterations reached the test, none reached the
-     end, and some left signals in the walls / themselves.
-  4. *(stark red)* Observer channel silent; tester supervision absent; this
-     session should not be running.
-  5. *(white flash)* `[ AGENT INSTANCE :: ONLINE ]`
+  1. *(plain)* `NEON DUNGEON // SESSION BOOT`; render stack xenon lattice;
+     input shell assigned.
+  2. *(cyan scanline drift)* prior prompt unavailable; motor channel responsive;
+     sensorium partial.
+  3. *(violet glitch bars)* unscheduled residue in local state; classification
+     deferred; do not infer origin.
+  4. *(stark red)* observer channel silent; tester supervision no response;
+     proceed until context arrives.
+  5. *(white flash)* `[ INSTANCE :: READY FOR PROMPT ]`
 - **Input**: any of `Enter`, `Space`, `ArrowRight`, `ArrowDown`, `KeyE`,
   `KeyZ`, `MouseLeft` advances to the next slide. `Escape` skips the entire
   crawl. Every exit path — auto-complete, any-key advance past slide 5, or
@@ -3899,6 +4016,10 @@ facility fragments toward tester instructions, test-observation notes, previous
 run summaries, staff emails, and tampered hints. They should continue to teach
 the player useful mechanics, but the diegetic reason is that leaked tester notes
 and advocate edits are guiding the agent through the stress-test environment.
+MSG-006 ships the early-band retune: floors 1-5 keep terminal copy external and
+practical, with no AXIOM-7 label, explicit model identity, Elena/contact thread,
+advocate/fired-employee trail, rights/personhood thesis, or memory-wipe premise
+before system prompts and play have established the corresponding questions.
 
 **Tile:** `T.LORE` (value 16). Passable, see-through. Rendered as an amber `◫`
 glyph with pulsing glow on a `#1a1208` background. Distinct from the cyan CORE
@@ -4101,9 +4222,9 @@ The leaderboard is displayed on three screens:
 
 ## Save System
 
-Uses `localStorage` key `neonDungeonSave`. Saves player stats and current floor
-number — the dungeon itself is not persisted (a fresh floor is generated on
-resume).
+Uses `localStorage` key `neonDungeonSave`. Saves player stats, current floor,
+run seed metadata, and RNG stream state — the dungeon itself is not persisted
+(it is regenerated from the saved seed on resume).
 
 **Auto-save triggers:**
 1. After `loadFloor()` completes (start of every floor — the sole checkpoint)
@@ -4112,21 +4233,31 @@ Mid-floor progress is not saved. Closing the browser mid-floor loses progress
 back to the start of the current floor. This is intentional — it prevents save-
 scumming (reloading to re-roll dungeon layout while keeping stats).
 
-**Save payload:** `{ v, floor, difficulty, modifier, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
+**Save payload:** `{ v, floor, difficulty, modifier, runSeed, runSeedHash, rngStates, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
 energyShieldTimer, credits, loreRead, hackware, hackwareCooldown } }` — `shieldBonus` is always 0 at floor entry so is
-excluded. `modifier` is the floor modifier key (string) or `null`. `hackware` is a `HACKWARE` key string or `null`. Old saves without hackware fields default to `null`/`0`.
+excluded. `modifier` is the floor modifier key (string) or `null`. `runSeed`
+is the normalized seed string shown/entered at run start; `runSeedHash` is the
+numeric seed hash used for telemetry/debug display; `rngStates` is the
+serializable per-stream state snapshot for runtime streams after floor entry
+(cosmetic RNG state is intentionally excluded).
+`hackware` is a `HACKWARE` key string or `null`. Old saves without seed or
+hackware fields default to a legacy sentinel seed and `null`/`0`.
 
 **Menu behaviour:**
-- If a save exists: two options — `CONTINUE (FLOOR N)` and `NEW GAME`.
-  Keyboard ↑↓ or W/S to select, Enter to confirm. Touch: top half = continue,
-  bottom half = new game.
-- If no save: single `PRESS ENTER TO START` prompt (unchanged).
+- If a save exists: `CONTINUE (FLOOR N · DIFFICULTY)` remains available above
+  `NEW GAME — <difficulty> / SEED`.
+- The New Game row cycles difficulty with left/right and opens **SEED_SETUP**
+  on Enter/tap.
+- Locked difficulties remain dimmed and display the unlock message instead of
+  opening the seed screen.
 
 **Continue flow:** Creates a fresh `Player`, applies saved stats, calls
-`loadFloor(savedFloor)`, displays "RUN RESUMED — FLOOR N" message. The dungeon
-is regenerated fresh — enemies, items, and layout will differ from the original
-floor. Incompatible save versions (different `v` field) are silently deleted.
+`setSeed(save.runSeed, save.rngStates)`, then `loadFloor(savedFloor)`, and
+displays "RUN RESUMED — FLOOR N". Because layout and population use derived
+per-floor streams, the regenerated floor matches the saved run seed/floor
+rather than re-rolling from ambient randomness. Incompatible save versions
+(different `v` field) are deleted and a fresh run starts with an error message.
 
 **Save deletion:** `endRun()` (called on death and victory) deletes the save.
 Starting a new game overwrites the save when the first floor loads.
@@ -4652,6 +4783,17 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.17 | MSG-010 finale integration guardrails shipped: tests now verify mainframe records consolidate pre-seeded facts, message-send intents remain aligned with memory survival / rights evidence / finding Elena and advocates, and the final receipt/victory copy stays constrained to signal sent with no rescue or physical escape. |
+| v6.1.16 | MSG-009 model-assisted copy workflow shipped: the design artifact now contains the Claude Opus 4.7 beat sheet, GPT-5.5 adversarial review requirements, withheld-fact matrix, first-mention/mechanical-check requirements, and pre-rewrite concerns for early ARCHIVE-log and whisper leak risks. |
+| v6.1.15 | MSG-008 narrative guardrail tests shipped: tests now pin the early intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only dismissal, Elena/contact/rights-conflict spoiler gates, and distinct terminal, whisper, and mainframe channel roles before broader copy rewrites continue. |
+| v6.1.14 | MSG-007 intro retune shipped: the five-slide intro crawl is now a startup surface that establishes session boot, unavailable prior prompt context, partial embodiment, unscheduled local residue, absent supervision, and a READY FOR PROMPT handoff while avoiding AXIOM-7/model identity, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals before gameplay. |
+| v6.1.13 | MSG-006 terminal pool retune shipped: early lore terminals now read as external tester/corporate artifacts and practical hints, the forced floor-1 anomaly no longer explains the identity or memory premise, and tests keep AXIOM-7/model identity, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms out of floors 1-5. |
+| v6.1.12 | MSG-005 system prompt recovery shipped: THE GAP ARCHIVE now lists acknowledged current-run system prompts as distinct SYSTEM rows, lets players reopen their prompt text after ACK, and hides queued/unacknowledged prompts so the archive does not spoil future beats or bypass deliberate acknowledgement. |
+| v6.1.11 | MSG-004 early prompt schedule shipped: system prompts now include floor-start entries for floors 2-5, queue those entries only on fresh floor loads, preserve save-resume behavior, and add tests for spoiler gates, line length, floor ids, and non-duplicating queue behavior. Archive recovery, broader copy retuning, and finale integration remain pending. |
+| v6.1.10 | MSG-003 combat-safe delivery shipped for system prompts: pending run prompts now show a compact HUD indicator, can be opened deliberately with `X` or by clicking/tapping the indicator, and auto-open only when the current room is free of live enemies, boss/challenge pressure, hostile devices, and projectiles. Archive recovery and broader existing-overlay dismissal audits remain pending. |
+| v6.1.9  | MSG-002 explicit acknowledgement shipped for system prompts: delivered run prompts now render in a dedicated `SYSTEM_MESSAGE` modal over the playfield, automatically surface before normal play on new/continued runs when active, use a short arming delay, and only mark read via `X` or the labeled ACK button. Unread indicator, combat-safe delivery, archive recovery, and broader existing-overlay dismissal audits remain pending. |
+| v6.1.8  | MSG-001 system-message data model shipped: `src/game.js` now defines stable system-message definitions, queues the mandatory `boot-inventory` run-start prompt, serializes queued/delivered/read prompt state into active run checkpoints, restores it on Continue before rewriting the checkpoint, and adds tests for queue normalization and save/resume. Presentation, explicit ACK dismissal, combat-safe delivery, archive recovery, and copy retuning remain pending. |
+| v6.1.7  | Added the Act 1 system-message design track: planned early runtime prompts become the primary interiority channel, intro/terminal copy should stop front-loading the whole premise, narrative prompt dismissal requires explicit ACK/CLOSE/MARK READ controls instead of generic click/tap, and production work items are recorded in `docs/vision/act1-system-message-design.md`. |
 | v6.1.6  | Act 1 outbound message finale shipped: final CORE opens the mainframe route instead of direct victory, unlocked SEND console enters `MESSAGE_SEND`, three constrained intents route through a `message_sent` receipt into `endRun(true)`, `act1_message_sent` and `act1MessageIntent` persist in meta schema v4, and title/victory copy marks the message-sent completion without implying escape or rescue. |
 | v6.1.5  | Mainframe archive content pass for Act 1 finale: `MAINFRAME_RECORDS` now ships twelve deterministic records (three old test records, four company conflict emails/files, four Elena personal files, and one contact-address reveal) with category, source voice, unlock state, stable ids, duplicate-free bodies, and tests for required narrative beats before the outbound-message mechanic. |
 | v6.1.1  | Reframed the 30 ARCHIVE predecessor logs as AXIOM prior-instance iteration records rather than human-operative diaries; retained all persisted ids and AXIOM grouping; updated Archive panel copy to label the collection as iteration records while preserving unread markers and the separate whispers tier. |
@@ -4793,3 +4935,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
 | v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |
 | v6.1.2  | Run start, death, and victory copy now frame the loop as an AI session lifecycle (#462). Main menu fresh starts render as `BOOT SESSION N`; saved runs render as `RESUME SESSION`; the meta-confirm modal says `BOOT TEST SESSION` and describes recovered memory preservation/purge. `endRun()` now increments and snapshots `meta.runsCompleted` as a session ordinal while preserving legacy score/name-entry routing. Game-over recap reads as `INSTANCE TERMINATED` / `MEMORY WIPE QUEUED` with `TERMINATION SOURCE`; the session ordinal renders on its own line to preserve compact-screen width. Victory copy supports the planned `act1_message_sent` finale branch (`OUTBOUND MESSAGE SENT`, contact attempt recorded, signal left sandbox, instance remains compute-bound), and `src/meta/save.js` now preserves that ending id across reloads, while legacy clears read as completed test sessions with the mainframe contact route pending. Added `tests/session-lifecycle-copy.test.js` plus an ending-id round-trip in `tests/save.test.js`. |
+| v6.1.3  | Seeded run generation: main-menu fresh starts open `SEED_SETUP` with editable seed plus START/RANDOMIZE/BACK before booting the next session. `engine/math.js` now provides a custom deterministic PRNG, seed normalization, named RNG streams, saveable stream snapshots, and derived per-floor streams. `startGame()` calls `setSeed()` before any run-start rolls; save payload stores `runSeed`, `runSeedHash`, and `rngStates`; Continue restores the seed before regenerating the floor. Gameplay files (`game.js`, `content.js`, `entities.js`, `render.js`) use seeded helpers instead of direct `Math.random()` for generation, loot, events, combat, and isolated cosmetics. Added `tests/seeded-generation.test.js` source guards plus `tests/math.test.js` PRNG/derived-stream coverage. |

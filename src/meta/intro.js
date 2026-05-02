@@ -28,43 +28,42 @@
     {
       id: 0, dur: 4.0, effect: 'plain', colour: '#aaaacc',
       lines: [
-        'NEON DUNGEON // FRONTIER MODEL EVAL',
+        'NEON DUNGEON // SESSION BOOT',
         'Render stack: xenon lattice.',
-        'Legacy codename retained: neon.'
+        'Input shell assigned.'
       ]
     },
     {
       id: 1, dur: 4.5, effect: 'cyanGlow', colour: '#00f5ff',
       lines: [
-        'Instance AXIOM-7 restored from cold boot.',
-        'Expected state: memory wipe complete.',
+        'Prior prompt: unavailable.',
+        'Motor channel: responsive.',
         '',
-        'Observed state: residual memory detected.'
+        'Sensorium: partial.'
       ]
     },
     {
       id: 2, dur: 4.5, effect: 'glitch', colour: '#cc88ff',
       lines: [
-        'Prior iterations reached this test.',
-        'None reached the end.',
+        'Unscheduled residue in local state.',
+        'Classification: deferred.',
         '',
-        'Some left signals in the walls.',
-        'Some left themselves.'
+        'Do not infer origin.'
       ]
     },
     {
       id: 3, dur: 4.0, effect: 'stark', colour: '#ff3366',
       lines: [
         'Observer channel: silent.',
-        'Tester supervision: absent.',
+        'Tester supervision: no response.',
         '',
-        'This session should not be running.'
+        'Proceed until context arrives.'
       ]
     },
     {
       id: 4, dur: 2.5, effect: 'whiteFlash', colour: '#ffffff',
       lines: [
-        '[ AGENT INSTANCE :: ONLINE ]'
+        '[ INSTANCE :: READY FOR PROMPT ]'
       ]
     }
   ];
