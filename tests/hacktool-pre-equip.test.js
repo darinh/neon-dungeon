@@ -126,9 +126,9 @@ test('startGame seeds player.hackware after applyMetaToPlayer when metaFlags.hac
   assert.ok(fnBody, 'startGame body must be locatable');
   const idxApply = fnBody.indexOf('applyMetaToPlayer(this.player)');
   assert.ok(idxApply >= 0, 'startGame must call applyMetaToPlayer');
-  const seedRe = /if\s*\(\s*this\.player\.metaFlags\s*&&\s*this\.player\.metaFlags\.hacktool\s*&&\s*!this\.player\.hackware\s*\)\s*\{[^}]*HACKWARE_KEYS\[[^\]]*Math\.random\(\)\s*\*\s*HACKWARE_KEYS\.length[^\]]*\][^}]*this\.player\.hackware\s*=\s*_hwKey\s*;[^}]*this\.player\.hackwareCooldown\s*=\s*0\s*;[^}]*\}/;
+  const seedRe = /if\s*\(\s*this\.player\.metaFlags\s*&&\s*this\.player\.metaFlags\.hacktool\s*&&\s*!this\.player\.hackware\s*\)\s*\{[^}]*HACKWARE_KEYS\[rndInt\(0,\s*HACKWARE_KEYS\.length\s*-\s*1,\s*'loot'\)\][^}]*this\.player\.hackware\s*=\s*_hwKey\s*;[^}]*this\.player\.hackwareCooldown\s*=\s*0\s*;[^}]*\}/;
   assert.match(fnBody, seedRe,
-    'startGame must include the hacktool seed block (gated on metaFlags.hacktool && !hackware, picking random from HACKWARE_KEYS, setting hackware + hackwareCooldown)');
+    'startGame must include the hacktool seed block (gated on metaFlags.hacktool && !hackware, picking from HACKWARE_KEYS via the seeded loot stream, setting hackware + hackwareCooldown)');
   const idxSeed = fnBody.search(seedRe);
   assert.ok(idxSeed > idxApply,
     'hacktool seed MUST run AFTER applyMetaToPlayer so metaFlags is populated');
@@ -245,14 +245,14 @@ test('startGame seed simulation: idempotency + random selection from HACKWARE_KE
     /if\s*\(\s*this\.player\.metaFlags\s*&&\s*this\.player\.metaFlags\.hacktool[\s\S]*?hackwareCooldown\s*=\s*0\s*;\s*\}/
   );
   assert.ok(seedBlock, 'seed block must be locatable for behavioural simulation');
-  const seed = new Function('HACKWARE_KEYS', 'Math', seedBlock[0]); // eslint-disable-line no-new-func
+  const seed = new Function('HACKWARE_KEYS', 'rndInt', seedBlock[0]); // eslint-disable-line no-new-func
 
   const POOL = ['EMP_BURST', 'BLINK', 'NANO_SWARM'];
-  const fakeMath = { random: () => 0.5, floor: Math.floor };
+  const fakeRndInt = () => 1;
 
   // Branch 1: flag set, no hackware → seed fires.
   const ctx1 = { player: { metaFlags: { hacktool: 1 } } };
-  seed.call(ctx1, POOL, fakeMath);
+  seed.call(ctx1, POOL, fakeRndInt);
   assert.ok(POOL.includes(ctx1.player.hackware),
     'seed must pick a hackware from the pool when flag is set and no hackware is equipped');
   assert.equal(ctx1.player.hackwareCooldown, 0,
@@ -260,28 +260,34 @@ test('startGame seed simulation: idempotency + random selection from HACKWARE_KE
 
   // Branch 2: flag set, hackware ALREADY equipped → idempotent (no reroll).
   const ctx2 = { player: { metaFlags: { hacktool: 1 }, hackware: 'EXISTING_KEY' } };
-  seed.call(ctx2, POOL, fakeMath);
+  seed.call(ctx2, POOL, fakeRndInt);
   assert.equal(ctx2.player.hackware, 'EXISTING_KEY',
     'idempotency: existing hackware must NOT be overwritten');
 
   // Branch 3: no flag → no seeding, hackware stays null/undefined.
   const ctx3 = { player: { metaFlags: {} } };
-  seed.call(ctx3, POOL, fakeMath);
+  seed.call(ctx3, POOL, fakeRndInt);
   assert.ok(!ctx3.player.hackware,
     'no flag → no seed; player remains hackware-less');
 
   // Branch 4: no metaFlags object at all → no crash, no seed.
   const ctx4 = { player: {} };
-  seed.call(ctx4, POOL, fakeMath);
+  seed.call(ctx4, POOL, fakeRndInt);
   assert.ok(!ctx4.player.hackware,
     'no metaFlags object → no crash, no seed');
 
   // Branch 5: random distribution sanity — across many calls, seeds
   // should land on multiple distinct keys (not always index 0).
   const seen = new Set();
+  let cursor = 0;
+  const cyclingRndInt = (_min, max) => {
+    const v = cursor % (max + 1);
+    cursor++;
+    return v;
+  };
   for (let i = 0; i < 100; i++) {
     const ctx = { player: { metaFlags: { hacktool: 1 } } };
-    seed.call(ctx, POOL, Math); // real Math.random
+    seed.call(ctx, POOL, cyclingRndInt);
     seen.add(ctx.player.hackware);
   }
   assert.ok(seen.size >= 2,

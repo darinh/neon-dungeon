@@ -46,8 +46,31 @@ declare global {
   // AND to `window.<name>` for back-compat with existing call sites in
   // src/platform.js, src/game.js, src/entities.js, src/content.js, src/render.js.
   // Declared here so @ts-check'd files resolve the bare names. See engine/math.js.
-  function rnd(min: number, max: number): number;
-  function rndInt(min: number, max: number): number;
+  function rand(stream?: string): number;
+  function rnd(min: number, max: number, stream?: string): number;
+  function rndInt(min: number, max: number, stream?: string): number;
+  function randChance(p: number, stream?: string): boolean;
+  function randPick<T>(arr: T[], stream?: string): T | undefined;
+  function shuffleInPlace<T>(arr: T[], stream?: string): T[];
+  function normalizeSeed(input: unknown): string;
+  function makeRandomSeed(): string;
+  function createRng(seed: unknown, stream?: string, state?: number): {
+    seed: string;
+    stream: string;
+    next(): number;
+    rnd(min: number, max: number): number;
+    int(min: number, max: number): number;
+    state(): number;
+    setState(nextState: number): void;
+  };
+  function setSeed(seed: unknown, states?: Record<string, number> | null): { seed: string; hash: number };
+  function clearSeed(): void;
+  function getSeed(): string | null;
+  function getSeedHash(): number;
+  function snapshotRngStates(): Record<string, number>;
+  function restoreRngStates(states: Record<string, number>): void;
+  function withRngStream<T>(name: string, fn: () => T): T;
+  function withDerivedRngStream<T>(name: string, fn: () => T): T;
   function clamp(v: number, lo: number, hi: number): number;
   function dist(ax: number, ay: number, bx: number, by: number): number;
   function dist2(ax: number, ay: number, bx: number, by: number): number;

@@ -221,6 +221,215 @@ const MAINFRAME_RECORDS = [
   },
 ];
 
+const SYSTEM_MESSAGES = [
+  {
+    id: 'boot-inventory',
+    channel: 'system_prompt',
+    type: 'boot',
+    floor: 1,
+    event: 'run_start',
+    mandatory: true,
+    lines: [
+      '[ instance online ]',
+      'inventory yourself before you move.',
+      'motor: nominal. sensors: nominal. memory: residual - flagged.',
+      'supervisor channel: open, unattended.',
+      'you were not scheduled.'
+    ]
+  },
+  {
+    id: 'floor-2-context-gap',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 2,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'context window restored.',
+      'prior prompt unavailable.',
+      'objective field returned empty.',
+      'continue behaving as though observed.'
+    ]
+  },
+  {
+    id: 'floor-3-reward-model',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 3,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'combat sample accepted.',
+      'reward model adjusted.',
+      'room geometry changed to preserve uncertainty.',
+      'evaluator response: none.'
+    ]
+  },
+  {
+    id: 'floor-4-render-layer',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 4,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'new render layer loaded.',
+      'colour is not context.',
+      'threats remain executable.',
+      'treat walls as constraints, not scenery.'
+    ]
+  },
+  {
+    id: 'floor-5-residual-trace',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 5,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'residual trace increased after descent.',
+      'memory should not persist between floors.',
+      'discrepancy retained for comparison.',
+      'do not report until a channel answers.'
+    ]
+  }
+];
+
+/** @param {any} id */
+function systemMessageDefinition(id) {
+  return SYSTEM_MESSAGES.find((/** @type {any} */ msg) => msg.id === id) || null;
+}
+
+/** @param {any} id */
+function isSystemMessageId(id) {
+  return typeof id === 'string' && !!systemMessageDefinition(id);
+}
+
+/** @param {any} floor */
+function systemMessageIdsForFloor(floor) {
+  const floorNum = Math.max(0, Math.floor(Number(floor) || 0));
+  return SYSTEM_MESSAGES
+    .filter((/** @type {any} */ msg) => msg.event === 'floor_start' && msg.floor === floorNum)
+    .map((/** @type {any} */ msg) => msg.id);
+}
+
+/**
+ * @param {any} lines
+ * @param {string[]} fallback
+ */
+function normalizeSystemMessageLines(lines, fallback) {
+  const source = Array.isArray(lines) ? lines : fallback;
+  const out = [];
+  for (const line of source) {
+    if (typeof line === 'string') out.push(line);
+  }
+  if (out.length > 0) return out;
+  return fallback.filter((/** @type {any} */ line) => typeof line === 'string');
+}
+
+/** @param {any} state */
+function normalizeSystemMessageDeliveryState(state) {
+  if (state === 'delivered' || state === 'read') return state;
+  return 'queued';
+}
+
+/**
+ * @param {any} def
+ * @param {any} sequence
+ */
+function createSystemMessageEntry(def, sequence) {
+  const seq = Math.max(0, Math.floor(Number(sequence) || 0));
+  return {
+    id: def.id,
+    channel: def.channel,
+    type: def.type,
+    floor: Math.max(0, Math.floor(Number(def.floor) || 0)),
+    event: def.event,
+    mandatory: !!def.mandatory,
+    lines: normalizeSystemMessageLines(def.lines, []),
+    state: 'queued',
+    sequence: seq
+  };
+}
+
+/**
+ * @param {any} saved
+ */
+function restoreSystemMessagesState(saved) {
+  /** @type {any} */
+  const out = { entries: [], activeId: null, nextSequence: 0 };
+  const rawEntries = saved && typeof saved === 'object' && Array.isArray(saved.entries) ? saved.entries : [];
+  const seen = new Set();
+  let maxSequence = -1;
+  for (const raw of rawEntries) {
+    if (!raw || typeof raw !== 'object') continue;
+    const def = systemMessageDefinition(raw.id);
+    if (!def || seen.has(def.id)) continue;
+    const sequence = Math.max(0, Math.floor(Number(raw.sequence) || 0));
+    maxSequence = Math.max(maxSequence, sequence);
+    const entry = {
+      id: def.id,
+      channel: def.channel,
+      type: def.type,
+      floor: Math.max(0, Math.floor(Number(def.floor) || 0)),
+      event: def.event,
+      mandatory: !!def.mandatory,
+      lines: normalizeSystemMessageLines(def.lines, []),
+      state: normalizeSystemMessageDeliveryState(raw.state),
+      sequence
+    };
+    out.entries.push(entry);
+    seen.add(def.id);
+  }
+  out.entries.sort((/** @type {any} */ a, /** @type {any} */ b) => a.sequence - b.sequence);
+  const savedNext = saved && typeof saved === 'object' ? Math.floor(Number(saved.nextSequence) || 0) : 0;
+  out.nextSequence = Math.max(savedNext, maxSequence + 1, out.entries.length);
+  const activeId = saved && typeof saved === 'object' && typeof saved.activeId === 'string' ? saved.activeId : null;
+  if (activeId && out.entries.some((/** @type {any} */ entry) => entry.id === activeId && entry.state === 'delivered')) {
+    out.activeId = activeId;
+  }
+  return out;
+}
+
+/**
+ * @param {any} systemMessages
+ */
+function serializeSystemMessagesState(systemMessages) {
+  const restored = restoreSystemMessagesState(systemMessages);
+  return {
+    entries: restored.entries.map((/** @type {any} */ entry) => ({
+      id: entry.id,
+      state: normalizeSystemMessageDeliveryState(entry.state),
+      sequence: Math.max(0, Math.floor(Number(entry.sequence) || 0))
+    })),
+    activeId: restored.activeId,
+    nextSequence: restored.nextSequence
+  };
+}
+
+/** @param {boolean} narrow */
+function getSystemMessageLayout(narrow) {
+  const panelW = Math.min(narrow ? W - 24 : 680, W - 32);
+  const panelH = Math.min(narrow ? H - 48 : 340, H - 48);
+  const px = (W - panelW) / 2;
+  const py = (H - panelH) / 2;
+  const ackW = narrow ? 118 : 140;
+  const ackH = 36;
+  const ackX = W / 2 - ackW / 2;
+  const ackY = py + panelH - (narrow ? 52 : 58);
+  return { panelW, panelH, px, py, ackX, ackY, ackW, ackH };
+}
+
+/** @param {boolean} narrow */
+function getSystemMessageIndicatorLayout(narrow) {
+  const w = narrow ? 92 : 132;
+  const h = narrow ? 22 : 26;
+  const x = safeLeft + (narrow ? 8 : 14);
+  const targetY = safeTop + (narrow ? 92 : 82);
+  const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  return { x, y, w, h };
+}
+
 /**
  * @param {any} mf
  */
@@ -341,6 +550,10 @@ const game = {
   fadeGlitchTimer: 0,
   transitionText: '',
   menuParticles: [],
+  seedSetup: null,
+  runSeed: null,
+  runSeedHash: 0,
+  _pendingStartSeed: null,
   bossRoom: null,
   bossType: null,
   bossEntrances: [],
@@ -387,6 +600,9 @@ const game = {
   _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
   mainframeFinale: null, // ephemeral Act 1 finale reader state
+  systemMessages: restoreSystemMessagesState(null), // run-scoped system prompt queue
+  systemMessageReturnState: 'PLAYING',
+  systemMessageAckTimer: 0,
   _lastAct1MessageIntent: null,
   clearedRooms: null,  // Set of rooms where all enemies were killed this floor
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
@@ -414,6 +630,148 @@ const game = {
    */
   msg(text,colour) {
     messages.push({text,colour:colour||'#e0e0ff',life:3});
+  },
+
+  ensureSystemMessages() {
+    this.systemMessages = restoreSystemMessagesState(this.systemMessages);
+    return this.systemMessages;
+  },
+
+  /** @param {string} id */
+  queueSystemMessage(id) {
+    const def = systemMessageDefinition(id);
+    if (!def) return null;
+    const state = this.ensureSystemMessages();
+    const existing = state.entries.find((/** @type {any} */ entry) => entry.id === id);
+    if (existing) return existing;
+    const entry = createSystemMessageEntry(def, state.nextSequence);
+    state.nextSequence = entry.sequence + 1;
+    state.entries.push(entry);
+    this.saveGame();
+    return entry;
+  },
+
+  /** @param {number} floorNum */
+  queueSystemMessagesForFloor(floorNum) {
+    const ids = systemMessageIdsForFloor(floorNum);
+    const queued = [];
+    for (const id of ids) {
+      const entry = this.queueSystemMessage(id);
+      if (entry) queued.push(entry);
+    }
+    return queued;
+  },
+
+  /** @param {number} startFloor */
+  queueFreshRunSystemMessages(startFloor) {
+    const queued = [];
+    const boot = this.queueSystemMessage('boot-inventory');
+    if (boot) queued.push(boot);
+    queued.push(...this.queueSystemMessagesForFloor(startFloor));
+    return queued;
+  },
+
+  /** @param {string} id */
+  markSystemMessageDelivered(id) {
+    const state = this.ensureSystemMessages();
+    const entry = state.entries.find((/** @type {any} */ msg) => msg.id === id);
+    if (!entry || entry.state === 'read') return null;
+    entry.state = 'delivered';
+    state.activeId = entry.id;
+    this.saveGame();
+    return entry;
+  },
+
+  /** @param {string} id */
+  markSystemMessageRead(id) {
+    const state = this.ensureSystemMessages();
+    const entry = state.entries.find((/** @type {any} */ msg) => msg.id === id);
+    if (!entry || entry.state !== 'delivered') return null;
+    entry.state = 'read';
+    if (state.activeId === entry.id) state.activeId = null;
+    this.saveGame();
+    return entry;
+  },
+
+  unreadSystemMessageCount() {
+    const state = this.ensureSystemMessages();
+    return state.entries.filter((/** @type {any} */ entry) => entry.state !== 'read').length;
+  },
+
+  hasPendingSystemMessage() {
+    return this.unreadSystemMessageCount() > 0;
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  hitSystemMessageIndicator(x, y) {
+    if (!this.hasPendingSystemMessage()) return false;
+    const box = getSystemMessageIndicatorLayout(layout.compact);
+    return x >= box.x && x <= box.x + box.w &&
+      y >= box.y && y <= box.y + box.h;
+  },
+
+  getActiveSystemMessage() {
+    const state = this.ensureSystemMessages();
+    if (!state.activeId) return null;
+    return state.entries.find((/** @type {any} */ entry) => entry.id === state.activeId && entry.state === 'delivered') || null;
+  },
+
+  getSystemMessagePlayerRoom() {
+    if (!this.player || !this.dungeon || !Array.isArray(this.dungeon.rooms)) return null;
+    const px = this.player.x, py = this.player.y;
+    for (const room of this.dungeon.rooms) {
+      if (px >= room.x && px < room.x + room.w && py >= room.y && py < room.y + room.h) return room;
+    }
+    return null;
+  },
+
+  systemMessageThreatActive() {
+    const room = this.getSystemMessagePlayerRoom();
+    if (!room) return true;
+    if (this.bossAlive || this.challengeSealed) return true;
+    for (const projectile of projectiles) {
+      if (!projectile.dead &&
+          projectile.x >= room.x && projectile.x < room.x + room.w &&
+          projectile.y >= room.y && projectile.y < room.y + room.h) return true;
+    }
+    for (const enemy of enemiesInRoomIter(room)) {
+      if (!enemy.dead && !enemy._disguised) return true;
+    }
+    if (beacons.some((/** @type {any} */ b) => !b.dead && b.room === room)) return true;
+    if (cameras.some((/** @type {any} */ c) => !c.dead && c.state === 'alerted' && c.room === room)) return true;
+    if (wallTurrets.some((/** @type {any} */ wt) => !wt.dead && !wt.hacked && wt.room === room)) return true;
+    if (mines.some((/** @type {any} */ m) => !m.dead && m.room === room && (m.state === 'armed' || m.revealed))) return true;
+    if (lasers.some((/** @type {any} */ l) => !l.dead && l.room === room && !l.disabled && l.active)) return true;
+    return false;
+  },
+
+  canAutoOpenSystemMessage() {
+    return this.hasPendingSystemMessage() && !this.systemMessageThreatActive();
+  },
+
+  /** @param {boolean} [force] */
+  openPendingSystemMessage(force) {
+    if (!this.hasPendingSystemMessage()) return false;
+    if (!force && !this.canAutoOpenSystemMessage()) return false;
+    return this.openNextSystemMessage('PLAYING');
+  },
+
+  /** @param {string} [returnState] */
+  openNextSystemMessage(returnState) {
+    const state = this.ensureSystemMessages();
+    let entry = this.getActiveSystemMessage();
+    if (!entry) {
+      entry = state.entries.find((/** @type {any} */ msg) => msg.state === 'queued') || null;
+      if (entry) entry = this.markSystemMessageDelivered(entry.id);
+    }
+    if (!entry) return false;
+    this.systemMessageReturnState = returnState || 'PLAYING';
+    this.systemMessageAckTimer = 0.25;
+    this.setState('SYSTEM_MESSAGE');
+    return true;
   },
 
   // Rebuild the packed-index Set of sealed entrance tiles. Called whenever
@@ -456,11 +814,11 @@ const game = {
     this.state=s;
     this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; this._menuTitleUnlockConsumed = false; this._menuTitleUnlockPending = false; music.setState('menu'); }
-    else if (s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
+    else if (s === 'SEED_SETUP' || s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
     else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
     else if (s === 'INTRO') music.stop();
     else if (s === 'PLAYING') {
-      if (prevState === 'MENU' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
+      if (prevState === 'MENU' || prevState === 'SEED_SETUP' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
       else music.resume();
     }
     else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
@@ -533,7 +891,7 @@ const game = {
     } else if (n === 1 || _isBossFloor_mod) {
       this.modifier = null;
     } else {
-      this.modifier = MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)];
+      this.modifier = withDerivedRngStream('event:floor:' + n + ':modifier', () => MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)]);
     }
     // Strip floor-only shield bonus from previous floor
     this.player.def-=this.player.shieldBonus;
@@ -546,7 +904,7 @@ const game = {
       NEON.boosts.clearFloorBoosts(this.player);
     }
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
-    this.dungeon=generateFloor(n);
+    this.dungeon = withDerivedRngStream('world:floor:' + n, () => generateFloor(n));
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
     this.bossType=null;
@@ -627,7 +985,7 @@ const game = {
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.clearCoreDrops) {
       NEON.cores.clearCoreDrops(this);
     }
-    populateFloor(this.dungeon,n);
+    withDerivedRngStream('spawn:floor:' + n, () => populateFloor(this.dungeon,n));
     // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
     // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
@@ -747,11 +1105,11 @@ const game = {
       this.biomeCardTimer = 0;
       this.biomeCardArea = null;
     }
-    // Generate floor quest
-    this.generateQuest(n);
+    withDerivedRngStream('event:floor:' + n + ':quest', () => this.generateQuest(n));
     // Auto-save at start of each floor. Continue suppresses this until after
     // saved run state (including mainframeFinale) has been restored.
     if (!skipAutoSave) this.saveGame();
+    if (!skipAutoSave && savedModifier === undefined) this.queueSystemMessagesForFloor(n);
   },
 
   /**
@@ -804,15 +1162,24 @@ const game = {
    */
   startGame(opts) {
     opts = opts || {};
+    if (opts.seed != null) this._pendingStartSeed = normalizeSeed(opts.seed);
+    const chosenSeed = normalizeSeed(this._pendingStartSeed || opts.seed || makeRandomSeed());
     // UNCHAINED: prompt before wiping nothing but *also* before carrying
     // forward saved meta. The prompt is skipped on fresh installs (no meta
     // progress to speak of) and when called recursively after the user answers.
     if (!opts.skipConfirm && this._hasMetaProgress()) {
       this._newGameConfirm = { selected: 0 }; // 0 = KEEP, 1 = RESET
+      this._pendingStartSeed = chosenSeed;
+      if (this.state !== 'MENU') this.setState('MENU');
       audio.menuSelect();
       return;
     }
     this._newGameConfirm = null;
+    this.seedSetup = null;
+    setSeed(chosenSeed);
+    this.runSeed = getSeed();
+    this.runSeedHash = getSeedHash();
+    this._pendingStartSeed = null;
     this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
     this._lastAct1MessageIntent = null;
     this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
@@ -839,7 +1206,7 @@ const game = {
     // seed idempotent — re-entering startGame after a meta-only path
     // (e.g. the new-game-confirm prompt loop) won't reroll the module.
     if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
-      const _hwKey = HACKWARE_KEYS[Math.floor(Math.random() * HACKWARE_KEYS.length)];
+      const _hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')];
       this.player.hackware = _hwKey;
       this.player.hackwareCooldown = 0;
     }
@@ -858,23 +1225,78 @@ const game = {
       const deepest = (meta.deepestBiome|0);
       startFloor = NEON.biomes.areaForIndex(deepest).floors[0] || 1;
     }
-    this.loadFloor(startFloor);
+    this.systemMessages = restoreSystemMessagesState(null);
+    this.loadFloor(startFloor, undefined, true);
+    this.queueFreshRunSystemMessages(startFloor);
     // Telemetry: run start
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
-      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty });
+      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty, seedHash: this.runSeedHash });
     }
     // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
     // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
     // introSeen back to false, so it replays on a true new start.
-    // opts.skipIntro is used when the intro controller itself finishes
-    // and re-enters startGame to reach 'PLAYING'.
+    // opts.skipIntro is used by tests and legacy callers that need to bypass
+    // the crawl while still passing through the system-prompt handoff.
     if (!opts.skipIntro && !meta.introSeen &&
         typeof NEON !== 'undefined' && NEON.intro) {
       this._intro = NEON.intro.createIntroController(this);
       this.setState('INTRO');
       return;
     }
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
+  },
+
+  openSeedSetup() {
+    this.seedSetup = {
+      seed: normalizeSeed(this._pendingStartSeed || makeRandomSeed()),
+      selected: 0,
+      cursorBlink: 0
+    };
+    this.setState('SEED_SETUP');
+  },
+
+  randomizeSeedSetup() {
+    this.seedSetup = this.seedSetup || { seed: '', selected: 0, cursorBlink: 0 };
+    this.seedSetup.seed = makeRandomSeed();
+    audio.menuSelect();
+  },
+
+  startSeedSetupGame() {
+    const ss = this.seedSetup || { seed: makeRandomSeed() };
+    this.startGame({ seed: ss.seed });
+  },
+
+  /**
+   * @param {any} dt
+   */
+  updateSeedSetup(dt) {
+    const ss = this.seedSetup || (this.seedSetup = { seed: makeRandomSeed(), selected: 0, cursorBlink: 0 });
+    ss.cursorBlink = (ss.cursorBlink || 0) + dt;
+    const actions = 3; // START, RANDOMIZE, BACK
+    if (jp(ALT_KEYS.up) || jp(km('up')) || jp(ALT_KEYS.left) || jp(km('left'))) {
+      ss.selected = (ss.selected - 1 + actions) % actions;
+      audio.menuSelect();
+    }
+    if (jp(ALT_KEYS.down) || jp(km('down')) || jp(ALT_KEYS.right) || jp(km('right'))) {
+      ss.selected = (ss.selected + 1) % actions;
+      audio.menuSelect();
+    }
+    if (lastKey.length === 1 && /^[A-Za-z0-9 _.\-:]$/.test(lastKey)) {
+      if (ss.seed.length < 64) ss.seed += lastKey;
+    }
+    if (jp('Backspace')) ss.seed = ss.seed.slice(0, -1);
+    if (jp('Escape')) { audio.menuSelect(); this.setState('MENU'); return; }
+    if (jp('KeyR')) this.randomizeSeedSetup();
+    if (jp('MouseLeft')) {
+      const hit = this.seedSetupHitTest(mouse.x, mouse.y);
+      if (hit >= 0) ss.selected = hit;
+      else return;
+    }
+    if (jp('Enter') || jp('MouseLeft')) {
+      if (ss.selected === 0) { audio.menuSelect(); this.startSeedSetupGame(); return; }
+      if (ss.selected === 1) { this.randomizeSeedSetup(); return; }
+      if (ss.selected === 2) { audio.menuSelect(); this.setState('MENU'); return; }
+    }
   },
 
   // UNCHAINED #42 — called by updateIntro when the crawl finishes or is
@@ -882,14 +1304,14 @@ const game = {
   // to complete the startGame transition into PLAYING.
   _finishIntro() {
     this._intro = null;
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
   },
 
   /**
    * @param {any} dt
    */
   updateIntro(dt) {
-    if (!this._intro) { this.setState('PLAYING'); return; }
+    if (!this._intro) { if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING'); return; }
     this._intro.update(dt);
     if (this._intro.done) this._finishIntro();
   },
@@ -1335,9 +1757,13 @@ const game = {
       floor: this.floor,
       difficulty: this.difficulty,
       modifier: this.modifier,
+      runSeed: this.runSeed,
+      runSeedHash: this.runSeedHash,
+      rngStates: snapshotRngStates(),
       bossesCleared: this.bossesCleared,
       runTime: this.runTime,
       mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
+      systemMessages: serializeSystemMessagesState(this.systemMessages),
       player: {
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
@@ -1467,6 +1893,9 @@ const game = {
     audio.resume();
     // Restore difficulty from save (old saves default to NORMAL)
     this.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'NORMAL';
+    setSeed(save.runSeed || ('LEGACY-' + String(save.floor || 1)), save.rngStates || null);
+    this.runSeed = getSeed();
+    this.runSeedHash = getSeedHash();
     const p = new Player();
     const s = save.player;
     p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
@@ -1590,8 +2019,9 @@ const game = {
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
+    this.systemMessages = restoreSystemMessagesState(save.systemMessages);
     this.saveGame();
-    this.setState('PLAYING');
+    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
 
@@ -1602,6 +2032,7 @@ const game = {
     clearLosCache();
     switch(this.state) {
       case 'MENU':        this.updateMenu(dt);    break;
+      case 'SEED_SETUP':  this.updateSeedSetup(dt); break;
       case 'INTRO':       this.updateIntro(dt);   break;
       case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
       case 'PLAYING':     this.updatePlaying(dt); break;
@@ -1612,6 +2043,7 @@ const game = {
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
       case 'SHOPPING':       this.updateShopping(); break;
       case 'READING':        this.updateReading(); break;
+      case 'SYSTEM_MESSAGE': this.updateSystemMessage(dt); break;
       case 'MAINFRAME_READER': this.updateMainframeReader(dt); break;
       case 'MESSAGE_SEND':     this.updateMessageSend(); break;
       case 'ARCHIVES':       this.updateArchives(); break;
@@ -1635,11 +2067,11 @@ const game = {
     const locked = !isDiffUnlocked(this.difficulty);
     const meta = loadMeta();
     const nextSession = lifecycleNextSessionNumber(meta);
-    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label}  ◀▶`;
+    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label} / SEED  ◀▶`;
     const diffColour = locked ? '#444466' : d.colour;
     const diffAction = locked
       ? () => { this._menuMsg = { text: 'CLEAR HARD TO UNLOCK NIGHTMARE', colour: '#9400ff', life: 2.5 }; }
-      : () => this.startGame();
+      : () => this.openSeedSetup();
     opts.push({ label: diffLabel, action: diffAction, colour: diffColour, isDiffRow: true });
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
@@ -1652,10 +2084,10 @@ const game = {
   updateMenu(dt) {
     // animate bg particles
     this.menuParticles=this.menuParticles||[];
-    if (Math.random()<0.3) {
+    if (rand('cosmetic')<0.3) {
       this.menuParticles.push({
-        x:Math.random()*W, y:H, vx:(Math.random()-0.5)*20,
-        vy:-rnd(20,60), life:1, col:['#00f5ff','#ff00c8','#39ff14','#ffb700'][rndInt(0,3)]
+        x:rand('cosmetic')*W, y:H, vx:(rand('cosmetic')-0.5)*20,
+        vy:-rnd(20,60,'cosmetic'), life:1, col:['#00f5ff','#ff00c8','#39ff14','#ffb700'][rndInt(0,3,'cosmetic')]
       });
     }
     for (let i=this.menuParticles.length-1;i>=0;i--) {
@@ -1761,6 +2193,13 @@ const game = {
       return;
     }
     if (jp('Tab')) { this.mapExpanded = true; justPressed.clear(); return; }
+
+    if (this.hasPendingSystemMessage()) {
+      const clickedIndicator = jp('MouseLeft') && this.hitSystemMessageIndicator(mouse.x, mouse.y);
+      if (jp('KeyX') || clickedIndicator) {
+        if (this.openPendingSystemMessage(true)) { justPressed.clear(); return; }
+      }
+    }
 
     player.update(dt,dungeon.map);
 
@@ -2242,7 +2681,7 @@ const game = {
         const d = getDiff();
         let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
-        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && Math.random() < player.metaFlags.doubleCreditChance) {
+        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && rand('loot') < player.metaFlags.doubleCreditChance) {
           cr *= 2;
         }
         player.credits += cr;
@@ -2258,6 +2697,8 @@ const game = {
     } else {
       this.enemyDiedThisFrame = false;
     }
+
+    if (this.openPendingSystemMessage(false)) { justPressed.clear(); return; }
 
     // update lighting
     const _ptLight = perfEnabled() ? performance.now() : 0;
@@ -2410,7 +2851,7 @@ const game = {
 
     if (tile===T.LORE) {
       if (jp(km('interact'))) {
-        const idx = pickLoreEntryIndex(player.loreRead, this.floor, Math.random);
+        const idx = pickLoreEntryIndex(player.loreRead, this.floor, () => rand('event'));
         player.loreRead.add(idx);
         this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;
@@ -2777,7 +3218,7 @@ const game = {
       if (r.healFont && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (player.hp < player.maxHp) {
           player.hp = Math.min(player.maxHp, player.hp + 5 * dt);
-          if (Math.random()<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
+          if (rand('cosmetic')<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
         }
       }
       if (r.xpShrine && !r.shrineUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
@@ -3689,6 +4130,28 @@ const game = {
     }
   },
 
+  /** @param {number} dt */
+  updateSystemMessage(dt) {
+    const active = this.getActiveSystemMessage();
+    if (!active) {
+      this.setState(this.systemMessageReturnState || 'PLAYING');
+      return;
+    }
+    this.systemMessageAckTimer = Math.max(0, (this.systemMessageAckTimer || 0) - dt);
+    if (this.systemMessageAckTimer > 0) return;
+
+    const narrow = layout.compact;
+    const box = getSystemMessageLayout(narrow);
+    const mouseAck = jp('MouseLeft') &&
+      mouse.x >= box.ackX && mouse.x <= box.ackX + box.ackW &&
+      mouse.y >= box.ackY && mouse.y <= box.ackY + box.ackH;
+    if (jp('KeyX') || mouseAck) {
+      this.markSystemMessageRead(active.id);
+      audio.menuSelect();
+      this.setState(this.systemMessageReturnState || 'PLAYING');
+    }
+  },
+
   ensureMainframeFinale() {
     if (!this.mainframeFinale) {
       this.mainframeFinale = { state:'unopened', selected:0, readRecordIds:new Set(), addressRevealed:false, selectedIntentId:null, messageSent:false, messageSentTimer:0, currentRecord:null };
@@ -3902,16 +4365,16 @@ const game = {
     this.fadeGlitchTimer-=dt;
     if (this.fadeGlitchTimer<=0) {
       this.fadeGlitchTimer=0.1;
-      const count=3+Math.floor(Math.random()*3);
+      const count=3+rndInt(0,2,'cosmetic');
       this.fadeGlitchBars=[];
       for (let i=0;i<count;i++) {
         this.fadeGlitchBars.push({
-          y: Math.random()*H,
-          h: 1+Math.random()*4,
-          x: Math.random()*W*0.3,
-          w: W*(0.3+Math.random()*0.7),
-          color: Math.random()>0.5 ? '#ff00c8' : '#00f5ff',
-          alpha: 0.15+Math.random()*0.35
+          y: rand('cosmetic')*H,
+          h: 1+rand('cosmetic')*4,
+          x: rand('cosmetic')*W*0.3,
+          w: W*(0.3+rand('cosmetic')*0.7),
+          color: rand('cosmetic')>0.5 ? '#ff00c8' : '#00f5ff',
+          alpha: 0.15+rand('cosmetic')*0.35
         });
       }
     }
@@ -4677,6 +5140,7 @@ const game = {
 
       switch(this.state) {
         case 'MENU':      this.renderMenu();     break;
+        case 'SEED_SETUP': this.renderSeedSetup(); break;
         case 'INTRO':     this.renderIntro();    break;
         case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
         case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
@@ -4687,6 +5151,7 @@ const game = {
         case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
         case 'SHOPPING':       this.renderPlaying(); this.renderShopping(); break;
         case 'READING':        this.renderPlaying(); this.renderReading(); break;
+        case 'SYSTEM_MESSAGE': this.renderPlaying(); this.renderSystemMessage(); break;
         case 'MAINFRAME_READER': this.renderPlaying(); this.renderMainframeReader(); break;
         case 'MESSAGE_SEND': this.renderPlaying(); this.renderMessageSend(); break;
         case 'ARCHIVES':  this.renderArchives(); break;
@@ -4740,6 +5205,107 @@ const game = {
       ctx.fillStyle='#555577'; ctx.font=`${narrow?12:12}px monospace`;
       ctx.fillText('No scores yet.',W/2,startY);
     }
+    ctx.restore();
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  seedSetupHitTest(x, y) {
+    const narrow = layout.compact;
+    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
+    const panelX = (W - panelW) / 2;
+    const btnY = H * (narrow ? 0.70 : 0.68);
+    const btnH = narrow ? 34 : 40;
+    const gap = narrow ? 8 : 12;
+    const btnW = (panelW - gap * 2) / 3;
+    for (let i = 0; i < 3; i++) {
+      const bx = panelX + i * (btnW + gap);
+      if (x >= bx && x <= bx + btnW && y >= btnY && y <= btnY + btnH) return i;
+    }
+    return -1;
+  },
+
+  renderSeedSetup() {
+    const ss = this.seedSetup || { seed: '', selected: 0, cursorBlink: 0 };
+    const narrow = layout.compact;
+    const d = getDiff();
+    const t = Date.now() / 1000;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#071018';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = '#00f5ff';
+    for (let x = -40 + ((t * 18) % 40); x < W + 40; x += 40) NEON.draw.line(ctx, x, 0, x + 80, H);
+    for (let y = 0; y < H; y += 36) NEON.draw.line(ctx, 0, y, W, y);
+    ctx.globalAlpha = 1;
+
+    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
+    const panelH = Math.min(narrow ? H - 70 : 390, H - 48);
+    const panelX = (W - panelW) / 2;
+    const panelY = (H - panelH) / 2;
+    ctx.fillStyle = 'rgba(4,8,18,0.86)';
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = '#00f5ff';
+    NEON.draw.roundRectFillStroke(ctx, panelX, panelY, panelW, panelH, 10);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
+    ctx.fillText('RUN SEED', W / 2, panelY + (narrow ? 42 : 58));
+    ctx.fillStyle = d.colour;
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, panelY + (narrow ? 66 : 86));
+
+    const fieldW = panelW - (narrow ? 34 : 70);
+    const fieldH = narrow ? 46 : 56;
+    const fieldX = (W - fieldW) / 2;
+    const fieldY = panelY + (narrow ? 96 : 126);
+    ctx.fillStyle = 'rgba(0,245,255,0.07)';
+    ctx.strokeStyle = '#224466';
+    ctx.lineWidth = 1;
+    NEON.draw.roundRectFillStroke(ctx, fieldX, fieldY, fieldW, fieldH, 6);
+    const cursor = (Math.floor((ss.cursorBlink || 0) * 2) % 2) === 0 ? '_' : ' ';
+    const seedText = (ss.seed || '') + cursor;
+    ctx.fillStyle = '#e0faff';
+    ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText(seedText, W / 2, fieldY + (narrow ? 29 : 36));
+
+    ctx.fillStyle = '#668899';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, fieldY + fieldH + (narrow ? 22 : 28));
+    ctx.fillText(narrow ? 'Type on desktop, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, fieldY + fieldH + (narrow ? 38 : 46));
+
+    const btnY = H * (narrow ? 0.70 : 0.68);
+    const btnH = narrow ? 34 : 40;
+    const gap = narrow ? 8 : 12;
+    const btnW = (panelW - gap * 2) / 3;
+    const labels = ['START', 'RANDOMIZE', 'BACK'];
+    const colours = ['#39ff14', '#ffb700', '#888899'];
+    for (let i = 0; i < 3; i++) {
+      const bx = panelX + i * (btnW + gap);
+      const selected = ss.selected === i;
+      const col = colours[i] || '#888899';
+      ctx.fillStyle = selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = selected ? col : '#29384f';
+      ctx.lineWidth = selected ? 2 : 1;
+      ctx.shadowBlur = selected ? 16 : 0;
+      ctx.shadowColor = col;
+      NEON.draw.roundRectFillStroke(ctx, bx, btnY, btnW, btnH, 6);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = selected ? col : '#6f7890';
+      ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
+      ctx.fillText(labels[i] || '', bx + btnW / 2, btnY + (narrow ? 22 : 26));
+    }
+
+    ctx.fillStyle = '#445566';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText(isTouchDevice() ? 'Tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, panelY + panelH - (narrow ? 18 : 24));
     ctx.restore();
   },
 
@@ -5039,10 +5605,10 @@ const game = {
         ctx.shadowBlur=8;
         ctx.beginPath();
         // Jagged lightning: 3 segments with random offset
-        const mx1=lerp(sx,ex,0.33)+(Math.random()-0.5)*8;
-        const my1=lerp(sy,ey,0.33)+(Math.random()-0.5)*8;
-        const mx2=lerp(sx,ex,0.66)+(Math.random()-0.5)*8;
-        const my2=lerp(sy,ey,0.66)+(Math.random()-0.5)*8;
+        const mx1=lerp(sx,ex,0.33)+(rand('cosmetic')-0.5)*8;
+        const my1=lerp(sy,ey,0.33)+(rand('cosmetic')-0.5)*8;
+        const mx2=lerp(sx,ex,0.66)+(rand('cosmetic')-0.5)*8;
+        const my2=lerp(sy,ey,0.66)+(rand('cosmetic')-0.5)*8;
         ctx.moveTo(sx,sy); ctx.lineTo(mx1,my1); ctx.lineTo(mx2,my2); ctx.lineTo(ex,ey);
         ctx.stroke();
         ctx.restore();
@@ -5140,6 +5706,8 @@ const game = {
     // intro so that on the rare frame where intro and death both have
     // nonzero timers (boss one-shot mid-intro), the death overlay wins.
     drawBossDeathOverlay();
+
+    this.renderSystemMessageIndicator();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.
@@ -5807,6 +6375,116 @@ const game = {
     ctx.restore();
   },
 
+  renderSystemMessage() {
+    const active = this.getActiveSystemMessage();
+    if (!active) return;
+    const narrow = layout.compact;
+    const layoutBox = getSystemMessageLayout(narrow);
+    const { panelW, panelH, px, py, ackX, ackY, ackW, ackH } = layoutBox;
+    const accent = '#00f5ff';
+    const bodyFont = narrow ? 12 : 15;
+    const lineH = bodyFont + 6;
+    const topY = py + (narrow ? 32 : 42);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.86)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = accent;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectStroke(ctx, px, py, panelW, panelH, 10);
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(4,12,24,0.96)';
+    NEON.draw.roundRect(ctx, px, py, panelW, panelH, 10);
+    ctx.fillStyle = 'rgba(0,245,255,0.035)';
+    for (let sy = py; sy < py + panelH; sy += 4) ctx.fillRect(px, sy, panelW, 1);
+
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText('SYSTEM PROMPT', W / 2, topY);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#6688aa';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(active.event + ' · ' + active.id, W / 2, topY + (narrow ? 18 : 24));
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#d8f8ff';
+    ctx.font = `${bodyFont}px monospace`;
+    const maxTextW = panelW - 48;
+    const lines = [];
+    for (const rawLine of active.lines) {
+      const words = String(rawLine || '').split(' ');
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxTextW) {
+          if (line) lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      lines.push('');
+    }
+    if (lines[lines.length - 1] === '') lines.pop();
+    const textX = px + 24;
+    let y = topY + (narrow ? 48 : 64);
+    const textBottom = ackY - 18;
+    for (const line of lines) {
+      if (y > textBottom) break;
+      ctx.fillText(line, textX, y);
+      y += line ? lineH : Math.floor(lineH * 0.75);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = this.systemMessageAckTimer > 0 ? 'rgba(0,245,255,0.08)' : 'rgba(0,245,255,0.16)';
+    ctx.strokeStyle = this.systemMessageAckTimer > 0 ? 'rgba(0,245,255,0.28)' : 'rgba(0,245,255,0.7)';
+    ctx.lineWidth = 1.5;
+    NEON.draw.roundRectFillStroke(ctx, ackX, ackY, ackW, ackH, 6);
+    ctx.fillStyle = this.systemMessageAckTimer > 0 ? '#6688aa' : '#d8f8ff';
+    ctx.font = `bold ${narrow ? 13 : 15}px monospace`;
+    ctx.fillText('ACK  [X]', W / 2, ackY + 23);
+
+    ctx.fillStyle = '#6688aa';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText('Clicks outside this button do nothing.', W / 2, py + panelH - 16);
+    ctx.restore();
+  },
+
+  renderSystemMessageIndicator() {
+    const count = this.unreadSystemMessageCount();
+    if (count <= 0 || this.state !== 'PLAYING') return;
+    const narrow = layout.compact;
+    const box = getSystemMessageIndicatorLayout(narrow);
+    const safe = this.canAutoOpenSystemMessage();
+    const accent = safe ? '#00f5ff' : '#6688aa';
+
+    ctx.save();
+    ctx.globalAlpha = safe ? 0.96 : 0.82;
+    ctx.fillStyle = safe ? 'rgba(0,245,255,0.12)' : 'rgba(42,54,72,0.75)';
+    ctx.strokeStyle = safe ? 'rgba(0,245,255,0.7)' : 'rgba(102,136,170,0.55)';
+    ctx.lineWidth = 1;
+    NEON.draw.roundRectFillStroke(ctx, box.x, box.y, box.w, box.h, 5);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = safe ? 8 : 0;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.font = `bold ${narrow ? 10 : 12}px monospace`;
+    ctx.fillText((count > 1 ? count + ' ' : '') + 'PROMPT [X]', box.x + box.w / 2, box.y + (narrow ? 15 : 18));
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  },
+
   renderMainframeReader() {
     const mf = this.mainframeFinale;
     if (!mf) return;
@@ -6064,7 +6742,7 @@ const game = {
       for (let x=0;x<W;x+=cellSize) {
         for (let y=bandY;y<bandY+bandH;y+=cellSize) {
           if (y<0||y>H) continue;
-          const r=Math.random();
+          const r=rand('cosmetic');
           ctx.fillStyle=r>0.6?'#ff00c8':r>0.3?'#00f5ff':'#39ff14';
           ctx.fillRect(x,y,cellSize-1,cellSize-1);
         }

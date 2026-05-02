@@ -71,7 +71,7 @@ test('menu state owns title music and gameplay leaves it', () => {
   assert.match(game, /if \(s === 'MENU'\) \{ this\.menuSel = 0; this\._menuTitleUnlockConsumed = false; this\._menuTitleUnlockPending = false; music\.setState\('menu'\); \}/);
   assert.match(game, /game\.state='MENU';\nmusic\.setState\('menu'\);/);
   assert.doesNotMatch(game, /updateMenu\(dt\) \{\n    music\.setState\('menu'\);/);
-  assert.match(game, /prevState === 'MENU' \|\| prevState === 'ARCHIVES'/);
+  assert.match(game, /prevState === 'MENU' \|\| prevState === 'SEED_SETUP' \|\| prevState === 'ARCHIVES'/);
   assert.match(game, /music\.setState\('explore'\);\n      else music\.resume\(\);/);
   assert.match(game, /if \(this\._menuTitleUnlockPending\) \{/);
   assert.match(game, /this\._menuTitleUnlockPending = false;/);
@@ -80,6 +80,6 @@ test('menu state owns title music and gameplay leaves it', () => {
   assert.match(platform, /function menuTitleNeedsGestureUnlock\(\)/);
   assert.match(platform, /const consumeTitleUnlock = consumeMenuActivation && menuTitleNeedsGestureUnlock\(\);/);
   assert.match(platform, /if \(consumeTitleUnlock\) _G\._menuTitleUnlockPending = true;/);
-  assert.match(platform, /_G\.state === 'MENU' \|\| _G\.state === 'ARCHIVES'/);
+  assert.match(platform, /_G\.state === 'MENU' \|\| _G\.state === 'SEED_SETUP' \|\| _G\.state === 'ARCHIVES'/);
   assert.match(platform, /_G\.state === 'SETTINGS' && _G\._settingsFrom === 'MENU'/);
 });

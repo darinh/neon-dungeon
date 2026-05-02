@@ -192,7 +192,7 @@ test('OVERCHARGE force-crit fires on counter % 5 === 0', () => {
 test('Player.shoot declares forceCrit = false at top so non-OVERCHARGE floors take the random crit path', () => {
   // The forceCrit local must default to FALSE so that on every
   // non-OVERCHARGE floor (and on shots 1-4 of an OVERCHARGE cycle),
-  // the existing `critChance > 0 && Math.random() < critChance` roll
+  // the existing `critChance > 0 && rand('combat') < critChance` roll
   // is what decides crit. Without the false default, a missing
   // initialization would either crash (TDZ) or worse, default-truthy
   // and silently force-crit every shot.
@@ -218,7 +218,7 @@ test('forceCrit is wired into all five crit-roll sites: melee, ranged main, MULT
   // modifier that fires another bonus projectile) means bumping this
   // assertion AND wiring forceCrit into the new site.
   const occurrences = (ENTITIES_CODE.match(
-    /forceCrit\s*\|\|\s*\(\s*critChance\s*>\s*0\s*&&\s*Math\.random\(\)\s*<\s*critChance\s*\)/g
+    /forceCrit\s*\|\|\s*\(\s*critChance\s*>\s*0\s*&&\s*rand\('combat'\)\s*<\s*critChance\s*\)/g
   ) || []).length;
   assert.strictEqual(occurrences, 5,
     'forceCrit must be ORed into exactly FIVE crit-roll sites (melee + ranged main + MULTI_SHOT bonus + ranged echo + melee echo); got ' + occurrences);

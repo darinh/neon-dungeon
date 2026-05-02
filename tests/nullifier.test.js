@@ -183,15 +183,15 @@ test('NULLIFIER is excluded from elite-affix roll', () => {
 
 test('spawnEnemy NULLIFIER init block seeds _nlPulse with random offset', () => {
   // Per design: clustered spawns must not pulse in lock-step (visual
-  // only, no gameplay coupling). _nlPulse seeded with Math.random() *
+  // only, no gameplay coupling). _nlPulse seeded with cosmetic RNG *
   // TWO_PI so each instance starts at a different phase.
   const initBlock = ENTITIES_CODE.match(
     /if\s*\(\s*type\s*===\s*'NULLIFIER'\s*\)\s*\{[\s\S]{0,500}?\}/
   );
   assert.ok(initBlock, 'NULLIFIER init block must exist in spawnEnemy');
   assert.match(initBlock[0],
-    /e\._nlPulse\s*=\s*Math\.random\s*\(\s*\)\s*\*\s*TWO_PI\s*;/,
-    'init block must seed e._nlPulse = Math.random() * TWO_PI;');
+    /e\._nlPulse\s*=\s*rand\('cosmetic'\)\s*\*\s*TWO_PI\s*;/,
+    "init block must seed e._nlPulse = rand('cosmetic') * TWO_PI;");
   assert.ok(!hasDeadBranch(initBlock[0]),
     'init block must not contain dead branches (would defeat the seed)');
 });
