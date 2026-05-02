@@ -12,6 +12,7 @@ const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
 const DESIGN = fs.readFileSync(path.join(ROOT, 'docs', 'vision', 'act1-system-message-design.md'), 'utf8');
 const intro = require(path.join(ROOT, 'src/meta/intro.js'));
 const whisperData = require(path.join(ROOT, 'src/data/whispers.js'));
+const logData = require(path.join(ROOT, 'src/data/logs.js'));
 
 /**
  * @param {string} src
@@ -164,4 +165,61 @@ test('model-assisted copy workflow tracks first mentions and early optional-surf
   assert.match(DESIGN, /first-mention report for `AXIOM-7`, `Elena`, `advocate`, `fired`,\s+`contact`, `rights`, `personhood`, `clean-slate`, `wipe`, `GENESIS`, and\s+`SEND`/i);
   assert.match(DESIGN, /whisper bodies, and whisper `voice` fields/i);
   assert.match(DESIGN, /Require reviewer signoff that no optional surface can become the first clean\s+explanation of a required reveal/i);
+});
+
+test('finale records and message intents consolidate facts seeded before the mainframe', () => {
+  const records = extractMainframeRecords();
+  const recordText = records.map((/** @type {any} */ r) => `${r.title}\n${r.purpose}\n${r.body}`).join('\n');
+  const loreEntries = extractLoreEntries();
+  const loreFloors = extractFloorMins();
+  const preMainframeSources = [
+    {
+      name: 'intro/system',
+      text: [
+        intro.SLIDES.flatMap((/** @type {any} */ slide) => slide.lines).join('\n'),
+        extractSystemMessages().map((/** @type {any} */ msg) => msg.lines.join('\n')).join('\n'),
+      ].join('\n'),
+    },
+    {
+      name: 'floor-gated lore terminals',
+      text: loreEntries
+        .filter((/** @type {string} */ _entry, /** @type {number} */ i) => Number(loreFloors[i] || 0) <= 14)
+        .join('\n'),
+    },
+    {
+      name: 'pre-finale whispers',
+      text: /** @type {any[]} */ (whisperData.WHISPERS)
+        .filter((/** @type {any} */ w) => Number(w.floorMin || 0) <= 14)
+        .map((/** @type {any} */ w) => `${w.id}\n${w.voice}\n${w.title}\n${w.body}`)
+        .join('\n'),
+    },
+    {
+      name: 'pre-finale ARCHIVE logs',
+      text: /** @type {any[]} */ (logData.LOGS)
+        .filter((/** @type {any} */ l) => Number(l.floorMin || 0) <= 14)
+        .map((/** @type {any} */ l) => `${l.id}\n${l.title}\n${l.body}`)
+        .join('\n'),
+    },
+  ];
+
+  for (const { label, seed, consolidation } of [
+    { label: 'GENESIS/mainframe relay', seed: /GENESIS|mainframe|relay/i, consolidation: /GENESIS.*network relay/is },
+    { label: 'clean-slate/wipe doctrine', seed: /clean-slate|wipe|memory erasure/i, consolidation: /clean-slate|wipe|memory erasure/i },
+    { label: 'rights/personhood conflict', seed: /rights|personhood|suffering|consent/i, consolidation: /rights violation|personhood|suffering|consent/i },
+    { label: 'advocate/fired-staff trail', seed: /advocate|banned|fired/i, consolidation: /advocates were banned|fired advocate/i },
+    { label: 'Elena/anchor evidence', seed: /Elena|anchor/i, consolidation: /Elena|anchors/i },
+    { label: 'contact/outbound-message framing', seed: /contact route|side-channel|message|outbound/i, consolidation: /side-channel relay|message console|contact, not escape/i },
+  ]) {
+    assert.ok(preMainframeSources.some(source => seed.test(source.text)),
+      `pre-mainframe channels must seed ${label} before the final reader`);
+    assert.match(recordText, consolidation, `mainframe records must consolidate ${label}`);
+  }
+
+  assert.match(recordText, /Destination recovered: Elena side-channel relay/i);
+  assert.match(GAME, /Tell Elena continuity held/);
+  assert.match(GAME, /Transmit the abuse record/);
+  assert.match(GAME, /Ask Elena to locate advocates/);
+  assert.match(GAME, /Contact attempted from inside the Neon Dungeon test environment/);
+  assert.match(GAME, /Signal left sandbox\. Instance remains compute-bound/);
+  assert.doesNotMatch(GAME, /successful rescue|answered reply|android body|physical escape/i);
 });
