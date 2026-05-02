@@ -460,7 +460,7 @@ function menuTitleNeedsGestureUnlock() {
 function resumeInteractiveAudio(consumeMenuActivation) {
   const consumeTitleUnlock = consumeMenuActivation && menuTitleNeedsGestureUnlock();
   audio.resume();
-  const menuMusicState = _G.state === 'MENU' || _G.state === 'ARCHIVES' ||
+  const menuMusicState = _G.state === 'MENU' || _G.state === 'SEED_SETUP' || _G.state === 'ARCHIVES' ||
     (_G.state === 'SETTINGS' && _G._settingsFrom === 'MENU');
   if (menuMusicState) {
     try { if (typeof music !== 'undefined') music.resume(); } catch (_) {}

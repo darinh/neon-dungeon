@@ -60,7 +60,7 @@ test('new game flow collects a seed before startGame initializes the run RNG', (
 });
 
 test('floor generation uses derived seed streams for world, spawn, and event work', () => {
-  const loadIdx = GAME.indexOf('loadFloor(n, savedModifier)');
+  const loadIdx = GAME.indexOf('loadFloor(n, savedModifier, skipAutoSave)');
   const nextIdx = GAME.indexOf('startGame(opts)', loadIdx);
   assert.ok(loadIdx >= 0 && nextIdx > loadIdx, 'loadFloor block must be findable');
   const loadBlock = GAME.slice(loadIdx, nextIdx);
