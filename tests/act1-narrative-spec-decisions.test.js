@@ -61,6 +61,7 @@ test('Act 1 spec defines planned system message channel and dismissal safety', (
   assert.match(SPEC, /Generic mouse\/touch fire, movement, Interact, Enter, and\s+the same input that opened the prompt must not dismiss it/i);
   assert.match(SPEC, /System\s+prompts carry interiority; terminals carry tester\/corporate artifacts; whispers\s+carry prior-instance residue/i);
   assert.match(SPEC, /MSG-006 ships the early-band retune/i);
+  assert.match(SPEC, /MSG-008 adds narrative guardrail tests that pin the\s+early channel stack/i);
   assert.match(SPEC, /docs\/vision\/act1-system-message-design\.md/i);
 });
 
