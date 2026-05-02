@@ -265,12 +265,12 @@ const music = (() => {
     const hLen = Math.ceil(ctx.sampleRate * 0.12);
     hatBuf = ctx.createBuffer(1, hLen, ctx.sampleRate);
     const hd = hatBuf.getChannelData(0);
-    for (let i = 0; i < hLen; i++) hd[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < hLen; i++) hd[i] = rand('cosmetic') * 2 - 1;
 
     const aLen = Math.ceil(ctx.sampleRate * 0.8);
     airBuf = ctx.createBuffer(1, aLen, ctx.sampleRate);
     const ad = airBuf.getChannelData(0);
-    for (let i = 0; i < aLen; i++) ad[i] = (Math.random() * 2 - 1) * (1 - i / aLen);
+    for (let i = 0; i < aLen; i++) ad[i] = (rand('cosmetic') * 2 - 1) * (1 - i / aLen);
   }
 
   /**
@@ -463,7 +463,7 @@ const music = (() => {
   function schedArp(t) {
     const bank = MOTIFS[state] || MOTIFS.explore;
     if (!bank || !bank.length) return;
-    if (step % 16 === 0) motifCursor = (motifCursor + 1 + (Math.random() < 0.26 ? 1 : 0)) % bank.length;
+    if (step % 16 === 0) motifCursor = (motifCursor + 1 + (rand('cosmetic') < 0.26 ? 1 : 0)) % bank.length;
     const motif = bank[motifCursor];
     const token = motif[step % motif.length];
     if (token == null) return;
@@ -531,7 +531,7 @@ const music = (() => {
    */
   function schedAir(t) {
     if (state === 'combat' || state === 'idle') return;
-    if (step % 8 !== 0 || Math.random() > (state === 'boss' ? 0.7 : 0.45)) return;
+    if (step % 8 !== 0 || rand('cosmetic') > (state === 'boss' ? 0.7 : 0.45)) return;
     const src = ctx.createBufferSource();
     src.buffer = airBuf;
     const bp = ctx.createBiquadFilter();
@@ -543,7 +543,7 @@ const music = (() => {
     g.gain.setValueAtTime(0.06, t);
     g.gain.linearRampToValueAtTime(0.1, t + 0.22);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-    src.connect(bp); bp.connect(g); g.connect(withPan(droneG, Math.random() * 0.4 - 0.2, 0.8));
+    src.connect(bp); bp.connect(g); g.connect(withPan(droneG, rand('cosmetic') * 0.4 - 0.2, 0.8));
     src.start(t); src.stop(t + 0.58);
   }
 
@@ -743,7 +743,7 @@ function pickLoreEntryIndex(loreRead, floorNum, randomFn) {
     return floorNum >= minFloor;
   });
   const lorePool = eligibleUnseen.length > 0 ? eligibleUnseen : unseen;
-  const roll = typeof randomFn === 'function' ? randomFn : Math.random;
+  const roll = typeof randomFn === 'function' ? randomFn : () => rand('event');
   if (lorePool.length > 0) {
     const pick = Math.max(0, Math.min(lorePool.length - 1, Math.floor(roll() * lorePool.length)));
     return lorePool[pick] ?? 0;
@@ -1925,7 +1925,7 @@ function updateHackwareEffects(dt) {
         }
       }
       // Trail particle
-      if (Math.random() < dt * 10) spawnParticles(fx.x, fx.y, 'MUZZLE', '#44ff88', 1);
+      if (rand('cosmetic') < dt * 10) spawnParticles(fx.x, fx.y, 'MUZZLE', '#44ff88', 1);
     }
 
     if (fx.type === 'scrap_magnet') {
@@ -1962,9 +1962,9 @@ function updateHackwareEffects(dt) {
         it.y += (fx.y - it.y) * pct;
       }
       // Ambient gold sparkle in the pull radius.
-      if (Math.random() < dt * 14) {
-        const a = Math.random() * TWO_PI;
-        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+      if (rand('cosmetic') < dt * 14) {
+        const a = rand('cosmetic') * TWO_PI;
+        const r = fx.radius * 0.4 + rand('cosmetic') * fx.radius * 0.5;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ffd700', 1);
       }
     }
@@ -1982,9 +1982,9 @@ function updateHackwareEffects(dt) {
         }
       }
       // Ambient vortex particles
-      if (Math.random() < dt * 8) {
-        const a = Math.random() * TWO_PI;
-        const r = fx.radius * 0.5 + Math.random() * fx.radius * 0.5;
+      if (rand('cosmetic') < dt * 8) {
+        const a = rand('cosmetic') * TWO_PI;
+        const r = fx.radius * 0.5 + rand('cosmetic') * fx.radius * 0.5;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff8800', 1);
       }
     }
@@ -2010,9 +2010,9 @@ function updateHackwareEffects(dt) {
         }
       }
       // Ambient crackling particles
-      if (Math.random() < dt * 6) {
-        const a = Math.random() * TWO_PI;
-        const r = Math.random() * fx.radius;
+      if (rand('cosmetic') < dt * 6) {
+        const a = rand('cosmetic') * TWO_PI;
+        const r = rand('cosmetic') * fx.radius;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'SPARK', '#44ccff', 1);
       }
       // Static field damages shield generators (1s interval, reuse hitMap with string key)
@@ -2117,9 +2117,9 @@ function updateHackwareEffects(dt) {
       }
       // Ambient particles in arm + detonation (gentler during arming).
       const sparkRate = fx.detonated ? 12 : 6;
-      if (Math.random() < dt * sparkRate) {
-        const a = Math.random() * TWO_PI;
-        const r = fx.radius * 0.45 + Math.random() * fx.radius * 0.4;
+      if (rand('cosmetic') < dt * sparkRate) {
+        const a = rand('cosmetic') * TWO_PI;
+        const r = fx.radius * 0.45 + rand('cosmetic') * fx.radius * 0.4;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#ff22aa', 1);
       }
     }
@@ -2174,9 +2174,9 @@ function updateHackwareEffects(dt) {
       }
       // Ambient temporal sparkles — slower spawn than static_field
       // (the visual language is "time slowed" not "energetic").
-      if (Math.random() < dt * 5) {
-        const a = Math.random() * TWO_PI;
-        const r = fx.radius * 0.4 + Math.random() * fx.radius * 0.5;
+      if (rand('cosmetic') < dt * 5) {
+        const a = rand('cosmetic') * TWO_PI;
+        const r = fx.radius * 0.4 + rand('cosmetic') * fx.radius * 0.5;
         spawnParticles(fx.x + Math.cos(a) * r, fx.y + Math.sin(a) * r, 'MUZZLE', '#aa88ff', 1);
       }
     }
@@ -2198,8 +2198,8 @@ function updateHackwareEffects(dt) {
         }
       }
       // Ambient holographic particles
-      if (Math.random() < dt * 4) {
-        const a = Math.random() * TWO_PI;
+      if (rand('cosmetic') < dt * 4) {
+        const a = rand('cosmetic') * TWO_PI;
         spawnParticles(fx.x + Math.cos(a) * 0.3, fx.y + Math.sin(a) * 0.3, 'MUZZLE', '#ff44ff', 1);
       }
     }
@@ -2234,7 +2234,7 @@ function updateHackwareEffects(dt) {
         fx.aimAngle += dt * 1.2;
       }
       // Ambient ready-LED blink
-      if (Math.random() < dt * 3) {
+      if (rand('cosmetic') < dt * 3) {
         spawnParticles(fx.x, fx.y - 0.2, 'MUZZLE', '#00ffaa', 1);
       }
     }
@@ -2489,7 +2489,7 @@ function drawHackwareEffects(camX, camY) {
     if (fx.type === 'hologram') {
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       const fade = 1 - (fx.age / fx.maxAge) * 0.3;
-      const flicker = Math.random() > 0.05 ? 1 : 0.3;
+      const flicker = rand('cosmetic') > 0.05 ? 1 : 0.3;
       const pulse = 0.6 + Math.sin(fx.age * 8) * 0.15;
       ctx.save();
       // Hexagon body
@@ -2614,7 +2614,7 @@ function rollWeapon(baseKey, floor) {
   if (floor <= 3)      { pTwo = 0;    pOne = 0.50; }
   else if (floor <= 5) { pTwo = 0.25; pOne = 0.45; }
   else                 { pTwo = 0.40; pOne = 0.40; }
-  const roll = Math.random();
+  const roll = rand('loot');
   let wantCount;
   if (roll < pTwo)           wantCount = 2;
   else if (roll < pTwo+pOne) wantCount = 1;
@@ -2626,12 +2626,12 @@ function rollWeapon(baseKey, floor) {
   // Pick eligible suffix
   const eligSuf = AFFIX_SUFFIXES.filter(id => affixEligible(id, base));
   if (wantCount >= 2 && eligPre.length && eligSuf.length) {
-    affixes.push(eligPre[rndInt(0, eligPre.length - 1)]);
-    affixes.push(eligSuf[rndInt(0, eligSuf.length - 1)]);
+    affixes.push(eligPre[rndInt(0, eligPre.length - 1, 'loot')]);
+    affixes.push(eligSuf[rndInt(0, eligSuf.length - 1, 'loot')]);
   } else if (wantCount >= 1) {
     // Pick from either pool
     const combined = [...eligPre, ...eligSuf];
-    if (combined.length) affixes.push(combined[rndInt(0, combined.length - 1)]);
+    if (combined.length) affixes.push(combined[rndInt(0, combined.length - 1, 'loot')]);
   }
   return buildWeapon(baseKey, affixes);
 }
@@ -2719,7 +2719,7 @@ function calcRunShards(floor, score, bc, vic)   { return NEON.save.calcRunShards
 /**
  * @param {any} player
  */
-function applyMetaToPlayer(player)              { return NEON.save.applyMetaToPlayer(player, buildWeapon); }
+function applyMetaToPlayer(player)              { return NEON.save.applyMetaToPlayer(player, buildWeapon, () => rand('loot')); }
 function getMetaXPMultiplier()                  { return NEON.save.getMetaXPMultiplier(); }
 function getMetaCreditMultiplier()              { return NEON.save.getMetaCreditMultiplier(); }
 // UNCHAINED helpers — thin wrappers so game.js can call them without NEON.save.
@@ -2787,16 +2787,16 @@ function spawnParticles(wx, wy, type, colour, count) {
   for (let i=0; i<count; i++) {
     const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
-    const a = Math.random()*TWO_PI;
-    const spd = type==='EXPLOSION' ? rnd(1,4) : rnd(0.5,3);
+    const a = rand('cosmetic') * TWO_PI;
+    const spd = type==='EXPLOSION' ? rnd(1,4,'cosmetic') : rnd(0.5,3,'cosmetic');
     // EXHAUSTIVE reset — every field rewritten, no bleed-through
     p.x = wx*TILE;
     p.y = wy*TILE;
     p.vx = Math.cos(a)*spd*(TILE/2);
     p.vy = Math.sin(a)*spd*(TILE/2);
     p.life = 1;
-    p.maxLife = type==='MUZZLE' ? 0.08 : type==='EXPLOSION' ? 0.5 : rnd(0.3,0.6);
-    p.size = type==='EXPLOSION' ? rnd(3,8) : rnd(1,3);
+    p.maxLife = type==='MUZZLE' ? 0.08 : type==='EXPLOSION' ? 0.5 : rnd(0.3,0.6,'cosmetic');
+    p.size = type==='EXPLOSION' ? rnd(3,8,'cosmetic') : rnd(1,3,'cosmetic');
     p.colour = colour;
     p.type = type;
     p.grav = type==='BLOOD' ? 40 : 0;
@@ -2910,20 +2910,20 @@ function updateAmbient(dt) {
       if (ddx * ddx + ddy * ddy > torchR * torchR) continue;
 
       if (tile === T.FLOOR || tile === T.DOOR_OPEN) {
-        if (Math.random() < 0.008) emitters.push({ kind: 'DUST', tx, ty });
+        if (rand('cosmetic') < 0.008) emitters.push({ kind: 'DUST', tx, ty });
       } else if (tile === T.PLASMA) {
-        if (Math.random() < 0.15) emitters.push({ kind: 'EMBER', tx, ty });
+        if (rand('cosmetic') < 0.15) emitters.push({ kind: 'EMBER', tx, ty });
       } else if (tile === T.ARC) {
         const arcActive = Math.sin((_CG.floorTime || 0) * Math.PI) > 0;
-        if (arcActive && Math.random() < 0.12) emitters.push({ kind: 'ZAP', tx, ty });
+        if (arcActive && rand('cosmetic') < 0.12) emitters.push({ kind: 'ZAP', tx, ty });
       } else if (tile === T.CRACKED) {
         const pdx = tx - Math.floor(player.x), pdy = ty - Math.floor(player.y);
         if (pdx * pdx + pdy * pdy <= 16) {
-          if (Math.random() < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
+          if (rand('cosmetic') < 0.06) emitters.push({ kind: 'STEAM', tx, ty });
         }
       } else if (tile === T.WALL) {
         if (_CG.sealedEntranceSet && _CG.sealedEntranceSet.has(ty * MAP_W + tx)) {
-          if (Math.random() < 0.18) emitters.push({ kind: 'WISP', tx, ty });
+          if (rand('cosmetic') < 0.18) emitters.push({ kind: 'WISP', tx, ty });
         }
       }
     }
@@ -2933,7 +2933,7 @@ function updateAmbient(dt) {
   const budget = AMB_CAP - ambientParticles.length;
   const count = Math.min(emitters.length, budget, 3);
   for (let i = 0; i < count; i++) {
-    const idx = Math.floor(Math.random() * emitters.length);
+    const idx = rndInt(0, emitters.length - 1, 'cosmetic');
     const e = /** @type {any} */ (emitters.splice(idx, 1)[0]);
     const cx = e.tx * TILE + rnd(2, TILE - 2);
     const cy = e.ty * TILE + rnd(2, TILE - 2);
@@ -2949,13 +2949,13 @@ function updateAmbient(dt) {
             if (bp && Array.isArray(bp.dust) && bp.dust.length) dustPal = bp.dust;
           }
         } catch(_) {}
-        const col = Math.random() < 0.5 ? dustPal[0] : dustPal[1 % dustPal.length];
+        const col = rand('cosmetic') < 0.5 ? dustPal[0] : dustPal[1 % dustPal.length];
         ambientParticles.push({
           kind: 'DUST', x: cx, y: cy,
           vx: rnd(-3, 3), vy: rnd(-3, 3),
           life: 1, maxLife: rnd(3, 6), size: rnd(1, 2.5),
           alpha: rnd(0.06, 0.18), colour: col,
-          seed: Math.random() * 1000,
+          seed: rand('cosmetic') * 1000,
         });
         break;
       }
@@ -2964,7 +2964,7 @@ function updateAmbient(dt) {
           kind: 'EMBER', x: cx, y: cy,
           vx: rnd(-6, 6), vy: rnd(-25, -10),
           life: 1, maxLife: rnd(0.6, 1.2), size: rnd(1.5, 3),
-          alpha: rnd(0.3, 0.6), colour: Math.random() < 0.5 ? '#ff6600' : '#ffaa33',
+          alpha: rnd(0.3, 0.6, 'cosmetic'), colour: rand('cosmetic') < 0.5 ? '#ff6600' : '#ffaa33',
           seed: 0,
         });
         break;
@@ -2991,8 +2991,8 @@ function updateAmbient(dt) {
           kind: 'WISP', x: cx, y: cy,
           vx: rnd(-10, 10), vy: rnd(-10, 10),
           life: 1, maxLife: rnd(0.8, 1.8), size: rnd(2, 4),
-          alpha: rnd(0.2, 0.45), colour: Math.random() < 0.6 ? '#ff3333' : '#ff6644',
-          seed: Math.random() * 1000,
+          alpha: rnd(0.2, 0.45, 'cosmetic'), colour: rand('cosmetic') < 0.6 ? '#ff3333' : '#ff6644',
+          seed: rand('cosmetic') * 1000,
         });
         break;
     }
@@ -3117,8 +3117,8 @@ function updateShake(dt) {
   shake.timer -= dt;
   const t = Math.max(0, shake.timer);
   const mag = shake.intensity * (t / 0.25);  // decay linearly
-  shake.ox = (Math.random() * 2 - 1) * mag;
-  shake.oy = (Math.random() * 2 - 1) * mag;
+  shake.ox = (rand('cosmetic') * 2 - 1) * mag;
+  shake.oy = (rand('cosmetic') * 2 - 1) * mag;
   if (shake.timer <= 0) { shake.intensity = 0; shake.ox = shake.oy = 0; }
 }
 
@@ -3915,7 +3915,7 @@ class BSPNode {
    */
   split(depth) {
     if (depth<=0 || (this.w<16 && this.h<16)) return;
-    const horiz = this.h > this.w ? true : this.w > this.h ? false : Math.random()<0.5;
+    const horiz = this.h > this.w ? true : this.w > this.h ? false : rand('world') < 0.5;
     if (horiz) {
       const split = rndInt(8, this.h-8);
       this.left  = new BSPNode(this.x, this.y, this.w, split);
@@ -3958,7 +3958,7 @@ class BSPNode {
     if (this.room) return this.room;
     const l = this.left?.getRoom(), r = this.right?.getRoom();
     if (!l) return r; if (!r) return l;
-    return Math.random()<0.5?l:r;
+    return rand('world') < 0.5 ? l : r;
   }
 }
 
@@ -4326,7 +4326,7 @@ function generateFloor(floorNum) {
   // ── Special room rotation (excluding vendor room) ───────────────────────
   const specialEligible = eligible.filter((/** @type {any} */ r) => r !== vendorRoom);
   const numSpecial = Math.min(specialEligible.length, Math.floor(floorNum/2)+1);
-  const picked = specialEligible.sort(()=>Math.random()-0.5).slice(0,numSpecial);
+  const picked = shuffleInPlace(specialEligible.slice(), 'world').slice(0,numSpecial);
   for (let i=0; i<picked.length; i++) {
     const r = picked[i];
     r.roomType = ROOM_TYPES[i % ROOM_TYPES.length];
@@ -4381,7 +4381,7 @@ function generateFloor(floorNum) {
     const clusters = getEntranceClusters(r);
     // Only door narrow clusters (1-2 tiles = real chokepoints)
     for (const cl of clusters) {
-      if (cl.length <= 2 && Math.random() < 0.5) {
+      if (cl.length <= 2 && rand('world') < 0.5) {
         for (const e of cl) map[e.y][e.x] = T.DOOR;
       }
     }
@@ -4403,7 +4403,7 @@ function generateFloor(floorNum) {
       r !== spawnRoom && r !== farthest && r !== bossRoom &&
       !specialRooms.includes(r) && r.w * r.h >= 20
     );
-    lockPriority.push(...fallback.sort(() => Math.random()-0.5));
+    lockPriority.push(...shuffleInPlace(fallback.slice(), 'world'));
 
     const numLocked = floorNum >= 7 ? 3 : floorNum >= 4 ? 2 : 1;
     const colours = ['red','blue','gold'];
@@ -4477,7 +4477,7 @@ function generateFloor(floorNum) {
       r !== spawnRoom && r !== farthest && r !== bossRoom && !r.roomType && r.w * r.h >= 20
     );
     // Shuffle and try to find one with a narrow entrance cluster
-    const shuffled = secretEligible.sort(() => Math.random() - 0.5);
+    const shuffled = shuffleInPlace(secretEligible.slice(), 'world');
     for (const r of shuffled) {
       const cls = getEntranceClusters(r);
       const narrow = cls.filter(cl => cl.length <= 2);
@@ -4505,7 +4505,7 @@ function generateFloor(floorNum) {
       // tests of generateFloor).
       try {
         if (typeof NEON !== 'undefined' && NEON.whispers && NEON.whispers.pickWhisperForFloor) {
-          const w = NEON.whispers.pickWhisperForFloor(floorNum);
+          const w = NEON.whispers.pickWhisperForFloor(floorNum, () => rand('event'));
           if (w && w.id) {
             whisperItems.push({ x: r.cx + 0.5, y: r.cy + 0.5, whisperId: w.id });
           }
@@ -4524,7 +4524,7 @@ function generateFloor(floorNum) {
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 30
     );
-    const shuffledCh = challengeEligible.sort(() => Math.random() - 0.5);
+    const shuffledCh = shuffleInPlace(challengeEligible.slice(), 'world');
     for (const r of shuffledCh) {
       const cls = getEntranceClusters(r);
       // Only pick rooms where ALL entrance clusters are narrow (≤2 tiles)
@@ -4546,7 +4546,7 @@ function generateFloor(floorNum) {
 
   // ── Implant Room (floor 2+, non-boss, ~50% chance): augment shrine ─────
   /** @type {any} */ let implantRoom = null;
-  if (floorNum >= 2 && !bossRoom && Math.random() < 0.5) {
+  if (floorNum >= 2 && !bossRoom && rand('world') < 0.5) {
     const implantEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 16
@@ -4801,7 +4801,7 @@ function generateFloor(floorNum) {
           // the player in place / displace them — over-spawning trivialises
           // rooms. Repulsor is the rarest because adjacent repulsors can
           // chain a forced detour that's hard to plan around.
-          const roll = Math.random();
+          const roll = rand('world');
           map[ty][tx] = roll < 0.55 ? T.TRAP_SPIKE
                       : roll < 0.77 ? T.TRAP_SLOW
                       : roll < 0.90 ? T.SHOCK_TILE
@@ -4815,7 +4815,7 @@ function generateFloor(floorNum) {
   if (floorNum >= 3) {
     for (const r of rooms) {
       if (r === spawnRoom || r === bossRoom || r.roomType) continue;
-      if (Math.random() > 0.30) continue; // ~30% of eligible rooms
+      if (rand('world') > 0.30) continue; // ~30% of eligible rooms
       const sx = r.x + rndInt(2, r.w-3);
       const sy = r.y + rndInt(2, r.h-3);
       if (map[sy][sx] !== T.FLOOR) continue;
@@ -4838,7 +4838,7 @@ function generateFloor(floorNum) {
   if (floorNum >= 4) {
     for (const r of rooms) {
       if (r === spawnRoom || r === bossRoom || r.roomType) continue;
-      if (Math.random() > 0.35) continue; // ~35% of eligible rooms
+      if (rand('world') > 0.35) continue; // ~35% of eligible rooms
       // Seed tile for the pool
       const sx = r.x + rndInt(2, r.w-3);
       const sy = r.y + rndInt(2, r.h-3);
@@ -4893,7 +4893,7 @@ function generateFloor(floorNum) {
       r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
     );
     const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : floorNum >= 2 ? 1 : 0);
-    const loreRooms = loreEligible.sort(() => Math.random() - 0.5).slice(0, numLore);
+    const loreRooms = shuffleInPlace(loreEligible.slice(), 'world').slice(0, numLore);
     for (const r of loreRooms) {
       placeLoreTerminalInRoom(r);
     }
@@ -4924,7 +4924,7 @@ function generateFloor(floorNum) {
     }
     // Place arc grids: ~1 per 12 corridor tiles, capped
     const arcCount = Math.min(Math.floor(corridorTiles.length / 12) + 1, 6 + floorNum);
-    const shuffled = corridorTiles.sort(() => Math.random() - 0.5);
+    const shuffled = shuffleInPlace(corridorTiles.slice(), 'world');
     let placed = 0;
     for (const ct of shuffled) {
       if (placed >= arcCount) break;
@@ -4949,7 +4949,7 @@ function generateFloor(floorNum) {
     );
     // Want pairs of rooms far apart — sort by BFS distance from spawn and pair extremes
     const pairCount = floorNum >= 6 ? 2 : 1;
-    const shuffled = padEligible.sort(() => Math.random() - 0.5);
+    const shuffled = shuffleInPlace(padEligible.slice(), 'world');
     const used = new Set();
     for (let p = 0; p < pairCount && shuffled.length - used.size >= 2; p++) {
       let bestA = null, bestB = null, bestDist = 0;
@@ -5890,7 +5890,7 @@ function pickUpgradeOption(exclude) {
       fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+40); } };
   }
   const total = pool.reduce((s,u) => s+u.rarity, 0);
-  let r = Math.random() * total;
+  let r = rand('loot') * total;
   for (const u of pool) { r -= u.rarity; if (r <= 0) return u; }
   return pool[0];
 }
@@ -5940,10 +5940,7 @@ const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
 function rollPerkChoices(player, count) {
   const available = Object.keys(PERK_POOL).filter(id => !player.perks[id]);
   // Fisher-Yates shuffle, take first `count`
-  for (let i = available.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [/** @type {string} */ (available[j]), /** @type {string} */ (available[i])];
-  }
+  shuffleInPlace(available, 'loot');
   return available.slice(0, Math.min(count, available.length));
 }
 
@@ -6108,9 +6105,9 @@ function applyEventEffect(event, choice, player, gm) {
         break;
       }
       case 'CORRUPTED_TERMINAL': {
-        if (Math.random() < 0.6) {
+        if (rand('event') < 0.6) {
           if (!player.hackware) {
-            const hw = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)]);
+            const hw = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')]);
             player.hackware = hw;
             player.hackwareCooldown = 0;
             gm.msg('HACKWARE: ' + HACKWARE[hw].name, HACKWARE[hw].colour);
@@ -6227,7 +6224,7 @@ function applyEventEffect(event, choice, player, gm) {
           // UNCHAINED #39: 50% chance the rare-terminal reward is a core
           // instead of a module. Same slot as the module roll — cores and
           // modules are mutually exclusive per the #39 spec.
-          if (Math.random() < 0.50 && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
+          if (rand('loot') < 0.50 && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
             NEON.cores.spawnCoreDrop(gm, player.x, player.y, 1);
             gm.msg('CORE FRAGMENT SALVAGED', '#a866ff');
             spawnParticles(player.x, player.y, 'SPARK', '#a866ff', 10);
@@ -6347,8 +6344,8 @@ function generateShopItems(floor, player, dungeon) {
     }
   }
   // Offer a hackware module on floor 3+ (~40% chance per vendor)
-  if (floor >= 3 && Math.random() < 0.4) {
-    const hwKey = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1)]);
+  if (floor >= 3 && rand('loot') < 0.4) {
+    const hwKey = /** @type {string} */ (HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')]);
     const hw = HACKWARE[hwKey];
     const replaces = player.hackware ? HACKWARE[player.hackware] : null;
     pool.push({
@@ -6359,7 +6356,7 @@ function generateShopItems(floor, player, dungeon) {
     });
   }
   // Offer an augment on floor 3+ (~20% chance, if player has room)
-  if (floor >= 3 && Math.random() < 0.2) {
+  if (floor >= 3 && rand('loot') < 0.2) {
     const augOpt = makeAugmentShopOption(null);
     if (augOpt) pool.push(augOpt);
   }
@@ -6368,10 +6365,7 @@ function generateShopItems(floor, player, dungeon) {
   // floor-scoped (or instant one-shots) and never grant permanent growth.
   const boostKeys = (typeof NEON !== 'undefined' && NEON.boosts) ? NEON.boosts.BOOST_KEYS.slice() : [];
   // Shuffle boost keys for variety across vendors.
-  for (let i = boostKeys.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const t = boostKeys[i]; boostKeys[i] = boostKeys[j]; boostKeys[j] = t;
-  }
+  shuffleInPlace(boostKeys, 'loot');
   const usedIds = new Set(pool.map(p => p.id));
   for (const bk of boostKeys) {
     if (pool.length >= 3) break;
@@ -6405,7 +6399,7 @@ function generateShopItems(floor, player, dungeon) {
   const used = usedIds;
   const eligible = nonPersistentPool.filter((/** @type {any} */ u) => !used.has(u.id));
   // Shuffle eligible and pick enough to fill 3 total slots
-  const shuffled = eligible.sort(() => Math.random() - 0.5);
+  const shuffled = shuffleInPlace(eligible.slice(), 'loot');
   while (pool.length < 3 && shuffled.length > 0) {
     const u = shuffled.pop();
     const price = shopPrice(u.id, floor, player ? player.upgrades : {});
@@ -6435,7 +6429,7 @@ class HarvestPickup {
   constructor(x, y) {
     this.x = x; this.y = y;
     this.dead = false;
-    this.bob = Math.random() * TWO_PI;
+    this.bob = rand('cosmetic') * TWO_PI;
     this.isHarvest = true;
     // Decays after 5s if uncollected. Tracks remaining time so the draw
     // branch can flash + alpha-fade in the last second to telegraph imminent
@@ -6497,7 +6491,7 @@ class MagpieHoard {
   constructor(x, y, amt) {
     this.x = x; this.y = y;
     this.dead = false;
-    this.bob = Math.random() * TWO_PI;
+    this.bob = rand('cosmetic') * TWO_PI;
     this.isHoard = true;
     this.amt = Math.max(0, Math.round(amt || 0));
   }
@@ -6555,7 +6549,7 @@ class VaultCoin {
   constructor(x, y, amt) {
     this.x = x; this.y = y;
     this.dead = false;
-    this.bob = Math.random() * TWO_PI;
+    this.bob = rand('cosmetic') * TWO_PI;
     this.isHoard = true;
     this.amt = Math.max(0, Math.round(amt || 0));
     // Visual size hint — used to scale the ring radius. Coin (5cr) reads
@@ -6622,7 +6616,7 @@ class ShockPulsePickup {
   constructor(x, y) {
     this.x = x; this.y = y;
     this.dead = false;
-    this.bob = Math.random() * TWO_PI;
+    this.bob = rand('cosmetic') * TWO_PI;
     this.isShockPulse = true;
   }
   /** @param {any} dt */
@@ -6662,7 +6656,7 @@ class Item {
    */
   constructor(x,y,type) {
     this.x=x; this.y=y; this.type=type||pickItemType();
-    this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=false;
+    this.dead=false; this.bob=rand('cosmetic')*TWO_PI; this.isKey=false;
   }
   /**
    * @param {any} dt
@@ -6702,7 +6696,7 @@ class KeyItem {
     this.x=x; this.y=y;
     this.colour=colour; // 'red','blue','gold'
     this.tileColour=tileColour;
-    this.dead=false; this.bob=Math.random()*TWO_PI; this.isKey=true;
+    this.dead=false; this.bob=rand('cosmetic')*TWO_PI; this.isKey=true;
   }
   /**
    * @param {any} dt
@@ -6743,7 +6737,7 @@ class WhisperItem {
     this.x = x; this.y = y;
     this.whisperId = whisperId;
     this.dead = false;
-    this.bob = Math.random() * TWO_PI;
+    this.bob = rand('cosmetic') * TWO_PI;
     this.isWhisper = true;
   }
   /** @param {any} dt */
@@ -6783,7 +6777,7 @@ class WhisperItem {
 function tryRareTerminalModuleDrop(gm, player) {
   if (!gm || (gm.floor|0) < 2) return;
   if (typeof NEON === 'undefined' || !NEON.modules) return;
-  const id = NEON.modules.rollModuleDrop({ source: 'rare-terminal' });
+  const id = NEON.modules.rollModuleDrop({ source: 'rare-terminal', rng: () => rand('loot') });
   if (!id) return;
   NEON.modules.addRunPickup(gm, id);
   const mod = NEON.modules.getModule(id);
@@ -6807,8 +6801,8 @@ const _LOG_DROP_CHANCE = 0.40;
 function tryRareTerminalLogDrop(gm, player) {
   if (!gm) return false;
   if (typeof NEON === 'undefined' || !NEON.logs) return false;
-  if (Math.random() >= _LOG_DROP_CHANCE) return false;
-  const log = NEON.logs.pickLogForFloor(gm.floor | 0);
+  if (rand('event') >= _LOG_DROP_CHANCE) return false;
+  const log = NEON.logs.pickLogForFloor(gm.floor | 0, () => rand('event'));
   if (!log) return false;
   try { NEON.logs.findLog(log.id); } catch (_) {}
   try { NEON.logs.readLog(log.id); } catch (_) {}

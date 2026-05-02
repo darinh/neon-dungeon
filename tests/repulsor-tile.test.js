@@ -361,7 +361,7 @@ test('content.js trap-mix sums to 1.0 — no cumulative-roll hole that drops a h
   // skips the 0.70–0.90 range for B). Pin: every threshold must be strictly
   // ascending and the picker must end with a default (no `: nothing`).
   const stripped = stripFullLineComments(CONTENT);
-  const pickerM = stripped.match(/const\s+roll\s*=\s*Math\.random\(\)\s*;[\s\S]*?T\.REPULSOR\s*;/);
+  const pickerM = stripped.match(/const\s+roll\s*=\s*rand\('world'\)\s*;[\s\S]*?T\.REPULSOR\s*;/);
   assert.ok(pickerM, 'trap-mix picker must be locatable');
   const picker = pickerM[0];
   // Extract numeric thresholds in order and assert strictly ascending.

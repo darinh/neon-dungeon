@@ -51,13 +51,13 @@ test('SAPPER has a stat row in spawnEnemy switch', () => {
 test('SAPPER spawn init block sets _saPulse', () => {
   // Without _saPulse the draw branch reads undefined and the
   // tendril/body wobble is in lock-step across a clustered spawn.
-  // Stagger via Math.random() so a pack of SAPPERs reads as
+  // Stagger via cosmetic RNG so a pack of SAPPERs reads as
   // independent agents.
   const block = ENTITIES.match(/if\s*\(type\s*===\s*'SAPPER'\)[\s\S]{0,300}\}/);
   assert.ok(block, 'SAPPER init block missing');
   assert.match(block[0], /_saPulse\s*=/, 'SAPPER must initialise _saPulse');
-  assert.match(block[0], /Math\.random\(\)/,
-    'SAPPER init must stagger _saPulse with Math.random()');
+  assert.match(block[0], /rand\('cosmetic'\)/,
+    'SAPPER init must stagger _saPulse with the cosmetic RNG');
 });
 
 test('SAPPER is excluded from the elite affix roll', () => {

@@ -89,7 +89,7 @@ test('SALVAGE skips summons and shards (defense in depth)', () => {
     'SALVAGE block must skip isSummon');
 });
 
-test('SALVAGE rolls Math.random() < 0.10 (10% chance per qualifying kill)', () => {
+test('SALVAGE rolls seeded loot RNG < 0.10 (10% chance per qualifying kill)', () => {
   // 10% is the design — too high (50%) trivializes the elite/boss core
   // economy by making any-mob drops the dominant source; too low (1%)
   // makes the suffix never feel rewarding over a 5-floor run. Pin the
@@ -97,8 +97,8 @@ test('SALVAGE rolls Math.random() < 0.10 (10% chance per qualifying kill)', () =
   const idx = ENTITIES_CODE.indexOf("effects.includes('salvage')");
   assert.ok(idx !== -1, 'salvage gate must exist');
   const window = ENTITIES_CODE.slice(idx, idx + 800);
-  assert.match(window, /Math\.random\(\)\s*<\s*0\.10/,
-    'SALVAGE must roll Math.random() < 0.10 (10% chance)');
+  assert.match(window, /rand\('loot'\)\s*<\s*0\.10/,
+    'SALVAGE must roll rand(\'loot\') < 0.10 (10% chance)');
 });
 
 test('SALVAGE calls NEON.cores.spawnCoreDrop with value=1 and emits cyan particle hint', () => {

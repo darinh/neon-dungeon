@@ -48,10 +48,10 @@ test('WATCHER spawn init block sets state + randomised initial sweep angle', () 
   // randomised so a clustered spawn doesn't sweep in lock-step.
   const re = /if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}_wState\s*=\s*'sweep'[\s\S]{0,400}_wAng\s*=/;
   assert.match(ENTITIES, re, 'WATCHER init must set _wState=sweep and randomised _wAng');
-  // Stagger via Math.random() — otherwise a pack telegraphs together
+  // Stagger via seeded spawn RNG — otherwise a pack telegraphs together
   const initBlock = ENTITIES.match(/if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}\}/);
-  assert.ok(initBlock && /Math\.random\(\)/.test(initBlock[0]),
-    'WATCHER init must stagger _wAng via Math.random()');
+  assert.ok(initBlock && /rand\('spawn'\)/.test(initBlock[0]),
+    'WATCHER init must stagger _wAng via the seeded spawn RNG');
 });
 
 test('WATCHER spawn init zeroes telegraph + recovery timers', () => {

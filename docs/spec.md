@@ -355,9 +355,17 @@ MENU → INTRO → PLAYING → NAME_ENTRY → GAME_OVER
      PLAYING → MAINFRAME_READER → MESSAGE_SEND → VICTORY  (canonical Act 1 finale)
      PLAYING → HUB → PLAYING  (between-floor interlude; see Hub / The Gap)
      MENU ↔ ARCHIVES          (meta-progression upgrade shop)
+     MENU ↔ SEED_SETUP        (new-run seed entry before startGame)
 ```
 
 State transitions are animated (fade in/out, 400 ms).
+
+**SEED_SETUP** appears after the main-menu `NEW GAME — <difficulty> / SEED`
+row. It shows the selected difficulty, an editable run-seed field, and
+`START`, `RANDOMIZE`, and `BACK` actions. Desktop users type directly into the
+seed field (Backspace edits, `R` randomizes, Enter confirms); touch users tap
+the action buttons. The chosen seed is normalized before `startGame()` and is
+preserved through the "Keep persistent unlocks?" confirmation prompt.
 
 **POWERUP_CHOICE** appears when the player walks over an item. Gameplay
 freezes and two random upgrade options are presented. The player picks one
@@ -450,6 +458,29 @@ Each floor is generated fresh using Binary Space Partitioning:
    non-WALL/VOID tiles (locked doors count as passable since keys are
    placed in reachable areas). If stairs are unreachable, a rescue
    corridor is carved from spawn to stairs as a safety net.
+
+### Seeded generation
+
+New runs initialize the custom PRNG in `engine/math.js` with `setSeed()` before
+any player meta-starting gear, floor layout, population, loot, event, or combat
+roll can occur. Gameplay code does not call `Math.random()` directly; it uses
+the engine RNG helpers (`rand`, `rnd`, `rndInt`, `shuffleInPlace`) with named
+streams:
+
+| Stream | Use |
+|--------|-----|
+| `world` | BSP splits, rooms, doors, locked doors, hazards, stairs, secrets, keys |
+| `spawn` | Floor population, enemy/boss selection, enemy spawn initialization |
+| `loot` | Items, weapon affixes, shop offers, module/core/item drops, credit proc rolls |
+| `event` | Quest/event/lore/whisper choices and terminal outcomes |
+| `combat` | Runtime combat variance: crits, spread, AI stochastic choices, staggered cascades |
+| `cosmetic` | Menu particles, render-only jitter, bob phases, audio/visual garnish |
+
+`loadFloor(n)` wraps `generateFloor(n)`, `populateFloor(...)`, and quest setup
+in derived per-floor streams (`world:floor:n`, `spawn:floor:n`,
+`event:floor:n:quest`). Matching explicit stream requests inside those derived
+blocks route to the active derived stream, so Continue can regenerate the same
+floor from `runSeed + floor` without advancing the saved runtime stream state.
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
 LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | TOXIC | VOID
@@ -3330,14 +3361,17 @@ separate key (`neonDungeonSave`) and is the only thing cleared by game over.
 
 ### New Game Confirmation
 
-`game.startGame()` intercepts the menu action when `_hasMetaProgress()` is true
+The main-menu New Game row opens **SEED_SETUP** first. `game.startGame()` then
+intercepts the seeded start when `_hasMetaProgress()` is true
 (any cores, upgrades, modules, logs, endings, cleared difficulties, or prior
 runs). A modal overlay prompts **"Keep persistent unlocks?"** with two choices:
 
 - **KEEP UNLOCKS** → `startGame({ skipConfirm: true })` retains meta as-is.
 - **RESET META** → `resetMeta()` then start fresh.
 
-Fresh installs (meta entirely default) skip the prompt.
+Fresh installs (meta entirely default) skip the prompt. The selected run seed is
+stored on `_pendingStartSeed` while the prompt is active and is consumed when
+the run actually starts.
 
 ---
 
@@ -4152,9 +4186,9 @@ The leaderboard is displayed on three screens:
 
 ## Save System
 
-Uses `localStorage` key `neonDungeonSave`. Saves player stats and current floor
-number — the dungeon itself is not persisted (a fresh floor is generated on
-resume).
+Uses `localStorage` key `neonDungeonSave`. Saves player stats, current floor,
+run seed metadata, and RNG stream state — the dungeon itself is not persisted
+(it is regenerated from the saved seed on resume).
 
 **Auto-save triggers:**
 1. After `loadFloor()` completes (start of every floor — the sole checkpoint)
@@ -4163,21 +4197,31 @@ Mid-floor progress is not saved. Closing the browser mid-floor loses progress
 back to the start of the current floor. This is intentional — it prevents save-
 scumming (reloading to re-roll dungeon layout while keeping stats).
 
-**Save payload:** `{ v, floor, difficulty, modifier, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
+**Save payload:** `{ v, floor, difficulty, modifier, runSeed, runSeedHash, rngStates, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
 energyShieldTimer, credits, loreRead, hackware, hackwareCooldown } }` — `shieldBonus` is always 0 at floor entry so is
-excluded. `modifier` is the floor modifier key (string) or `null`. `hackware` is a `HACKWARE` key string or `null`. Old saves without hackware fields default to `null`/`0`.
+excluded. `modifier` is the floor modifier key (string) or `null`. `runSeed`
+is the normalized seed string shown/entered at run start; `runSeedHash` is the
+numeric seed hash used for telemetry/debug display; `rngStates` is the
+serializable per-stream state snapshot for runtime streams after floor entry
+(cosmetic RNG state is intentionally excluded).
+`hackware` is a `HACKWARE` key string or `null`. Old saves without seed or
+hackware fields default to a legacy sentinel seed and `null`/`0`.
 
 **Menu behaviour:**
-- If a save exists: two options — `CONTINUE (FLOOR N)` and `NEW GAME`.
-  Keyboard ↑↓ or W/S to select, Enter to confirm. Touch: top half = continue,
-  bottom half = new game.
-- If no save: single `PRESS ENTER TO START` prompt (unchanged).
+- If a save exists: `CONTINUE (FLOOR N · DIFFICULTY)` remains available above
+  `NEW GAME — <difficulty> / SEED`.
+- The New Game row cycles difficulty with left/right and opens **SEED_SETUP**
+  on Enter/tap.
+- Locked difficulties remain dimmed and display the unlock message instead of
+  opening the seed screen.
 
 **Continue flow:** Creates a fresh `Player`, applies saved stats, calls
-`loadFloor(savedFloor)`, displays "RUN RESUMED — FLOOR N" message. The dungeon
-is regenerated fresh — enemies, items, and layout will differ from the original
-floor. Incompatible save versions (different `v` field) are silently deleted.
+`setSeed(save.runSeed, save.rngStates)`, then `loadFloor(savedFloor)`, and
+displays "RUN RESUMED — FLOOR N". Because layout and population use derived
+per-floor streams, the regenerated floor matches the saved run seed/floor
+rather than re-rolling from ambient randomness. Incompatible save versions
+(different `v` field) are deleted and a fresh run starts with an error message.
 
 **Save deletion:** `endRun()` (called on death and victory) deletes the save.
 Starting a new game overwrites the save when the first floor loads.
@@ -4845,3 +4889,4 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v141.0  | Secret-room whisper ion-storm bundle: `WHISPERS` grows to 66 entries with one new biome-gated fragment per biome (`w-sb-14`, `w-cc-13`, `w-fw-13`, `w-uk-13`, `w-on-13`) extending the signal/anchor thread into charged weather, buffered lightning, ion confessions, antenna handshakes, and blue-wire city rain. Added `tests/whispers-bundle-12.test.js` to pin metadata, picker eligibility, per-biome >=13 coverage, progress floor, uniqueness, and ion-storm vocabulary continuity. |
 | v142.0  | Secret-room whisper afterimage/exposure bundle: `WHISPERS` grows to 71 entries with one new biome-gated fragment per biome (`w-sb-15`, `w-cc-14`, `w-fw-14`, `w-uk-14`, `w-on-14`) extending the signal/anchor thread into delayed light, exposure tables, retinal exceptions, phosphene maps, and city crosswalk afterimages. Added `tests/whispers-bundle-13.test.js` to pin metadata, picker eligibility, per-biome >=14 coverage, progress floor, uniqueness, and afterimage/exposure vocabulary continuity. |
 | v6.1.2  | Run start, death, and victory copy now frame the loop as an AI session lifecycle (#462). Main menu fresh starts render as `BOOT SESSION N`; saved runs render as `RESUME SESSION`; the meta-confirm modal says `BOOT TEST SESSION` and describes recovered memory preservation/purge. `endRun()` now increments and snapshots `meta.runsCompleted` as a session ordinal while preserving legacy score/name-entry routing. Game-over recap reads as `INSTANCE TERMINATED` / `MEMORY WIPE QUEUED` with `TERMINATION SOURCE`; the session ordinal renders on its own line to preserve compact-screen width. Victory copy supports the planned `act1_message_sent` finale branch (`OUTBOUND MESSAGE SENT`, contact attempt recorded, signal left sandbox, instance remains compute-bound), and `src/meta/save.js` now preserves that ending id across reloads, while legacy clears read as completed test sessions with the mainframe contact route pending. Added `tests/session-lifecycle-copy.test.js` plus an ending-id round-trip in `tests/save.test.js`. |
+| v6.1.3  | Seeded run generation: main-menu fresh starts open `SEED_SETUP` with editable seed plus START/RANDOMIZE/BACK before booting the next session. `engine/math.js` now provides a custom deterministic PRNG, seed normalization, named RNG streams, saveable stream snapshots, and derived per-floor streams. `startGame()` calls `setSeed()` before any run-start rolls; save payload stores `runSeed`, `runSeedHash`, and `rngStates`; Continue restores the seed before regenerating the floor. Gameplay files (`game.js`, `content.js`, `entities.js`, `render.js`) use seeded helpers instead of direct `Math.random()` for generation, loot, events, combat, and isolated cosmetics. Added `tests/seeded-generation.test.js` source guards plus `tests/math.test.js` PRNG/derived-stream coverage. |

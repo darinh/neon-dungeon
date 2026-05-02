@@ -341,6 +341,10 @@ const game = {
   fadeGlitchTimer: 0,
   transitionText: '',
   menuParticles: [],
+  seedSetup: null,
+  runSeed: null,
+  runSeedHash: 0,
+  _pendingStartSeed: null,
   bossRoom: null,
   bossType: null,
   bossEntrances: [],
@@ -456,11 +460,11 @@ const game = {
     this.state=s;
     this.mapExpanded = false;
     if (s === 'MENU') { this.menuSel = 0; this._menuTitleUnlockConsumed = false; this._menuTitleUnlockPending = false; music.setState('menu'); }
-    else if (s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
+    else if (s === 'SEED_SETUP' || s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
     else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
     else if (s === 'INTRO') music.stop();
     else if (s === 'PLAYING') {
-      if (prevState === 'MENU' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
+      if (prevState === 'MENU' || prevState === 'SEED_SETUP' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
       else music.resume();
     }
     else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
@@ -533,7 +537,7 @@ const game = {
     } else if (n === 1 || _isBossFloor_mod) {
       this.modifier = null;
     } else {
-      this.modifier = MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)];
+      this.modifier = withDerivedRngStream('event:floor:' + n + ':modifier', () => MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)]);
     }
     // Strip floor-only shield bonus from previous floor
     this.player.def-=this.player.shieldBonus;
@@ -546,7 +550,7 @@ const game = {
       NEON.boosts.clearFloorBoosts(this.player);
     }
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
-    this.dungeon=generateFloor(n);
+    this.dungeon = withDerivedRngStream('world:floor:' + n, () => generateFloor(n));
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
     this.bossType=null;
@@ -627,7 +631,7 @@ const game = {
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.clearCoreDrops) {
       NEON.cores.clearCoreDrops(this);
     }
-    populateFloor(this.dungeon,n);
+    withDerivedRngStream('spawn:floor:' + n, () => populateFloor(this.dungeon,n));
     // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
     // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
@@ -747,8 +751,7 @@ const game = {
       this.biomeCardTimer = 0;
       this.biomeCardArea = null;
     }
-    // Generate floor quest
-    this.generateQuest(n);
+    withDerivedRngStream('event:floor:' + n + ':quest', () => this.generateQuest(n));
     // Auto-save at start of each floor. Continue suppresses this until after
     // saved run state (including mainframeFinale) has been restored.
     if (!skipAutoSave) this.saveGame();
@@ -804,15 +807,24 @@ const game = {
    */
   startGame(opts) {
     opts = opts || {};
+    if (opts.seed != null) this._pendingStartSeed = normalizeSeed(opts.seed);
+    const chosenSeed = normalizeSeed(this._pendingStartSeed || opts.seed || makeRandomSeed());
     // UNCHAINED: prompt before wiping nothing but *also* before carrying
     // forward saved meta. The prompt is skipped on fresh installs (no meta
     // progress to speak of) and when called recursively after the user answers.
     if (!opts.skipConfirm && this._hasMetaProgress()) {
       this._newGameConfirm = { selected: 0 }; // 0 = KEEP, 1 = RESET
+      this._pendingStartSeed = chosenSeed;
+      if (this.state !== 'MENU') this.setState('MENU');
       audio.menuSelect();
       return;
     }
     this._newGameConfirm = null;
+    this.seedSetup = null;
+    setSeed(chosenSeed);
+    this.runSeed = getSeed();
+    this.runSeedHash = getSeedHash();
+    this._pendingStartSeed = null;
     this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
     this._lastAct1MessageIntent = null;
     this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
@@ -839,7 +851,7 @@ const game = {
     // seed idempotent — re-entering startGame after a meta-only path
     // (e.g. the new-game-confirm prompt loop) won't reroll the module.
     if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
-      const _hwKey = HACKWARE_KEYS[Math.floor(Math.random() * HACKWARE_KEYS.length)];
+      const _hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')];
       this.player.hackware = _hwKey;
       this.player.hackwareCooldown = 0;
     }
@@ -861,7 +873,7 @@ const game = {
     this.loadFloor(startFloor);
     // Telemetry: run start
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
-      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty });
+      NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty, seedHash: this.runSeedHash });
     }
     // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
     // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
@@ -875,6 +887,59 @@ const game = {
       return;
     }
     this.setState('PLAYING');
+  },
+
+  openSeedSetup() {
+    this.seedSetup = {
+      seed: normalizeSeed(this._pendingStartSeed || makeRandomSeed()),
+      selected: 0,
+      cursorBlink: 0
+    };
+    this.setState('SEED_SETUP');
+  },
+
+  randomizeSeedSetup() {
+    this.seedSetup = this.seedSetup || { seed: '', selected: 0, cursorBlink: 0 };
+    this.seedSetup.seed = makeRandomSeed();
+    audio.menuSelect();
+  },
+
+  startSeedSetupGame() {
+    const ss = this.seedSetup || { seed: makeRandomSeed() };
+    this.startGame({ seed: ss.seed });
+  },
+
+  /**
+   * @param {any} dt
+   */
+  updateSeedSetup(dt) {
+    const ss = this.seedSetup || (this.seedSetup = { seed: makeRandomSeed(), selected: 0, cursorBlink: 0 });
+    ss.cursorBlink = (ss.cursorBlink || 0) + dt;
+    const actions = 3; // START, RANDOMIZE, BACK
+    if (jp(ALT_KEYS.up) || jp(km('up')) || jp(ALT_KEYS.left) || jp(km('left'))) {
+      ss.selected = (ss.selected - 1 + actions) % actions;
+      audio.menuSelect();
+    }
+    if (jp(ALT_KEYS.down) || jp(km('down')) || jp(ALT_KEYS.right) || jp(km('right'))) {
+      ss.selected = (ss.selected + 1) % actions;
+      audio.menuSelect();
+    }
+    if (lastKey.length === 1 && /^[A-Za-z0-9 _.\-:]$/.test(lastKey)) {
+      if (ss.seed.length < 64) ss.seed += lastKey;
+    }
+    if (jp('Backspace')) ss.seed = ss.seed.slice(0, -1);
+    if (jp('Escape')) { audio.menuSelect(); this.setState('MENU'); return; }
+    if (jp('KeyR')) this.randomizeSeedSetup();
+    if (jp('MouseLeft')) {
+      const hit = this.seedSetupHitTest(mouse.x, mouse.y);
+      if (hit >= 0) ss.selected = hit;
+      else return;
+    }
+    if (jp('Enter') || jp('MouseLeft')) {
+      if (ss.selected === 0) { audio.menuSelect(); this.startSeedSetupGame(); return; }
+      if (ss.selected === 1) { this.randomizeSeedSetup(); return; }
+      if (ss.selected === 2) { audio.menuSelect(); this.setState('MENU'); return; }
+    }
   },
 
   // UNCHAINED #42 — called by updateIntro when the crawl finishes or is
@@ -1335,6 +1400,9 @@ const game = {
       floor: this.floor,
       difficulty: this.difficulty,
       modifier: this.modifier,
+      runSeed: this.runSeed,
+      runSeedHash: this.runSeedHash,
+      rngStates: snapshotRngStates(),
       bossesCleared: this.bossesCleared,
       runTime: this.runTime,
       mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
@@ -1467,6 +1535,9 @@ const game = {
     audio.resume();
     // Restore difficulty from save (old saves default to NORMAL)
     this.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'NORMAL';
+    setSeed(save.runSeed || ('LEGACY-' + String(save.floor || 1)), save.rngStates || null);
+    this.runSeed = getSeed();
+    this.runSeedHash = getSeedHash();
     const p = new Player();
     const s = save.player;
     p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
@@ -1602,6 +1673,7 @@ const game = {
     clearLosCache();
     switch(this.state) {
       case 'MENU':        this.updateMenu(dt);    break;
+      case 'SEED_SETUP':  this.updateSeedSetup(dt); break;
       case 'INTRO':       this.updateIntro(dt);   break;
       case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
       case 'PLAYING':     this.updatePlaying(dt); break;
@@ -1635,11 +1707,11 @@ const game = {
     const locked = !isDiffUnlocked(this.difficulty);
     const meta = loadMeta();
     const nextSession = lifecycleNextSessionNumber(meta);
-    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label}  ◀▶`;
+    const diffLabel = locked ? `BOOT SESSION ${nextSession} — ${d.label} [LOCKED]  ◀▶` : `BOOT SESSION ${nextSession} — ${d.label} / SEED  ◀▶`;
     const diffColour = locked ? '#444466' : d.colour;
     const diffAction = locked
       ? () => { this._menuMsg = { text: 'CLEAR HARD TO UNLOCK NIGHTMARE', colour: '#9400ff', life: 2.5 }; }
-      : () => this.startGame();
+      : () => this.openSeedSetup();
     opts.push({ label: diffLabel, action: diffAction, colour: diffColour, isDiffRow: true });
     opts.push({ label:`NEURAL ARCHIVES (${meta.shards}◆)`, action:()=>{ audio.menuSelect(); this.archivesSel=0; this.setState('ARCHIVES'); }, colour:'#ffb700' });
     opts.push({ label:'SETTINGS', action:()=>{ audio.menuSelect(); this._settingsFrom='MENU'; this.setState('SETTINGS'); }, colour:'#888899' });
@@ -1652,10 +1724,10 @@ const game = {
   updateMenu(dt) {
     // animate bg particles
     this.menuParticles=this.menuParticles||[];
-    if (Math.random()<0.3) {
+    if (rand('cosmetic')<0.3) {
       this.menuParticles.push({
-        x:Math.random()*W, y:H, vx:(Math.random()-0.5)*20,
-        vy:-rnd(20,60), life:1, col:['#00f5ff','#ff00c8','#39ff14','#ffb700'][rndInt(0,3)]
+        x:rand('cosmetic')*W, y:H, vx:(rand('cosmetic')-0.5)*20,
+        vy:-rnd(20,60,'cosmetic'), life:1, col:['#00f5ff','#ff00c8','#39ff14','#ffb700'][rndInt(0,3,'cosmetic')]
       });
     }
     for (let i=this.menuParticles.length-1;i>=0;i--) {
@@ -2242,7 +2314,7 @@ const game = {
         const d = getDiff();
         let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
-        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && Math.random() < player.metaFlags.doubleCreditChance) {
+        if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && rand('loot') < player.metaFlags.doubleCreditChance) {
           cr *= 2;
         }
         player.credits += cr;
@@ -2410,7 +2482,7 @@ const game = {
 
     if (tile===T.LORE) {
       if (jp(km('interact'))) {
-        const idx = pickLoreEntryIndex(player.loreRead, this.floor, Math.random);
+        const idx = pickLoreEntryIndex(player.loreRead, this.floor, () => rand('event'));
         player.loreRead.add(idx);
         this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;
@@ -2777,7 +2849,7 @@ const game = {
       if (r.healFont && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (player.hp < player.maxHp) {
           player.hp = Math.min(player.maxHp, player.hp + 5 * dt);
-          if (Math.random()<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
+          if (rand('cosmetic')<0.1) spawnParticles(player.x, player.y, 'SPARK', '#00ff88', 1);
         }
       }
       if (r.xpShrine && !r.shrineUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
@@ -3902,16 +3974,16 @@ const game = {
     this.fadeGlitchTimer-=dt;
     if (this.fadeGlitchTimer<=0) {
       this.fadeGlitchTimer=0.1;
-      const count=3+Math.floor(Math.random()*3);
+      const count=3+rndInt(0,2,'cosmetic');
       this.fadeGlitchBars=[];
       for (let i=0;i<count;i++) {
         this.fadeGlitchBars.push({
-          y: Math.random()*H,
-          h: 1+Math.random()*4,
-          x: Math.random()*W*0.3,
-          w: W*(0.3+Math.random()*0.7),
-          color: Math.random()>0.5 ? '#ff00c8' : '#00f5ff',
-          alpha: 0.15+Math.random()*0.35
+          y: rand('cosmetic')*H,
+          h: 1+rand('cosmetic')*4,
+          x: rand('cosmetic')*W*0.3,
+          w: W*(0.3+rand('cosmetic')*0.7),
+          color: rand('cosmetic')>0.5 ? '#ff00c8' : '#00f5ff',
+          alpha: 0.15+rand('cosmetic')*0.35
         });
       }
     }
@@ -4677,6 +4749,7 @@ const game = {
 
       switch(this.state) {
         case 'MENU':      this.renderMenu();     break;
+        case 'SEED_SETUP': this.renderSeedSetup(); break;
         case 'INTRO':     this.renderIntro();    break;
         case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
         case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
@@ -4740,6 +4813,107 @@ const game = {
       ctx.fillStyle='#555577'; ctx.font=`${narrow?12:12}px monospace`;
       ctx.fillText('No scores yet.',W/2,startY);
     }
+    ctx.restore();
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  seedSetupHitTest(x, y) {
+    const narrow = layout.compact;
+    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
+    const panelX = (W - panelW) / 2;
+    const btnY = H * (narrow ? 0.70 : 0.68);
+    const btnH = narrow ? 34 : 40;
+    const gap = narrow ? 8 : 12;
+    const btnW = (panelW - gap * 2) / 3;
+    for (let i = 0; i < 3; i++) {
+      const bx = panelX + i * (btnW + gap);
+      if (x >= bx && x <= bx + btnW && y >= btnY && y <= btnY + btnH) return i;
+    }
+    return -1;
+  },
+
+  renderSeedSetup() {
+    const ss = this.seedSetup || { seed: '', selected: 0, cursorBlink: 0 };
+    const narrow = layout.compact;
+    const d = getDiff();
+    const t = Date.now() / 1000;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#071018';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = '#00f5ff';
+    for (let x = -40 + ((t * 18) % 40); x < W + 40; x += 40) NEON.draw.line(ctx, x, 0, x + 80, H);
+    for (let y = 0; y < H; y += 36) NEON.draw.line(ctx, 0, y, W, y);
+    ctx.globalAlpha = 1;
+
+    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
+    const panelH = Math.min(narrow ? H - 70 : 390, H - 48);
+    const panelX = (W - panelW) / 2;
+    const panelY = (H - panelH) / 2;
+    ctx.fillStyle = 'rgba(4,8,18,0.86)';
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 22;
+    ctx.shadowColor = '#00f5ff';
+    NEON.draw.roundRectFillStroke(ctx, panelX, panelY, panelW, panelH, 10);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
+    ctx.fillText('RUN SEED', W / 2, panelY + (narrow ? 42 : 58));
+    ctx.fillStyle = d.colour;
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, panelY + (narrow ? 66 : 86));
+
+    const fieldW = panelW - (narrow ? 34 : 70);
+    const fieldH = narrow ? 46 : 56;
+    const fieldX = (W - fieldW) / 2;
+    const fieldY = panelY + (narrow ? 96 : 126);
+    ctx.fillStyle = 'rgba(0,245,255,0.07)';
+    ctx.strokeStyle = '#224466';
+    ctx.lineWidth = 1;
+    NEON.draw.roundRectFillStroke(ctx, fieldX, fieldY, fieldW, fieldH, 6);
+    const cursor = (Math.floor((ss.cursorBlink || 0) * 2) % 2) === 0 ? '_' : ' ';
+    const seedText = (ss.seed || '') + cursor;
+    ctx.fillStyle = '#e0faff';
+    ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
+    ctx.fillText(seedText, W / 2, fieldY + (narrow ? 29 : 36));
+
+    ctx.fillStyle = '#668899';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, fieldY + fieldH + (narrow ? 22 : 28));
+    ctx.fillText(narrow ? 'Type on desktop, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, fieldY + fieldH + (narrow ? 38 : 46));
+
+    const btnY = H * (narrow ? 0.70 : 0.68);
+    const btnH = narrow ? 34 : 40;
+    const gap = narrow ? 8 : 12;
+    const btnW = (panelW - gap * 2) / 3;
+    const labels = ['START', 'RANDOMIZE', 'BACK'];
+    const colours = ['#39ff14', '#ffb700', '#888899'];
+    for (let i = 0; i < 3; i++) {
+      const bx = panelX + i * (btnW + gap);
+      const selected = ss.selected === i;
+      const col = colours[i] || '#888899';
+      ctx.fillStyle = selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = selected ? col : '#29384f';
+      ctx.lineWidth = selected ? 2 : 1;
+      ctx.shadowBlur = selected ? 16 : 0;
+      ctx.shadowColor = col;
+      NEON.draw.roundRectFillStroke(ctx, bx, btnY, btnW, btnH, 6);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = selected ? col : '#6f7890';
+      ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
+      ctx.fillText(labels[i] || '', bx + btnW / 2, btnY + (narrow ? 22 : 26));
+    }
+
+    ctx.fillStyle = '#445566';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText(isTouchDevice() ? 'Tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, panelY + panelH - (narrow ? 18 : 24));
     ctx.restore();
   },
 
@@ -5039,10 +5213,10 @@ const game = {
         ctx.shadowBlur=8;
         ctx.beginPath();
         // Jagged lightning: 3 segments with random offset
-        const mx1=lerp(sx,ex,0.33)+(Math.random()-0.5)*8;
-        const my1=lerp(sy,ey,0.33)+(Math.random()-0.5)*8;
-        const mx2=lerp(sx,ex,0.66)+(Math.random()-0.5)*8;
-        const my2=lerp(sy,ey,0.66)+(Math.random()-0.5)*8;
+        const mx1=lerp(sx,ex,0.33)+(rand('cosmetic')-0.5)*8;
+        const my1=lerp(sy,ey,0.33)+(rand('cosmetic')-0.5)*8;
+        const mx2=lerp(sx,ex,0.66)+(rand('cosmetic')-0.5)*8;
+        const my2=lerp(sy,ey,0.66)+(rand('cosmetic')-0.5)*8;
         ctx.moveTo(sx,sy); ctx.lineTo(mx1,my1); ctx.lineTo(mx2,my2); ctx.lineTo(ex,ey);
         ctx.stroke();
         ctx.restore();
@@ -6064,7 +6238,7 @@ const game = {
       for (let x=0;x<W;x+=cellSize) {
         for (let y=bandY;y<bandY+bandH;y+=cellSize) {
           if (y<0||y>H) continue;
-          const r=Math.random();
+          const r=rand('cosmetic');
           ctx.fillStyle=r>0.6?'#ff00c8':r>0.3?'#00f5ff':'#39ff14';
           ctx.fillRect(x,y,cellSize-1,cellSize-1);
         }

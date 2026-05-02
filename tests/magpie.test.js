@@ -69,8 +69,8 @@ test('MAGPIE init block sets _mgScanT, _mgTarget, _mgStolenCr', () => {
   assert.match(block[0], /_mgStolenCr\s*=\s*0/, 'MAGPIE must initialise _mgStolenCr = 0');
   // Stagger initial scan so a clustered spawn doesn't all scan in
   // lock-step (cosmetic + perf — same pattern as _saPulse / _mgPulse).
-  assert.match(block[0], /Math\.random\(\)/,
-    'MAGPIE init must stagger _mgScanT with Math.random()');
+  assert.match(block[0], /rand\('spawn'\)/,
+    'MAGPIE init must stagger _mgScanT with the seeded spawn RNG');
 });
 
 test('MAGPIE is excluded from the elite affix roll', () => {

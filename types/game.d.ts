@@ -175,7 +175,7 @@ declare global {
       victory: boolean,
       shardMul?: number,
     ): number;
-    applyMetaToPlayer(player: any, buildWeaponFn?: any): void;
+    applyMetaToPlayer(player: any, buildWeaponFn?: any, randomFn?: () => number): void;
     getMetaXPMultiplier(): number;
     getMetaCreditMultiplier(): number;
     /** Adds `n` cores; returns the new wallet balance. */
