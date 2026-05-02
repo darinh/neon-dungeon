@@ -109,6 +109,10 @@ test('floor snapshots restore player location, mutated floor state, and live act
     Object,
     Number,
     String,
+    ArrayBuffer,
+    DataView,
+    Float32Array,
+    Uint8Array,
     enemies: [],
     items: [],
     projectiles: [],
@@ -162,10 +166,10 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
     player: { x: 12.5, y: 13.5 },
     dungeon: {
       map: [['OPEN']],
-      visited: [[true]],
-      light: [[0.75]],
-      visible: [[true]],
-      secretMask: [[false]],
+      visited: [new Uint8Array([1])],
+      light: [new Float32Array([0.75])],
+      visible: [new Uint8Array([1])],
+      secretMask: [new Uint8Array([0])],
       rooms: [room0, room1],
     },
     clearedRooms: new Set([room0]),
@@ -181,9 +185,10 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
     teleportCooldown: 1.5,
   };
 
-  const snapshot = sandbox.serializeFloorSnapshot(sourceGame);
+  const snapshot = JSON.parse(JSON.stringify(sandbox.serializeFloorSnapshot(sourceGame)));
   assert.equal(snapshot.player.x, 12.5);
   assert.equal(snapshot.dungeon.map[0][0], 'OPEN');
+  assert.deepEqual(snapshot.dungeon.light[0], [0.75]);
   assert.equal(snapshot.enemies[0]._roomIndex, 1);
   assert.equal(snapshot.enemies[0].room, undefined);
   assert.equal(snapshot.items[0].typeId, 'BOOST');
@@ -200,10 +205,10 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
     player: { x: 1, y: 1 },
     dungeon: {
       map: [['WALL']],
-      visited: [[false]],
-      light: [[0]],
-      visible: [[false]],
-      secretMask: [[true]],
+      visited: [new Uint8Array([0])],
+      light: [new Float32Array([0])],
+      visible: [new Uint8Array([0])],
+      secretMask: [new Uint8Array([1])],
       rooms: [newRoom0, newRoom1],
     },
     clearedRooms: new Set(),
@@ -215,6 +220,9 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(restored, true);
   assert.equal(targetGame.player.x, 12.5);
   assert.equal(targetGame.dungeon.map[0][0], 'OPEN');
+  assert.equal(typeof targetGame.dungeon.light[0].fill, 'function');
+  assert.equal(typeof targetGame.dungeon.visible[0].fill, 'function');
+  assert.equal(targetGame.dungeon.light[0][0] > 0.7, true);
   assert.equal(sandbox.enemies.length, 1);
   assert.equal(sandbox.enemies[0].room, newRoom1);
   assert.equal(newRoom1.registered, sandbox.enemies[0]);
@@ -233,6 +241,89 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(targetGame.mapRevealed, true);
   assert.equal(targetGame.refreshed, true);
   assert.equal(targetGame.mutated, true);
+
+  const legacyTypedArraySnapshot = JSON.parse(JSON.stringify(snapshot));
+  legacyTypedArraySnapshot.dungeon.light = [{ 0: 0.5 }];
+  legacyTypedArraySnapshot.dungeon.visible = [{ 0: 1 }];
+  legacyTypedArraySnapshot.dungeon.visited = [{ 0: 1 }];
+  legacyTypedArraySnapshot.dungeon.secretMask = [{ 0: 0 }];
+  const legacyTarget = {
+    floor: 2,
+    player: { x: 1, y: 1 },
+    dungeon: {
+      map: [['WALL']],
+      visited: [new Uint8Array([0])],
+      light: [new Float32Array([0])],
+      visible: [new Uint8Array([0])],
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() {},
+    markMapMutated() {},
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(legacyTarget, legacyTypedArraySnapshot), true);
+  assert.equal(typeof legacyTarget.dungeon.light[0].fill, 'function');
+  assert.equal(legacyTarget.dungeon.visible[0][0], 1);
+
+  const sparseObjectSnapshot = JSON.parse(JSON.stringify(snapshot));
+  sparseObjectSnapshot.dungeon.light = [{ 0: 0.5 }];
+  sparseObjectSnapshot.dungeon.visible = [{ 0: 1 }];
+  const sparseFallbackLight = new Float32Array([0.1, 0.2]);
+  const sparseFallbackVisible = new Uint8Array([1, 0]);
+  const sparseFallbackLightGrid = [sparseFallbackLight];
+  const sparseFallbackVisibleGrid = [sparseFallbackVisible];
+  const sparseTarget = {
+    floor: 2,
+    player: { x: 1, y: 1 },
+    dungeon: {
+      map: [['WALL']],
+      visited: [new Uint8Array([0])],
+      light: sparseFallbackLightGrid,
+      visible: sparseFallbackVisibleGrid,
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() {},
+    markMapMutated() {},
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(sparseTarget, sparseObjectSnapshot), true);
+  assert.equal(sparseTarget.dungeon.light, sparseFallbackLightGrid);
+  assert.equal(sparseTarget.dungeon.visible, sparseFallbackVisibleGrid);
+  assert.equal(sparseTarget.dungeon.light[0].length, 2);
+
+  const truncatedSnapshot = JSON.parse(JSON.stringify(snapshot));
+  truncatedSnapshot.dungeon.light = [];
+  truncatedSnapshot.dungeon.visible = [];
+  const fallbackLight = new Float32Array([0.25]);
+  const fallbackVisible = new Uint8Array([1]);
+  const fallbackLightGrid = [fallbackLight];
+  const fallbackVisibleGrid = [fallbackVisible];
+  const truncatedTarget = {
+    floor: 2,
+    player: { x: 1, y: 1 },
+    dungeon: {
+      map: [['WALL']],
+      visited: [new Uint8Array([0])],
+      light: fallbackLightGrid,
+      visible: fallbackVisibleGrid,
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() {},
+    markMapMutated() {},
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(truncatedTarget, truncatedSnapshot), true);
+  assert.equal(truncatedTarget.dungeon.light, fallbackLightGrid);
+  assert.equal(truncatedTarget.dungeon.light[0], fallbackLight);
+  assert.equal(typeof truncatedTarget.dungeon.light[0].fill, 'function');
+  assert.equal(truncatedTarget.dungeon.visible, fallbackVisibleGrid);
+  assert.equal(truncatedTarget.dungeon.visible[0], fallbackVisible);
 });
 
 test('mobile/page lifecycle interruptions save current run before the browser can unload', () => {
