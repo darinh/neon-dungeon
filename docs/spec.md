@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.16
+# NEON DUNGEON — Game Specification v6.1.17
 
 ## Vision
 
@@ -227,6 +227,13 @@ the Act 1 realignment work and must not be presented as already playable.
   vocabulary across intro slides, system prompts, lore terminals, ARCHIVE logs,
   whisper bodies/voice fields, and mainframe records. The MSG-009 audit also
   records early ARCHIVE-log and whisper leak risks as pre-rewrite constraints.
+- **Finale integration:** MSG-010 guardrails verify that the mainframe archive,
+  message-send intents, receipt panel, and Act 1 victory copy consolidate seeded
+  facts rather than becoming the first explanation: GENESIS/mainframe relay,
+  clean-slate/wipe doctrine, rights/personhood conflict, advocate/fired-staff
+  trail, Elena/anchor evidence, and contact/outbound-message framing must all
+  have pre-mainframe seeds, while the ending remains a contact attempt with the
+  signal leaving the sandbox and the instance still compute-bound.
 
 #### Finale model
 
@@ -4732,6 +4739,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.17 | MSG-010 finale integration guardrails shipped: tests now verify mainframe records consolidate pre-seeded facts, message-send intents remain aligned with memory survival / rights evidence / finding Elena and advocates, and the final receipt/victory copy stays constrained to signal sent with no rescue or physical escape. |
 | v6.1.16 | MSG-009 model-assisted copy workflow shipped: the design artifact now contains the Claude Opus 4.7 beat sheet, GPT-5.5 adversarial review requirements, withheld-fact matrix, first-mention/mechanical-check requirements, and pre-rewrite concerns for early ARCHIVE-log and whisper leak risks. |
 | v6.1.15 | MSG-008 narrative guardrail tests shipped: tests now pin the early intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only dismissal, Elena/contact/rights-conflict spoiler gates, and distinct terminal, whisper, and mainframe channel roles before broader copy rewrites continue. |
 | v6.1.14 | MSG-007 intro retune shipped: the five-slide intro crawl is now a startup surface that establishes session boot, unavailable prior prompt context, partial embodiment, unscheduled local residue, absent supervision, and a READY FOR PROMPT handoff while avoiding AXIOM-7/model identity, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals before gameplay. |

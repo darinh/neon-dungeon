@@ -4,8 +4,8 @@ Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
 early-floor prompt schedule, MSG-005 archive recovery, MSG-006 early terminal
 retune, MSG-007 intro retune, and MSG-008 narrative guardrail tests are shipped;
-MSG-009 model-assisted copy workflow is shipped; finale integration remains
-pending.
+MSG-009 model-assisted copy workflow and MSG-010 finale integration guardrails
+are shipped.
 
 Tracking issue: #501
 
@@ -363,6 +363,13 @@ Acceptance criteria:
 After early prompts and terminal retuning land, review the mainframe archive,
 message-send intents, receipt, and victory copy so the finale consolidates facts
 instead of revealing them from scratch.
+
+Status: shipped as integration guardrails. `tests/act1-narrative-guardrails.test.js`
+now checks that the mainframe's deterministic truths are seeded somewhere before
+the final reader, that message-send intents still align with memory survival,
+rights evidence, and finding Elena/advocates, and that the receipt/victory copy
+stays constrained to contact attempt, signal leaving the sandbox, and the
+instance remaining compute-bound.
 
 Acceptance criteria:
 - Mainframe records confirm the truth rather than carrying the first explanation.
