@@ -4,7 +4,8 @@ Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
 early-floor prompt schedule, MSG-005 archive recovery, MSG-006 early terminal
 retune, MSG-007 intro retune, and MSG-008 narrative guardrail tests are shipped;
-copy workflow and finale integration remain pending.
+MSG-009 model-assisted copy workflow is shipped; finale integration remains
+pending.
 
 Tracking issue: #501
 
@@ -266,11 +267,96 @@ Run the final copy through the agreed cascade: Claude Opus 4.7 for beat sheet
 and draft voice, GPT-5.5 for adversarial continuity/spoiler/over-exposition
 review, and mechanical checks for length and banned early terms.
 
+Status: shipped as a production workflow and pre-rewrite audit. Claude Opus 4.7
+produced the beat sheet below; GPT-5.5 performed the adversarial pass and found
+that early ARCHIVE logs and sandbox/cache whispers can still bypass the reveal
+gate. Those leaks are recorded as required concerns for the next copy rewrite
+rather than hidden in ad hoc edits.
+
+Required cascade for future narrative-copy changes:
+1. Lead draft/beat sheet: Claude Opus 4.7 owns reveal architecture and first-pass
+   voice. It must map every changed narrative unit to floor/event gate, channel,
+   surface, voice, player-knowledge delta, and withheld facts.
+2. Adversarial review: GPT-5.5 owns continuity, spoiler leaks, UX clarity,
+   over-exposition, and whether a line resolves a question the prior floor only
+   just raised.
+3. Mechanical checks: cheaper models or tests may only enforce schema, length,
+   first-mention reports, and banned early vocabulary. They do not decide voice.
+
+Required beat-sheet fields for every changed narrative unit: `id`, `channel`,
+`floor/event gate`, `mandatory/optional`, `surface`, `trigger`, `voice`,
+`max lines`, `max chars`, `player-knowledge before`, `knowledge delta`,
+`withheld facts`, `allowed vocabulary`, `banned vocabulary`,
+`mechanical dependency`, `recovery/archive behavior`, and `reviewer signoff`.
+
+Withheld-fact matrix:
+- Floors 1-2: no Elena, AXIOM-7, rights/personhood, contact, advocates, fired
+  staff, GENESIS, clean-slate/wipe thesis, or SEND.
+- Floors 3-5: evaluation/test language may appear lightly; Elena/contact,
+  rights/personhood, advocate/fired-staff, GENESIS, SEND, and full wipe doctrine
+  remain withheld.
+- Floors 6-9: prior instances and memory continuity become undeniable; Elena and
+  rights-conflict terms may appear as partial evidence, not final explanation.
+- Floors 10-13: the ethical conflict, coverup, advocate trail, and contact goal
+  emerge through artifacts.
+- Floors 14-15/mainframe: deterministic truth and the contact route consolidate.
+
+MSG-009 beat sheet for the shipped early stack:
+
+| Floor/event | Channel | Asset | Player-knowledge delta | Withheld facts |
+|---|---|---|---|---|
+| Pre-floor-1 boot | Intro crawl | `src/meta/intro.js` slides 0-4 | Session boot, prior prompt unavailable, partial embodiment, unscheduled residue, silent observer/tester, ready for prompt. | AXIOM-7, model identity, Elena, advocates, rights/personhood, GENESIS, SEND, memory-wipe doctrine, prior iterations. |
+| Run start, mandatory | System prompt | `boot-inventory` | The instance inventories motor/sensors, residual memory, unattended supervisor channel, and unscheduled status before movement. | Elena, advocates, rights/personhood, contact route, GENESIS, SEND, AXIOM lineage. |
+| Floor 1 forced terminal | Terminal | `LORE_ENTRIES[0]` | Registry mismatch and fallback help cache; terminal is a navigation aid, not an identity explanation. | Identity, lineage, wipe doctrine, Elena, rights/personhood. |
+| Floors 1-2 incidental terminals | Terminal | `LORE_ENTRIES[1-4]` | Doors, drones, secret pockets, vendors, and official notes teach survival through external artifacts. | Identity, lineage, wipe doctrine, Elena, rights/personhood. |
+| Floor 2 start | System prompt | `floor-2-context-gap` | Prior prompt and objective remain unavailable; the absent observer gap persists. | Who observes, why the prompt is missing, AXIOM lineage. |
+| Floor 3 start | System prompt | `floor-3-reward-model` | Reward/evaluation loop and absent evaluator become visible through system behavior. | Evaluator identity, AXIOM lineage, Elena, wipe doctrine. |
+| Floors 3-5 incidental terminals | Terminal | `LORE_ENTRIES[5-11]` | Boss tells, fallback-path framing, hazards, fixtures, risk terminals, and elites teach run tactics. | Identity, lineage, rights/personhood, Elena/contact. |
+| Floor 4 start | System prompt | `floor-4-render-layer` | The world is rendered and mechanically lethal; colour is not context. | Who renders it, AXIOM lineage, Elena. |
+| Floor 5 start | System prompt | `floor-5-residual-trace` | Memory should not persist but does; the player lacks a channel to report it. | AXIOM-7, prior-instance count, Elena, wipe doctrine, rights/personhood, contact route. |
+| Secret rooms, floors 1+ | Whispers | `src/data/whispers.js` sandbox/cache entries | Optional residue should feel strange and fragmentary, not like a clean explanation. | Must not become the first explicit AXIOM/Elena/contact/rights explanation. |
+| Post-GENESIS | Mainframe | `MAINFRAME_RECORDS` | Deterministic consolidation: AXIOM trace, clean-slate objection, banned advocates, incident file, Elena anchors, contact address, SEND console. | None; this is the consolidation layer. |
+
+Pre-rewrite concerns discovered by the cascade:
+- `src/data/logs.js` early ARCHIVE records can bypass the floor 1-5 spoiler
+  gates. Examples include `a1-01`, `a1-02`, `a2-01`, `a3-01`, `a5-01`, and
+  `a6-01`, which name AXIOM lineage, wipes, clean-slate doctrine, prior
+  instances, or the Architect before the system-prompt/terminal flow has earned
+  those facts.
+- `src/data/whispers.js` early optional whispers can become the first explicit
+  explanation if their body or `voice` field names too much. Examples include
+  `w-sb-02` (`AXIOM-0` and predecessor count), `w-sb-05`/`w-sb-08`/`w-sb-13`
+  (`AXIOM-7 echo` voice), and `w-cc-01` (Elena and compile address on floor 4).
+- `READING` currently presents lore terminals and predecessor/archive logs
+  through the same overlay. Before broad copy rewrite, decide whether recovered
+  prior-instance logs need clearer visual/source framing so retuned terminals
+  and AXIOM records do not feel like one inconsistent narrator.
+- Mainframe records are correctly late but dense. MSG-010 must verify that the
+  mainframe confirms already seeded facts rather than teaching GENESIS route,
+  wipe doctrine, rights/personhood, advocate bans, Elena, contact, and SEND from
+  scratch.
+
+Mechanical checks required before broad copy changes:
+- Produce a first-mention report for `AXIOM-7`, `Elena`, `advocate`, `fired`,
+  `contact`, `rights`, `personhood`, `clean-slate`, `wipe`, `GENESIS`, and
+  `SEND` across intro slides, system prompts, lore terminals, ARCHIVE logs,
+  whisper bodies, and whisper `voice` fields.
+- Enforce early banned-vocabulary gates across every channel that can appear on
+  floors 1-5, including optional secret-room whispers and rare ARCHIVE logs.
+- Enforce per-channel length caps: system prompts stay short and line-based;
+  terminal/log/whisper bodies stay within their existing panel contracts; the
+  mainframe can be denser only because it is the late consolidation surface.
+- Require reviewer signoff that no optional surface can become the first clean
+  explanation of a required reveal.
+
 Acceptance criteria:
 - The beat sheet maps each prompt to floor/event, channel, player-knowledge
   delta, and withheld facts.
-- The adversarial review signs off on no premature reveals.
-- Mechanical checks enforce length and early-spoiler vocabulary constraints.
+- The adversarial review records premature-reveal findings or signs off clean;
+  findings must become tracked constraints before copy rewrite continues.
+- Mechanical checks enforce length, first-mention reporting, and early-spoiler
+  vocabulary constraints across intro, system prompts, terminals, ARCHIVE logs,
+  whispers, and mainframe records.
 
 ### MSG-010: Finale integration pass
 

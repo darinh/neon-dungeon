@@ -88,6 +88,11 @@ test('Act 1 system-message design artifact tracks production work items', () => 
   assert.match(SYSTEM_MESSAGE_DESIGN, /Read messages remain visible until run end and survive save\/resume/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Intro copy no longer reveals the complete Act 1 premise before floor 1/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Tests assert spoiler gates for Elena\/contact\/rights-conflict terms/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Required cascade for future narrative-copy changes/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Withheld-fact matrix/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-009 beat sheet for the shipped early stack/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Pre-rewrite concerns discovered by the cascade/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /Produce a first-mention report/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Mainframe records confirm the truth rather than carrying the first explanation/i);
 });
 
