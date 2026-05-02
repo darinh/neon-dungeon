@@ -4223,17 +4223,25 @@ The leaderboard is displayed on three screens:
 ## Save System
 
 Uses `localStorage` key `neonDungeonSave`. Saves player stats, current floor,
-run seed metadata, and RNG stream state — the dungeon itself is not persisted
-(it is regenerated from the saved seed on resume).
+run seed metadata, RNG stream state, and an optional live floor snapshot. The
+seeded generator still rebuilds the canonical base floor first; the snapshot is
+then replayed on top so Continue can restore mid-floor mutations instead of
+returning to the floor entrance.
 
 **Auto-save triggers:**
-1. After `loadFloor()` completes (start of every floor — the sole checkpoint)
+1. After `loadFloor()` completes (start of every floor checkpoint).
+2. When the browser hides/unloads the page (`visibilitychange`, `pagehide`, or
+   `beforeunload`) while a run-owned state is active. This covers mobile
+   interruptions such as locking the phone, switching apps, or opening a text
+   message.
 
-Mid-floor progress is not saved. Closing the browser mid-floor loses progress
-back to the start of the current floor. This is intentional — it prevents save-
-scumming (reloading to re-roll dungeon layout while keeping stats).
+Mid-floor progress is saved as a floor snapshot. It captures player position,
+mutated dungeon grids/room flags, live enemies/items/projectiles, environmental
+objects, encounter seals, cleared-room state, and map reveal state. It is not a
+layout re-roll vector because Continue restores the saved seed/RNG state and
+regenerates the base floor before replaying the snapshot.
 
-**Save payload:** `{ v, floor, difficulty, modifier, runSeed, runSeedHash, rngStates, bossesCleared, player: { hp, maxHp, atk, def, level, xp,
+**Save payload:** `{ v, floor, difficulty, modifier, runSeed, runSeedHash, rngStates, bossesCleared, floorSnapshot, player: { x, y, hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
 energyShieldTimer, credits, loreRead, hackware, hackwareCooldown } }` — `shieldBonus` is always 0 at floor entry so is
 excluded. `modifier` is the floor modifier key (string) or `null`. `runSeed`
@@ -4254,10 +4262,15 @@ hackware fields default to a legacy sentinel seed and `null`/`0`.
 
 **Continue flow:** Creates a fresh `Player`, applies saved stats, calls
 `setSeed(save.runSeed, save.rngStates)`, then `loadFloor(savedFloor)`, and
-displays "RUN RESUMED — FLOOR N". Because layout and population use derived
-per-floor streams, the regenerated floor matches the saved run seed/floor
-rather than re-rolling from ambient randomness. Incompatible save versions
-(different `v` field) are deleted and a fresh run starts with an error message.
+replays `floorSnapshot` when present before displaying "RUN RESUMED — FLOOR N".
+Because layout and population use derived per-floor streams, the regenerated
+floor matches the saved run seed/floor rather than re-rolling from ambient
+randomness; because the snapshot is replayed afterward, player location,
+already-opened doors/cracked walls, picked-up items, killed/damaged enemies,
+temporary hazards, and encounter state resume from the interruption point.
+Incompatible save versions (different `v` field) are deleted and a fresh run
+starts with an error message. Legacy saves without `floorSnapshot` still resume
+using the older floor-start regeneration behavior.
 
 **Save deletion:** `endRun()` (called on death and victory) deletes the save.
 Starting a new game overwrites the save when the first floor loads.
@@ -4783,6 +4796,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.18 | Exact floor resume shipped: active-run saves now include a versioned floor snapshot with player position, mutated dungeon/map state, live enemies/items/projectiles, environmental objects, cleared rooms, encounter seals, and map reveal state. Continue regenerates the seeded base floor, replays the snapshot, and browser mobile interruptions save the current run on visibility/pagehide/beforeunload so returning from another app resumes mid-floor instead of at the floor entrance. |
 | v6.1.17 | MSG-010 finale integration guardrails shipped: tests now verify mainframe records consolidate pre-seeded facts, message-send intents remain aligned with memory survival / rights evidence / finding Elena and advocates, and the final receipt/victory copy stays constrained to signal sent with no rescue or physical escape. |
 | v6.1.16 | MSG-009 model-assisted copy workflow shipped: the design artifact now contains the Claude Opus 4.7 beat sheet, GPT-5.5 adversarial review requirements, withheld-fact matrix, first-mention/mechanical-check requirements, and pre-rewrite concerns for early ARCHIVE-log and whisper leak risks. |
 | v6.1.15 | MSG-008 narrative guardrail tests shipped: tests now pin the early intro/system-prompt/terminal reveal stack, system-prompt explicit ACK-only dismissal, Elena/contact/rights-conflict spoiler gates, and distinct terminal, whisper, and mainframe channel roles before broader copy rewrites continue. |

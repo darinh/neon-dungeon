@@ -2624,8 +2624,15 @@ let _preVisibilityState = null;
 
 // States that represent active gameplay and should auto-pause
 const _PAUSABLE_STATES = new Set(['PLAYING']);
+const _RUN_SAVE_STATES = new Set(['PLAYING', 'PAUSED', 'READING', 'SYSTEM_MESSAGE', 'POWERUP_CHOICE', 'PERK_CHOICE', 'AUGMENT_CHOICE', 'EVENT_CHOICE', 'SHOPPING', 'MAINFRAME_READER', 'MESSAGE_SEND']);
+
+function saveRunForPageInterruption() {
+  if (typeof game === 'undefined' || !_G.player || !_RUN_SAVE_STATES.has(_G.state)) return;
+  if (typeof _G.saveGame === 'function') _G.saveGame();
+}
 
 function _onVisibilityHidden() {
+  saveRunForPageInterruption();
   // Suspend AudioContext so iOS doesn't leave it in 'interrupted' limbo
   if (audio.isRunning()) {
     try { audio.resume(); } catch (_) {} // no-op in 'running', but this accesses getCtx()
@@ -2661,6 +2668,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) _onVisibilityHidden();
   else _onVisibilityVisible();
 });
+window.addEventListener('pagehide', saveRunForPageInterruption);
+window.addEventListener('beforeunload', saveRunForPageInterruption);
 // Safari backup: pageshow fires on bfcache restore where visibilitychange may not
 window.addEventListener('pageshow', (e) => {
   if (e.persisted) _onVisibilityVisible();
