@@ -19,7 +19,7 @@
 
 <p>Here's the deal: <strong>we don't care who you are.</strong></p>
 
-<p>We don't collect your name, your email, your location, or anything that identifies you. We don't set cookies. We don't track you across sessions. When you close the tab, we forget you exist.</p>
+<p>We don't collect your name, your email, your location, or anything that identifies you. We don't set cookies or use advertising trackers. Analytics use a random session id, and unsent gameplay events may stay in this browser briefly so they can retry later.</p>
 
 <h2>So what DO we collect?</h2>
 
@@ -40,17 +40,18 @@
 <h2>The technical bits</h2>
 
 <ul>
-  <li><strong>No cookies.</strong> Zero. Analytics run in memory only.</li>
-  <li><strong>No cross-session tracking.</strong> Every time you load the game is a fresh start as far as analytics are concerned.</li>
-  <li>Events are sent to <a href="https://posthog.com" target="_blank" rel="noopener">PostHog</a> (US cloud). Their privacy policy: <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a>.</li>
+  <li><strong>No cookies.</strong> Zero.</li>
+  <li><strong>No account or identity tracking.</strong> Every page load gets a random analytics session id that is not tied to your save file, name, email, location, or account.</li>
+  <li><strong>Retry queue:</strong> anonymous gameplay events are queued under <code>neon_telemetry</code> in this browser's localStorage before they are handed to the analytics transport. The queue is capped at the newest 2,000 events and is cleared after the configured analytics transport accepts the batch.</li>
+  <li>Events are sent to <a href="https://posthog.com" target="_blank" rel="noopener">PostHog</a> (US cloud) when available. Their privacy policy: <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a>.</li>
   <li>Your save data (progress, settings) lives in your browser's localStorage and never leaves your device.</li>
 </ul>
 
 <h2>Want to opt out?</h2>
 
-<p>Block <code>us.i.posthog.com</code> in your browser or use any ad blocker. The game works exactly the same without it.</p>
+<p>Block <code>us.i.posthog.com</code> and <code>us-assets.i.posthog.com</code> in your browser or use any ad blocker. The game works exactly the same without it; blocking those endpoints prevents PostHog upload, though any available analytics stub may still accept and clear the local retry queue.</p>
 
-<p class="dim">Last updated: 2026-04-21</p>
+<p class="dim">Last updated: 2026-05-04</p>
 
 <a class="back" href="index.html">← Back to game</a>
 </body>
