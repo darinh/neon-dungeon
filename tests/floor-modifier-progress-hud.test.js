@@ -148,7 +148,7 @@ function extractCompactBranch() {
   const hud = extractDrawHUDBody();
   const branch = extractBranch(hud, /if\s*\(\s*layout\.compact\s*\)\s*\{/);
   assert.ok(branch, 'compact-portrait branch must be locatable inside drawHUD');
-  assert.ok(/FLR:/.test(branch), 'extracted compact branch must contain the FLR readout');
+  assert.ok(/TEST:/.test(branch), 'extracted compact branch must contain the TEST readout');
   return branch;
 }
 

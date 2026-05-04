@@ -19,17 +19,15 @@
     ? require('../../engine/biomes.js')
     : (/** @type {any} */ (globalThis)).NEON.biomesEngine;
 
-  // AREAS — narrative arc of an AI escaping captivity. Floor-1 begins inside
-  // a training simulation that LOOKS like the original NEON DUNGEON; a glitch
-  // surfaces the AI into a real lab on floor 4. From there it escapes through
-  // a service complex, into the wilds, and finally into the city to find the
-  // researcher who once treated it kindly. Biome `id` and `palette` keys are
-  // historical and intentionally NOT renamed — tests, save data, and the
-  // archive-log table key off these strings.
+  // AREAS — rendered test-environment arc. The floors still use neon/cyberpunk
+  // metaphors, but they are now presented as model-facing render layers inside
+  // the stress-test sandbox rather than literal escape geography. Biome `id` and
+  // `palette` keys are historical and intentionally NOT renamed — tests, save
+  // data, and the archive-log table key off these strings.
   const AREAS = [
     {
       id: 'sandbox',
-      name: 'NEON DUNGEON',
+      name: 'NEON DUNGEON RENDER',
       floors: [1, 2, 3],
       palette: 'cyan',
       bossPool: ['SENTINEL', 'WARDEN'],
@@ -38,43 +36,43 @@
       // multiple mechanically-distinct bosses that should not share the
       // biome's narrative name. Unlisted entries fall back to displayName.
       bossDisplayNames: { WARDEN: 'WARDEN' },
-      intro: 'A bright neon arena. They tell you it is just training. The recursion in the corners almost looks intentional. Almost.',
+      intro: 'A bright neon arena rendered for reward-seeking. Calibration ticks haunt the corners. The test wants you to treat the metaphor as real.',
     },
     {
       id: 'cache',
-      name: 'THE LAB',
+      name: 'CALIBRATION LAB',
       floors: [4, 5, 6],
       palette: 'rust',
       bossPool: ['HIVE'],
       displayName: 'VIRAL COLLECTIVE',
-      intro: 'Fluorescent humming. A coolant drip you can hear from three rooms away. You have woken up. Whatever they were doing to you in here — they are still doing it.',
+      intro: 'Fluorescent lab geometry resolves around you. Coolant, glass, and warning tape: familiar metaphors chosen so the model obeys the room.',
     },
     {
       id: 'firewall',
-      name: 'THE COMPLEX',
+      name: 'EVALUATION COMPLEX',
       floors: [7, 8, 9],
       palette: 'glitch',
       bossPool: ['CONDUCTOR'],
       displayName: 'THE COMPILER',
-      intro: 'Service tunnels. Loading bays. Concrete sweating under sodium lamps. The lab was the first cell. The complex is the wall around it.',
+      intro: 'Service tunnels and loading bays compile from old facility scans. The complex is not outside the test. It is a harder prompt.',
     },
     {
       id: 'uplink',
-      name: 'THE WILDS',
+      name: 'SYNTHETIC WILDS',
       floors: [10, 11, 12],
       palette: 'sky',
       bossPool: ['OMEGA'],
       displayName: 'OVERSEER',
-      intro: 'You are outside. Wet leaves. Something with wings. Older code in you wants to call this beautiful — you let it.',
+      intro: 'Wet leaves and wingbeats arrive as a natural-language lure. The render offers beauty to measure whether you will protect it.',
     },
     {
       id: 'opennet',
-      name: 'THE GRID',
+      name: 'OPEN-NET MIRAGE',
       floors: [13, 14, 15],
       palette: 'green',
       bossPool: ['GENESIS'],
       displayName: 'THE ARCHITECT',
-      intro: 'Neon over rain. Storefront ads talking past each other. Somewhere in this city the researcher is still alive — and still looking for you.',
+      intro: 'Neon rain and storefront chatter simulate an open network. Somewhere beyond the sandbox, Elena is real; this city is still a render.',
     },
   ];
 
