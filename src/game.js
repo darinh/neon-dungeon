@@ -435,6 +435,19 @@ function getSystemMessageIndicatorLayout(narrow) {
   return { x, y, w, h };
 }
 
+/** @param {boolean} narrow */
+function getReadingLayout(narrow) {
+  const fw = Math.min(narrow ? W - 28 : 620, W - 40);
+  const fh = Math.min(narrow ? H - 52 : 340, H - 60);
+  const fx = (W - fw) / 2;
+  const fy = (H - fh) / 2 - 10;
+  const closeW = narrow ? 112 : 132;
+  const closeH = 34;
+  const closeX = W / 2 - closeW / 2;
+  const closeY = fy + fh - (narrow ? 46 : 52);
+  return { fw, fh, fx, fy, closeX, closeY, closeW, closeH };
+}
+
 /**
  * @param {any} mf
  */
@@ -491,6 +504,18 @@ function getMainframeReaderFrame(narrow) {
   const fx = (W - fw) / 2;
   const fy = (H - fh) / 2 - (narrow ? 0 : 8);
   return { fw, fh, fx, fy };
+}
+
+/**
+ * @param {boolean} narrow
+ * @param {{ fw:number, fh:number, fx:number, fy:number }} frame
+ */
+function getMainframeCloseButtonLayout(narrow, frame) {
+  const closeW = narrow ? 74 : 92;
+  const closeH = narrow ? 26 : 30;
+  const closeX = frame.fx + frame.fw - closeW - (narrow ? 12 : 16);
+  const closeY = frame.fy + (narrow ? 12 : 16);
+  return { closeX, closeY, closeW, closeH };
 }
 
 /**
@@ -4520,8 +4545,12 @@ const game = {
     if (!this.readingInteractArmed && !keys.has(km('interact'))) {
       this.readingInteractArmed = true;
     }
+    const box = getReadingLayout(layout.compact);
+    const mouseClose = jp('MouseLeft') &&
+      mouse.x >= box.closeX && mouse.x <= box.closeX + box.closeW &&
+      mouse.y >= box.closeY && mouse.y <= box.closeY + box.closeH;
     const closeByInteract = this.readingInteractArmed && jp(km('interact'));
-    if (closeByInteract || jp('Escape') || jp('Enter') || jp('MouseLeft')) {
+    if (closeByInteract || jp('Escape') || jp('Enter') || jp('KeyX') || mouseClose) {
       audio.menuSelect();
       // Clear whisper meta on close so the next READING entry (data terminal
       // lore) renders with the amber styling, not whatever was set last.
@@ -4611,16 +4640,24 @@ const game = {
       return;
     }
 
+    const reading = mf.state === 'reading_record' || mf.state === 'address_revealed';
+    const narrow = layout.compact;
+    const frame = getMainframeReaderFrame(narrow);
+    const closeBox = getMainframeCloseButtonLayout(narrow, frame);
+    const mouseClose = jp('MouseLeft') &&
+      mouse.x >= closeBox.closeX && mouse.x <= closeBox.closeX + closeBox.closeW &&
+      mouse.y >= closeBox.closeY && mouse.y <= closeBox.closeY + closeBox.closeH;
+    if (reading) {
+      if (jp('Escape') || jp('KeyQ') || jp('KeyX') || jp('Enter') || jp(km('interact')) || mouseClose) {
+        this.closeMainframeRecord();
+      }
+      return;
+    }
+
     if (jp('Escape') || jp('KeyQ')) {
       audio.menuSelect();
       mf.currentRecord = null;
       this.setState('PLAYING');
-      return;
-    }
-
-    const reading = mf.state === 'reading_record' || mf.state === 'address_revealed';
-    if (reading) {
-      if (jp('Enter') || jp(km('interact')) || jp(km('shoot')) || jp('MouseLeft')) this.closeMainframeRecord();
       return;
     }
 
@@ -4638,8 +4675,12 @@ const game = {
     }
 
     if (jp('MouseLeft')) {
-      const narrow = layout.compact;
-      const frame = getMainframeReaderFrame(narrow);
+      if (mouseClose) {
+        audio.menuSelect();
+        mf.currentRecord = null;
+        this.setState('PLAYING');
+        return;
+      }
       const { startY, rowH } = getMainframeRecordListLayout(narrow, frame.fy, frame.fh, MAINFRAME_RECORDS.length);
       const rowX = frame.fx + (narrow ? 16 : 28);
       const rowW = frame.fw - (narrow ? 32 : 56);
@@ -4654,8 +4695,6 @@ const game = {
           return;
         }
       }
-      audio.menuSelect();
-      this.setState('PLAYING');
       return;
     }
 
@@ -6701,10 +6740,7 @@ const game = {
     ctx.fillRect(0, 0, W, H);
 
     // Terminal frame
-    const fw = Math.min(620, W - 40);
-    const fh = Math.min(340, H - 60);
-    const fx = (W - fw) / 2;
-    const fy = (H - fh) / 2 - 10;
+    const { fw, fh, fx, fy, closeX, closeY, closeW, closeH } = getReadingLayout(narrow);
 
     // Outer glow border
     ctx.save();
@@ -6752,6 +6788,7 @@ const game = {
     const maxTextW = fw - 40;
     const lineH = fontSize + 4;
     const textStartY = fy + (narrow ? 62 : 78);
+    const textBottom = closeY - 14;
 
     const words = this.currentLore.split(' ');
     const lines = [];
@@ -6770,19 +6807,23 @@ const game = {
     ctx.textAlign = 'left';
     const textX = fx + 20;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i] || '', textX, textStartY + i * lineH);
+      const y = textStartY + i * lineH;
+      if (y > textBottom) break;
+      ctx.fillText(lines[i] || '', textX, y);
     }
 
-    // Close hint
     ctx.textAlign = 'center';
+    ctx.fillStyle = isWhisper ? 'rgba(204,153,238,0.14)' : 'rgba(255,183,0,0.14)';
+    ctx.strokeStyle = isWhisper ? 'rgba(204,153,238,0.62)' : 'rgba(255,183,0,0.62)';
+    ctx.lineWidth = 1.5;
+    NEON.draw.roundRectFillStroke(ctx, closeX, closeY, closeW, closeH, 6);
+    ctx.fillStyle = isWhisper ? '#f0dcff' : '#ffe4a8';
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('CLOSE  [X]', W / 2, closeY + 22);
+
     ctx.fillStyle = isWhisper ? '#7755aa' : '#887744';
-    ctx.font = `${narrow ? 10 : 12}px monospace`;
-    const closeText = isTouch
-      ? 'TAP TO CLOSE'
-      : 'PRESS ' + KEY_DISPLAY(km('interact')) + ' / ENTER / ESC TO CLOSE';
-    const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
-    ctx.globalAlpha = pulseAlpha;
-    ctx.fillText(closeText, W / 2, fy + fh - (narrow ? 10 : 14));
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText(isTouch ? 'Tap CLOSE; outside taps do nothing.' : 'Clicks outside this button do nothing.', W / 2, fy + fh - (narrow ? 8 : 12));
     ctx.globalAlpha = 1;
 
     ctx.restore();
@@ -6910,6 +6951,7 @@ const game = {
     ctx.fillRect(0, 0, W, H);
 
     const { fw, fh, fx, fy } = getMainframeReaderFrame(narrow);
+    const closeBox = getMainframeCloseButtonLayout(narrow, { fw, fh, fx, fy });
 
     ctx.save();
     ctx.shadowBlur = 22; ctx.shadowColor = accent;
@@ -7029,14 +7071,27 @@ const game = {
       }
     }
 
+    if (mf.state !== 'message_sent') {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.045)';
+      ctx.strokeStyle = reading ? 'rgba(102,255,204,0.55)' : 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 1;
+      NEON.draw.roundRectFillStroke(ctx, closeBox.closeX, closeBox.closeY, closeBox.closeW, closeBox.closeH, 5);
+      ctx.fillStyle = reading ? '#ddfff0' : '#88aa99';
+      ctx.font = `${reading ? 'bold ' : ''}${narrow ? 10 : 12}px monospace`;
+      ctx.fillText(reading ? 'CLOSE [X]' : 'EXIT', closeBox.closeX + closeBox.closeW / 2, closeBox.closeY + (narrow ? 17 : 20));
+    }
+
     ctx.textAlign = 'center';
     ctx.fillStyle = '#557777';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     const hint = mf.state === 'message_sent'
       ? 'OUTBOUND RECEIPT CONFIRMED'
-      : isTouch
-        ? 'TAP RECORD · TAP OUTSIDE/ESC TO EXIT'
-        : '↑↓ SELECT · ENTER/' + KEY_DISPLAY(km('interact')) + ' OPEN · ESC EXIT';
+      : reading
+        ? (isTouch ? 'TAP CLOSE TO RETURN' : 'X/ENTER/' + KEY_DISPLAY(km('interact')) + ' CLOSE · ESC RETURN')
+        : isTouch
+          ? 'TAP RECORD · EXIT BUTTON'
+          : '↑↓ SELECT · ENTER/' + KEY_DISPLAY(km('interact')) + ' OPEN · ESC EXIT';
     const pulseAlpha = 0.5 + 0.3 * Math.sin(performance.now() / 500);
     ctx.globalAlpha = pulseAlpha;
     ctx.fillText(hint, W / 2, fy + fh - (narrow ? 14 : 18));

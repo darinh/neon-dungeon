@@ -129,11 +129,13 @@ Acceptance criteria:
 
 ### MSG-002: Explicit acknowledgement and dismissal safety
 
-Status: shipped explicit-ACK modal slice for system prompts in `src/game.js`.
-Delivered prompts use the `SYSTEM_MESSAGE` state, render over the playfield,
-require `X` or a hit-tested ACK button, and use a short arming delay. Broader
-audits of legacy `READING`, `MAINFRAME_READER`, and intro dismissal behavior
-remain pending.
+Status: shipped explicit-ACK modal slice plus legacy overlay hardening in
+`src/game.js`. Delivered prompts use the `SYSTEM_MESSAGE` state, render over the
+playfield, require `X` or a hit-tested ACK button, and use a short arming delay.
+Legacy `READING` lore/whisper overlays and `MAINFRAME_READER` archive records
+now ignore outside pointer taps/clicks and require a labeled close button or
+explicit keyboard close action. Intro dismissal still advances only from
+keyboard controls and remains intentionally short.
 
 Replace generic narrative-overlay dismissal for system prompts with a deliberate
 ACK/CLOSE/MARK READ action and touch button. This work should also audit
