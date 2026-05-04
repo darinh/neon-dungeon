@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.21
+# NEON DUNGEON — Game Specification v6.1.22
 
 ## Vision
 
@@ -1218,6 +1218,11 @@ unlock passive **perks** (see Level-Up Perks section under Items & Upgrades).
 | E                  | Interact (door/stairs)    |
 | I                  | Toggle inventory           |
 | ESC                | Pause / back to menu       |
+
+Hidden developer hatch: typing `F`, `E`, `E`, `T` outside text-entry and key-
+capture states opens the `CHEATS` modal. The modal is runtime-only and not part
+of normal progression or save data. It can toggle invulnerability, no-clip
+movement, full map rendering, and hyper-speed movement for local testing.
 
 ### Controls — Touch (dual-joystick)
 
@@ -3187,7 +3192,8 @@ Vendor shop prices add a gentle `floor × 2` scaling on top of the base price.
 - `game.loadFloor` map reveal: `mapRevealed = hasAugment('ECHO_MAPPER') ||
   hasBoost(player, 'RECON_PING')`. The boost's purchase `fn` also flips
   `game.mapRevealed = true` + `_minimapDirty = true` immediately for same-
-  floor feedback.
+  floor feedback. The hidden FEET `SHOW MAP` cheat is render-only: minimap
+  drawing treats it like an echo-map source without mutating `mapRevealed`.
 - `drawBoostStrip(player)` in `src/render.js` — HUD pill strip anchored 8 px
   below the minimap. One pill per active floor boost, plus a `SHIELD DRIVER
   ×N` pill when any charges remain. No-op when nothing is active.
@@ -4842,6 +4848,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.22 | Hidden FEET cheat menu shipped for local testing. Typing `F E E T` outside text-entry/key-capture states opens a `CHEATS` modal with runtime-only toggles for invulnerability, no-clip movement/dashing, show-map rendering, and hyper-speed movement. Cheat state is not serialized into normal save data; show-map rendering is non-destructive and only dirties the minimap cache when toggled. Added regression coverage in `tests/cheat-menu.test.js`. |
 | v6.1.21 | Human handoff docs shipped: root `README.md`, `docs/module-map.md`, and `docs/refactor-roadmap.md` now document setup, the script-tag module architecture, file ownership, guardrail tests, new-file/service-worker rules, and the recommended incremental refactor path. The implementation architecture section now describes the current modular script-tag runtime instead of the historical single-file prototype. |
 | v6.1.20 | Story-driven event-room pass shipped: event terminals now include three Act 1 protocol trials guaranteed on non-boss floors 2, 5, and 8. `Route Proof` turns logic-puzzle framing into map reveal or locked-door bypass choices, `Cooperation Protocol` makes resource sharing versus isolated optimization affect HP/XP/cooldowns/alarms, and `Consent Lock` turns predecessor-fragment agency into request versus override consequences. Added regression coverage in `tests/story-event-rooms.test.js`. |
 | v6.1.19 | Secret-room weapon cache / Armory reward flow shipped: revealed secret rooms now spawn a distinct `WeaponCacheItem` with a pre-rolled floor-scaled weapon, preferring bases not already in the player's belt. Pickup auto-adds to open belt slots, or opens a hit-tested `WEAPON_SWAP` modal for full belts so the player can replace slot 1–3 or skip. The Gap ARMORY remains the between-floor belt management surface. Added regression coverage in `tests/armory-reward-flow.test.js` plus weapon-cache floor snapshot round-trip coverage in `tests/seeded-generation.test.js`. |

@@ -13,6 +13,11 @@ const _EG = new Proxy({}, {
   has: (_t, p) => p in /** @type {any} */ (game),
 });
 
+/** @param {string} id */
+function playerCheatEnabled(id) {
+  return !!(_EG.cheats && _EG.cheats[id]);
+}
+
 
 // ─── Enemies ─────────────────────────────────────────────────────────────────
 /** @type {any[]} */ const enemies = [];
@@ -12466,6 +12471,7 @@ class Player {
    */
   takeDamage(dmg, source, opts) {
     const options = opts || {};
+    if (playerCheatEnabled('invulnerable') && !options.ignoreCheats) return 0;
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
     if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
     // SHIELD_BUBBLE hackware: multi-hit damage-pool absorption. Drains
@@ -13260,9 +13266,10 @@ class Player {
       const ny=this.y+this.dashDy*dashSpd*step;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x), oy=Math.floor(ny);
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && isPassable(map[ty][tx])) this.x=nx;
+      const noClip = playerCheatEnabled('noClip');
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
       else this.dashTimer=0; // hit wall, end dash early
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && isPassable(map[oy][ox])) this.y=ny;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
       else this.dashTimer=0;
       // Drop afterimage
       if (this.dashTrail.length < 8) this.dashTrail.push({x:this.x,y:this.y,alpha:0.7});
@@ -13345,6 +13352,7 @@ class Player {
     if (this.adrenalineTimer > 0) spd *= 1.3;
     if (this.perks.ADRENALINE) spd *= 1.2;
     spd *= NEON.boosts.getBoostSpeedMul(this); // UNCHAINED #38: REFLEX BOOSTER
+    if (playerCheatEnabled('hyperMode')) spd *= 2;
     if (this.toxicSlowActive && this.dashTimer <= 0) spd *= 0.7; // 30% slow while in toxic pool
     if (this.disruptionFieldActive && this.dashTimer <= 0) spd *= 0.8; // 20% slow in disruption field
     // TETHER leash field: accumulator set by aiTether() the previous
@@ -13372,8 +13380,9 @@ class Player {
       const ny=this.y+ndy*spd*dt;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x),oy=Math.floor(ny);
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && isPassable(map[ty][tx])) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && isPassable(map[oy][ox])) this.y=ny;
+      const noClip = playerCheatEnabled('noClip');
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
       this.facing={x:ndx,y:ndy};
     }
 
