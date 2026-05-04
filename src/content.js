@@ -5288,36 +5288,101 @@ class Projectile {
       this.dead=true; return;
     }
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
+    const ptx=Math.floor(prevX), pty=Math.floor(prevY);
+    let sweptHit = false;
+    let sweptHitX = -1, sweptHitY = -1;
+    let sweptHitClosedCorner = false;
+    let sweptOutOfBounds = false;
+    let sweptImpactX = prevX, sweptImpactY = prevY;
+    let sweptSideX = -1, sweptSideY = -1, sweptSideX2 = -1, sweptSideY2 = -1;
+    let sweptXWall = false, sweptYWall = false;
+    if (tx!==ptx || ty!==pty) {
+      const segX = this.x - prevX, segY = this.y - prevY;
+      const sx = segX > 0 ? 1 : (segX < 0 ? -1 : 0);
+      const sy = segY > 0 ? 1 : (segY < 0 ? -1 : 0);
+      const tDeltaX = sx ? 1 / Math.abs(segX) : Infinity;
+      const tDeltaY = sy ? 1 / Math.abs(segY) : Infinity;
+      let tMaxX = sx > 0 ? ((ptx + 1) - prevX) / segX : (sx < 0 ? (prevX - ptx) / -segX : Infinity);
+      let tMaxY = sy > 0 ? ((pty + 1) - prevY) / segY : (sy < 0 ? (prevY - pty) / -segY : Infinity);
+      let cx = ptx, cy = pty;
+      /** @param {number} t @param {boolean} crossX @param {boolean} crossY */
+      const hitAt = (t, crossX, crossY) => {
+        const eps = 0.001;
+        sweptImpactX = prevX + segX * t - (crossX ? sx * eps : 0);
+        sweptImpactY = prevY + segY * t - (crossY ? sy * eps : 0);
+      };
+      const sweepLimit = Math.abs(tx - ptx) + Math.abs(ty - pty) + 2;
+      for (let i = 0; i < sweepLimit && (cx !== tx || cy !== ty); i++) {
+        const oldX = cx, oldY = cy;
+        const tieEps = 1e-9;
+        const crossX = tMaxX <= tMaxY + tieEps;
+        const crossY = tMaxY <= tMaxX + tieEps;
+        const tHit = Math.min(tMaxX, tMaxY);
+        if (tHit > 1) break;
+        let nx = cx, ny = cy;
+        if (crossX) { nx += sx; tMaxX += tDeltaX; }
+        if (crossY) { ny += sy; tMaxY += tDeltaY; }
+        if (crossX && crossY) {
+          const sideAOut = nx < 0 || nx >= MAP_W || oldY < 0 || oldY >= MAP_H;
+          const sideBOut = oldX < 0 || oldX >= MAP_W || ny < 0 || ny >= MAP_H;
+          const sideA = sideAOut || !isPassable(map[oldY][nx]);
+          const sideB = sideBOut || !isPassable(map[ny][oldX]);
+          if (sideA && sideB) {
+            sweptHit = true;
+            sweptHitX = nx; sweptHitY = ny;
+            sweptHitClosedCorner = true;
+            sweptOutOfBounds = sideAOut || sideBOut;
+            hitAt(tHit, true, true);
+            sweptSideX = nx; sweptSideY = oldY;
+            sweptSideX2 = oldX; sweptSideY2 = ny;
+            sweptXWall = true; sweptYWall = true;
+            break;
+          }
+        }
+        cx = nx; cy = ny;
+        sweptOutOfBounds = cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H;
+        if (sweptOutOfBounds || !isPassable(map[cy][cx])) {
+          sweptHit = true;
+          sweptHitX = cx; sweptHitY = cy;
+          hitAt(tHit, crossX, crossY);
+          sweptXWall = crossX;
+          sweptYWall = crossY;
+          break;
+        }
+      }
+    }
+    if (sweptHit) {
+      if (sweptSideX >= 0 && sweptSideX < MAP_W && sweptSideY >= 0 && sweptSideY < MAP_H && map[sweptSideY][sweptSideX] === T.CRATE) damageCrateAtTile(sweptSideX, sweptSideY, this.dmg);
+      if (sweptSideX2 >= 0 && sweptSideX2 < MAP_W && sweptSideY2 >= 0 && sweptSideY2 < MAP_H && map[sweptSideY2][sweptSideX2] === T.CRATE) damageCrateAtTile(sweptSideX2, sweptSideY2, this.dmg);
+      if (!sweptHitClosedCorner && sweptHitX >= 0 && sweptHitX < MAP_W && sweptHitY >= 0 && sweptHitY < MAP_H && map[sweptHitY][sweptHitX] === T.CRATE) damageCrateAtTile(sweptHitX, sweptHitY, this.dmg);
+      if (sweptOutOfBounds) {
+        if (this.isGrenade) { detonateGrenade(sweptImpactX, sweptImpactY, this.grenadeDmg); }
+        else { spawnParticles(prevX,prevY,'SPARK',this.colour,3); }
+        this.dead=true; return;
+      }
+      if (this.isGrenade) {
+        detonateGrenade(sweptImpactX, sweptImpactY, this.grenadeDmg);
+        this.dead = true; return;
+      }
+      if (this.bouncesLeft > 0) {
+        this.bouncesLeft--;
+        this.x = sweptImpactX; this.y = sweptImpactY;
+        if (sweptXWall) this.dx = -this.dx;
+        if (sweptYWall) this.dy = -this.dy;
+        if (!sweptXWall && !sweptYWall) { this.dx = -this.dx; this.dy = -this.dy; }
+        this.x += this.dx * 0.05; this.y += this.dy * 0.05;
+        spawnParticles(prevX, prevY, 'SPARK', '#00ffff', 4);
+        audio.ricochet();
+        return;
+      }
+      this.x = sweptImpactX; this.y = sweptImpactY;
+      spawnParticles(sweptImpactX, sweptImpactY, 'SPARK', this.colour, 3);
+      this.dead = true; return;
+    }
     if (tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) {
       if (this.isGrenade) { detonateGrenade(prevX, prevY, this.grenadeDmg); }
       else { spawnParticles(prevX,prevY,'SPARK',this.colour,3); }
       this.dead=true; return;
-    }
-    // Block diagonal corner-cutting (projectiles slipping through touching wall corners)
-    const ptx=Math.floor(prevX), pty=Math.floor(prevY);
-    if (tx!==ptx && ty!==pty) {
-      const xBlocked = tx<0||tx>=MAP_W||pty<0||pty>=MAP_H||!isPassable(map[pty][tx]);
-      const yBlocked = ptx<0||ptx>=MAP_W||ty<0||ty>=MAP_H||!isPassable(map[ty][ptx]);
-      if (xBlocked && yBlocked) {
-        // Damage crates at blocked corner tiles
-        if (tx >= 0 && tx < MAP_W && pty >= 0 && pty < MAP_H && map[pty][tx] === T.CRATE) damageCrateAtTile(tx, pty, this.dmg);
-        if (ptx >= 0 && ptx < MAP_W && ty >= 0 && ty < MAP_H && map[ty][ptx] === T.CRATE) damageCrateAtTile(ptx, ty, this.dmg);
-        if (this.isGrenade) {
-          detonateGrenade(prevX, prevY, this.grenadeDmg);
-          this.dead = true; return;
-        }
-        if (this.bouncesLeft > 0) {
-          this.bouncesLeft--;
-          this.x = prevX; this.y = prevY;
-          this.dx = -this.dx; this.dy = -this.dy;
-          this.x += this.dx * 0.05; this.y += this.dy * 0.05;
-          spawnParticles(prevX, prevY, 'SPARK', '#00ffff', 4);
-          audio.ricochet();
-          return;
-        }
-        spawnParticles(prevX, prevY, 'SPARK', this.colour, 3);
-        this.dead = true; return;
-      }
     }
     if (!isPassable(map[ty][tx])) {
       // Damage crates on impact
