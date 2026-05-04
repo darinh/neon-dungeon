@@ -541,7 +541,11 @@ function resumeInteractiveAudio(consumeMenuActivation) {
   if (consumeTitleUnlock) _G._menuTitleUnlockPending = true;
 }
 
-canvas.addEventListener('mousemove', e => {
+/**
+ * @param {number} clientX
+ * @param {number} clientY
+ */
+function updateMouseFromClient(clientX, clientY) {
   const r = canvas.getBoundingClientRect();
   // Pointer events arrive in CSS px → map to canvas BACKING px → then
   // divide by worldZoom to land in LOGICAL coordinates (the same space
@@ -551,10 +555,14 @@ canvas.addEventListener('mousemove', e => {
   // already pre-zoomed. Defensive: settings may be momentarily
   // un-populated; fall back to 1.0.
   const _wz = (settings && settings.worldZoom) || 1;
-  mouse.x = (e.clientX - r.left) * canvas.width  / r.width  / _wz;
-  mouse.y = (e.clientY - r.top)  * canvas.height / r.height / _wz;
+  mouse.x = (clientX - r.left) * canvas.width  / r.width  / _wz;
+  mouse.y = (clientY - r.top)  * canvas.height / r.height / _wz;
+}
+
+canvas.addEventListener('mousemove', e => {
+  updateMouseFromClient(e.clientX, e.clientY);
 });
-canvas.addEventListener('mousedown', e => { mouse.down = true; justPressed.add('MouseLeft'); resumeInteractiveAudio(true); });
+canvas.addEventListener('mousedown', e => { updateMouseFromClient(e.clientX, e.clientY); mouse.down = true; justPressed.add('MouseLeft'); resumeInteractiveAudio(true); });
 canvas.addEventListener('mouseup',   e => { mouse.down = false; });
 window.addEventListener('mouseup',   e => { mouse.down = false; });
 // Scroll wheel: weapon belt cycling
@@ -671,7 +679,7 @@ canvas.addEventListener('touchstart', e => {
         justPressed.add('MouseLeft');
         continue;
       }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
