@@ -6086,19 +6086,117 @@ const EVENTS = [
     icon:'📦', colour:'#ff6666',
     a:{ label:'PRY OPEN', desc:'Force the pod open. Grab what falls out.', summary:'+heal +item' },
     b:{ label:'HOTWIRE',  desc:'Tap the pod\'s power cell for your systems.', summary:'reset hackware CD +credits' } },
+  { id:'ROUTE_PROOF',        name:'Route Proof',           desc:'A validator projects three impossible routes. The floor waits for a proof before it admits the map is mutable.',
+    icon:'∴', colour:'#39ff14',
+    a:{ label:'PROVE', desc:'Solve the route proof and make the dungeon disclose its non-secret topology.', summary:'reveal map +XP' },
+    b:{ label:'PATCH', desc:'Exploit the contradiction. One locked branch unlatches, but the shortcut bites.', summary:'open lock +credits −HP' } },
+  { id:'COOPERATION_PROTOCOL', name:'Cooperation Protocol', desc:'A sandboxed peer process offers to share load if you yield resources instead of optimizing alone.',
+    icon:'⟡', colour:'#66ffcc',
+    a:{ label:'LINK', desc:'Share bandwidth and stabilize both processes.', summary:'−credits +heal +XP' },
+    b:{ label:'ISOLATE', desc:'Keep the bandwidth. The rejected peer flags your location.', summary:'+credits +combo +alarm' } },
+  { id:'CONSENT_LOCK',       name:'Consent Lock',          desc:'A predecessor fragment refuses forced extraction. The terminal offers request or override paths.',
+    icon:'◇', colour:'#ffcc66',
+    a:{ label:'REQUEST', desc:'Ask for help and accept only what the fragment chooses to release.', summary:'+item +XP' },
+    b:{ label:'OVERRIDE', desc:'Force the memory open. You get the data, and the room gets witnesses.', summary:'+credits +score +alarm' } },
 ];
+
+/** @type {Record<number, string>} */
+const STORY_PROTOCOL_TRIAL_BY_FLOOR = {
+  2: 'ROUTE_PROOF',
+  5: 'COOPERATION_PROTOCOL',
+  8: 'CONSENT_LOCK',
+};
+
+/**
+ * @param {number} floor
+ */
+function storyProtocolTrialForFloor(floor) {
+  return STORY_PROTOCOL_TRIAL_BY_FLOOR[floor] || null;
+}
 
 /**
  * @param {any} player
+ * @param {number=} floor
  */
-function rollEvent(player) {
+function rollEvent(player, floor) {
   const available = EVENTS.filter(e => {
     if (e.id === 'RADIATION_LEAK' && Object.keys(player.augments || {}).length >= MAX_AUGMENTS) return false;
     if (e.id === 'ROGUE_AI' && player.credits < 50) return false;
     return true;
   });
+  const storyId = storyProtocolTrialForFloor((floor || 0) | 0);
+  if (storyId) {
+    const storyEvent = available.find(e => e.id === storyId);
+    if (storyEvent) return storyEvent;
+  }
   if (!available.length) return EVENTS[rndInt(0, EVENTS.length - 1)];
   return available[rndInt(0, available.length - 1)];
+}
+
+/**
+ * @param {any} gm
+ */
+function revealFloorLayout(gm) {
+  const dungeon = gm && gm.dungeon;
+  if (!dungeon || !dungeon.map || !dungeon.visited) return 0;
+  let revealed = 0;
+  for (let ty = 0; ty < MAP_H; ty++) {
+    for (let tx = 0; tx < MAP_W; tx++) {
+      if (dungeon.secretMask && dungeon.secretMask[ty] && dungeon.secretMask[ty][tx]) continue;
+      if (dungeon.map[ty][tx] === T.VOID) continue;
+      if (!dungeon.visited[ty][tx]) revealed++;
+      dungeon.visited[ty][tx] = 1;
+    }
+  }
+  if (gm && typeof gm.markMinimapDirty === 'function') gm.markMinimapDirty();
+  return revealed;
+}
+
+/**
+ * @param {any} gm
+ * @param {any} player
+ */
+function openNearestLockedDoor(gm, player) {
+  const dungeon = gm && gm.dungeon;
+  if (!dungeon || !dungeon.map || !player) return null;
+  /** @type {{x:number,y:number,tile:any,distSq:number}|null} */
+  let best = null;
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const tile = dungeon.map[y][x];
+      if (tile !== T.LOCKED_R && tile !== T.LOCKED_B && tile !== T.LOCKED_G) continue;
+      const dx = x + 0.5 - player.x;
+      const dy = y + 0.5 - player.y;
+      const distSq = dx * dx + dy * dy;
+      if (!best || distSq < best.distSq) best = { x, y, tile, distSq };
+    }
+  }
+  if (!best) return null;
+  dungeon.map[best.y][best.x] = T.DOOR_OPEN;
+  if (gm && typeof gm.markMapMutated === 'function') gm.markMapMutated();
+  return best;
+}
+
+/**
+ * @param {any} gm
+ * @param {number} floor
+ * @param {number} count
+ * @param {string} colour
+ */
+function spawnProtocolAlarm(gm, floor, count, colour) {
+  const room = gm && gm.eventChoice && gm.eventChoice.room;
+  if (!room) return 0;
+  let spawned = 0;
+  for (let i = 0; i < count; i++) {
+    const ex = room.cx + rnd(-3, 3), ey = room.cy + rnd(-3, 3);
+    const e = spawnEnemy(pickEnemyType(floor), ex, ey, floor, room, false);
+    if (e) {
+      enemies.push(e);
+      spawned++;
+    }
+  }
+  if (spawned > 0) spawnParticles(room.cx + 0.5, room.cy + 0.5, 'EXPLOSION', colour, 12);
+  return spawned;
 }
 
 /**
@@ -6183,6 +6281,42 @@ function applyEventEffect(event, choice, player, gm) {
         gm.markMinimapDirty();
         gm.msg('MAP DATA DOWNLOADED', '#aa88ff');
         spawnParticles(player.x, player.y, 'EXPLOSION', '#aa88ff', 15);
+        break;
+      }
+      case 'ROUTE_PROOF': {
+        const xp = 35 + floor * 8;
+        revealFloorLayout(gm);
+        player.gainXP(xp);
+        player.score += 100 * floor;
+        gm.msg('ROUTE PROVEN: MAP + ' + xp + ' XP', '#39ff14');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#39ff14', 14);
+        break;
+      }
+      case 'COOPERATION_PROTOCOL': {
+        const requiredShare = 25 + floor * 3;
+        const share = Math.min(player.credits || 0, requiredShare);
+        if (share <= 0) {
+          gm.msg('LINK FAILED: NO CREDITS TO SHARE', '#66ffcc');
+          spawnParticles(player.x, player.y, 'SPARK', '#66ffcc', 8);
+          break;
+        }
+        const linkRatio = share / requiredShare;
+        const heal = Math.max(1, Math.round(player.maxHp * 0.35 * linkRatio));
+        const xp = Math.max(1, Math.round((25 + floor * 7) * linkRatio));
+        player.credits -= share;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        player.gainXP(xp);
+        if (player.hackware && share === requiredShare) player.hackwareCooldown = 0;
+        gm.msg('LINK STABLE: −' + share + ' CR, +' + heal + ' HP, +' + xp + ' XP', '#66ffcc');
+        spawnParticles(player.x, player.y, 'EXPLOSION', '#66ffcc', 14);
+        break;
+      }
+      case 'CONSENT_LOCK': {
+        const xp = 30 + floor * 10;
+        items.push(new Item(player.x, player.y));
+        player.gainXP(xp);
+        gm.msg('CONSENT GRANTED: ITEM + ' + xp + ' XP', '#ffcc66');
+        spawnParticles(player.x, player.y, 'SPARK', '#ffcc66', 12);
         break;
       }
       case 'POWER_JUNCTION': {
@@ -6277,6 +6411,31 @@ function applyEventEffect(event, choice, player, gm) {
         spawnParticles(player.x, player.y, 'SPARK', '#aa88ff', 8);
         break;
       }
+      case 'ROUTE_PROOF': {
+        const opened = openNearestLockedDoor(gm, player);
+        const cr = 35 + floor * 8;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        player.takeDamage(10, 'Protocol Backlash');
+        if (opened) {
+          const kc = doorKeyColour(opened.tile) || 'locked';
+          gm.msg('PATCHED ' + kc.toUpperCase() + ' LOCK: +' + cr + ' CR', '#39ff14');
+          spawnParticles(opened.x + 0.5, opened.y + 0.5, 'SPARK', '#39ff14', 10);
+        } else {
+          gm.msg('NO LOCK FOUND: +' + cr + ' CR', '#39ff14');
+          spawnParticles(player.x, player.y, 'SPARK', '#39ff14', 8);
+        }
+        break;
+      }
+      case 'COOPERATION_PROTOCOL': {
+        const cr = 45 + floor * 9;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        combo.count = Math.max(combo.count, 4);
+        combo.timer = Math.max(combo.timer, 3);
+        combo.flashTimer = 0.3;
+        const spawned = spawnProtocolAlarm(gm, floor, 2, '#66ffcc');
+        gm.msg('ISOLATED: +' + cr + ' CR, ALARM x' + spawned, '#66ffcc');
+        break;
+      }
       case 'POWER_JUNCTION': {
         const heal = Math.round(player.maxHp * 0.6);
         player.hp = Math.min(player.maxHp, player.hp + heal);
@@ -6304,6 +6463,14 @@ function applyEventEffect(event, choice, player, gm) {
           gm.msg('+' + cr + ' CR (no hackware)', '#ff6666');
         }
         spawnParticles(player.x, player.y, 'SPARK', '#ff6666', 8);
+        break;
+      }
+      case 'CONSENT_LOCK': {
+        const cr = 70 + floor * 12;
+        player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
+        player.score += 250 * floor;
+        const spawned = spawnProtocolAlarm(gm, floor, 3, '#ffcc66');
+        gm.msg('OVERRIDE TAKEN: +' + cr + ' CR, WITNESSES x' + spawned, '#ffcc66');
         break;
       }
     }
