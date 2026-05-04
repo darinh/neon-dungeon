@@ -458,7 +458,7 @@ test('system message unread indicator layout stays visible above the bottom HUD'
     assert.ok(box.y < scenario.layout.hudTop - 120,
       'indicator should stay high enough to avoid bottom touch action buttons');
   }
-  assert.match(PLATFORM, /hitSystemMessageIndicator[\s\S]*justPressed\.add\('MouseLeft'\)[\s\S]*if \(hitBtn\(cx,cy,BTNS\.E\)\)/,
+  assert.match(PLATFORM, /hitSystemMessageIndicator[\s\S]*routeTouchAsMouseClick\(cx, cy\);[\s\S]*if \(hitBtn\(cx,cy,BTNS\.E\)\)/,
     'touch input should prioritize the prompt indicator before action buttons and joystick routing');
 });
 
