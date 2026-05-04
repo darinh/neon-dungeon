@@ -131,9 +131,11 @@ test('floor snapshots restore player location, mutated floor state, and live act
     placedWalls: [],
     frostPatches: [],
     UPGRADES: [{ id: 'BOOST', name: 'Boost' }],
+    buildWeapon(base, affixes) { return { _base: base, _affixes: affixes.slice(), displayName: base + ' rebuilt', _effects: affixes.map(id => 'effect:' + id) }; },
     Item: function Item(x, y, type) { this.x = x; this.y = y; this.type = type; },
     KeyItem: function KeyItem(x, y, colour, tileColour) { this.x = x; this.y = y; this.colour = colour; this.tileColour = tileColour; this.isKey = true; },
     WhisperItem: function WhisperItem(x, y, whisperId) { this.x = x; this.y = y; this.whisperId = whisperId; this.isWhisper = true; },
+    WeaponCacheItem: function WeaponCacheItem(x, y, weapon) { this.x = x; this.y = y; this.weapon = weapon; this.isWeaponCache = true; },
     HarvestPickup: function HarvestPickup(x, y) { this.x = x; this.y = y; this.isHarvest = true; },
     ShockPulsePickup: function ShockPulsePickup(x, y) { this.x = x; this.y = y; this.isShockPulse = true; },
     VaultCoin: function VaultCoin(x, y, amt) { this.x = x; this.y = y; this.amt = amt; this.isHoard = true; this._big = true; },
@@ -160,6 +162,7 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   const sourceEnemy = { x: 9, y: 10, hp: 4, type: 'GUARD', colour: '#f00', room: room1, hitEnemies: new Set([{ stale: true }]) };
   sandbox.enemies.push(sourceEnemy);
   sandbox.items.push(new sandbox.Item(3, 4, sandbox.UPGRADES[0]));
+  sandbox.items.push(new sandbox.WeaponCacheItem(4, 5, { _base: 'RAILGUN', _affixes: ['FLAME'], displayName: 'Railgun', colour: '#ff00c8' }));
   sandbox.projectiles.push({ x: 5, y: 6, dx: 1, dy: 0, spd: 8, dmg: 2, maxRange: 9, colour: '#0ff', piercing: true, fromPlayer: true, weaponName: 'TEST', hitEnemies: new Set([sourceEnemy]), homing: sourceEnemy, _owner: sourceEnemy });
   const sourceGame = {
     floor: 2,
@@ -192,6 +195,8 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(snapshot.enemies[0]._roomIndex, 1);
   assert.equal(snapshot.enemies[0].room, undefined);
   assert.equal(snapshot.items[0].typeId, 'BOOST');
+  assert.equal(snapshot.items[1]._kind, 'weaponCache');
+  assert.equal(snapshot.items[1].weapon._base, 'RAILGUN');
   assert.deepEqual(Array.from(snapshot.projectiles[0]._hitEnemyIndices), [0]);
   assert.equal(snapshot.projectiles[0]._homingEnemyIndex, 0);
   assert.equal(snapshot.projectiles[0]._ownerEnemyIndex, 0);
@@ -227,6 +232,9 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(sandbox.enemies[0].room, newRoom1);
   assert.equal(newRoom1.registered, sandbox.enemies[0]);
   assert.equal(sandbox.items[0].type.id, 'BOOST');
+  assert.equal(sandbox.items[1].isWeaponCache, true);
+  assert.equal(sandbox.items[1].weapon.displayName, 'RAILGUN rebuilt');
+  assert.deepEqual(sandbox.items[1].weapon._effects, ['effect:FLAME']);
   assert.equal(released.length, 1);
   assert.equal(sandbox.projectiles.length, 1);
   assert.equal(sandbox.projectiles[0].x, 5);
