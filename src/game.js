@@ -3750,7 +3750,7 @@ const game = {
       if (r.roomType === 'event' && !r.eventUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.eventUsed = true;
-          const ev = rollEvent(player);
+          const ev = rollEvent(player, this.floor);
           this.eventChoice = { event: ev, selected: 0, room: r };
           this.setState('EVENT_CHOICE');
           audio.eventTerminal();
