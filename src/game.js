@@ -1052,7 +1052,8 @@ function restoreFuseShardSnapshot(saved) {
   return fs;
 }
 
-const CHEAT_SEQUENCE = ['KeyF', 'KeyE', 'KeyE', 'KeyT'];
+const CHEAT_SEQUENCE = ['F', 'E', 'E', 'SHIFT'];
+const CHEAT_TOUCH_CODES = new Set(['CheatF', 'CheatE', 'CheatShift']);
 const CHEAT_DEFS = [
   { id:'invulnerable', name:'INVULNERABILITY', hot:'1', colour:'#ff3366', desc:'Ignore all incoming damage packets.' },
   { id:'noClip',       name:'NO-CLIP',         hot:'2', colour:'#66ffcc', desc:'Move and dash through solid floor geometry.' },
@@ -1065,14 +1066,26 @@ function defaultCheats() {
 }
 
 /**
+ * @param {string} code
+ */
+function normalizeCheatSequenceCode(code) {
+  if (!code || code === 'MouseLeft') return null;
+  if (code === 'CheatF' || code === 'KeyF') return 'F';
+  if (code === 'CheatE' || code === 'KeyE') return 'E';
+  if (code === 'CheatShift' || code === 'ShiftLeft' || code === 'ShiftRight') return 'SHIFT';
+  return 'OTHER';
+}
+
+/**
  * @param {number} progress
  * @param {string} code
  */
 function advanceCheatSequence(progress, code) {
-  if (!code || code === 'MouseLeft') return progress;
+  const token = normalizeCheatSequenceCode(code);
+  if (!token) return progress;
   const p = Math.max(0, Math.min(CHEAT_SEQUENCE.length - 1, progress | 0));
-  if (code === CHEAT_SEQUENCE[p]) return p + 1;
-  return code === CHEAT_SEQUENCE[0] ? 1 : 0;
+  if (token === CHEAT_SEQUENCE[p]) return p + 1;
+  return token === CHEAT_SEQUENCE[0] ? 1 : 0;
 }
 
 /**
@@ -1469,7 +1482,15 @@ const game = {
   updateCheatHotkey(){
     if (!this.shouldCaptureCheatSequence()) return false;
     let opened = false;
+    let touchSequenceInput = false;
     for (const code of justPressed) {
+      if (CHEAT_TOUCH_CODES.has(code)) {
+        touchSequenceInput = true;
+        break;
+      }
+    }
+    for (const code of justPressed) {
+      if (touchSequenceInput && !CHEAT_TOUCH_CODES.has(code)) continue;
       this.cheatSequenceProgress = advanceCheatSequence(this.cheatSequenceProgress, code);
       if (this.cheatSequenceProgress >= CHEAT_SEQUENCE.length) {
         this.openCheatMenu();
