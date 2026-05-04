@@ -66,6 +66,28 @@ function extractFunctionSource(src, name) {
   assert.fail(name + ' function body must be balanced');
 }
 
+/**
+ * @param {string} src
+ * @param {string} name
+ */
+function extractObjectMethodSource(src, name) {
+  const start = src.indexOf('\n  ' + name + '(');
+  assert.ok(start >= 0, name + ' object method must exist');
+  const methodStart = start + 3;
+  const braceStart = src.indexOf('{', methodStart);
+  assert.ok(braceStart > methodStart, name + ' object method must have a body');
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(methodStart, i + 1);
+    }
+  }
+  assert.fail(name + ' object method body must be balanced');
+}
+
 test('mainframe interaction tiles are in the shared tile vocabulary and passable', () => {
   assert.match(PLATFORM, /MAINFRAME_READER\s*:\s*25/);
   assert.match(PLATFORM, /NETWORK_PORTAL\s*:\s*26/);
@@ -252,6 +274,28 @@ test('mainframe reader state is wired into gameplay, rendering, and touch routin
   assert.doesNotMatch(GAME, /openEndgameChoice\(genesisEntity\)\s*{(?:(?!\n  },)[\s\S])*endRun\(true\)/,
     'GENESIS defeat must not present the legacy default ACCEPT path or directly end the run');
   assert.match(PLATFORM, /_G\.state\s*===\s*'MAINFRAME_READER'[\s\S]*_G\.state\s*===\s*'MESSAGE_SEND'/);
+});
+
+test('mainframe reader requires explicit close controls for pointer dismissal', () => {
+  const updateMainframe = extractObjectMethodSource(GAME, 'updateMainframeReader');
+  const renderMainframe = extractObjectMethodSource(GAME, 'renderMainframeReader');
+
+  assert.match(GAME, /function getMainframeCloseButtonLayout\(narrow,\s*frame\)/,
+    'mainframe reader input and rendering should share a close-button layout');
+  assert.match(updateMainframe, /const\s+mouseClose\s*=\s*jp\('MouseLeft'\)[\s\S]*closeBox\.closeX[\s\S]*closeBox\.closeY/,
+    'mouse or touch dismissal must be constrained to the mainframe close button');
+  assert.doesNotMatch(updateMainframe, /jp\(km\('shoot'\)\)[\s\S]{0,100}closeMainframeRecord/,
+    'fire input must not close archive records');
+  assert.doesNotMatch(updateMainframe, /jp\('MouseLeft'\)\)\s*this\.closeMainframeRecord\(\)/,
+    'bare clicks must not close archive records');
+  assert.doesNotMatch(updateMainframe, /audio\.menuSelect\(\);\s*this\.setState\('PLAYING'\);\s*return;\s*}\s*$/m,
+    'bare outside clicks on the record list must not exit the reader');
+  assert.match(renderMainframe, /CLOSE \[X\]/,
+    'archive records must draw a visible close button');
+  assert.match(renderMainframe, /EXIT BUTTON/,
+    'touch copy must point users at the explicit exit button rather than outside taps');
+  assert.doesNotMatch(renderMainframe, /TAP OUTSIDE\/ESC TO EXIT/,
+    'mainframe reader must not advertise tap-outside dismissal');
 });
 
 test('message-send finale has three constrained intents, explicit controls, and canonical ending persistence', () => {

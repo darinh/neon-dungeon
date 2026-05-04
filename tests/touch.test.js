@@ -4,9 +4,12 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const touchEngine = require('../engine/touch.js');
 const { toCanvas, hitBtn, resetTouch } = touchEngine;
+const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 
 // ---------- toCanvas ----------
 
@@ -149,4 +152,11 @@ test('resetTouch: tolerates touch with missing joystick/aim sub-objects', () => 
   const partial = { btnE: 1, btnF: 2, btnV: 3, btnDash: 4, btnPause: 5 };
   assert.doesNotThrow(() => resetTouch(partial, { down: true }));
   assert.equal(partial.btnE, null);
+});
+
+test('touch routing sends READING taps through coordinates instead of any-tap Enter fallback', () => {
+  assert.match(PLATFORM, /_G\.state === 'READING'[\s\S]{0,220}mouse\.x = cx; mouse\.y = cy;[\s\S]{0,80}justPressed\.add\('MouseLeft'\);[\s\S]{0,40}continue;/,
+    'READING touch input must be coordinate-routed so only the hit-tested close button can dismiss it');
+  assert.match(PLATFORM, /else\s*\{\s*justPressed\.add\('Enter'\);\s*justPressed\.add\('MouseLeft'\);\s*\}/,
+    'generic fallback remains for states that intentionally treat touch as confirm');
 });

@@ -289,23 +289,33 @@ test('renderPlaying applies shake to cam without dividing by worldZoom (logical-
 
 // ─── NEW: input-coord normalization at the host boundary ─────────────────────
 
-test('platform.js mousemove handler divides client→canvas conversion by worldZoom (logical coords delivered)', () => {
+test('platform.js mouse pointer handlers divide client→canvas conversion by worldZoom (logical coords delivered)', () => {
   // The single input-normalization site for pointer events. Without
   // this divide, every consumer in the codebase would need its own
   // `/worldZoom` correction — the architecture explicitly avoids
   // that scattering by normalising once at the host boundary.
+  const helperIdx = PLATFORM_NC.search(/function\s+updateMouseFromClient\s*\(/);
+  assert.ok(helperIdx >= 0, 'must find shared mouse coordinate normalization helper');
+  const body = extractBody(PLATFORM_NC, helperIdx);
+  assert.ok(body, 'must extract updateMouseFromClient() body');
   const mmIdx = PLATFORM_NC.search(/canvas\.addEventListener\(\s*'mousemove'/);
   assert.ok(mmIdx >= 0, 'must find canvas mousemove listener');
-  const tail = PLATFORM_NC.slice(mmIdx, mmIdx + 600);
-  // mouse.x = (clientX - r.left) * canvas.width / r.width / worldZoom
-  assert.match(tail, /mouse\.x\s*=\s*\(\s*e\.clientX\s*-\s*r\.left\s*\)\s*\*\s*canvas\.width\s*\/\s*r\.width\s*\/\s*[a-zA-Z_$][\w$]*/,
-    'mousemove handler must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
-  assert.match(tail, /mouse\.y\s*=\s*\(\s*e\.clientY\s*-\s*r\.top\s*\)\s*\*\s*canvas\.height\s*\/\s*r\.height\s*\/\s*[a-zA-Z_$][\w$]*/,
-    'mousemove handler must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
+  const mdIdx = PLATFORM_NC.search(/canvas\.addEventListener\(\s*'mousedown'/);
+  assert.ok(mdIdx >= 0, 'must find canvas mousedown listener');
+  const mousemoveTail = PLATFORM_NC.slice(mmIdx, mmIdx + 180);
+  const mousedownTail = PLATFORM_NC.slice(mdIdx, mdIdx + 220);
+  assert.match(mousemoveTail, /updateMouseFromClient\(\s*e\.clientX\s*,\s*e\.clientY\s*\)/,
+    'mousemove handler must use the shared logical coordinate helper');
+  assert.match(mousedownTail, /updateMouseFromClient\(\s*e\.clientX\s*,\s*e\.clientY\s*\)[\s\S]*justPressed\.add\('MouseLeft'\)/,
+    'mousedown handler must refresh logical coords before click hit-testing');
+  assert.match(body, /mouse\.x\s*=\s*\(\s*clientX\s*-\s*r\.left\s*\)\s*\*\s*canvas\.width\s*\/\s*r\.width\s*\/\s*[a-zA-Z_$][\w$]*/,
+    'shared pointer helper must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
+  assert.match(body, /mouse\.y\s*=\s*\(\s*clientY\s*-\s*r\.top\s*\)\s*\*\s*canvas\.height\s*\/\s*r\.height\s*\/\s*[a-zA-Z_$][\w$]*/,
+    'shared pointer helper must divide the client→canvas conversion by an identifier (worldZoom) to deliver logical coords');
   // The divisor must derive from settings.worldZoom (with defensive
   // guard) — a hardcoded 1 would silently break the feature.
-  assert.match(tail, /settings(?:\s*&&\s*settings)?\.worldZoom/,
-    'mousemove handler must read settings.worldZoom for the input-normalization divisor');
+  assert.match(body, /settings(?:\s*&&\s*settings)?\.worldZoom/,
+    'shared pointer helper must read settings.worldZoom for the input-normalization divisor');
 });
 
 test('platform.js toCanvas wrapper divides _touchHelpers.toCanvas output by worldZoom (parity with mousemove)', () => {

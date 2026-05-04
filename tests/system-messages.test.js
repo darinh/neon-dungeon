@@ -349,6 +349,24 @@ test('system message modal delivery opens before play and arms explicit ACK only
     'touch input must route coordinates to the modal instead of using global any-tap confirm');
 });
 
+test('legacy reading overlay uses an explicit close button for pointer dismissal', () => {
+  const updateReading = extractObjectMethodSource(GAME, 'updateReading');
+  const renderReading = extractObjectMethodSource(GAME, 'renderReading');
+
+  assert.match(GAME, /function getReadingLayout\(narrow\)/,
+    'reading overlay input and rendering should share a close-button layout');
+  assert.match(updateReading, /const\s+mouseClose\s*=\s*jp\('MouseLeft'\)[\s\S]*box\.closeX[\s\S]*box\.closeY/,
+    'mouse or touch dismissal must be constrained to the close button');
+  assert.doesNotMatch(updateReading, /jp\('MouseLeft'\)\s*\)\s*{[\s\S]*setState\('PLAYING'\)/,
+    'a bare MouseLeft press must not dismiss lore/whisper reading');
+  assert.doesNotMatch(updateReading, /jp\(km\('shoot'\)\)/,
+    'fire input must not dismiss lore/whisper reading');
+  assert.match(renderReading, /CLOSE\s+\s*\[X\]/,
+    'reading overlay must draw an explicit close button');
+  assert.match(renderReading, /outside (taps|this button) do nothing/,
+    'reading overlay copy must tell touch and mouse users that outside taps are ignored');
+});
+
 test('intro completion hands off to mandatory system message before play', () => {
   const game = systemMessageGameHarness();
   game.queueSystemMessage('boot-inventory');
@@ -473,7 +491,7 @@ test('system message spec and design artifact reflect shipped MSG-001 through MS
   assert.match(DESIGN, /MSG-001: System message data model and queue/i);
   assert.match(DESIGN, /Status: shipped data-model slice/i);
   assert.match(DESIGN, /MSG-002: Explicit acknowledgement and dismissal safety/i);
-  assert.match(DESIGN, /Status: shipped explicit-ACK modal slice/i);
+  assert.match(DESIGN, /Status: shipped explicit-ACK modal slice plus legacy overlay hardening/i);
   assert.match(DESIGN, /MSG-003: Combat-safe delivery rules/i);
   assert.match(DESIGN, /Status: shipped combat-safe delivery slice/i);
   assert.match(DESIGN, /MSG-004: Boot and early-floor prompt schedule/i);
