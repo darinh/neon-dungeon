@@ -826,10 +826,15 @@ canvas.addEventListener('touchstart', e => {
       justPressed.add('MouseLeft');
       continue;
     }
-    if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add(km('interact')); continue; }
-    if (hitBtn(cx,cy,BTNS.F) && _G.player && _G.player.hackware) { touch.btnF=t.identifier; justPressed.add(km('hackware')); continue; }
+    if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('CheatE'); justPressed.add(km('interact')); continue; }
+    if (hitBtn(cx,cy,BTNS.F)) {
+      touch.btnF=t.identifier;
+      justPressed.add('CheatF');
+      if (_G.player && _G.player.hackware) justPressed.add(km('hackware'));
+      continue;
+    }
     if (hitBtn(cx,cy,BTNS.V))     { touch.btnV=t.identifier; justPressed.add(km('voidshard')); continue; }
-    if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add(km('dash')); continue; }
+    if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add('CheatShift'); justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
     // Tap minimap area to expand (after buttons so pause isn't stolen)
     const _mx = W - 120 - 8 - safeRight, _my = 8 + safeTop;
@@ -963,7 +968,8 @@ function drawTouchUI() {
     NEON.draw.circleStroke(ctx,btn.x,btn.y,btn.r);
     ctx.fillStyle=btn.colour+'33';
     NEON.draw.circle(ctx,btn.x,btn.y,btn.r);
-    ctx.fillStyle=btn.colour; ctx.font=`bold ${key==='PAUSE'?11:14}px monospace`;
+    const labelSize = key === 'PAUSE' ? 11 : key === 'DASH' ? 20 : 14;
+    ctx.fillStyle=btn.colour; ctx.font=`bold ${labelSize}px monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(btn.label,btn.x,btn.y);
     ctx.restore();

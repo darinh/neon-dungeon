@@ -16,9 +16,14 @@ function read(file) {
 const GAME = read('src/game.js');
 const ENTITIES = read('src/entities.js');
 const RENDER = read('src/render.js');
+const PLATFORM = read('src/platform.js');
 
 test('FEET sequence opens the hidden cheat menu without text-entry capture', () => {
-  assert.match(GAME, /const CHEAT_SEQUENCE = \['KeyF', 'KeyE', 'KeyE', 'KeyT'\]/);
+  assert.match(GAME, /const CHEAT_SEQUENCE = \['F', 'E', 'E', 'SHIFT'\]/);
+  assert.match(GAME, /if \(code === 'CheatF' \|\| code === 'KeyF'\) return 'F'/);
+  assert.match(GAME, /if \(code === 'CheatE' \|\| code === 'KeyE'\) return 'E'/);
+  assert.match(GAME, /if \(code === 'CheatShift' \|\| code === 'ShiftLeft' \|\| code === 'ShiftRight'\) return 'SHIFT'/);
+  assert.match(GAME, /if \(touchSequenceInput && !CHEAT_TOUCH_CODES\.has\(code\)\) continue/);
   assert.match(GAME, /advanceCheatSequence\(this\.cheatSequenceProgress,\s*code\)/);
   assert.match(GAME, /this\.openCheatMenu\(\)/);
   assert.match(GAME, /this\.setState\('CHEATS'\)/);
@@ -31,6 +36,13 @@ test('FEET sequence opens the hidden cheat menu without text-entry capture', () 
   assert.match(GAME, /if \(this\._cheatMenuJustOpened\) \{\s*this\._cheatMenuJustOpened = false;\s*return;\s*\}/);
   assert.match(GAME, /this\.state === 'NAME_ENTRY' \|\| this\.state === 'SEED_SETUP'/);
   assert.match(GAME, /this\.state === 'SETTINGS' && this\.settingsCapture/);
+});
+
+test('mobile touch buttons can complete F-E-E-Shift cheat sequence', () => {
+  assert.match(PLATFORM, /hitBtn\(cx,cy,BTNS\.E\)[\s\S]{0,100}justPressed\.add\('CheatE'\);[\s\S]{0,80}justPressed\.add\(km\('interact'\)\)/);
+  assert.match(PLATFORM, /hitBtn\(cx,cy,BTNS\.F\)[\s\S]{0,120}justPressed\.add\('CheatF'\);[\s\S]{0,120}if \(_G\.player && _G\.player\.hackware\) justPressed\.add\(km\('hackware'\)\)/);
+  assert.match(PLATFORM, /hitBtn\(cx,cy,BTNS\.DASH\)[\s\S]{0,120}justPressed\.add\('CheatShift'\);[\s\S]{0,80}justPressed\.add\(km\('dash'\)\)/);
+  assert.match(PLATFORM, /const labelSize = key === 'PAUSE' \? 11 : key === 'DASH' \? 20 : 14/);
 });
 
 test('cheat menu exposes runtime-only toggles and dirties minimap on show-map changes', () => {
