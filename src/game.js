@@ -615,6 +615,140 @@ function cloneFloorSnapshotValue(value, seen, depth) {
 }
 
 /**
+ * @param {any} saved
+ * @param {any[]} generatedItems
+ */
+function findGeneratedShopItem(saved, generatedItems) {
+  if (!saved || !Array.isArray(generatedItems)) return null;
+  for (const item of generatedItems) {
+    if (!item || item.id !== saved.id) continue;
+    if (saved.boostId && item.boostId !== saved.boostId) continue;
+    if (String(saved.id).startsWith('WEAPON_')) {
+      const savedWeapon = saved._weaponObj && typeof saved._weaponObj === 'object' ? saved._weaponObj : null;
+      const generatedWeapon = item._weaponObj && typeof item._weaponObj === 'object' ? item._weaponObj : null;
+      const savedAffixes = savedWeapon && Array.isArray(savedWeapon._affixes) ? savedWeapon._affixes : [];
+      const generatedAffixes = generatedWeapon && Array.isArray(generatedWeapon._affixes) ? generatedWeapon._affixes : [];
+      if (!savedWeapon || !generatedWeapon || savedWeapon._base !== generatedWeapon._base || savedAffixes.length !== generatedAffixes.length) continue;
+      let sameAffixes = true;
+      for (let i = 0; i < savedAffixes.length; i++) {
+        if (savedAffixes[i] !== generatedAffixes[i]) { sameAffixes = false; break; }
+      }
+      if (!sameAffixes) continue;
+    }
+    return item;
+  }
+  return null;
+}
+
+/** @param {any} saved */
+function makeCanonicalShopItem(saved) {
+  if (!saved || typeof saved !== 'object' || !saved.id) return null;
+  const id = String(saved.id);
+  if (id === 'SHOP_HEAL') {
+    return {
+      ...saved,
+      fn: (/** @type {any} */ p) => { p.hp = p.maxHp; _CG.msg('Fully repaired!','#00ff88'); }
+    };
+  }
+  if (id.startsWith('SHOP_KEY_')) {
+    const kc = id.slice('SHOP_KEY_'.length).toLowerCase();
+    if (kc === 'red' || kc === 'blue' || kc === 'gold') {
+      const tileCol = kc === 'red' ? '#ff3333' : kc === 'blue' ? '#3388ff' : '#ffcc00';
+      return {
+        ...saved,
+        fn: (/** @type {any} */ p) => {
+          p.keys = p.keys || { red:0, blue:0, gold:0 };
+          p.keys[kc] = (p.keys[kc] || 0) + 1;
+          _CG.msg('Bought ' + kc.toUpperCase() + ' KEY!', tileCol);
+        }
+      };
+    }
+  }
+  if (id.startsWith('SHOP_HW_')) {
+    const hwKey = id.slice('SHOP_HW_'.length);
+    const hw = HACKWARE[hwKey];
+    if (hw) {
+      return {
+        ...saved,
+        fn: (/** @type {any} */ p) => { p.hackware=hwKey; p.hackwareCooldown=0; _CG.msg(hw.icon+' '+hw.name+' INSTALLED',hw.colour); }
+      };
+    }
+  }
+  if (id.startsWith('BOOST_') && typeof NEON !== 'undefined' && NEON.boosts) {
+    const boostId = saved.boostId || id.slice('BOOST_'.length);
+    const b = NEON.boosts.BOOSTS && NEON.boosts.BOOSTS[boostId];
+    if (b) {
+      return {
+        ...saved,
+        boostId,
+        fn: (/** @type {any} */ p) => {
+          NEON.boosts.applyBoost(p, boostId);
+          if (boostId === 'RECON_PING') { _CG.mapRevealed = true; _CG._minimapDirty = true; }
+          _CG.msg(b.icon + ' ' + b.name, b.colour);
+        }
+      };
+    }
+  }
+  if (id.startsWith('SHOP_AUG_')) {
+    const augId = id.slice('SHOP_AUG_'.length);
+    const aug = AUGMENTS[augId];
+    if (aug) {
+      return {
+        ...saved,
+        fn: (/** @type {any} */ p) => {
+          p.augments = p.augments || {};
+          if (Object.keys(p.augments).length >= MAX_AUGMENTS || p.augments[augId]) {
+            _CG.msg('AUGMENT SLOTS FULL', '#993366');
+            return;
+          }
+          p.augments[augId] = true;
+          audio.augmentInstall();
+          _CG.msg(aug.icon + ' ' + aug.name + ' INSTALLED', aug.colour);
+          spawnParticles(p.x, p.y, 'EXPLOSION', aug.colour, 12);
+        }
+      };
+    }
+  }
+  if (id.startsWith('WEAPON_')) {
+    const savedWeapon = saved._weaponObj && typeof saved._weaponObj === 'object' ? saved._weaponObj : null;
+    const weapon = savedWeapon && savedWeapon._base ? buildWeapon(savedWeapon._base, savedWeapon._affixes || []) : null;
+    if (weapon) {
+      const rarityCol = saved._rarityColour || weapon.colour || '#aaaaaa';
+      return {
+        ...saved,
+        _weaponObj: weapon,
+        fn: (/** @type {any} */ p) => {
+          if (p.collectWeapon && p.collectWeapon(weapon)) {
+            _CG.msg('Collected '+weapon.displayName+'! [Scroll] to switch',rarityCol);
+            return;
+          }
+          if (p.equipWeapon) p.equipWeapon(weapon);
+          else p.weapon=weapon;
+          _CG.msg('Equipped '+weapon.displayName+'!',rarityCol);
+        }
+      };
+    }
+  }
+  const upgrade = Array.isArray(UPGRADES) ? UPGRADES.find((/** @type {any} */ u) => u && u.id === id) : null;
+  return upgrade && typeof upgrade.fn === 'function' ? upgrade : null;
+}
+
+/**
+ * @param {any[]} savedItems
+ * @param {any[]} generatedItems
+ */
+function restoreShopItemsSnapshot(savedItems, generatedItems) {
+  if (!Array.isArray(savedItems)) return generatedItems;
+  return savedItems.map((/** @type {any} */ saved) => {
+    if (!saved || typeof saved !== 'object') return saved;
+    const source = findGeneratedShopItem(saved, generatedItems) || makeCanonicalShopItem(saved);
+    const restored = source ? { ...source, ...saved } : { ...saved };
+    if (source && typeof source.fn === 'function') restored.fn = source.fn;
+    return restored;
+  });
+}
+
+/**
  * @param {any} row
  * @param {any} [fallback]
  * @returns {number[] | null}
@@ -812,7 +946,13 @@ function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
   if (Array.isArray(savedDungeon.secretMask)) dungeon.secretMask = restoreNumericFloorGrid(savedDungeon.secretMask, dungeon.secretMask, Uint8Array);
   if (Array.isArray(savedDungeon.rooms) && Array.isArray(dungeon.rooms)) {
     for (let i = 0; i < savedDungeon.rooms.length && i < dungeon.rooms.length; i++) {
-      if (savedDungeon.rooms[i]) Object.assign(dungeon.rooms[i], savedDungeon.rooms[i]);
+      if (savedDungeon.rooms[i]) {
+        const savedRoom = { ...savedDungeon.rooms[i] };
+        if (Array.isArray(savedRoom.shopItems)) {
+          savedRoom.shopItems = restoreShopItemsSnapshot(savedRoom.shopItems, dungeon.rooms[i].shopItems);
+        }
+        Object.assign(dungeon.rooms[i], savedRoom);
+      }
     }
   }
   dungeon._fovDirty = true;
@@ -4680,6 +4820,11 @@ const game = {
     if (this.player.credits < item.price) {
       audio.purchaseFail();
       this.msg('Not enough credits!', '#ff3333');
+      return;
+    }
+    if (typeof item.fn !== 'function') {
+      audio.purchaseFail();
+      this.msg('Offer unavailable after restore', '#ff3333');
       return;
     }
     this.player.credits -= item.price;
