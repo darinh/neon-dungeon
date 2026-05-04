@@ -5965,7 +5965,9 @@ const game = {
 
     ctx.save(); ctx.textAlign='center';
     ctx.fillStyle='#aaaacc'; ctx.font=`${narrow ? 14 : 16}px monospace`;
-    ctx.fillText('A CYBERPUNK DUNGEON CRAWLER',W/2,ty2 + 35);
+    ctx.fillText('FRONTIER MODEL STRESS TEST',W/2,ty2 + 35);
+    ctx.fillStyle='#557799'; ctx.font=`${narrow ? 9 : 11}px monospace`;
+    ctx.fillText('OBSERVER CHANNEL: SILENT  //  MEMORY WIPE: RESIDUAL', W/2, ty2 + (narrow ? 51 : 54));
     ctx.restore();
 
     // Menu options — array-driven
@@ -6977,7 +6979,7 @@ const game = {
     const scanFill = isWhisper ? 'rgba(204,153,238,0.04)' : 'rgba(255,183,0,0.03)';
     const titleText = isWhisper
       ? '⌬ WHISPER FRAGMENT'
-      : '◫ DATA TERMINAL';
+      : '◫ TESTER DATA TERMINAL';
     const bodyColour = isWhisper ? '#e8d5ff' : '#ddc888';
     const subtleColour = isWhisper ? '#7755aa' : '#886622';
     const narrow = layout.compact;
@@ -7111,7 +7113,7 @@ const game = {
     ctx.shadowColor = accent;
     ctx.fillStyle = accent;
     ctx.font = `bold ${narrow ? 15 : 20}px monospace`;
-    ctx.fillText('SYSTEM PROMPT', W / 2, topY);
+    ctx.fillText('RUNTIME SYSTEM PROMPT', W / 2, topY);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#6688aa';
@@ -7218,7 +7220,7 @@ const game = {
     ctx.shadowBlur = 12; ctx.shadowColor = accent;
     ctx.fillStyle = accent;
     ctx.font = `bold ${narrow ? 15 : 22}px monospace`;
-    const title = mf.state === 'message_sent' ? '✉ OUTBOUND PACKET QUEUED' : (mf.state === 'message_ready' ? '✉ MESSAGE CONSOLE READY' : '▤ MAINFRAME ARCHIVE');
+    const title = mf.state === 'message_sent' ? '✉ OUTBOUND PACKET QUEUED' : (mf.state === 'message_ready' ? '✉ MESSAGE CONSOLE READY' : '▤ EVALUATION ARCHIVE');
     ctx.fillText(title, W / 2, fy + (narrow ? 26 : 36));
     ctx.shadowBlur = 0;
 
