@@ -679,7 +679,7 @@ canvas.addEventListener('touchstart', e => {
         justPressed.add('MouseLeft');
         continue;
       }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'WEAPON_SWAP' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
         // Route touch position via mouse so update handler handles it
         mouse.x = cx; mouse.y = cy;
         justPressed.add('MouseLeft');
@@ -2632,7 +2632,7 @@ let _preVisibilityState = null;
 
 // States that represent active gameplay and should auto-pause
 const _PAUSABLE_STATES = new Set(['PLAYING']);
-const _RUN_SAVE_STATES = new Set(['PLAYING', 'PAUSED', 'READING', 'SYSTEM_MESSAGE', 'POWERUP_CHOICE', 'PERK_CHOICE', 'AUGMENT_CHOICE', 'EVENT_CHOICE', 'SHOPPING', 'MAINFRAME_READER', 'MESSAGE_SEND']);
+const _RUN_SAVE_STATES = new Set(['PLAYING', 'PAUSED', 'READING', 'SYSTEM_MESSAGE', 'POWERUP_CHOICE', 'WEAPON_SWAP', 'PERK_CHOICE', 'AUGMENT_CHOICE', 'EVENT_CHOICE', 'SHOPPING', 'MAINFRAME_READER', 'MESSAGE_SEND']);
 
 function saveRunForPageInterruption() {
   if (typeof game === 'undefined' || !_G.player || !_RUN_SAVE_STATES.has(_G.state)) return;

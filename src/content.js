@@ -5835,6 +5835,22 @@ function makeWeaponOption() {
 }
 
 /**
+ * @param {any} player
+ * @param {number} floor
+ */
+function rollSecretWeaponCacheWeapon(player, floor) {
+  const belt = player && Array.isArray(player.weapons) ? player.weapons : [];
+  const owned = new Set(belt.map((/** @type {any} */ w) => w && w._base).filter(Boolean));
+  let bases = WEAPON_KEYS.filter(k => !owned.has(k));
+  if (bases.length === 0 && player && player.weapon && player.weapon._base) {
+    bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
+  }
+  if (bases.length === 0) bases = WEAPON_KEYS.slice();
+  const baseKey = /** @type {string} */ (bases[rndInt(0, bases.length - 1, 'loot')]);
+  return rollWeapon(baseKey, Math.min(10, (floor | 0) + 2));
+}
+
+/**
  * @param {any} exclude
  */
 function makeHackwareOption(exclude) {
@@ -6760,6 +6776,43 @@ class WhisperItem {
     ctx.fillStyle = '#552277';
     ctx.fillRect(sx - 0.8, sy - 5, 1.6, 10);
     ctx.fillRect(sx - 5, sy - 0.8, 10, 1.6);
+    ctx.restore();
+  }
+}
+
+class WeaponCacheItem {
+  /**
+   * @param {any} x
+   * @param {any} y
+   * @param {any} weapon
+   */
+  constructor(x, y, weapon) {
+    this.x = x; this.y = y;
+    this.weapon = weapon || buildWeapon('PULSE_PISTOL', []);
+    this.dead = false;
+    this.bob = rand('cosmetic') * TWO_PI;
+    this.isWeaponCache = true;
+  }
+  /** @param {any} dt */
+  update(dt) { this.bob += dt * 2.0; }
+  /** @param {any} camX @param {any} camY */
+  draw(camX, camY) {
+    const tx = Math.floor(this.x), ty = Math.floor(this.y);
+    if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
+    const colour = (this.weapon && this.weapon.colour) || '#ffb700';
+    const bobY = Math.sin(this.bob) * 2.5;
+    const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
+    const pulse = 0.55 + 0.45 * Math.sin(this.bob * 1.5);
+    ctx.save();
+    ctx.shadowBlur = 10 + 12 * pulse;
+    ctx.shadowColor = colour;
+    ctx.globalAlpha = 0.72 + 0.28 * pulse;
+    ctx.strokeStyle = '#ffb700';
+    ctx.lineWidth = 1.5;
+    NEON.draw.circleStroke(ctx, sx, sy, 8 + 1.5 * pulse);
+    ctx.fillStyle = colour;
+    ctx.fillRect(sx - 7, sy - 1.5, 14, 3);
+    ctx.fillRect(sx - 2, sy - 5, 4, 10);
     ctx.restore();
   }
 }
