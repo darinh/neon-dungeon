@@ -363,7 +363,10 @@ the Act 1 realignment work and must not be presented as already playable.
 
 ## Technical Constraints
 
-- **Delivery:** Modular JavaScript source files loaded by `index.html`, zero external dependencies
+- **Delivery:** Modular JavaScript source files loaded by `index.html`, no npm
+  runtime packages and no bundler. Production analytics deliberately loads the
+  hosted PostHog script from `index.html`; telemetry storage/disclosure rules
+  live in `privacy.html`.
 - **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 22–48 CSS px). Viewport sizing uses CSS `100dvh` with `100vh` fallback and `canvas.getBoundingClientRect()` in JS to avoid rendering under mobile browser chrome. `visualViewport` resize listener catches address bar show/hide.
 - **Audio:** Web Audio API for synthesised gameplay music/SFX, plus rendered
   browser audio assets where explicitly listed (currently the title/menu theme)
