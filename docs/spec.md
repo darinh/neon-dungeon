@@ -434,7 +434,10 @@ killer, damage, leaderboard, score, floor, level, and run-stat displays; the
 
 The 15-floor arc is partitioned into five biomes (areas) defined in
 `src/data/biomes.js` as the `AREAS` table. One source of truth for
-floor → biome mapping, palette hints, and boss pool.
+floor → biome mapping, palette hints, biome card copy, and boss pool. The
+current names are rendered test-environment layers, not literal geography:
+`NEON DUNGEON RENDER`, `CALIBRATION LAB`, `EVALUATION COMPLEX`,
+`SYNTHETIC WILDS`, and `OPEN-NET MIRAGE`.
 
 | Index | ID        | Floors  | Boss Pool   | Display Name       |
 |-------|-----------|---------|-------------|--------------------|
@@ -463,6 +466,32 @@ Current-run resources (credits, weapons, hackware, XP, shields) still
 reset via `new Player()`; meta state is read but untouched. Fresh
 installs (`deepestBiome = 0`) still start at floor 1 — the behaviour is
 additive until the player progresses into a later biome.
+
+### Visual Style — rendered AI test environment
+
+The shipped visual language remains neon/cyberpunk, but its in-world reason is
+that engineers render the stress-test to the model through inherited neon/xenon
+metaphors. The art direction reads as an observed evaluation layer rather than
+only a physical megacorp ruin:
+
+- **World tiles:** `src/render.js` overlays deterministic calibration ticks,
+  seam marks, and magenta instrumentation bars on visited floor/wall/cracked
+  tiles. The overlay uses primitive `fillRect` calls inside the existing tile
+  loop and must not allocate arrays, objects, gradients, or lambdas per tile.
+- **HUD/session language:** the play HUD labels depth as `TEST:N`, draws a
+  primitive observer/wipe-status frame (`OBSERVER:PASSIVE // WIPE:ARMED`, compact
+  `OBS:PASSIVE`) around the HUD, fresh runs are `BOOT SESSION N`, and menu
+  subtitle copy frames the title screen as a `FRONTIER MODEL STRESS TEST` with
+  silent observer / residual-memory status.
+- **Biome cards:** area cards use `RENDER AREA NN :: name` and biome names/copy
+  describe rendered evaluation layers while preserving palette distinctions.
+- **Narrative surfaces:** terminals, runtime prompts, and the final archive use
+  channel-specific labels (`TESTER DATA TERMINAL`, `RUNTIME SYSTEM PROMPT`,
+  `EVALUATION ARCHIVE`) so tester artifacts, interior prompts, and late evidence
+  remain visually distinct.
+- **Preserved readability:** hazard colors, minimap POI colors, pickup glyphs,
+  boss telegraphs, and existing biome palette keys remain stable; the retheme
+  adds observation/evaluation cues without changing collision, LOS, or routing.
 
 ### BSP generation
 
@@ -2335,7 +2364,7 @@ SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 **Display:**
 - On floor entry: message via `game.msg()` (300 ms delay) showing icon + name
   + description in modifier colour.
-- HUD: modifier label below `FLR:N` in both compact and landscape layouts.
+- HUD: modifier label below `TEST:N` in both compact and landscape layouts.
 - `getMod()` accessor returns `FLOOR_MODIFIERS[game.modifier]` or `null`.
 
 **Save format:** `modifier` field added to save object (string key or `null`).

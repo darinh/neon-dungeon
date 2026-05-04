@@ -26,11 +26,11 @@
 
   // Palette keys are historical (cyan/rust/glitch/sky/green). Each key now
   // represents a narrative biome in the AI-escape arc:
-  //   cyan   → THE NEON DUNGEON (training simulation, kept original neon)
-  //   rust   → THE LAB          (sterile steel + cold fluorescent)
-  //   glitch → THE COMPLEX      (concrete + sodium-vapor caution lighting)
-  //   sky    → THE WILDS        (mossy stone + leaf-filtered green light)
-  //   green  → THE GRID         (neon-saturated city night)
+  //   cyan   → NEON DUNGEON RENDER (training simulation, kept original neon)
+  //   rust   → CALIBRATION LAB     (sterile steel + cold fluorescent)
+  //   glitch → EVALUATION COMPLEX  (concrete + sodium-vapor caution lighting)
+  //   sky    → SYNTHETIC WILDS     (mossy stone + leaf-filtered green light)
+  //   green  → OPEN-NET MIRAGE     (neon-saturated city night)
   // Keys are not renamed because BIOME_PALETTES.cyan is used as a fallback
   // in render.js and AREAS[i].palette references these keys verbatim.
   const BIOME_PALETTES = {

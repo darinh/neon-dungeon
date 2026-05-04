@@ -51,9 +51,9 @@ function extractCompactBranch() {
   // can't mis-target.
   const branch = extractBranch(hud, /if\s*\(\s*layout\.compact\s*\)\s*\{/);
   assert.ok(branch, 'compact-portrait branch must be locatable inside drawHUD');
-  // Defensive: the compact branch must reach the FLR draw to confirm the
+  // Defensive: the compact branch must reach the TEST draw to confirm the
   // extraction landed in the right block.
-  assert.ok(/FLR:/.test(branch), 'extracted compact branch must contain the FLR readout');
+  assert.ok(/TEST:/.test(branch), 'extracted compact branch must contain the TEST readout');
   return branch;
 }
 
