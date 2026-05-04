@@ -150,13 +150,42 @@ test('floor snapshots restore player location, mutated floor state, and live act
     registerEnemyInRoom(e) { if (e.room) e.room.registered = e; },
     clearEnemiesByRoom() { for (const room of sandbox.__rooms || []) delete room.registered; },
     releaseProjectile(p) { released.push(p); },
+    _CG: { msg() {} },
   };
   vm.createContext(sandbox);
   vm.runInContext(`${helperBlock}
 this.serializeFloorSnapshot = serializeFloorSnapshot;
 this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
 
-  const room0 = { id: 'start', open: false };
+  const room0 = {
+    id: 'start',
+    open: false,
+    shopItems: [
+      {
+        id: 'SHOP_HEAL',
+        name: 'Full Repair',
+        sold: false,
+        price: 62,
+        fn(player) { player.hp = player.maxHp; }
+      },
+      {
+        id: 'BOOST_COMBAT_STIM',
+        boostId: 'COMBAT_STIM',
+        name: 'Combat Stim',
+        sold: true,
+        price: 19,
+        fn(player) { player.activeBoosts = { COMBAT_STIM: true }; }
+      },
+      {
+        id: 'WEAPON_RAILGUN',
+        name: 'Saved Railgun',
+        sold: false,
+        price: 99,
+        _weaponObj: { _base: 'RAILGUN', _affixes: ['FLAME'], displayName: 'Saved Railgun' },
+        fn(player) { player.weapon = { _base: 'RAILGUN', _affixes: ['FLAME'], from: 'saved' }; }
+      }
+    ]
+  };
   const room1 = { id: 'boss', locked: true };
   sandbox.__rooms = [room0, room1];
   const sourceEnemy = { x: 9, y: 10, hp: 4, type: 'GUARD', colour: '#f00', room: room1, hitEnemies: new Set([{ stale: true }]) };
@@ -192,6 +221,7 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(snapshot.player.x, 12.5);
   assert.equal(snapshot.dungeon.map[0][0], 'OPEN');
   assert.deepEqual(snapshot.dungeon.light[0], [0.75]);
+  assert.equal(snapshot.dungeon.rooms[0].shopItems[0].fn, undefined);
   assert.equal(snapshot.enemies[0]._roomIndex, 1);
   assert.equal(snapshot.enemies[0].room, undefined);
   assert.equal(snapshot.items[0].typeId, 'BOOST');
@@ -203,7 +233,27 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   sandbox.projectiles.length = 0;
   sandbox.projectiles.push({ old: true, hitEnemies: new Set(), trail: [1] });
 
-  const newRoom0 = { id: 'start' };
+  const newRoom0 = {
+    id: 'start',
+    shopItems: [
+      {
+        id: 'BOOST_COMBAT_STIM',
+        boostId: 'COMBAT_STIM',
+        name: 'Combat Stim',
+        sold: false,
+        price: 19,
+        fn(player) { player.activeBoosts = { COMBAT_STIM: true }; }
+      },
+      {
+        id: 'WEAPON_RAILGUN',
+        name: 'Regenerated Railgun',
+        sold: false,
+        price: 99,
+        _weaponObj: { _base: 'RAILGUN', _affixes: ['FROST'], displayName: 'Regenerated Railgun' },
+        fn(player) { player.weapon = { _base: 'RAILGUN', _affixes: ['FROST'], from: 'regenerated' }; }
+      }
+    ]
+  };
   const newRoom1 = { id: 'boss' };
   const targetGame = {
     floor: 2,
@@ -249,6 +299,19 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   assert.equal(targetGame.mapRevealed, true);
   assert.equal(targetGame.refreshed, true);
   assert.equal(targetGame.mutated, true);
+  assert.equal(typeof newRoom0.shopItems[0].fn, 'function');
+  assert.equal(newRoom0.shopItems[0].id, 'SHOP_HEAL');
+  assert.equal(newRoom0.shopItems[1].sold, true);
+  const shopPlayer = { hp: 1, maxHp: 9, activeBoosts: {} };
+  newRoom0.shopItems[0].fn(shopPlayer);
+  assert.equal(shopPlayer.hp, 9);
+  newRoom0.shopItems[1].fn(shopPlayer);
+  assert.deepEqual(shopPlayer.activeBoosts, { COMBAT_STIM: true });
+  assert.equal(typeof newRoom0.shopItems[2].fn, 'function');
+  assert.equal(newRoom0.shopItems[2]._weaponObj._affixes[0], 'FLAME');
+  newRoom0.shopItems[2].fn(shopPlayer);
+  assert.deepEqual(shopPlayer.weapon._affixes, ['FLAME']);
+  assert.deepEqual(shopPlayer.weapon._effects, ['effect:FLAME']);
 
   const legacyTypedArraySnapshot = JSON.parse(JSON.stringify(snapshot));
   legacyTypedArraySnapshot.dungeon.light = [{ 0: 0.5 }];
