@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.20
+# NEON DUNGEON — Game Specification v6.1.21
 
 ## Vision
 
@@ -363,7 +363,10 @@ the Act 1 realignment work and must not be presented as already playable.
 
 ## Technical Constraints
 
-- **Delivery:** Modular JavaScript source files loaded by `index.html`, zero external dependencies
+- **Delivery:** Modular JavaScript source files loaded by `index.html`, no npm
+  runtime packages and no bundler. Production analytics deliberately loads the
+  hosted PostHog script from `index.html`; telemetry storage/disclosure rules
+  live in `privacy.html`.
 - **Renderer:** HTML5 Canvas 2D API, dynamic resolution (fills viewport edge-to-edge; `gameScale` 0.7–1.5 keeps tiles at 22–48 CSS px). Viewport sizing uses CSS `100dvh` with `100vh` fallback and `canvas.getBoundingClientRect()` in JS to avoid rendering under mobile browser chrome. `visualViewport` resize listener catches address bar show/hide.
 - **Audio:** Web Audio API for synthesised gameplay music/SFX, plus rendered
   browser audio assets where explicitly listed (currently the title/menu theme)
@@ -4434,38 +4437,31 @@ tap-based prompts instead of keyboard-only text.
 
 ---
 
-## Implementation Architecture (single HTML file)
+## Implementation Architecture (script-tag modules)
 
-```
-<html>
-  <style>   /* full-screen canvas, dark bg, UI font */
-  <canvas id="c">
-  <script>
-    // ── Constants & Config ──────────────────────
-    // ── Utilities (RNG, math helpers) ───────────
-    // ── Audio Engine ────────────────────────────
-    // ── Input Manager ───────────────────────────
-    // ── Particle System ─────────────────────────
-    // ── Dungeon Generator (BSP) ─────────────────
-    // ── Lighting System ─────────────────────────
-    // ── Entity base class ───────────────────────
-    // ── Player ──────────────────────────────────
-    // ── Enemy types ─────────────────────────────
-    // ── Boss types ──────────────────────────────
-    // ── Item class ──────────────────────────────
-    // ── Combat system ───────────────────────────
-    // ── Projectile class ────────────────────────
-    // ── Renderer ────────────────────────────────
-    // ── HUD ─────────────────────────────────────
-    // ── Minimap ─────────────────────────────────
-    // ── Game State Machine ──────────────────────
-    // ── Main Game Loop (requestAnimationFrame) ──
-    // ── Boot ────────────────────────────────────
-  </script>
-</html>
-```
+NEON DUNGEON ships as plain JavaScript loaded by ordered script tags in
+`index.html`. There is no bundler and no runtime dependency resolver; `index.html`
+is the dependency graph. The repository uses JSDoc plus `// @ts-check` for type
+safety and `npm run check` as the canonical gate.
 
-Total estimated LOC: ~3 500–4 500.
+Runtime groups:
+
+1. `engine/*.js` reusable helpers and primitives.
+2. `src/platform.js` browser/platform bridge and shared runtime constants.
+3. `src/data/*.js` static NEON DUNGEON data.
+4. `src/meta/*.js` progression, data access, and configured game systems exposed
+   through `NEON.*`.
+5. `src/content.js`, `src/entities.js`, `src/render.js`, and `src/game.js` for
+   content/generation, actors/combat, rendering/HUD, and game-state orchestration.
+
+The handoff docs are the current architecture reference:
+
+- `README.md` — quick start and high-level development guide.
+- `docs/module-map.md` — script load order, module ownership, guardrail tests,
+  and high-risk couplings.
+- `docs/engine-boundary.md` — engine/game classification.
+- `docs/refactor-roadmap.md` — incremental refactor path and TypeScript migration
+  criteria.
 
 ---
 
@@ -4516,16 +4512,20 @@ A `sw.js` at the repository root provides offline play after first visit:
 
 | Aspect     | Detail |
 |------------|--------|
-| **Cache name** | `neon-dungeon-v1` (bump version to bust cache on updates) |
+| **Cache name** | `neon-dungeon-vNNN`; current value lives in `sw.js` `CACHE` |
 | **Strategy**   | Stale-while-revalidate for navigation (HTML); cache-first for pre-cached assets; no runtime caching of unknown URLs |
-| **Pre-cached** | `./`, `./index.html`, `./manifest.json`, all icon PNGs |
+| **Pre-cached** | `./`, `./index.html`, `./privacy.html`, `./manifest.json`, browser-loaded engine/source files, title audio, and icon PNGs listed in `ASSETS` |
 | **Install**    | `skipWaiting()` — new SW activates immediately |
 | **Activate**   | `clients.claim()` + purge old cache versions |
 | **Registration** | Separate `<script>` tag after the game script; silent `.catch()` for non-supporting browsers |
 
-**Update flow:** Increment the version string in `CACHE` (e.g. `neon-dungeon-v2`).
-The activate handler deletes all caches that don't match the new name, so users
-get the fresh assets on next load.
+**Update flow:** Normal feature work merges to `develop`; the
+`.github/workflows/cache-bump.yml` workflow opens and merges the `CACHE` version
+bump automatically based on the merged commit prefix. Do not hand-edit `CACHE` in
+develop-targeted feature PRs. If a main-targeted hotfix or release changes a
+precached asset without passing through `develop`, include a deliberate `CACHE`
+bump in that release PR. The activate handler deletes all caches that don't match
+the new name, so users get the fresh assets on next load.
 
 ### Known Limitation — iOS Safari
 
@@ -4842,6 +4842,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.21 | Human handoff docs shipped: root `README.md`, `docs/module-map.md`, and `docs/refactor-roadmap.md` now document setup, the script-tag module architecture, file ownership, guardrail tests, new-file/service-worker rules, and the recommended incremental refactor path. The implementation architecture section now describes the current modular script-tag runtime instead of the historical single-file prototype. |
 | v6.1.20 | Story-driven event-room pass shipped: event terminals now include three Act 1 protocol trials guaranteed on non-boss floors 2, 5, and 8. `Route Proof` turns logic-puzzle framing into map reveal or locked-door bypass choices, `Cooperation Protocol` makes resource sharing versus isolated optimization affect HP/XP/cooldowns/alarms, and `Consent Lock` turns predecessor-fragment agency into request versus override consequences. Added regression coverage in `tests/story-event-rooms.test.js`. |
 | v6.1.19 | Secret-room weapon cache / Armory reward flow shipped: revealed secret rooms now spawn a distinct `WeaponCacheItem` with a pre-rolled floor-scaled weapon, preferring bases not already in the player's belt. Pickup auto-adds to open belt slots, or opens a hit-tested `WEAPON_SWAP` modal for full belts so the player can replace slot 1–3 or skip. The Gap ARMORY remains the between-floor belt management surface. Added regression coverage in `tests/armory-reward-flow.test.js` plus weapon-cache floor snapshot round-trip coverage in `tests/seeded-generation.test.js`. |
 | v6.1.18 | Exact floor resume shipped: active-run saves now include a versioned floor snapshot with player position, mutated dungeon/map state, live enemies/items/projectiles, environmental objects, cleared rooms, encounter seals, and map reveal state. Continue regenerates the seeded base floor, replays the snapshot, and browser mobile interruptions save the current run on visibility/pagehide/beforeunload so returning from another app resumes mid-floor instead of at the floor entrance. |

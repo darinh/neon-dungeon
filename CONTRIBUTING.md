@@ -1,12 +1,24 @@
 # Contributing to NEON DUNGEON
 
+## Human orientation
+
+Start with:
+
+- `README.md` — quick start, commands, architecture overview, release workflow.
+- `docs/module-map.md` — file ownership, load order, risk areas, guardrail tests.
+- `docs/refactor-roadmap.md` — safe reorganization path and why not to start with
+  a broad TypeScript/class-per-file rewrite.
+- `docs/engine-boundary.md` — engine vs NEON-specific game boundary.
+
 ## Module pattern — "UMD-lite"
 
-New code lives in `src/meta/` or `src/data/`. Every file uses this IIFE wrapper so
-it works in both the browser (via `<script>` tag, attaching to `window.NEON`) and
-Node (`require()` for unit tests):
+New browser/Node-testable modules generally live in `engine/`, `src/meta/`, or
+`src/data/`. Use this IIFE wrapper when a file must work in both the browser
+(via `<script>` tag, attaching to `window.NEON`) and Node (`require()` for unit
+tests):
 
 ```js
+// @ts-check
 // src/meta/example.js
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -21,13 +33,18 @@ Node (`require()` for unit tests):
 ```
 
 **Rules:**
-1. No runtime dependencies. Zero `require()`/`import` at the top level of a new
-   module. If you need data from another module, depend on it via the `NEON`
-   namespace at call time — never at load time.
-2. Browser load order: script tags in `index.html` must list producer files
+1. Add `// @ts-check` to every new `.js` file.
+2. No npm runtime package dependencies and no top-level `require()`/`import` in
+   browser modules. Production `index.html` does load PostHog's hosted analytics
+   script; do not add additional hosted runtime dependencies without updating
+   `README.md` and `privacy.html`. If you need data from another module, depend
+   on it via the `NEON` namespace at call time — never at load time.
+3. Browser load order: script tags in `index.html` must list producer files
    before consumer files. If `src/meta/hub.js` uses `NEON.upgrades`, the
    `<script src="./src/meta/upgrades.js">` tag must appear first.
-3. Pure logic is preferred. Anything that reads globals or touches the DOM
+4. Browser assets: add new browser-loaded files to `sw.js` `ASSETS`, but do not
+   manually bump the service-worker `CACHE` key in feature PRs.
+5. Pure logic is preferred. Anything that reads globals or touches the DOM
    cannot be unit-tested in Node — keep those pieces thin and push
    computation into pure functions.
 
@@ -56,14 +73,17 @@ test('doThing increments', () => {
 });
 ```
 
-CI (`.github/workflows/test.yml`) runs `npm test` on every PR targeting `main` or
-`develop`. A failing test blocks merge.
+CI (`.github/workflows/test.yml`) runs `npm run check` on every PR targeting
+`main` or `develop`. A failing check blocks merge.
 
 ## Branching
 
-- `main` — stable, deployed to GitHub Pages. Never push directly; only merge from `develop`.
+- `main` — stable, deployed to GitHub Pages. Never push directly.
 - `develop` — integration branch. All feature branches PR into `develop`.
-- `anvil/<task-id>` or `feat/<thing>` — your working branch.
+- `anvil/<task-id>`, `feat/<thing>`, `fix/<thing>`, or `docs/<thing>` — your
+  working branch.
+- `release/<thing>` — linear promotion branch from `main` when promoting
+  verified `develop` work to production.
 
 ## Service Worker cache
 
@@ -77,8 +97,11 @@ from the conventional-commit prefix of the merged commit:
 | `feat:` | +2 |
 | anything else | +1 |
 
-You do **not** bump the `CACHE` constant in your PR. Doing so creates artificial
-merge conflicts on every parallel PR.
+For normal feature PRs into `develop`, you do **not** bump the `CACHE` constant
+manually. Doing so creates artificial merge conflicts on every parallel PR. If a
+main-targeted hotfix or release changes a precached asset without passing through
+`develop`, include a deliberate `CACHE` bump in that release PR because the
+auto-bump workflow does not run on `main`.
 
 You **do** still need to:
 
