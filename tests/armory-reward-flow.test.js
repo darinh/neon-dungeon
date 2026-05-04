@@ -56,7 +56,7 @@ test('weapon swap modal is wired into update, render, and mobile touch routing',
     'modal update/render should share a layout helper');
   assert.match(GAME, /renderWeaponSwap\(\)[\s\S]*1-3 replace/,
     'rendered modal should explain keyboard replacement controls');
-  assert.match(PLATFORM, /_G\.state === 'POWERUP_CHOICE' \|\| _G\.state === 'WEAPON_SWAP'[\s\S]*?mouse\.x = cx; mouse\.y = cy;[\s\S]*?justPressed\.add\('MouseLeft'\);[\s\S]*?continue;/,
+  assert.match(PLATFORM, /_G\.state === 'POWERUP_CHOICE' \|\| _G\.state === 'WEAPON_SWAP'[\s\S]*?routeTouchAsMouseClick\(cx, cy\);[\s\S]*?continue;/,
     'mobile WEAPON_SWAP touches must be coordinate-routed for hit testing');
 });
 
