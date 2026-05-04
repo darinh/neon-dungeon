@@ -647,6 +647,16 @@ function hitBtn(cx, cy, btn) {
   return _touchHelpers.hitBtn(cx, cy, btn, gameScale);
 }
 
+/**
+ * @param {number} cx
+ * @param {number} cy
+ */
+function routeTouchAsMouseClick(cx, cy) {
+  mouse.x = cx;
+  mouse.y = cy;
+  justPressed.add('MouseLeft');
+}
+
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   const consumeTitleUnlock = menuTitleNeedsGestureUnlock();
@@ -675,19 +685,16 @@ canvas.addEventListener('touchstart', e => {
           continue;
         }
         blurSeedSetupInput();
-        mouse.x = cx; mouse.y = cy;
-        justPressed.add('MouseLeft');
+        routeTouchAsMouseClick(cx, cy);
         continue;
       }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'WEAPON_SWAP' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE') {
+      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'WEAPON_SWAP' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE' || _G.state === 'CHEATS') {
         // Route touch position via mouse so update handler handles it
-        mouse.x = cx; mouse.y = cy;
-        justPressed.add('MouseLeft');
+        routeTouchAsMouseClick(cx, cy);
         continue;
       }
       if (_G.state === 'SETTINGS') {
-        mouse.x = cx; mouse.y = cy;
-        justPressed.add('MouseLeft');
+        routeTouchAsMouseClick(cx, cy);
         continue;
       }
       if (_G.state === 'PAUSED') {
@@ -726,8 +733,7 @@ canvas.addEventListener('touchstart', e => {
             }
           } catch (_) {}
           if (!consumedByPanel) {
-            mouse.x = cx; mouse.y = cy;
-            justPressed.add('MouseLeft');
+            routeTouchAsMouseClick(cx, cy);
           }
         }
         // Otherwise: tap on empty hub space → no-op (don't accidentally
@@ -822,8 +828,7 @@ canvas.addEventListener('touchstart', e => {
     // Expanded map: any tap closes (modal — takes priority)
     if (_G.mapExpanded) { justPressed.add('Tab'); continue; }
     if (typeof _G.hitSystemMessageIndicator === 'function' && _G.hitSystemMessageIndicator(cx, cy)) {
-      mouse.x = cx; mouse.y = cy;
-      justPressed.add('MouseLeft');
+      routeTouchAsMouseClick(cx, cy);
       continue;
     }
     if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('CheatE'); justPressed.add(km('interact')); continue; }
