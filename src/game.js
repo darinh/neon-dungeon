@@ -1052,6 +1052,54 @@ function restoreFuseShardSnapshot(saved) {
   return fs;
 }
 
+const CHEAT_SEQUENCE = ['KeyF', 'KeyE', 'KeyE', 'KeyT'];
+const CHEAT_DEFS = [
+  { id:'invulnerable', name:'INVULNERABILITY', hot:'1', colour:'#ff3366', desc:'Ignore all incoming damage packets.' },
+  { id:'noClip',       name:'NO-CLIP',         hot:'2', colour:'#66ffcc', desc:'Move and dash through solid floor geometry.' },
+  { id:'revealMap',    name:'SHOW MAP',        hot:'3', colour:'#44ccff', desc:'Render the full non-secret floor layout.' },
+  { id:'hyperMode',    name:'HYPER MODE',      hot:'4', colour:'#ffb700', desc:'Double player movement speed.' },
+];
+
+function defaultCheats() {
+  return { invulnerable:false, noClip:false, revealMap:false, hyperMode:false };
+}
+
+/**
+ * @param {number} progress
+ * @param {string} code
+ */
+function advanceCheatSequence(progress, code) {
+  if (!code || code === 'MouseLeft') return progress;
+  const p = Math.max(0, Math.min(CHEAT_SEQUENCE.length - 1, progress | 0));
+  if (code === CHEAT_SEQUENCE[p]) return p + 1;
+  return code === CHEAT_SEQUENCE[0] ? 1 : 0;
+}
+
+/**
+ * @param {any} gameState
+ * @param {string} id
+ */
+function isCheatEnabled(gameState, id) {
+  return !!(gameState && gameState.cheats && gameState.cheats[id]);
+}
+
+/** @param {boolean} narrow */
+function getCheatMenuLayout(narrow) {
+  const panelW = Math.min(narrow ? W - 24 : 620, W - 24);
+  const panelH = Math.min(narrow ? H - 36 : 460, H - 36);
+  const px = (W - panelW) / 2;
+  const py = (H - panelH) / 2;
+  const rowH = narrow ? 54 : 66;
+  const rowStart = py + (narrow ? 92 : 118);
+  const rowX = px + (narrow ? 14 : 28);
+  const rowW = panelW - (narrow ? 28 : 56);
+  const closeW = narrow ? 130 : 160;
+  const closeH = 36;
+  const closeX = W / 2 - closeW / 2;
+  const closeY = py + panelH - (narrow ? 50 : 58);
+  return { panelW, panelH, px, py, rowH, rowStart, rowX, rowW, closeW, closeH, closeX, closeY };
+}
+
 /**
  * @param {any} gameState
  * @param {any} snapshot
@@ -1120,6 +1168,11 @@ const game = {
   // manual pauses, so a returning player isn't confused by an
   // unexplained PAUSED screen.
   wasAutoPaused: false,
+  cheats: defaultCheats(),
+  cheatSequenceProgress: 0,
+  cheatSelected: 0,
+  cheatReturnState: 'PLAYING',
+  _cheatMenuJustOpened: false,
   fadeAlpha: 0,
   fadeDir: 0,
   fadeCallback: null,
@@ -1406,6 +1459,90 @@ const game = {
     // Show privacy link only on menu screen
     try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === 'MENU' ? '' : 'none'; } catch(_){}
     if (callback) callback();
+  },
+
+  shouldCaptureCheatSequence(){
+    if (this.state === 'NAME_ENTRY' || this.state === 'SEED_SETUP') return false;
+    if (this.state === 'SETTINGS' && this.settingsCapture) return false;
+    return this.state !== 'CHEATS';
+  },
+  updateCheatHotkey(){
+    if (!this.shouldCaptureCheatSequence()) return false;
+    let opened = false;
+    for (const code of justPressed) {
+      this.cheatSequenceProgress = advanceCheatSequence(this.cheatSequenceProgress, code);
+      if (this.cheatSequenceProgress >= CHEAT_SEQUENCE.length) {
+        this.openCheatMenu();
+        this.cheatSequenceProgress = 0;
+        opened = true;
+        break;
+      }
+    }
+    return opened;
+  },
+  openCheatMenu(){
+    this.cheats = Object.assign(defaultCheats(), this.cheats || {});
+    this.cheatReturnState = this.state === 'CHEATS' ? this.cheatReturnState : this.state;
+    this.cheatSelected = 0;
+    this._cheatMenuJustOpened = true;
+    this.setState('CHEATS');
+    this.msg('FEET diagnostic hatch opened.', '#66ffcc');
+  },
+  closeCheatMenu(){
+    const returnState = this.cheatReturnState || 'PLAYING';
+    this.setState(returnState);
+  },
+  /** @param {number} index */
+  toggleCheat(index){
+    const def = CHEAT_DEFS[index];
+    if (!def) return;
+    this.cheats = Object.assign(defaultCheats(), this.cheats || {});
+    this.cheats[def.id] = !this.cheats[def.id];
+    if (def.id === 'revealMap') this._minimapDirty = true;
+    this.msg(`${def.name}: ${this.cheats[def.id] ? 'ON' : 'OFF'}`, this.cheats[def.id] ? def.colour : '#9aa');
+  },
+  updateCheatMenu(){
+    if (this._cheatMenuJustOpened) {
+      this._cheatMenuJustOpened = false;
+      return;
+    }
+    if (jp('Escape') || jp('Backspace')) {
+      this.closeCheatMenu();
+      return;
+    }
+    if (jp('ArrowUp') || jp('KeyW')) {
+      this.cheatSelected = (this.cheatSelected + CHEAT_DEFS.length) % (CHEAT_DEFS.length + 1);
+      audio.menuSelect();
+    }
+    if (jp('ArrowDown') || jp('KeyS')) {
+      this.cheatSelected = (this.cheatSelected + 1) % (CHEAT_DEFS.length + 1);
+      audio.menuSelect();
+    }
+    for (let i = 0; i < CHEAT_DEFS.length; i++) {
+      if (jp(`Digit${i + 1}`)) this.toggleCheat(i);
+    }
+    if (jp('Enter') || jp('Space')) {
+      if (this.cheatSelected >= CHEAT_DEFS.length) this.closeCheatMenu();
+      else this.toggleCheat(this.cheatSelected);
+    }
+    if (justPressed.has('MouseLeft')) {
+      const m = mouse;
+      const layout = getCheatMenuLayout(W < 560);
+      let handled = false;
+      for (let i = 0; i < CHEAT_DEFS.length; i++) {
+        const y = layout.rowStart + i * layout.rowH;
+        if (m.x >= layout.rowX && m.x <= layout.rowX + layout.rowW && m.y >= y && m.y <= y + layout.rowH - 8) {
+          this.cheatSelected = i;
+          this.toggleCheat(i);
+          handled = true;
+          break;
+        }
+      }
+      if (!handled && m.x >= layout.closeX && m.x <= layout.closeX + layout.closeW && m.y >= layout.closeY && m.y <= layout.closeY + layout.closeH) {
+        this.cheatSelected = CHEAT_DEFS.length;
+        this.closeCheatMenu();
+      }
+    }
   },
 
   /**
@@ -1765,6 +1902,10 @@ const game = {
     this._lastAct1MessageIntent = null;
     this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
     this._exitPos = null;     // clear any stale exit-position from a prior run
+    this.cheats = defaultCheats();
+    this.cheatSequenceProgress = 0;
+    this.cheatSelected = 0;
+    this._cheatMenuJustOpened = false;
     audio.resume();
     const meta = loadMeta();
     meta.lastDifficulty = this.difficulty;
@@ -2480,6 +2621,10 @@ const game = {
     this._lastEnding = null;
     this._lastAct1MessageIntent = null;
     this._exitPos = null;     // resume should not relocate the player
+    this.cheats = defaultCheats();
+    this.cheatSequenceProgress = 0;
+    this.cheatSelected = 0;
+    this._cheatMenuJustOpened = false;
     this.pendingPerkChoices=[];
     this.perkChoice=null;
     this.augmentChoice=null;
@@ -2653,8 +2798,10 @@ const game = {
    */
   update(dt) {
     clearLosCache();
+    this.updateCheatHotkey();
     switch(this.state) {
       case 'MENU':        this.updateMenu(dt);    break;
+      case 'CHEATS':      this.updateCheatMenu(); break;
       case 'SEED_SETUP':  this.updateSeedSetup(dt); break;
       case 'INTRO':       this.updateIntro(dt);   break;
       case 'ENDGAME_CHOICE': this.updateEndgameChoice(dt); break;
@@ -5863,6 +6010,75 @@ const game = {
     ctx.restore();
   },
 
+  renderCheatMenu() {
+    const narrow = W < 560;
+    const layoutBox = getCheatMenuLayout(narrow);
+    const cheats = Object.assign(defaultCheats(), this.cheats || {});
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.70)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = '#66ffcc';
+    ctx.fillStyle = 'rgba(4,14,18,0.96)';
+    ctx.strokeStyle = '#66ffcc';
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectFillStroke(ctx, layoutBox.px, layoutBox.py, layoutBox.panelW, layoutBox.panelH, 10);
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#66ffcc';
+    ctx.font = `bold ${narrow ? 19 : 26}px monospace`;
+    ctx.fillText('FEET // DIAGNOSTIC HATCH', W / 2, layoutBox.py + (narrow ? 34 : 48));
+    ctx.fillStyle = '#789';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText('Runtime cheats are not written to normal save data.', W / 2, layoutBox.py + (narrow ? 56 : 72));
+
+    ctx.textAlign = 'left';
+    for (let i = 0; i < CHEAT_DEFS.length; i++) {
+      const def = CHEAT_DEFS[i];
+      if (!def) continue;
+      const y = layoutBox.rowStart + i * layoutBox.rowH;
+      const on = !!cheats[def.id];
+      const selected = this.cheatSelected === i;
+
+      ctx.fillStyle = selected ? 'rgba(102,255,204,0.13)' : 'rgba(255,255,255,0.035)';
+      ctx.strokeStyle = selected ? def.colour : 'rgba(102,255,204,0.22)';
+      ctx.lineWidth = selected ? 2 : 1;
+      NEON.draw.roundRectFillStroke(ctx, layoutBox.rowX, y, layoutBox.rowW, layoutBox.rowH - 8, 6);
+
+      ctx.fillStyle = selected ? def.colour : '#d8ffff';
+      ctx.font = `bold ${narrow ? 13 : 16}px monospace`;
+      ctx.fillText(`${def.hot}. ${def.name}`, layoutBox.rowX + 16, y + (narrow ? 21 : 25));
+
+      ctx.fillStyle = '#7f99a0';
+      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      ctx.fillText(def.desc, layoutBox.rowX + 16, y + (narrow ? 38 : 45));
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = on ? def.colour : '#566';
+      ctx.font = `bold ${narrow ? 13 : 15}px monospace`;
+      ctx.fillText(on ? 'ONLINE' : 'OFFLINE', layoutBox.rowX + layoutBox.rowW - 16, y + (narrow ? 29 : 35));
+      ctx.textAlign = 'left';
+    }
+
+    const closeSelected = this.cheatSelected >= CHEAT_DEFS.length;
+    ctx.fillStyle = closeSelected ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+    ctx.strokeStyle = closeSelected ? '#ffb700' : '#334';
+    ctx.lineWidth = 1;
+    NEON.draw.roundRectFillStroke(ctx, layoutBox.closeX, layoutBox.closeY, layoutBox.closeW, layoutBox.closeH, 6);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = closeSelected ? '#ffb700' : '#899';
+    ctx.font = `bold ${narrow ? 12 : 13}px monospace`;
+    ctx.fillText('CLOSE', W / 2, layoutBox.closeY + 23);
+
+    ctx.fillStyle = '#445';
+    ctx.font = `${narrow ? 10 : 11}px monospace`;
+    ctx.fillText(isTouchDevice() ? 'Tap rows to toggle' : '↑↓ select · Enter toggle · 1-4 quick toggle · Esc close', W / 2, layoutBox.py + layoutBox.panelH - 14);
+    ctx.restore();
+  },
+
   render() {
     // Global UI scale wrap (browser-CTRL-+ analog). Every renderable
     // state — MENU, PLAYING, HUB, SETTINGS, all overlays — runs
@@ -5894,6 +6110,10 @@ const game = {
 
       switch(this.state) {
         case 'MENU':      this.renderMenu();     break;
+        case 'CHEATS':
+          if (this.dungeon && this.cheatReturnState !== 'MENU' && this.cheatReturnState !== 'SEED_SETUP' && this.cheatReturnState !== 'ARCHIVES' && this.cheatReturnState !== 'SETTINGS' && this.cheatReturnState !== 'HUB') this.renderPlaying();
+          this.renderCheatMenu();
+          break;
         case 'SEED_SETUP': this.renderSeedSetup(); break;
         case 'INTRO':     this.renderIntro();    break;
         case 'ENDGAME_CHOICE': this.renderPlaying(); this.renderEndgameChoice(); break;
