@@ -1269,6 +1269,7 @@ Weapons found on floor 2+ may roll random affixes that modify their stats and gr
 - Burn damage-over-time ticks can trigger on-kill effects (detonation).
 - Detonation AoE damages the player at 50% if in range (LOS-gated), similar to VOLATILE modifier.
 - Shock uses `enemy.stunTimer` (shared with EMP hackware) but has a per-enemy 2 s internal cooldown (`_shockICD`) to prevent stunlock from fast weapons.
+- Projectile movement is swept through every crossed tile in `Projectile.update()`, so fast or large-frame-step player, enemy, ally-turret, reflected, homing, and auto-spell shots cannot tunnel through intervening walls or closed diagonal wall corners.
 
 **Visual indicators:**
 - Burning enemies: flickering orange underglow.
