@@ -2103,7 +2103,7 @@ function drawMinimap(dungeon, player) {
   NEON.minimap.drawMinimapFrame(ctx, MX, MY, MW, MH);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
-  const echoMap = _RG.mapRevealed; // ECHO_MAPPER: show layout even if unvisited
+  const echoMap = _RG.mapRevealed || !!(_RG.cheats && _RG.cheats.revealMap); // ECHO_MAPPER / FEET show-map cheat
 
   // Rebuild cache on demand. echoMap flip OR a settings.minimapScale
   // change (detected via canvas size mismatch in rebuildMinimapBase)
@@ -2438,7 +2438,7 @@ function drawExpandedMinimap(dungeon, player) {
     fillInner: true,
   });
 
-  const echoMap = _RG.mapRevealed;
+  const echoMap = _RG.mapRevealed || !!(_RG.cheats && _RG.cheats.revealMap);
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   const pois = [];
 
