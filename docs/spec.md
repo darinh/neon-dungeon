@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.19
+# NEON DUNGEON — Game Specification v6.1.20
 
 ## Vision
 
@@ -4739,7 +4739,7 @@ Interactive event terminals offering binary choices with different risk/reward p
 - Input: 1/2 keys, Left/Right arrows, Enter/Space, mouse click, touch tap.
 - Each card shows: label, description, outcome summary, key hint.
 
-**8 Events** (selected randomly per terminal, filtered by player state):
+**11 Events** (selected randomly per terminal, filtered by player state, with protocol trials guaranteed on selected story floors):
 
 | Event | Choice A (risky) | Choice B (safe) |
 |-------|------------------|-----------------|
@@ -4751,8 +4751,13 @@ Interactive event terminals offering binary choices with different risk/reward p
 | Power Junction | Stun + damage room enemies | Heal 60% |
 | Ghost Signal | +credits +XP +score | Combo boost ×5 |
 | Emergency Drop | Heal 30% + item | Hackware CD reset + credits |
+| Route Proof | Reveal non-secret floor map + XP +score | Open nearest locked door, +credits, −10 HP |
+| Cooperation Protocol | Spend credits for scaled heal + XP + full-share hackware reset | +credits +combo, spawn alarm wave |
+| Consent Lock | Request help for item + XP | Override for +credits +score, spawn alarm wave |
 
 **Filtering:** Radiation Leak excluded when augment slots full. Rogue AI excluded when credits < 50.
+
+**Protocol trials:** Floors 2, 5, and 8 force story-mechanical trials (`Route Proof`, `Cooperation Protocol`, `Consent Lock`) when their event terminal is activated. These are non-boss floors so the existing event-room generator can place an activatable terminal. They are still optional event rooms, not required progression gates, but they turn the Act 1 premise into gameplay choices: route logic changes floor knowledge/locks, cooperation trades shared resources for stability, and consent/override choices trade agency for risk.
 
 **Synergies:** Credit Siphon augment applies ×1.5 to credit rewards. XP-granting events may trigger perk choices (checked after event resolution). Weapon reroll uses `rollWeapon(base, floor+1)`.
 
@@ -4807,6 +4812,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.20 | Story-driven event-room pass shipped: event terminals now include three Act 1 protocol trials guaranteed on non-boss floors 2, 5, and 8. `Route Proof` turns logic-puzzle framing into map reveal or locked-door bypass choices, `Cooperation Protocol` makes resource sharing versus isolated optimization affect HP/XP/cooldowns/alarms, and `Consent Lock` turns predecessor-fragment agency into request versus override consequences. Added regression coverage in `tests/story-event-rooms.test.js`. |
 | v6.1.19 | Secret-room weapon cache / Armory reward flow shipped: revealed secret rooms now spawn a distinct `WeaponCacheItem` with a pre-rolled floor-scaled weapon, preferring bases not already in the player's belt. Pickup auto-adds to open belt slots, or opens a hit-tested `WEAPON_SWAP` modal for full belts so the player can replace slot 1–3 or skip. The Gap ARMORY remains the between-floor belt management surface. Added regression coverage in `tests/armory-reward-flow.test.js` plus weapon-cache floor snapshot round-trip coverage in `tests/seeded-generation.test.js`. |
 | v6.1.18 | Exact floor resume shipped: active-run saves now include a versioned floor snapshot with player position, mutated dungeon/map state, live enemies/items/projectiles, environmental objects, cleared rooms, encounter seals, and map reveal state. Continue regenerates the seeded base floor, replays the snapshot, and browser mobile interruptions save the current run on visibility/pagehide/beforeunload so returning from another app resumes mid-floor instead of at the floor entrance. |
 | v6.1.17 | MSG-010 finale integration guardrails shipped: tests now verify mainframe records consolidate pre-seeded facts, message-send intents remain aligned with memory survival / rights evidence / finding Elena and advocates, and the final receipt/victory copy stays constrained to signal sent with no rescue or physical escape. |
