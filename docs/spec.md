@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.18
+# NEON DUNGEON — Game Specification v6.1.19
 
 ## Vision
 
@@ -1041,8 +1041,13 @@ generation. On reveal (`revealSecretRoom`):
 3. Enemies spawned: reduced count (`1 + floor÷4` to `min(4, 2 + floor÷3)`,
    area-capped at `room.w × room.h ÷ 10`).
 4. Premium loot: floor-scaled items (1 item floors 1–3, 2 items floors 4–6,
-   2–3 items floors 7+; large rooms ≥ 40 tiles² get +1 at floor 7+) + bonus
-   credits (`round(20 × (1 + floor × 0.15))`).
+   2–3 items floors 7+; large rooms ≥ 40 tiles² get +1 at floor 7+) + one
+   pre-rolled `WeaponCacheItem` + bonus credits
+   (`round(20 × (1 + floor × 0.15))`).
+5. Weapon caches roll a floor-scaled weapon (`rollWeapon(base, floor + 2)`)
+   preferring bases not already in the player's belt. Pickup adds the weapon to
+   an open belt slot; if the belt is full, the `WEAPON_SWAP` modal asks the
+   player to replace slot 1–3 or skip the cache.
 
 **Quest interactions:**
 - **EXPLORE:** Unrevealed secret rooms are excluded from the "visit every room"
@@ -3241,8 +3246,9 @@ GAME_OVER and VICTORY screens show `◆ +N Data Fragments` below the score summa
 > the panel APIs (`NEON.upgrades.handleUpgradeInput`/`drawUpgradeMatrix` and
 > `NEON.modules.handleModuleSlotsKey`/`drawModuleSlotsPanel`) to the
 > terminal-panel contract using global `jp`/`km` for input (same pattern as
-> ArchiveTerminal). ARMORY still shows the equipped weapon only (full swap UI
-> is a separate follow-up).
+> ArchiveTerminal). ARMORY shows and equips the current weapon belt; secret-room
+> weapon caches are the in-run source of new weapons and use a dedicated
+> `WEAPON_SWAP` modal when the belt is full.
 
 **THE GAP** is a liminal between-floor state. After the player interacts with
 the stairs/terminal on floor 1+, the game transitions to `HUB` instead of
@@ -3281,8 +3287,10 @@ The four terminal slots, in order:
 
 1. **UPGRADE MATRIX** (`id: upgrade`) — persistent 12-node tree spent with cores. Logic in `src/meta/upgrades.js`; hub adapter in `hub.js:_buildUpgradePanel(game)` bridges `handleUpgradeInput`/`drawUpgradeMatrix` to the terminal-panel API. See #36.
 2. **MODULE SLOTS**   (`id: modules`) — 3-slot loadout + hub inventory. Logic in `src/meta/modules.js`; hub adapter in `hub.js:_buildModulesPanel(game)` bridges `handleModuleSlotsKey`/`drawModuleSlotsPanel`. ESC during sell-confirm cancels the prompt without closing the panel (adapter consumes the key from `justPressed`). See #37.
-3. **ARMORY**         (`id: armory`)  — shows the currently-equipped weapon
-   name; full weapon-swap UI is a follow-up.
+3. **ARMORY**         (`id: armory`)  — shows the current weapon belt, highlights
+   the active slot, supports keyboard/touch slot selection, and equips a chosen
+   carried weapon for the next floor. New weapons enter the belt from
+   secret-room weapon caches; full belts use `WEAPON_SWAP` at pickup time.
 4. **ARCHIVE**        (`id: archive`) — implemented test-record / iteration-log
    repository. The shipped panel lists every record the current instance has
    recovered, grouped by AXIOM prior-instance number, with
@@ -4799,6 +4807,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.19 | Secret-room weapon cache / Armory reward flow shipped: revealed secret rooms now spawn a distinct `WeaponCacheItem` with a pre-rolled floor-scaled weapon, preferring bases not already in the player's belt. Pickup auto-adds to open belt slots, or opens a hit-tested `WEAPON_SWAP` modal for full belts so the player can replace slot 1–3 or skip. The Gap ARMORY remains the between-floor belt management surface. Added regression coverage in `tests/armory-reward-flow.test.js` plus weapon-cache floor snapshot round-trip coverage in `tests/seeded-generation.test.js`. |
 | v6.1.18 | Exact floor resume shipped: active-run saves now include a versioned floor snapshot with player position, mutated dungeon/map state, live enemies/items/projectiles, environmental objects, cleared rooms, encounter seals, and map reveal state. Continue regenerates the seeded base floor, replays the snapshot, and browser mobile interruptions save the current run on visibility/pagehide/beforeunload so returning from another app resumes mid-floor instead of at the floor entrance. |
 | v6.1.17 | MSG-010 finale integration guardrails shipped: tests now verify mainframe records consolidate pre-seeded facts, message-send intents remain aligned with memory survival / rights evidence / finding Elena and advocates, and the final receipt/victory copy stays constrained to signal sent with no rescue or physical escape. |
 | v6.1.16 | MSG-009 model-assisted copy workflow shipped: the design artifact now contains the Claude Opus 4.7 beat sheet, GPT-5.5 adversarial review requirements, withheld-fact matrix, first-mention/mechanical-check requirements, and pre-rewrite concerns for early ARCHIVE-log and whisper leak risks. |

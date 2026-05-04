@@ -4,7 +4,7 @@
 // UNCHAINED #35. Appears after every cleared floor (1+). Houses 4 terminals:
 //   1. UPGRADE MATRIX  (#36 — placeholder stub here)
 //   2. MODULE SLOTS    (#37 — placeholder stub here)
-//   3. ARMORY          (placeholder; real weapon-swap wire-up in a follow-up)
+//   3. ARMORY          (weapon-belt equip panel)
 //   4. ARCHIVE         (#41 — placeholder stub here)
 //
 // Follows the NEON "UMD-lite" IIFE pattern so Node tests can require() it and

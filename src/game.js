@@ -448,6 +448,20 @@ function getReadingLayout(narrow) {
   return { fw, fh, fx, fy, closeX, closeY, closeW, closeH };
 }
 
+/** @param {boolean} narrow */
+function getWeaponSwapLayout(narrow) {
+  const panelW = Math.min(narrow ? W - 28 : 560, W - 32);
+  const panelH = Math.min(narrow ? H - 52 : 330, H - 52);
+  const panelX = (W - panelW) / 2;
+  const panelY = (H - panelH) / 2;
+  const rowH = narrow ? 34 : 40;
+  const rowTop = panelY + (narrow ? 120 : 130);
+  const rowX = panelX + 24;
+  const rowW = panelW - 48;
+  const skipY = panelY + panelH - (narrow ? 54 : 62);
+  return { panelW, panelH, panelX, panelY, rowH, rowTop, rowX, rowW, skipY, skipH: narrow ? 32 : 36 };
+}
+
 /**
  * @param {any} mf
  */
@@ -689,6 +703,7 @@ function serializeItemSnapshot(item) {
   const out = cloneFloorSnapshotValue(item) || {};
   out._kind = item && item.isKey ? 'key'
     : item && item.isWhisper ? 'whisper'
+    : item && item.isWeaponCache ? 'weaponCache'
     : item && item.isHarvest ? 'harvest'
     : item && item.isShockPulse ? 'shockPulse'
     : item && item.isHoard && item._big != null ? 'vaultCoin'
@@ -822,6 +837,12 @@ function restoreItemSnapshot(saved) {
   let item;
   if (saved._kind === 'key') item = new KeyItem(saved.x, saved.y, saved.colour, saved.tileColour);
   else if (saved._kind === 'whisper') item = new WhisperItem(saved.x, saved.y, String(saved.whisperId || ''));
+  else if (saved._kind === 'weaponCache') {
+    const savedWeapon = saved.weapon && typeof saved.weapon === 'object' ? saved.weapon : null;
+    const affixes = savedWeapon && Array.isArray(savedWeapon._affixes) ? savedWeapon._affixes : [];
+    const rebuiltWeapon = buildWeapon(savedWeapon && savedWeapon._base ? savedWeapon._base : 'PULSE_PISTOL', affixes);
+    item = new WeaponCacheItem(saved.x, saved.y, rebuiltWeapon);
+  }
   else if (saved._kind === 'harvest') item = new HarvestPickup(saved.x, saved.y);
   else if (saved._kind === 'shockPulse') item = new ShockPulsePickup(saved.x, saved.y);
   else if (saved._kind === 'vaultCoin') item = new VaultCoin(saved.x, saved.y, saved.amt || 0);
@@ -832,6 +853,11 @@ function restoreItemSnapshot(saved) {
   }
   Object.assign(item, saved);
   const restoredItem = /** @type {any} */ (item);
+  if (saved._kind === 'weaponCache') {
+    const savedWeapon = saved.weapon && typeof saved.weapon === 'object' ? saved.weapon : null;
+    const affixes = savedWeapon && Array.isArray(savedWeapon._affixes) ? savedWeapon._affixes : [];
+    restoredItem.weapon = buildWeapon(savedWeapon && savedWeapon._base ? savedWeapon._base : 'PULSE_PISTOL', affixes);
+  }
   if (restoredItem.type == null && saved.typeId && Array.isArray(UPGRADES)) {
     const type = UPGRADES.find((/** @type {any} */ u) => u && u.id === saved.typeId);
     if (type) restoredItem.type = type;
@@ -1035,6 +1061,7 @@ const game = {
   // Perk choice state
   pendingPerkChoices: [], // queued level milestones awaiting perk selection
   perkChoice: null,       // {options: [id, id, id], selected: 0}
+  weaponSwapChoice: null, // {weapon, selected, _arm} for full-belt weapon cache replacement
   // Teleport pad state
   teleportCooldown: 0, // seconds remaining before pads can be used again
 
@@ -2005,6 +2032,12 @@ const game = {
       const ix = sr.x + rnd(1, sr.w - 1), iy = sr.y + rnd(1, sr.h - 1);
       items.push(new Item(ix, iy));
     }
+    if (typeof rollSecretWeaponCacheWeapon === 'function') {
+      const cacheWeapon = rollSecretWeaponCacheWeapon(this.player, floorNum);
+      if (cacheWeapon && typeof WeaponCacheItem === 'function') {
+        items.push(new WeaponCacheItem(sr.cx + 0.5, sr.cy + 0.5, cacheWeapon));
+      }
+    }
     // Bonus credit pickup worth floor-scaled amount
     const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier() * getDiff().creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
     this.player.credits += secretCr;
@@ -2173,6 +2206,15 @@ const game = {
      * @param {any} w
      */
     const weaponsSave = (p.weapons || [p.weapon]).map((/** @type {any} */ w) => ({ _base: w._base || 'PULSE_PISTOL', _affixes: w._affixes || [] }));
+    const pendingWeaponSwap = this.state === 'WEAPON_SWAP' && this.weaponSwapChoice && this.weaponSwapChoice.weapon
+      ? {
+          weapon: {
+            _base: this.weaponSwapChoice.weapon._base || 'PULSE_PISTOL',
+            _affixes: this.weaponSwapChoice.weapon._affixes || []
+          },
+          selected: this.weaponSwapChoice.selected | 0
+        }
+      : null;
     const save = {
       v: SAVE_VERSION,
       floor: this.floor,
@@ -2185,6 +2227,7 @@ const game = {
       runTime: this.runTime,
       mainframeFinale: serializeMainframeFinaleState(this.mainframeFinale),
       systemMessages: serializeSystemMessagesState(this.systemMessages),
+      weaponSwapChoice: pendingWeaponSwap,
       floorSnapshot: serializeFloorSnapshot(this),
       player: {
         x:p.x, y:p.y,
@@ -2300,6 +2343,7 @@ const game = {
     this.pendingPerkChoices=[];
     this.perkChoice=null;
     this.augmentChoice=null;
+    this.weaponSwapChoice=null;
     // UNCHAINED #39: seed cached cores from persistent wallet on resume.
     if (typeof NEON !== 'undefined' && NEON.save) {
       const _m = NEON.save.loadMeta();
@@ -2446,6 +2490,19 @@ const game = {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
     this.systemMessages = restoreSystemMessagesState(save.systemMessages);
+    if (save.weaponSwapChoice && save.weaponSwapChoice.weapon && save.weaponSwapChoice.weapon._base) {
+      const affixes = Array.isArray(save.weaponSwapChoice.weapon._affixes) ? save.weaponSwapChoice.weapon._affixes : [];
+      const belt = Array.isArray(this.player.weapons) ? this.player.weapons : [];
+      this.weaponSwapChoice = {
+        weapon: buildWeapon(save.weaponSwapChoice.weapon._base, affixes),
+        selected: Math.max(0, Math.min(save.weaponSwapChoice.selected | 0, Math.max(0, belt.length))),
+        _arm: 0
+      };
+      this.setState('WEAPON_SWAP');
+      this.saveGame();
+      this.msg('WEAPON CACHE RESTORED', '#ffb700');
+      return;
+    }
     this.saveGame();
     if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
@@ -2464,6 +2521,7 @@ const game = {
       case 'PLAYING':     this.updatePlaying(dt); break;
       case 'PAUSED':      this.updatePaused();    break;
       case 'POWERUP_CHOICE': this.updatePowerupChoice(dt); break;
+      case 'WEAPON_SWAP':    this.updateWeaponSwap(dt); break;
       case 'PERK_CHOICE':    this.updatePerkChoice(dt); break;
       case 'AUGMENT_CHOICE': this.updateAugmentChoice(dt); break;
       case 'EVENT_CHOICE':   this.updateEventChoice(); break;
@@ -2984,6 +3042,12 @@ const game = {
             return;
           }
           continue;
+        }
+        if (it.isWeaponCache) {
+          items.splice(i, 1);
+          try { audio.pickup(); } catch (_) {}
+          this.collectWeaponCache(it.weapon);
+          return;
         }
         // Defer upgrade pickup if a perk/augment choice is pending
         if (this.pendingPerkChoices.length || this.perkChoice || this.augmentChoice) continue;
@@ -4106,6 +4170,111 @@ const game = {
     this.powerupChoice = null;
     // Check for queued perk choices before returning to PLAYING
     if (this.pendingPerkChoices.length) { this.openNextPerkChoice(); return; }
+    this.setState('PLAYING');
+  },
+
+  /** @param {any} weapon */
+  collectWeaponCache(weapon) {
+    if (!weapon || !this.player) {
+      this.msg('WEAPON CACHE EMPTY', '#666688');
+      this.setState('PLAYING');
+      return;
+    }
+    const name = String(weapon.displayName || weapon.name || 'Weapon');
+    if (this.player.collectWeapon && this.player.collectWeapon(weapon)) {
+      this.msg('WEAPON CACHE: ' + name + ' ADDED', weapon.colour || '#ffb700');
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        NEON.telemetry.track('weapon_cache_collect', { weapon: weapon._base || name, floor: this.floor });
+      }
+      return;
+    }
+    const belt = Array.isArray(this.player.weapons) ? this.player.weapons : [];
+    if (belt.length === 0 && this.player.equipWeapon) {
+      this.player.equipWeapon(weapon);
+      this.msg('WEAPON CACHE: ' + name + ' EQUIPPED', weapon.colour || '#ffb700');
+      return;
+    }
+    this.weaponSwapChoice = {
+      weapon,
+      selected: Math.max(0, Math.min(this.player.weaponIdx || 0, Math.max(0, belt.length - 1))),
+      _arm: 0.25
+    };
+    this.setState('WEAPON_SWAP');
+  },
+
+  /**
+   * @param {number} dt
+   */
+  updateWeaponSwap(dt) {
+    const wc = this.weaponSwapChoice;
+    if (!wc || !this.player) { this.weaponSwapChoice = null; this.setState('PLAYING'); return; }
+    const belt = Array.isArray(this.player.weapons) ? this.player.weapons : [];
+    const slotCount = Math.min(3, belt.length);
+    const choiceCount = slotCount + 1; // slots + SKIP
+    if (choiceCount <= 1) { this.applyWeaponSwapChoice(-1); return; }
+    wc.selected = Math.max(0, Math.min(wc.selected | 0, choiceCount - 1));
+    if (wc._arm > 0) {
+      wc._arm -= (dt || 1 / 60);
+      if (jp(ALT_KEYS.up) || jp(km('up')) || jp(ALT_KEYS.left) || jp(km('left'))) wc.selected = Math.max(0, wc.selected - 1);
+      if (jp(ALT_KEYS.down) || jp(km('down')) || jp(ALT_KEYS.right) || jp(km('right'))) wc.selected = Math.min(choiceCount - 1, wc.selected + 1);
+      return;
+    }
+    if (jp(ALT_KEYS.up) || jp(km('up')) || jp(ALT_KEYS.left) || jp(km('left'))) {
+      wc.selected = (wc.selected + choiceCount - 1) % choiceCount;
+      audio.menuSelect();
+    }
+    if (jp(ALT_KEYS.down) || jp(km('down')) || jp(ALT_KEYS.right) || jp(km('right'))) {
+      wc.selected = (wc.selected + 1) % choiceCount;
+      audio.menuSelect();
+    }
+    if (jp('Digit1') && slotCount >= 1) { this.applyWeaponSwapChoice(0); return; }
+    if (jp('Digit2') && slotCount >= 2) { this.applyWeaponSwapChoice(1); return; }
+    if (jp('Digit3') && slotCount >= 3) { this.applyWeaponSwapChoice(2); return; }
+    if (jp('Digit4') || jp('Escape') || jp('KeyQ')) { this.applyWeaponSwapChoice(-1); return; }
+    if (jp('Enter') || jp(km('interact')) || jp(km('shoot'))) {
+      this.applyWeaponSwapChoice(wc.selected >= slotCount ? -1 : wc.selected);
+      return;
+    }
+    if (jp('MouseLeft')) {
+      const narrow = layout.compact;
+      const box = getWeaponSwapLayout(narrow);
+      const mx = mouse.x, my = mouse.y;
+      for (let i = 0; i < slotCount; i++) {
+        const y = box.rowTop + i * box.rowH;
+        if (mx >= box.rowX && mx <= box.rowX + box.rowW && my >= y && my <= y + box.rowH - 6) {
+          this.applyWeaponSwapChoice(i);
+          return;
+        }
+      }
+      if (mx >= box.rowX && mx <= box.rowX + box.rowW && my >= box.skipY && my <= box.skipY + box.skipH) {
+        this.applyWeaponSwapChoice(-1);
+      }
+    }
+  },
+
+  /** @param {number} idx */
+  applyWeaponSwapChoice(idx) {
+    const wc = this.weaponSwapChoice;
+    this.weaponSwapChoice = null;
+    if (!wc || !this.player) { this.setState('PLAYING'); return; }
+    const weapon = wc.weapon;
+    const name = String((weapon && (weapon.displayName || weapon.name)) || 'Weapon');
+    if (idx >= 0 && this.player.swapWeapon && Array.isArray(this.player.weapons) && idx < this.player.weapons.length) {
+      this.player.swapWeapon(idx, weapon);
+      this.player.weaponIdx = idx;
+      this.player.weapon = weapon;
+      this.player.shootCooldown = 0;
+      audio.menuSelect();
+      this.msg('ARMORY CACHE: ' + name + ' INSTALLED', weapon.colour || '#ffb700');
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        NEON.telemetry.track('weapon_cache_replace', { weapon: weapon._base || name, slot: idx, floor: this.floor });
+      }
+    } else {
+      this.msg('Weapon cache skipped', '#666688');
+      if (typeof NEON !== 'undefined' && NEON.telemetry) {
+        NEON.telemetry.track('weapon_cache_skip', { weapon: weapon && (weapon._base || weapon.name), floor: this.floor });
+      }
+    }
     this.setState('PLAYING');
   },
 
@@ -5586,6 +5755,7 @@ const game = {
         case 'PLAYING':   this.renderPlaying(); if (this.mapExpanded) drawExpandedMinimap(this.dungeon, this.player); break;
         case 'PAUSED':    this.renderPlaying(); this.renderPaused(); break;
         case 'POWERUP_CHOICE': this.renderPlaying(); this.renderPowerupChoice(); break;
+        case 'WEAPON_SWAP':    this.renderPlaying(); this.renderWeaponSwap(); break;
         case 'PERK_CHOICE':    this.renderPlaying(); this.renderPerkChoice(); break;
         case 'AUGMENT_CHOICE': this.renderPlaying(); this.renderAugmentChoice(); break;
         case 'EVENT_CHOICE':   this.renderPlaying(); this.renderEventChoice(); break;
@@ -6478,6 +6648,85 @@ const game = {
       ctx.fillText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', W/2, skipY + skipH + 22);
     }
 
+    ctx.restore();
+  },
+
+  renderWeaponSwap() {
+    const wc = this.weaponSwapChoice;
+    if (!wc || !this.player) return;
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    const box = getWeaponSwapLayout(narrow);
+    const belt = Array.isArray(this.player.weapons) ? this.player.weapons : [];
+    const slotCount = Math.min(3, belt.length);
+    const weapon = wc.weapon || {};
+    const colour = weapon.colour || '#ffb700';
+    const name = String(weapon.displayName || weapon.name || 'Weapon').toUpperCase();
+    const stats = weapon.melee
+      ? weapon.dmg + ' DMG · MELEE · ' + weapon.rate + '/S'
+      : weapon.dmg + (weapon.count > 1 ? 'x' + weapon.count : '') + ' DMG · ' + weapon.rate + '/S · RNG ' + weapon.range;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.76)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(8,10,20,0.96)';
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 2;
+    NEON.draw.roundRectFillStroke(ctx, box.panelX, box.panelY, box.panelW, box.panelH, 10);
+
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 20; ctx.shadowColor = colour;
+    ctx.fillStyle = colour;
+    ctx.font = `bold ${narrow ? 18 : 24}px monospace`;
+    ctx.fillText('WEAPON CACHE', W / 2, box.panelY + (narrow ? 32 : 40));
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${narrow ? 13 : 16}px monospace`;
+    ctx.fillText(name, W / 2, box.panelY + (narrow ? 58 : 70));
+    ctx.fillStyle = '#aaaacc';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(stats, W / 2, box.panelY + (narrow ? 78 : 94));
+    if (weapon._affixes && weapon._affixes.length) {
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillText('AFFIXES: ' + weapon._affixes.join(' + '), W / 2, box.panelY + (narrow ? 96 : 112));
+    }
+
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    for (let i = 0; i < slotCount; i++) {
+      const y = box.rowTop + i * box.rowH;
+      const old = belt[i] || {};
+      const selected = wc.selected === i;
+      ctx.fillStyle = selected ? 'rgba(255,183,0,0.16)' : 'rgba(255,255,255,0.04)';
+      ctx.strokeStyle = selected ? colour : 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = selected ? 2 : 1;
+      NEON.draw.roundRectFillStroke(ctx, box.rowX, y, box.rowW, box.rowH - 6, 6);
+      ctx.fillStyle = selected ? colour : '#888ab0';
+      ctx.fillText('[' + (i + 1) + ']', box.rowX + 12, y + (narrow ? 21 : 25));
+      ctx.fillStyle = '#e8e8ff';
+      ctx.fillText(String(old.displayName || old.name || 'Empty').toUpperCase(), box.rowX + 52, y + (narrow ? 21 : 25));
+      if (i === this.player.weaponIdx) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = colour;
+        ctx.fillText('ACTIVE', box.rowX + box.rowW - 12, y + (narrow ? 21 : 25));
+        ctx.textAlign = 'left';
+      }
+    }
+
+    const skipSelected = wc.selected >= slotCount;
+    ctx.fillStyle = skipSelected ? 'rgba(102,102,136,0.28)' : 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = skipSelected ? '#8888aa' : 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = skipSelected ? 2 : 1;
+    NEON.draw.roundRectFillStroke(ctx, box.rowX, box.skipY, box.rowW, box.skipH, 6);
+    ctx.fillStyle = skipSelected ? '#aaaacc' : '#666688';
+    ctx.textAlign = 'center';
+    ctx.font = `${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('SKIP CACHE  [4]', box.rowX + box.rowW / 2, box.skipY + (narrow ? 21 : 24));
+
+    ctx.fillStyle = '#555577';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    const hint = isTouch ? 'Tap a slot to replace, or Skip' : '1-3 replace · arrows + Enter · 4/Esc skip';
+    ctx.fillText(hint, W / 2, box.panelY + box.panelH - 18);
     ctx.restore();
   },
 
