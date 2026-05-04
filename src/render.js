@@ -228,6 +228,36 @@ function siphonHudSuffix(player) {
   return ` ◈${shown}/3`;
 }
 
+/**
+ * @param {any} tile
+ * @param {number} sx
+ * @param {number} sy
+ * @param {number} tx
+ * @param {number} ty
+ * @param {number} brightness
+ */
+function drawSimulationTileOverlay(tile, sx, sy, tx, ty, brightness) {
+  if (tile !== T.FLOOR && tile !== T.WALL && tile !== T.CRACKED) return;
+  const h = ((tx * 37) ^ (ty * 101) ^ ((_RG.floor | 0) * 53)) >>> 0;
+  if ((h & 15) === 0) {
+    ctx.globalAlpha = brightness * (tile === T.WALL ? 0.16 : 0.11);
+    ctx.fillStyle = tile === T.WALL ? '#66ddff' : '#8af4ff';
+    ctx.fillRect(sx + 2, sy + 2, 5, 1);
+    ctx.fillRect(sx + 2, sy + 2, 1, 5);
+  }
+  if (tile === T.FLOOR && h % 29 === 0) {
+    ctx.globalAlpha = brightness * 0.09;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(sx + TILE - 7, sy + TILE - 3, 5, 1);
+    ctx.fillRect(sx + TILE - 3, sy + TILE - 7, 1, 5);
+  } else if (tile === T.WALL && h % 37 === 0) {
+    ctx.globalAlpha = brightness * 0.18;
+    ctx.fillStyle = '#ff66cc';
+    ctx.fillRect(sx + TILE - 4, sy + 4, 1, 4);
+    ctx.fillRect(sx + TILE - 4, sy + 10, 1, 2);
+  }
+}
+
 // ─── Camera ───────────────────────────────────────────────────────────────────
 /**
  * @param {any} player
@@ -449,7 +479,7 @@ const _BIOME_DECOR = {
     ctx.restore();
   },
 
-  // cache / THE LAB — sterile white wall consoles, steel pipes,
+  // cache / CALIBRATION LAB — sterile white wall consoles, steel pipes,
   // biohazard canisters with caution-yellow bands.
   /**
    * @param {any} sx
@@ -507,7 +537,7 @@ const _BIOME_DECOR = {
     ctx.restore();
   },
 
-  // firewall / THE COMPLEX — sodium-vapor wall sconces, dark conduit runs
+  // firewall / EVALUATION COMPLEX — sodium-vapor wall sconces, dark conduit runs
   // with amber accents, concrete bollards with caution stripes.
   /**
    * @param {any} sx
@@ -557,7 +587,7 @@ const _BIOME_DECOR = {
     ctx.restore();
   },
 
-  // uplink / THE WILDS — moss patches on stone, twisting vines, glowing
+  // uplink / SYNTHETIC WILDS — moss patches on stone, twisting vines, glowing
   // fungi clusters. Slower, breathier flicker (it is a forest, not a
   // server room).
   /**
@@ -617,7 +647,7 @@ const _BIOME_DECOR = {
     ctx.restore();
   },
 
-  // opennet / THE GRID — holographic ad strips (alternating magenta/cyan),
+  // opennet / OPEN-NET MIRAGE — holographic ad strips (alternating magenta/cyan),
   // electric magenta cable runs, trash + vending-machine pile.
   /**
    * @param {any} sx
@@ -1132,6 +1162,7 @@ function drawWorld(dungeon, camX, camY) {
           break;
         }
       }
+      drawSimulationTileOverlay(tile, sx, sy, tx, ty, brightness);
       ctx.restore();
     }
   }
@@ -1183,7 +1214,7 @@ function drawHUD(player) {
 
     const mid = lx + hpW + 10;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`FLR:${_RG.floor}`, mid, r1 + 10);
+    ctx.fillText(`TEST:${_RG.floor}`, mid, r1 + 10);
 
     // Floor modifier badge
     if (_RG.modifier) {
@@ -1362,7 +1393,7 @@ function drawHUD(player) {
     ctx.fillStyle='#e0e0ff';
     ctx.fillText(`ATK:${player.atk}`, colBase + 60, y + 10);
     ctx.fillText(`DEF:${player.def}`, colBase + 105, y + 10);
-    ctx.fillText(`FLR:${_RG.floor}`, colBase + 160, y + 10);
+    ctx.fillText(`TEST:${_RG.floor}`, colBase + 160, y + 10);
 
     // Floor modifier badge
     if (_RG.modifier) {
@@ -1907,7 +1938,7 @@ function drawBiomeCard() {
   ctx.textAlign = 'center';
   ctx.fillStyle = pal.wallHi;
   ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
-  const areaTag = 'AREA ' + String(areaIdx).padStart(2, '0');
+  const areaTag = 'RENDER AREA ' + String(areaIdx).padStart(2, '0');
   ctx.fillText(areaTag + ' :: ' + area.name, W / 2, cy + (narrow ? 32 : 40));
 
   ctx.fillStyle = '#aaaacc';
