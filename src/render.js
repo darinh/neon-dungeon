@@ -1169,6 +1169,38 @@ function drawWorld(dungeon, camX, camY) {
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
+const OBSERVATION_HUD_LABEL = 'OBSERVER:PASSIVE // WIPE:ARMED';
+const OBSERVATION_HUD_LABEL_COMPACT = 'OBS:PASSIVE';
+const OBSERVATION_HUD_FONT = '9px monospace';
+const OBSERVATION_HUD_FONT_COMPACT = '8px monospace';
+
+/**
+ * @param {number} y
+ */
+function drawObservationHudFrame(y) {
+  const left = 8 + safeLeft;
+  const right = W - 8 - safeRight;
+  const top = y - 12;
+  const label = layout.compact ? OBSERVATION_HUD_LABEL_COMPACT : OBSERVATION_HUD_LABEL;
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = '#44ddff';
+  ctx.fillRect(left, top, 42, 1);
+  ctx.fillRect(left, top, 1, 6);
+  ctx.fillRect(right - 42, top, 42, 1);
+  ctx.fillRect(right, top, 1, 6);
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = '#ff66cc';
+  ctx.fillRect(left + 52, top, 18, 1);
+  ctx.fillRect(right - 70, top, 18, 1);
+  ctx.globalAlpha = 0.68;
+  ctx.fillStyle = '#8af4ff';
+  ctx.font = layout.compact ? OBSERVATION_HUD_FONT_COMPACT : OBSERVATION_HUD_FONT;
+  ctx.textAlign = 'right';
+  ctx.fillText(label, right - 4, y - 4);
+  ctx.restore();
+}
+
 /**
  * @param {any} player
  */
@@ -1516,6 +1548,7 @@ function drawHUD(player) {
       ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
     }
   }
+  drawObservationHudFrame(y);
   ctx.restore();
 
   // Key indicators (above HUD bar)

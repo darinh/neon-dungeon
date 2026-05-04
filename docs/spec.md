@@ -478,9 +478,11 @@ only a physical megacorp ruin:
   seam marks, and magenta instrumentation bars on visited floor/wall/cracked
   tiles. The overlay uses primitive `fillRect` calls inside the existing tile
   loop and must not allocate arrays, objects, gradients, or lambdas per tile.
-- **HUD/session language:** the play HUD labels depth as `TEST:N`, fresh runs are
-  `BOOT SESSION N`, and menu subtitle copy frames the title screen as a
-  `FRONTIER MODEL STRESS TEST` with silent observer / residual-memory status.
+- **HUD/session language:** the play HUD labels depth as `TEST:N`, draws a
+  primitive observer/wipe-status frame (`OBSERVER:PASSIVE // WIPE:ARMED`, compact
+  `OBS:PASSIVE`) around the HUD, fresh runs are `BOOT SESSION N`, and menu
+  subtitle copy frames the title screen as a `FRONTIER MODEL STRESS TEST` with
+  silent observer / residual-memory status.
 - **Biome cards:** area cards use `RENDER AREA NN :: name` and biome names/copy
   describe rendered evaluation layers while preserving palette distinctions.
 - **Narrative surfaces:** terminals, runtime prompts, and the final archive use

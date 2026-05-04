@@ -56,7 +56,20 @@ test('main menu and narrative overlays use AI stress-test channel labels', () =>
 test('HUD and biome card reframe floor depth as test/render area', () => {
   assert.match(RENDER, /TEST:\$\{_RG\.floor\}/);
   assert.match(RENDER, /RENDER AREA /);
+  assert.match(RENDER, /OBSERVER:PASSIVE \/\/ WIPE:ARMED/);
+  assert.match(RENDER, /OBS:PASSIVE/);
   assert.doesNotMatch(RENDER, /FLR:\$\{_RG\.floor\}/);
+});
+
+test('observation HUD frame is primitive-only and drawn from drawHUD', () => {
+  const frame = extractFunctionSource(RENDER, 'drawObservationHudFrame');
+  assert.match(frame, /ctx\.fillRect/);
+  assert.match(frame, /OBSERVATION_HUD_LABEL/);
+  assert.match(frame, /y - 4/);
+  assert.doesNotMatch(frame, /new\s+Array|\[\]|{}|createLinearGradient|createRadialGradient|=>/,
+    'per-frame HUD observation frame must not allocate collections, gradients, or lambdas');
+  const drawHUD = extractFunctionSource(RENDER, 'drawHUD');
+  assert.match(drawHUD, /drawObservationHudFrame\(y\);/);
 });
 
 test('simulation tile overlay is primitive-only and called from drawWorld tile loop', () => {
