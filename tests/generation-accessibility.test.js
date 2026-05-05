@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -8,13 +10,18 @@ const {
   MAP_W,
   T,
   computeReach,
+  carriedSpawnForDungeon,
   createGenerationFixture,
+  findTile,
   generateFloorFixture,
+  generateFloorWithGameSpawnFixture,
   lockColours,
   lockedDoorTilesOnRoomBoundary,
   physicalReachWithKeys,
   roomContainsTile,
 } = require('./_generation-fixture.js');
+
+const GAME = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
 
 function reachWithAllLocksOpen(dungeon) {
   return computeReach(dungeon, new Set(['red', 'blue', 'gold']));
@@ -74,6 +81,24 @@ test('physical reachability is cardinal and does not allow corner walking', () =
   assert.equal(reach.vis[2][2], 0, 'diagonal-only adjacency must not be reachable');
 });
 
+test('progression reachability treats openable and destructible blockers as traversable', () => {
+  const map = emptyTestMap();
+  map[1][1] = T.FLOOR;
+  map[1][2] = T.DOOR;
+  map[1][3] = T.CRACKED;
+  map[1][4] = T.CRATE;
+  map[1][5] = T.FLOOR;
+  const dungeon = {
+    map,
+    rooms: [],
+    spawnRoom: { x: 1, y: 1, w: 1, h: 1, cx: 1, cy: 1 },
+    playerPos: { x: 1.5, y: 1.5 },
+    keyItems: [{ x: 5, y: 1, colour: 'red', tileColour: '#ff3333' }],
+  };
+  const reach = physicalReachWithKeys(dungeon);
+  assert.equal(reach.have.has('red'), true, 'closed doors, cracked walls, and crates are player-clearable for progression');
+});
+
 test('seed 1111-1111-1111 floor 6 has no movement-unreachable required rooms', () => {
   const { dungeon } = generateFloorFixture('1111-1111-1111', 6);
   assertAllRequiredRoomsReachable(dungeon);
@@ -87,6 +112,23 @@ function assertAllRequiredRoomsReachable(dungeon) {
   assert.equal(unreachable.length, 0, JSON.stringify(unreachable));
   for (const colour of lockColours(dungeon)) {
     assert.equal(reach.have.has(colour), true, `locked ${colour} doors exist but ${colour} key was not physically reachable`);
+  }
+}
+
+function roomAt(dungeon, pos) {
+  return dungeon.rooms.find((room) =>
+    pos.x >= room.x && pos.x < room.x + room.w &&
+    pos.y >= room.y && pos.y < room.y + room.h
+  ) || null;
+}
+
+function assertAllRequiredRoomsReachableFrom(dungeon, playerPos) {
+  const oldPlayerPos = dungeon.playerPos;
+  dungeon.playerPos = playerPos;
+  try {
+    assertAllRequiredRoomsReachable(dungeon);
+  } finally {
+    dungeon.playerPos = oldPlayerPos;
   }
 }
 
@@ -159,4 +201,51 @@ test('seed 1111-1111-1111 floor 2 does not put stairs in a red-locked spawn room
       'red key must be reachable before opening any red locked door'
     );
   }
+});
+
+test('seed 1111-1111-1111 floor 2 fixture uses the same descent spawn guard as game.loadFloor', () => {
+  assert.match(
+    GAME,
+    /const progressionProblem = floorProgressionProblem\(this\.dungeon\.map, near, this\.dungeon\.keyItems \|\| \[\], this\.player && this\.player\.keys\);[\s\S]*if \(!progressionProblem\) spawn = near;/
+  );
+
+  const fixture = createGenerationFixture();
+  const floor1 = fixture.generateFloor('1111-1111-1111', 1);
+  const floor2 = fixture.generateFloor('1111-1111-1111', 2);
+  const floor1Exit = findTile(floor1, T.STAIRS);
+  assert.ok(floor1Exit, 'floor 1 must have stairs for descent carryover');
+
+  const unguardedSpawn = carriedSpawnForDungeon(floor2, floor1Exit, { guardReachability: false });
+  const unguardedRoom = roomAt(floor2, unguardedSpawn);
+  assert.ok(unguardedRoom, 'unguarded carried spawn should land in a room');
+  assert.equal(
+    roomContainsTile(floor2, unguardedRoom, T.STAIRS),
+    true,
+    'the unguarded loadFloor carryover reproduces the reported wrong floor-2 start room'
+  );
+  assert.notDeepEqual(
+    unguardedSpawn,
+    floor2.playerPos,
+    'standalone generateFloor() default spawn is not the runtime descent spawn without the guard'
+  );
+
+  const runtime = generateFloorWithGameSpawnFixture('1111-1111-1111', 2);
+  const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
+  assert.ok(runtimeRoom, 'guarded runtime spawn should land in a room');
+  assert.equal(
+    roomContainsTile(runtime.dungeon, runtimeRoom, T.STAIRS),
+    false,
+    'guarded runtime spawn must not start in the stairs room'
+  );
+  assert.deepEqual(
+    runtime.playerPos,
+    runtime.defaultPlayerPos,
+    'invalid exit-position carryover should fall back to the generated spawn'
+  );
+  assert.deepEqual(
+    lockedDoorTilesOnRoomBoundary(runtime.dungeon, runtimeRoom),
+    [],
+    'guarded runtime spawn room boundary must not be sealed by progression locks'
+  );
+  assertAllRequiredRoomsReachableFrom(runtime.dungeon, runtime.playerPos);
 });

@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const math = require('../engine/math.js');
+const spawn = require('../engine/spawn.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -217,6 +218,78 @@ function createGenerationFixture() {
 }
 
 /**
+ * @param {any} dungeon
+ * @param {number} tile
+ * @returns {{x:number,y:number} | null}
+ */
+function findTile(dungeon, tile) {
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (dungeon.map[y]?.[x] === tile) return { x, y };
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {number} tile
+ * @returns {boolean}
+ */
+function isSafeSpawnTile(tile) {
+  return isPassable(tile) &&
+    tile !== T.TRAP_SPIKE && tile !== T.TRAP_SLOW &&
+    tile !== T.PLASMA && tile !== T.ARC && tile !== T.TOXIC &&
+    tile !== T.SHOCK_TILE && tile !== T.REPULSOR;
+}
+
+/**
+ * Mirrors game.loadFloor() exit-position carryover for tests that need the
+ * player's actual runtime start tile rather than generateFloor().playerPos.
+ *
+ * @param {any} dungeon
+ * @param {{x:number,y:number} | null} exitPos
+ * @param {{guardReachability?: boolean}} [opts]
+ * @returns {{x:number,y:number}}
+ */
+function carriedSpawnForDungeon(dungeon, exitPos, opts = {}) {
+  let playerPos = dungeon.playerPos;
+  if (!exitPos) return playerPos;
+  const near =
+    spawn.findNearestPassable(dungeon.map, exitPos.x, exitPos.y, isSafeSpawnTile) ||
+    spawn.findNearestPassable(dungeon.map, exitPos.x, exitPos.y, isPassable);
+  if (!near) return playerPos;
+  if (opts.guardReachability) {
+    const oldPlayerPos = dungeon.playerPos;
+    dungeon.playerPos = near;
+    try {
+      const reach = physicalReachWithKeys(dungeon);
+      for (const colour of lockColours(dungeon)) {
+        if (!reach.have.has(colour)) return playerPos;
+      }
+    } finally {
+      dungeon.playerPos = oldPlayerPos;
+    }
+  }
+  playerPos = near;
+  return playerPos;
+}
+
+/**
+ * @param {string} seed
+ * @param {number} floor
+ * @returns {{seed:string, floor:number, dungeon:any, sandbox:any, playerPos:{x:number,y:number}, defaultPlayerPos:{x:number,y:number}, previousExitPos:({x:number,y:number} | null)}}
+ */
+function generateFloorWithGameSpawnFixture(seed, floor) {
+  const fixture = createGenerationFixture();
+  const previous = floor > 1 ? fixture.generateFloor(seed, floor - 1) : null;
+  const previousExitPos = previous ? findTile(previous, T.STAIRS) : null;
+  const dungeon = fixture.generateFloor(seed, floor);
+  const defaultPlayerPos = dungeon.playerPos;
+  const playerPos = carriedSpawnForDungeon(dungeon, previousExitPos, { guardReachability: true });
+  return { seed, floor, sandbox: fixture.sandbox, dungeon, playerPos, defaultPlayerPos, previousExitPos };
+}
+
+/**
  * Convenience wrapper for one-off regressions.
  *
  * @param {string} seed
@@ -239,7 +312,7 @@ function generateFloorFixture(seed, floor) {
  * @returns {boolean}
  */
 function isOpenForKeys(tile, have) {
-  return isPassable(tile) || tile === T.DOOR || tile === T.CRACKED ||
+  return isPassable(tile) || tile === T.DOOR || tile === T.CRACKED || tile === T.CRATE ||
     (tile === T.LOCKED_R && have.has('red')) ||
     (tile === T.LOCKED_B && have.has('blue')) ||
     (tile === T.LOCKED_G && have.has('gold'));
@@ -367,8 +440,11 @@ module.exports = {
   MAP_W,
   T,
   computeReach,
+  carriedSpawnForDungeon,
   createGenerationFixture,
+  findTile,
   generateFloorFixture,
+  generateFloorWithGameSpawnFixture,
   isDoor,
   isPassable,
   isSeeThrough,
