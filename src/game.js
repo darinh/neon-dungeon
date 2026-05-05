@@ -1212,14 +1212,15 @@ function downgradeLockedRoomBoundary(map, room) {
 /**
  * @param {any} dungeon
  * @param {any} startRoom
+ * @param {any} originalSpawnRoom
  */
-function relocateStairsOutOfStartRoom(dungeon, startRoom) {
+function relocateStairsOutOfStartRoom(dungeon, startRoom, originalSpawnRoom) {
   if (!dungeon || !Array.isArray(dungeon.map) || !startRoom || !floorRoomContainsTile(dungeon.map, startRoom, FLOOR_SNAPSHOT_TILES.STAIRS)) return;
   /** @type {any} */
   let bestRoom = null;
   let bestScore = -1;
   for (const room of dungeon.rooms || []) {
-    if (!room || room === startRoom || !floorRoomEligibleForDescentStart(dungeon, room)) continue;
+    if (!room || room === startRoom || room === originalSpawnRoom || !floorRoomEligibleForDescentStart(dungeon, room)) continue;
     const score = Math.abs((room.cx | 0) - (startRoom.cx | 0)) + Math.abs((room.cy | 0) - (startRoom.cy | 0));
     if (score > bestScore) {
       bestScore = score;
@@ -1270,12 +1271,13 @@ function downgradeLockedDoorsByColour(map, colour) {
  */
 function repairDescentSpawnFloor(dungeon, spawn, playerKeys) {
   if (!dungeon || !Array.isArray(dungeon.map) || !spawn) return spawn;
+  const originalSpawnRoom = dungeon.spawnRoom;
   const normalized = normalizeDescentSpawnRoom(dungeon, spawn);
   const startRoom = normalized.room;
   spawn = normalized.spawn;
   if (startRoom) {
     dungeon.spawnRoom = startRoom;
-    relocateStairsOutOfStartRoom(dungeon, startRoom);
+    relocateStairsOutOfStartRoom(dungeon, startRoom, originalSpawnRoom);
     downgradeLockedRoomBoundary(dungeon.map, startRoom);
   }
   dungeon.playerPos = { x: spawn.x, y: spawn.y };
