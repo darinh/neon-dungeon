@@ -537,6 +537,61 @@ declare global {
     createCinematicController(opts: any): EngineCinematicController;
   }
 
+  interface EngineDungeonTopologyAPI {
+    createMap(width: number, height: number, fillTile: number): Uint8Array[];
+    carveRect(
+      map: ArrayLike<ArrayLike<number>>,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      tile: number,
+    ): void;
+    carveCorridor(
+      map: ArrayLike<ArrayLike<number>>,
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      tile: number,
+    ): void;
+    createBspDungeon(opts: {
+      width: number;
+      height: number;
+      depth: number;
+      wallTile: number;
+      floorTile: number;
+      rand: () => number;
+      rndInt: (min: number, max: number) => number;
+    }): { map: Uint8Array[]; root: unknown; rooms: any[] };
+    bfsRooms(
+      rooms: any[],
+      startRoom: any,
+      areConnected: (a: any, b: any) => boolean,
+    ): Map<any, number>;
+    BSPNode: unknown;
+  }
+
+  interface EngineDungeonReachabilityAPI {
+    solveKeyLockReachability(opts: {
+      map: ArrayLike<ArrayLike<number>>;
+      start: { x: number; y: number };
+      keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
+      requiredRooms?: any[];
+      isOpenTile: (tile: number) => boolean;
+      lockColourForTile?: (tile: number) => string | null | undefined;
+    }): {
+      reachable: Uint8Array[];
+      collectedColours: Set<string>;
+      unreachableRooms: any[];
+      missingColours: string[];
+      blockedEdges: any[];
+      repairHints: any[];
+      computeReach: (have: Set<string>) => Uint8Array[];
+    };
+    roomTouchesReach(room: any, reachable: Uint8Array[]): boolean;
+  }
+
   // ─── Aggregate ────────────────────────────────────────────────────────────
 
   /**
@@ -554,6 +609,8 @@ declare global {
     touch: EngineTouchAPI;
     draw: EngineDrawAPI;
     decor: EngineDecorAPI;
+    dungeonTopology: EngineDungeonTopologyAPI;
+    dungeonReachability: EngineDungeonReachabilityAPI;
     renderBoundary: EngineRenderBoundaryAPI;
     spawn: EngineSpawnAPI;
     telemetry: EngineTelemetryAPI;

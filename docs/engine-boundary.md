@@ -62,6 +62,8 @@ Reusable as-is. These are the candidates for the first engine package.
 | `engine/biomes.js` | `NEON.biomesEngine.createBiomeRouter` | Floor↔area routing factory: takes any `{floors:[]}`-shaped table and returns `{areas, areaForFloor, isBiomeBossFloor, firstFloorOfBiomeContaining, biomeIndex, areaForIndex, finalFloor}`. Zero NEON content. Game-side wiring at `src/data/biomes.js`. |
 | `engine/cinematic.js` | `NEON.cinematic.createCinematicController` | Generic timed-slide controller: state machine, fade in/out, advance/skip key callbacks, optional final-slide flash envelope. Caller injects slide schema and `drawSlide` callback. Game-side wiring at `src/meta/intro.js`. |
 | `engine/decor.js` | `NEON.decor.{tileHash, NEIGHBOR_OFFSETS_4, createContextScratch}` | Pure per-tile decor primitives: deterministic 3-int hash, frozen 4-direction neighbour table, scratch-context factory. Hot-path safe (no allocations on hot path; consumers hoist a single scratch instance to module scope). Backs `_decoContext` in `src/render.js`. |
+| `engine/dungeon/topology.js` | `NEON.dungeonTopology.{createMap, carveRect, carveCorridor, createBspDungeon, bfsRooms}` | Reusable room/corridor topology primitives with caller-injected tile ids and RNG. NEON room roles and content placement remain in `src/content.js`. |
+| `engine/dungeon/reachability.js` | `NEON.dungeonReachability.{solveKeyLockReachability, roomTouchesReach}` | Generic physical key/lock traversal solver. Tile semantics and repair policy are injected by the game layer. |
 | `engine/draw.js` | `NEON.draw.{circle, circleStroke, arcStroke, line, setShadow, clearShadow}` | Pure 2D canvas drawing primitives. Allocation-free; safe in per-tile hot loops. |
 | `engine/particles.js` | `NEON.particles.createSystem({cap?, burstScaleThreshold?})` | Pooled particle system: capped object pool + per-frame physics integration (vx*dt, vy*dt, gravity, life decay, compact-in-place reclamation). Knows nothing about particle "types", colours, or draw style — those are gameplay vocabulary in `src/content.js`. Hot-path safe (zero alloc per tick once pool warms). |
 | `engine/render-boundary.js` | `NEON.renderBoundary.{trackRenderError, drawErrorOverlay, shouldLog}` | Generic frame-error overlay for any canvas main loop. No NEON DUNGEON specifics. Pure-functional state-threading API (state in → new state out). |
@@ -100,6 +102,91 @@ would stay in game.
 | `src/data/biomes.js` + `engine/biomes.js` | **Extracted** to `engine/biomes.js`: `createBiomeRouter(areas)` factory returning `{areas, areaForFloor, isBiomeBossFloor, firstFloorOfBiomeContaining, biomeIndex, areaForIndex, finalFloor}`. Operates on any `{floors:[]}`-shaped table. Clamps out-of-range floors and indexes to first/last. | `src/data/biomes.js` is the wiring shim that owns the AREAS rows (sandbox/cache/firewall/uplink/opennet, narrative `intro` copy, `bossPool`, `displayName` overrides) and re-exports the configured surface as `NEON.biomes`. |
 | `src/data/palettes.js` | The `BIOME_PALETTES: Record<string, Palette>` shape with keys `wallFill`, `wallHi`, `floor`, `floorAccent`, `minimapWall`, `minimapFloor`, `dust[]`, `ambient`. **No extraction**: pure data table with no behavioural helpers — extracting a `validatePalette` shim purely to mirror the biomes split would be ceremony without value. | The actual hex values per palette. |
 | `src/meta/intro.js` + `engine/cinematic.js` | **Extracted** to `engine/cinematic.js`: `createCinematicController({slides, onFinish, isAdvanceKey, isSkipKey, drawSlide, fadeIn, fadeOut, flashSlideIndex, flashRampSeconds})`. State machine, fade math, flash envelope. Generic enough for any cinematic. | `src/meta/intro.js` is the wiring shim that owns SLIDES (the Act 1 startup narrative copy + per-slide effect flags), the canvas effect renderer (cyanGlow/glitch/whiteFlash/stark), and the `_markIntroSeen` save flip via `NEON.save`. |
+
+### 🟪 Dungeon generation contract (planned extraction)
+
+`src/content.js generateFloor(floorNum)` is the next mixed boundary to split.
+The reusable part is the dungeon-topology engine; the NEON-specific part is the
+floor-content policy layered on top of that topology.
+
+The **engine-shaped** responsibilities are:
+
+- BSP/room creation.
+- Rectangle carving and corridor carving.
+- Room graph / entrance-edge discovery.
+- Cardinal tile traversal.
+- Lock/key dependency solving.
+- Reachability invariant reporting.
+
+The **game-shaped** responsibilities are:
+
+- Which floors get red/blue/gold locks and how many.
+- Which rooms become vendor, armory, medbay, shrine, vault, challenge, event,
+  implant, boss, secret, mainframe, or finale rooms.
+- What tile ids mean in NEON DUNGEON (`T.VENDOR`, `T.LORE`,
+  `T.MAINFRAME_READER`, etc.).
+- Which content is placed after topology is proven: weapons, items, enemies,
+  terminals, whispers, hazards, and biome/finale narrative hooks.
+- The policy for failures reported by the engine: downgrade a lock, carve a
+  rescue connection, reject/regenerate a floor, or apply a floor-specific
+  fallback.
+
+#### Required-room invariant
+
+For current NEON DUNGEON generation, every room returned in the generated
+floor's `rooms` array is a **required room** unless production code explicitly
+marks it optional/unreachable in the future. This includes secret rooms: their
+current access path is a cracked wall, and cracked walls are player-interactable
+exploration content rather than unreachable scenery.
+
+The generator must prove all required rooms can be entered by normal player
+mechanics before the floor is returned. Finishing the floor is not enough; a map
+where stairs are reachable but a vendor, special room, boss approach, or secret
+room is disconnected is invalid generation.
+
+#### Physical traversal semantics
+
+Reachability checks must model what the player can actually do:
+
+- Movement is 4-direction/cardinal; no diagonal movement and no corner walking.
+- `T.WALL` and `T.VOID` block movement.
+- `T.DOOR` is closed at rest, but interact-openable, so generation validation
+  treats it as traversable.
+- `T.DOOR_OPEN` is traversable.
+- `T.LOCKED_R`, `T.LOCKED_B`, and `T.LOCKED_G` are traversable only after the
+  matching key has been physically reached and collected.
+- `T.CRACKED` is interact-breakable for secret access, so full-exploration
+  validation treats it as traversable.
+- `T.CHALLENGE_GATE` is traversable because runtime `isPassable()` includes it.
+- Runtime-walkable hazards (`T.TRAP_SPIKE`, `T.TRAP_SLOW`, `T.PLASMA`, `T.ARC`,
+  `T.TOXIC`, `T.SHOCK_TILE`, `T.REPULSOR`) are not topology blockers.
+
+The important distinction is **physical key-pickup progression**, not "all locks
+open." A valid proof starts at spawn, traverses only currently legal tiles,
+collects reachable keys, unlocks the matching doors, and repeats until a fixed
+point. A separate all-locks-open check is useful only as a repair diagnostic.
+
+#### First extraction API shape
+
+The exact API is intentionally flexible, but an engine reachability solver
+should return structured facts instead of silently mutating a NEON map:
+
+```js
+{
+  reachable,          // tile reachability grid or equivalent
+  collectedColours,  // physically collected key colours at fixed point
+  unreachableRooms,  // required rooms with no reachable tile
+  missingColours,    // lock colours present but not physically collectible
+  blockedEdges,      // optional gates/edges blocking required reachability
+  repairHints        // optional data for game-layer policy
+}
+```
+
+The engine module reports facts. The NEON wrapper applies policy. The first
+policy-preserving extraction should keep today's fallback order: downgrade lock
+colours whose keys cannot be physically collected, recompute reachability, then
+carve rescue connections for still-unreachable required rooms while preserving
+gate semantics where possible.
 
 ### 🟨 The five large `src/*.js` files (mostly mixed)
 
