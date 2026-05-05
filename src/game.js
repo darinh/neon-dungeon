@@ -73,6 +73,7 @@ function sanitizeSeedSetupSeed(value) {
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
 const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
 const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
+const APP_VERSION = '6.0.0-wip';
 const ACT1_MESSAGE_INTENTS = [
   {
     id: 'memory_survived',
@@ -6803,6 +6804,13 @@ const game = {
         ctx.restore();
       }
     }
+
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#445566';
+    ctx.font = `${narrow ? 9 : 11}px monospace`;
+    ctx.fillText('v' + APP_VERSION, W - (narrow ? 10 : 16), H - (narrow ? 10 : 14));
+    ctx.restore();
 
     // UNCHAINED: "Keep persistent unlocks?" confirm overlay.
     // Drawn last so it sits on top of every other menu layer.
