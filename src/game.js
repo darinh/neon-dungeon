@@ -958,6 +958,147 @@ function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
   dungeon._fovDirty = true;
 }
 
+const FLOOR_SNAPSHOT_TILES = (typeof T !== 'undefined') ? T : {
+  VOID: 0, WALL: 1, FLOOR: 2, STAIRS: 3, TERMINAL: 4, DOOR: 5, DOOR_OPEN: 6,
+  LOCKED_R: 7, LOCKED_B: 8, LOCKED_G: 9, CRACKED: 15, CRATE: 21,
+};
+
+/**
+ * @param {any} tile
+ * @returns {string | null}
+ */
+function floorSnapshotLockColour(tile) {
+  if (tile === FLOOR_SNAPSHOT_TILES.LOCKED_R || tile === 'LOCKED_R') return 'red';
+  if (tile === FLOOR_SNAPSHOT_TILES.LOCKED_B || tile === 'LOCKED_B') return 'blue';
+  if (tile === FLOOR_SNAPSHOT_TILES.LOCKED_G || tile === 'LOCKED_G') return 'gold';
+  return null;
+}
+
+/**
+ * @param {any} tile
+ * @param {Set<string>} haveColours
+ */
+function floorSnapshotTilePassable(tile, haveColours) {
+  const lockColour = floorSnapshotLockColour(tile);
+  if (lockColour) return haveColours.has(lockColour);
+  return tile !== FLOOR_SNAPSHOT_TILES.WALL &&
+    tile !== FLOOR_SNAPSHOT_TILES.VOID &&
+    tile !== 'WALL' &&
+    tile !== 'VOID';
+}
+
+/**
+ * @param {any[][]} map
+ * @param {number} sx
+ * @param {number} sy
+ * @param {Set<string>} haveColours
+ * @returns {Set<string>}
+ */
+function floorSnapshotComputeReach(map, sx, sy, haveColours) {
+  const reach = new Set();
+  if (!Array.isArray(map) || map.length === 0) return reach;
+  const h = map.length;
+  const w = Array.isArray(map[0]) ? map[0].length : 0;
+  const x0 = Math.floor(Number(sx));
+  const y0 = Math.floor(Number(sy));
+  if (!(x0 >= 0 && y0 >= 0 && x0 < w && y0 < h)) return reach;
+  if (!floorSnapshotTilePassable(map[y0] && map[y0][x0], haveColours)) return reach;
+  const q = [{ x: x0, y: y0 }];
+  reach.add(x0 + ',' + y0);
+  for (let qi = 0; qi < q.length; qi++) {
+    const p = /** @type {{x:number,y:number}} */ (q[qi]);
+    const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+    for (const d of dirs) {
+      const nx = p.x + d.x;
+      const ny = p.y + d.y;
+      const key = nx + ',' + ny;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h || reach.has(key)) continue;
+      if (!floorSnapshotTilePassable(map[ny] && map[ny][nx], haveColours)) continue;
+      reach.add(key);
+      q.push({ x: nx, y: ny });
+    }
+  }
+  return reach;
+}
+
+/**
+ * @param {any} saved
+ * @returns {string | null}
+ */
+function floorSnapshotSavedKeyColour(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  if (!(saved._kind === 'key' || saved.isKey || saved.tileColour)) return null;
+  const colour = String(saved.colour || '').toLowerCase();
+  return colour === 'red' || colour === 'blue' || colour === 'gold' ? colour : null;
+}
+
+/**
+ * @param {any} keys
+ */
+function floorSnapshotHeldColours(keys) {
+  const have = new Set();
+  if (keys && keys.red > 0) have.add('red');
+  if (keys && keys.blue > 0) have.add('blue');
+  if (keys && keys.gold > 0) have.add('gold');
+  return have;
+}
+
+/**
+ * @param {any[][]} map
+ * @param {any} start
+ * @param {any[]} keyItems
+ * @param {any} playerKeys
+ */
+function floorProgressionProblem(map, start, keyItems, playerKeys) {
+  if (!Array.isArray(map) || !start || !Number.isFinite(start.x) || !Number.isFinite(start.y)) return null;
+  const requiredColours = new Set();
+  for (let y = 0; y < map.length; y++) {
+    const row = map[y];
+    if (!Array.isArray(row)) continue;
+    for (let x = 0; x < row.length; x++) {
+      const tile = row[x];
+      const lockColour = floorSnapshotLockColour(tile);
+      if (lockColour) requiredColours.add(lockColour);
+    }
+  }
+  if (requiredColours.size === 0) return null;
+
+  const itemsToCheck = Array.isArray(keyItems) ? keyItems : [];
+  const heldColours = floorSnapshotHeldColours(playerKeys);
+  const haveColours = new Set(heldColours);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const reach = floorSnapshotComputeReach(map, start.x, start.y, haveColours);
+    for (const item of itemsToCheck) {
+      const colour = floorSnapshotSavedKeyColour(item);
+      if (!colour || haveColours.has(colour)) continue;
+      const x = Math.floor(Number(item.x));
+      const y = Math.floor(Number(item.y));
+      if (reach.has(x + ',' + y)) {
+        haveColours.add(colour);
+        changed = true;
+      }
+    }
+  }
+
+  for (const colour of requiredColours) {
+    if (!haveColours.has(colour)) return colour + ' key is not reachable in saved floor snapshot';
+  }
+  return null;
+}
+
+/** @param {any} snapshot @param {any} playerKeys */
+function floorSnapshotProgressionProblem(snapshot, playerKeys) {
+  const savedDungeon = snapshot && snapshot.dungeon;
+  return floorProgressionProblem(
+    savedDungeon && savedDungeon.map,
+    snapshot && snapshot.player,
+    Array.isArray(snapshot && snapshot.items) ? snapshot.items : [],
+    playerKeys
+  );
+}
+
 /**
  * @param {any} saved
  * @param {any[]} rooms
@@ -1119,6 +1260,11 @@ function getCheatMenuLayout(narrow) {
  */
 function restoreFloorSnapshot(gameState, snapshot) {
   if (!gameState || !snapshot || snapshot.v !== FLOOR_SNAPSHOT_VERSION || snapshot.floor !== gameState.floor || !gameState.dungeon) return false;
+  const progressionProblem = floorSnapshotProgressionProblem(snapshot, gameState.player && gameState.player.keys);
+  if (progressionProblem) {
+    gameState._discardedFloorSnapshotReason = progressionProblem;
+    return false;
+  }
   const rooms = gameState.dungeon.rooms || [];
   restoreDungeonFloorSnapshot(gameState.dungeon, snapshot.dungeon);
   if (gameState.player && snapshot.player) {
@@ -1780,7 +1926,10 @@ const game = {
         const near =
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
           NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
-        if (near) spawn = near;
+        if (near) {
+          const progressionProblem = floorProgressionProblem(this.dungeon.map, near, this.dungeon.keyItems || [], this.player && this.player.keys);
+          if (!progressionProblem) spawn = near;
+        }
       } catch (_) { /* fall through to default spawn */ }
     }
     this._exitPos = null;
@@ -2791,7 +2940,7 @@ const game = {
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
     this.loadFloor(save.floor||1, savedMod, true);
-    restoreFloorSnapshot(this, save.floorSnapshot);
+    const floorSnapshotRestored = restoreFloorSnapshot(this, save.floorSnapshot);
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
@@ -2811,6 +2960,10 @@ const game = {
     }
     this.saveGame();
     if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
+    if (save.floorSnapshot && !floorSnapshotRestored && this._discardedFloorSnapshotReason) {
+      this.msg('FLOOR SNAPSHOT REPAIRED — REGENERATED', '#ffb700');
+      this._discardedFloorSnapshotReason = null;
+    }
     this.msg('RUN RESUMED — FLOOR '+this.floor,'#00f5ff');
   },
 
