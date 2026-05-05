@@ -81,7 +81,7 @@ test('save and continue persist exact mid-floor snapshot state', () => {
   assert.match(GAME, /const FLOOR_SNAPSHOT_VERSION = 1/);
   assert.match(GAME, /floorSnapshot:\s*serializeFloorSnapshot\(this\)/);
   assert.match(GAME, /player:\s*\{\s*x:p\.x,\s*y:p\.y,/);
-  assert.match(GAME, /restoreFloorSnapshot\(this,\s*save\.floorSnapshot\)/);
+  assert.match(GAME, /const floorSnapshotRestored = restoreFloorSnapshot\(this,\s*save\.floorSnapshot\)/);
   assert.ok(
     GAME.indexOf('this.loadFloor(save.floor||1, savedMod, true);') <
     GAME.indexOf('restoreFloorSnapshot(this, save.floorSnapshot);'),
@@ -146,6 +146,7 @@ test('floor snapshots restore player location, mutated floor state, and live act
       this.colour = colour; this.piercing = piercing; this.fromPlayer = fromPlayer; this.weaponName = weaponName;
       this.hitEnemies = new Set(); this.trail = [];
     },
+    T: { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, CRACKED:15, CRATE:21 },
     FuseShard: function FuseShard(x, y) { this.x = x; this.y = y; },
     registerEnemyInRoom(e) { if (e.room) e.room.registered = e; },
     clearEnemiesByRoom() { for (const room of sandbox.__rooms || []) delete room.registered; },
@@ -312,6 +313,95 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
   newRoom0.shopItems[2].fn(shopPlayer);
   assert.deepEqual(shopPlayer.weapon._affixes, ['FLAME']);
   assert.deepEqual(shopPlayer.weapon._effects, ['effect:FLAME']);
+
+  const staleLockedSnapshot = JSON.parse(JSON.stringify(snapshot));
+  staleLockedSnapshot.player = { x: 1, y: 1 };
+  staleLockedSnapshot.items = [];
+  staleLockedSnapshot.dungeon.map = [
+    [1, 1, 1, 1, 1],
+    [1, 2, 3, 2, 1],
+    [1, 7, 1, 2, 1],
+    [1, 2, 2, 2, 1],
+    [1, 1, 1, 1, 1],
+  ];
+  const generatedMap = [[2]];
+  const staleTarget = {
+    floor: 2,
+    player: { x: 4, y: 4, keys: { red: 0, blue: 0, gold: 0 } },
+    dungeon: {
+      map: generatedMap,
+      visited: [new Uint8Array([0])],
+      light: [new Float32Array([0])],
+      visible: [new Uint8Array([0])],
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() { this.refreshed = true; },
+    markMapMutated() { this.mutated = true; },
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(staleTarget, staleLockedSnapshot), false);
+  assert.equal(staleTarget.dungeon.map, generatedMap);
+  assert.equal(staleTarget.player.x, 4);
+  assert.match(staleTarget._discardedFloorSnapshotReason, /red key is not reachable/);
+
+  const closedDoorSnapshot = JSON.parse(JSON.stringify(snapshot));
+  closedDoorSnapshot.player = { x: 1, y: 1 };
+  closedDoorSnapshot.items = [{ _kind: 'key', isKey: true, x: 3, y: 1, colour: 'red' }];
+  closedDoorSnapshot.dungeon.map = [
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 2, 5, 2, 7, 2, 1],
+    [1, 1, 1, 1, 1, 3, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+  ];
+  const closedDoorTarget = {
+    floor: 2,
+    player: { x: 1, y: 1, keys: { red: 0, blue: 0, gold: 0 } },
+    dungeon: {
+      map: generatedMap,
+      visited: [new Uint8Array([0])],
+      light: [new Float32Array([0])],
+      visible: [new Uint8Array([0])],
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() {},
+    markMapMutated() {},
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(closedDoorTarget, closedDoorSnapshot), true);
+  assert.equal(closedDoorTarget.player.x, 1);
+
+  const walledKeySnapshot = JSON.parse(JSON.stringify(snapshot));
+  walledKeySnapshot.player = { x: 1, y: 1 };
+  walledKeySnapshot.items = [{ _kind: 'key', isKey: true, x: 3, y: 3, colour: 'red' }];
+  walledKeySnapshot.dungeon.map = [
+    [1, 1, 1, 1, 1, 1],
+    [1, 2, 2, 7, 2, 1],
+    [1, 1, 1, 1, 2, 1],
+    [1, 1, 1, 2, 2, 1],
+    [1, 1, 1, 1, 1, 1],
+  ];
+  const walledKeyTarget = {
+    floor: 2,
+    player: { x: 1, y: 1, keys: { red: 0, blue: 0, gold: 0 } },
+    dungeon: {
+      map: generatedMap,
+      visited: [new Uint8Array([0])],
+      light: [new Float32Array([0])],
+      visible: [new Uint8Array([0])],
+      secretMask: [new Uint8Array([1])],
+      rooms: [newRoom0, newRoom1],
+    },
+    clearedRooms: new Set(),
+    bossRoom: null,
+    refreshSealedEntrances() {},
+    markMapMutated() {},
+  };
+  assert.equal(sandbox.restoreFloorSnapshot(walledKeyTarget, walledKeySnapshot), false);
+  assert.match(walledKeyTarget._discardedFloorSnapshotReason, /red key is not reachable/);
 
   const legacyTypedArraySnapshot = JSON.parse(JSON.stringify(snapshot));
   legacyTypedArraySnapshot.dungeon.light = [{ 0: 0.5 }];
