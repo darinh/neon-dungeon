@@ -36,6 +36,24 @@ include a deliberate `CACHE` bump in that release PR.
 | `src/game.js` | Main state machine, menu, run lifecycle, save/restore, floor transitions, narrative overlays, finale flow. | God-file coordinator. Extract pure helpers first; do not move the runtime `game` object until dependencies are mapped. | `tests/save.test.js`, `tests/mainframe-room.test.js`, `tests/system-messages.test.js`, `tests/session-lifecycle-copy.test.js` |
 | `sw.js` | Offline cache and fetch strategy. | Add/remove asset paths, but do not manually bump `CACHE` in feature PRs. | `tests/cache-bump-workflow.test.js` plus CI |
 
+### Content/entities split-prep inventory
+
+`src/content.js` and `src/entities.js` still behave as script-tag globals, not
+importable modules. Before either file is split, preserve these public surfaces
+through the original filename or update every browser/test call site in the same
+change.
+
+| File | Public surfaces future splits must preserve |
+|---|---|
+| `src/content.js` | Procedural music (`music`), lore selection (`LORE_ENTRIES`, `LORE_ENTRY_FLOOR_MIN`, `pickLoreEntryIndex`), item/weapon/hackware/perk/augment/modifier registries (`WEAPONS`, `WEAPON_AFFIXES`, `HACKWARE`, `FLOOR_MODIFIERS`, `UPGRADES`, `PERK_POOL`, `AUGMENTS`), meta-save shims (`loadMeta`, `saveMeta`, `applyMetaToPlayer`, core/log/module helpers), particles/floating-text/combo/status helpers, dungeon generation (`createMap`, `carveRect`, `carveCorridor`, `BSPNode`, `bfsRooms`, `generateFloor`, `updateLighting`, `tileHasLOS`), projectile/hazard runtime (`Projectile`, `releaseProjectile`, `detonateGrenade`, hazard-zone helpers), upgrade/shop/event helpers, and pickup classes (`HarvestPickup`, `MagpieHoard`, `VaultCoin`, `ShockPulsePickup`, `Item`, `KeyItem`, `WhisperItem`, `WeaponCacheItem`). |
+| `src/entities.js` | Runtime collections (`enemies`, `items`, `hazardZones`, `vcores`, `crates`, traps/turrets/field arrays), room enemy index helpers (`registerEnemyInRoom`, `unregisterEnemyFromRoom`, `clearEnemiesByRoom`, `getEnemiesInRoom`, `enemiesInRoomIter`), render side-passes (`drawReaperPlayerRings`, `drawTetherLeashes`), combat/AI/entity classes and spawn/update helpers (`Player`, `Enemy`, `FuseShard`, boss/enemy subclasses or factories, `spawnEnemy`), and any globals consumed by `src/game.js`, `src/render.js`, tests, or save/restore logic. |
+
+Source-text tests should load these files through `tests/_source-files.js`
+instead of hard-coding `src/content.js` or `src/entities.js` paths. That helper
+is the test-facing compatibility facade for future file moves: when a subsystem
+is extracted, update the facade or add a logical source key before migrating
+individual tests.
+
 ## `engine/` modules
 
 `engine/` should stay reusable. `npm run check:engine` scans for NEON-specific
