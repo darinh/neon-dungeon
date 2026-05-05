@@ -126,10 +126,35 @@ test('seed 1111-1111-1111 floor 6 has no movement-unreachable non-secret rooms a
   const sandbox = loadGenerateFloor();
   sandbox.setSeed('1111-1111-1111');
   const dungeon = sandbox.withDerivedRngStream('world:floor:6', () => sandbox.generateFloor(6));
+  assertAllNonSecretRoomsReachable(dungeon);
+});
+
+function assertAllNonSecretRoomsReachable(dungeon) {
   const reach = floodReachable(dungeon);
   const unreachable = dungeon.rooms
     .filter((room) => room.roomType !== 'secret')
     .filter((room) => !reach[room.cy]?.[room.cx])
     .map((room) => ({ x: room.cx, y: room.cy, type: room.roomType || 'normal' }));
   assert.equal(unreachable.length, 0, JSON.stringify(unreachable));
+}
+
+test('sampled seeded floors keep all non-secret rooms movement-reachable after lock repair', () => {
+  const sandbox = loadGenerateFloor();
+  const seeds = [
+    '1111-1111-1111',
+    '2222-2222-2222',
+    '3333-3333-3333',
+    '4444-4444-4444',
+    '5555-5555-5555',
+    '6666-6666-6666',
+    '7777-7777-7777',
+    '8888-8888-8888',
+  ];
+  for (const seed of seeds) {
+    sandbox.setSeed(seed);
+    for (let floor = 1; floor <= 15; floor++) {
+      const dungeon = sandbox.withDerivedRngStream(`world:floor:${floor}`, () => sandbox.generateFloor(floor));
+      assertAllNonSecretRoomsReachable(dungeon);
+    }
+  }
 });
