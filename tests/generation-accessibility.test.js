@@ -122,6 +122,24 @@ function roomAt(dungeon, pos) {
   ) || null;
 }
 
+function assertNormalRuntimeStart(runtime, reason = '') {
+  const prefix = reason ? `[${reason}] ` : '';
+  const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
+  assert.ok(runtimeRoom, prefix + 'runtime spawn should normalize to a room');
+  assert.equal(runtimeRoom.roomType || null, null, prefix + 'runtime spawn room must be a normal room so populateFloor can safely skip it');
+  assert.notEqual(runtimeRoom, runtime.dungeon.bossRoom, prefix + 'runtime spawn room must not be the boss room');
+  assert.notEqual(runtimeRoom, runtime.dungeon.mainframeRoom, prefix + 'runtime spawn room must not be the mainframe room');
+  assert.equal(runtime.dungeon.spawnRoom, runtimeRoom, prefix + 'normalized runtime room becomes the spawn room');
+  assert.equal(roomContainsTile(runtime.dungeon, runtimeRoom, T.STAIRS), false, prefix + 'runtime start room must not contain stairs');
+  assert.deepEqual(lockedDoorTilesOnRoomBoundary(runtime.dungeon, runtimeRoom), [], prefix + 'runtime start room boundary must not be sealed by progression locks');
+  const stairs = findTile(runtime.dungeon, T.STAIRS);
+  assert.ok(stairs, prefix + 'runtime floor must still contain stairs after repair');
+  const stairRoom = roomAt(runtime.dungeon, { x: stairs.x + 0.5, y: stairs.y + 0.5 });
+  assert.ok(stairRoom, prefix + 'stairs should remain in a room after relocation');
+  assert.equal(stairRoom.roomType || null, null, prefix + 'relocated stairs must stay in a normal room so special-room setup cannot overwrite them');
+  assertAllRequiredRoomsReachableFrom(runtime.dungeon, runtime.playerPos);
+}
+
 function assertAllRequiredRoomsReachableFrom(dungeon, playerPos) {
   const oldPlayerPos = dungeon.playerPos;
   dungeon.playerPos = playerPos;
@@ -203,10 +221,10 @@ test('seed 1111-1111-1111 floor 2 does not put stairs in a red-locked spawn room
   }
 });
 
-test('seed 1111-1111-1111 floor 2 fixture uses the same descent spawn guard as game.loadFloor', () => {
+test('seed 1111-1111-1111 floor 2 preserves descent start and repairs that room', () => {
   assert.match(
     GAME,
-    /const progressionProblem = floorProgressionProblem\(this\.dungeon\.map, near, this\.dungeon\.keyItems \|\| \[\], this\.player && this\.player\.keys\);[\s\S]*if \(!progressionProblem\) spawn = near;/
+    /spawn = repairDescentSpawnFloor\(this\.dungeon, spawn, this\.player && this\.player\.keys\);/
   );
 
   const fixture = createGenerationFixture();
@@ -231,21 +249,45 @@ test('seed 1111-1111-1111 floor 2 fixture uses the same descent spawn guard as g
 
   const runtime = generateFloorWithGameSpawnFixture('1111-1111-1111', 2);
   const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
-  assert.ok(runtimeRoom, 'guarded runtime spawn should land in a room');
-  assert.equal(
-    roomContainsTile(runtime.dungeon, runtimeRoom, T.STAIRS),
-    false,
-    'guarded runtime spawn must not start in the stairs room'
-  );
+  assert.ok(runtimeRoom, 'runtime spawn should land in a room');
   assert.deepEqual(
     runtime.playerPos,
+    unguardedSpawn,
+    'runtime descent spawn must stay below the previous floor exit instead of falling back to generated spawn'
+  );
+  assert.notDeepEqual(
+    runtime.playerPos,
     runtime.defaultPlayerPos,
-    'invalid exit-position carryover should fall back to the generated spawn'
+    'runtime descent spawn must not use standalone generateFloor() default spawn for this regression'
   );
-  assert.deepEqual(
-    lockedDoorTilesOnRoomBoundary(runtime.dungeon, runtimeRoom),
-    [],
-    'guarded runtime spawn room boundary must not be sealed by progression locks'
+  assert.equal(
+    runtime.dungeon.spawnRoom,
+    runtimeRoom,
+    'room containing the carried descent spawn becomes the runtime starting room'
   );
-  assertAllRequiredRoomsReachableFrom(runtime.dungeon, runtime.playerPos);
+  assertNormalRuntimeStart(runtime);
+});
+
+test('runtime descent start normalizes corridor, special, and boss-room carryover cases', () => {
+  const cases = [
+    { seed: '1111-1111-1111', floor: 3, reason: 'raw carried spawn lands in a corridor' },
+    { seed: 'special-search-1', floor: 7, reason: 'raw carried spawn lands in a vendor room' },
+    { seed: '1000', floor: 3, reason: 'raw carried spawn lands in the boss room' },
+  ];
+  for (const c of cases) {
+    const runtime = generateFloorWithGameSpawnFixture(c.seed, c.floor);
+    assertNormalRuntimeStart(runtime, c.reason);
+  }
+});
+
+test('runtime stair relocation keeps stairs out of special rooms that populateFloor may overwrite', () => {
+  const runtime = generateFloorWithGameSpawnFixture('1111-1111-1111', 14);
+  const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
+  assert.ok(runtimeRoom, 'runtime spawn should land in a room');
+  assert.equal(roomContainsTile(runtime.dungeon, runtimeRoom, T.STAIRS), false);
+  const stairs = findTile(runtime.dungeon, T.STAIRS);
+  assert.ok(stairs, 'stairs must still exist after runtime repair');
+  const stairRoom = roomAt(runtime.dungeon, { x: stairs.x + 0.5, y: stairs.y + 0.5 });
+  assert.ok(stairRoom, 'stairs should be placed inside a room');
+  assert.equal(stairRoom.roomType || null, null, 'stairs must not relocate into medbay/vendor/event/shrine/special rooms');
 });
