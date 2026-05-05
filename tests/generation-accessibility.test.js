@@ -125,6 +125,7 @@ function roomAt(dungeon, pos) {
 function assertNormalRuntimeStart(runtime, reason = '') {
   const prefix = reason ? `[${reason}] ` : '';
   const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
+  const defaultRoom = roomAt(runtime.dungeon, runtime.defaultPlayerPos);
   assert.ok(runtimeRoom, prefix + 'runtime spawn should normalize to a room');
   assert.equal(runtimeRoom.roomType || null, null, prefix + 'runtime spawn room must be a normal room so populateFloor can safely skip it');
   assert.notEqual(runtimeRoom, runtime.dungeon.bossRoom, prefix + 'runtime spawn room must not be the boss room');
@@ -136,6 +137,7 @@ function assertNormalRuntimeStart(runtime, reason = '') {
   assert.ok(stairs, prefix + 'runtime floor must still contain stairs after repair');
   const stairRoom = roomAt(runtime.dungeon, { x: stairs.x + 0.5, y: stairs.y + 0.5 });
   assert.ok(stairRoom, prefix + 'stairs should remain in a room after relocation');
+  assert.notEqual(stairRoom, defaultRoom, prefix + 'relocated stairs must not move into the standalone generateFloor() spawn room');
   assert.equal(stairRoom.roomType || null, null, prefix + 'relocated stairs must stay in a normal room so special-room setup cannot overwrite them');
   assertAllRequiredRoomsReachableFrom(runtime.dungeon, runtime.playerPos);
 }
