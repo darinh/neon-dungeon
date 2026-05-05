@@ -55,27 +55,13 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
+const { readSourceFile, stripJsComments } = require('./_source-files.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
-const ENTITIES = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-);
-const RENDER = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
-);
-
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-const ENTITIES_CODE = stripComments(ENTITIES);
+const CONTENT = readSourceFile(__dirname, 'content');
+const ENTITIES = readSourceFile(__dirname, 'entities');
+const RENDER = readSourceFile(__dirname, 'render');
+const ENTITIES_CODE = stripJsComments(ENTITIES);
 
 /**
  * Brace-walked entry extraction for registry entries (KEY: { ... }).

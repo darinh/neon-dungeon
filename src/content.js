@@ -12,6 +12,8 @@ const _CG = new Proxy({}, {
   set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
   has: (_t, p) => p in /** @type {any} */ (game),
 });
+const dungeonTopology = /** @type {any} */ (NEON).dungeonTopology;
+const dungeonReachability = /** @type {any} */ (NEON).dungeonReachability;
 
 // ─── Procedural Music ────────────────────────────────────────────────────────
 const music = (() => {
@@ -3872,7 +3874,7 @@ function updateCombo(dt) {
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 /** @returns {any} */
 function createMap() {
-  return Array.from({length: MAP_H}, () => new Uint8Array(MAP_W).fill(T.WALL));
+  return dungeonTopology.createMap(MAP_W, MAP_H, T.WALL);
 }
 
 /**
@@ -3884,9 +3886,7 @@ function createMap() {
  * @param {any} tile
  */
 function carveRect(map, x, y, w, h, tile) {
-  for (let ty=y; ty<y+h; ty++)
-    for (let tx=x; tx<x+w; tx++)
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H) map[ty][tx]=tile;
+  dungeonTopology.carveRect(map, x, y, w, h, tile);
 }
 
 /**
@@ -3897,69 +3897,7 @@ function carveRect(map, x, y, w, h, tile) {
  * @param {any} y2
  */
 function carveCorridor(map, x1, y1, x2, y2) {
-  let x=x1, y=y1;
-  while (x!==x2) { map[y][x]=T.FLOOR; x += x<x2?1:-1; }
-  while (y!==y2) { map[y][x]=T.FLOOR; y += y<y2?1:-1; }
-}
-
-class BSPNode {
-  /**
-   * @param {any} x
-   * @param {any} y
-   * @param {any} w
-   * @param {any} h
-   */
-  constructor(x,y,w,h) { this.x=x; this.y=y; this.w=w; this.h=h; this.left=null; this.right=null; this.room=null; }
-  /**
-   * @param {any} depth
-   */
-  split(depth) {
-    if (depth<=0 || (this.w<16 && this.h<16)) return;
-    const horiz = this.h > this.w ? true : this.w > this.h ? false : rand('world') < 0.5;
-    if (horiz) {
-      const split = rndInt(8, this.h-8);
-      this.left  = new BSPNode(this.x, this.y, this.w, split);
-      this.right = new BSPNode(this.x, this.y+split, this.w, this.h-split);
-    } else {
-      const split = rndInt(8, this.w-8);
-      this.left  = new BSPNode(this.x, this.y, split, this.h);
-      this.right = new BSPNode(this.x+split, this.y, this.w-split, this.h);
-    }
-    this.left.split(depth-1);
-    this.right.split(depth-1);
-  }
-  /** @returns {any[]} */
-  getLeaves() {
-    if (!this.left && !this.right) return [this];
-    return [...(this.left?.getLeaves()??[]), ...(this.right?.getLeaves()??[])];
-  }
-  /**
-   * @param {any} map
-   */
-  carveRooms(map) {
-    if (!this.left && !this.right) {
-      const rw = rndInt(5, Math.max(6,this.w-2));
-      const rh = rndInt(5, Math.max(6,this.h-2));
-      const rx = this.x + rndInt(1, Math.max(2,this.w-rw-1));
-      const ry = this.y + rndInt(1, Math.max(2,this.h-rh-1));
-      this.room = {x:rx, y:ry, w:rw, h:rh,
-        cx: Math.floor(rx+rw/2), cy: Math.floor(ry+rh/2)};
-      carveRect(map, rx, ry, rw, rh, T.FLOOR);
-      return;
-    }
-    this.left?.carveRooms(map);
-    this.right?.carveRooms(map);
-    const lr = this.left?.getRoom();
-    const rr = this.right?.getRoom();
-    if (lr && rr) carveCorridor(map, lr.cx, lr.cy, rr.cx, rr.cy);
-  }
-  /** @returns {any} */
-  getRoom() {
-    if (this.room) return this.room;
-    const l = this.left?.getRoom(), r = this.right?.getRoom();
-    if (!l) return r; if (!r) return l;
-    return rand('world') < 0.5 ? l : r;
-  }
+  dungeonTopology.carveCorridor(map, x1, y1, x2, y2, T.FLOOR);
 }
 
 /**
@@ -3968,32 +3906,27 @@ class BSPNode {
  * @param {any} map
  */
 function bfsRooms(rooms, startRoom, map) {
-  const dist = new Map();
-  const q = [startRoom];
-  dist.set(startRoom, 0);
-  while (q.length) {
-    const cur = q.shift();
-    for (const other of rooms) {
-      if (dist.has(other)) continue;
-      if (hasLOS(cur.cx, cur.cy, other.cx, other.cy, map) ||
-          dist2(cur.cx,cur.cy,other.cx,other.cy) < 400) {
-        dist.set(other, dist.get(cur)+1);
-        q.push(other);
-      }
-    }
-  }
-  return dist;
+  return dungeonTopology.bfsRooms(rooms, startRoom, (/** @type {any} */ cur, /** @type {any} */ other) =>
+    hasLOS(cur.cx, cur.cy, other.cx, other.cy, map) ||
+    dist2(cur.cx, cur.cy, other.cx, other.cy) < 400
+  );
 }
 
 /**
  * @param {any} floorNum
  */
 function generateFloor(floorNum) {
-  const map = createMap();
-  const root = new BSPNode(0,0,MAP_W,MAP_H);
-  root.split(5);
-  root.carveRooms(map);
-  const rooms = root.getLeaves().map((/** @type {any} */ l)=>l.room).filter(Boolean);
+  const bsp = dungeonTopology.createBspDungeon({
+    width: MAP_W,
+    height: MAP_H,
+    depth: 5,
+    wallTile: T.WALL,
+    floorTile: T.FLOOR,
+    rand: () => rand('world'),
+    rndInt,
+  });
+  const map = bsp.map;
+  const rooms = bsp.rooms;
 
   // Pick spawn room — try several candidates and pick the one that maximizes
   // BFS distance to the farthest room (ensures exit is far from spawn).
@@ -4692,63 +4625,24 @@ function generateFloor(floorNum) {
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
       t === T.CHALLENGE_GATE;
 
-    /** @param {Set<string>} haveColours @returns {Uint8Array[]} */
-    const computeReach = (haveColours) => {
-      /** @type {any} */ const r = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-      const sx0 = spawnRoom.cx, sy0 = spawnRoom.cy;
-      r[sy0][sx0] = 1;
-      const q = [{x: sx0, y: sy0}];
-      while (q.length) {
-        const {x: cx, y: cy} = /** @type {{x:any,y:any}} */ (q.shift());
-        for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-          const nx = cx + dx, ny = cy + dy;
-          if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-          if (r[ny][nx]) continue;
-          const t = map[ny][nx];
-          const open = passable(t) ||
-            (haveColours.has('red')  && t === T.LOCKED_R) ||
-            (haveColours.has('blue') && t === T.LOCKED_B) ||
-            (haveColours.has('gold') && t === T.LOCKED_G);
-          if (!open) continue;
-          r[ny][nx] = 1;
-          q.push({x: nx, y: ny});
-        }
-      }
-      return r;
-    };
-
-    /** @type {Set<string>} */ const haveColours = new Set();
-    /** @type {any} */ let reach = null;
-    let progressIter = true;
-    let safetyIter = 6; // hard cap (3 colours × 2 = 6 expansion rounds max)
-    while (progressIter && safetyIter-- > 0) {
-      progressIter = false;
-      reach = computeReach(haveColours);
-      for (const ki of keyItems) {
-        if (ki && ki.colour && reach[ki.y][ki.x] && !haveColours.has(ki.colour)) {
-          haveColours.add(/** @type {string} */ (ki.colour));
-          progressIter = true;
-        }
-      }
-    }
+    const lockColourForTile = (/** @type {any} */ t) =>
+      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
+    const solvedReach = dungeonReachability.solveKeyLockReachability({
+      map,
+      start: { x: spawnRoom.cx, y: spawnRoom.cy },
+      keys: keyItems,
+      requiredRooms: rooms,
+      isOpenTile: passable,
+      lockColourForTile,
+    });
+    const computeReach = solvedReach.computeReach;
+    const haveColours = solvedReach.collectedColours;
+    /** @type {any} */ let reach = solvedReach.reachable;
     // After fixed point, `reach` reflects max possible exploration with all
     // collectible keys. Check every room for at least one reachable tile.
     /** @param {{x:number,y:number,w:number,h:number,cx:number,cy:number}} room */
-    const roomTouchesReach = (room) => {
-      // Cheap-path: spot-check center first (most rooms).
-      if (reach[room.cy] && reach[room.cy][room.cx]) return true;
-      // Full-path: scan room rect (tiles set to special types may not be
-      // at center; e.g. vendor tile, lore terminal).
-      for (let yy = room.y; yy < room.y + room.h; yy++) {
-        const row = reach[yy];
-        if (!row) continue;
-        for (let xx = room.x; xx < room.x + room.w; xx++) {
-          if (row[xx]) return true;
-        }
-      }
-      return false;
-    };
-    const unreachableWithKeys = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
+    const roomTouchesReach = (room) => dungeonReachability.roomTouchesReach(room, reach);
+    const unreachableWithKeys = solvedReach.unreachableRooms;
     if (unreachableWithKeys.length > 0) {
       // Downgrade every locked door whose colour the player couldn't pick up.
       // This includes colours with no key item placed at all (the
