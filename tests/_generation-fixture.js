@@ -468,13 +468,14 @@ function downgradeLockedRoomBoundary(dungeon, room) {
 /**
  * @param {any} dungeon
  * @param {any} startRoom
+ * @param {any} originalSpawnRoom
  */
-function relocateStairsOutOfStartRoom(dungeon, startRoom) {
+function relocateStairsOutOfStartRoom(dungeon, startRoom, originalSpawnRoom) {
   if (!roomContainsTile(dungeon, startRoom, T.STAIRS)) return;
   let bestRoom = null;
   let bestScore = -1;
   for (const room of dungeon.rooms || []) {
-    if (room === startRoom || !roomEligibleForDescentStart(dungeon, room)) continue;
+    if (room === startRoom || room === originalSpawnRoom || !roomEligibleForDescentStart(dungeon, room)) continue;
     const score = Math.abs(room.cx - startRoom.cx) + Math.abs(room.cy - startRoom.cy);
     if (score > bestScore) {
       bestScore = score;
@@ -497,12 +498,13 @@ function relocateStairsOutOfStartRoom(dungeon, startRoom) {
  * @returns {{x:number,y:number}}
  */
 function repairDescentSpawnDungeon(dungeon, playerPos) {
+  const originalSpawnRoom = dungeon.spawnRoom;
   const normalized = normalizeDescentSpawnDungeon(dungeon, playerPos);
   const startRoom = normalized.room;
   playerPos = normalized.playerPos;
   if (startRoom) {
     dungeon.spawnRoom = startRoom;
-    relocateStairsOutOfStartRoom(dungeon, startRoom);
+    relocateStairsOutOfStartRoom(dungeon, startRoom, originalSpawnRoom);
     downgradeLockedRoomBoundary(dungeon, startRoom);
   }
   dungeon.playerPos = { x: playerPos.x, y: playerPos.y };
