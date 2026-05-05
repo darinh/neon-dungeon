@@ -4391,6 +4391,7 @@ function generateFloor(floorNum) {
   // Lock meaningful targets: stair room first, then special rooms, then random.
   // All narrow entrance clusters of the target room are locked so the room
   // is truly gated (no walking around a single locked tile).
+  /** @type {{x:number,y:number,colour:string,tileColour:string}[]} */
   const keyItems = [];
   if (floorNum >= 2) {
     // Build priority list: stair room > special rooms > eligible randoms
@@ -4434,26 +4435,65 @@ function generateFloor(floorNum) {
         }
       }
 
-      // BFS from spawn to find rooms reachable without this lock
-      const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
-      /** @type {any} */ const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
-      vis2[spawnRoom.cy][spawnRoom.cx] = 1;
-      while (q2.length) {
-        const {x:cx,y:cy} = /** @type {{x:any,y:any}} */ (q2.shift());
-        for (const [ddx,ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-          const nx2=cx+ddx, ny2=cy+ddy;
-          if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
-          const t=map[ny2][nx2];
-          if (t===T.WALL||t===T.VOID||t===T.CRACKED||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G) continue;
-          vis2[ny2][nx2]=1;
-          q2.push({x:nx2,y:ny2});
+      /** @param {Set<string>} haveColours */
+      const reachForKeys = (haveColours) => {
+        const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
+        /** @type {any} */ const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
+        vis2[spawnRoom.cy][spawnRoom.cx] = 1;
+        while (q2.length) {
+          const {x:cx,y:cy} = /** @type {{x:any,y:any}} */ (q2.shift());
+          for (const [ddx,ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx2=cx+ddx, ny2=cy+ddy;
+            if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
+            const t=map[ny2][nx2];
+            const open = (t !== T.WALL && t !== T.VOID && t !== T.CRACKED &&
+              t !== T.LOCKED_R && t !== T.LOCKED_B && t !== T.LOCKED_G) ||
+              (haveColours.has('red') && t === T.LOCKED_R) ||
+              (haveColours.has('blue') && t === T.LOCKED_B) ||
+              (haveColours.has('gold') && t === T.LOCKED_G);
+            if (!open) continue;
+            vis2[ny2][nx2]=1;
+            q2.push({x:nx2,y:ny2});
+          }
         }
+        return vis2;
+      };
+
+      /** @type {Set<string>} */
+      const placedColours = new Set();
+      let vis2 = reachForKeys(placedColours);
+      let expanded = true;
+      let keySafety = 6;
+      while (expanded && keySafety-- > 0) {
+        expanded = false;
+        for (const ki of keyItems) {
+          if (!placedColours.has(ki.colour) && vis2[ki.y]?.[ki.x]) {
+            placedColours.add(ki.colour);
+            expanded = true;
+          }
+        }
+        if (expanded) vis2 = reachForKeys(placedColours);
       }
-      // Find a reachable room to place the key
-      const keyRoom = rooms.filter((/** @type {any} */ r) => r!==lr && r!==bossRoom && vis2[r.cy][r.cx]);
+      const keyOccupied = (/** @type {any} */ r) => keyItems.some((/** @type {any} */ ki) => ki.x === r.cx && ki.y === r.cy);
+      const keyEligible = rooms.filter((/** @type {any} */ r) =>
+        r !== lr && r !== spawnRoom && r !== bossRoom && r.roomType !== 'secret' &&
+        !keyOccupied(r) && vis2[r.cy][r.cx]
+      );
+      const preferredKeyRooms = keyEligible.filter((/** @type {any} */ r) =>
+        r !== farthest && r.roomType !== 'vendor'
+      );
+      // Find a reachable, already-explorable room to place the key. Never put
+      // progression keys in the spawn room: that creates "locked start room"
+      // layouts that are technically solvable but read as broken generation.
+      const keyRoom = preferredKeyRooms.length ? preferredKeyRooms : keyEligible;
       if (keyRoom.length) {
         const kr = keyRoom[rndInt(0, keyRoom.length-1)];
-        keyItems.push({ x: kr.cx, y: kr.cy, colour: colours[ci], tileColour: lockColours[ci] });
+        keyItems.push({
+          x: kr.cx,
+          y: kr.cy,
+          colour: /** @type {string} */ (colours[ci]),
+          tileColour: /** @type {string} */ (lockColours[ci])
+        });
         lr.hasLoot = true;
         placed++;
       } else {

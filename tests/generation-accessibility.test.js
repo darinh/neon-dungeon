@@ -99,27 +99,55 @@ function loadGenerateFloor() {
   return sandbox;
 }
 
-function floodReachable(dungeon) {
+function physicalReachWithKeys(dungeon) {
   const map = dungeon.map;
   const sx = Math.floor(dungeon.playerPos.x);
   const sy = Math.floor(dungeon.playerPos.y);
-  const vis = Array.from({ length: MAP_H }, () => new Uint8Array(MAP_W));
-  const q = [{ x: sx, y: sy }];
-  vis[sy][sx] = 1;
-  while (q.length) {
-    const { x, y } = q.shift();
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || vis[ny][nx]) continue;
-      const tile = map[ny][nx];
-      const open = isPassable(tile) || tile === T.DOOR || tile === T.CRACKED ||
-        tile === T.LOCKED_R || tile === T.LOCKED_B || tile === T.LOCKED_G;
-      if (!open) continue;
-      vis[ny][nx] = 1;
-      q.push({ x: nx, y: ny });
+  const have = new Set();
+  const keyItems = dungeon.keyItems || [];
+  let vis = Array.from({ length: MAP_H }, () => new Uint8Array(MAP_W));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    vis = Array.from({ length: MAP_H }, () => new Uint8Array(MAP_W));
+    const q = [{ x: sx, y: sy }];
+    vis[sy][sx] = 1;
+    while (q.length) {
+      const { x, y } = q.shift();
+      for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || vis[ny][nx]) continue;
+        const tile = map[ny][nx];
+        const open = isPassable(tile) || tile === T.DOOR || tile === T.CRACKED ||
+          (tile === T.LOCKED_R && have.has('red')) ||
+          (tile === T.LOCKED_B && have.has('blue')) ||
+          (tile === T.LOCKED_G && have.has('gold'));
+        if (!open) continue;
+        vis[ny][nx] = 1;
+        q.push({ x: nx, y: ny });
+      }
+    }
+    for (const key of keyItems) {
+      if (!have.has(key.colour) && vis[key.y]?.[key.x]) {
+        have.add(key.colour);
+        changed = true;
+      }
     }
   }
-  return vis;
+  return { vis, have };
+}
+
+function lockColours(dungeon) {
+  const colours = new Set();
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const tile = dungeon.map[y][x];
+      if (tile === T.LOCKED_R) colours.add('red');
+      if (tile === T.LOCKED_B) colours.add('blue');
+      if (tile === T.LOCKED_G) colours.add('gold');
+    }
+  }
+  return colours;
 }
 
 test('seed 1111-1111-1111 floor 6 has no movement-unreachable non-secret rooms after locks open', () => {
@@ -130,12 +158,32 @@ test('seed 1111-1111-1111 floor 6 has no movement-unreachable non-secret rooms a
 });
 
 function assertAllNonSecretRoomsReachable(dungeon) {
-  const reach = floodReachable(dungeon);
+  const reach = physicalReachWithKeys(dungeon);
   const unreachable = dungeon.rooms
-    .filter((room) => room.roomType !== 'secret')
-    .filter((room) => !reach[room.cy]?.[room.cx])
+    .filter((room) => !reach.vis[room.cy]?.[room.cx])
     .map((room) => ({ x: room.cx, y: room.cy, type: room.roomType || 'normal' }));
   assert.equal(unreachable.length, 0, JSON.stringify(unreachable));
+  for (const colour of lockColours(dungeon)) {
+    assert.equal(reach.have.has(colour), true, `locked ${colour} doors exist but ${colour} key was not physically reachable`);
+  }
+}
+
+function assertNoSpawnRoomKeys(dungeon) {
+  const spawn = dungeon.spawnRoom;
+  const spawnKeys = (dungeon.keyItems || []).filter((key) =>
+    key.x >= spawn.x && key.x < spawn.x + spawn.w &&
+    key.y >= spawn.y && key.y < spawn.y + spawn.h
+  );
+  assert.equal(spawnKeys.length, 0, 'progression keys must not spawn in the starting room');
+}
+
+function assertNoDuplicateKeyTiles(dungeon) {
+  const seen = new Set();
+  for (const key of dungeon.keyItems || []) {
+    const pos = `${key.x},${key.y}`;
+    assert.equal(seen.has(pos), false, `multiple progression keys spawned at ${pos}`);
+    seen.add(pos);
+  }
 }
 
 test('sampled seeded floors keep all non-secret rooms movement-reachable after lock repair', () => {
@@ -155,6 +203,16 @@ test('sampled seeded floors keep all non-secret rooms movement-reachable after l
     for (let floor = 1; floor <= 15; floor++) {
       const dungeon = sandbox.withDerivedRngStream(`world:floor:${floor}`, () => sandbox.generateFloor(floor));
       assertAllNonSecretRoomsReachable(dungeon);
+      assertNoSpawnRoomKeys(dungeon);
+      assertNoDuplicateKeyTiles(dungeon);
     }
   }
+});
+
+test('seed 1111-1111-1111 floor 2 does not solve locks by putting the red key in spawn', () => {
+  const sandbox = loadGenerateFloor();
+  sandbox.setSeed('1111-1111-1111');
+  const dungeon = sandbox.withDerivedRngStream('world:floor:2', () => sandbox.generateFloor(2));
+  assertAllNonSecretRoomsReachable(dungeon);
+  assertNoSpawnRoomKeys(dungeon);
 });
