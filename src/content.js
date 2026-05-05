@@ -4708,11 +4708,8 @@ function generateFloor(floorNum) {
       }
       return false;
     };
-    // Cracked walls are now in passable() (interact-breakable). Secret rooms
-    // become naturally reachable through them, so no special exclusion is
-    // needed in the unreachable filter.
-    const unreachable = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
-    if (unreachable.length > 0) {
+    const unreachableWithKeys = rooms.filter((/** @type {any} */ r) => !roomTouchesReach(r));
+    if (unreachableWithKeys.length > 0) {
       // Downgrade every locked door whose colour the player couldn't pick up.
       // This includes colours with no key item placed at all (the
       // lockPriority/keyRoom empty-fallback edge case in the lock-placement
@@ -4729,13 +4726,74 @@ function generateFloor(floorNum) {
       }
       // After downgrading, recompute reach (no longer gated by missing keys).
       reach = computeReach(new Set(['red', 'blue', 'gold']));
-      // Any rooms STILL unreachable are walled off structurally (secret room
-      // boundaries, dead-end pruning that nuked the only corridor). The
-      // rescue-corridor pass below handles spawn→stairs; non-stairs special
-      // rooms still unreachable here will be quietly orphaned (acceptable
-      // edge case; alternative would be to carve more rescue corridors,
-      // which risks visual oddities). Telemetry could surface this in a
-      // future pass.
+    }
+
+    /**
+     * @param {number} tx
+     * @param {number} ty
+     */
+    const carveRescueCorridorTo = (tx, ty) => {
+      let cx = spawnRoom.cx, cy = spawnRoom.cy;
+      while (cx !== tx) {
+        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
+        cx += cx < tx ? 1 : -1;
+      }
+      while (cy !== ty) {
+        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
+        cy += cy < ty ? 1 : -1;
+      }
+      if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
+    };
+
+    /**
+     * @param {any} room
+     * @returns {{x:number,y:number,ox:number,oy:number}[]}
+     */
+    const roomBoundaryGates = (room) => {
+      /** @type {{x:number,y:number,ox:number,oy:number}[]} */
+      const gates = [];
+      for (let tx = room.x; tx < room.x + room.w; tx++) {
+        const top = map[room.y]?.[tx];
+        if (top === T.LOCKED_R || top === T.LOCKED_B || top === T.LOCKED_G || top === T.CRACKED || top === T.CHALLENGE_GATE) {
+          gates.push({ x: tx, y: room.y, ox: tx, oy: room.y - 1 });
+        }
+        const by = room.y + room.h - 1;
+        const bottom = map[by]?.[tx];
+        if (bottom === T.LOCKED_R || bottom === T.LOCKED_B || bottom === T.LOCKED_G || bottom === T.CRACKED || bottom === T.CHALLENGE_GATE) {
+          gates.push({ x: tx, y: by, ox: tx, oy: by + 1 });
+        }
+      }
+      for (let ty = room.y; ty < room.y + room.h; ty++) {
+        const left = map[ty]?.[room.x];
+        if (left === T.LOCKED_R || left === T.LOCKED_B || left === T.LOCKED_G || left === T.CRACKED || left === T.CHALLENGE_GATE) {
+          gates.push({ x: room.x, y: ty, ox: room.x - 1, oy: ty });
+        }
+        const bx = room.x + room.w - 1;
+        const right = map[ty]?.[bx];
+        if (right === T.LOCKED_R || right === T.LOCKED_B || right === T.LOCKED_G || right === T.CRACKED || right === T.CHALLENGE_GATE) {
+          gates.push({ x: bx, y: ty, ox: bx + 1, oy: ty });
+        }
+      }
+      return gates.filter((/** @type {any} */ g) =>
+        g.ox >= 0 && g.oy >= 0 && g.ox < MAP_W && g.oy < MAP_H
+      );
+    };
+
+    // Final repair pass: validate with ALL locks open using the same 4-way
+    // movement the player has. If a gated room is unreachable, carve to the
+    // OUTSIDE face of its gate so the lock still matters; only ungated rooms
+    // get a direct rescue corridor to their centre.
+    for (let repair = 0; repair < rooms.length; repair++) {
+      reach = computeReach(new Set(['red', 'blue', 'gold']));
+      const blocked = rooms.find((/** @type {any} */ r) => r.roomType !== 'secret' && !roomTouchesReach(r));
+      if (!blocked) break;
+      const gates = roomBoundaryGates(blocked);
+      if (gates.length > 0) {
+        const gate = gates.find((/** @type {any} */ g) => !reach[g.oy]?.[g.ox]) || gates[0];
+        if (gate) carveRescueCorridorTo(gate.ox, gate.oy);
+      } else {
+        carveRescueCorridorTo(blocked.cx, blocked.cy);
+      }
     }
   }
 

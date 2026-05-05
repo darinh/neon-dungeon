@@ -248,6 +248,10 @@ function notifyVengeance(deadEnemy) {
 
 /** @type {Record<string, any>} */
 const CREDIT_VALUES = {GUARD:8, TURRET:6, CRAWLER:4, PHANTOM:12, DRONE:5, SHIELDER:10, GRENADIER:7, SPLITTER:9, TELEPORTER:8, SNIPER:10, SUMMONER:12, HEALER:8, CHARGER:9, SCORCHER:8, BRUTE:12, MIMIC:10, LEAPER:8, REFLECTOR:12, DISRUPTOR:10, WRAITH:12, NEXUS:12, SIPHON:10, GRAVITON:12, SEEKER:5, PULSER:7, ECHOER:9, RESONATOR:10, MIRROR:10, REAPER:10, GHOST_PROJECTOR:9, PROPHET:10, CRYOPHAGE:10, WARDLING:4, VENGEANCE:10, CONDUIT:8, HARVESTER:5, MAGNETON:8, SPECTRE:9, SAPPER:6, MAGPIE:4, TETHER:6, VAULTMASTER:4, GULPER:11, WATCHER:9, ARCHITECT:10, NULLIFIER:10, SHARD:0, SENTINEL:80, WARDEN:80, HIVE:120, CONDUCTOR:120, OMEGA:200, GENESIS:200};
+const ENEMY_TARGET_MEMORY_SECONDS = 3;
+const ENEMY_SIGHT_RANGE = 15;
+const ENEMY_ROOM_LEASH_TILES = 8;
+const ENEMY_LEASH_DEFEND_RANGE = 2.5;
 
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
@@ -1799,6 +1803,10 @@ class Enemy {
   /** @type {any} */ _tnTargetY;
   /** @type {any} */ _tx;
   /** @type {any} */ _ty;
+  /** @type {any} */ _targetKnown;
+  /** @type {any} */ _targetLostTimer;
+  /** @type {any} */ _lastSeenX;
+  /** @type {any} */ _lastSeenY;
   /** @type {any} */ _unchainedPhase;
   /** @type {any} */ _volatileKill;
   /** @type {any} */ _warpFade;
@@ -1918,7 +1926,10 @@ class Enemy {
     this._lastHitCtx=null;                // weapon context of last hit (for on-kill effects)
     // Holo Decoy taunt redirection
     this._tauntTarget=null;               // active hologram effect (or null)
-    this._tx=x; this._ty=y;              // perceived target position (hologram or player)
+    this._tx=x; this._ty=y;              // perceived target position (hologram, last seen player, or patrol focus)
+    this._targetKnown=false;
+    this._targetLostTimer=0;
+    this._lastSeenX=x; this._lastSeenY=y;
   }
 
   /**
@@ -2822,11 +2833,38 @@ class Enemy {
       }
     }
 
-    // Set perceived target position (hologram taunt redirection)
-    this._tx = player.x; this._ty = player.y;
+    // Set perceived target position. Normal enemies are not omniscient: they
+    // acquire the player with line of sight, chase the last seen point briefly,
+    // then forget. Taunts and bosses keep their legacy arena/hackware rules.
+    this._tx = this.patrolTarget ? this.patrolTarget.x : this.x;
+    this._ty = this.patrolTarget ? this.patrolTarget.y : this.y;
     const _t = this._tauntTarget;
-    if (_t && _t.age < _t.maxAge) { this._tx = _t.x; this._ty = _t.y; }
+    const tauntActive = !!(_t && _t.age < _t.maxAge);
+    let liveTargetX = player.x, liveTargetY = player.y;
+    if (tauntActive) { liveTargetX = _t.x; liveTargetY = _t.y; }
     else if (_t) { this._tauntTarget = null; }
+    const targetLeashed = this._isLeashedFromRoom();
+    const liveTargetable = tauntActive || canTargetPlayer();
+    const liveTargetDist = dist(this.x, this.y, liveTargetX, liveTargetY);
+    const canAcquireTarget = !targetLeashed || liveTargetDist <= ENEMY_LEASH_DEFEND_RANGE;
+    const targetVisible = liveTargetable && canAcquireTarget && liveTargetDist < ENEMY_SIGHT_RANGE &&
+      hasLOS(this.x, this.y, liveTargetX, liveTargetY, map);
+    const targetForced = tauntActive || (this.isBoss && canTargetPlayer());
+    if (targetForced || targetVisible) {
+      this._targetKnown = true;
+      this._targetLostTimer = 0;
+      this._lastSeenX = liveTargetX;
+      this._lastSeenY = liveTargetY;
+    } else if (this._targetKnown) {
+      this._targetLostTimer += dt;
+      if (this._targetLostTimer >= ENEMY_TARGET_MEMORY_SECONDS || targetLeashed) {
+        this._forgetTarget();
+      }
+    }
+    if (this._targetKnown) {
+      this._tx = this._lastSeenX;
+      this._ty = this._lastSeenY;
+    }
 
     // Stun: freeze AI + cooldown timers while stunned
     // REAPER frenzy: full stun immunity. Drop any incoming stun BEFORE the
@@ -3007,8 +3045,7 @@ class Enemy {
     }
 
     const d = dist(this.x,this.y,this._tx,this._ty);
-    const targetable = (this._tauntTarget && this._tauntTarget.age < this._tauntTarget.maxAge) || canTargetPlayer();
-    const los = targetable && d<15 && hasLOS(this.x,this.y,this._tx,this._ty,map);
+    const los = !!targetVisible;
 
     // type-specific AI
     switch(this.type) {
@@ -3091,7 +3128,25 @@ class Enemy {
   // Taunt-aware targeting check: taunted enemies can "target" the hologram
   _canTarget() {
     const t = this._tauntTarget;
-    return (t && t.age < t.maxAge) || canTargetPlayer();
+    return (t && t.age < t.maxAge) || (this._targetKnown && canTargetPlayer());
+  }
+
+  _forgetTarget() {
+    this._targetKnown = false;
+    this._targetLostTimer = 0;
+    this._lastSeenX = this.x;
+    this._lastSeenY = this.y;
+    if (this.state === 'CHASE') this.state = 'PATROL';
+  }
+
+  _isLeashedFromRoom() {
+    if (!this.room || this.isBoss || this._summoned || this._ghIsGhost) return false;
+    const r = this.room;
+    const maxX = r.x + r.w;
+    const maxY = r.y + r.h;
+    const dx = this.x < r.x ? r.x - this.x : this.x > maxX ? this.x - maxX : 0;
+    const dy = this.y < r.y ? r.y - this.y : this.y > maxY ? this.y - maxY : 0;
+    return dx * dx + dy * dy > ENEMY_ROOM_LEASH_TILES * ENEMY_ROOM_LEASH_TILES;
   }
 
   /**
