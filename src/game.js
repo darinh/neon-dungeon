@@ -1088,6 +1088,207 @@ function floorProgressionProblem(map, start, keyItems, playerKeys) {
   return null;
 }
 
+/**
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} pos
+ */
+function floorRoomAt(dungeon, pos) {
+  const x = Math.floor(Number(pos && pos.x));
+  const y = Math.floor(Number(pos && pos.y));
+  if (!dungeon || !Array.isArray(dungeon.rooms) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return dungeon.rooms.find((/** @type {any} */ room) =>
+    x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h
+  ) || null;
+}
+
+/**
+ * @param {any[][]} map
+ * @param {any} room
+ * @param {any} tile
+ */
+function floorRoomContainsTile(map, room, tile) {
+  if (!Array.isArray(map) || !room) return false;
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      const row = map[y];
+      if (row && row[x] === tile) return true;
+    }
+  }
+  return false;
+}
+
+/** @param {any} tile */
+function floorSnapshotIsLockedDoor(tile) {
+  return tile === FLOOR_SNAPSHOT_TILES.LOCKED_R || tile === FLOOR_SNAPSHOT_TILES.LOCKED_B || tile === FLOOR_SNAPSHOT_TILES.LOCKED_G ||
+    tile === 'LOCKED_R' || tile === 'LOCKED_B' || tile === 'LOCKED_G';
+}
+
+/** @param {any} t */
+const isSafeSpawn = (t) => isPassable(t) &&
+  t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
+  t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC &&
+  t !== T.SHOCK_TILE && t !== T.REPULSOR;
+
+/**
+ * @param {any} dungeon
+ * @param {any} room
+ */
+function floorRoomEligibleForDescentStart(dungeon, room) {
+  return !!room && room !== dungeon.bossRoom && room !== dungeon.mainframeRoom && !room.roomType;
+}
+
+/**
+ * @param {any[][]} map
+ * @param {any} room
+ * @param {{x:number,y:number}} origin
+ */
+function nearestSafeTileInRoom(map, room, origin) {
+  /** @type {{x:number,y:number} | null} */
+  let best = null;
+  let bestScore = Infinity;
+  for (let y = room.y; y < room.y + room.h; y++) {
+    const row = map[y];
+    if (!row) continue;
+    for (let x = room.x; x < room.x + room.w; x++) {
+      if (!isSafeSpawn(row[x])) continue;
+      const score = Math.abs((x + 0.5) - origin.x) + Math.abs((y + 0.5) - origin.y);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: x + 0.5, y: y + 0.5 };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} spawn
+ */
+function normalizeDescentSpawnRoom(dungeon, spawn) {
+  const currentRoom = floorRoomAt(dungeon, spawn);
+  if (floorRoomEligibleForDescentStart(dungeon, currentRoom)) {
+    return { spawn, room: currentRoom };
+  }
+  /** @type {{spawn:{x:number,y:number},room:any} | null} */
+  let best = null;
+  let bestScore = Infinity;
+  for (const room of dungeon.rooms || []) {
+    if (!floorRoomEligibleForDescentStart(dungeon, room)) continue;
+    const roomSpawn = nearestSafeTileInRoom(dungeon.map, room, spawn);
+    if (!roomSpawn) continue;
+    const score = Math.abs(roomSpawn.x - spawn.x) + Math.abs(roomSpawn.y - spawn.y);
+    if (score < bestScore) {
+      bestScore = score;
+      best = { spawn: roomSpawn, room };
+    }
+  }
+  return best || { spawn, room: currentRoom };
+}
+
+/**
+ * @param {any[][]} map
+ * @param {any} room
+ */
+function downgradeLockedRoomBoundary(map, room) {
+  if (!Array.isArray(map) || !room) return;
+  for (let x = room.x; x < room.x + room.w; x++) {
+    const topRow = map[room.y];
+    if (topRow && floorSnapshotIsLockedDoor(topRow[x])) topRow[x] = FLOOR_SNAPSHOT_TILES.FLOOR;
+    const by = room.y + room.h - 1;
+    const bottomRow = map[by];
+    if (bottomRow && floorSnapshotIsLockedDoor(bottomRow[x])) bottomRow[x] = FLOOR_SNAPSHOT_TILES.FLOOR;
+  }
+  for (let y = room.y; y < room.y + room.h; y++) {
+    const row = map[y];
+    if (!row) continue;
+    if (floorSnapshotIsLockedDoor(row[room.x])) row[room.x] = FLOOR_SNAPSHOT_TILES.FLOOR;
+    const rx = room.x + room.w - 1;
+    if (floorSnapshotIsLockedDoor(row[rx])) row[rx] = FLOOR_SNAPSHOT_TILES.FLOOR;
+  }
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} startRoom
+ */
+function relocateStairsOutOfStartRoom(dungeon, startRoom) {
+  if (!dungeon || !Array.isArray(dungeon.map) || !startRoom || !floorRoomContainsTile(dungeon.map, startRoom, FLOOR_SNAPSHOT_TILES.STAIRS)) return;
+  /** @type {any} */
+  let bestRoom = null;
+  let bestScore = -1;
+  for (const room of dungeon.rooms || []) {
+    if (!room || room === startRoom || !floorRoomEligibleForDescentStart(dungeon, room)) continue;
+    const score = Math.abs((room.cx | 0) - (startRoom.cx | 0)) + Math.abs((room.cy | 0) - (startRoom.cy | 0));
+    if (score > bestScore) {
+      bestScore = score;
+      bestRoom = room;
+    }
+  }
+  if (!bestRoom) return;
+  for (let y = 0; y < dungeon.map.length; y++) {
+    const row = dungeon.map[y];
+    if (!Array.isArray(row)) continue;
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === FLOOR_SNAPSHOT_TILES.STAIRS) row[x] = FLOOR_SNAPSHOT_TILES.FLOOR;
+    }
+  }
+  dungeon.map[bestRoom.cy][bestRoom.cx] = FLOOR_SNAPSHOT_TILES.STAIRS;
+  dungeon.stairRoom = bestRoom;
+}
+
+/**
+ * @param {any[][]} map
+ * @param {string} colour
+ */
+function downgradeLockedDoorsByColour(map, colour) {
+  const tile =
+    colour === 'red' ? FLOOR_SNAPSHOT_TILES.LOCKED_R :
+    colour === 'blue' ? FLOOR_SNAPSHOT_TILES.LOCKED_B :
+    colour === 'gold' ? FLOOR_SNAPSHOT_TILES.LOCKED_G : null;
+  if (tile == null) return;
+  for (let y = 0; y < map.length; y++) {
+    const row = map[y];
+    if (!Array.isArray(row)) continue;
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === tile) row[x] = FLOOR_SNAPSHOT_TILES.FLOOR;
+    }
+  }
+}
+
+/**
+ * Preserve the descent invariant: a fresh floor starts near the previous
+ * floor's exit. If that inherited start lands in the generated stair room or
+ * behind progression locks, repair the floor around the inherited start
+ * instead of teleporting the player to the standalone generateFloor() spawn.
+ *
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} spawn
+ * @param {any} playerKeys
+ * @returns {{x:number,y:number}}
+ */
+function repairDescentSpawnFloor(dungeon, spawn, playerKeys) {
+  if (!dungeon || !Array.isArray(dungeon.map) || !spawn) return spawn;
+  const normalized = normalizeDescentSpawnRoom(dungeon, spawn);
+  const startRoom = normalized.room;
+  spawn = normalized.spawn;
+  if (startRoom) {
+    dungeon.spawnRoom = startRoom;
+    relocateStairsOutOfStartRoom(dungeon, startRoom);
+    downgradeLockedRoomBoundary(dungeon.map, startRoom);
+  }
+  dungeon.playerPos = { x: spawn.x, y: spawn.y };
+  for (let repair = 0; repair < 3; repair++) {
+    const problem = floorProgressionProblem(dungeon.map, spawn, dungeon.keyItems || [], playerKeys);
+    if (!problem) break;
+    const colour = /^([a-z]+) key is not reachable/.exec(problem)?.[1];
+    if (!(colour === 'red' || colour === 'blue' || colour === 'gold')) break;
+    downgradeLockedDoorsByColour(dungeon.map, colour);
+  }
+  dungeon._fovDirty = true;
+  return spawn;
+}
+
 /** @param {any} snapshot @param {any} playerKeys */
 function floorSnapshotProgressionProblem(snapshot, playerKeys) {
   const savedDungeon = snapshot && snapshot.dungeon;
@@ -1790,6 +1991,25 @@ const game = {
     }
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
     this.dungeon = withDerivedRngStream('world:floor:' + n, () => generateFloor(n));
+    // Floor exit-position carryover: if the player descended from a previous
+    // floor, drop them near the same world coordinates on the new floor
+    // (procedural layout means we may need the nearest passable tile). This
+    // must run before populateFloor(), because the inherited room becomes the
+    // real starting room for enemy/item placement.
+    let spawn = this.dungeon.playerPos;
+    if (savedModifier === undefined && this._exitPos &&
+        typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
+      try {
+        const near =
+          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
+          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
+        if (near) {
+          spawn = near;
+          spawn = repairDescentSpawnFloor(this.dungeon, spawn, this.player && this.player.keys);
+        }
+      } catch (_) { /* fall through to default spawn */ }
+    }
+    this._exitPos = null;
     // Reset boss state before populating (populateFloor sets them for boss floors)
     this.bossRoom=null;
     this.bossType=null;
@@ -1906,33 +2126,6 @@ const game = {
       this.mapRevealed = false;
     }
     this.mapExpanded = false;
-    // Floor exit-position carryover: if the player descended from a previous
-    // floor, drop them near the same world coordinates on the new floor
-    // (procedural layout means we may need the nearest passable tile). Skips
-    // on save-resume (savedModifier !== undefined) so reloading a save does
-    // not relocate the player. _exitPos is captured in descend() and consumed
-    // here exactly once.
-    let spawn = this.dungeon.playerPos;
-    if (savedModifier === undefined && this._exitPos &&
-        typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
-      try {
-        // Prefer a safe tile (no hazards). Fall back to any passable tile.
-        /**
-         * @param {any} t
-         */
-        const isSafeSpawn = (t) => isPassable(t) &&
-          t !== T.TRAP_SPIKE && t !== T.TRAP_SLOW &&
-          t !== T.PLASMA && t !== T.ARC && t !== T.TOXIC && t !== T.SHOCK_TILE && t !== T.REPULSOR;
-        const near =
-          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
-          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
-        if (near) {
-          const progressionProblem = floorProgressionProblem(this.dungeon.map, near, this.dungeon.keyItems || [], this.player && this.player.keys);
-          if (!progressionProblem) spawn = near;
-        }
-      } catch (_) { /* fall through to default spawn */ }
-    }
-    this._exitPos = null;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
     // Clear position history on floor transition so an ECHOER on the new

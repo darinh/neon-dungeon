@@ -259,16 +259,8 @@ function carriedSpawnForDungeon(dungeon, exitPos, opts = {}) {
     spawn.findNearestPassable(dungeon.map, exitPos.x, exitPos.y, isPassable);
   if (!near) return playerPos;
   if (opts.guardReachability) {
-    const oldPlayerPos = dungeon.playerPos;
-    dungeon.playerPos = near;
-    try {
-      const reach = physicalReachWithKeys(dungeon);
-      for (const colour of lockColours(dungeon)) {
-        if (!reach.have.has(colour)) return playerPos;
-      }
-    } finally {
-      dungeon.playerPos = oldPlayerPos;
-    }
+    playerPos = repairDescentSpawnDungeon(dungeon, near);
+    return playerPos;
   }
   playerPos = near;
   return playerPos;
@@ -368,6 +360,159 @@ function physicalReachWithKeys(dungeon) {
     }
   }
   return { vis, have };
+}
+
+/**
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} pos
+ */
+function roomAtDungeon(dungeon, pos) {
+  const x = Math.floor(pos.x);
+  const y = Math.floor(pos.y);
+  return (dungeon.rooms || []).find((room) =>
+    x >= room.x && x < room.x + room.w &&
+    y >= room.y && y < room.y + room.h
+  ) || null;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} room
+ */
+function roomEligibleForDescentStart(dungeon, room) {
+  return !!room && room !== dungeon.bossRoom && room !== dungeon.mainframeRoom && !room.roomType;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} room
+ * @param {{x:number,y:number}} origin
+ */
+function nearestSafeTileInRoom(dungeon, room, origin) {
+  let best = null;
+  let bestScore = Infinity;
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      if (!isSafeSpawnTile(dungeon.map[y]?.[x])) continue;
+      const score = Math.abs((x + 0.5) - origin.x) + Math.abs((y + 0.5) - origin.y);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: x + 0.5, y: y + 0.5 };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} playerPos
+ */
+function normalizeDescentSpawnDungeon(dungeon, playerPos) {
+  const currentRoom = roomAtDungeon(dungeon, playerPos);
+  if (roomEligibleForDescentStart(dungeon, currentRoom)) return { playerPos, room: currentRoom };
+  let best = null;
+  let bestScore = Infinity;
+  for (const room of dungeon.rooms || []) {
+    if (!roomEligibleForDescentStart(dungeon, room)) continue;
+    const roomSpawn = nearestSafeTileInRoom(dungeon, room, playerPos);
+    if (!roomSpawn) continue;
+    const score = Math.abs(roomSpawn.x - playerPos.x) + Math.abs(roomSpawn.y - playerPos.y);
+    if (score < bestScore) {
+      bestScore = score;
+      best = { playerPos: roomSpawn, room };
+    }
+  }
+  return best || { playerPos, room: currentRoom };
+}
+
+/**
+ * @param {number} tile
+ */
+function lockColourForTile(tile) {
+  if (tile === T.LOCKED_R) return 'red';
+  if (tile === T.LOCKED_B) return 'blue';
+  if (tile === T.LOCKED_G) return 'gold';
+  return null;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {string} colour
+ */
+function downgradeLockedDoorsByColour(dungeon, colour) {
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (lockColourForTile(dungeon.map[y][x]) === colour) dungeon.map[y][x] = T.FLOOR;
+    }
+  }
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} room
+ */
+function downgradeLockedRoomBoundary(dungeon, room) {
+  for (let x = room.x; x < room.x + room.w; x++) {
+    if (isLockedDoorTile(dungeon.map[room.y]?.[x])) dungeon.map[room.y][x] = T.FLOOR;
+    const bottomY = room.y + room.h - 1;
+    if (isLockedDoorTile(dungeon.map[bottomY]?.[x])) dungeon.map[bottomY][x] = T.FLOOR;
+  }
+  for (let y = room.y; y < room.y + room.h; y++) {
+    if (isLockedDoorTile(dungeon.map[y]?.[room.x])) dungeon.map[y][room.x] = T.FLOOR;
+    const rightX = room.x + room.w - 1;
+    if (isLockedDoorTile(dungeon.map[y]?.[rightX])) dungeon.map[y][rightX] = T.FLOOR;
+  }
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} startRoom
+ */
+function relocateStairsOutOfStartRoom(dungeon, startRoom) {
+  if (!roomContainsTile(dungeon, startRoom, T.STAIRS)) return;
+  let bestRoom = null;
+  let bestScore = -1;
+  for (const room of dungeon.rooms || []) {
+    if (room === startRoom || !roomEligibleForDescentStart(dungeon, room)) continue;
+    const score = Math.abs(room.cx - startRoom.cx) + Math.abs(room.cy - startRoom.cy);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRoom = room;
+    }
+  }
+  if (!bestRoom) return;
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (dungeon.map[y][x] === T.STAIRS) dungeon.map[y][x] = T.FLOOR;
+    }
+  }
+  dungeon.map[bestRoom.cy][bestRoom.cx] = T.STAIRS;
+  dungeon.stairRoom = bestRoom;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {{x:number,y:number}} playerPos
+ * @returns {{x:number,y:number}}
+ */
+function repairDescentSpawnDungeon(dungeon, playerPos) {
+  const normalized = normalizeDescentSpawnDungeon(dungeon, playerPos);
+  const startRoom = normalized.room;
+  playerPos = normalized.playerPos;
+  if (startRoom) {
+    dungeon.spawnRoom = startRoom;
+    relocateStairsOutOfStartRoom(dungeon, startRoom);
+    downgradeLockedRoomBoundary(dungeon, startRoom);
+  }
+  dungeon.playerPos = { x: playerPos.x, y: playerPos.y };
+  for (let repair = 0; repair < 3; repair++) {
+    const reach = physicalReachWithKeys(dungeon);
+    const missing = [...lockColours(dungeon)].filter((colour) => !reach.have.has(colour));
+    if (missing.length === 0) break;
+    for (const colour of missing) downgradeLockedDoorsByColour(dungeon, colour);
+  }
+  return playerPos;
 }
 
 /**
