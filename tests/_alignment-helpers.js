@@ -72,8 +72,11 @@
 // blast radius is too high to verify mutation semantics on all 17
 // files at once.
 
-const fs = require('node:fs');
-const path = require('node:path');
+const {
+  blankStringContents,
+  readSourceFile,
+  stripJsComments,
+} = require('./_source-files.js');
 
 /**
  * Strip both block (`/* ... *​/`) and line (`// ...`) comments from
@@ -81,36 +84,14 @@ const path = require('node:path');
  * structural anchor regexes (e.g. a comment containing `if (` would
  * otherwise interfere with `lastIndexOf('if (')`).
  *
- * Note: this is a NAIVE strip — it does not handle comment-like
- * substrings inside string literals. Combine with `blankStringContents`
- * if your test depends on neither comments NOR string literals.
+ * Delegates to tests/_source-files.js so future source-file splits have one
+ * place to update source text loading/comment handling.
  *
  * @param {string} src
  * @returns {string}
  */
 function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
-}
-
-/**
- * Replace string-literal CONTENTS (single, double, backtick) with
- * same-length runs of spaces, preserving the QUOTE characters AND the
- * overall length of the source (so character offsets remain valid).
- *
- * Defends brace-depth and paren-depth counters from being confused by
- * `{` / `}` / `(` / `)` substrings inside string literals — see the
- * structural-ancestor and brace-depth checks in
- * tests/bulwark-hud.test.js / tests/glass-cannon-hud.test.js.
- *
- * @param {string} src
- * @returns {string}
- */
-function blankStringContents(src) {
-  return src
-    .replace(/('(?:\\.|[^'\\])*')|("(?:\\.|[^"\\])*")|(`(?:\\.|[^`\\])*`)/g,
-      (m) => m[0] + ' '.repeat(m.length - 2) + m[m.length - 1]);
+  return stripJsComments(src);
 }
 
 /**
@@ -232,12 +213,8 @@ function normaliseBadgePredicate(cond) {
  * }}
  */
 function loadAlignmentSources(testsDir) {
-  const CONTENT = fs.readFileSync(
-    path.resolve(testsDir, '..', 'src', 'content.js'), 'utf8'
-  );
-  const ENTITIES = fs.readFileSync(
-    path.resolve(testsDir, '..', 'src', 'entities.js'), 'utf8'
-  );
+  const CONTENT = readSourceFile(testsDir, 'content');
+  const ENTITIES = readSourceFile(testsDir, 'entities');
   const CONTENT_CODE = stripComments(CONTENT);
   const ENTITIES_CODE = stripComments(ENTITIES);
   const CONTENT_BRACES = blankStringContents(CONTENT_CODE);

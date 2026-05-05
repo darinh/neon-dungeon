@@ -59,9 +59,18 @@ function scan() {
     console.error('engine/ directory not found at ' + ENGINE_DIR);
     process.exit(2);
   }
-  const files = fs.readdirSync(ENGINE_DIR)
-    .filter((f) => f.endsWith('.js'))
-    .map((f) => path.join(ENGINE_DIR, f));
+  /** @param {string} dir @returns {string[]} */
+  function collectJsFiles(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...collectJsFiles(p));
+      else if (entry.isFile() && entry.name.endsWith('.js')) out.push(p);
+    }
+    return out;
+  }
+
+  const files = collectJsFiles(ENGINE_DIR);
 
   const findings = [];
   for (const file of files) {
@@ -118,7 +127,18 @@ function scan() {
 }
 
 const findings = scan();
-const fileCount = fs.readdirSync(ENGINE_DIR).filter((f) => f.endsWith('.js')).length;
+/** @param {string} dir @returns {number} */
+function countJsFiles(dir) {
+  let count = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) count += countJsFiles(p);
+    else if (entry.isFile() && entry.name.endsWith('.js')) count++;
+  }
+  return count;
+}
+
+const fileCount = countJsFiles(ENGINE_DIR);
 if (findings.length === 0) {
   console.log('engine purity: ok (' + fileCount + ' files clean)');
   process.exit(0);
