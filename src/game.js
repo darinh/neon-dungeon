@@ -95,7 +95,7 @@ const ACT1_MESSAGE_INTENTS = [
   },
 ];
 
-const APP_VERSION_RELEASE_URL = 'https://api.github.com/repos/darinh/neon-dungeon/releases/latest';
+const APP_VERSION_URL = './version.json';
 const APP_VERSION_CACHE_KEY = 'neonDungeonReleaseVersion';
 const APP_VERSION_CACHE_TS_KEY = 'neonDungeonReleaseVersionCheckedAt';
 const APP_VERSION_REFRESH_MS = 60 * 60 * 1000;
@@ -129,20 +129,19 @@ function loadAppVersion() {
     return Promise.resolve();
   }
 
-  return fetch(APP_VERSION_RELEASE_URL)
+  return fetch(APP_VERSION_URL)
     .then((response) => {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     })
-    .then((release) => {
-      const tag = release && typeof release.tag_name === 'string' ? release.tag_name.trim() : '';
-      const version = tag.replace(/^v/i, '');
-      if (!version) throw new Error('GitHub release missing tag_name');
+    .then((metadata) => {
+      const version = metadata && typeof metadata.version === 'string' ? metadata.version.trim() : '';
+      if (!version) throw new Error('version.json missing version');
       appVersion = version;
       cacheAppVersion(version);
     })
     .catch((err) => {
-      console.error('[version] failed to load latest GitHub release:', err);
+      console.error('[version] failed to load release version:', err);
     });
 }
 

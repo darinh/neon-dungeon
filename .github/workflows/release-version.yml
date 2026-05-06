@@ -10,11 +10,16 @@ concurrency:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     if: "${{ github.actor != 'github-actions[bot]' }}"
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,9 +55,8 @@ jobs:
 
           latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)
           if [ -z "$latest_tag" ]; then
-            major=0
-            minor=0
-            patch=0
+            echo "::error::no existing semver release tag found; seed the current release tag before enabling automated bumps"
+            exit 1
           else
             version=${latest_tag#v}
             IFS=. read -r major minor patch <<< "$version"
@@ -94,3 +98,27 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "NEON DUNGEON v${VERSION}" \
             --notes "$BODY"
+
+      - uses: actions/configure-pages@v5
+
+      - name: Build Pages artifact
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          rsync -a \
+            --exclude='.git' \
+            --exclude='_site' \
+            --exclude='node_modules' \
+            ./ _site/
+          printf '{"version":"%s","tag":"v%s","commit":"%s"}\n' "$VERSION" "$VERSION" "$GITHUB_SHA" > _site/version.json
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
