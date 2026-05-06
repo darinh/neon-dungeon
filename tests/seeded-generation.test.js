@@ -65,7 +65,7 @@ test('floor generation uses derived seed streams for world, spawn, and event wor
   const nextIdx = GAME.indexOf('startGame(opts)', loadIdx);
   assert.ok(loadIdx >= 0 && nextIdx > loadIdx, 'loadFloor block must be findable');
   const loadBlock = GAME.slice(loadIdx, nextIdx);
-  assert.match(loadBlock, /withDerivedRngStream\('world:floor:' \+ n,\s*\(\) => generateFloor\(n\)\)/);
+  assert.match(loadBlock, /withDerivedRngStream\('world:floor:' \+ n,\s*\(\) =>\s*generateFloor\(n, descentExitPos \? \{ previousExitPos: descentExitPos \} : undefined\)\s*\)/);
   assert.match(loadBlock, /withDerivedRngStream\('spawn:floor:' \+ n,\s*\(\) => populateFloor\(this\.dungeon,n\)\)/);
   assert.match(loadBlock, /withDerivedRngStream\('event:floor:' \+ n \+ ':quest',\s*\(\) => this\.generateQuest\(n\)\)/);
 });

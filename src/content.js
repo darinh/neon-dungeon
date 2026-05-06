@@ -3913,9 +3913,53 @@ function bfsRooms(rooms, startRoom, map) {
 }
 
 /**
- * @param {any} floorNum
+ * @param {number[][]} map
+ * @param {any[]} rooms
+ * @param {{x:number,y:number}|null|undefined} preferred
+ * @returns {{pos:{x:number,y:number}, room:any}|null}
  */
-function generateFloor(floorNum) {
+function resolvePreferredSpawnRoom(map, rooms, preferred) {
+  if (!preferred || !map || !rooms || !rooms.length) return null;
+  const h = map.length;
+  const w = map[0] ? map[0].length : 0;
+  if (!h || !w) return null;
+  const sx = Math.max(0, Math.min(w - 1, Math.floor(preferred.x)));
+  const sy = Math.max(0, Math.min(h - 1, Math.floor(preferred.y)));
+  const visited = new Set();
+  /** @type {{x:number,y:number,d:number}[]} */
+  const q = [{ x: sx, y: sy, d: 0 }];
+  visited.add(sy * w + sx);
+  while (q.length) {
+    const cur = q.shift();
+    if (!cur || cur.d > 12) continue;
+    const tile = map[cur.y]?.[cur.x];
+    if (isPassable(tile)) {
+      const pos = { x: cur.x + 0.5, y: cur.y + 0.5 };
+      const room = rooms.find((/** @type {any} */ r) =>
+        pos.x >= r.x && pos.x < r.x + r.w && pos.y >= r.y && pos.y < r.y + r.h
+      );
+      if (room) return { pos, room };
+    }
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let i = 0; i < dirs.length; i++) {
+      const dir = dirs[i];
+      if (!dir) continue;
+      const nx = cur.x + (dir[0] || 0), ny = cur.y + (dir[1] || 0);
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const key = ny * w + nx;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      q.push({ x: nx, y: ny, d: cur.d + 1 });
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {any} floorNum
+ * @param {{previousExitPos?: {x:number,y:number}|null}} [opts]
+ */
+function generateFloor(floorNum, opts) {
   const bsp = dungeonTopology.createBspDungeon({
     width: MAP_W,
     height: MAP_H,
@@ -3944,12 +3988,32 @@ function generateFloor(floorNum) {
       if (cMax > bestMaxD) { bestMaxD = cMax; spawnRoom = c; }
     }
   }
-  const playerPos = { x: spawnRoom.cx + 0.5, y: spawnRoom.cy + 0.5 };
+  const defaultSpawnRoom = spawnRoom;
+  let playerPos = { x: spawnRoom.cx + 0.5, y: spawnRoom.cy + 0.5 };
+  const preferredSpawn = resolvePreferredSpawnRoom(map, rooms, opts && opts.previousExitPos);
+  if (preferredSpawn) {
+    spawnRoom = preferredSpawn.room;
+    playerPos = preferredSpawn.pos;
+  }
 
   // Furthest room from spawn for stairs
   let dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
-  for (const [r,d] of dist) { if (d>farthestD) { farthestD=d; farthest=r; } }
+  for (const [r,d] of dist) {
+    if (preferredSpawn && r === defaultSpawnRoom) continue;
+    if (preferredSpawn && r === spawnRoom) continue;
+    if (d>farthestD) { farthestD=d; farthest=r; }
+  }
+  if (preferredSpawn && farthest === spawnRoom) {
+    let bestRoom = null;
+    let bestScore = -1;
+    for (const r of rooms) {
+      if (!r || r === spawnRoom || r === defaultSpawnRoom || r.roomType) continue;
+      const score = Math.abs(r.cx - spawnRoom.cx) + Math.abs(r.cy - spawnRoom.cy);
+      if (score > bestScore) { bestScore = score; bestRoom = r; }
+    }
+    if (bestRoom) farthest = bestRoom;
+  }
   const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
   const _isBossFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(floorNum) : (floorNum===3||floorNum===6||floorNum===10);
 
@@ -4983,7 +5047,7 @@ function generateFloor(floorNum) {
         if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
   }
 
-  return { map, rooms, spawnRoom, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, defaultSpawnRoom, preferredSpawnResolved: !!preferredSpawn, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
 
 // ─── Lighting ────────────────────────────────────────────────────────────────

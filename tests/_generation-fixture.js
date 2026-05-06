@@ -199,7 +199,7 @@ function createGenerationSandbox() {
 }
 
 /**
- * @returns {{sandbox:any, generateFloor(seed:string, floor:number): any}}
+ * @returns {{sandbox:any, generateFloor(seed:string, floor:number, opts?: any): any}}
  */
 function createGenerationFixture() {
   const sandbox = createGenerationSandbox();
@@ -208,11 +208,12 @@ function createGenerationFixture() {
     /**
      * @param {string} seed
      * @param {number} floor
+     * @param {any} [opts]
      * @returns {any}
      */
-    generateFloor(seed, floor) {
+    generateFloor(seed, floor, opts) {
       sandbox.setSeed(seed);
-      return sandbox.withDerivedRngStream(`world:floor:${floor}`, () => sandbox.generateFloor(floor));
+      return sandbox.withDerivedRngStream(`world:floor:${floor}`, () => sandbox.generateFloor(floor, opts));
     },
   };
 }
@@ -275,9 +276,17 @@ function generateFloorWithGameSpawnFixture(seed, floor) {
   const fixture = createGenerationFixture();
   const previous = floor > 1 ? fixture.generateFloor(seed, floor - 1) : null;
   const previousExitPos = previous ? findTile(previous, T.STAIRS) : null;
-  const dungeon = fixture.generateFloor(seed, floor);
-  const defaultPlayerPos = dungeon.playerPos;
-  const playerPos = carriedSpawnForDungeon(dungeon, previousExitPos, { guardReachability: true });
+  const standalone = fixture.generateFloor(seed, floor);
+  const defaultPlayerPos = standalone.playerPos;
+  const dungeon = fixture.generateFloor(seed, floor, previousExitPos ? { previousExitPos } : undefined);
+  let playerPos = dungeon.playerPos;
+  if (previousExitPos && !dungeon.preferredSpawnResolved) {
+    playerPos =
+      spawn.findNearestPassable(dungeon.map, previousExitPos.x, previousExitPos.y, isSafeSpawnTile) ||
+      spawn.findNearestPassable(dungeon.map, previousExitPos.x, previousExitPos.y, isPassable) ||
+      playerPos;
+  }
+  if (previousExitPos) playerPos = repairDescentSpawnDungeon(dungeon, playerPos);
   return { seed, floor, sandbox: fixture.sandbox, dungeon, playerPos, defaultPlayerPos, previousExitPos };
 }
 
@@ -410,7 +419,11 @@ function nearestSafeTileInRoom(dungeon, room, origin) {
  */
 function normalizeDescentSpawnDungeon(dungeon, playerPos) {
   const currentRoom = roomAtDungeon(dungeon, playerPos);
-  if (roomEligibleForDescentStart(dungeon, currentRoom)) return { playerPos, room: currentRoom };
+  if (roomEligibleForDescentStart(dungeon, currentRoom)) {
+    if (isSafeSpawnTile(dungeon.map[Math.floor(playerPos.y)]?.[Math.floor(playerPos.x)])) return { playerPos, room: currentRoom };
+    const safeSpawn = nearestSafeTileInRoom(dungeon, currentRoom, playerPos);
+    if (safeSpawn) return { playerPos: safeSpawn, room: currentRoom };
+  }
   let best = null;
   let bestScore = Infinity;
   for (const room of dungeon.rooms || []) {
@@ -498,7 +511,7 @@ function relocateStairsOutOfStartRoom(dungeon, startRoom, originalSpawnRoom) {
  * @returns {{x:number,y:number}}
  */
 function repairDescentSpawnDungeon(dungeon, playerPos) {
-  const originalSpawnRoom = dungeon.spawnRoom;
+  const originalSpawnRoom = dungeon.defaultSpawnRoom || dungeon.spawnRoom;
   const normalized = normalizeDescentSpawnDungeon(dungeon, playerPos);
   const startRoom = normalized.room;
   playerPos = normalized.playerPos;
@@ -594,6 +607,7 @@ module.exports = {
   generateFloorWithGameSpawnFixture,
   isDoor,
   isPassable,
+  isSafeSpawnTile,
   isSeeThrough,
   lockColours,
   lockedDoorTilesOnRoomBoundary,
