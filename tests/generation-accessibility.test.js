@@ -15,6 +15,7 @@ const {
   findTile,
   generateFloorFixture,
   generateFloorWithGameSpawnFixture,
+  isSafeSpawnTile,
   lockColours,
   lockedDoorTilesOnRoomBoundary,
   physicalReachWithKeys,
@@ -126,7 +127,9 @@ function assertNormalRuntimeStart(runtime, reason = '') {
   const prefix = reason ? `[${reason}] ` : '';
   const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
   const defaultRoom = roomAt(runtime.dungeon, runtime.defaultPlayerPos);
+  const spawnTile = runtime.dungeon.map[Math.floor(runtime.playerPos.y)]?.[Math.floor(runtime.playerPos.x)];
   assert.ok(runtimeRoom, prefix + 'runtime spawn should normalize to a room');
+  assert.equal(isSafeSpawnTile(spawnTile), true, prefix + 'runtime spawn must land on a safe final tile');
   assert.equal(runtimeRoom.roomType || null, null, prefix + 'runtime spawn room must be a normal room so populateFloor can safely skip it');
   assert.notEqual(runtimeRoom, runtime.dungeon.bossRoom, prefix + 'runtime spawn room must not be the boss room');
   assert.notEqual(runtimeRoom, runtime.dungeon.mainframeRoom, prefix + 'runtime spawn room must not be the mainframe room');
@@ -228,6 +231,10 @@ test('seed 1111-1111-1111 floor 2 preserves descent start and repairs that room'
     GAME,
     /spawn = repairDescentSpawnFloor\(this\.dungeon, spawn, this\.player && this\.player\.keys\);/
   );
+  assert.match(
+    GAME,
+    /generateFloor\(n, descentExitPos \? \{ previousExitPos: descentExitPos \} : undefined\)/
+  );
 
   const fixture = createGenerationFixture();
   const floor1 = fixture.generateFloor('1111-1111-1111', 1);
@@ -251,10 +258,12 @@ test('seed 1111-1111-1111 floor 2 preserves descent start and repairs that room'
 
   const runtime = generateFloorWithGameSpawnFixture('1111-1111-1111', 2);
   const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
+  const defaultRoom = roomAt(runtime.dungeon, runtime.defaultPlayerPos);
   assert.ok(runtimeRoom, 'runtime spawn should land in a room');
-  assert.deepEqual(
-    runtime.playerPos,
-    unguardedSpawn,
+  assert.ok(defaultRoom, 'standalone default spawn room should still be identifiable');
+  assert.equal(
+    `${runtime.playerPos.x},${runtime.playerPos.y}`,
+    `${unguardedSpawn.x},${unguardedSpawn.y}`,
     'runtime descent spawn must stay below the previous floor exit instead of falling back to generated spawn'
   );
   assert.notDeepEqual(
@@ -266,6 +275,11 @@ test('seed 1111-1111-1111 floor 2 preserves descent start and repairs that room'
     runtime.dungeon.spawnRoom,
     runtimeRoom,
     'room containing the carried descent spawn becomes the runtime starting room'
+  );
+  assert.notEqual(
+    runtime.dungeon.defaultSpawnRoom,
+    runtime.dungeon.spawnRoom,
+    'generator must remember the standalone default spawn separately from the carried runtime spawn'
   );
   assertNormalRuntimeStart(runtime);
 });
@@ -279,6 +293,40 @@ test('runtime descent start normalizes corridor, special, and boss-room carryove
   for (const c of cases) {
     const runtime = generateFloorWithGameSpawnFixture(c.seed, c.floor);
     assertNormalRuntimeStart(runtime, c.reason);
+  }
+});
+
+test('runtime descent does not abandon sparse previous-exit fallback to generated default spawn', () => {
+  const cases = [
+    { seed: '1006', floor: 14 },
+    { seed: '1049', floor: 8 },
+  ];
+  for (const c of cases) {
+    const runtime = generateFloorWithGameSpawnFixture(c.seed, c.floor);
+    assert.equal(runtime.dungeon.preferredSpawnResolved, false, `${c.seed} floor ${c.floor} should exercise unresolved preferred-spawn fallback`);
+    assertNormalRuntimeStart(runtime, `${c.seed} floor ${c.floor}`);
+    const carriedDistance = Math.abs(runtime.playerPos.x - (runtime.previousExitPos.x + 0.5)) +
+      Math.abs(runtime.playerPos.y - (runtime.previousExitPos.y + 0.5));
+    const defaultDistance = Math.abs(runtime.defaultPlayerPos.x - (runtime.previousExitPos.x + 0.5)) +
+      Math.abs(runtime.defaultPlayerPos.y - (runtime.previousExitPos.y + 0.5));
+    assert.ok(
+      carriedDistance < defaultDistance,
+      `${c.seed} floor ${c.floor} should stay closer to the previous exit than the standalone default spawn`
+    );
+  }
+});
+
+test('runtime descent repairs preferred spawn tiles that later become doors', () => {
+  const cases = [
+    { seed: '1002', floor: 9 },
+    { seed: '1016', floor: 5 },
+  ];
+  for (const c of cases) {
+    const runtime = generateFloorWithGameSpawnFixture(c.seed, c.floor);
+    assert.equal(runtime.dungeon.preferredSpawnResolved, true, `${c.seed} floor ${c.floor} should resolve the preferred room during generation`);
+    assertNormalRuntimeStart(runtime, `${c.seed} floor ${c.floor}`);
+    const spawnTile = runtime.dungeon.map[Math.floor(runtime.playerPos.y)]?.[Math.floor(runtime.playerPos.x)];
+    assert.notEqual(spawnTile, T.DOOR, `${c.seed} floor ${c.floor} spawn tile must move off closed doors`);
   }
 });
 
