@@ -130,6 +130,14 @@ function tileInsideRoom(dungeon, x, y) {
   );
 }
 
+function tileOnRoomBoundary(dungeon, x, y) {
+  return dungeon.rooms.some((room) =>
+    x >= room.x && x < room.x + room.w &&
+    y >= room.y && y < room.y + room.h &&
+    (x === room.x || x === room.x + room.w - 1 || y === room.y || y === room.y + room.h - 1)
+  );
+}
+
 function isDoorLikeTile(tile) {
   return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
     tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
@@ -146,10 +154,14 @@ function assertFlushSingleTileEntrances(dungeon, label) {
     for (let x = 1; x < MAP_W - 1; x++) {
       const tile = dungeon.map[y][x];
       if (!isDoorLikeTile(tile)) continue;
-      if (tileInsideRoom(dungeon, x, y)) failures.push(`${label}: door-like tile inside room at ${x},${y}`);
-      const adjacentRoom = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        .filter(([dx, dy]) => tileInsideRoom(dungeon, x + dx, y + dy));
-      if (adjacentRoom.length === 0) failures.push(`${label}: door-like tile not flush with a room wall at ${x},${y}`);
+      if (!tileOnRoomBoundary(dungeon, x, y)) failures.push(`${label}: door-like tile not on room wall line at ${x},${y}`);
+      const adjacentOutsidePassage = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .filter(([dx, dy]) => !tileInsideRoom(dungeon, x + dx, y + dy))
+        .some(([dx, dy]) => {
+          const t = dungeon.map[y + dy]?.[x + dx];
+          return t !== T.WALL && t !== T.VOID;
+        });
+      if (!adjacentOutsidePassage) failures.push(`${label}: door-like tile has no outside passage at ${x},${y}`);
       const adjacentDoor = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .some(([dx, dy]) => isDoorLikeTile(dungeon.map[y + dy]?.[x + dx]));
       if (adjacentDoor) failures.push(`${label}: adjacent double door/gate tile at ${x},${y}`);
