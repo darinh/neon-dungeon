@@ -521,9 +521,13 @@ Each floor is generated fresh using Binary Space Partitioning:
    rooms wall off entrances, corridor tiles that become dead ends
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
    WALL so players never walk down a tunnel to nowhere.
-8. **Wide-corridor thinning**: outside-room 2×2 passable hallway blocks are
-   iteratively narrowed without removing door-like tiles and only when the
-   key/lock reachability solver still proves every room reachable.
+8. **Door and hallway normalization**: door-like entrances (`DOOR`, locked
+   doors, challenge gates, cracked secret entrances) are single-tile,
+   non-adjacent, never placed on room corners, and must be embedded in the wall
+   line with wall/void tiles on either the north+south or east+west sides.
+   Outside-room 2×2 passable hallway blocks are iteratively narrowed without
+   removing door-like tiles and only when the key/lock reachability solver still
+   proves every room reachable.
 9. **Reachability guarantee**: key-cascade BFS from spawn to every room
    respects locked doors until their physically reachable keys are collected.
    If stairs are unreachable after generation, a rescue corridor is carved
@@ -621,8 +625,8 @@ explosion with sub-bass and debris crackle.
 
 **Lighting:** Each floor tile has a computed light level (0–1) based on
 distance from the player torch (radius = 9 tiles; BLACKOUT: 5), with LOS
-gating. Walls, cracked walls, and closed/locked doors block vision; diagonal
-corner peeking is blocked. Light decays linearly to zero at the torch edge.
+gating. Walls, cracked walls, closed/locked doors, and challenge gates block
+vision; diagonal corner peeking is blocked. Light decays linearly to zero at the torch edge.
 Static wall sconces (radius 4, 0.4× brightness) add ambient light to already
 visited tiles near the player but do not reveal new tiles.
 **Fog of war:** tiles seen once remain visited; currently lit tiles render at
@@ -657,8 +661,9 @@ tile coordinates + health). HP scales with floor: `15 + floor × 5`.
 - **Volatile Core detonation:** Crates within the 2.2-tile blast radius (LOS
   gated) take full detonation damage.
 - **Grenade explosion:** Crates within the 1.5-tile blast radius take grenade
-  damage.
-- **VOLATILE / EXPLOSIVE_KILLS death explosion:** Crates in radius take damage.
+  damage, gated by line of sight.
+- **VOLATILE / EXPLOSIVE_KILLS death explosion:** Crates in radius take damage,
+  gated by line of sight.
 - **Weapon affix AoE (EXPLOSIVE affix):** Crates in radius take damage.
 - **CHARGER charge impact:** When a charging CHARGER collides with a crate
   wall, the crate takes `1.5× ATK` damage (same as charge hit damage).
@@ -2770,6 +2775,12 @@ There is a 20 % chance one option is a pre-rolled weapon showing exact stats.
 | NANO_REPAIR | Nano-Repair | +15 HP | 35 |
 | XP_CHIP | XP Chip | +50 XP | 20 |
 | VOID_SHARD | Void Shard | +1 void bomb charge | 4 |
+
+Void Shard bombs (`FuseShard` → `_detonateBombAt`) deal mob damage and shatter
+cracked walls only when the target has blast line-of-sight from the detonation
+point. Walls, closed/locked doors, challenge gates, crates, and intervening
+cracked walls block the blast; the cracked wall being targeted can still be
+shattered if no separate blocker sits between it and the bomb.
 
 **Weapon upgrades (pre-rolled, shows exact weapon name and stats):**
 

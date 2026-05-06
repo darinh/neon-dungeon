@@ -66,7 +66,8 @@ function isPassable(t) {
  */
 function isSeeThrough(t) {
   return t !== T.WALL && t !== T.VOID && t !== T.CRACKED && t !== T.DOOR &&
-    t !== T.LOCKED_R && t !== T.LOCKED_B && t !== T.LOCKED_G && t !== T.CRATE;
+    t !== T.LOCKED_R && t !== T.LOCKED_B && t !== T.LOCKED_G &&
+    t !== T.CHALLENGE_GATE && t !== T.CRATE;
 }
 
 /**
@@ -605,6 +606,7 @@ module.exports = {
   findTile,
   generateFloorFixture,
   generateFloorWithGameSpawnFixture,
+  hasLOS,
   isDoor,
   isPassable,
   isSafeSpawnTile,
