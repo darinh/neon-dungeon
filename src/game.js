@@ -97,19 +97,13 @@ const ACT1_MESSAGE_INTENTS = [
 
 const APP_VERSION_URL = './version.json';
 const APP_VERSION_CACHE_KEY = 'neonDungeonReleaseVersion';
-const APP_VERSION_CACHE_TS_KEY = 'neonDungeonReleaseVersionCheckedAt';
-const APP_VERSION_REFRESH_MS = 60 * 60 * 1000;
 
-/** @returns {number} */
 function readCachedAppVersion() {
   try {
     const version = localStorage.getItem(APP_VERSION_CACHE_KEY);
-    const checkedAt = Number(localStorage.getItem(APP_VERSION_CACHE_TS_KEY) || 0);
     if (version) appVersion = version;
-    return checkedAt;
   } catch (err) {
     console.warn('[version] failed to read cached release version:', err);
-    return 0;
   }
 }
 
@@ -117,19 +111,13 @@ function readCachedAppVersion() {
 function cacheAppVersion(version) {
   try {
     localStorage.setItem(APP_VERSION_CACHE_KEY, version);
-    localStorage.setItem(APP_VERSION_CACHE_TS_KEY, String(Date.now()));
   } catch (err) {
     console.warn('[version] failed to cache release version:', err);
   }
 }
 
 function loadAppVersion() {
-  const checkedAt = readCachedAppVersion();
-  if (checkedAt && Date.now() - checkedAt < APP_VERSION_REFRESH_MS) {
-    return Promise.resolve();
-  }
-
-  return fetch(APP_VERSION_URL)
+  return fetch(APP_VERSION_URL, { cache: 'no-store' })
     .then((response) => {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
@@ -142,6 +130,7 @@ function loadAppVersion() {
     })
     .catch((err) => {
       console.error('[version] failed to load release version:', err);
+      readCachedAppVersion();
     });
 }
 
