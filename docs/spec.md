@@ -557,12 +557,12 @@ LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | 
 
 ### Doors & Locked Doors
 
-**Regular doors:** Placed on the corridor-side tile immediately outside a room
-wall using entrance clustering. Multi-tile entrance clusters are narrowed to a
-single flush doorway tile before door/lock/secret/challenge placement, so
-door-like tiles do not sit inside rooms and adjacent double-door openings are
-collapsed. Each eligible single-tile entrance has a 50 % chance of receiving a
-regular `T.DOOR`.
+**Regular doors:** Placed on the room boundary tile, in line with the room's
+wall edge, using entrance clustering. Multi-tile entrance clusters are narrowed
+to a single flush doorway tile before door/lock/secret/challenge placement, so
+door-like tiles do not protrude into the hallway and adjacent double-door
+openings are collapsed. Each eligible single-tile entrance has a 50 % chance of
+receiving a regular `T.DOOR`.
 
 **Locked doors (floor 2+):** Gate high-value rooms using coloured keys (red,
 blue, gold). Target priority:

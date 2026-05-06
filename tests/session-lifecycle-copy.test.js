@@ -73,10 +73,10 @@ test('run start menu frames new and saved runs as AI test sessions', () => {
 test('title screen renders the latest GitHub Release version', () => {
   assert.doesNotMatch(GAME, /APP_VERSION\s*=\s*['"]/);
   assert.match(GAME, /APP_VERSION_URL = '\.\/version\.json'/);
-  assert.match(GAME, /APP_VERSION_REFRESH_MS = 60 \* 60 \* 1000/);
+  assert.doesNotMatch(GAME, /APP_VERSION_REFRESH_MS/);
+  assert.match(GAME, /fetch\(APP_VERSION_URL,\s*\{\s*cache:\s*'no-store'\s*\}\)/);
   assert.match(GAME, /localStorage\.getItem\(APP_VERSION_CACHE_KEY\)/);
-  assert.match(GAME, /Date\.now\(\) - checkedAt < APP_VERSION_REFRESH_MS/);
-  assert.match(GAME, /fetch\(APP_VERSION_URL\)/);
+  assert.doesNotMatch(GAME, /Date\.now\(\) - checkedAt/);
   assert.match(GAME, /version\.json missing version/);
   assert.match(GAME, /appVersion = version/);
   assert.match(GAME, /cacheAppVersion\(version\)/);
