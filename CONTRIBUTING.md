@@ -90,7 +90,8 @@ CI (`.github/workflows/test.yml`) runs `npm run check` on every PR targeting
 `sw.js` precaches the file list with a stable cache name. Do not add or bump a
 numeric service-worker cache version; the only user-facing release version is
 the latest GitHub Release tag, which is created automatically on `main` by
-`.github/workflows/release-version.yml`.
+`.github/workflows/release-version.yml` and written into the Pages artifact as
+same-origin `version.json`.
 
 There is no cache version to bump. Code freshness is handled by network-first
 fetches for navigations and explicit app assets; offline support comes from the
