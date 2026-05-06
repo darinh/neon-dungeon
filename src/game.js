@@ -1185,7 +1185,10 @@ function nearestSafeTileInRoom(map, room, origin) {
 function normalizeDescentSpawnRoom(dungeon, spawn) {
   const currentRoom = floorRoomAt(dungeon, spawn);
   if (floorRoomEligibleForDescentStart(dungeon, currentRoom)) {
-    return { spawn, room: currentRoom };
+    const row = dungeon.map && dungeon.map[Math.floor(spawn.y)];
+    if (row && isSafeSpawn(row[Math.floor(spawn.x)])) return { spawn, room: currentRoom };
+    const safeSpawn = nearestSafeTileInRoom(dungeon.map, currentRoom, spawn);
+    if (safeSpawn) return { spawn: safeSpawn, room: currentRoom };
   }
   /** @type {{spawn:{x:number,y:number},room:any} | null} */
   let best = null;
@@ -1287,7 +1290,7 @@ function downgradeLockedDoorsByColour(map, colour) {
  */
 function repairDescentSpawnFloor(dungeon, spawn, playerKeys) {
   if (!dungeon || !Array.isArray(dungeon.map) || !spawn) return spawn;
-  const originalSpawnRoom = dungeon.spawnRoom;
+  const originalSpawnRoom = dungeon.defaultSpawnRoom || dungeon.spawnRoom;
   const normalized = normalizeDescentSpawnRoom(dungeon, spawn);
   const startRoom = normalized.room;
   spawn = normalized.spawn;
@@ -2009,23 +2012,26 @@ const game = {
       NEON.boosts.clearFloorBoosts(this.player);
     }
     this.player.autoLaserBeam=null; // clear stale beam from previous floor
-    this.dungeon = withDerivedRngStream('world:floor:' + n, () => generateFloor(n));
+    const descentExitPos = savedModifier === undefined ? this._exitPos : null;
+    this.dungeon = withDerivedRngStream('world:floor:' + n, () =>
+      generateFloor(n, descentExitPos ? { previousExitPos: descentExitPos } : undefined)
+    );
     // Floor exit-position carryover: if the player descended from a previous
     // floor, drop them near the same world coordinates on the new floor
     // (procedural layout means we may need the nearest passable tile). This
     // must run before populateFloor(), because the inherited room becomes the
     // real starting room for enemy/item placement.
     let spawn = this.dungeon.playerPos;
-    if (savedModifier === undefined && this._exitPos &&
-        typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
+    if (savedModifier === undefined && this._exitPos) {
       try {
-        const near =
-          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
-          NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
-        if (near) {
-          spawn = near;
-          spawn = repairDescentSpawnFloor(this.dungeon, spawn, this.player && this.player.keys);
+        if (!this.dungeon.preferredSpawnResolved &&
+            typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
+          const near =
+            NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
+            NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
+          if (near) spawn = near;
         }
+        spawn = repairDescentSpawnFloor(this.dungeon, spawn, this.player && this.player.keys);
       } catch (_) { /* fall through to default spawn */ }
     }
     this._exitPos = null;
