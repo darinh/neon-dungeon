@@ -4331,36 +4331,23 @@ function generateFloor(floorNum, opts) {
   }
 
   // ── Doors: place at room-corridor junctions (chokepoints only) ──────────
-  // Helper: find entrance clusters for a room (groups of adjacent corridor-side
-  // tiles outside the room wall). Returns array of arrays.
+  // Helper: find entrance clusters for a room (groups of adjacent boundary
+  // tiles on the room wall line). Returns array of arrays.
   /**
    * @param {any} room
    */
   function getEntranceClusters(room) {
     const edges = [];
     const isEntry = (/** @type {any} */ t) => t===T.FLOOR||t===T.DOOR;
-    /** @type {[number, number][]} */
-    const cardinalDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    /** @param {number} x @param {number} y */
-    const inThisRoom = (x, y) => x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
-    /** @param {number} x @param {number} y */
-    const hasCorridorSide = (x, y) => {
-      for (const [dx, dy] of cardinalDirs) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || inThisRoom(nx, ny)) continue;
-        if (isEntry(map[ny]?.[nx])) return true;
-      }
-      return false;
-    };
     for (let tx=room.x; tx<room.x+room.w; tx++) {
-      if (room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx]) && hasCorridorSide(tx, room.y-1)) edges.push({x:tx, y:room.y-1});
+      if (room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx])) edges.push({x:tx, y:room.y});
       const by=room.y+room.h-1;
-      if (by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx]) && hasCorridorSide(tx, by+1)) edges.push({x:tx, y:by+1});
+      if (by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx])) edges.push({x:tx, y:by});
     }
     for (let ty=room.y; ty<room.y+room.h; ty++) {
-      if (room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1]) && hasCorridorSide(room.x-1, ty)) edges.push({x:room.x-1, y:ty});
+      if (room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1])) edges.push({x:room.x, y:ty});
       const bx=room.x+room.w-1;
-      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1]) && hasCorridorSide(bx+1, ty)) edges.push({x:bx+1, y:ty});
+      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1])) edges.push({x:bx, y:ty});
     }
     // Deduplicate
     const seen = new Set();
@@ -4403,6 +4390,27 @@ function generateFloor(floorNum, opts) {
   function isDoorLikeEntranceTile(tile) {
     return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
       tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
+  }
+
+  /** @param {number} x @param {number} y */
+  function hasOutsidePassage(x, y) {
+    /** @type {[number, number][]} */
+    const cardinalDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dx, dy] of cardinalDirs) {
+      const nx = x + dx, ny = y + dy;
+      const t = map[ny]?.[nx];
+      if (rooms.some((/** @type {any} */ r) => nx >= r.x && nx < r.x + r.w && ny >= r.y && ny < r.y + r.h)) continue;
+      if (t !== T.WALL && t !== T.VOID) return true;
+    }
+    return false;
+  }
+
+  function clearOrphanEntranceTiles() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (isDoorLikeEntranceTile(map[y][x]) && !hasOutsidePassage(x, y)) map[y][x] = T.FLOOR;
+      }
+    }
   }
 
   function collapseAdjacentEntranceTiles() {
@@ -4508,7 +4516,7 @@ function generateFloor(floorNum, opts) {
   for (const r of rooms) {
     if (r === bossRoom) continue;
     const clusters = getEntranceClusters(r);
-    // Single corridor-side entrance tiles become optional doors.
+    // Single room-boundary entrance tiles become optional doors.
     for (const cl of clusters) {
       if (cl.length === 1 && rand('world') < 0.5) {
         for (const e of cl) map[e.y][e.x] = T.DOOR;
@@ -4544,7 +4552,7 @@ function generateFloor(floorNum, opts) {
     for (const lr of lockPriority) {
       if (placed >= numLocked) break;
       const ci = Math.min(placed, 2);
-      // Entrance clusters were already narrowed to one corridor-side tile;
+      // Entrance clusters were already narrowed to one room-boundary tile;
       // lock every current entrance so the room cannot be bypassed.
       const cls = getEntranceClusters(lr);
       const narrowClusters = cls.filter(cl => cl.length <= 2);
@@ -4874,25 +4882,25 @@ function generateFloor(floorNum, opts) {
       /** @type {{x:number,y:number,ox:number,oy:number}[]} */
       const gates = [];
       for (let tx = room.x; tx < room.x + room.w; tx++) {
-        const top = map[room.y - 1]?.[tx];
+        const top = map[room.y]?.[tx];
         if (top === T.LOCKED_R || top === T.LOCKED_B || top === T.LOCKED_G || top === T.CRACKED || top === T.CHALLENGE_GATE) {
-          gates.push({ x: tx, y: room.y - 1, ox: tx, oy: room.y - 2 });
+          gates.push({ x: tx, y: room.y, ox: tx, oy: room.y - 1 });
         }
         const by = room.y + room.h - 1;
-        const bottom = map[by + 1]?.[tx];
+        const bottom = map[by]?.[tx];
         if (bottom === T.LOCKED_R || bottom === T.LOCKED_B || bottom === T.LOCKED_G || bottom === T.CRACKED || bottom === T.CHALLENGE_GATE) {
-          gates.push({ x: tx, y: by + 1, ox: tx, oy: by + 2 });
+          gates.push({ x: tx, y: by, ox: tx, oy: by + 1 });
         }
       }
       for (let ty = room.y; ty < room.y + room.h; ty++) {
-        const left = map[ty]?.[room.x - 1];
+        const left = map[ty]?.[room.x];
         if (left === T.LOCKED_R || left === T.LOCKED_B || left === T.LOCKED_G || left === T.CRACKED || left === T.CHALLENGE_GATE) {
-          gates.push({ x: room.x - 1, y: ty, ox: room.x - 2, oy: ty });
+          gates.push({ x: room.x, y: ty, ox: room.x - 1, oy: ty });
         }
         const bx = room.x + room.w - 1;
-        const right = map[ty]?.[bx + 1];
+        const right = map[ty]?.[bx];
         if (right === T.LOCKED_R || right === T.LOCKED_B || right === T.LOCKED_G || right === T.CRACKED || right === T.CHALLENGE_GATE) {
-          gates.push({ x: bx + 1, y: ty, ox: bx + 2, oy: ty });
+          gates.push({ x: bx, y: ty, ox: bx + 1, oy: ty });
         }
       }
       return gates;
@@ -4963,6 +4971,7 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
+  clearOrphanEntranceTiles();
 
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
