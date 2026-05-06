@@ -77,9 +77,10 @@ Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `s
 
 `sw.js` must not carry a numeric app/cache version such as `neon-dungeon-vNNN`.
 The only user-facing release version is the latest GitHub Release tag, created
-by `.github/workflows/release-version.yml` after changes land on `main`. The
-service worker uses a stable cache name and network-first fetches for app assets
-so code freshness does not depend on a second version number.
+by `.github/workflows/release-version.yml` after changes land on `main` and
+written into the Pages artifact as same-origin `version.json`. The service worker
+uses a stable cache name and network-first fetches for app assets so code
+freshness does not depend on a second version number.
 
 If you add a brand-new file under `ASSETS`, add the path to the precache list in
 `sw.js`; do not add or bump a service-worker version.
