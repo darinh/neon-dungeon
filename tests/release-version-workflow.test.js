@@ -42,11 +42,23 @@ test('release-version tags the exact main commit without editing package files',
   assert.match(WORKFLOW, /fetch-depth:\s*0/);
   assert.match(WORKFLOW, /git tag --points-at "\$GITHUB_SHA"/);
   assert.match(WORKFLOW, /git tag --list 'v\[0-9\]\*\.\[0-9\]\*\.\[0-9\]\*'/);
+  assert.match(WORKFLOW, /no existing semver release tag found/);
   assert.match(WORKFLOW, /gh release create "v\$\{VERSION\}"/);
   assert.match(WORKFLOW, /--target "\$GITHUB_SHA"/);
   assert.doesNotMatch(WORKFLOW, /package\.json/);
   assert.doesNotMatch(WORKFLOW, /package-lock\.json/);
   assert.doesNotMatch(WORKFLOW, /git push origin "v\$\{VERSION\}"/);
+});
+
+test('release-version deploys same-origin version metadata with Pages artifact', () => {
+  assert.match(WORKFLOW, /pages:\s*write/);
+  assert.match(WORKFLOW, /id-token:\s*write/);
+  assert.match(WORKFLOW, /actions\/configure-pages@v5/);
+  assert.match(WORKFLOW, /actions\/upload-pages-artifact@v3/);
+  assert.match(WORKFLOW, /actions\/deploy-pages@v4/);
+  assert.match(WORKFLOW, /printf '\{"version":"%s","tag":"v%s","commit":"%s"\}\\n'/);
+  assert.match(WORKFLOW, /> _site\/version\.json/);
+  assert.match(WORKFLOW, /touch _site\/\.nojekyll/);
 });
 
 test('release-version parses bump markers from conventional commit positions only', () => {

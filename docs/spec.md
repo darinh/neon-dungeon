@@ -4529,9 +4529,10 @@ A `sw.js` at the repository root provides offline play after first visit:
 **Update flow:** Changes that land on `main` trigger
 `.github/workflows/release-version.yml`, which computes the next semver tag and
 creates a GitHub Release at the exact `main` commit. The visible title-screen
-version comes from the latest GitHub Release tag; `sw.js` deliberately has no
-numeric version. App assets are fetched network-first and update the stable cache
-when online, then fall back to cached responses offline.
+version comes from same-origin `version.json` generated from that release tag in
+the Pages artifact; `sw.js` deliberately has no numeric version. App assets are
+fetched network-first and update the stable cache when online, then fall back to
+cached responses offline.
 
 ### Known Limitation — iOS Safari
 

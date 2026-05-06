@@ -72,12 +72,12 @@ test('run start menu frames new and saved runs as AI test sessions', () => {
 
 test('title screen renders the latest GitHub Release version', () => {
   assert.doesNotMatch(GAME, /APP_VERSION\s*=\s*['"]/);
-  assert.match(GAME, /APP_VERSION_RELEASE_URL = 'https:\/\/api\.github\.com\/repos\/darinh\/neon-dungeon\/releases\/latest'/);
+  assert.match(GAME, /APP_VERSION_URL = '\.\/version\.json'/);
   assert.match(GAME, /APP_VERSION_REFRESH_MS = 60 \* 60 \* 1000/);
   assert.match(GAME, /localStorage\.getItem\(APP_VERSION_CACHE_KEY\)/);
   assert.match(GAME, /Date\.now\(\) - checkedAt < APP_VERSION_REFRESH_MS/);
-  assert.match(GAME, /fetch\(APP_VERSION_RELEASE_URL\)/);
-  assert.match(GAME, /tag_name/);
+  assert.match(GAME, /fetch\(APP_VERSION_URL\)/);
+  assert.match(GAME, /version\.json missing version/);
   assert.match(GAME, /appVersion = version/);
   assert.match(GAME, /cacheAppVersion\(version\)/);
   assert.match(GAME, /ctx\.fillText\('v' \+ appVersion,/);
