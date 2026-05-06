@@ -123,6 +123,61 @@ function roomAt(dungeon, pos) {
   ) || null;
 }
 
+function tileInsideRoom(dungeon, x, y) {
+  return dungeon.rooms.some((room) =>
+    x >= room.x && x < room.x + room.w &&
+    y >= room.y && y < room.y + room.h
+  );
+}
+
+function isDoorLikeTile(tile) {
+  return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
+    tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
+}
+
+function isCorridorTile(dungeon, x, y) {
+  const tile = dungeon.map[y]?.[x];
+  return !tileInsideRoom(dungeon, x, y) && tile !== T.WALL && tile !== T.VOID;
+}
+
+function assertFlushSingleTileEntrances(dungeon, label) {
+  const failures = [];
+  for (let y = 1; y < MAP_H - 1; y++) {
+    for (let x = 1; x < MAP_W - 1; x++) {
+      const tile = dungeon.map[y][x];
+      if (!isDoorLikeTile(tile)) continue;
+      if (tileInsideRoom(dungeon, x, y)) failures.push(`${label}: door-like tile inside room at ${x},${y}`);
+      const adjacentRoom = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .filter(([dx, dy]) => tileInsideRoom(dungeon, x + dx, y + dy));
+      if (adjacentRoom.length === 0) failures.push(`${label}: door-like tile not flush with a room wall at ${x},${y}`);
+      const adjacentDoor = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .some(([dx, dy]) => isDoorLikeTile(dungeon.map[y + dy]?.[x + dx]));
+      if (adjacentDoor) failures.push(`${label}: adjacent double door/gate tile at ${x},${y}`);
+    }
+  }
+  assert.deepEqual(failures, []);
+}
+
+function assertNoWideCorridors(dungeon, label) {
+  const failures = [];
+  for (let y = 1; y < MAP_H - 2; y++) {
+    for (let x = 1; x < MAP_W - 2; x++) {
+      if (isCorridorTile(dungeon, x, y) &&
+          isCorridorTile(dungeon, x + 1, y) &&
+          isCorridorTile(dungeon, x, y + 1) &&
+          isCorridorTile(dungeon, x + 1, y + 1)) {
+        const adjacentRoomEdges = [
+          [x - 1, y], [x - 1, y + 1], [x + 2, y], [x + 2, y + 1],
+          [x, y - 1], [x + 1, y - 1], [x, y + 2], [x + 1, y + 2],
+        ].filter(([ax, ay]) => tileInsideRoom(dungeon, ax, ay)).length;
+        if (adjacentRoomEdges >= 2) continue;
+        failures.push(`${label}: 2x2 corridor block at ${x},${y}`);
+      }
+    }
+  }
+  assert.deepEqual(failures, []);
+}
+
 function assertNormalRuntimeStart(runtime, reason = '') {
   const prefix = reason ? `[${reason}] ` : '';
   const runtimeRoom = roomAt(runtime.dungeon, runtime.playerPos);
@@ -191,6 +246,8 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
       assertAllRequiredRoomsReachable(dungeon);
       assertNoSpawnRoomKeys(dungeon);
       assertNoDuplicateKeyTiles(dungeon);
+      assertFlushSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
+      assertNoWideCorridors(dungeon, `${seed} floor ${floor}`);
     }
   }
 });
