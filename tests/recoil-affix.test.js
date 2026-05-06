@@ -215,15 +215,7 @@ test('RECOIL is non-proc-gated by caller (chain/explode procs do not stack-shove
     'applyHitEffects must remain gated on !ctx.isProc at the call site in EXECUTABLE code');
 });
 
-test('sw.js cache version >= v201 (RECOIL adds runtime behavior)', () => {
-  // Per project convention (conduit / sapper / harvester / fragile
-  // pattern): cache version assertion is a floor (>=), not exact-match,
-  // so sibling PRs can leapfrog without retroactive test edits. v201
-  // leapfrogs PRs #154 (v198), #155 (v199), #156 (v200) which were
-  // open at ship time.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vNNN cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 201,
-    `sw.js cache version must be >= 201 (RECOIL ships runtime behavior in src/content.js + src/entities.js), got v${v}`);
+test('sw.js cache freshness does not depend on a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

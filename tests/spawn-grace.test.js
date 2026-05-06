@@ -118,14 +118,9 @@ test('Player.draw renders pulsing ring while _spawnGraceTimer > 0', () => {
     'Player.draw must stroke a ring while spawn grace is active');
 });
 
-// ─── Service worker cache bump (per AGENTS.md sw cache convention) ──────
+// ─── Service worker cache freshness ─────────────────────────────────────
 
-test('sw.js cache version >= v194 (bumped for spawn-grace ship)', () => {
-  // AGENTS.md sw cache convention — relax the assertion to >= so future
-  // PRs that bump the cache further don't have to retitle this test.
-  // Pattern established by conduit/sapper/magneton tests.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m && m[1] || '0', 10);
-  assert.ok(v >= 194, `sw.js cache must be >= v194, got v${v}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

@@ -226,14 +226,9 @@ test('REVERSE_POLARITY skips ally-turret shots (friendly-fire regression)', () =
     'reflected projectile must clear isAllyTurret on convert');
 });
 
-// ─── Service worker cache bump ───────────────────────────────────────────
+// ─── Service worker cache freshness ──────────────────────────────────────
 
-test('SW cache version bumped (REVERSE_POLARITY ships fresh code)', () => {
-  // Per project convention: any change to a file listed in ASSETS
-  // requires a CACHE bump. Without it, existing PWA users keep the
-  // stale entities.js / content.js and never see the new hackware.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'SW must declare a versioned cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 214, `SW cache version must be >= 214 (was v213 before this change), got v${v}`);
+test('SW freshness does not use a second numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

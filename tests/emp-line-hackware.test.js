@@ -550,17 +550,9 @@ test('audio.hackwareEMPLine is defined in platform.js', () => {
     'platform.js must define an audio.hackwareEMPLine() method (otherwise activation crashes)');
 });
 
-// ─── SW cache invalidation ────────────────────────────────────────────────
+// ─── SW cache freshness ───────────────────────────────────────────────────
 
-test('sw.js cache version is bumped to v368 or higher (>= ship floor)', () => {
-  // Per project convention (memory: sw cache test convention): assert
-  // >= the ship floor, not exact version, so subsequent PRs don't have
-  // to retitle this test as cache versions march forward. Floor is
-  // the version on develop at branch creation; CI auto-bumps on merge
-  // (see .github/workflows/cache-bump.yml).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const ver = parseInt(m[1], 10);
-  assert.ok(ver >= 368,
-    `sw cache version must be >= v368 (EMP_LINE branch floor) — found v${ver}`);
+test('sw.js uses network-first freshness instead of numeric cache versions', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)\.catch\(\(\) => caches\.match\(e\.request\)\)/);
 });

@@ -317,14 +317,9 @@ test('DEADEYE state is NOT serialized in save snapshots (runtime-only)', () => {
     'save.js must not serialize _steadyReady (runtime-only state)');
 });
 
-// ─── Service worker cache version ─────────────────────────────────────────
+// ─── Service worker cache freshness ───────────────────────────────────────
 
-test('sw.js cache version is at least v229', () => {
-  // CI auto-bumps on merge to develop (per AGENTS.md sw.js section).
-  // This floor matches the current published version; CI will bump to
-  // v230 on merge.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 229, `sw cache version must be >= v229, got v${v}`);
+test('sw.js cache freshness is not a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

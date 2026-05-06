@@ -149,15 +149,9 @@ test('BIOFILTER does NOT touch direct enemy-projectile damage paths', () => {
   }
 });
 
-test('sw.js cache version bumped (>= v213) so deploy invalidates stale clients', () => {
-  // BIOFILTER touches src/content.js, src/game.js, src/entities.js — all
-  // in ASSETS. Without a cache bump, returning users would get stale code
-  // and the augment would silently never trigger. develop currently at
-  // v213; this PR bumps further. Use >= so future bumps don't retro-fail.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must contain neon-dungeon-vNNN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 213, `sw.js cache version must be >= v213 for BIOFILTER deploy, got v${v}`);
+test('sw.js uses network-first freshness instead of numeric cache bumps', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)\.catch\(\(\) => caches\.match\(e\.request\)\)/);
 });
 
 test('AUGMENTS object remains <=15 entries (roster sanity)', () => {

@@ -154,10 +154,9 @@ test('platform.js defines conduitFire and conduitBeam audio stubs', () => {
   assert.match(PLATFORM, /conduitBeam\s*\(\s*\)\s*\{/);
 });
 
-test('sw.js cache version was bumped (>= v186)', () => {
-  const m = SW.match(/const\s+CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js CACHE constant must be locatable');
-  assert.ok(parseInt(m[1], 10) >= 186, `sw cache must be >= v186, got v${m[1]}`);
+test('sw.js cache freshness is not a second numeric version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Geometric hit-test (vm-extracted) ──────────────────────────────────

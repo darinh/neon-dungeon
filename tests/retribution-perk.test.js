@@ -202,11 +202,9 @@ test('RETRIBUTION does not introduce a movement-rate accumulator (dt-decay only)
     'RETRIBUTION decay must not gate on moved/dt rate');
 });
 
-// ─── SW cache version ─────────────────────────────────────────────────────
+// ─── SW cache freshness ───────────────────────────────────────────────────
 
-test('sw.js cache version is at least v214 (any modified-asset PR must bump)', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 214, `sw.js cache version must be >= v214 (found v${v})`);
+test('sw.js cache freshness is not tied to a manual numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

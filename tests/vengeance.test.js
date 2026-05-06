@@ -197,10 +197,9 @@ test('VENGEANCE draw branch renders a rush telegraph + charge pips', () => {
     'rush draw must render a lock line via NEON.draw.line');
 });
 
-// ─── Service worker cache bump ──────────────────────────────────────────
+// ─── Service worker cache freshness ─────────────────────────────────────
 
-test('sw.js cache version bumped to v185 or later', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache constant');
-  assert.ok(parseInt(m[1], 10) >= 185, `cache version must be >= v185 (VENGEANCE bump), got v${m[1]}`);
+test('sw.js cache freshness is not a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

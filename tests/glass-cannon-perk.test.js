@@ -235,11 +235,9 @@ test('GLASS_CANNON incoming-damage formula: +25% post-mitigation, gated on !igno
   assert.equal(incoming({dmg:0.13, def:0, perks:{GLASS_CANNON:true}, ignoreDefense:true, lastStandTimer:5}), 0.065);
 });
 
-// ─── SW cache version ─────────────────────────────────────────────────────
+// ─── SW cache freshness ───────────────────────────────────────────────────
 
-test('sw.js cache version is at least v233 (any modified-asset PR must bump)', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 233, `sw.js cache version must be >= v233 (found v${v})`);
+test('sw.js cache freshness is not represented as a second version number', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

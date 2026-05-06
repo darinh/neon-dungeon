@@ -209,12 +209,7 @@ test('game.js pickup loop has an isHoard branch that grants credits', () => {
     'isHoard branch must splice the hoard out of items[]');
 });
 
-test('sw.js cache key bumped (MAGPIE touches src/entities.js + content.js + game.js)', () => {
-  // Class-of-bug: forgetting to bump the cache key serves stale code
-  // to returning users. Lock that v191 (or higher) shipped with this
-  // change.
-  const m = SW.match(/CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js cache key not found');
-  assert.ok(parseInt(m[1], 10) >= 191,
-    `sw cache must be >= v191 after MAGPIE ship, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

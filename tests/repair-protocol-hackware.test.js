@@ -139,14 +139,9 @@ test('REPAIR tick uses 1.0s period (matches activation seed)', () => {
   assert.ok(m, 'REPAIR tick must add 1.0 to _repairTickTimer per fired tick');
 });
 
-// ─── Service worker cache bump ───────────────────────────────────────────
+// ─── Service worker cache freshness ──────────────────────────────────────
 
-test('SW cache version bumped (REPAIR_PROTOCOL ships fresh code)', () => {
-  // Per project convention: any change to a file listed in ASSETS
-  // requires a CACHE bump. Without it, existing PWA users keep the
-  // stale entities.js / content.js and never see the new hackware.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'SW must declare a versioned cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 213, `SW cache version must be >= 213 (was v212 before this change), got v${v}`);
+test('SW freshness does not use a second numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

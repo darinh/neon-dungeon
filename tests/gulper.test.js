@@ -308,15 +308,7 @@ test('GULPER draw branch differentiates chase / charging / recovery / stunned st
     'recovery state must render with spent-grey wedge colour');
 });
 
-test('sw.js cache version >= v197 (GULPER ship floor)', () => {
-  // sw.js cache key must bump on any commit that changes a file
-  // listed in ASSETS — entities.js + platform.js are both in the
-  // cache list and both changed for GULPER. Per stored 'sw cache test
-  // convention': assert >= floor, not exact, so a future PR doesn't
-  // have to retitle this test.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 197,
-    `sw.js cache version must be >= 197 (GULPER ship floor), got v${v}`);
+test('sw.js cache freshness does not use a second numeric version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
