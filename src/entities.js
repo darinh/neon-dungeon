@@ -4388,7 +4388,8 @@ class Enemy {
         // Emerge: AoE damage at 1.4 tile radius (telegraphed for ~1s, fair).
         const aoeR = 1.4;
         const aoeDmg = Math.round(this.atk * 1.0);
-        if (dist(this.x, this.y, player.x, player.y) < aoeR && this._canTarget()) {
+        if (dist(this.x, this.y, player.x, player.y) < aoeR && this._canTarget() &&
+            hasLOS(this.x, this.y, player.x, player.y, map)) {
           player.takeDamage(aoeDmg, 'Tunneller Eruption');
         }
         spawnParticles(this.x, this.y, 'EXPLOSION', '#cc8844', 16);
@@ -13863,14 +13864,16 @@ class FuseShard {
  * @param {number} y
  */
 function _detonateBombAt(x, y) {
+  const map = _EG.dungeon && _EG.dungeon.map;
   for (const e of enemies) {
-    if (!e.dead && !e._wrPhased && dist(x, y, e.x, e.y) < BOMB_BLAST_RADIUS) {
+    if (!e.dead && !e._wrPhased && map &&
+        dist(x, y, e.x, e.y) < BOMB_BLAST_RADIUS &&
+        hasLOS(x, y, e.x, e.y, map)) {
       e.takeDamage(BOMB_DAMAGE, 'Bomb');
     }
   }
   spawnParticles(x, y, 'EXPLOSION', '#aa00ff', 30);
   triggerShake(10, 0.3);
-  const map = _EG.dungeon && _EG.dungeon.map;
   let wallsBroken = 0;
   if (map) {
     const cx = Math.floor(x), cy = Math.floor(y);
@@ -13882,6 +13885,7 @@ function _detonateBombAt(x, y) {
       for (let tx = x0; tx <= x1; tx++) {
         if (row[tx] !== T.CRACKED) continue;
         if (dist(x, y, tx + 0.5, ty + 0.5) >= R) continue;
+        if (!hasLOS(x, y, tx + 0.5, ty + 0.5, map)) continue;
         row[tx] = T.FLOOR;
         wallsBroken++;
         spawnParticles(tx + 0.5, ty + 0.5, 'EXPLOSION', '#ffb700', 12);
