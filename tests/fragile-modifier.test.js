@@ -145,15 +145,7 @@ test('FRAGILE has no overlap with existing modifiers (cross-check)', () => {
     `FRAGILE desc must be distinct from existing 8 modifiers, got "${desc}"`);
 });
 
-test('sw.js cache version >= v200 (FRAGILE adds runtime behavior)', () => {
-  // Per project convention (conduit / sapper / harvester pattern):
-  // cache version assertion is a floor (>=), not exact-match, so
-  // sibling PRs can leapfrog without retroactive test edits. v200
-  // leapfrogs PR #154 (v198) and #155 (v199) which were open at
-  // ship time.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vNNN cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 200,
-    `sw.js cache version must be >= 200 (FRAGILE modifier ships runtime behavior in src/content.js + src/entities.js), got v${v}`);
+test('sw.js cache freshness does not use a second numeric version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

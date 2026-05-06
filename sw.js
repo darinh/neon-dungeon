@@ -1,12 +1,11 @@
 // NEON DUNGEON — Service Worker (cache-first offline PWA)
 'use strict';
 
-const CACHE = 'neon-dungeon-v492';
+const CACHE = 'neon-dungeon-assets';
 const ASSETS = [
   './',
   './index.html',
   './privacy.html',
-  './package.json',
   './manifest.json',
   './engine/math.js',
   './engine/viewport.js',
@@ -51,6 +50,7 @@ const ASSETS = [
   './icon-192x192-maskable.png',
   './icon-512x512-maskable.png',
 ];
+const ASSET_URLS = new Set(ASSETS.map((asset) => new URL(asset, self.location.href).href));
 
 // Pre-cache all static assets on install
 self.addEventListener('install', (e) => {
@@ -60,7 +60,8 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-// Purge old cache versions on activate
+// Purge old caches on activate. The cache name is intentionally stable:
+// freshness comes from network-first fetches, not a second version number.
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -70,31 +71,63 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Stale-while-revalidate for navigation (HTML); cache-first for known assets
+function cacheFromNetwork(e) {
+  return fetch(e.request).then((response) => {
+    if (response.ok) {
+      const clone = response.clone();
+      e.waitUntil(caches.open(CACHE).then((c) => c.put(e.request, clone)));
+    }
+    return response;
+  });
+}
+
+function cacheAppShellFromNetwork(e) {
+  return fetch(e.request).then((response) => {
+    if (response.ok) {
+      const clone = response.clone();
+      e.waitUntil(caches.open(CACHE).then((c) => c.put('./', clone)));
+    }
+    return response;
+  });
+}
+
+function isAppShellNavigation(url) {
+  const appRoot = new URL('./', self.location.href);
+  const appIndex = new URL('./index.html', self.location.href);
+  return url.pathname === appRoot.pathname ||
+    url.pathname === appRoot.pathname.replace(/\/$/, '') ||
+    url.pathname === appIndex.pathname;
+}
+
+// Network-first for app assets; cached fallback keeps the PWA offline-capable.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Navigation requests: serve cached immediately, update cache from network
   if (e.request.mode === 'navigate') {
+    if (!isAppShellNavigation(url)) {
+      if (!ASSET_URLS.has(url.href)) {
+        e.respondWith(fetch(e.request));
+        return;
+      }
+
+      e.respondWith(cacheFromNetwork(e).catch(() => caches.match(e.request)));
+      return;
+    }
+
     e.respondWith(
-      caches.match(e.request).then((cached) => {
-        const netFetch = fetch(e.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, clone));
-          }
-          return response;
-        });
-        return cached || netFetch;
-      })
+      cacheAppShellFromNetwork(e).catch(() => caches.match('./').then((cached) => cached || caches.match('./index.html')))
     );
     return;
   }
 
-  // Static assets: cache-first, only cache if pre-cached (no unbounded growth)
+  if (!ASSET_URLS.has(url.href)) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request))
+    cacheFromNetwork(e).catch(() => caches.match(e.request))
   );
 });

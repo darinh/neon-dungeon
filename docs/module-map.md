@@ -20,10 +20,8 @@ Current load groups:
 | 5 | `src/content.js`, `src/entities.js`, `src/render.js`, `src/game.js` | Large runtime modules: generation/content, actors/combat, rendering/HUD, and game-state orchestration. |
 
 When adding a new browser module, update both `index.html` and `sw.js` `ASSETS`.
-The service-worker cache version is auto-bumped on `develop`; do not edit the
-cache key by hand for normal develop-targeted feature work. If a main-targeted
-hotfix or release changes precached assets without passing through `develop`,
-include a deliberate `CACHE` bump in that release PR.
+There is no service-worker cache version to bump; `sw.js` uses a stable cache
+name plus network-first freshness for explicit assets.
 
 ## Large-file ownership
 
@@ -34,7 +32,7 @@ include a deliberate `CACHE` bump in that release PR.
 | `src/entities.js` | Entity base, player, enemies, boss behavior, combat effects, runtime actor collections. | High coupling to `game` state and room indexes; small AI changes can affect seeded determinism or HUD expectations. | Enemy-specific tests, `tests/seeded-generation.test.js`, combat modifier tests |
 | `src/render.js` | World rendering, per-tile decor, HUD, minimap, overlays, threat indicators, screen effects. | Hot path: avoid per-tile/per-frame allocations in `drawWorld` and decor loops; HUD lanes overlap easily on mobile. | `tests/rendered-test-environment.test.js`, HUD tests, `tests/world-zoom.test.js`, `tests/engine-minimap.test.js` |
 | `src/game.js` | Main state machine, menu, run lifecycle, save/restore, floor transitions, narrative overlays, finale flow. | God-file coordinator. Extract pure helpers first; do not move the runtime `game` object until dependencies are mapped. | `tests/save.test.js`, `tests/mainframe-room.test.js`, `tests/system-messages.test.js`, `tests/session-lifecycle-copy.test.js` |
-| `sw.js` | Offline cache and fetch strategy. | Add/remove asset paths, but do not manually bump `CACHE` in feature PRs. | `tests/cache-bump-workflow.test.js` plus CI |
+| `sw.js` | Offline cache and fetch strategy. | Add/remove asset paths, but do not add/bump a numeric cache version. | `tests/release-version-workflow.test.js` plus CI |
 
 ### Content/entities split-prep inventory
 

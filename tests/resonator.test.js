@@ -156,12 +156,9 @@ test('platform.js exposes audio.resonatorCharge and audio.resonatorFire', () => 
   assert.match(PLATFORM, /resonatorFire\s*\(\s*\)\s*\{/);
 });
 
-test('sw.js cache version was bumped (>= v177)', () => {
-  // Service worker cache must be bumped any time src/* assets change,
-  // otherwise users get stale code.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'CACHE constant not found');
-  assert.ok(parseInt(m[1], 10) >= 177, `cache must be >= v177, got v${m[1]}`);
+test('sw.js cache name is stable and unversioned', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 test('RESONATOR appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {

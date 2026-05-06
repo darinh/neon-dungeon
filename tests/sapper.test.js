@@ -145,14 +145,9 @@ test('SAPPER draw branch exists and uses _saPulse', () => {
     'SAPPER must have a draw branch that consumes _saPulse for the tendril/body wobble');
 });
 
-test('sw.js cache key bumped (SAPPER touches src/entities.js + boosts.js)', () => {
-  // Class-of-bug: forgetting to bump the cache key serves stale code
-  // to returning users. Lock that v190 (or higher) shipped with this
-  // change.
-  const m = SW.match(/CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js cache key not found');
-  assert.ok(parseInt(m[1], 10) >= 190,
-    `sw cache must be >= v190 after SAPPER ship, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── drainTimedBoost helper unit tests ──────────────────────────────────

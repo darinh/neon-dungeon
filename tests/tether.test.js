@@ -170,12 +170,7 @@ test('drawTetherLeashes telegraph parity with aiTether range', () => {
     'drawTetherLeashes must not skip on t<=0.05 (telegraph dead-zone)');
 });
 
-test('sw.js cache version bumped to v192+ for TETHER ship', () => {
-  // Any commit changing files in ASSETS must bump the cache key,
-  // otherwise users get stale code via the service worker.
-  // Per project convention: assert >= floor (not exact match).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js cache version not found');
-  assert.ok(parseInt(m[1], 10) >= 192,
-    `sw.js cache version should be >= v192 (TETHER ship floor), got v${m[1]}`);
+test('sw.js does not use a second numeric cache version for TETHER freshness', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

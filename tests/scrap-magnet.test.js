@@ -6,7 +6,7 @@
 // tests assert the structural invariants any working SCRAP_MAGNET must
 // satisfy: registry entry, activation case (with dedup), per-frame update
 // branch (with deliberate exclusions), draw branch, audio function, and
-// the SW cache version bump.
+// SW freshness guardrails.
 //
 // Each check fails loudly the moment a refactor drops a wire — the same
 // regression-shape that bit past hackware additions.
@@ -159,12 +159,7 @@ test('platform.js exposes audio.hackwareScrapMagnet()', () => {
   assert.match(PLATFORM, /hackwareScrapMagnet\s*\(\)\s*\{/, 'audio.hackwareScrapMagnet must be defined');
 });
 
-test('sw.js cache version is at least v198 (SCRAP_MAGNET ship floor)', () => {
-  // Bumping the SW cache forces clients to fetch the new content.js + sw.js
-  // bundle. Without the bump, returning users get the old bundle and never
-  // see the new hackware.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vNNN cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 198, `sw cache version v${v} must be >= 198 (SCRAP_MAGNET ship floor)`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

@@ -123,11 +123,9 @@ test('platform.js exposes audio.prophetLock and audio.prophetFire', () => {
   assert.match(PLATFORM, /prophetFire\s*\(\s*\)\s*\{/);
 });
 
-test('sw.js cache version was bumped (>= v181)', () => {
-  // Service worker cache must be bumped any time src/* assets change.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'CACHE constant not found');
-  assert.ok(parseInt(m[1], 10) >= 181, `cache must be >= v181, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });
 
 test('PROPHET appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {

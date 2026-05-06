@@ -140,5 +140,5 @@ test('KINETIC_DAMPER applies BEFORE CORROSIVE/FRAGILE/HUNTER modifiers', () => {
   assert.ok(kdIdx < hunterIdx, 'KINETIC_DAMPER must apply BEFORE HUNTER modifier branch');
 });
 
-// NOTE: no sw.js cache-version assertion — auto-bumped by CI workflow
-// .github/workflows/cache-bump.yml on push to develop. See AGENTS.md.
+// NOTE: no sw.js numeric cache assertion — sw.js must not carry a second
+// version. See AGENTS.md.

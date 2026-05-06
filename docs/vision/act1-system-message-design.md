@@ -389,8 +389,8 @@ Acceptance criteria:
   the text.
 - The schedule needs spoiler gates. Elena, contact routes, fired advocates, and
   explicit rights-conflict language belong later than the boot/floor-1 beats.
-- The implementation should avoid adding new service-worker cache assertions;
-  existing project policy leaves cache version bumps to CI.
+- The implementation should avoid adding service-worker cache-version assertions;
+  `sw.js` uses a stable cache name plus network-first asset freshness.
 - Mobile/touch behavior is part of the core acceptance criteria because generic
   tap dismissal was the original user pain.
 - The copy pass should happen after the message UX exists; otherwise prose will

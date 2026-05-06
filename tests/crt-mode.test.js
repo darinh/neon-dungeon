@@ -132,14 +132,9 @@ test('CRT overlay uses cached pattern + gradient (no per-frame allocation in hot
     '_crtCache must hold both pattern and vignette');
 });
 
-// ─── Service worker cache version ──────────────────────────────────────
+// ─── Service worker cache freshness ────────────────────────────────────
 
-test('sw.js cache version >= v193 (assets changed)', () => {
-  // src/game.js, src/platform.js, sw.js itself — all in ASSETS — were
-  // modified. Service worker MUST be bumped or returning users get
-  // stale code and the toggle never appears.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache name');
-  assert.ok(parseInt(m[1], 10) >= 193,
-    `sw cache version must be >= 193; found v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

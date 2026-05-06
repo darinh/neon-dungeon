@@ -82,10 +82,9 @@ test('bundle: progress total reflects bundle additions (>= 11)', () => {
   assert.ok(p.total >= 11, `whisper total >= 11 after bundle, got ${p.total}`);
 });
 
-test('bundle: sw.js CACHE bumped to >= v206 (whispers.js asset changed)', () => {
+test('bundle: sw.js uses stable cache name and network-first freshness', () => {
   const sw = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
-  const m = sw.match(/const\s+CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'CACHE constant found in sw.js');
-  const n = parseInt(m[1], 10);
-  assert.ok(n >= 206, `sw cache version >= 206 after whispers asset change, got ${n}`);
+  assert.doesNotMatch(sw, /neon-dungeon-v\d+/);
+  assert.match(sw, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
+  assert.match(sw, /cacheFromNetwork\(e\)/);
 });

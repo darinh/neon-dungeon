@@ -104,17 +104,9 @@ test('MAGNETON tuning constants are defined', () => {
   assert.match(ENTITIES, /const\s+MAGNETON_SAFE_R\s*=\s*[\d.]+/);
 });
 
-test('sw cache version bumped (any change to ASSETS-listed file requires a bump)', () => {
-  // Per AGENTS.md service-worker rule: sw.js cache key MUST be bumped on
-  // any commit that changes a file in ASSETS. entities.js + sw.js are
-  // in ASSETS so the bump is mandatory. Use a >= comparison anchored to
-  // the version in effect when MAGNETON shipped (v188) so this test
-  // doesn't churn on every subsequent mob ship — each new mob's own
-  // test-file will assert its own >= floor.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js cache key not found');
-  assert.ok(parseInt(m[1], 10) >= 188,
-    `sw cache must be >= v188 (MAGNETON ship floor), got v${m[1]}`);
+test('sw cache freshness does not use a second numeric version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────

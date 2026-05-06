@@ -103,16 +103,9 @@ test('EMERGENCY_CACHE branch shows player feedback via deferred this.msg', () =>
     'EMERGENCY_CACHE branch must call this.msg via setTimeout to survive loadFloor messages.length=0 wipe');
 });
 
-test('sw.js cache version bumped to v204 or later', () => {
-  // EMERGENCY_CACHE adds a new AUGMENTS entry and a new game.js code
-  // path. ASSETS includes sw.js, src/content.js, src/game.js — without
-  // a cache bump, returning users get stale code and the augment never
-  // triggers. Float-comparison style match (>=204) so future ships'
-  // bumps don't retroactively fail this test.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must contain neon-dungeon-vNNN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 204, `sw.js cache version must be >= v204 to invalidate EMERGENCY_CACHE deploy, got v${v}`);
+test('sw.js uses network-first freshness instead of numeric cache bumps', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)\.catch\(\(\) => caches\.match\(e\.request\)\)/);
 });
 
 test('EMERGENCY_CACHE branch uses bitwise|0 for maxHp normalisation', () => {

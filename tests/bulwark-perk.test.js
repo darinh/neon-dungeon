@@ -217,7 +217,4 @@ test('BULWARK HP threshold uses pre-deduction HP (mirrors PRISTINE)', () => {
     'BULWARK HP-threshold check must occur BEFORE hp deduction (so threshold reads pre-hit HP)');
 });
 
-// ─── (sw.js cache-version assertion intentionally omitted — per AGENTS.md
-//      service-worker section, new test files MUST NOT introduce floor
-//      assertions; CI bumps sw.js automatically on push to develop based
-//      on the merged commit's conventional prefix.)
+// ─── sw.js intentionally has no numeric cache assertion; see AGENTS.md.

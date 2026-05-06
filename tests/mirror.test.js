@@ -279,12 +279,9 @@ test('platform.js exposes audio.mirrorCharge and audio.mirrorFire', () => {
   assert.match(PLATFORM, /mirrorFire\s*\(\s*\)\s*\{/);
 });
 
-test('sw.js cache version was bumped (>= v178)', () => {
-  // Service worker cache must be bumped any time src/* assets change,
-  // otherwise users get stale code. MIRROR added → bump from v177 to v178.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'CACHE constant not found');
-  assert.ok(parseInt(m[1], 10) >= 178, `cache must be >= v178, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });
 
 test('pickMirrorKinematics pure helper is defined in entities.js', () => {

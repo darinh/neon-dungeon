@@ -246,13 +246,9 @@ test('platform.js exposes reaperTelegraph and reaperFrenzy audio', () => {
   assert.match(PLATFORM, /reaperFrenzy\s*\(\s*\)\s*\{/, 'reaperFrenzy audio missing');
 });
 
-test('sw.js cache version bumped past v178 for REAPER deploy', () => {
-  // Service-worker cache must be bumped on any commit that ships new code
-  // — otherwise users get stale assets and the new mob never loads.
-  const m = SW.match(/CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js CACHE constant must be present');
-  assert.ok(parseInt(m[1], 10) >= 179,
-    `sw.js cache must be bumped to v179+, found v${m[1]}`);
+test('sw.js cache freshness does not require a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Behavioural unit tests via node:vm extraction ──────────────────────

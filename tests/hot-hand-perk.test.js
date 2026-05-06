@@ -460,7 +460,4 @@ test('HOT_HAND formula: +5% per stack capped at 6 stacks (+30%)', () => {
   assert.equal(applyHit(s, 3, A, baseOpts), 4);
 });
 
-// ─── (sw.js cache-version assertion intentionally omitted — per AGENTS.md
-//      service-worker section, new test files MUST NOT introduce floor
-//      assertions; CI bumps sw.js automatically on push to develop based
-//      on the merged commit's conventional prefix.)
+// ─── sw.js intentionally has no numeric cache assertion; see AGENTS.md.

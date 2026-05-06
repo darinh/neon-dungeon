@@ -114,14 +114,8 @@ test('TUNNELLER stun handler forces surface (mirrors WRAITH safety)', () => {
   assert.match(ENTITIES, re, 'stun handler must force a TUNNELLER to surface at a passable tile');
 });
 
-test('service-worker cache version was bumped past v173', () => {
-  // entities.js is in sw.js ASSETS — adding a new mob without bumping
-  // CACHE means returning players keep playing the old code from cache
-  // and the spawn table mismatch crashes pickEnemyType (TUNNELLER absent
-  // from the cached weights but present in any future patch reference).
+test('service-worker cache freshness does not use a numeric cache version', () => {
   const sw = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
-  const m = sw.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 174, `sw cache should be >= v174, got v${v}`);
+  assert.doesNotMatch(sw, /neon-dungeon-v\d+/);
+  assert.match(sw, /cacheFromNetwork\(e\)/);
 });

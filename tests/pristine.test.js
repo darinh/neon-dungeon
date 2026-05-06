@@ -85,11 +85,9 @@ test("HUD pushes a 'pristine' chip with 'PRIME' label when active", () => {
     'HUD gate must use hp/maxHp >= 0.9');
 });
 
-// ─── Service worker cache bump ────────────────────────────────────────────
+// ─── Service worker cache freshness ───────────────────────────────────────
 
-test('sw.js cache version is at least v209 (PRISTINE ship floor)', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must define a neon-dungeon-vNNN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 209, `sw.js cache version must be >= v209, got v${v}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });
