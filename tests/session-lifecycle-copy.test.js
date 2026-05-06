@@ -9,6 +9,7 @@ const vm = require('node:vm');
 
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
 const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
+const SW = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
 const PACKAGE = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
 
 /**
@@ -71,10 +72,12 @@ test('run start menu frames new and saved runs as AI test sessions', () => {
 });
 
 test('title screen renders the package version', () => {
-  const versionMatch = GAME.match(/const APP_VERSION = '([^']+)'/);
-  assert.ok(versionMatch, 'APP_VERSION must be declared for title rendering');
-  assert.equal(versionMatch[1], PACKAGE.version);
-  assert.match(GAME, /ctx\.fillText\('v' \+ APP_VERSION,/);
+  assert.match(PACKAGE.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+  assert.doesNotMatch(GAME, /APP_VERSION/);
+  assert.match(GAME, /fetch\('\.\/package\.json'\)/);
+  assert.match(GAME, /appVersion = version/);
+  assert.match(GAME, /ctx\.fillText\('v' \+ appVersion,/);
+  assert.match(SW, /'\.\/package\.json'/);
 });
 
 test('endRun records a persistent session ordinal without bypassing leaderboard flow', () => {

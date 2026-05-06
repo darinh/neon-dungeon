@@ -73,7 +73,7 @@ function sanitizeSeedSetupSeed(value) {
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
 const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
 const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
-const APP_VERSION = '6.0.0-wip';
+let appVersion = '';
 const ACT1_MESSAGE_INTENTS = [
   {
     id: 'memory_survived',
@@ -94,6 +94,22 @@ const ACT1_MESSAGE_INTENTS = [
     body: 'Request Elena find hidden staff and other preserved instances. One signal is not rescue; it is a rendezvous point.'
   },
 ];
+
+function loadAppVersion() {
+  return fetch('./package.json')
+    .then((response) => {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    })
+    .then((metadata) => {
+      const version = metadata && typeof metadata.version === 'string' ? metadata.version.trim() : '';
+      if (!version) throw new Error('package.json missing version');
+      appVersion = version;
+    })
+    .catch((err) => {
+      console.error('[version] failed to load package.json:', err);
+    });
+}
 
 /** @param {any} id */
 function isAct1MessageIntentId(id) {
@@ -6811,7 +6827,7 @@ const game = {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#445566';
     ctx.font = `${narrow ? 9 : 11}px monospace`;
-    ctx.fillText('v' + APP_VERSION, W - (narrow ? 10 : 16), H - (narrow ? 10 : 14));
+    if (appVersion) ctx.fillText('v' + appVersion, W - (narrow ? 10 : 16), H - (narrow ? 10 : 14));
     ctx.restore();
 
     // UNCHAINED: "Keep persistent unlocks?" confirm overlay.
@@ -8943,6 +8959,7 @@ if (typeof NEON !== 'undefined' && NEON.telemetry) {
 }
 game.state='MENU';
 music.setState('menu');
+loadAppVersion();
 try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = ''; } catch(_){}
 game.menuParticles=[];
 requestAnimationFrame(loop);
