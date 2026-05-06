@@ -2744,6 +2744,7 @@ class Enemy {
       const feedbackDmg = 10 + (_EG.floor || 1) * 2;
       for (const linked of this._nxLinks) {
         if (linked.dead) continue;
+        if (!hasLOS(this.x, this.y, linked.x, linked.y, _EG.dungeon.map)) continue;
         linked._nxBoosted = false;
         linked.stunTimer = Math.max(linked.stunTimer || 0, 1.5);
         linked.takeDamage(feedbackDmg, 'Neural Feedback');
