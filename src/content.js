@@ -4340,14 +4340,14 @@ function generateFloor(floorNum, opts) {
     const edges = [];
     const isEntry = (/** @type {any} */ t) => t===T.FLOOR||t===T.DOOR;
     for (let tx=room.x; tx<room.x+room.w; tx++) {
-      if (room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx])) edges.push({x:tx, y:room.y});
+      if (tx > room.x && tx < room.x + room.w - 1 && room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx])) edges.push({x:tx, y:room.y});
       const by=room.y+room.h-1;
-      if (by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx])) edges.push({x:tx, y:by});
+      if (tx > room.x && tx < room.x + room.w - 1 && by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx])) edges.push({x:tx, y:by});
     }
     for (let ty=room.y; ty<room.y+room.h; ty++) {
-      if (room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1])) edges.push({x:room.x, y:ty});
+      if (ty > room.y && ty < room.y + room.h - 1 && room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1])) edges.push({x:room.x, y:ty});
       const bx=room.x+room.w-1;
-      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1])) edges.push({x:bx, y:ty});
+      if (ty > room.y && ty < room.y + room.h - 1 && bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1])) edges.push({x:bx, y:ty});
     }
     // Deduplicate
     const seen = new Set();
@@ -4392,6 +4392,139 @@ function generateFloor(floorNum, opts) {
       tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
   }
 
+  /** @param {any} tile */
+  function isWallLikeEntranceTile(tile) {
+    return tile === T.WALL || tile === T.VOID;
+  }
+
+  /** @param {number} x @param {number} y */
+  function tileInsideAnyRoom(x, y) {
+    return rooms.some((/** @type {any} */ r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+  }
+
+  /** @param {number} x @param {number} y */
+  function tileOnRoomCorner(x, y) {
+    return rooms.some((/** @type {any} */ r) =>
+      (x === r.x || x === r.x + r.w - 1) && (y === r.y || y === r.y + r.h - 1)
+    );
+  }
+
+  /** @param {number} x @param {number} y */
+  function entranceWallPairAxis(x, y) {
+    for (const r of rooms) {
+      if (x < r.x || x >= r.x + r.w || y < r.y || y >= r.y + r.h) continue;
+      const onTopOrBottom = y === r.y || y === r.y + r.h - 1;
+      const onLeftOrRight = x === r.x || x === r.x + r.w - 1;
+      if (onTopOrBottom && !onLeftOrRight) return 'horizontal';
+      if (onLeftOrRight && !onTopOrBottom) return 'vertical';
+      if (onTopOrBottom && !isWallLikeEntranceTile(map[y - 1]?.[x]) && !isWallLikeEntranceTile(map[y + 1]?.[x])) return 'horizontal';
+      if (onLeftOrRight && !isWallLikeEntranceTile(map[y]?.[x - 1]) && !isWallLikeEntranceTile(map[y]?.[x + 1])) return 'vertical';
+    }
+    return null;
+  }
+
+  /** @param {number} x @param {number} y */
+  function enforceEntranceWallPair(x, y) {
+    const axis = entranceWallPairAxis(x, y);
+    if (axis === 'vertical') {
+      if (y > 0) map[y - 1][x] = T.WALL;
+      if (y < MAP_H - 1) map[y + 1][x] = T.WALL;
+    } else if (axis === 'horizontal') {
+      if (x > 0) map[y][x - 1] = T.WALL;
+      if (x < MAP_W - 1) map[y][x + 1] = T.WALL;
+    }
+  }
+
+  function enforceEntranceWallPairs() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (isDoorLikeEntranceTile(map[y][x])) enforceEntranceWallPair(x, y);
+      }
+    }
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  function isEntranceSupportWall(x, y) {
+    if (map[y]?.[x] !== T.WALL && map[y]?.[x] !== T.VOID) return false;
+    const dirs = /** @type {const} */ ([[0, -1], [0, 1], [-1, 0], [1, 0]]);
+    for (const dir of dirs) {
+      const dx = dir[0];
+      const dy = dir[1];
+      const doorX = x + dx;
+      const doorY = y + dy;
+      if (!isDoorLikeEntranceTile(map[doorY]?.[doorX])) continue;
+      const axis = entranceWallPairAxis(doorX, doorY);
+      if (axis === 'vertical' && doorX === x) return true;
+      if (axis === 'horizontal' && doorY === y) return true;
+    }
+    return false;
+  }
+
+  /**
+   * @param {number} tx
+   * @param {number} ty
+   */
+  function carveProtectedRescueCorridorTo(tx, ty) {
+    const sx = spawnRoom.cx;
+    const sy = spawnRoom.cy;
+    /** @type {{x:number,y:number}[]} */
+    const q = [{ x: sx, y: sy }];
+    /** @type {Int16Array[]} */
+    const prev = Array.from({ length: MAP_H }, () => new Int16Array(MAP_W).fill(-1));
+    const startRow = prev[sy];
+    if (!startRow) return;
+    startRow[sx] = sy * MAP_W + sx;
+    for (let qi = 0; qi < q.length; qi++) {
+      const current = q[qi];
+      if (!current) continue;
+      const { x, y } = current;
+      if (x === tx && y === ty) break;
+      const dirs = /** @type {const} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]]);
+      for (const dir of dirs) {
+        const dx = dir[0];
+        const dy = dir[1];
+        const nx = x + dx;
+        const ny = y + dy;
+        const prevRow = prev[ny];
+        if (nx <= 0 || ny <= 0 || nx >= MAP_W - 1 || ny >= MAP_H - 1 || !prevRow) continue;
+        const seen = prevRow[nx];
+        if (seen === undefined || seen >= 0) continue;
+        if (isEntranceSupportWall(nx, ny)) continue;
+        prevRow[nx] = y * MAP_W + x;
+        q.push({ x: nx, y: ny });
+      }
+    }
+    const targetRow = prev[ty];
+    const targetSeen = targetRow?.[tx];
+    if (targetSeen === undefined || targetSeen < 0) {
+      let cx = sx, cy = sy;
+      while (cx !== tx) {
+        if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+        cx += cx < tx ? 1 : -1;
+      }
+      while (cy !== ty) {
+        if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+        cy += cy < ty ? 1 : -1;
+      }
+      if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+      return;
+    }
+    let cx = tx;
+    let cy = ty;
+    while (!(cx === sx && cy === sy)) {
+      if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+      const pathRow = prev[cy];
+      if (!pathRow) break;
+      const p = pathRow[cx];
+      if (p === undefined || p < 0) break;
+      cy = Math.floor(p / MAP_W);
+      cx = p % MAP_W;
+    }
+  }
+
   /** @param {number} x @param {number} y */
   function hasOutsidePassage(x, y) {
     /** @type {[number, number][]} */
@@ -4399,7 +4532,7 @@ function generateFloor(floorNum, opts) {
     for (const [dx, dy] of cardinalDirs) {
       const nx = x + dx, ny = y + dy;
       const t = map[ny]?.[nx];
-      if (rooms.some((/** @type {any} */ r) => nx >= r.x && nx < r.x + r.w && ny >= r.y && ny < r.y + r.h)) continue;
+      if (tileInsideAnyRoom(nx, ny)) continue;
       if (t !== T.WALL && t !== T.VOID) return true;
     }
     return false;
@@ -4408,7 +4541,7 @@ function generateFloor(floorNum, opts) {
   function clearOrphanEntranceTiles() {
     for (let y = 1; y < MAP_H - 1; y++) {
       for (let x = 1; x < MAP_W - 1; x++) {
-        if (isDoorLikeEntranceTile(map[y][x]) && !hasOutsidePassage(x, y)) map[y][x] = T.FLOOR;
+        if (isDoorLikeEntranceTile(map[y][x]) && (tileOnRoomCorner(x, y) || !hasOutsidePassage(x, y))) map[y][x] = T.FLOOR;
       }
     }
   }
@@ -4491,13 +4624,14 @@ function generateFloor(floorNum, opts) {
             ];
             for (const c of candidates) {
               if (isDoorLikeEntranceTile(map[c.y][c.x])) continue;
-              const prev = map[c.y][c.x];
+              const snapshot = map.map((/** @type {any} */ row) => row.slice());
               map[c.y][c.x] = T.WALL;
+              enforceEntranceWallPairs();
               if (allRoomsReachable()) {
                 changed = true;
                 break;
               }
-              map[c.y][c.x] = prev;
+              for (let ry = 0; ry < MAP_H; ry++) map[ry] = snapshot[ry];
             }
           }
         }
@@ -4741,7 +4875,9 @@ function generateFloor(floorNum, opts) {
     }
   }
 
+  enforceEntranceWallPairs();
   collapseAdjacentEntranceTiles();
+  enforceEntranceWallPairs();
   // ── Prune dead-end corridor tiles ─────────────────────────────────────
   // After secret rooms, locked doors, and challenge rooms wall off entrances,
   // some corridor segments become dead ends (floor tile with only 1 passable
@@ -4772,6 +4908,11 @@ function generateFloor(floorNum, opts) {
       }
     }
   }
+
+  thinWideCorridors();
+  enforceEntranceWallPairs();
+  clearOrphanEntranceTiles();
+  enforceEntranceWallPairs();
 
   // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
   // Goal: from spawn, the player must be able to reach EVERY room — not just
@@ -4858,23 +4999,6 @@ function generateFloor(floorNum, opts) {
     }
 
     /**
-     * @param {number} tx
-     * @param {number} ty
-     */
-    const carveRescueCorridorTo = (tx, ty) => {
-      let cx = spawnRoom.cx, cy = spawnRoom.cy;
-      while (cx !== tx) {
-        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
-        cx += cx < tx ? 1 : -1;
-      }
-      while (cy !== ty) {
-        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
-        cy += cy < ty ? 1 : -1;
-      }
-      if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
-    };
-
-    /**
      * @param {any} room
      * @returns {{x:number,y:number,ox:number,oy:number}[]}
      */
@@ -4921,10 +5045,10 @@ function generateFloor(floorNum, opts) {
         ) || gates[0];
         if (gate) {
           const outsideInBounds = gate.ox >= 0 && gate.oy >= 0 && gate.ox < MAP_W && gate.oy < MAP_H;
-          carveRescueCorridorTo(outsideInBounds ? gate.ox : gate.x, outsideInBounds ? gate.oy : gate.y);
+          carveProtectedRescueCorridorTo(outsideInBounds ? gate.ox : gate.x, outsideInBounds ? gate.oy : gate.y);
         }
       } else {
-        carveRescueCorridorTo(blocked.cx, blocked.cy);
+        carveProtectedRescueCorridorTo(blocked.cx, blocked.cy);
       }
     }
   }
@@ -4971,7 +5095,68 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
+  enforceEntranceWallPairs();
   clearOrphanEntranceTiles();
+  enforceEntranceWallPairs();
+
+  {
+    const passable = (/** @type {any} */ t) =>
+      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
+      t === T.STAIRS || t === T.TERMINAL ||
+      t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
+      t === T.CRACKED ||
+      t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
+      t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
+      t === T.CHALLENGE_GATE;
+    const lockColourForTile = (/** @type {any} */ t) =>
+      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
+    /** @param {any} room */
+    const roomBoundaryGates = (room) => {
+      /** @type {{x:number,y:number,ox:number,oy:number}[]} */
+      const gates = [];
+      for (let tx = room.x; tx < room.x + room.w; tx++) {
+        const top = map[room.y]?.[tx];
+        if (top === T.LOCKED_R || top === T.LOCKED_B || top === T.LOCKED_G || top === T.CRACKED || top === T.CHALLENGE_GATE) gates.push({ x: tx, y: room.y, ox: tx, oy: room.y - 1 });
+        const by = room.y + room.h - 1;
+        const bottom = map[by]?.[tx];
+        if (bottom === T.LOCKED_R || bottom === T.LOCKED_B || bottom === T.LOCKED_G || bottom === T.CRACKED || bottom === T.CHALLENGE_GATE) gates.push({ x: tx, y: by, ox: tx, oy: by + 1 });
+      }
+      for (let ty = room.y; ty < room.y + room.h; ty++) {
+        const left = map[ty]?.[room.x];
+        if (left === T.LOCKED_R || left === T.LOCKED_B || left === T.LOCKED_G || left === T.CRACKED || left === T.CHALLENGE_GATE) gates.push({ x: room.x, y: ty, ox: room.x - 1, oy: ty });
+        const bx = room.x + room.w - 1;
+        const right = map[ty]?.[bx];
+        if (right === T.LOCKED_R || right === T.LOCKED_B || right === T.LOCKED_G || right === T.CRACKED || right === T.CHALLENGE_GATE) gates.push({ x: bx, y: ty, ox: bx + 1, oy: ty });
+      }
+      return gates;
+    };
+    for (let repair = 0; repair < rooms.length; repair++) {
+      const solvedReach = dungeonReachability.solveKeyLockReachability({
+        map,
+        start: { x: spawnRoom.cx, y: spawnRoom.cy },
+        keys: keyItems,
+        requiredRooms: rooms,
+        isOpenTile: passable,
+        lockColourForTile,
+      });
+      const blocked = solvedReach.unreachableRooms[0];
+      if (!blocked) break;
+      const gates = roomBoundaryGates(blocked);
+      const gate = gates.find((/** @type {any} */ g) =>
+        g.ox >= 0 && g.oy >= 0 && g.ox < MAP_W && g.oy < MAP_H && !solvedReach.reachable[g.oy]?.[g.ox]
+      ) || gates[0];
+      if (gate) {
+        const outsideInBounds = gate.ox >= 0 && gate.oy >= 0 && gate.ox < MAP_W && gate.oy < MAP_H;
+        carveProtectedRescueCorridorTo(outsideInBounds ? gate.ox : gate.x, outsideInBounds ? gate.oy : gate.y);
+      } else {
+        carveProtectedRescueCorridorTo(blocked.cx, blocked.cy);
+      }
+    }
+  }
+
+  thinWideCorridors();
 
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {

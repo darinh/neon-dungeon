@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { T, hasLOS } = require('./_generation-fixture.js');
 
 const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
@@ -72,4 +73,32 @@ test('enemy death AoE and NEXUS feedback use LOS gates', () => {
 test('grenade bomb zones keep player damage LOS-gated', () => {
   const hazardBody = extractBlock(CONTENT_NC, /function\s+updateHazardZones\s*\(/);
   assert.match(hazardBody, /dist\(player\.x,\s*player\.y,\s*z\.x,\s*z\.y\)\s*<\s*z\.radius\s*&&\s*hasLOS\(z\.x,\s*z\.y,\s*player\.x,\s*player\.y,\s*_CG\.dungeon\.map\)/);
+});
+
+test('blast line-of-sight is blocked by closed doors', () => {
+  const map = Array.from({ length: 5 }, () => Array(5).fill(T.FLOOR));
+  const row = map[2];
+  assert.ok(row);
+  row[2] = T.DOOR;
+  assert.equal(hasLOS(1.5, 2.5, 3.5, 2.5, map), false, 'closed doors must block bomb and AoE line-of-sight');
+});
+
+test('blast line-of-sight is blocked by challenge gates', () => {
+  const map = Array.from({ length: 5 }, () => Array(5).fill(T.FLOOR));
+  const row = map[2];
+  assert.ok(row);
+  row[2] = T.CHALLENGE_GATE;
+  assert.equal(hasLOS(1.5, 2.5, 3.5, 2.5, map), false, 'challenge gates are door-like blast blockers');
+});
+
+test('fuse shard bomb damage and wall breaking are LOS-gated', () => {
+  const bombBody = extractBlock(ENTITIES_NC, /function\s+_detonateBombAt\s*\(/);
+  const enemyLoop = extractBlock(bombBody, /for\s*\(\s*const\s+e\s+of\s+enemies\s*\)/);
+  assert.match(enemyLoop, /map\s*&&\s*dist\(x,\s*y,\s*e\.x,\s*e\.y\)\s*<\s*BOMB_BLAST_RADIUS\s*&&\s*hasLOS\(x,\s*y,\s*e\.x,\s*e\.y,\s*map\)/);
+  assert.match(bombBody, /if\s*\(\s*!hasLOS\(x,\s*y,\s*tx\s*\+\s*0\.5,\s*ty\s*\+\s*0\.5,\s*map\)\)\s*continue/);
+});
+
+test('tunneller eruption AoE is LOS-gated', () => {
+  const tunnellerBody = extractBlock(ENTITIES_NC, /aiTunneller\s*\([^)]*\)\s*\{/);
+  assert.match(tunnellerBody, /dist\(this\.x,\s*this\.y,\s*player\.x,\s*player\.y\)\s*<\s*aoeR\s*&&\s*this\._canTarget\(\)\s*&&\s*hasLOS\(this\.x,\s*this\.y,\s*player\.x,\s*player\.y,\s*map\)/);
 });
