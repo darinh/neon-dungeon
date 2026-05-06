@@ -138,9 +138,20 @@ function tileOnRoomBoundary(dungeon, x, y) {
   );
 }
 
+function tileOnRoomCorner(dungeon, x, y) {
+  return dungeon.rooms.some((room) =>
+    (x === room.x || x === room.x + room.w - 1) &&
+    (y === room.y || y === room.y + room.h - 1)
+  );
+}
+
 function isDoorLikeTile(tile) {
   return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
     tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
+}
+
+function isWallLikeTile(tile) {
+  return tile === T.WALL || tile === T.VOID;
 }
 
 function isCorridorTile(dungeon, x, y) {
@@ -155,6 +166,11 @@ function assertFlushSingleTileEntrances(dungeon, label) {
       const tile = dungeon.map[y][x];
       if (!isDoorLikeTile(tile)) continue;
       if (!tileOnRoomBoundary(dungeon, x, y)) failures.push(`${label}: door-like tile not on room wall line at ${x},${y}`);
+      if (tileOnRoomCorner(dungeon, x, y)) failures.push(`${label}: door-like tile on room corner at ${x},${y}`);
+      const embeddedInWallLine =
+        (isWallLikeTile(dungeon.map[y - 1]?.[x]) && isWallLikeTile(dungeon.map[y + 1]?.[x])) ||
+        (isWallLikeTile(dungeon.map[y]?.[x - 1]) && isWallLikeTile(dungeon.map[y]?.[x + 1]));
+      if (!embeddedInWallLine) failures.push(`${label}: door-like tile is not embedded in a wall segment at ${x},${y}`);
       const adjacentOutsidePassage = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .filter(([dx, dy]) => !tileInsideRoom(dungeon, x + dx, y + dy))
         .some(([dx, dy]) => {

@@ -1097,7 +1097,7 @@ function hasLOS(x1, y1, x2, y2, map) {
 function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR||t===T.MAINFRAME_READER||t===T.NETWORK_PORTAL||t===T.MESSAGE_CONSOLE; }
 /** @param {any} t */
 function isSeeThrough(t) {
-  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CRATE;
+  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CHALLENGE_GATE && t!==T.CRATE;
 }
 /** @param {any} t */
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }
