@@ -207,13 +207,7 @@ test('HUNTER tracker tolerates first-frame init (no NaN, no spike)', () => {
     'Motion comparator must null-coalesce _prevHuntY to this.y to avoid NaN on first frame');
 });
 
-test('sw.js cache version >= v203 (HUNTER ships runtime behavior)', () => {
-  // Floor-style assertion (>=) per project convention so sibling PRs can
-  // leapfrog without retroactive test edits. v203 leapfrogs the open
-  // PR chain (#154 v198, #155 v199, #156 v200, #157 v201, #158 v202).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vNNN cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 203,
-    `sw.js cache version must be >= 203 (HUNTER modifier ships runtime behavior in src/content.js + src/entities.js), got v${v}`);
+test('sw.js cache freshness does not use a second numeric version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

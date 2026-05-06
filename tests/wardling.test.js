@@ -178,10 +178,9 @@ test('WARDLING draw branch renders a link line to ward when bonded', () => {
   assert.match(ENTITIES, re, 'WARDLING draw branch must render a link line via NEON.draw.line');
 });
 
-// ─── Service worker cache bump ──────────────────────────────────────────
+// ─── Service worker cache freshness ─────────────────────────────────────
 
-test('sw.js cache version bumped to v184 or later', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache constant');
-  assert.ok(parseInt(m[1], 10) >= 184, `cache version must be >= v184 (WARDLING bump), got v${m[1]}`);
+test('sw.js cache freshness is not a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

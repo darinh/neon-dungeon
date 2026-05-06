@@ -44,6 +44,7 @@
   <li><strong>No account or identity tracking.</strong> Every page load gets a random analytics session id that is not tied to your save file, name, email, location, or account.</li>
   <li><strong>Retry queue:</strong> anonymous gameplay events are queued under <code>neon_telemetry</code> in this browser's localStorage before they are handed to the analytics transport. The queue is capped at the newest 2,000 events and is cleared after the configured analytics transport accepts the batch.</li>
   <li>Events are sent to <a href="https://posthog.com" target="_blank" rel="noopener">PostHog</a> (US cloud) when available. Their privacy policy: <a href="https://posthog.com/privacy" target="_blank" rel="noopener">posthog.com/privacy</a>.</li>
+  <li>The title screen occasionally requests the latest public GitHub Release tag from <code>api.github.com</code> and caches it in this browser so the displayed version matches the published release without checking on every load.</li>
   <li>Your save data (progress, settings) lives in your browser's localStorage and never leaves your device.</li>
 </ul>
 
@@ -51,7 +52,7 @@
 
 <p>Block <code>us.i.posthog.com</code> and <code>us-assets.i.posthog.com</code> in your browser or use any ad blocker. The game works exactly the same without it; blocking those endpoints prevents PostHog upload, though any available analytics stub may still accept and clear the local retry queue.</p>
 
-<p class="dim">Last updated: 2026-05-04</p>
+<p class="dim">Last updated: 2026-05-06</p>
 
 <a class="back" href="index.html">← Back to game</a>
 </body>

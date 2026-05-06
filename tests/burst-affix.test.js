@@ -67,12 +67,7 @@ test('affixEligible excludes BURST on melee weapons (mirrors TWIN — countAdd i
   assert.match(CONTENT_NC, re, 'affixEligible must reject BURST when baseWeapon.melee is true in EXECUTABLE code');
 });
 
-test('sw.js cache version bumped to v207 or later (BURST adds new content.js code)', () => {
-  // Per repo convention (see harvester/sapper/conduit tests): assert >=
-  // ship floor, not exact match — avoids the brittleness of every PR
-  // having to retitle the prior PR's test.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache name');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 207, `sw cache version must be >= 207, got v${v}`);
+test('sw.js does not use a numeric cache version for BURST freshness', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

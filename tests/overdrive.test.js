@@ -133,16 +133,11 @@ test('OVERDRIVE does not introduce a new player accumulator (reuses combo.count)
   );
 });
 
-// ─── SW cache version ─────────────────────────────────────────────────────
+// ─── SW cache freshness ───────────────────────────────────────────────────
 
-test('sw.js cache version is at least v211 (any modified-asset PR must bump)', () => {
-  // Per project convention: cache key MUST be bumped when any cached asset
-  // changes. We assert >= the version this PR ships with so concurrent PRs
-  // can leapfrog without failing this test (per stored sw cache convention).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 211, `sw.js cache version must be >= v211 (found v${v})`);
+test('sw.js does not expose a second numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Cross-floor reset invariant ──────────────────────────────────────────

@@ -229,12 +229,7 @@ test('tickEnemyStatusEffects decays enemy._markedTimer with dt and clamps to 0',
     'mark decay must live inside tickEnemyStatusEffects in EXECUTABLE code');
 });
 
-test('sw.js cache version bumped to v215 or later (MARK adds new code)', () => {
-  // Per repo convention: assert >= ship floor, not exact match. Without
-  // bumping the cache, returning users get stale content.js / entities.js
-  // that don't know about the affix.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, "sw.js must declare a 'neon-dungeon-v###' cache key");
-  const ver = parseInt(m[1], 10);
-  assert.ok(ver >= 215, `sw cache must be >= v215, got v${ver}`);
+test('sw.js does not use numeric cache versions for MARK freshness', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

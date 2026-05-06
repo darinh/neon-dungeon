@@ -205,15 +205,9 @@ test('audio.hackwareBlink is defined in platform.js', () => {
     'platform.js must define an audio.hackwareBlink() method (otherwise activation crashes)');
 });
 
-// ─── SW cache invalidation ────────────────────────────────────────────────
+// ─── SW cache freshness ───────────────────────────────────────────────────
 
-test('sw.js cache version is bumped to v202 or higher (>= ship floor)', () => {
-  // Per project convention (memory: sw cache test convention): assert >=
-  // the ship floor, not exact version, so subsequent PRs don't have to
-  // retitle this test as cache versions march forward.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const ver = parseInt(m[1], 10);
-  assert.ok(ver >= 202,
-    `sw cache version must be >= v202 (BLINK ship floor) — found v${ver}`);
+test('sw.js uses network-first freshness instead of numeric cache versions', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

@@ -224,15 +224,12 @@ test('GHOST_PROJECTOR has CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS entries',
     'SOURCE_COLOURS must include GHOST_PROJECTOR with a hex colour');
 });
 
-// ─── Service worker cache version bump ──────────────────────────────────
+// ─── Service worker cache freshness ─────────────────────────────────────
 
-test('sw.js cache version was bumped to v180+ for the GHOST_PROJECTOR ship', () => {
-  // Cache key bump is mandatory whenever a file in ASSETS changes —
-  // otherwise users get stale entities.js with no GHOST_PROJECTOR.
-  const m = SW.match(/const\s+CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js must define CACHE constant');
-  assert.ok(parseInt(m[1], 10) >= 180,
-    `sw.js cache must be >= v180 for GHOST_PROJECTOR ship, got v${m[1]}`);
+test('sw.js uses network-first freshness instead of a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
+  assert.match(SW, /cacheFromNetwork\(e\)\.catch\(\(\) => caches\.match\(e\.request\)\)/);
 });
 
 // ─── game.js deferred-spawn flush wiring ────────────────────────────────

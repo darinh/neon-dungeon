@@ -148,15 +148,7 @@ test('REGENERATIVE has no overlap with existing modifiers (cross-check)', () => 
     `REGENERATIVE desc must be distinct from existing 9 modifiers, got "${desc}"`);
 });
 
-test('sw.js cache version >= v216 (REGENERATIVE adds runtime behavior)', () => {
-  // Per project convention: cache-version assertion is a floor (>=), not
-  // exact-match, so sibling PRs / the auto-bumper can leapfrog without
-  // retroactive test edits. v216 is the last manually-bumped version
-  // (commit dcfea81); the auto-bumper (PR #176) will push it higher
-  // once #176 merges.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vNNN cache version');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 216,
-    `sw.js cache version must be >= 216 (REGENERATIVE modifier ships runtime behavior in src/content.js + src/entities.js), got v${v}`);
+test('sw.js cache freshness is not a second version number', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

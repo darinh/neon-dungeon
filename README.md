@@ -70,11 +70,9 @@ see `docs/engine-boundary.md`.
    `CONTRIBUTING.md`.
 3. Add the script tag to `index.html` after its producers and before its
    consumers.
-4. Add browser-loaded files to `sw.js` `ASSETS`. For normal feature PRs into
-   `develop`, do not manually bump the service-worker cache key; the
-   develop-branch workflow does that. For a main-targeted hotfix/release that
-   changes precached assets without passing through `develop`, include a
-   deliberate `CACHE` bump in that release PR.
+4. Add browser-loaded files to `sw.js` `ASSETS`. Do not add or bump a service-
+   worker version number; `sw.js` uses a stable cache name and network-first
+   refresh for app assets.
 5. Add or update focused tests.
 6. Run `npm run check`.
 

@@ -146,13 +146,7 @@ test('execute branch sets hp=0 and calls die() (terminal kill, not damage)', () 
   assert.match(body, /enemy\.die\(\)/, 'execute must call enemy.die() in EXECUTABLE code');
 });
 
-test('sw.js cache version bumped to v208 or later (EXECUTE adds new code)', () => {
-  // Per repo convention (per sw-cache-test-convention rule): assert >=
-  // ship floor, not exact match — every PR after this one will only
-  // bump higher. Without bumping the cache, returning users get stale
-  // content.js / entities.js that don't know about the affix.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, "sw.js must declare a 'neon-dungeon-v###' cache key");
-  const ver = parseInt(m[1], 10);
-  assert.ok(ver >= 208, `sw cache must be >= v208, got v${ver}`);
+test('sw.js does not use numeric cache versions for EXECUTE freshness', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

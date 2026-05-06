@@ -187,14 +187,9 @@ test('game.js loadFloor clears frostPatches on floor transition', () => {
   assert.match(GAME, /frostPatches\.length\s*=\s*0/);
 });
 
-// ─── Service worker cache bump ──────────────────────────────────────────
+// ─── Service worker cache freshness ─────────────────────────────────────
 
-test('sw.js cache version bumped to v183 or later', () => {
-  // sw.js must be bumped on any commit that changes a file listed in
-  // ASSETS — otherwise users get stale code (old entities.js without
-  // CRYOPHAGE wiring while server reports the new schema).
-  // Match v183 OR later (subsequent mob PRs re-bump on the same line).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a versioned cache constant');
-  assert.ok(parseInt(m[1], 10) >= 183, `cache version must be >= v183 (CRYOPHAGE bump), got v${m[1]}`);
+test('sw.js freshness does not depend on a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

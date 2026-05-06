@@ -95,19 +95,54 @@ const ACT1_MESSAGE_INTENTS = [
   },
 ];
 
+const APP_VERSION_RELEASE_URL = 'https://api.github.com/repos/darinh/neon-dungeon/releases/latest';
+const APP_VERSION_CACHE_KEY = 'neonDungeonReleaseVersion';
+const APP_VERSION_CACHE_TS_KEY = 'neonDungeonReleaseVersionCheckedAt';
+const APP_VERSION_REFRESH_MS = 60 * 60 * 1000;
+
+/** @returns {number} */
+function readCachedAppVersion() {
+  try {
+    const version = localStorage.getItem(APP_VERSION_CACHE_KEY);
+    const checkedAt = Number(localStorage.getItem(APP_VERSION_CACHE_TS_KEY) || 0);
+    if (version) appVersion = version;
+    return checkedAt;
+  } catch (err) {
+    console.warn('[version] failed to read cached release version:', err);
+    return 0;
+  }
+}
+
+/** @param {string} version */
+function cacheAppVersion(version) {
+  try {
+    localStorage.setItem(APP_VERSION_CACHE_KEY, version);
+    localStorage.setItem(APP_VERSION_CACHE_TS_KEY, String(Date.now()));
+  } catch (err) {
+    console.warn('[version] failed to cache release version:', err);
+  }
+}
+
 function loadAppVersion() {
-  return fetch('./package.json')
+  const checkedAt = readCachedAppVersion();
+  if (checkedAt && Date.now() - checkedAt < APP_VERSION_REFRESH_MS) {
+    return Promise.resolve();
+  }
+
+  return fetch(APP_VERSION_RELEASE_URL)
     .then((response) => {
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     })
-    .then((metadata) => {
-      const version = metadata && typeof metadata.version === 'string' ? metadata.version.trim() : '';
-      if (!version) throw new Error('package.json missing version');
+    .then((release) => {
+      const tag = release && typeof release.tag_name === 'string' ? release.tag_name.trim() : '';
+      const version = tag.replace(/^v/i, '');
+      if (!version) throw new Error('GitHub release missing tag_name');
       appVersion = version;
+      cacheAppVersion(version);
     })
     .catch((err) => {
-      console.error('[version] failed to load package.json:', err);
+      console.error('[version] failed to load latest GitHub release:', err);
     });
 }
 

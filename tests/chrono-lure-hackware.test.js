@@ -595,15 +595,7 @@ test('audio.hackwareChronoLure and audio.hackwareChronoLureBoom are defined in p
 
 // ─── SW cache invalidation ────────────────────────────────────────────────
 
-test('sw.js cache version is bumped to v372 or higher (>= ship floor)', () => {
-  // Per project convention (memory: sw cache test convention): assert
-  // >= the ship floor, not exact version, so subsequent PRs don't have
-  // to retitle this test as cache versions march forward. Floor is
-  // the version on develop at branch creation; CI auto-bumps on merge
-  // (see .github/workflows/cache-bump.yml).
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const ver = parseInt(m[1], 10);
-  assert.ok(ver >= 372,
-    `sw cache version must be >= v372 (CHRONO_LURE branch floor) — found v${ver}`);
+test('sw.js uses network-first freshness instead of numeric cache versions', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)\.catch\(\(\) => caches\.match\(e\.request\)\)/);
 });
