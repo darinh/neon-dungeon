@@ -1005,7 +1005,7 @@ function activateHackware(player) {
       // EMP destroys disruption fields in radius
       for (const f of disruptionFields) {
         if (f.dead) continue;
-        if (dist(player.x, player.y, f.x, f.y) < radius) {
+        if (dist(player.x, player.y, f.x, f.y) < radius && map && hasLOS(player.x, player.y, f.x, f.y, map)) {
           f.dead = true;
           spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
         }
@@ -1013,7 +1013,7 @@ function activateHackware(player) {
       // EMP collapses gravity wells in radius
       for (const w of gravityWells) {
         if (w.dead) continue;
-        if (dist(player.x, player.y, w.x, w.y) < radius) {
+        if (dist(player.x, player.y, w.x, w.y) < radius && map && hasLOS(player.x, player.y, w.x, w.y, map)) {
           w.dead = true;
           spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
           audio.gravitonCollapse();
@@ -1552,14 +1552,14 @@ function activateHackware(player) {
         }
         for (const f of disruptionFields) {
           if (f.dead) continue;
-          if (segDist2(f.x, f.y) < WIDTH_SQ) {
+          if (segDist2(f.x, f.y) < WIDTH_SQ && hasLOS(player.x, player.y, f.x, f.y, map)) {
             f.dead = true;
             spawnParticles(f.x, f.y, 'SPARK', '#ff44aa', 6);
           }
         }
         for (const w of gravityWells) {
           if (w.dead) continue;
-          if (segDist2(w.x, w.y) < WIDTH_SQ) {
+          if (segDist2(w.x, w.y) < WIDTH_SQ && hasLOS(player.x, player.y, w.x, w.y, map)) {
             w.dead = true;
             spawnParticles(w.x, w.y, 'SPARK', '#8833ff', 6);
             audio.gravitonCollapse();
@@ -4331,23 +4331,36 @@ function generateFloor(floorNum, opts) {
   }
 
   // ── Doors: place at room-corridor junctions (chokepoints only) ──────────
-  // Helper: find entrance clusters for a room (groups of adjacent boundary tiles
-  // connecting to corridors). Returns array of arrays.
+  // Helper: find entrance clusters for a room (groups of adjacent corridor-side
+  // tiles outside the room wall). Returns array of arrays.
   /**
    * @param {any} room
    */
   function getEntranceClusters(room) {
     const edges = [];
     const isEntry = (/** @type {any} */ t) => t===T.FLOOR||t===T.DOOR;
+    /** @type {[number, number][]} */
+    const cardinalDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    /** @param {number} x @param {number} y */
+    const inThisRoom = (x, y) => x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
+    /** @param {number} x @param {number} y */
+    const hasCorridorSide = (x, y) => {
+      for (const [dx, dy] of cardinalDirs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || inThisRoom(nx, ny)) continue;
+        if (isEntry(map[ny]?.[nx])) return true;
+      }
+      return false;
+    };
     for (let tx=room.x; tx<room.x+room.w; tx++) {
-      if (room.y>0 && isEntry(map[room.y][tx]) && map[room.y-1][tx]===T.FLOOR) edges.push({x:tx, y:room.y});
+      if (room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx]) && hasCorridorSide(tx, room.y-1)) edges.push({x:tx, y:room.y-1});
       const by=room.y+room.h-1;
-      if (by<MAP_H-1 && isEntry(map[by][tx]) && map[by+1][tx]===T.FLOOR) edges.push({x:tx, y:by});
+      if (by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx]) && hasCorridorSide(tx, by+1)) edges.push({x:tx, y:by+1});
     }
     for (let ty=room.y; ty<room.y+room.h; ty++) {
-      if (room.x>0 && isEntry(map[ty][room.x]) && map[ty][room.x-1]===T.FLOOR) edges.push({x:room.x, y:ty});
+      if (room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1]) && hasCorridorSide(room.x-1, ty)) edges.push({x:room.x-1, y:ty});
       const bx=room.x+room.w-1;
-      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && map[ty][bx+1]===T.FLOOR) edges.push({x:bx, y:ty});
+      if (bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1]) && hasCorridorSide(bx+1, ty)) edges.push({x:bx+1, y:ty});
     }
     // Deduplicate
     const seen = new Set();
@@ -4373,12 +4386,131 @@ function generateFloor(floorNum, opts) {
     return clusters;
   }
 
+  /**
+   * @param {any[]} cluster
+   * @returns {any}
+   */
+  function keepSingleEntranceTile(cluster) {
+    const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
+    const keep = sorted[Math.floor(sorted.length / 2)];
+    for (const e of sorted) {
+      if (e !== keep) map[e.y][e.x] = T.WALL;
+    }
+    return keep;
+  }
+
+  /** @param {any} tile */
+  function isDoorLikeEntranceTile(tile) {
+    return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
+      tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
+  }
+
+  function collapseAdjacentEntranceTiles() {
+    /** @type {Set<string>} */
+    const visitedDoorTiles = new Set();
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x])) continue;
+        const key = x + ',' + y;
+        if (visitedDoorTiles.has(key)) continue;
+        const cluster = [{ x, y }];
+        visitedDoorTiles.add(key);
+        for (let qi = 0; qi < cluster.length; qi++) {
+          const c = /** @type {any} */ (cluster[qi]);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = c.x + dx, ny = c.y + dy;
+            const nk = nx + ',' + ny;
+            if (visitedDoorTiles.has(nk) || !isDoorLikeEntranceTile(map[ny]?.[nx])) continue;
+            visitedDoorTiles.add(nk);
+            cluster.push({ x: nx, y: ny });
+          }
+        }
+        if (cluster.length > 1) keepSingleEntranceTile(cluster);
+      }
+    }
+  }
+
+  function thinWideCorridors() {
+    /** @type {any} */
+    const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
+    for (const r of rooms) {
+      for (let ty = r.y; ty < r.y + r.h; ty++) {
+        for (let tx = r.x; tx < r.x + r.w; tx++) {
+          if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
+        }
+      }
+    }
+    /** @param {number} x @param {number} y */
+    const isCorridor = (x, y) => {
+      const t = map[y]?.[x];
+      return !inRoom[y]?.[x] && t !== T.WALL && t !== T.VOID;
+    };
+    const allRoomsReachable = () => {
+      const passable = (/** @type {any} */ t) =>
+        t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
+        t === T.STAIRS || t === T.TERMINAL ||
+        t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+        t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
+        t === T.CRACKED ||
+        t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+        t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
+        t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
+        t === T.CHALLENGE_GATE;
+      const lockColourForTile = (/** @type {any} */ t) =>
+        t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
+      const solvedReach = dungeonReachability.solveKeyLockReachability({
+        map,
+        start: { x: spawnRoom.cx, y: spawnRoom.cy },
+        keys: keyItems,
+        requiredRooms: rooms,
+        isOpenTile: passable,
+        lockColourForTile,
+      });
+      return solvedReach.unreachableRooms.length === 0;
+    };
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let y = 1; y < MAP_H - 2; y++) {
+        for (let x = 1; x < MAP_W - 2; x++) {
+          if (isCorridor(x, y) && isCorridor(x + 1, y) &&
+              isCorridor(x, y + 1) && isCorridor(x + 1, y + 1)) {
+            const candidates = [
+              { x: x + 1, y: y + 1 },
+              { x: x + 1, y },
+              { x, y: y + 1 },
+              { x, y },
+            ];
+            for (const c of candidates) {
+              if (isDoorLikeEntranceTile(map[c.y][c.x])) continue;
+              const prev = map[c.y][c.x];
+              map[c.y][c.x] = T.WALL;
+              if (allRoomsReachable()) {
+                changed = true;
+                break;
+              }
+              map[c.y][c.x] = prev;
+            }
+          }
+        }
+      }
+    }
+  }
+
   for (const r of rooms) {
     if (r === bossRoom) continue;
     const clusters = getEntranceClusters(r);
-    // Only door narrow clusters (1-2 tiles = real chokepoints)
     for (const cl of clusters) {
-      if (cl.length <= 2 && rand('world') < 0.5) {
+      if (cl.length > 1) keepSingleEntranceTile(cl);
+    }
+  }
+
+  for (const r of rooms) {
+    if (r === bossRoom) continue;
+    const clusters = getEntranceClusters(r);
+    // Single corridor-side entrance tiles become optional doors.
+    for (const cl of clusters) {
+      if (cl.length === 1 && rand('world') < 0.5) {
         for (const e of cl) map[e.y][e.x] = T.DOOR;
       }
     }
@@ -4412,23 +4544,18 @@ function generateFloor(floorNum, opts) {
     for (const lr of lockPriority) {
       if (placed >= numLocked) break;
       const ci = Math.min(placed, 2);
-      // Get entrance clusters and lock ALL narrow ones (size ≤ 2)
+      // Entrance clusters were already narrowed to one corridor-side tile;
+      // lock every current entrance so the room cannot be bypassed.
       const cls = getEntranceClusters(lr);
       const narrowClusters = cls.filter(cl => cl.length <= 2);
       if (!narrowClusters.length) continue; // can't meaningfully gate this room
 
-      // Convert every tile in every narrow cluster to a locked door
+      // Convert every tile in every entrance cluster to a locked door.
       const lockedTiles = [];
       for (const cl of narrowClusters) {
         for (const e of cl) {
           map[e.y][e.x] = lockTiles[ci];
           lockedTiles.push(e);
-        }
-      }
-      // Wide clusters (>2): wall them off to prevent bypass
-      for (const cl of cls) {
-        if (cl.length > 2) {
-          for (const e of cl) map[e.y][e.x] = T.WALL;
         }
       }
 
@@ -4494,13 +4621,8 @@ function generateFloor(floorNum, opts) {
         lr.hasLoot = true;
         placed++;
       } else {
-        // Can't safely place key — revert locks and walls to floor
+        // Can't safely place key — revert locks to floor.
         for (const e of lockedTiles) map[e.y][e.x] = T.FLOOR;
-        for (const cl of cls) {
-          if (cl.length > 2) {
-            for (const e of cl) map[e.y][e.x] = T.FLOOR;
-          }
-        }
       }
     }
   }
@@ -4513,12 +4635,12 @@ function generateFloor(floorNum, opts) {
     const secretEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r !== bossRoom && !r.roomType && r.w * r.h >= 20
     );
-    // Shuffle and try to find one with a narrow entrance cluster
+    // Shuffle and try to find one with a normalized single-tile entrance.
     const shuffled = shuffleInPlace(secretEligible.slice(), 'world');
     for (const r of shuffled) {
       const cls = getEntranceClusters(r);
       const narrow = cls.filter(cl => cl.length <= 2);
-      if (!narrow.length) continue; // no narrow entrance → skip
+      if (!narrow.length) continue; // no entrance to convert into a cracked wall
 
       r.roomType = 'secret';
       r.secretRevealed = false;
@@ -4611,6 +4733,7 @@ function generateFloor(floorNum, opts) {
     }
   }
 
+  collapseAdjacentEntranceTiles();
   // ── Prune dead-end corridor tiles ─────────────────────────────────────
   // After secret rooms, locked doors, and challenge rooms wall off entrances,
   // some corridor segments become dead ends (floor tile with only 1 passable
@@ -4751,30 +4874,28 @@ function generateFloor(floorNum, opts) {
       /** @type {{x:number,y:number,ox:number,oy:number}[]} */
       const gates = [];
       for (let tx = room.x; tx < room.x + room.w; tx++) {
-        const top = map[room.y]?.[tx];
+        const top = map[room.y - 1]?.[tx];
         if (top === T.LOCKED_R || top === T.LOCKED_B || top === T.LOCKED_G || top === T.CRACKED || top === T.CHALLENGE_GATE) {
-          gates.push({ x: tx, y: room.y, ox: tx, oy: room.y - 1 });
+          gates.push({ x: tx, y: room.y - 1, ox: tx, oy: room.y - 2 });
         }
         const by = room.y + room.h - 1;
-        const bottom = map[by]?.[tx];
+        const bottom = map[by + 1]?.[tx];
         if (bottom === T.LOCKED_R || bottom === T.LOCKED_B || bottom === T.LOCKED_G || bottom === T.CRACKED || bottom === T.CHALLENGE_GATE) {
-          gates.push({ x: tx, y: by, ox: tx, oy: by + 1 });
+          gates.push({ x: tx, y: by + 1, ox: tx, oy: by + 2 });
         }
       }
       for (let ty = room.y; ty < room.y + room.h; ty++) {
-        const left = map[ty]?.[room.x];
+        const left = map[ty]?.[room.x - 1];
         if (left === T.LOCKED_R || left === T.LOCKED_B || left === T.LOCKED_G || left === T.CRACKED || left === T.CHALLENGE_GATE) {
-          gates.push({ x: room.x, y: ty, ox: room.x - 1, oy: ty });
+          gates.push({ x: room.x - 1, y: ty, ox: room.x - 2, oy: ty });
         }
         const bx = room.x + room.w - 1;
-        const right = map[ty]?.[bx];
+        const right = map[ty]?.[bx + 1];
         if (right === T.LOCKED_R || right === T.LOCKED_B || right === T.LOCKED_G || right === T.CRACKED || right === T.CHALLENGE_GATE) {
-          gates.push({ x: bx, y: ty, ox: bx + 1, oy: ty });
+          gates.push({ x: bx + 1, y: ty, ox: bx + 2, oy: ty });
         }
       }
-      return gates.filter((/** @type {any} */ g) =>
-        g.ox >= 0 && g.oy >= 0 && g.ox < MAP_W && g.oy < MAP_H
-      );
+      return gates;
     };
 
     // Final repair pass: validate with ALL locks open using the same 4-way
@@ -4783,12 +4904,17 @@ function generateFloor(floorNum, opts) {
     // get a direct rescue corridor to their centre.
     for (let repair = 0; repair < rooms.length; repair++) {
       reach = computeReach(new Set(['red', 'blue', 'gold']));
-      const blocked = rooms.find((/** @type {any} */ r) => r.roomType !== 'secret' && !roomTouchesReach(r));
+      const blocked = rooms.find((/** @type {any} */ r) => !roomTouchesReach(r));
       if (!blocked) break;
       const gates = roomBoundaryGates(blocked);
       if (gates.length > 0) {
-        const gate = gates.find((/** @type {any} */ g) => !reach[g.oy]?.[g.ox]) || gates[0];
-        if (gate) carveRescueCorridorTo(gate.ox, gate.oy);
+        const gate = gates.find((/** @type {any} */ g) =>
+          g.ox >= 0 && g.oy >= 0 && g.ox < MAP_W && g.oy < MAP_H && !reach[g.oy]?.[g.ox]
+        ) || gates[0];
+        if (gate) {
+          const outsideInBounds = gate.ox >= 0 && gate.oy >= 0 && gate.ox < MAP_W && gate.oy < MAP_H;
+          carveRescueCorridorTo(outsideInBounds ? gate.ox : gate.x, outsideInBounds ? gate.oy : gate.y);
+        }
       } else {
         carveRescueCorridorTo(blocked.cx, blocked.cy);
       }
@@ -4835,6 +4961,8 @@ function generateFloor(floorNum, opts) {
       while (cy !== stairY) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cy += cy < stairY ? 1 : -1; }
     }
   }
+
+  thinWideCorridors();
 
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {

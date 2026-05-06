@@ -1,0 +1,75 @@
+// @ts-check
+'use strict';
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
+const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+
+/** @param {string} src */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+const CONTENT_NC = stripComments(CONTENT);
+const ENTITIES_NC = stripComments(ENTITIES);
+
+/**
+ * @param {string} src
+ * @param {RegExp} openerRe
+ * @returns {string}
+ */
+function extractBlock(src, openerRe) {
+  const i = src.search(openerRe);
+  assert.notEqual(i, -1, `missing opener ${openerRe}`);
+  const open = src.indexOf('{', i);
+  assert.notEqual(open, -1, `missing block for ${openerRe}`);
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(i, j + 1);
+    }
+  }
+  assert.fail(`unterminated block for ${openerRe}`);
+}
+
+test('EMP_BURST cannot collapse fields or wells through walls and doors', () => {
+  const body = extractBlock(CONTENT_NC, /case\s+'EMP_BURST':/);
+  const fieldLoop = extractBlock(body, /for\s*\(\s*const\s+f\s+of\s+disruptionFields\s*\)/);
+  const wellLoop = extractBlock(body, /for\s*\(\s*const\s+w\s+of\s+gravityWells\s*\)/);
+
+  assert.match(fieldLoop, /dist\(player\.x,\s*player\.y,\s*f\.x,\s*f\.y\)\s*<\s*radius\s*&&\s*map\s*&&\s*hasLOS\(player\.x,\s*player\.y,\s*f\.x,\s*f\.y,\s*map\)/);
+  assert.match(wellLoop, /dist\(player\.x,\s*player\.y,\s*w\.x,\s*w\.y\)\s*<\s*radius\s*&&\s*map\s*&&\s*hasLOS\(player\.x,\s*player\.y,\s*w\.x,\s*w\.y,\s*map\)/);
+});
+
+test('EMP_LINE cannot collapse fields or wells through walls and doors', () => {
+  const body = extractBlock(CONTENT_NC, /case\s+'EMP_LINE':/);
+  const fieldLoop = extractBlock(body, /for\s*\(\s*const\s+f\s+of\s+disruptionFields\s*\)/);
+  const wellLoop = extractBlock(body, /for\s*\(\s*const\s+w\s+of\s+gravityWells\s*\)/);
+
+  assert.match(fieldLoop, /segDist2\(f\.x,\s*f\.y\)\s*<\s*WIDTH_SQ\s*&&\s*hasLOS\(player\.x,\s*player\.y,\s*f\.x,\s*f\.y,\s*map\)/);
+  assert.match(wellLoop, /segDist2\(w\.x,\s*w\.y\)\s*<\s*WIDTH_SQ\s*&&\s*hasLOS\(player\.x,\s*player\.y,\s*w\.x,\s*w\.y,\s*map\)/);
+});
+
+test('enemy death AoE and NEXUS feedback use LOS gates', () => {
+  const detonateBody = extractBlock(ENTITIES_NC, /function\s+applyOnKill\s*\(/);
+  assert.match(detonateBody, /dist\(e\.x,\s*e\.y,\s*enemy\.x,\s*enemy\.y\)\s*<\s*aoeR\s*&&\s*hasLOS\(enemy\.x,\s*enemy\.y,\s*e\.x,\s*e\.y,\s*_EG\.dungeon\.map\)/);
+  assert.match(detonateBody, /dist\(p\.x,\s*p\.y,\s*enemy\.x,\s*enemy\.y\)\s*<\s*aoeR\s*&&\s*hasLOS\(enemy\.x,\s*enemy\.y,\s*p\.x,\s*p\.y,\s*_EG\.dungeon\.map\)/);
+
+  const nexusIdx = ENTITIES_NC.indexOf("this.type === 'NEXUS' && this._nxLinks");
+  assert.notEqual(nexusIdx, -1, 'NEXUS death feedback branch must exist');
+  const nexusBranch = ENTITIES_NC.slice(nexusIdx, nexusIdx + 600);
+  const nexusLoop = extractBlock(nexusBranch, /for\s*\(\s*const\s+linked\s+of\s+this\._nxLinks\s*\)/);
+  assert.match(nexusLoop, /if\s*\(\s*!hasLOS\(this\.x,\s*this\.y,\s*linked\.x,\s*linked\.y,\s*_EG\.dungeon\.map\)\)\s*continue/);
+});
+
+test('grenade bomb zones keep player damage LOS-gated', () => {
+  const hazardBody = extractBlock(CONTENT_NC, /function\s+updateHazardZones\s*\(/);
+  assert.match(hazardBody, /dist\(player\.x,\s*player\.y,\s*z\.x,\s*z\.y\)\s*<\s*z\.radius\s*&&\s*hasLOS\(z\.x,\s*z\.y,\s*player\.x,\s*player\.y,\s*_CG\.dungeon\.map\)/);
+});

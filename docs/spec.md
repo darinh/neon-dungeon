@@ -521,10 +521,13 @@ Each floor is generated fresh using Binary Space Partitioning:
    rooms wall off entrances, corridor tiles that become dead ends
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
    WALL so players never walk down a tunnel to nowhere.
-8. **Reachability guarantee**: BFS from spawn to stairs across all
-   non-WALL/VOID tiles (locked doors count as passable since keys are
-   placed in reachable areas). If stairs are unreachable, a rescue
-   corridor is carved from spawn to stairs as a safety net.
+8. **Wide-corridor thinning**: outside-room 2×2 passable hallway blocks are
+   iteratively narrowed without removing door-like tiles and only when the
+   key/lock reachability solver still proves every room reachable.
+9. **Reachability guarantee**: key-cascade BFS from spawn to every room
+   respects locked doors until their physically reachable keys are collected.
+   If stairs are unreachable after generation, a rescue corridor is carved
+   from spawn to stairs as a safety net.
 
 ### Seeded generation
 
@@ -554,12 +557,12 @@ LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | 
 
 ### Doors & Locked Doors
 
-**Regular doors:** Placed at room–corridor junctions using entrance clustering.
-Adjacent boundary tiles that connect to corridors are grouped into clusters.
-Only narrow clusters (1–2 tiles wide) receive doors — wider openings are left
-open (they are hallways, not doorways). When a cluster is doored, **all** tiles
-in the cluster become `T.DOOR` (no single-door-next-to-open-tile problem). Each
-eligible cluster has a 50 % chance of receiving doors.
+**Regular doors:** Placed on the corridor-side tile immediately outside a room
+wall using entrance clustering. Multi-tile entrance clusters are narrowed to a
+single flush doorway tile before door/lock/secret/challenge placement, so
+door-like tiles do not sit inside rooms and adjacent double-door openings are
+collapsed. Each eligible single-tile entrance has a 50 % chance of receiving a
+regular `T.DOOR`.
 
 **Locked doors (floor 2+):** Gate high-value rooms using coloured keys (red,
 blue, gold). Target priority:
@@ -567,15 +570,14 @@ blue, gold). Target priority:
 2. **Special rooms** (armory, medbay, shrine, vault)
 3. **Random eligible rooms** (fallback, shuffled)
 
-All narrow entrance clusters of the target room are converted to locked tiles
-(same colour). Wide clusters (> 2 tiles) are walled off to prevent bypass. This
-ensures the room is truly gated. Picking up a key grants that colour for the
-remainder of the current floor (doors of that colour do not consume the key).
-Closed and locked doors block line-of-sight until opened.
+All normalized entrance clusters of the target room are converted to locked
+tiles (same colour), ensuring the room is truly gated. Picking up a key grants
+that colour for the remainder of the current floor (doors of that colour do not
+consume the key). Closed and locked doors block line-of-sight until opened.
 
 Number of locked rooms per floor: 1 (floor 2–3), 2 (floor 4–6), 3 (floor 7+).
 Keys are placed via BFS reachability from spawn to guarantee no softlocks. If a
-room cannot be safely locked (no narrow clusters, or no reachable room for the
+room cannot be safely locked (no entrance clusters, or no reachable room for the
 key), it is skipped and the lock budget moves to the next candidate.
 
 ### Environmental Hazards
