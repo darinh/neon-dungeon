@@ -176,16 +176,11 @@ test('HUD computeStatusFx pushes a stride chip when stacks > 0', () => {
     'HUD chip must gate on player.perks && player.perks.STRIDE && ss > 0 (defensive null-check + entities.js alias mirror)');
 });
 
-// ─── Service worker cache version ─────────────────────────────────────────
+// ─── Service worker cache freshness ───────────────────────────────────────
 
-test('sw.js cache version is at least v210', () => {
-  // Match the develop convention of an additive bump per shipped
-  // user-visible change. Open PRs claim v198–v209 in parallel; this PR
-  // takes v210 to avoid collision until merge order resolves.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 210, `sw cache version must be >= v210 (STRIDE), got v${v}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Floor transition: STRIDE stacks must reset ──────────────────────────

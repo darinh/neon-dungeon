@@ -154,12 +154,11 @@ test('continueGame() restores lastStandTimer and lastStandCD with safe defaults'
   assert.match(GAME_SRC, /p\.lastStandCD\s*=\s*s\.lastStandCD\s*\|\|\s*0/);
 });
 
-// ─── Service worker cache bump ───────────────────────────────────────────────
+// ─── Service worker cache freshness ─────────────────────────────────────────
 
-test('service worker cache key bumped past v204 (per LAST_STAND content change)', () => {
-  const m = SW_SRC.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'cache key present');
-  assert.ok(parseInt(m[1], 10) >= 205, `cache version should be >= 205, got ${m[1]}`);
+test('service worker cache key is not a second numeric app version', () => {
+  assert.doesNotMatch(SW_SRC, /neon-dungeon-v\d+/);
+  assert.match(SW_SRC, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });
 
 // ─── Tier 3 smoke: behaviour proof via reduced harness ──────────────────────

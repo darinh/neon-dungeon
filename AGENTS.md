@@ -75,19 +75,14 @@ Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `s
 
 ## Service worker
 
-`sw.js` cache key (`neon-dungeon-vNNN`) is **auto-bumped by CI** on every push to `develop` — see `.github/workflows/cache-bump.yml`. The bump size is derived from the merged commit message:
+`sw.js` must not carry a numeric app/cache version such as `neon-dungeon-vNNN`.
+The only user-facing release version is the latest GitHub Release tag, created
+by `.github/workflows/release-version.yml` after changes land on `main`. The
+service worker uses a stable cache name and network-first fetches for app assets
+so code freshness does not depend on a second version number.
 
-| Commit prefix / marker | Bump |
-|---|---|
-| `BREAKING CHANGE` or `!:` | +10 |
-| `feat:` / `feat(scope):` | +2 |
-| anything else (`fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `perf:`, …) | +1 |
-
-**Do not bump `sw.js` manually in normal feature PRs to `develop`.** Manual bumps create artificial merge conflicts on every parallel PR (the cascade pattern that bit us at v215→v218). The bot pushes the bump back to `develop` with `[skip cache-bump]` in the message to avoid loops. Exception: if a main-targeted hotfix or release changes a precached asset without passing through `develop`, include a deliberate `CACHE` bump in that release PR because the auto-bump workflow does not run on `main`.
-
-You also do **not** need to add `sw.js` cache-version assertions to new tests. The existing floor assertions (`>= vNNN`) in older tests will continue to hold — leave them alone — but new test files should not introduce new ones.
-
-If you add a brand-new file under `ASSETS`, you DO still need to add the path to the precache list in `sw.js` — that's a real code change. The version bump on top will then be handled by CI.
+If you add a brand-new file under `ASSETS`, add the path to the precache list in
+`sw.js`; do not add or bump a service-worker version.
 
 ## Tests
 

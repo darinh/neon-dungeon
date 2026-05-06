@@ -10,7 +10,6 @@ const vm = require('node:vm');
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
 const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
 const SW = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
-const PACKAGE = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
 
 /**
  * @typedef {{
@@ -71,13 +70,18 @@ test('run start menu frames new and saved runs as AI test sessions', () => {
   assert.doesNotMatch(GAME, /fillText\('START NEW RUN'/);
 });
 
-test('title screen renders the package version', () => {
-  assert.match(PACKAGE.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
-  assert.doesNotMatch(GAME, /APP_VERSION/);
-  assert.match(GAME, /fetch\('\.\/package\.json'\)/);
+test('title screen renders the latest GitHub Release version', () => {
+  assert.doesNotMatch(GAME, /APP_VERSION\s*=\s*['"]/);
+  assert.match(GAME, /APP_VERSION_RELEASE_URL = 'https:\/\/api\.github\.com\/repos\/darinh\/neon-dungeon\/releases\/latest'/);
+  assert.match(GAME, /APP_VERSION_REFRESH_MS = 60 \* 60 \* 1000/);
+  assert.match(GAME, /localStorage\.getItem\(APP_VERSION_CACHE_KEY\)/);
+  assert.match(GAME, /Date\.now\(\) - checkedAt < APP_VERSION_REFRESH_MS/);
+  assert.match(GAME, /fetch\(APP_VERSION_RELEASE_URL\)/);
+  assert.match(GAME, /tag_name/);
   assert.match(GAME, /appVersion = version/);
+  assert.match(GAME, /cacheAppVersion\(version\)/);
   assert.match(GAME, /ctx\.fillText\('v' \+ appVersion,/);
-  assert.match(SW, /'\.\/package\.json'/);
+  assert.doesNotMatch(SW, /'\.\/package\.json'/);
 });
 
 test('endRun records a persistent session ordinal without bypassing leaderboard flow', () => {

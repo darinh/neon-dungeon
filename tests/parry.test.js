@@ -132,15 +132,9 @@ test('parry preserves full damage (no nerf — skill-rewarded perk)', () => {
     'parry must NOT reassign this.dmg (preserves enemy projectile damage)');
 });
 
-// ─── Service-worker cache version ─────────────────────────────────────────
+// ─── Service-worker cache freshness ───────────────────────────────────────
 
-test('sw.js cache version is bumped to >= v198 (parry-perk ship)', () => {
-  // Per project convention (stored memory: "sw cache test convention"):
-  // tests assert >= ship_floor, NOT exact match — prevents brittleness
-  // when sibling PRs race to ship.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare CACHE = neon-dungeon-vNNN');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 198,
-    `sw.js cache version must be >= v198 for parry-perk ship, got v${v}`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });

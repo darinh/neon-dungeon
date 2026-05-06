@@ -357,7 +357,7 @@ the Act 1 realignment work and must not be presented as already playable.
   their narrative purposes, contact-address reveal, three message intents plus
   SEND/BACK controls, `act1_message_sent` persistence, `act1MessageIntent`
   migration, and legacy `keeper`/`unchained` preservation. New tests must not add
-  service-worker cache-version assertions.
+  numeric service-worker cache assertions.
 
 ---
 
@@ -4519,20 +4519,19 @@ A `sw.js` at the repository root provides offline play after first visit:
 
 | Aspect     | Detail |
 |------------|--------|
-| **Cache name** | `neon-dungeon-vNNN`; current value lives in `sw.js` `CACHE` |
-| **Strategy**   | Stale-while-revalidate for navigation (HTML); cache-first for pre-cached assets; no runtime caching of unknown URLs |
+| **Cache name** | Stable `neon-dungeon-assets`; not a release/version number |
+| **Strategy**   | Network-first for navigation and explicit `ASSETS`; cached fallback keeps first-visit assets offline-capable; unknown URLs are not runtime-cached |
 | **Pre-cached** | `./`, `./index.html`, `./privacy.html`, `./manifest.json`, browser-loaded engine/source files, title audio, and icon PNGs listed in `ASSETS` |
 | **Install**    | `skipWaiting()` — new SW activates immediately |
 | **Activate**   | `clients.claim()` + purge old cache versions |
 | **Registration** | Separate `<script>` tag after the game script; silent `.catch()` for non-supporting browsers |
 
-**Update flow:** Normal feature work merges to `develop`; the
-`.github/workflows/cache-bump.yml` workflow opens and merges the `CACHE` version
-bump automatically based on the merged commit prefix. Do not hand-edit `CACHE` in
-develop-targeted feature PRs. If a main-targeted hotfix or release changes a
-precached asset without passing through `develop`, include a deliberate `CACHE`
-bump in that release PR. The activate handler deletes all caches that don't match
-the new name, so users get the fresh assets on next load.
+**Update flow:** Changes that land on `main` trigger
+`.github/workflows/release-version.yml`, which computes the next semver tag and
+creates a GitHub Release at the exact `main` commit. The visible title-screen
+version comes from the latest GitHub Release tag; `sw.js` deliberately has no
+numeric version. App assets are fetched network-first and update the stable cache
+when online, then fall back to cached responses offline.
 
 ### Known Limitation — iOS Safari
 
@@ -4882,7 +4881,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 | v1.8    | Scatter Gun per-pellet pitch randomisation: 4 staggered cracks with ±15% pitch variation and randomised noise filters replace the static dual-noise burst |
 | v1.9    | Weapon-aware hit sounds: `audio.hit()` accepts weapon name; each weapon produces a distinct enemy-impact sound (Scatter plink, Railgun crack+ring, Plasma Sword sizzle, Void Cannon thud); Projectile carries `weaponName`; fixed double-hit-sound on surviving enemies |
 | v1.10   | Maskable icon variants: 192×192 + 512×512 maskable PNGs (72% inner icon, `#0a0a12` background) for Android adaptive icons; manifest updated with `purpose: maskable` entries |
-| v1.11   | Service worker (`sw.js`): cache-first offline PWA; pre-caches index.html, manifest, and icon PNGs on install; `skipWaiting` + `clients.claim` for immediate activation; versioned cache name for update busting |
+| v1.11   | Service worker (`sw.js`): initial cache-first offline PWA; pre-caches index.html, manifest, and icon PNGs on install; `skipWaiting` + `clients.claim` for immediate activation. Current behavior is documented in the Service Worker section above. |
 | v2.1    | Floor transition audio: `audio.transition()` plays digital glitch SFX (stutter tones + bandpass noise sweep + sub rumble) on every `fadeTo()` call; SW cache v5 |
 | v2.2    | Audio polish + spec fixes: boss phase transition SFX (`audio.phaseShift()`), menu select blip (`audio.menuSelect()`), low-health heartbeat warning (`audio.lowHealth()` every 2 s at ≤25% HP); Hive phase transitions now have VFX + message like Omega/Sentinel; Sentinel shield burst fixed to 20 dmg (was 15, spec says 20); Hive shockwave fixed to 25 dmg (was 30, spec says 25); touch pause overlay now shows resume + quit (was resume only); mobile first-touch aim initialises mouse position immediately (fixes stale aim on first shot) |
 | v2.3    | Spec accuracy: corrected torch radius 8→9; replaced "fully dark beyond radius 12" with actual fog-of-war behaviour (visited tiles at 12–20% brightness, unvisited not drawn); clarified stairs-placement BFS uses LOS + proximity heuristic, not true corridor BFS |

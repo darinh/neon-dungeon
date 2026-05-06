@@ -229,9 +229,7 @@ test('CREDIT_VALUES has a low VAULTMASTER baseline (most reward is in coins)', (
     `CREDIT_VALUES.VAULTMASTER (${baseCv}) must be < jackpot (${jack}) so coins are the dominant reward source`);
 });
 
-test('sw.js cache key bumped (VAULTMASTER touches src/entities.js + content.js)', () => {
-  const m = SW.match(/CACHE\s*=\s*'neon-dungeon-v(\d+)'/);
-  assert.ok(m, 'sw.js cache key not found');
-  assert.ok(parseInt(m[1], 10) >= 195,
-    `sw cache must be >= v195 after VAULTMASTER ship, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache key', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

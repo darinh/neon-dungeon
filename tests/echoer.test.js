@@ -125,12 +125,9 @@ test('game.js loadFloor clears player._posHistory after teleport', () => {
   assert.match(GAME, /this\.player\._posHistory[\s\S]{0,200}\.length\s*=\s*0/);
 });
 
-test('sw.js cache version was bumped (>= v176)', () => {
-  // Service worker cache must be bumped any time src/* assets change,
-  // otherwise users get stale code.
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'CACHE constant not found');
-  assert.ok(parseInt(m[1], 10) >= 176, `cache must be >= v176, got v${m[1]}`);
+test('sw.js cache freshness does not use a numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });
 
 test('ECHOER appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {

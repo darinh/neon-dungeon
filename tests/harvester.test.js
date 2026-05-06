@@ -180,8 +180,7 @@ test('game.js pickup loop handles isHarvest before falling through to upgrade ch
 
 const SW_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
 
-test('service worker cache key bumped past v186 (per HARVESTER content change)', () => {
-  const m = SW_SRC.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'cache key present');
-  assert.ok(parseInt(m[1], 10) >= 187, `cache version should be >= 187, got ${m[1]}`);
+test('service worker cache key is stable and unversioned', () => {
+  assert.doesNotMatch(SW_SRC, /neon-dungeon-v\d+/);
+  assert.match(SW_SRC, /const\s+CACHE\s*=\s*'neon-dungeon-assets'/);
 });

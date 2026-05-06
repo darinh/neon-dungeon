@@ -87,21 +87,14 @@ CI (`.github/workflows/test.yml`) runs `npm run check` on every PR targeting
 
 ## Service Worker cache
 
-`sw.js` precaches the file list. **The `CACHE` version constant is auto-bumped
-by CI** on push to `develop` (see `.github/workflows/cache-bump.yml`) — derived
-from the conventional-commit prefix of the merged commit:
+`sw.js` precaches the file list with a stable cache name. Do not add or bump a
+numeric service-worker cache version; the only user-facing release version is
+the latest GitHub Release tag, which is created automatically on `main` by
+`.github/workflows/release-version.yml`.
 
-| Prefix / marker | Bump |
-|---|---|
-| `BREAKING CHANGE` / `!:` | +10 |
-| `feat:` | +2 |
-| anything else | +1 |
-
-For normal feature PRs into `develop`, you do **not** bump the `CACHE` constant
-manually. Doing so creates artificial merge conflicts on every parallel PR. If a
-main-targeted hotfix or release changes a precached asset without passing through
-`develop`, include a deliberate `CACHE` bump in that release PR because the
-auto-bump workflow does not run on `main`.
+There is no cache version to bump. Code freshness is handled by network-first
+fetches for navigations and explicit app assets; offline support comes from the
+stable precache.
 
 You **do** still need to:
 

@@ -204,12 +204,9 @@ test('audio.shockPulse() cue is defined in platform.js', () => {
     'audio.shockPulse() must be defined in src/platform.js');
 });
 
-// ─── Service worker cache bump (per stored memory: ship-floor convention) ──
+// ─── Service worker cache freshness ────────────────────────────────────────
 
-test('sw.js cache version >= v196 (SHOCK_PULSE ship floor)', () => {
-  const m = SW.match(/neon-dungeon-v(\d+)/);
-  assert.ok(m, 'sw.js must declare a neon-dungeon-vN cache key');
-  const v = parseInt(m[1], 10);
-  assert.ok(v >= 196,
-    `sw.js cache version must be >= v196 for SHOCK_PULSE ship, got v${v}`);
+test('sw.js does not declare a second numeric cache version', () => {
+  assert.doesNotMatch(SW, /neon-dungeon-v\d+/);
+  assert.match(SW, /cacheFromNetwork\(e\)/);
 });
