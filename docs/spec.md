@@ -4483,6 +4483,14 @@ Runtime groups:
 5. `src/content.js`, `src/entities.js`, `src/render.js`, and `src/game.js` for
    content/generation, actors/combat, rendering/HUD, and game-state orchestration.
 
+Runtime game states are centralized in `src/game-states.js`. `src/game.js`
+captures the exported vocabulary through `requireNEON('gameStates', 'src/game.js')`;
+`game.setState()` rejects any state that is absent from `GAME_STATES_SET` before
+mutating `game.state`, so accidental new string states fail loudly instead of
+creating unreachable update/render branches. `PAUSABLE_STATES` and
+`RUN_SAVE_STATES` are exported from the same module and consumed by
+`src/platform.js`.
+
 The handoff docs are the current architecture reference:
 
 - `README.md` — quick start and high-level development guide.
