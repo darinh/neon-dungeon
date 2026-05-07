@@ -15,6 +15,7 @@ const {
 
 test('source file facade records the script-tag runtime source tail', () => {
   assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entities', 'render', 'game']);
+  assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -23,7 +24,10 @@ test('source file facade records the script-tag runtime source tail', () => {
 
 test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'content').endsWith('src/content.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentTerminals').endsWith('src/content/terminals.js'), true);
   const sources = readSourceFiles(__dirname);
+  const terminalSource = readSourceFile(__dirname, 'contentTerminals');
+  assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);

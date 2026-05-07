@@ -2,8 +2,8 @@
 // @ts-check
 //
 // Act 1 opening story spine: the first playable slice of the new AI
-// stress-test vision. These are structural tests because content.js/game.js are
-// browser-loaded globals rather than importable CommonJS modules.
+// stress-test vision. These are structural tests because content scripts and
+// game.js are browser-loaded globals rather than importable CommonJS modules.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,12 +11,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const intro = require('../src/meta/intro.js');
+const TERMINALS = fs.readFileSync(path.resolve(__dirname, '..', 'src/content/terminals.js'), 'utf8');
 const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src/content.js'), 'utf8');
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src/game.js'), 'utf8');
 
 function extractLoreEntries() {
-  const m = CONTENT.match(/const LORE_ENTRIES = \[([\s\S]*?)\n\];/);
-  assert.ok(m, 'LORE_ENTRIES array literal must be findable in src/content.js');
+  const m = TERMINALS.match(/const LORE_ENTRIES = \[([\s\S]*?)\n\];/);
+  assert.ok(m, 'LORE_ENTRIES array literal must be findable in src/content/terminals.js');
   // eslint-disable-next-line no-eval -- structural extraction of project-owned string-literal array.
   const arr = eval('[' + m[1] + ']');
   assert.ok(Array.isArray(arr), 'LORE_ENTRIES must parse to an array');
@@ -42,7 +43,7 @@ test('first lore entry is an external anomaly warning before the full Act 1 reve
   const entries = extractLoreEntries();
   const opening = entries[0];
 
-  assert.match(CONTENT, /const\s+ACT1_OPENING_LORE_INDEX\s*=\s*0\s*;/,
+  assert.match(TERMINALS, /const\s+ACT1_OPENING_LORE_INDEX\s*=\s*0\s*;/,
     'opening lore index must stay pinned to entry 0');
   assert.match(opening, /TERMINAL ERROR/i);
   assert.match(opening, /UNEXPECTED PARTICIPANT/i);
