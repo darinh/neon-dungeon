@@ -100,6 +100,42 @@ test('progression reachability treats openable and destructible blockers as trav
   assert.equal(reach.have.has('red'), true, 'closed doors, cracked walls, and crates are player-clearable for progression');
 });
 
+test('documented traversal semantics distinguish blockers, interactions, hazards, and key locks', () => {
+  const map = emptyTestMap();
+  map[2][1] = T.FLOOR;
+  map[1][1] = T.WALL;
+  map[3][1] = T.VOID;
+  const pathTiles = [
+    T.DOOR,
+    T.CRACKED,
+    T.CHALLENGE_GATE,
+    T.TRAP_SPIKE,
+    T.TRAP_SLOW,
+    T.PLASMA,
+    T.ARC,
+    T.TOXIC,
+    T.SHOCK_TILE,
+    T.REPULSOR,
+    T.LOCKED_R,
+    T.STAIRS,
+  ];
+  for (let i = 0; i < pathTiles.length; i++) map[2][2 + i] = pathTiles[i];
+  const dungeon = {
+    map,
+    rooms: [],
+    spawnRoom: { x: 1, y: 2, w: 1, h: 1, cx: 1, cy: 2 },
+    playerPos: { x: 1.5, y: 2.5 },
+    keyItems: [{ x: 11, y: 2, colour: 'red', tileColour: '#ff3333' }],
+  };
+
+  const reach = physicalReachWithKeys(dungeon);
+  assert.equal(reach.vis[1][1], 0, 'walls remain permanent blockers');
+  assert.equal(reach.vis[3][1], 0, 'void remains a permanent blocker');
+  assert.equal(reach.have.has('red'), true, 'keys on runtime-walkable hazard tiles are physically collectible');
+  assert.equal(reach.vis[2][12], 1, 'matching key pickup opens red locks during fixed-point traversal');
+  assert.equal(reach.vis[2][13], 1, 'stairs remain reachable after interactable gates, hazards, and keyed locks');
+});
+
 test('seed 1111-1111-1111 floor 6 has no movement-unreachable required rooms', () => {
   const { dungeon } = generateFloorFixture('1111-1111-1111', 6);
   assertAllRequiredRoomsReachable(dungeon);

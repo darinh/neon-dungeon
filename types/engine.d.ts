@@ -572,13 +572,25 @@ declare global {
     BSPNode: unknown;
   }
 
+  /**
+   * Physical key/lock traversal facts for dungeon generation.
+   *
+   * The engine owns cardinal fixed-point traversal; the host injects tile
+   * semantics through `isOpenTile` and `lockColourForTile`. For NEON DUNGEON,
+   * `requiredRooms` means every generated room unless game code explicitly
+   * marks it optional in the future. The solver reports facts only; map repair,
+   * lock downgrades, and regeneration policy stay in the game/content layer.
+   */
   interface EngineDungeonReachabilityAPI {
     solveKeyLockReachability(opts: {
       map: ArrayLike<ArrayLike<number>>;
       start: { x: number; y: number };
       keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
+      /** Rooms that must touch the final physically reachable set. */
       requiredRooms?: any[];
+      /** True for host-open tiles: floors, regular doors, cracked walls, hazards, etc. */
       isOpenTile: (tile: number) => boolean;
+      /** Returns a lock colour for locked-door tiles; null/undefined otherwise. */
       lockColourForTile?: (tile: number) => string | null | undefined;
     }): {
       reachable: Uint8Array[];
