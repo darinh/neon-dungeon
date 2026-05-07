@@ -6,11 +6,34 @@ first, then read `README.md`, `docs/module-map.md`, and
 
 ## Branch model
 
-- `main` — stable production branch deployed by GitHub Pages. Do not push directly.
-- `develop` — integration branch for feature work.
-- `anvil/xxx`, `feat/xxx`, `fix/xxx`, `docs/xxx` — short-lived branches off
-  `develop` unless doing a main release promotion.
-- `release/xxx` — linear promotion branches based on `main`.
+- `main` — stable production branch deployed by GitHub Pages. Do not push
+  directly. Do not open feature, fix, chore, docs, hotfix, or release branches
+  directly into `main`.
+- `develop` — the only integration branch for feature/fix/chore/docs work.
+- `anvil/xxx`, `feat/xxx`, `fix/xxx`, `docs/xxx`, `chore/xxx` — short-lived
+  work branches based on `develop` and targeting `develop`.
+
+## Merge policy
+
+These are hard rules, not preferences:
+
+- All work lands in `develop` first. No direct work PRs to `main`.
+- PRs into `develop` MUST use **Squash and merge**. The resulting `develop`
+  commit is the canonical integration commit for that work.
+- Production promotion is ONLY a PR from this repository's `develop` branch to
+  `main`. That PR MUST use **Rebase and merge**.
+- Do not squash `develop` into `main`. Do not create a merge commit from
+  `develop` into `main`.
+- Do not cherry-pick or hotfix directly to `main`. Urgent production fixes still
+  land in `develop` first, then `develop` is promoted to `main`.
+- If `main` and `develop` diverge, stop and reconcile the branch history
+  deliberately. Do not paper over the divergence with direct `main` PRs.
+- `release-version.yml` runs after pushes to `main`; it is not a pull-request
+  exception. Do not disable or bypass release/versioning automation when
+  enforcing this branch policy.
+- The checked-in PR branch-policy workflow enforces the source branch for PRs to
+  `main`. It cannot enforce which GitHub merge button a human clicks, so agents
+  must explicitly verify and use the required merge method before merging.
 
 ## Commands
 
