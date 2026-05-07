@@ -20,7 +20,7 @@
   /** @type {{ createCinematicController: (opts:any) => { update:(dt:number)=>void, draw:(ctx:any,W:number,H:number)=>void, done:boolean, _state:any } }} */
   const engine = (typeof module === 'object' && module.exports)
     ? require('../../engine/cinematic')
-    : /** @type {any} */ ((typeof self !== 'undefined' ? self : globalThis)).NEON.cinematic;
+    : /** @type {any} */ (requireNEON('cinematic', 'src/meta/intro.js'));
 
   // Slides — id, body (array of lines), colour family, effect flag.
   // Durations: auto-advance after `dur` seconds if no key pressed.

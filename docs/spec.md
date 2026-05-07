@@ -4474,7 +4474,8 @@ safety and `npm run check` as the canonical gate.
 
 Runtime groups:
 
-1. `engine/*.js` reusable helpers and primitives.
+1. `src/neon.js` fail-loud dependency resolver, then `engine/*.js` reusable
+   helpers and primitives.
 2. `src/platform.js` browser/platform bridge and shared runtime constants.
 3. `src/data/*.js` static NEON DUNGEON data.
 4. `src/meta/*.js` progression, data access, and configured game systems exposed

@@ -293,8 +293,9 @@ function getCamera(player) {
 // constants — only the home address changed. Hot-path allocation rule
 // preserved: single _DECO_CX instance hoisted to module scope, neighbour
 // offsets read from the frozen engine table.
+const _decor = /** @type {any} */ (requireNEON('decor', 'src/render.js'));
 /** @type {{ h: number, roll: number, wallSide: ('N'|'S'|'E'|'W'|null), flicker: number, alarmEligible: boolean, decorEligible: boolean }} */
-const _DECO_CX = NEON.decor.createContextScratch();
+const _DECO_CX = _decor.createContextScratch();
 /**
  * @param {any} t
  */
@@ -316,7 +317,7 @@ function _decoIsSolid(t) {
 function _decoContext(dungeon, tx, ty) {
   if (!game || _RG.floor < 2) return null;
   const map = dungeon.map;
-  const h = NEON.decor.tileHash(tx, ty, _RG.floor);
+  const h = _decor.tileHash(tx, ty, _RG.floor);
   const roll = h % 100;
   // Tile must be eligible for SOMETHING — regular biome decor (roll<11)
   // or an alarm-light beacon (alarm-light's own gate, ~4.3% of tiles).
@@ -328,7 +329,7 @@ function _decoContext(dungeon, tx, ty) {
   if (!decorEligible && !alarmEligible) return null;
 
   for (let i = 0; i < 4; i++) {
-    const off = NEON.decor.NEIGHBOR_OFFSETS_4[i];
+    const off = _decor.NEIGHBOR_OFFSETS_4[i];
     if (!off) continue;
     const dx = off[0];
     const dy = off[1];

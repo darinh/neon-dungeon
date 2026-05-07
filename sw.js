@@ -7,6 +7,7 @@ const ASSETS = [
   './index.html',
   './privacy.html',
   './manifest.json',
+  './src/neon.js',
   './engine/math.js',
   './engine/viewport.js',
   './engine/audio.js',
