@@ -151,7 +151,7 @@ function isDoorLikeTile(tile) {
 }
 
 function isWallLikeTile(tile) {
-  return tile === T.WALL || tile === T.VOID;
+  return tile === T.WALL || tile === T.VOID || tile == null;
 }
 
 function isCorridorTile(dungeon, x, y) {
@@ -159,10 +159,30 @@ function isCorridorTile(dungeon, x, y) {
   return !tileInsideRoom(dungeon, x, y) && tile !== T.WALL && tile !== T.VOID;
 }
 
+function isOutsidePassageTile(dungeon, x, y) {
+  if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1) return false;
+  return !tileInsideRoom(dungeon, x, y) && !isWallLikeTile(dungeon.map[y]?.[x]);
+}
+
 function roomBoundaryNeighborsForEntrance(dungeon, x, y) {
   return [[1, 0], [-1, 0], [0, 1], [0, -1]]
     .map(([dx, dy]) => ({ dx, dy, bx: x + dx, by: y + dy }))
     .filter(({ bx, by }) => tileOnRoomBoundary(dungeon, bx, by));
+}
+
+function outsidePassageConnectionCount(dungeon, x, y, exceptX, exceptY) {
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .filter(([dx, dy]) => x + dx !== exceptX || y + dy !== exceptY)
+    .filter(([dx, dy]) => isOutsidePassageTile(dungeon, x + dx, y + dy))
+    .length;
+}
+
+function connectedPassageOppositeRoomSide(dungeon, x, y, side) {
+  const px = x - side.dx;
+  const py = y - side.dy;
+  if (!isOutsidePassageTile(dungeon, px, py)) return { ok: false, reason: 'missing' };
+  if (outsidePassageConnectionCount(dungeon, px, py, x, y) <= 0) return { ok: false, reason: 'stub' };
+  return { ok: true, reason: '' };
 }
 
 function assertOutwardSingleTileEntrances(dungeon, label) {
@@ -194,13 +214,14 @@ function assertOutwardSingleTileEntrances(dungeon, label) {
           }
         }
       }
-      const adjacentOutsidePassage = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        .filter(([dx, dy]) => !tileInsideRoom(dungeon, x + dx, y + dy))
-        .some(([dx, dy]) => {
-          const t = dungeon.map[y + dy]?.[x + dx];
-          return !isWallLikeTile(t);
-        });
-      if (roomSides.length === 1 && !adjacentOutsidePassage) failures.push(`${label}: door-like tile has no outside passage at ${x},${y}`);
+      if (roomSides.length === 1) {
+        const alignedPassage = connectedPassageOppositeRoomSide(dungeon, x, y, roomSides[0]);
+        if (!alignedPassage.ok && alignedPassage.reason === 'stub') {
+          failures.push(`${label}: aligned passage is a dead-end stub at ${x},${y}`);
+        } else if (!alignedPassage.ok) {
+          failures.push(`${label}: door-like tile is next to a hallway but not aligned with it at ${x},${y}`);
+        }
+      }
       const adjacentDoor = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .some(([dx, dy]) => isDoorLikeTile(dungeon.map[y + dy]?.[x + dx]));
       if (adjacentDoor) failures.push(`${label}: adjacent double door/gate tile at ${x},${y}`);

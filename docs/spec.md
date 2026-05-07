@@ -522,15 +522,20 @@ Each floor is generated fresh using Binary Space Partitioning:
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
    WALL so players never walk down a tunnel to nowhere.
 8. **Door and hallway normalization**: door-like entrances (`DOOR`, locked
-   doors, challenge gates, cracked secret entrances) are single-tile,
-   non-adjacent, never placed on room corners, and are relocated to a connected
-   outside corridor/wall-line tile adjacent to the room edge or to a valid
-   two-room wall bridge. The original room-edge tile is restored to floor so
-   doors sit in the surrounding wall/corridor line instead of occupying the
-   inside edge of the room or adding side-wall bulges.
-   Outside-room 2×2 passable hallway blocks are iteratively narrowed without
-   removing door-like tiles and only when the key/lock reachability solver still
-   proves every room reachable.
+    doors, challenge gates, cracked secret entrances) are single-tile,
+    non-adjacent, never placed on room corners, and are relocated to a connected
+    outside corridor/wall-line tile adjacent to the room edge or to a valid
+    two-room wall bridge. The original room-edge tile is restored to floor so
+    doors sit in the surrounding wall/corridor line instead of occupying the
+    inside edge of the room or adding side-wall bulges.
+    One-sided room entrances must align on a single axis: room boundary,
+    entrance, then connected outside passage must form north/south or east/west
+    pairs. A lateral hallway beside the entrance does not count, and a one-tile
+    dead-end stub in front of the entrance is not a valid passage. Two-room
+    bridges must connect opposite room boundaries on the same axis.
+    Outside-room 2×2 passable hallway blocks are iteratively narrowed without
+    removing door-like tiles and only when the key/lock reachability solver still
+    proves every room reachable.
 9. **Reachability guarantee**: key-cascade BFS from spawn to every room
    respects locked doors until their physically reachable keys are collected.
    If stairs are unreachable after generation, a rescue corridor is carved

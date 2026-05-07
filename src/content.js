@@ -4501,8 +4501,9 @@ function generateFloor(floorNum, opts) {
   }
 
   /** @param {number} x @param {number} y */
-  function outsideEntranceRoomSideCount(x, y) {
-    let roomSides = 0;
+  function outsideEntranceRoomSides(x, y) {
+    /** @type {{dx:number,dy:number,bx:number,by:number}[]} */
+    const roomSides = [];
     for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
       const bx = x + dx;
       const by = y + dy;
@@ -4510,9 +4511,103 @@ function generateFloor(floorNum, opts) {
       if (rooms.some((/** @type {any} */ r) => {
         const outside = outsideFaceForBoundaryTile(r, bx, by);
         return outside?.x === x && outside?.y === y;
-      })) roomSides++;
+      })) roomSides.push({ dx, dy, bx, by });
     }
     return roomSides;
+  }
+
+  /** @param {number} x @param {number} y */
+  function isOutsidePassageTile(x, y) {
+    if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1) return false;
+    const t = map[y]?.[x];
+    return !tileInsideAnyRoom(x, y) && t !== undefined && t !== null && t !== T.WALL && t !== T.VOID;
+  }
+
+  /** @param {number} x @param {number} y */
+  function canCarveOutsidePassageTile(x, y) {
+    if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1 || tileInsideAnyRoom(x, y)) return false;
+    return map[y]?.[x] === T.WALL || map[y]?.[x] === T.VOID;
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} exceptX
+   * @param {number} exceptY
+   */
+  function outsidePassageConnectionCount(x, y, exceptX, exceptY) {
+    let degree = 0;
+    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx === exceptX && ny === exceptY) continue;
+      if (isOutsidePassageTile(nx, ny)) degree++;
+    }
+    return degree;
+  }
+
+  /** @param {number} x @param {number} y @param {{dx:number,dy:number}} side */
+  function hasConnectedPassageOppositeRoomSide(x, y, side) {
+    const px = x - side.dx;
+    const py = y - side.dy;
+    return isOutsidePassageTile(px, py) && outsidePassageConnectionCount(px, py, x, y) > 0;
+  }
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {{dx:number,dy:number}} side
+   */
+  function findAlignedOutsidePassageRepair(x, y, side) {
+    const px = x - side.dx;
+    const py = y - side.dy;
+    if (outsidePassageConnectionCount(px, py, x, y) > 0) return { px, py, cx: -1, cy: -1 };
+    if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
+    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      if (dx * side.dx + dy * side.dy !== 0) continue;
+      if (!isOutsidePassageTile(x + dx, y + dy)) continue;
+      const cx = px + dx;
+      const cy = py + dy;
+      if (isOutsidePassageTile(cx, cy) || canCarveOutsidePassageTile(cx, cy)) return { px, py, cx, cy };
+    }
+    return null;
+  }
+
+  /** @param {number} x @param {number} y @param {{dx:number,dy:number}} side */
+  function repairAlignedOutsideEntrancePassage(x, y, side) {
+    const repair = findAlignedOutsidePassageRepair(x, y, side);
+    if (!repair) return false;
+    if (map[repair.py]?.[repair.px] === T.WALL || map[repair.py]?.[repair.px] === T.VOID) map[repair.py][repair.px] = T.FLOOR;
+    if (repair.cx >= 0 && repair.cy >= 0 && (map[repair.cy]?.[repair.cx] === T.WALL || map[repair.cy]?.[repair.cx] === T.VOID)) {
+      map[repair.cy][repair.cx] = T.FLOOR;
+    }
+    return outsidePassageConnectionCount(repair.px, repair.py, x, y) > 0;
+  }
+
+  /** @param {number} x @param {number} y */
+  function hasAlignedOutsideEntrancePassage(x, y) {
+    const roomSides = outsideEntranceRoomSides(x, y);
+    if (roomSides.length === 2) {
+      const a = roomSides[0];
+      const b = roomSides[1];
+      if (!a || !b) return false;
+      return a.dx + b.dx === 0 && a.dy + b.dy === 0;
+    }
+    if (roomSides.length !== 1) return false;
+    const side = roomSides[0];
+    return !!side && hasConnectedPassageOppositeRoomSide(x, y, side);
+  }
+
+  function repairMisalignedOutsideEntrancePassages() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        const roomSides = outsideEntranceRoomSides(x, y);
+        const side = roomSides[0];
+        if (roomSides.length !== 1 || !side || hasConnectedPassageOppositeRoomSide(x, y, side)) continue;
+        repairAlignedOutsideEntrancePassage(x, y, side);
+      }
+    }
   }
 
   function collapseAdjacentOutsideEntranceTilesToFloor() {
@@ -4561,22 +4656,9 @@ function generateFloor(floorNum, opts) {
     for (let y = 1; y < MAP_H - 1; y++) {
       for (let x = 1; x < MAP_W - 1; x++) {
         if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
-        let roomSides = 0;
-        let outsidePassages = 0;
-        for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (tileOnRoomCorner(nx, ny)) continue;
-          if (rooms.some((/** @type {any} */ r) => {
-            const outside = outsideFaceForBoundaryTile(r, nx, ny);
-            return outside?.x === x && outside?.y === y;
-          })) {
-            roomSides++;
-            continue;
-          }
-          if (!tileInsideAnyRoom(nx, ny) && map[ny]?.[nx] !== T.WALL && map[ny]?.[nx] !== T.VOID) outsidePassages++;
-        }
-        if (roomSides === 1 && outsidePassages === 0) map[y][x] = T.FLOOR;
+        const roomSides = outsideEntranceRoomSides(x, y);
+        const side = roomSides[0];
+        if (roomSides.length === 1 && side && !hasConnectedPassageOppositeRoomSide(x, y, side)) map[y][x] = T.FLOOR;
       }
     }
   }
@@ -4612,10 +4694,18 @@ function generateFloor(floorNum, opts) {
       const replacingDoor = isReplaceableDoorEntranceTile(outsideTile);
       if (isDoorLikeEntranceTile(outsideTile) && !replacingDoor) return;
       if (adjacentDoorLikeEntranceCount(outside.x, outside.y) > 0) return;
-      const roomSideCount = outsideEntranceRoomSideCount(outside.x, outside.y);
+      const roomSides = outsideEntranceRoomSides(outside.x, outside.y);
+      const roomSideCount = roomSides.length;
       const passageDegree = outsidePassageDegree(outside.x, outside.y);
-      if (roomSideCount < 2 && passageDegree <= 0) return;
-      const score = (outsideTile !== T.WALL && outsideTile !== T.VOID ? 10 : 0) + passageDegree + roomSideCount;
+      let alignmentScore = 0;
+      if (roomSideCount < 2) {
+        const side = roomSides[0];
+        const hasAlignedPassage = !!side && hasConnectedPassageOppositeRoomSide(outside.x, outside.y, side);
+        const canRepairAlignedPassage = !!side && !!findAlignedOutsidePassageRepair(outside.x, outside.y, side);
+        if (!hasAlignedPassage && !canRepairAlignedPassage) return;
+        alignmentScore = hasAlignedPassage ? 20 : 5;
+      }
+      const score = alignmentScore + (outsideTile !== T.WALL && outsideTile !== T.VOID ? 10 : 0) + passageDegree + roomSideCount;
       candidates.push({ bx, by, ox: outside.x, oy: outside.y, dx: outside.dx, dy: outside.dy, score });
     };
     for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
@@ -4631,6 +4721,9 @@ function generateFloor(floorNum, opts) {
     if (!picked) return null;
     map[picked.by][picked.bx] = T.FLOOR;
     map[picked.oy][picked.ox] = tile;
+    const roomSides = outsideEntranceRoomSides(picked.ox, picked.oy);
+    const side = roomSides[0];
+    if (roomSides.length === 1 && side) repairAlignedOutsideEntrancePassage(picked.ox, picked.oy, side);
     repairFormerEntranceSidePadding(room, picked.bx, picked.by, picked.dx, picked.dy);
     return { x: picked.ox, y: picked.oy };
   }
@@ -4790,23 +4883,10 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  /** @param {number} x @param {number} y */
-  function hasOutsidePassage(x, y) {
-    /** @type {[number, number][]} */
-    const cardinalDirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (const [dx, dy] of cardinalDirs) {
-      const nx = x + dx, ny = y + dy;
-      const t = map[ny]?.[nx];
-      if (tileInsideAnyRoom(nx, ny)) continue;
-      if (t !== T.WALL && t !== T.VOID) return true;
-    }
-    return false;
-  }
-
   function clearOrphanEntranceTiles() {
     for (let y = 1; y < MAP_H - 1; y++) {
       for (let x = 1; x < MAP_W - 1; x++) {
-        if (isDoorLikeEntranceTile(map[y][x]) && (tileOnRoomCorner(x, y) || !hasOutsidePassage(x, y))) map[y][x] = T.FLOOR;
+        if (isDoorLikeEntranceTile(map[y][x]) && (tileOnRoomCorner(x, y) || !hasAlignedOutsideEntrancePassage(x, y))) map[y][x] = T.FLOOR;
       }
     }
   }
@@ -5172,6 +5252,7 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
+  repairMisalignedOutsideEntrancePassages();
   clearOrphanEntranceTiles();
 
   // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
@@ -5418,11 +5499,15 @@ function generateFloor(floorNum, opts) {
   const relocatedEntrances = normalizeEntranceTilesOutsideRooms();
   collapseAdjacentOutsideEntranceTilesToFloor();
   repairOutsideEntranceRoomEdges();
+  repairMisalignedOutsideEntrancePassages();
   clearDeadOutsideEntranceTiles();
   ensureSpecialRoomEntrances();
+  repairMisalignedOutsideEntrancePassages();
   collapseAdjacentOutsideEntranceTilesToFloor();
   repairOutsideEntranceRoomEdges();
   ensureSpecialRoomEntrances();
+  repairMisalignedOutsideEntrancePassages();
+  clearDeadOutsideEntranceTiles();
   repairPostRelocationLockReachability();
   removeKeysWithoutLiveLocks();
   for (const move of relocatedEntrances) {
