@@ -109,22 +109,34 @@ test('physical reachability is cardinal and does not allow corner walking', () =
   assert.equal(reach.vis[2][2], 0, 'diagonal-only adjacency must not be reachable');
 });
 
-test('progression reachability treats openable and destructible blockers as traversable', () => {
+test('progression reachability follows player-interaction tile semantics', () => {
   const map = emptyTestMap();
   map[1][1] = T.FLOOR;
   map[1][2] = T.DOOR;
   map[1][3] = T.CRACKED;
   map[1][4] = T.CRATE;
-  map[1][5] = T.FLOOR;
+  map[1][5] = T.CHALLENGE_GATE;
+  map[1][6] = T.TRAP_SPIKE;
+  map[1][7] = T.TRAP_SLOW;
+  map[1][8] = T.PLASMA;
+  map[1][9] = T.ARC;
+  map[1][10] = T.TOXIC;
+  map[1][11] = T.SHOCK_TILE;
+  map[1][12] = T.REPULSOR;
+  map[1][13] = T.FLOOR;
   const dungeon = {
     map,
     rooms: [],
     spawnRoom: { x: 1, y: 1, w: 1, h: 1, cx: 1, cy: 1 },
     playerPos: { x: 1.5, y: 1.5 },
-    keyItems: [{ x: 5, y: 1, colour: 'red', tileColour: '#ff3333' }],
+    keyItems: [{ x: 13, y: 1, colour: 'red', tileColour: '#ff3333' }],
   };
   const reach = physicalReachWithKeys(dungeon);
-  assert.equal(reach.have.has('red'), true, 'closed doors, cracked walls, and crates are player-clearable for progression');
+  assert.equal(
+    reach.have.has('red'),
+    true,
+    'closed doors, cracked walls, crates, challenge gates, and runtime-walkable hazards are valid progression traversal'
+  );
 });
 
 test('physical reachability fixture delegates to engine solver without changing traversal semantics', () => {
