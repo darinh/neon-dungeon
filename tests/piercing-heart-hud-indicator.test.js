@@ -246,7 +246,7 @@ test('both HUD sites render the suffix in the PIERCING_HEART affix colour #ff448
   // declaration in content.js (so this test will trip if the affix
   // colour is changed there without updating the HUD).
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /PIERCING_HEART[\s\S]*?colour\s*:\s*['"]#ff4488['"]/,
@@ -338,7 +338,7 @@ test('PIERCING_HEART affix still exists in WEAPON_AFFIXES and is a suffix', () =
   // _affixes.includes('PIERCING_HEART') check breaks silently. Pin the
   // canonical declaration in src/content.js.
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /PIERCING_HEART:\s*\{\s*slot:\s*['"]suffix['"]/,
