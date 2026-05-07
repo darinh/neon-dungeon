@@ -166,6 +166,21 @@ open." A valid proof starts at spawn, traverses only currently legal tiles,
 collects reachable keys, unlocks the matching doors, and repeats until a fixed
 point. A separate all-locks-open check is useful only as a repair diagnostic.
 
+#### Invariant checkpoints by generation phase
+
+Future extraction should preserve the current mixed pipeline's safety checks as
+explicit phase checkpoints. Each checkpoint is phrased in player-movement terms
+so the engine can report facts and the NEON content layer can decide repairs:
+
+| Phase checkpoint | Engine-side proof | NEON game/content policy |
+|---|---|---|
+| After BSP rooms/corridors | Every room intended for the floor has cardinal 4-direction connectivity before doors, locks, or special gates mutate topology. | Choose room roles and reject/regenerate if the base topology is too sparse or malformed. |
+| After regular doors | Closed regular doors are modeled as interact-openable edges, not permanent blockers. | Place door sprites/tile ids and preserve room-boundary entrance metadata for rendering and interaction. |
+| After locks/keys | Starting at spawn, physical traversal can collect keys in dependency order and then cross only matching locked doors. | Pick lock colours/counts, place keys outside their own locked dependency, downgrade impossible locks, or carve a rescue edge. |
+| After secrets and challenge gates | Cracked walls, challenge gates, and other intended interactable gates use the same traversal semantics as runtime interaction. | Mark secret/challenge rooms, maintain cracked/gate entrance metadata, and keep their rewards/content game-owned. |
+| After dead-end pruning or corridor cleanup | Pruning has not disconnected any room, required gate exterior, or key path that was previously reachable. | Decide whether a pruned branch is optional only by explicitly removing it from `rooms` or marking it optional in a future field. |
+| Before returning the floor | Full physical exploration can enter every required room and reach the stairs or finale terminal. Missing keys, unreachable rooms, and blocked gate exteriors are reported as structured facts. | Apply final NEON repair policy, preserve seeded determinism, and only then populate enemies, loot, lore, hazards, terminals, and finale content. |
+
 #### First extraction API shape
 
 The exact API is intentionally flexible, but an engine reachability solver
