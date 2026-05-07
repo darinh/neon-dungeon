@@ -43,6 +43,7 @@ const ASSETS = [
   './engine/dungeon/topology.js',
   './engine/dungeon/reachability.js',
   './src/content/terminals.js',
+  './src/content/weapons.js',
   './src/content.js',
   './src/entities.js',
   './src/render.js',

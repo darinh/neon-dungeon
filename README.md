@@ -42,9 +42,9 @@ The runtime is ordered script tags in `index.html`:
 3. Interleaved engine/data/meta modules: biome routing, static data, save/meta
    state, telemetry, cores, spawn, alarm-light wiring, upgrades/modules,
    logs/whispers, behavior/boosts, intro/hub, render-boundary.
-4. Content submodules such as `src/content/terminals.js`, then final large
-   runtime files: `src/content.js`, `src/entities.js`, `src/render.js`,
-   `src/game.js`.
+4. Content submodules such as `src/content/terminals.js` and
+   `src/content/weapons.js`, then final large runtime files: `src/content.js`,
+   `src/entities.js`, `src/render.js`, `src/game.js`.
 
 The script order is part of the architecture. Producers must appear before
 consumers in `index.html`, and browser assets must be listed in `sw.js` so the
@@ -59,7 +59,8 @@ see `docs/engine-boundary.md`.
 |---|---|---|
 | Game flow, menus, save/resume, finale | `src/game.js` | `tests/save.test.js`, `tests/seeded-generation.test.js`, `tests/mainframe-room.test.js` |
 | Player/enemies/combat simulation | `src/entities.js` | Combat and enemy-specific tests in `tests/*.test.js` |
-| Weapons, items, projectiles, dungeon generation | `src/content.js` | `tests/projectile-wall-corner.test.js`, seeded generation tests |
+| Weapons | `src/content/weapons.js` plus construction/use sites in `src/content.js`, `src/entities.js`, and `src/game.js` | Weapon-affix tests, `tests/armory-reward-flow.test.js` |
+| Items, projectiles, dungeon generation | `src/content.js` | `tests/projectile-wall-corner.test.js`, seeded generation tests |
 | Lore terminals | `src/content/terminals.js` plus placement in `src/content.js` | `tests/lore-terminals-act1.test.js`, narrative guardrail tests |
 | Rendering, HUD, minimap, screen effects | `src/render.js` plus `engine/draw.js`, `engine/minimap.js` | HUD tests, `tests/rendered-test-environment.test.js`, `tests/world-zoom.test.js` |
 | Browser platform, input, settings, touch, audio boot | `src/platform.js` | `tests/touch.test.js`, `tests/settings-scale.test.js`, `tests/world-zoom.test.js` |

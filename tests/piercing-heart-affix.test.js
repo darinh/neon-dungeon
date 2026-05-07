@@ -32,7 +32,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
 );
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
