@@ -7,6 +7,7 @@ const vm = require('node:vm');
 
 const math = require('../engine/math.js');
 const spawn = require('../engine/spawn.js');
+const reachability = require('../engine/dungeon/reachability.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -325,6 +326,14 @@ function isOpenForKeys(tile, have) {
 }
 
 /**
+ * @param {number} tile
+ * @returns {boolean}
+ */
+function isOpenForEngineKeyReach(tile) {
+  return isPassable(tile) || tile === T.DOOR || tile === T.CRACKED || tile === T.CRATE;
+}
+
+/**
  * @param {any} dungeon
  * @param {Set<string>} have
  * @returns {Uint8Array[]}
@@ -358,22 +367,14 @@ function computeReach(dungeon, have) {
  * @returns {{vis:Uint8Array[], have:Set<string>}}
  */
 function physicalReachWithKeys(dungeon) {
-  const have = new Set();
-  const keyItems = dungeon.keyItems || [];
-  /** @type {Uint8Array[]} */
-  let vis = Array.from({ length: MAP_H }, () => new Uint8Array(MAP_W));
-  let changed = true;
-  while (changed) {
-    changed = false;
-    vis = computeReach(dungeon, have);
-    for (const key of keyItems) {
-      if (!have.has(key.colour) && vis[key.y]?.[key.x]) {
-        have.add(key.colour);
-        changed = true;
-      }
-    }
-  }
-  return { vis, have };
+  const solved = reachability.solveKeyLockReachability({
+    map: dungeon.map,
+    start: { x: Math.floor(dungeon.playerPos.x), y: Math.floor(dungeon.playerPos.y) },
+    keys: dungeon.keyItems || [],
+    isOpenTile: isOpenForEngineKeyReach,
+    lockColourForTile,
+  });
+  return { vis: solved.reachable, have: solved.collectedColours, solved };
 }
 
 /**

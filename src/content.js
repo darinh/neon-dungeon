@@ -4733,9 +4733,8 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  function repairPostRelocationLockReachability() {
-    const passable = (/** @type {any} */ t) =>
-      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
+  const passable = (/** @type {any} */ t) =>
+    t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
       t === T.STAIRS || t === T.TERMINAL ||
       t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
       t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
@@ -4744,21 +4743,50 @@ function generateFloor(floorNum, opts) {
       t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
       t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
       t === T.CHALLENGE_GATE;
-    const lockColourForTile = (/** @type {any} */ t) =>
-      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
-    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
-    const solvedReach = dungeonReachability.solveKeyLockReachability({
+
+  /** @param {any} t */
+  function lockColourForTile(t) {
+    return t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
+  }
+
+  /** @param {any} t */
+  function keyPlacementOpenTile(t) {
+    // Key-placement reach keeps cracked walls blocked; crates remain open as in the legacy BFS.
+    return Number.isFinite(t) && t !== T.WALL && t !== T.VOID && t !== T.CRACKED && !lockColourForTile(t);
+  }
+
+  /**
+   * @param {any[]} requiredRooms
+   */
+  function solveProgressionReachability(requiredRooms) {
+    return dungeonReachability.solveKeyLockReachability({
       map,
       start: { x: spawnRoom.cx, y: spawnRoom.cy },
       keys: keyItems,
-      requiredRooms: rooms,
+      requiredRooms,
       isOpenTile: passable,
       lockColourForTile,
     });
+  }
+
+  /** @param {Set<string>} haveColours */
+  function computeKeyPlacementReach(haveColours) {
+    const solved = dungeonReachability.solveKeyLockReachability({
+      map,
+      start: { x: spawnRoom.cx, y: spawnRoom.cy },
+      keys: keyItems,
+      isOpenTile: keyPlacementOpenTile,
+      lockColourForTile,
+    });
+    return solved.computeReach(haveColours);
+  }
+
+  function repairPostRelocationLockReachability() {
+    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
+    const solvedReach = solveProgressionReachability(rooms);
     if (solvedReach.unreachableRooms.length === 0) return;
-    for (const colour of /** @type {const} */ (['red', 'blue', 'gold'])) {
-      if (solvedReach.collectedColours.has(colour)) continue;
-      const lockTile = lockTileForColour[colour];
+    for (const colour of solvedReach.missingColours) {
+      const lockTile = lockTileForColour[/** @type {'red'|'blue'|'gold'} */ (colour)];
       for (let y = 0; y < MAP_H; y++) {
         for (let x = 0; x < MAP_W; x++) {
           if (map[y][x] === lockTile) map[y][x] = T.DOOR;
@@ -4898,26 +4926,7 @@ function generateFloor(floorNum, opts) {
       return !inRoom[y]?.[x] && t !== T.WALL && t !== T.VOID;
     };
     const allRoomsReachable = () => {
-      const passable = (/** @type {any} */ t) =>
-        t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
-        t === T.STAIRS || t === T.TERMINAL ||
-        t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
-        t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
-        t === T.CRACKED ||
-        t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
-        t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
-        t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
-        t === T.CHALLENGE_GATE;
-      const lockColourForTile = (/** @type {any} */ t) =>
-        t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
-      const solvedReach = dungeonReachability.solveKeyLockReachability({
-        map,
-        start: { x: spawnRoom.cx, y: spawnRoom.cy },
-        keys: keyItems,
-        requiredRooms: rooms,
-        isOpenTile: passable,
-        lockColourForTile,
-      });
+      const solvedReach = solveProgressionReachability(rooms);
       return solvedReach.unreachableRooms.length === 0;
     };
     let changed = true;
@@ -5011,33 +5020,9 @@ function generateFloor(floorNum, opts) {
         }
       }
 
-      /** @param {Set<string>} haveColours */
-      const reachForKeys = (haveColours) => {
-        const q2 = [{x:spawnRoom.cx, y:spawnRoom.cy}];
-        /** @type {any} */ const vis2 = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
-        vis2[spawnRoom.cy][spawnRoom.cx] = 1;
-        while (q2.length) {
-          const {x:cx,y:cy} = /** @type {{x:any,y:any}} */ (q2.shift());
-          for (const [ddx,ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-            const nx2=cx+ddx, ny2=cy+ddy;
-            if (nx2<0||ny2<0||nx2>=MAP_W||ny2>=MAP_H||vis2[ny2][nx2]) continue;
-            const t=map[ny2][nx2];
-            const open = (t !== T.WALL && t !== T.VOID && t !== T.CRACKED &&
-              t !== T.LOCKED_R && t !== T.LOCKED_B && t !== T.LOCKED_G) ||
-              (haveColours.has('red') && t === T.LOCKED_R) ||
-              (haveColours.has('blue') && t === T.LOCKED_B) ||
-              (haveColours.has('gold') && t === T.LOCKED_G);
-            if (!open) continue;
-            vis2[ny2][nx2]=1;
-            q2.push({x:nx2,y:ny2});
-          }
-        }
-        return vis2;
-      };
-
       /** @type {Set<string>} */
       const placedColours = new Set();
-      let vis2 = reachForKeys(placedColours);
+      let vis2 = computeKeyPlacementReach(placedColours);
       let expanded = true;
       let keySafety = 6;
       while (expanded && keySafety-- > 0) {
@@ -5048,7 +5033,7 @@ function generateFloor(floorNum, opts) {
             expanded = true;
           }
         }
-        if (expanded) vis2 = reachForKeys(placedColours);
+        if (expanded) vis2 = computeKeyPlacementReach(placedColours);
       }
       const keyOccupied = (/** @type {any} */ r) => keyItems.some((/** @type {any} */ ki) => ki.x === r.cx && ki.y === r.cy);
       const keyEligible = rooms.filter((/** @type {any} */ r) =>
@@ -5257,29 +5242,8 @@ function generateFloor(floorNum, opts) {
   // player can open closed doors via interact; that diverges from runtime
   // isPassable but is intentional (matches dungeon-gen connectivity intent).
   {
-    const passable = (/** @type {any} */ t) =>
-      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
-      t === T.STAIRS || t === T.TERMINAL ||
-      t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
-      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
-      t === T.CRACKED ||
-      t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
-      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
-      t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
-      t === T.CHALLENGE_GATE;
-
-    const lockColourForTile = (/** @type {any} */ t) =>
-      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
-    const solvedReach = dungeonReachability.solveKeyLockReachability({
-      map,
-      start: { x: spawnRoom.cx, y: spawnRoom.cy },
-      keys: keyItems,
-      requiredRooms: rooms,
-      isOpenTile: passable,
-      lockColourForTile,
-    });
+    const solvedReach = solveProgressionReachability(rooms);
     const computeReach = solvedReach.computeReach;
-    const haveColours = solvedReach.collectedColours;
     /** @type {any} */ let reach = solvedReach.reachable;
     // After fixed point, `reach` reflects max possible exploration with all
     // collectible keys. Check every room for at least one reachable tile.
@@ -5292,9 +5256,8 @@ function generateFloor(floorNum, opts) {
       // lockPriority/keyRoom empty-fallback edge case in the lock-placement
       // loop above).
       const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
-      for (const colour of /** @type {const} */ (['red', 'blue', 'gold'])) {
-        if (haveColours.has(colour)) continue;
-        const lt = lockTileForColour[colour];
+      for (const colour of solvedReach.missingColours) {
+        const lt = lockTileForColour[/** @type {'red'|'blue'|'gold'} */ (colour)];
         for (let y = 0; y < MAP_H; y++) {
           for (let x = 0; x < MAP_W; x++) {
             if (map[y][x] === lt) map[y][x] = T.FLOOR;
@@ -5405,18 +5368,6 @@ function generateFloor(floorNum, opts) {
   clearOrphanEntranceTiles();
 
   {
-    const passable = (/** @type {any} */ t) =>
-      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
-      t === T.STAIRS || t === T.TERMINAL ||
-      t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
-      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
-      t === T.CRACKED ||
-      t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
-      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
-      t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
-      t === T.CHALLENGE_GATE;
-    const lockColourForTile = (/** @type {any} */ t) =>
-      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
     /** @param {any} room */
     const roomBoundaryGates = (room) => {
       /** @type {{x:number,y:number,ox:number,oy:number}[]} */
@@ -5438,14 +5389,7 @@ function generateFloor(floorNum, opts) {
       return gates;
     };
     for (let repair = 0; repair < rooms.length; repair++) {
-      const solvedReach = dungeonReachability.solveKeyLockReachability({
-        map,
-        start: { x: spawnRoom.cx, y: spawnRoom.cy },
-        keys: keyItems,
-        requiredRooms: rooms,
-        isOpenTile: passable,
-        lockColourForTile,
-      });
+      const solvedReach = solveProgressionReachability(rooms);
       const blocked = solvedReach.unreachableRooms[0];
       if (!blocked) break;
       const gates = roomBoundaryGates(blocked);

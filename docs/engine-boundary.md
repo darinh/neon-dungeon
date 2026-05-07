@@ -192,8 +192,8 @@ should return structured facts instead of silently mutating a NEON map:
   collectedColours,  // physically collected key colours at fixed point
   unreachableRooms,  // required rooms with no reachable tile
   missingColours,    // lock colours present but not physically collectible
-  blockedEdges,      // optional gates/edges blocking required reachability
-  repairHints        // optional data for game-layer policy
+  blockedEdges,      // frontier lock tiles adjacent to the final reachable set
+  repairHints        // advisory downgrade/connect facts for game-layer policy
 }
 ```
 
