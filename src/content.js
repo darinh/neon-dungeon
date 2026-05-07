@@ -4392,11 +4392,6 @@ function generateFloor(floorNum, opts) {
       tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
   }
 
-  /** @param {any} tile */
-  function isWallLikeEntranceTile(tile) {
-    return tile === T.WALL || tile === T.VOID;
-  }
-
   /** @param {number} x @param {number} y */
   function tileInsideAnyRoom(x, y) {
     return rooms.some((/** @type {any} */ r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
@@ -4409,58 +4404,329 @@ function generateFloor(floorNum, opts) {
     );
   }
 
+  /**
+   * @param {any} room
+   * @param {number} x
+   * @param {number} y
+   */
+  function outsideFaceForBoundaryTile(room, x, y) {
+    if (y === room.y && x > room.x && x < room.x + room.w - 1) return { x, y: y - 1, dx: 0, dy: -1 };
+    if (y === room.y + room.h - 1 && x > room.x && x < room.x + room.w - 1) return { x, y: y + 1, dx: 0, dy: 1 };
+    if (x === room.x && y > room.y && y < room.y + room.h - 1) return { x: x - 1, y, dx: -1, dy: 0 };
+    if (x === room.x + room.w - 1 && y > room.y && y < room.y + room.h - 1) return { x: x + 1, y, dx: 1, dy: 0 };
+    return null;
+  }
+
+  /**
+   * @param {any} room
+   * @param {number} x
+   * @param {number} y
+   * @param {number} dx
+   * @param {number} dy
+   */
+  function repairFormerEntranceSidePadding(room, x, y, dx, dy) {
+    const px = dy === 0 ? 0 : 1;
+    const py = dx === 0 ? 0 : 1;
+    for (const sign of [-1, 1]) {
+      const sx = x + px * sign;
+      const sy = y + py * sign;
+      if (sx < room.x || sx >= room.x + room.w || sy < room.y || sy >= room.y + room.h) continue;
+      if ((sx === room.x || sx === room.x + room.w - 1) && (sy === room.y || sy === room.y + room.h - 1)) continue;
+      if (map[sy]?.[sx] === T.WALL || map[sy]?.[sx] === T.VOID) map[sy][sx] = T.FLOOR;
+    }
+  }
+
+  function normalizeEntranceTilesOutsideRooms() {
+    /** @type {{fromX:number,fromY:number,toX:number,toY:number,tile:any}[]} */
+    const moved = [];
+    for (const room of rooms) {
+      for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
+        normalizeBoundaryEntrance(room, tx, room.y, moved);
+        normalizeBoundaryEntrance(room, tx, room.y + room.h - 1, moved);
+      }
+      for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
+        normalizeBoundaryEntrance(room, room.x, ty, moved);
+        normalizeBoundaryEntrance(room, room.x + room.w - 1, ty, moved);
+      }
+    }
+    return moved;
+  }
+
+  function repairOutsideEntranceRoomEdges() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        for (const room of rooms) {
+          const neighbors = /** @type {{bx:number,by:number,dx:number,dy:number}[]} */ ([
+            { bx: x, by: y - 1, dx: 0, dy: 1 },
+            { bx: x, by: y + 1, dx: 0, dy: -1 },
+            { bx: x - 1, by: y, dx: 1, dy: 0 },
+            { bx: x + 1, by: y, dx: -1, dy: 0 },
+          ]);
+          for (const n of neighbors) {
+            const outside = outsideFaceForBoundaryTile(room, n.bx, n.by);
+            if (!outside || outside.x !== x || outside.y !== y) continue;
+            repairFormerEntranceSidePadding(room, n.bx, n.by, n.dx, n.dy);
+          }
+        }
+      }
+    }
+  }
+
   /** @param {number} x @param {number} y */
-  function entranceWallPairAxis(x, y) {
-    for (const r of rooms) {
-      if (x < r.x || x >= r.x + r.w || y < r.y || y >= r.y + r.h) continue;
-      const onTopOrBottom = y === r.y || y === r.y + r.h - 1;
-      const onLeftOrRight = x === r.x || x === r.x + r.w - 1;
-      if (onTopOrBottom && !onLeftOrRight) return 'horizontal';
-      if (onLeftOrRight && !onTopOrBottom) return 'vertical';
-      if (onTopOrBottom && !isWallLikeEntranceTile(map[y - 1]?.[x]) && !isWallLikeEntranceTile(map[y + 1]?.[x])) return 'horizontal';
-      if (onLeftOrRight && !isWallLikeEntranceTile(map[y]?.[x - 1]) && !isWallLikeEntranceTile(map[y]?.[x + 1])) return 'vertical';
+  function outsidePassageDegree(x, y) {
+    let degree = 0;
+    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (tileInsideAnyRoom(nx, ny)) continue;
+      const t = map[ny]?.[nx];
+      if (t !== T.WALL && t !== T.VOID) degree++;
+    }
+    return degree;
+  }
+
+  /** @param {number} x @param {number} y */
+  function adjacentDoorLikeEntranceCount(x, y) {
+    let count = 0;
+    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      if (isDoorLikeEntranceTile(map[y + dy]?.[x + dx])) count++;
+    }
+    return count;
+  }
+
+  /** @param {any} tile */
+  function isReplaceableDoorEntranceTile(tile) {
+    return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B || tile === T.LOCKED_G;
+  }
+
+  /** @param {number} x @param {number} y */
+  function outsideEntranceRoomSideCount(x, y) {
+    let roomSides = 0;
+    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+      const bx = x + dx;
+      const by = y + dy;
+      if (tileOnRoomCorner(bx, by)) continue;
+      if (rooms.some((/** @type {any} */ r) => {
+        const outside = outsideFaceForBoundaryTile(r, bx, by);
+        return outside?.x === x && outside?.y === y;
+      })) roomSides++;
+    }
+    return roomSides;
+  }
+
+  function collapseAdjacentOutsideEntranceTilesToFloor() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        const adjacentBlocker = /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])
+          .some(([dx, dy]) => {
+            const t = map[y + dy]?.[x + dx];
+            return isDoorLikeEntranceTile(t) && t !== T.DOOR;
+          });
+        if (adjacentBlocker) map[y][x] = T.FLOOR;
+      }
+    }
+    /** @type {Set<string>} */
+    const visitedDoorTiles = new Set();
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        const key = x + ',' + y;
+        if (visitedDoorTiles.has(key)) continue;
+        const cluster = [{ x, y }];
+        visitedDoorTiles.add(key);
+        for (let qi = 0; qi < cluster.length; qi++) {
+          const c = /** @type {any} */ (cluster[qi]);
+          for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+            const nx = c.x + dx, ny = c.y + dy;
+            const nk = nx + ',' + ny;
+            if (visitedDoorTiles.has(nk) || !isDoorLikeEntranceTile(map[ny]?.[nx]) || tileInsideAnyRoom(nx, ny)) continue;
+            visitedDoorTiles.add(nk);
+            cluster.push({ x: nx, y: ny });
+          }
+        }
+        if (cluster.length <= 1) continue;
+        const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
+        const keep = sorted.find((/** @type {any} */ e) => map[e.y]?.[e.x] !== T.DOOR) || sorted[Math.floor(sorted.length / 2)];
+        for (const e of cluster) {
+          if (e === keep) continue;
+          map[e.y][e.x] = T.FLOOR;
+        }
+      }
+    }
+  }
+
+  function clearDeadOutsideEntranceTiles() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        let roomSides = 0;
+        let outsidePassages = 0;
+        for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (tileOnRoomCorner(nx, ny)) continue;
+          if (rooms.some((/** @type {any} */ r) => {
+            const outside = outsideFaceForBoundaryTile(r, nx, ny);
+            return outside?.x === x && outside?.y === y;
+          })) {
+            roomSides++;
+            continue;
+          }
+          if (!tileInsideAnyRoom(nx, ny) && map[ny]?.[nx] !== T.WALL && map[ny]?.[nx] !== T.VOID) outsidePassages++;
+        }
+        if (roomSides === 1 && outsidePassages === 0) map[y][x] = T.FLOOR;
+      }
+    }
+  }
+
+  /** @param {any} room @param {any} tile */
+  function roomHasRingTile(room, tile) {
+    return !!findRingTile(room, tile);
+  }
+
+  /** @param {any} room @param {any} tile */
+  function findRingTile(room, tile) {
+    for (let y = Math.max(0, room.y - 1); y <= Math.min(MAP_H - 1, room.y + room.h); y++) {
+      for (let x = Math.max(0, room.x - 1); x <= Math.min(MAP_W - 1, room.x + room.w); x++) {
+        if (map[y]?.[x] === tile) return { x, y };
+      }
     }
     return null;
   }
 
-  /** @param {number} x @param {number} y */
-  function enforceEntranceWallPair(x, y) {
-    const axis = entranceWallPairAxis(x, y);
-    if (axis === 'vertical') {
-      if (y > 0) map[y - 1][x] = T.WALL;
-      if (y < MAP_H - 1) map[y + 1][x] = T.WALL;
-    } else if (axis === 'horizontal') {
-      if (x > 0) map[y][x - 1] = T.WALL;
-      if (x < MAP_W - 1) map[y][x + 1] = T.WALL;
+  /** @param {any} room @param {any} tile */
+  function placeOutsideEntranceForRoom(room, tile) {
+    /** @type {{bx:number,by:number,ox:number,oy:number,dx:number,dy:number,score:number}[]} */
+    const candidates = [];
+    /**
+     * @param {number} bx
+     * @param {number} by
+     */
+    const addCandidate = (bx, by) => {
+      const outside = outsideFaceForBoundaryTile(room, bx, by);
+      if (!outside || outside.x <= 0 || outside.y <= 0 || outside.x >= MAP_W - 1 || outside.y >= MAP_H - 1) return;
+      if (tileInsideAnyRoom(outside.x, outside.y)) return;
+      const outsideTile = map[outside.y]?.[outside.x];
+      const replacingDoor = isReplaceableDoorEntranceTile(outsideTile);
+      if (isDoorLikeEntranceTile(outsideTile) && !replacingDoor) return;
+      if (adjacentDoorLikeEntranceCount(outside.x, outside.y) > 0) return;
+      const roomSideCount = outsideEntranceRoomSideCount(outside.x, outside.y);
+      const passageDegree = outsidePassageDegree(outside.x, outside.y);
+      if (roomSideCount < 2 && passageDegree <= 0) return;
+      const score = (outsideTile !== T.WALL && outsideTile !== T.VOID ? 10 : 0) + passageDegree + roomSideCount;
+      candidates.push({ bx, by, ox: outside.x, oy: outside.y, dx: outside.dx, dy: outside.dy, score });
+    };
+    for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
+      addCandidate(tx, room.y);
+      addCandidate(tx, room.y + room.h - 1);
+    }
+    for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
+      addCandidate(room.x, ty);
+      addCandidate(room.x + room.w - 1, ty);
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    const picked = candidates[0];
+    if (!picked) return null;
+    map[picked.by][picked.bx] = T.FLOOR;
+    map[picked.oy][picked.ox] = tile;
+    repairFormerEntranceSidePadding(room, picked.bx, picked.by, picked.dx, picked.dy);
+    return { x: picked.ox, y: picked.oy };
+  }
+
+  function ensureSpecialRoomEntrances() {
+    if (challengeRoom) {
+      for (let i = challengeEntrances.length - 1; i >= 0; i--) {
+        const entry = challengeEntrances[i];
+        if (!entry || map[entry.y]?.[entry.x] === T.CHALLENGE_GATE) continue;
+        challengeEntrances.splice(i, 1);
+      }
+      if (challengeEntrances.length === 0) {
+        const gate = findRingTile(challengeRoom, T.CHALLENGE_GATE) || placeOutsideEntranceForRoom(challengeRoom, T.CHALLENGE_GATE);
+        if (gate) challengeEntrances.push(gate);
+      }
+    }
+    for (const secret of secretRooms) {
+      if (roomHasRingTile(secret, T.CRACKED)) continue;
+      placeOutsideEntranceForRoom(secret, T.CRACKED);
     }
   }
 
-  function enforceEntranceWallPairs() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (isDoorLikeEntranceTile(map[y][x])) enforceEntranceWallPair(x, y);
+  function removeKeysWithoutLiveLocks() {
+    const hasLock = {
+      red: false,
+      blue: false,
+      gold: false,
+    };
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const tile = map[y][x];
+        if (tile === T.LOCKED_R) hasLock.red = true;
+        else if (tile === T.LOCKED_B) hasLock.blue = true;
+        else if (tile === T.LOCKED_G) hasLock.gold = true;
+      }
+    }
+    for (let i = keyItems.length - 1; i >= 0; i--) {
+      const key = keyItems[i];
+      if (!key || hasLock[/** @type {'red'|'blue'|'gold'} */ (key.colour)]) continue;
+      keyItems.splice(i, 1);
+    }
+  }
+
+  function repairPostRelocationLockReachability() {
+    const passable = (/** @type {any} */ t) =>
+      t === T.FLOOR || t === T.DOOR || t === T.DOOR_OPEN ||
+      t === T.STAIRS || t === T.TERMINAL ||
+      t === T.TRAP_SPIKE || t === T.TRAP_SLOW || t === T.TOXIC ||
+      t === T.PLASMA || t === T.ARC || t === T.SHOCK_TILE || t === T.REPULSOR ||
+      t === T.CRACKED ||
+      t === T.VENDOR || t === T.LORE || t === T.TELEPORT_PAD ||
+      t === T.MAINFRAME_READER || t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
+      t === T.IMPLANT_SHRINE || t === T.EVENT_TERMINAL ||
+      t === T.CHALLENGE_GATE;
+    const lockColourForTile = (/** @type {any} */ t) =>
+      t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
+    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
+    const solvedReach = dungeonReachability.solveKeyLockReachability({
+      map,
+      start: { x: spawnRoom.cx, y: spawnRoom.cy },
+      keys: keyItems,
+      requiredRooms: rooms,
+      isOpenTile: passable,
+      lockColourForTile,
+    });
+    if (solvedReach.unreachableRooms.length === 0) return;
+    for (const colour of /** @type {const} */ (['red', 'blue', 'gold'])) {
+      if (solvedReach.collectedColours.has(colour)) continue;
+      const lockTile = lockTileForColour[colour];
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          if (map[y][x] === lockTile) map[y][x] = T.DOOR;
+        }
       }
     }
   }
 
   /**
+   * @param {any} room
    * @param {number} x
    * @param {number} y
+   * @param {{fromX:number,fromY:number,toX:number,toY:number,tile:any}[]} moved
    */
-  function isEntranceSupportWall(x, y) {
-    if (map[y]?.[x] !== T.WALL && map[y]?.[x] !== T.VOID) return false;
-    const dirs = /** @type {const} */ ([[0, -1], [0, 1], [-1, 0], [1, 0]]);
-    for (const dir of dirs) {
-      const dx = dir[0];
-      const dy = dir[1];
-      const doorX = x + dx;
-      const doorY = y + dy;
-      if (!isDoorLikeEntranceTile(map[doorY]?.[doorX])) continue;
-      const axis = entranceWallPairAxis(doorX, doorY);
-      if (axis === 'vertical' && doorX === x) return true;
-      if (axis === 'horizontal' && doorY === y) return true;
+  function normalizeBoundaryEntrance(room, x, y, moved) {
+    const tile = map[y]?.[x];
+    if (!isDoorLikeEntranceTile(tile)) return;
+    const outside = outsideFaceForBoundaryTile(room, x, y);
+    if (!outside || outside.x <= 0 || outside.y <= 0 || outside.x >= MAP_W - 1 || outside.y >= MAP_H - 1 || tileInsideAnyRoom(outside.x, outside.y)) {
+      map[y][x] = T.FLOOR;
+      repairFormerEntranceSidePadding(room, x, y, 0, 0);
+      return;
     }
-    return false;
+    map[y][x] = T.FLOOR;
+    map[outside.y][outside.x] = tile;
+    repairFormerEntranceSidePadding(room, x, y, outside.dx, outside.dy);
+    moved.push({ fromX: x, fromY: y, toX: outside.x, toY: outside.y, tile });
   }
 
   /**
@@ -4492,7 +4758,6 @@ function generateFloor(floorNum, opts) {
         if (nx <= 0 || ny <= 0 || nx >= MAP_W - 1 || ny >= MAP_H - 1 || !prevRow) continue;
         const seen = prevRow[nx];
         if (seen === undefined || seen >= 0) continue;
-        if (isEntranceSupportWall(nx, ny)) continue;
         prevRow[nx] = y * MAP_W + x;
         q.push({ x: nx, y: ny });
       }
@@ -4502,20 +4767,20 @@ function generateFloor(floorNum, opts) {
     if (targetSeen === undefined || targetSeen < 0) {
       let cx = sx, cy = sy;
       while (cx !== tx) {
-        if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
         cx += cx < tx ? 1 : -1;
       }
       while (cy !== ty) {
-        if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+        if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
         cy += cy < ty ? 1 : -1;
       }
-      if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+      if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
       return;
     }
     let cx = tx;
     let cy = ty;
     while (!(cx === sx && cy === sy)) {
-      if (!isEntranceSupportWall(cx, cy) && (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID)) map[cy][cx] = T.FLOOR;
+      if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
       const pathRow = prev[cy];
       if (!pathRow) break;
       const p = pathRow[cx];
@@ -4626,7 +4891,6 @@ function generateFloor(floorNum, opts) {
               if (isDoorLikeEntranceTile(map[c.y][c.x])) continue;
               const snapshot = map.map((/** @type {any} */ row) => row.slice());
               map[c.y][c.x] = T.WALL;
-              enforceEntranceWallPairs();
               if (allRoomsReachable()) {
                 changed = true;
                 break;
@@ -4770,7 +5034,7 @@ function generateFloor(floorNum, opts) {
   }
 
   // ── Secret room (every floor, one per floor) ─────────────────────────────
-  const secretRooms = [];
+  /** @type {any[]} */ const secretRooms = [];
   /** @type {any[]} */ const whisperItems = [];
   {
     // Candidates: not spawn, not stair, not boss, not already special, decent size
@@ -4819,7 +5083,7 @@ function generateFloor(floorNum, opts) {
 
   // ── Challenge Room (floor 2+, non-boss): optional wave-based arena ─────
   /** @type {any} */ let challengeRoom = null;
-  const challengeEntrances = [];
+  /** @type {any[]} */ const challengeEntrances = [];
   if (floorNum >= 2 && !bossRoom) {
     const challengeEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
@@ -4875,9 +5139,7 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  enforceEntranceWallPairs();
   collapseAdjacentEntranceTiles();
-  enforceEntranceWallPairs();
   // ── Prune dead-end corridor tiles ─────────────────────────────────────
   // After secret rooms, locked doors, and challenge rooms wall off entrances,
   // some corridor segments become dead ends (floor tile with only 1 passable
@@ -4910,9 +5172,7 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
-  enforceEntranceWallPairs();
   clearOrphanEntranceTiles();
-  enforceEntranceWallPairs();
 
   // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
   // Goal: from spawn, the player must be able to reach EVERY room — not just
@@ -5095,9 +5355,7 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
-  enforceEntranceWallPairs();
   clearOrphanEntranceTiles();
-  enforceEntranceWallPairs();
 
   {
     const passable = (/** @type {any} */ t) =>
@@ -5157,6 +5415,26 @@ function generateFloor(floorNum, opts) {
   }
 
   thinWideCorridors();
+  const relocatedEntrances = normalizeEntranceTilesOutsideRooms();
+  collapseAdjacentOutsideEntranceTilesToFloor();
+  repairOutsideEntranceRoomEdges();
+  clearDeadOutsideEntranceTiles();
+  ensureSpecialRoomEntrances();
+  collapseAdjacentOutsideEntranceTilesToFloor();
+  repairOutsideEntranceRoomEdges();
+  ensureSpecialRoomEntrances();
+  repairPostRelocationLockReachability();
+  removeKeysWithoutLiveLocks();
+  for (const move of relocatedEntrances) {
+    if (move.tile !== T.CHALLENGE_GATE) continue;
+    const entry = challengeEntrances.find((/** @type {any} */ e) => e.x === move.fromX && e.y === move.fromY);
+    if (entry) { entry.x = move.toX; entry.y = move.toY; }
+  }
+  for (let i = challengeEntrances.length - 1; i >= 0; i--) {
+    const entry = challengeEntrances[i];
+    if (!entry || map[entry.y]?.[entry.x] === T.CHALLENGE_GATE) continue;
+    challengeEntrances.splice(i, 1);
+  }
 
   // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
