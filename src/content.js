@@ -14,6 +14,7 @@ const _CG = new Proxy({}, {
 });
 const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/content.js'));
 const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content.js'));
+const DUNGEON_CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.CARDINAL_DIRECTIONS);
 
 // ─── Procedural Music ────────────────────────────────────────────────────────
 const music = (() => {
@@ -4337,42 +4338,11 @@ function generateFloor(floorNum, opts) {
   // tiles on the room wall line). Returns array of arrays.
   /**
    * @param {any} room
+   * @returns {{x:number,y:number}[][]}
    */
   function getEntranceClusters(room) {
-    const edges = [];
-    const isEntry = (/** @type {any} */ t) => t===T.FLOOR||t===T.DOOR;
-    for (let tx=room.x; tx<room.x+room.w; tx++) {
-      if (tx > room.x && tx < room.x + room.w - 1 && room.y>0 && isEntry(map[room.y][tx]) && isEntry(map[room.y-1][tx])) edges.push({x:tx, y:room.y});
-      const by=room.y+room.h-1;
-      if (tx > room.x && tx < room.x + room.w - 1 && by<MAP_H-1 && isEntry(map[by][tx]) && isEntry(map[by+1][tx])) edges.push({x:tx, y:by});
-    }
-    for (let ty=room.y; ty<room.y+room.h; ty++) {
-      if (ty > room.y && ty < room.y + room.h - 1 && room.x>0 && isEntry(map[ty][room.x]) && isEntry(map[ty][room.x-1])) edges.push({x:room.x, y:ty});
-      const bx=room.x+room.w-1;
-      if (ty > room.y && ty < room.y + room.h - 1 && bx<MAP_W-1 && isEntry(map[ty][bx]) && isEntry(map[ty][bx+1])) edges.push({x:bx, y:ty});
-    }
-    // Deduplicate
-    const seen = new Set();
-    const dedup = edges.filter(e => { const k=e.x+','+e.y; if(seen.has(k)) return false; seen.add(k); return true; });
-    // Cluster adjacent tiles
-    const used = new Set();
-    const clusters = [];
-    for (const e of dedup) {
-      const k = e.x+','+e.y;
-      if (used.has(k)) continue;
-      const cl = [e]; used.add(k);
-      let qi = 0;
-      while (qi < cl.length) {
-        const c = /** @type {any} */ (cl[qi++]);
-        for (const o of dedup) {
-          const ok = o.x+','+o.y;
-          if (used.has(ok)) continue;
-          if (Math.abs(c.x-o.x)+Math.abs(c.y-o.y)===1) { cl.push(o); used.add(ok); }
-        }
-      }
-      clusters.push(cl);
-    }
-    return clusters;
+    const isOpenEntranceTile = (/** @type {any} */ t) => t === T.FLOOR || t === T.DOOR;
+    return dungeonTopology.findBoundaryEntranceClusters(map, room, isOpenEntranceTile);
   }
 
   /**
@@ -4396,14 +4366,12 @@ function generateFloor(floorNum, opts) {
 
   /** @param {number} x @param {number} y */
   function tileInsideAnyRoom(x, y) {
-    return rooms.some((/** @type {any} */ r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+    return rooms.some((/** @type {any} */ r) => dungeonTopology.roomContainsPoint(r, x, y));
   }
 
   /** @param {number} x @param {number} y */
   function tileOnRoomCorner(x, y) {
-    return rooms.some((/** @type {any} */ r) =>
-      (x === r.x || x === r.x + r.w - 1) && (y === r.y || y === r.y + r.h - 1)
-    );
+    return rooms.some((/** @type {any} */ r) => dungeonTopology.roomHasCorner(r, x, y));
   }
 
   /**
@@ -4412,11 +4380,7 @@ function generateFloor(floorNum, opts) {
    * @param {number} y
    */
   function outsideFaceForBoundaryTile(room, x, y) {
-    if (y === room.y && x > room.x && x < room.x + room.w - 1) return { x, y: y - 1, dx: 0, dy: -1 };
-    if (y === room.y + room.h - 1 && x > room.x && x < room.x + room.w - 1) return { x, y: y + 1, dx: 0, dy: 1 };
-    if (x === room.x && y > room.y && y < room.y + room.h - 1) return { x: x - 1, y, dx: -1, dy: 0 };
-    if (x === room.x + room.w - 1 && y > room.y && y < room.y + room.h - 1) return { x: x + 1, y, dx: 1, dy: 0 };
-    return null;
+    return dungeonTopology.outsideFaceForBoundaryTile(room, x, y);
   }
 
   /**
@@ -4478,7 +4442,7 @@ function generateFloor(floorNum, opts) {
   /** @param {number} x @param {number} y */
   function outsidePassageDegree(x, y) {
     let degree = 0;
-    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
       const nx = x + dx;
       const ny = y + dy;
       if (tileInsideAnyRoom(nx, ny)) continue;
@@ -4491,7 +4455,7 @@ function generateFloor(floorNum, opts) {
   /** @param {number} x @param {number} y */
   function adjacentDoorLikeEntranceCount(x, y) {
     let count = 0;
-    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
       if (isDoorLikeEntranceTile(map[y + dy]?.[x + dx])) count++;
     }
     return count;
@@ -4506,7 +4470,7 @@ function generateFloor(floorNum, opts) {
   function outsideEntranceRoomSides(x, y) {
     /** @type {{dx:number,dy:number,bx:number,by:number}[]} */
     const roomSides = [];
-    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
       const bx = x + dx;
       const by = y + dy;
       if (tileOnRoomCorner(bx, by)) continue;
@@ -4539,7 +4503,7 @@ function generateFloor(floorNum, opts) {
    */
   function outsidePassageConnectionCount(x, y, exceptX, exceptY) {
     let degree = 0;
-    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
       const nx = x + dx;
       const ny = y + dy;
       if (nx === exceptX && ny === exceptY) continue;
@@ -4565,7 +4529,7 @@ function generateFloor(floorNum, opts) {
     const py = y - side.dy;
     if (outsidePassageConnectionCount(px, py, x, y) > 0) return { px, py, cx: -1, cy: -1 };
     if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
-    for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
       if (dx * side.dx + dy * side.dy !== 0) continue;
       if (!isOutsidePassageTile(x + dx, y + dy)) continue;
       const cx = px + dx;
@@ -4616,7 +4580,7 @@ function generateFloor(floorNum, opts) {
     for (let y = 1; y < MAP_H - 1; y++) {
       for (let x = 1; x < MAP_W - 1; x++) {
         if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
-        const adjacentBlocker = /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])
+        const adjacentBlocker = DUNGEON_CARDINAL_DIRECTIONS
           .some(([dx, dy]) => {
             const t = map[y + dy]?.[x + dx];
             return isDoorLikeEntranceTile(t) && t !== T.DOOR;
@@ -4635,7 +4599,7 @@ function generateFloor(floorNum, opts) {
         visitedDoorTiles.add(key);
         for (let qi = 0; qi < cluster.length; qi++) {
           const c = /** @type {any} */ (cluster[qi]);
-          for (const [dx, dy] of /** @type {[number,number][]} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]])) {
+          for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
             const nx = c.x + dx, ny = c.y + dy;
             const nk = nx + ',' + ny;
             if (visitedDoorTiles.has(nk) || !isDoorLikeEntranceTile(map[ny]?.[nx]) || tileInsideAnyRoom(nx, ny)) continue;

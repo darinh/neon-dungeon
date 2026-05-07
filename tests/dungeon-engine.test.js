@@ -45,6 +45,58 @@ test('dungeon topology engine carves BSP rooms and corridors with injected tiles
   ]);
 });
 
+test('dungeon topology engine exposes cardinal room graph and boundary helpers', () => {
+  assert.deepEqual(topology.CARDINAL_DIRECTIONS, [[1, 0], [-1, 0], [0, 1], [0, -1]]);
+
+  const a = { id: 'a', x: 2, y: 2, w: 4, h: 4 };
+  const b = { id: 'b', x: 8, y: 2, w: 4, h: 4 };
+  const c = { id: 'c', x: 20, y: 2, w: 4, h: 4 };
+  const graph = topology.buildRoomGraph([a, b, c], (left, right) => Math.abs(left.x - right.x) <= 6);
+  assert.deepEqual(graph.get(a), [b]);
+  assert.deepEqual(graph.get(b), [a]);
+  assert.deepEqual(graph.get(c), []);
+
+  assert.equal(topology.roomContainsPoint(a, 2, 2), true);
+  assert.equal(topology.roomContainsPoint(a, 5, 5), true);
+  assert.equal(topology.roomContainsPoint(a, 6, 5), false);
+  assert.equal(topology.roomContainsPoint(a, 5, 6), false);
+  assert.equal(topology.roomHasCorner(a, 2, 2), true);
+  assert.equal(topology.roomHasCorner(a, 5, 5), true);
+  assert.equal(topology.roomHasCorner(a, 3, 2), false);
+
+  assert.deepEqual(topology.outsideFaceForBoundaryTile(a, 3, 2), { x: 3, y: 1, dx: 0, dy: -1 });
+  assert.deepEqual(topology.outsideFaceForBoundaryTile(a, 3, 5), { x: 3, y: 6, dx: 0, dy: 1 });
+  assert.deepEqual(topology.outsideFaceForBoundaryTile(a, 2, 3), { x: 1, y: 3, dx: -1, dy: 0 });
+  assert.deepEqual(topology.outsideFaceForBoundaryTile(a, 5, 3), { x: 6, y: 3, dx: 1, dy: 0 });
+  assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
+});
+
+test('dungeon topology engine clusters room boundary entrances with injected open-tile semantics', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5, LOCKED = 7;
+  const map = topology.createMap(8, 8, WALL);
+  const room = { x: 2, y: 2, w: 4, h: 4 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+
+  map[1][3] = FLOOR;
+  map[1][4] = DOOR;
+  map[6][3] = FLOOR;
+  map[3][1] = FLOOR;
+  map[4][6] = FLOOR;
+  map[1][2] = FLOOR;
+  map[2][2] = FLOOR;
+  map[6][4] = LOCKED;
+
+  const clusters = topology.findBoundaryEntranceClusters(map, room, (tile) => tile === FLOOR || tile === DOOR);
+  assert.deepEqual(clusters, [
+    [{ x: 3, y: 2 }, { x: 4, y: 2 }],
+    [{ x: 3, y: 5 }],
+    [{ x: 2, y: 3 }],
+    [{ x: 5, y: 4 }],
+  ]);
+});
+
 test('dungeon reachability solver reports physical key-lock progression facts', () => {
   const W = 8, H = 4;
   const map = Array.from({ length: H }, () => new Uint8Array(W).fill(1));

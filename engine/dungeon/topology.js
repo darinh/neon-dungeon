@@ -14,6 +14,13 @@
 }(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
+  const CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (Object.freeze([
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]));
+
   /**
    * @param {number} width
    * @param {number} height
@@ -161,6 +168,25 @@
 
   /**
    * @param {any[]} rooms
+   * @param {(a:any, b:any) => boolean} areConnected
+   * @returns {Map<any, any[]>}
+   */
+  function buildRoomGraph(rooms, areConnected) {
+    const graph = new Map();
+    for (const room of rooms) {
+      /** @type {any[]} */
+      const neighbors = [];
+      for (const other of rooms) {
+        if (other === room) continue;
+        if (areConnected(room, other)) neighbors.push(other);
+      }
+      graph.set(room, neighbors);
+    }
+    return graph;
+  }
+
+  /**
+   * @param {any[]} rooms
    * @param {any} startRoom
    * @param {(a:any, b:any) => boolean} areConnected
    * @returns {Map<any, number>}
@@ -182,12 +208,121 @@
     return dist;
   }
 
+  /**
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {number} x
+   * @param {number} y
+   */
+  function roomContainsPoint(room, x, y) {
+    return x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
+  }
+
+  /**
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {number} x
+   * @param {number} y
+   */
+  function roomHasCorner(room, x, y) {
+    return (x === room.x || x === room.x + room.w - 1) &&
+      (y === room.y || y === room.y + room.h - 1);
+  }
+
+  /**
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {number} x
+   * @param {number} y
+   * @returns {{x:number,y:number,dx:number,dy:number}|null}
+   */
+  function outsideFaceForBoundaryTile(room, x, y) {
+    if (y === room.y && x > room.x && x < room.x + room.w - 1) return { x, y: y - 1, dx: 0, dy: -1 };
+    if (y === room.y + room.h - 1 && x > room.x && x < room.x + room.w - 1) return { x, y: y + 1, dx: 0, dy: 1 };
+    if (x === room.x && y > room.y && y < room.y + room.h - 1) return { x: x - 1, y, dx: -1, dy: 0 };
+    if (x === room.x + room.w - 1 && y > room.y && y < room.y + room.h - 1) return { x: x + 1, y, dx: 1, dy: 0 };
+    return null;
+  }
+
+  /**
+   * Finds boundary tiles where both the room edge and the outside-facing tile
+   * satisfy the caller's open-tile predicate, then groups cardinal-adjacent
+   * boundary tiles. Scan order intentionally mirrors the legacy generator:
+   * top edge, bottom edge, left edge, right edge.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {(tile:number) => boolean} isOpenTile
+   * @returns {{x:number,y:number}[][]}
+   */
+  function findBoundaryEntranceClusters(map, room, isOpenTile) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    /** @type {{x:number,y:number}[]} */
+    const edges = [];
+    for (let tx = room.x; tx < room.x + room.w; tx++) {
+      if (tx > room.x && tx < room.x + room.w - 1 && room.y > 0 && tx >= 0 && tx < width &&
+          isOpenTile(Number(map[room.y]?.[tx])) && isOpenTile(Number(map[room.y - 1]?.[tx]))) {
+        edges.push({ x: tx, y: room.y });
+      }
+      const by = room.y + room.h - 1;
+      if (tx > room.x && tx < room.x + room.w - 1 && by < height - 1 && tx >= 0 && tx < width &&
+          isOpenTile(Number(map[by]?.[tx])) && isOpenTile(Number(map[by + 1]?.[tx]))) {
+        edges.push({ x: tx, y: by });
+      }
+    }
+    for (let ty = room.y; ty < room.y + room.h; ty++) {
+      if (ty > room.y && ty < room.y + room.h - 1 && room.x > 0 && ty >= 0 && ty < height &&
+          isOpenTile(Number(map[ty]?.[room.x])) && isOpenTile(Number(map[ty]?.[room.x - 1]))) {
+        edges.push({ x: room.x, y: ty });
+      }
+      const bx = room.x + room.w - 1;
+      if (ty > room.y && ty < room.y + room.h - 1 && bx < width - 1 && ty >= 0 && ty < height &&
+          isOpenTile(Number(map[ty]?.[bx])) && isOpenTile(Number(map[ty]?.[bx + 1]))) {
+        edges.push({ x: bx, y: ty });
+      }
+    }
+    const seen = new Set();
+    const dedup = edges.filter((e) => {
+      const k = e.x + ',' + e.y;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const used = new Set();
+    /** @type {{x:number,y:number}[][]} */
+    const clusters = [];
+    for (const e of dedup) {
+      const k = e.x + ',' + e.y;
+      if (used.has(k)) continue;
+      const cl = [e];
+      used.add(k);
+      let qi = 0;
+      while (qi < cl.length) {
+        const c = /** @type {{x:number,y:number}} */ (cl[qi++]);
+        for (const o of dedup) {
+          const ok = o.x + ',' + o.y;
+          if (used.has(ok)) continue;
+          if (Math.abs(c.x - o.x) + Math.abs(c.y - o.y) === 1) {
+            cl.push(o);
+            used.add(ok);
+          }
+        }
+      }
+      clusters.push(cl);
+    }
+    return clusters;
+  }
+
   return {
+    CARDINAL_DIRECTIONS,
     createMap,
     carveRect,
     carveCorridor,
     createBspDungeon,
+    buildRoomGraph,
     bfsRooms,
+    roomContainsPoint,
+    roomHasCorner,
+    outsideFaceForBoundaryTile,
+    findBoundaryEntranceClusters,
     BSPNode,
   };
 }));

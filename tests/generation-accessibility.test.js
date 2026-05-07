@@ -1,5 +1,6 @@
 'use strict';
 
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -30,6 +31,32 @@ function reachWithAllLocksOpen(dungeon) {
 
 function emptyTestMap() {
   return Array.from({ length: MAP_H }, () => new Uint8Array(MAP_W).fill(T.WALL));
+}
+
+function dungeonGenerationDigest(dungeon) {
+  const roomSummary = (room) => room && {
+    x: room.x,
+    y: room.y,
+    w: room.w,
+    h: room.h,
+    cx: room.cx,
+    cy: room.cy,
+    roomType: room.roomType || null,
+  };
+  const summary = {
+    map: dungeon.map.map((row) => Array.from(row).join(',')).join(';'),
+    rooms: (dungeon.rooms || []).map(roomSummary),
+    playerPos: dungeon.playerPos,
+    spawnRoom: roomSummary(dungeon.spawnRoom),
+    stairRoom: roomSummary(dungeon.stairRoom),
+    bossRoom: roomSummary(dungeon.bossRoom),
+    mainframeRoom: roomSummary(dungeon.mainframeRoom),
+    keyItems: dungeon.keyItems || [],
+    whisperItems: dungeon.whisperItems || [],
+    challengeEntrances: dungeon.challengeEntrances || [],
+    bossEntrances: dungeon.bossEntrances || [],
+  };
+  return createHash('sha256').update(JSON.stringify(summary)).digest('hex');
 }
 
 function makeTraversalFixture({ includeKey = true } = {}) {
@@ -388,6 +415,22 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
       assertOutwardSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
       assertNoWideCorridors(dungeon, `${seed} floor ${floor}`);
     }
+  }
+});
+
+test('sampled seeded generation digests stay stable across topology extraction', () => {
+  const fixture = createGenerationFixture();
+  const expected = new Map([
+    ['1111-1111-1111 floor 2', '8fc17ed633d583ce7b5dce8588e5507dcfac42f6a270812bd9a884dde3c33008'],
+    ['1111-1111-1111 floor 6', '8f577801e10b414778ca82f35a6dca894ba2d8439d1f02c1822c37ba3bacbb52'],
+    ['FACE-FEED-BEEF floor 3', '9ce823b3af778c0ea0d306ed9a74605c87e79fe23d721cdda10d0bb96d32aba7'],
+    ['CAFE-BABE-0001 floor 8', 'cdc96a592ecd0baac180650967fbf798606a0451454c03e0f91a6d08c9cd8d72'],
+    ['DEAD-BEEF-CAFE floor 15', '2fc8edb19e4ee86a18afdca276bf43701d9d4564a05e42ee99c0f1ab6fcf39b6'],
+  ]);
+  for (const [label, digest] of expected) {
+    const [seed, , floorText] = label.split(' ');
+    const dungeon = fixture.generateFloor(seed, Number(floorText));
+    assert.equal(dungeonGenerationDigest(dungeon), digest, label);
   }
 });
 
