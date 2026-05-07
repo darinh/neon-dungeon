@@ -230,7 +230,7 @@ test('both HUD sites render the SIPHON suffix in the affix colour #88ff88', () =
   // declaration in content.js (so this test will trip if the affix
   // colour is changed there without updating the HUD).
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /SIPHON:\s*\{[^}]*colour\s*:\s*['"]#88ff88['"]/,
@@ -242,7 +242,7 @@ test('SIPHON colour (#88ff88) is distinct from PIERCING_HEART colour (#ff4488)',
   // both colours in content.js so a careless refactor can't homogenize
   // them.
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /SIPHON[\s\S]*?colour\s*:\s*['"]#88ff88['"]/,
@@ -333,7 +333,7 @@ test('runtime: helper sandbox returns "" on null/undefined inputs', () => {
 
 test('SIPHON affix still exists in WEAPON_AFFIXES and is a suffix', () => {
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /SIPHON:\s*\{\s*slot:\s*['"]suffix['"]/,
@@ -352,7 +352,7 @@ test('SIPHON and PIERCING_HEART are mutually exclusive on a single weapon (both 
   // suffix per weapon. Pin this invariant — if a future refactor
   // moves PH to prefix-slot, the HUD wiring must be revisited.
   const CONTENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'content', 'weapons.js'), 'utf8'
   );
   assert.match(CONTENT,
     /PIERCING_HEART:\s*\{\s*slot:\s*['"]suffix['"]/,

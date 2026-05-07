@@ -15,6 +15,7 @@ const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
 const SOURCE_FILE_PATHS = Object.freeze({
   platform: path.join('src', 'platform.js'),
   contentTerminals: path.join('src', 'content', 'terminals.js'),
+  contentWeapons: path.join('src', 'content', 'weapons.js'),
   content: path.join('src', 'content.js'),
   entities: path.join('src', 'entities.js'),
   render: path.join('src', 'render.js'),

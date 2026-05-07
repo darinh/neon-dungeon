@@ -197,6 +197,10 @@ function createGenerationSandbox() {
     sandbox
   );
   vm.runInContext(
+    fs.readFileSync(path.join(ROOT, 'src/content/weapons.js'), 'utf8'),
+    sandbox
+  );
+  vm.runInContext(
     fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8') +
       '\nthis.generateFloor = generateFloor;',
     sandbox

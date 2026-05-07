@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RENDER = fs.readFileSync(path.resolve(process.cwd(), 'src/render.js'), 'utf8');
-const CONTENT = fs.readFileSync(path.resolve(process.cwd(), 'src/content.js'), 'utf8')
+const CONTENT = fs.readFileSync(path.resolve(process.cwd(), 'src/content/weapons.js'), 'utf8')
   .replace(/\/\/.*$/gm, '')
   .replace(/\/\*[\s\S]*?\*\//g, '');
 
