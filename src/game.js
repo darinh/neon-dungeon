@@ -1846,6 +1846,9 @@ const game = {
    * @param {any} callback
    */
   setState(s, callback) {
+    if (!_GG_STATE_DEFS.GAME_STATES_SET.has(s)) {
+      throw new Error('Unknown game state "' + String(s) + '"');
+    }
     const prevState = this.state;
     // Clear the auto-paused sticky indicator on any transition OUT of
     // PAUSED — PLAYING (manual resume), MENU (quit), SETTINGS (open
@@ -1967,7 +1970,7 @@ const game = {
    * @param {any} nextState
    */
   fadeTo(text, callback, nextState) {
-    this.state='FADE';
+    this.setState(_GG_STATES.FADE);
     this.transitionText=text;
     this.fadeAlpha=0;
     this.fadeDir=1;
