@@ -271,7 +271,7 @@ const _G = new Proxy({}, {
 // itself as window.NEON.viewport. No Node fallback (platform.js never runs
 // under Node — it touches `document`, `window`, `screen` at module top).
 /** @type {any} */
-const _vp = /** @type {any} */ (NEON).viewport;
+const _vp = /** @type {any} */ (requireNEON('viewport', 'src/platform.js'));
 
 // Safe-area insets (logical px) for notched devices
 let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
@@ -431,7 +431,7 @@ onOrientationChange();
 // they show the OS keyboard for the canvas-rendered seed field. clearJust()
 // wraps engine.clearJust() and also nulls host state so the existing one-call-
 // per-frame contract is preserved for all downstream consumers.
-const _input = /** @type {any} */ (NEON).input.createEngine({
+const _input = /** @type {any} */ (requireNEON('input', 'src/platform.js')).createEngine({
   win: window,
   onKeyDown: (/** @type {any} */ e) => {
     lastKey = e.key;
@@ -621,7 +621,7 @@ function updateBtns() {
 // toCanvas / hitBtn are pure helpers extracted to engine/touch.js (Phase C1e).
 // Host keeps thin wrappers so the canvas + gameScale stay implicit at call
 // sites in this file.
-const _touchHelpers = NEON.touch;
+const _touchHelpers = /** @type {any} */ (requireNEON('touch', 'src/platform.js'));
 
 /**
  * @param {number} clientX
@@ -1110,7 +1110,7 @@ function doorKeyColour(t) { return t===T.LOCKED_R?'red':t===T.LOCKED_B?'blue':t=
 // the NEON-specific named SFX (shoot, hit, menuSelect, etc.) as a content
 // layer on top of those primitives.
 const audio = (() => {
-  const _eng = /** @type {any} */ (NEON).audio.createEngine({
+  const _eng = /** @type {any} */ (requireNEON('audio', 'src/platform.js')).createEngine({
     getSfxVolume:   () => settings.sfxVol,
     getMusicVolume: () => settings.musicVol,
   });
