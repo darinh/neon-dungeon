@@ -345,7 +345,7 @@ test('system message modal delivery opens before play and arms explicit ACK only
     'only the dedicated X key or ACK button should mark a system prompt read');
   assert.doesNotMatch(extractObjectMethodSource(GAME, 'updateSystemMessage'), /jp\('Enter'\)|jp\(km\('interact'\)\)|jp\(km\('shoot'\)\)|jp\('Escape'\)/,
     'Enter, Interact, fire, and Escape must not dismiss system prompts');
-  assert.match(PLATFORM, /_G\.state === 'SYSTEM_MESSAGE'/,
+  assert.match(PLATFORM, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)/,
     'touch input must route coordinates to the modal instead of using global any-tap confirm');
 });
 

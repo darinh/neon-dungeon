@@ -116,7 +116,7 @@ test('system prompts keep explicit acknowledgement as the only dismissal path', 
     'generic escape/enter/interact/fire inputs must not dismiss system prompts');
   assert.match(renderSystemMessage, /ACK\s+\[X\]/,
     'modal must present an explicit ACK affordance');
-  assert.match(touchRouting, /_G\.state\s*===\s*'SYSTEM_MESSAGE'[\s\S]*justPressed\.add\('MouseLeft'\)[\s\S]*return/,
+  assert.match(touchRouting, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)[\s\S]*justPressed\.add\('MouseLeft'\)[\s\S]*continue/,
     'touch routing must send modal taps to SYSTEM_MESSAGE instead of gameplay fire controls');
 });
 

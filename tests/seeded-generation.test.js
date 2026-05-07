@@ -488,7 +488,7 @@ this.restoreFloorSnapshot = restoreFloorSnapshot;`, sandbox);
 });
 
 test('mobile/page lifecycle interruptions save current run before the browser can unload', () => {
-  assert.match(PLATFORM, /const _RUN_SAVE_STATES = new Set\(\[/);
+  assert.match(PLATFORM, /const _RUN_SAVE_STATES = _PG_STATE_DEFS\.RUN_SAVE_STATES/);
   assert.match(PLATFORM, /function saveRunForPageInterruption\(\)[\s\S]*_G\.saveGame\(\)/);
   assert.match(PLATFORM, /function _onVisibilityHidden\(\)[\s\S]*saveRunForPageInterruption\(\)/);
   assert.match(PLATFORM, /window\.addEventListener\('pagehide',\s*saveRunForPageInterruption\)/);
@@ -496,7 +496,7 @@ test('mobile/page lifecycle interruptions save current run before the browser ca
 });
 
 test('touch input routes seed setup taps through the seed screen hit-test path', () => {
-  assert.match(PLATFORM, /_G\.state === 'SEED_SETUP'[\s\S]*justPressed\.add\('MouseLeft'\)/);
+  assert.match(PLATFORM, /_G\.state === _PG_STATES\.SEED_SETUP[\s\S]*justPressed\.add\('MouseLeft'\)/);
   assert.match(GAME, /seedSetupHitTest\(mouse\.x, mouse\.y\)/);
 });
 
