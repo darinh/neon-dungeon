@@ -16,6 +16,8 @@
 
   /** @typedef {{x:number,y:number,w?:number,h?:number,cx?:number,cy?:number,[key:string]:any}} RoomLike */
   /** @typedef {{x:number,y:number,colour?:string,color?:string,[key:string]:any}} KeyLike */
+  /** @typedef {{x:number,y:number,colour:string}} BlockedEdge */
+  /** @typedef {{kind:'downgrade-lock-colour',colour:string}|{kind:'connect-room',room:RoomLike}} RepairHint */
 
   /**
    * @param {ArrayLike<ArrayLike<number>>} map
@@ -121,14 +123,38 @@
       }
     }
     const missingColours = Array.from(lockColours).filter((colour) => !collectedColours.has(colour));
+    /** @type {BlockedEdge[]} */
+    const blockedEdges = [];
+    if (opts.lockColourForTile) {
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (reachable[y]?.[x]) continue;
+          const colour = opts.lockColourForTile(Number(opts.map[y]?.[x]));
+          if (!colour) continue;
+          for (const dir of /** @type {const} */ ([[0, -1], [0, 1], [-1, 0], [1, 0]])) {
+            const nx = x + dir[0], ny = y + dir[1];
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (reachable[ny]?.[nx]) {
+              blockedEdges.push({ x, y, colour: String(colour) });
+              break;
+            }
+          }
+        }
+      }
+    }
+    /** @type {RepairHint[]} */
+    const repairHints = [
+      ...missingColours.map((colour) => ({ kind: /** @type {const} */ ('downgrade-lock-colour'), colour })),
+      ...unreachableRooms.map((room) => ({ kind: /** @type {const} */ ('connect-room'), room })),
+    ];
 
     return {
       reachable,
       collectedColours,
       unreachableRooms,
       missingColours,
-      blockedEdges: [],
-      repairHints: [],
+      blockedEdges,
+      repairHints,
       computeReach,
     };
   }

@@ -142,4 +142,9 @@ test('dungeon reachability solver does not treat locks as open without keys', ()
   assert.equal(solved.reachable[1][4], 0);
   assert.equal(solved.unreachableRooms.length, 1);
   assert.deepEqual(solved.missingColours, ['red']);
+  assert.deepEqual(solved.blockedEdges, [{ x: 3, y: 1, colour: 'red' }]);
+  assert.deepEqual(solved.repairHints, [
+    { kind: 'downgrade-lock-colour', colour: 'red' },
+    { kind: 'connect-room', room: { x: 4, y: 1, w: 1, h: 1, cx: 4, cy: 1 } },
+  ]);
 });
