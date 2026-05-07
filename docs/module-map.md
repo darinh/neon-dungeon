@@ -19,9 +19,9 @@ Current load groups:
 | 4 | `src/meta/save.js`, `engine/telemetry.js`, `src/meta/cores.js`, `engine/spawn.js`, `engine/alarm-light.js`, `src/meta/alarm-light.js`, `src/meta/upgrades.js`, `src/meta/modules.js`, `src/meta/logs.js`, `src/meta/whispers.js`, `src/meta/behavior.js`, `src/meta/boosts.js`, `engine/cinematic.js`, `src/meta/intro.js`, `src/meta/hub.js`, `engine/render-boundary.js` | Meta/progression systems and configured engine/game shims exposed through `NEON.*`. |
 | 5 | `src/content.js`, `src/entities.js`, `src/render.js`, `src/game.js` | Large runtime modules: generation/content, actors/combat, rendering/HUD, and game-state orchestration. |
 
-When adding a new browser module, update both `index.html` and `sw.js` `ASSETS`.
-There is no service-worker cache version to bump; `sw.js` uses a stable cache
-name plus network-first freshness for explicit assets.
+When adding a new browser module, update `scripts/manifest.js`, `index.html`,
+and `sw.js` `ASSETS`. There is no service-worker cache version to bump; `sw.js`
+uses a stable cache name plus network-first freshness for explicit assets.
 
 ## Large-file ownership
 
@@ -111,7 +111,7 @@ tokens that would leak game content into the engine layer.
 2. Use the UMD-lite wrapper from `CONTRIBUTING.md` if it must load in both browser
    and Node tests.
 3. Add it to `index.html` in dependency order.
-4. Add it to `sw.js` `ASSETS`.
+4. Add it to `scripts/manifest.js` and `sw.js` `ASSETS`.
 5. Add tests and run `npm run check`.
 
 ### Touch rendering hot paths

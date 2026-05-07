@@ -41,9 +41,11 @@ tests):
    on it via the `NEON` namespace at call time — never at load time.
 3. Browser load order: script tags in `index.html` must list producer files
    before consumer files. If `src/meta/hub.js` uses `NEON.upgrades`, the
-   `<script src="./src/meta/upgrades.js">` tag must appear first.
-4. Browser assets: add new browser-loaded files to `sw.js` `ASSETS`, but do not
-   manually bump the service-worker `CACHE` key in feature PRs.
+   `<script src="./src/meta/upgrades.js">` tag must appear first. Keep
+   `scripts/manifest.js` in that same order.
+4. Browser assets: add new browser-loaded files to `scripts/manifest.js` and
+   `sw.js` `ASSETS`, but do not manually bump the service-worker `CACHE` key in
+   feature PRs.
 5. Pure logic is preferred. Anything that reads globals or touches the DOM
    cannot be unit-tested in Node — keep those pieces thin and push
    computation into pure functions.
@@ -79,11 +81,15 @@ CI (`.github/workflows/test.yml`) runs `npm run check` on every PR targeting
 ## Branching
 
 - `main` — stable, deployed to GitHub Pages. Never push directly.
-- `develop` — integration branch. All feature branches PR into `develop`.
+- `develop` — integration branch. All feature/fix/documentation branches PR into
+  `develop`.
 - `anvil/<task-id>`, `feat/<thing>`, `fix/<thing>`, or `docs/<thing>` — your
   working branch.
-- `release/<thing>` — linear promotion branch from `main` when promoting
-  verified `develop` work to production.
+- PRs into `develop` are squash-merged.
+- Only same-repo promotion PRs from `develop` target `main`; do not target
+  `main` from feature/fix branches.
+- Promotion from `develop` to `main` uses rebase merge. Do not break the
+  release and versioning PR path or `.github/workflows/release-version.yml`.
 
 ## Service Worker cache
 
@@ -99,7 +105,8 @@ stable precache.
 
 You **do** still need to:
 
-1. Add any new source file path to the `ASSETS` precache list in `sw.js`.
+1. Add any new source file path to `scripts/manifest.js` and the `ASSETS`
+   precache list in `sw.js`.
 2. Remove any deleted paths from `ASSETS`.
 
 If a real `ASSETS` change conflicts with another PR (because both added paths
