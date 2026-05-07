@@ -159,25 +159,48 @@ function isCorridorTile(dungeon, x, y) {
   return !tileInsideRoom(dungeon, x, y) && tile !== T.WALL && tile !== T.VOID;
 }
 
-function assertFlushSingleTileEntrances(dungeon, label) {
+function roomBoundaryNeighborsForEntrance(dungeon, x, y) {
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dy]) => ({ dx, dy, bx: x + dx, by: y + dy }))
+    .filter(({ bx, by }) => tileOnRoomBoundary(dungeon, bx, by));
+}
+
+function assertOutwardSingleTileEntrances(dungeon, label) {
   const failures = [];
   for (let y = 1; y < MAP_H - 1; y++) {
     for (let x = 1; x < MAP_W - 1; x++) {
       const tile = dungeon.map[y][x];
       if (!isDoorLikeTile(tile)) continue;
-      if (!tileOnRoomBoundary(dungeon, x, y)) failures.push(`${label}: door-like tile not on room wall line at ${x},${y}`);
+      if (tileInsideRoom(dungeon, x, y)) failures.push(`${label}: door-like tile is still inside a room at ${x},${y}`);
+      if (tileOnRoomBoundary(dungeon, x, y)) failures.push(`${label}: door-like tile still occupies the room boundary at ${x},${y}`);
       if (tileOnRoomCorner(dungeon, x, y)) failures.push(`${label}: door-like tile on room corner at ${x},${y}`);
-      const embeddedInWallLine =
-        (isWallLikeTile(dungeon.map[y - 1]?.[x]) && isWallLikeTile(dungeon.map[y + 1]?.[x])) ||
-        (isWallLikeTile(dungeon.map[y]?.[x - 1]) && isWallLikeTile(dungeon.map[y]?.[x + 1]));
-      if (!embeddedInWallLine) failures.push(`${label}: door-like tile is not embedded in a wall segment at ${x},${y}`);
+      const roomSides = roomBoundaryNeighborsForEntrance(dungeon, x, y);
+      if (roomSides.length < 1 || roomSides.length > 2) {
+        failures.push(`${label}: door-like tile should sit outside one room boundary or between two room boundaries at ${x},${y}, found ${roomSides.length}`);
+      }
+      if (roomSides.length === 2 && (roomSides[0].dx + roomSides[1].dx !== 0 || roomSides[0].dy + roomSides[1].dy !== 0)) {
+        failures.push(`${label}: two-sided door-like tile should bridge opposite room boundaries at ${x},${y}`);
+      }
+      for (const side of roomSides) {
+        const roomTile = dungeon.map[side.by]?.[side.bx];
+        if (isWallLikeTile(roomTile) || isDoorLikeTile(roomTile)) failures.push(`${label}: room-side boundary tile was not restored to floor at ${side.bx},${side.by}`);
+        const px = side.dy === 0 ? 0 : 1;
+        const py = side.dx === 0 ? 0 : 1;
+        for (const sign of [-1, 1]) {
+          const sx = side.bx + px * sign;
+          const sy = side.by + py * sign;
+          if (tileInsideRoom(dungeon, sx, sy) && !tileOnRoomCorner(dungeon, sx, sy) && isWallLikeTile(dungeon.map[sy]?.[sx])) {
+            failures.push(`${label}: side-wall padding still bulges into the room at ${sx},${sy}`);
+          }
+        }
+      }
       const adjacentOutsidePassage = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .filter(([dx, dy]) => !tileInsideRoom(dungeon, x + dx, y + dy))
         .some(([dx, dy]) => {
           const t = dungeon.map[y + dy]?.[x + dx];
-          return t !== T.WALL && t !== T.VOID;
+          return !isWallLikeTile(t);
         });
-      if (!adjacentOutsidePassage) failures.push(`${label}: door-like tile has no outside passage at ${x},${y}`);
+      if (roomSides.length === 1 && !adjacentOutsidePassage) failures.push(`${label}: door-like tile has no outside passage at ${x},${y}`);
       const adjacentDoor = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .some(([dx, dy]) => isDoorLikeTile(dungeon.map[y + dy]?.[x + dx]));
       if (adjacentDoor) failures.push(`${label}: adjacent double door/gate tile at ${x},${y}`);
@@ -256,6 +279,34 @@ function assertNoDuplicateKeyTiles(dungeon) {
   }
 }
 
+function assertSpecialEntranceInvariants(dungeon, label) {
+  if (dungeon.challengeRoom) {
+    assert.ok((dungeon.challengeEntrances || []).length > 0, `${label}: challenge room has no live entrance metadata`);
+    for (const entry of dungeon.challengeEntrances || []) {
+      assert.equal(dungeon.map[entry.y]?.[entry.x], T.CHALLENGE_GATE, `${label}: stale challenge entrance metadata at ${entry.x},${entry.y}`);
+    }
+  }
+  for (const secret of dungeon.secretRooms || []) {
+    let cracked = 0;
+    for (let y = Math.max(0, secret.y - 1); y <= Math.min(MAP_H - 1, secret.y + secret.h); y++) {
+      for (let x = Math.max(0, secret.x - 1); x <= Math.min(MAP_W - 1, secret.x + secret.w); x++) {
+        if (dungeon.map[y]?.[x] === T.CRACKED) cracked++;
+      }
+    }
+    assert.ok(cracked > 0, `${label}: secret room at ${secret.x},${secret.y} has no cracked entrance`);
+  }
+  const lockTiles = {
+    red: T.LOCKED_R,
+    blue: T.LOCKED_B,
+    gold: T.LOCKED_G,
+  };
+  for (const key of dungeon.keyItems || []) {
+    const lockTile = lockTiles[key.colour];
+    assert.ok(lockTile, `${label}: key has unknown colour ${key.colour}`);
+    assert.ok(dungeon.map.some((row) => Array.from(row).includes(lockTile)), `${label}: ${key.colour} key exists without a matching live lock`);
+  }
+}
+
 test('sampled seeded floors keep all required rooms movement-reachable after lock repair', () => {
   const fixture = createGenerationFixture();
   const seeds = [
@@ -267,6 +318,8 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
     '6666-6666-6666',
     '7777-7777-7777',
     '8888-8888-8888',
+    'fuzz-4',
+    'passage-13',
   ];
   for (const seed of seeds) {
     for (let floor = 1; floor <= 15; floor++) {
@@ -274,7 +327,8 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
       assertAllRequiredRoomsReachable(dungeon);
       assertNoSpawnRoomKeys(dungeon);
       assertNoDuplicateKeyTiles(dungeon);
-      assertFlushSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
+      assertSpecialEntranceInvariants(dungeon, `${seed} floor ${floor}`);
+      assertOutwardSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
       assertNoWideCorridors(dungeon, `${seed} floor ${floor}`);
     }
   }

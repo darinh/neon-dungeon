@@ -523,8 +523,11 @@ Each floor is generated fresh using Binary Space Partitioning:
    WALL so players never walk down a tunnel to nowhere.
 8. **Door and hallway normalization**: door-like entrances (`DOOR`, locked
    doors, challenge gates, cracked secret entrances) are single-tile,
-   non-adjacent, never placed on room corners, and must be embedded in the wall
-   line with wall/void tiles on either the north+south or east+west sides.
+   non-adjacent, never placed on room corners, and are relocated to a connected
+   outside corridor/wall-line tile adjacent to the room edge or to a valid
+   two-room wall bridge. The original room-edge tile is restored to floor so
+   doors sit in the surrounding wall/corridor line instead of occupying the
+   inside edge of the room or adding side-wall bulges.
    Outside-room 2×2 passable hallway blocks are iteratively narrowed without
    removing door-like tiles and only when the key/lock reachability solver still
    proves every room reachable.
@@ -4862,6 +4865,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.23 | Door alignment correction: door-like entrances are moved outward from the room boundary into the adjacent corridor/wall-line tile, and the vacated room-edge tile plus any prior side-padding wall blocks are restored to floor. Generation tests now fail if door-like blockers remain inside/on a room boundary or if side-wall padding bulges into the room. |
 | v6.1.22 | Hidden FEET cheat menu shipped for local testing. Pressing keyboard `F E E Shift` or tapping mobile `F E E ⇧` outside text-entry/key-capture states opens a `CHEATS` modal with runtime-only toggles for invulnerability, no-clip movement/dashing, show-map rendering, and hyper-speed movement. Cheat state is not serialized into normal save data; show-map rendering is non-destructive and only dirties the minimap cache when toggled. Added regression coverage in `tests/cheat-menu.test.js`. |
 | v6.1.21 | Human handoff docs shipped: root `README.md`, `docs/module-map.md`, and `docs/refactor-roadmap.md` now document setup, the script-tag module architecture, file ownership, guardrail tests, new-file/service-worker rules, and the recommended incremental refactor path. The implementation architecture section now describes the current modular script-tag runtime instead of the historical single-file prototype. |
 | v6.1.20 | Story-driven event-room pass shipped: event terminals now include three Act 1 protocol trials guaranteed on non-boss floors 2, 5, and 8. `Route Proof` turns logic-puzzle framing into map reveal or locked-door bypass choices, `Cooperation Protocol` makes resource sharing versus isolated optimization affect HP/XP/cooldowns/alarms, and `Consent Lock` turns predecessor-fragment agency into request versus override consequences. Added regression coverage in `tests/story-event-rooms.test.js`. |
