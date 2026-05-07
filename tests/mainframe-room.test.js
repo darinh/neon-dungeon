@@ -11,6 +11,7 @@ const PLATFORM = fs.readFileSync(path.join(ROOT, 'src/platform.js'), 'utf8');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
 const RENDER = fs.readFileSync(path.join(ROOT, 'src/render.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
+const GAME_STATES_SRC = fs.readFileSync(path.join(ROOT, 'src/game-states.js'), 'utf8');
 
 /**
  * @param {string} src
@@ -273,7 +274,8 @@ test('mainframe reader state is wired into gameplay, rendering, and touch routin
     'GENESIS defeat must not present the legacy default ACCEPT path');
   assert.doesNotMatch(GAME, /openEndgameChoice\(genesisEntity\)\s*{(?:(?!\n  },)[\s\S])*endRun\(true\)/,
     'GENESIS defeat must not present the legacy default ACCEPT path or directly end the run');
-  assert.match(PLATFORM, /_G\.state\s*===\s*'MAINFRAME_READER'[\s\S]*_G\.state\s*===\s*'MESSAGE_SEND'/);
+  assert.match(PLATFORM, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)/);
+  assert.match(GAME_STATES_SRC, /TOUCH_ROUTE_AS_CLICK_STATES = new Set\(\[[\s\S]*GAME_STATES\.MAINFRAME_READER[\s\S]*GAME_STATES\.MESSAGE_SEND/);
 });
 
 test('mainframe reader requires explicit close controls for pointer dismissal', () => {

@@ -34,8 +34,9 @@ Run `npm run check` before opening a PR.
 
 The runtime is ordered script tags in `index.html`:
 
-1. `src/neon.js` fail-loud dependency resolver, then early `engine/*.js`
-   helpers: RNG, viewport, audio, input, touch, draw, decor, particles, minimap.
+1. `src/neon.js` fail-loud dependency resolver, `src/game-states.js`
+   runtime state vocabulary, then early `engine/*.js` helpers: RNG, viewport,
+   audio, input, touch, draw, decor, particles, minimap.
 2. `src/platform.js`: browser/platform bridge and shared globals used by later
    modules.
 3. Interleaved engine/data/meta modules: biome routing, static data, save/meta

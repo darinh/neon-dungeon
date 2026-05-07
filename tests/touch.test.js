@@ -10,6 +10,7 @@ const path = require('node:path');
 const touchEngine = require('../engine/touch.js');
 const { toCanvas, hitBtn, resetTouch } = touchEngine;
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
+const GAME_STATES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game-states.js'), 'utf8');
 
 // ---------- toCanvas ----------
 
@@ -157,7 +158,9 @@ test('resetTouch: tolerates touch with missing joystick/aim sub-objects', () => 
 test('touch routing sends hit-tested modal taps through coordinates instead of any-tap Enter fallback', () => {
   assert.match(PLATFORM, /function routeTouchAsMouseClick\(cx, cy\) \{\s*mouse\.x = cx;\s*mouse\.y = cy;\s*justPressed\.add\('MouseLeft'\);\s*\}/,
     'coordinate-routed modal taps should share one helper so new modals do not duplicate mouse routing');
-  assert.match(PLATFORM, /_G\.state === 'READING'[\s\S]{0,180}_G\.state === 'CHEATS'[\s\S]{0,120}routeTouchAsMouseClick\(cx, cy\);[\s\S]{0,40}continue;/,
+  assert.match(GAME_STATES_SRC, /TOUCH_ROUTE_AS_CLICK_STATES = new Set\(\[[\s\S]*GAME_STATES\.READING[\s\S]*GAME_STATES\.CHEATS/,
+    'READING/CHEATS must be in the centralized coordinate-routed touch set');
+  assert.match(PLATFORM, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)[\s\S]{0,120}routeTouchAsMouseClick\(cx, cy\);[\s\S]{0,40}continue;/,
     'READING/CHEATS touch input must be coordinate-routed so only hit-tested controls can dismiss or toggle');
   assert.match(PLATFORM, /else\s*\{\s*justPressed\.add\('Enter'\);\s*justPressed\.add\('MouseLeft'\);\s*\}/,
     'generic fallback remains for states that intentionally treat touch as confirm');
