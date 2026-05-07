@@ -32,6 +32,7 @@ declare global {
   // blocks without forcing a narrowing pyramid at every call site.
   // eslint-disable-next-line no-var
   var NEON: any;
+  function requireNEON(name: string, requiringFile: string): any;
 
   // The shared `game` object is declared as `const game = {...}` in
   // src/game.js (which is @ts-checked) with a `Record<string, any>` JSDoc

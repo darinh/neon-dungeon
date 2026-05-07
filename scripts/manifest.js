@@ -4,6 +4,7 @@
 // Keep engine primitives first, followed by game data/meta modules, dungeon
 // helpers, then the large runtime coordinators that consume those globals.
 const requiredInIndex = [
+  './src/neon.js',
   './engine/math.js',
   './engine/viewport.js',
   './engine/audio.js',

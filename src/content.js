@@ -12,8 +12,8 @@ const _CG = new Proxy({}, {
   set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
   has: (_t, p) => p in /** @type {any} */ (game),
 });
-const dungeonTopology = /** @type {any} */ (NEON).dungeonTopology;
-const dungeonReachability = /** @type {any} */ (NEON).dungeonReachability;
+const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/content.js'));
+const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content.js'));
 
 // ─── Procedural Music ────────────────────────────────────────────────────────
 const music = (() => {
@@ -2695,8 +2695,9 @@ function modSpeed(base) { return _CG.modifier === 'OVERCLOCK' ? base * 1.2 : bas
 // sites across the codebase and inject browser-side globals (DIFFICULTIES for
 // difficulty validation, buildWeapon for STARTING_GEAR) that the extracted
 // module cannot assume exist in Node tests.
-const META_UPGRADES     = NEON.save.META_UPGRADES;
-const DIFF_UNLOCK_REQS  = NEON.save.DIFF_UNLOCK_REQS;
+const _save = /** @type {any} */ (requireNEON('save', 'src/content.js'));
+const META_UPGRADES     = _save.META_UPGRADES;
+const DIFF_UNLOCK_REQS  = _save.DIFF_UNLOCK_REQS;
 
 function loadMeta()                             { return NEON.save.loadMeta(DIFFICULTIES); }
 /**
@@ -2762,7 +2763,8 @@ function sellModule(moduleId, refund)           { return NEON.save.sellModule(mo
 // life decay, burst scaling under load.
 const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
 const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
-const _particleSystem = NEON.particles.createSystem({
+const _particles = /** @type {any} */ (requireNEON('particles', 'src/content.js'));
+const _particleSystem = _particles.createSystem({
   cap: PARTICLE_CAP,
   burstScaleThreshold: PARTICLE_BURST_SCALE_THRESHOLD,
 });

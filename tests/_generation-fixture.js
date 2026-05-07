@@ -182,6 +182,10 @@ function createGenerationSandbox() {
   };
   vm.createContext(sandbox);
   vm.runInContext(
+    fs.readFileSync(path.join(ROOT, 'src/neon.js'), 'utf8'),
+    sandbox
+  );
+  vm.runInContext(
     fs.readFileSync(path.join(ROOT, 'engine/dungeon/topology.js'), 'utf8') +
       '\nthis.dungeonTopologyLoaded = !!NEON.dungeonTopology;',
     sandbox
