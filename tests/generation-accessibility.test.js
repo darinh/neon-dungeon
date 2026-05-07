@@ -127,6 +127,15 @@ test('progression reachability treats openable and destructible blockers as trav
   assert.equal(reach.have.has('red'), true, 'closed doors, cracked walls, and crates are player-clearable for progression');
 });
 
+test('physical reachability fixture delegates to engine solver without changing traversal semantics', () => {
+  const { dungeon } = generateFloorFixture('1111-1111-1111', 2);
+  const reach = physicalReachWithKeys(dungeon);
+  const diagnostic = computeReach(dungeon, reach.have);
+  for (let y = 0; y < MAP_H; y++) {
+    assert.deepEqual(Array.from(reach.vis[y]), Array.from(diagnostic[y]), `row ${y}`);
+  }
+});
+
 test('documented traversal semantics distinguish blockers, interactions, hazards, and key locks', () => {
   const map = emptyTestMap();
   map[2][1] = T.FLOOR;

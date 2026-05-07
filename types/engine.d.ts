@@ -627,8 +627,13 @@ declare global {
       collectedColours: Set<string>;
       unreachableRooms: any[];
       missingColours: string[];
-      blockedEdges: any[];
-      repairHints: any[];
+      /** Frontier locked tiles adjacent to the final reachable set. */
+      blockedEdges: Array<{ x: number; y: number; colour: string }>;
+      /** Advisory facts only; game/content code decides whether and how to mutate. */
+      repairHints: Array<
+        { kind: 'downgrade-lock-colour'; colour: string } |
+        { kind: 'connect-room'; room: any }
+      >;
       computeReach: (have: Set<string>) => Uint8Array[];
     };
     roomTouchesReach(room: any, reachable: Uint8Array[]): boolean;
