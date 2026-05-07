@@ -56,12 +56,12 @@ test('weapon swap modal is wired into update, render, and mobile touch routing',
     'modal update/render should share a layout helper');
   assert.match(GAME, /renderWeaponSwap\(\)[\s\S]*1-3 replace/,
     'rendered modal should explain keyboard replacement controls');
-  assert.match(PLATFORM, /_G\.state === 'POWERUP_CHOICE' \|\| _G\.state === 'WEAPON_SWAP'[\s\S]*?routeTouchAsMouseClick\(cx, cy\);[\s\S]*?continue;/,
+  assert.match(PLATFORM, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)[\s\S]*?routeTouchAsMouseClick\(cx, cy\);[\s\S]*?continue;/,
     'mobile WEAPON_SWAP touches must be coordinate-routed for hit testing');
 });
 
 test('weapon swap survives mobile/page interruption autosaves', () => {
-  assert.match(PLATFORM, /_RUN_SAVE_STATES = new Set\(\[[^\]]*'WEAPON_SWAP'/,
+  assert.match(read('src/game-states.js'), /RUN_SAVE_STATES = new Set\(\[[\s\S]*GAME_STATES\.WEAPON_SWAP/,
     'WEAPON_SWAP must autosave on visibility/pagehide interruptions');
   assert.match(GAME, /const pendingWeaponSwap = this\.state === 'WEAPON_SWAP'[\s\S]*weaponSwapChoice\.weapon\._base[\s\S]*selected: this\.weaponSwapChoice\.selected \| 0/,
     'saveGame must persist the pending cache weapon and selected row');

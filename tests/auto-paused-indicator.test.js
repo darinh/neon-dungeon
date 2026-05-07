@@ -59,7 +59,7 @@ test('auto-paused: setState clears wasAutoPaused on transition OUT of PAUSED', (
   assert.ok(setStateBody, 'setState body must be findable');
   assert.match(
     setStateBody[0],
-    /this\.state\s*===\s*['"]PAUSED['"][\s\S]{0,80}s\s*!==\s*['"]PAUSED['"][\s\S]{0,120}this\.wasAutoPaused\s*=\s*false/,
+    /this\.state\s*===\s*_GG_STATES\.PAUSED[\s\S]{0,80}s\s*!==\s*_GG_STATES\.PAUSED[\s\S]{0,120}this\.wasAutoPaused\s*=\s*false/,
     'setState must clear wasAutoPaused when transitioning out of PAUSED'
   );
 });

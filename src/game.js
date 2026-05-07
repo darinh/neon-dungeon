@@ -33,6 +33,9 @@ const BOSS_INTRO_DURATION = 2.4;
 // deserves a beat to land. Long enough that the "DESTROYED" beat
 // registers without overstaying past the natural impulse to descend.
 const BOSS_DEATH_DURATION = 2.6;
+const _GG_STATE_DEFS = /** @type {any} */ (requireNEON('gameStates', 'src/game.js'));
+const _GG_STATES = _GG_STATE_DEFS.GAME_STATES;
+const _GG_PAUSE_ACTION_STATES = _GG_STATE_DEFS.PAUSE_ACTION_STATES;
 
 /**
  * @param {any} meta
@@ -1561,7 +1564,7 @@ function restoreFloorSnapshot(gameState, snapshot) {
 
 /** @type {Record<string, any>} */
 const game = {
-  state: 'MENU',
+  state: _GG_STATES.MENU,
   difficulty: loadMeta().lastDifficulty || 'NORMAL',
   floor: 1,
   player: null,
@@ -1849,20 +1852,20 @@ const game = {
     // submenu), etc. The next auto-pause will set it again. Without
     // this, a player who auto-pauses then manually unpauses then
     // pauses again later by hand would still see "(auto-paused)".
-    if (this.state === 'PAUSED' && s !== 'PAUSED') this.wasAutoPaused = false;
+    if (this.state === _GG_STATES.PAUSED && s !== _GG_STATES.PAUSED) this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
-    if (s === 'MENU') { this.menuSel = 0; this._menuTitleUnlockConsumed = false; this._menuTitleUnlockPending = false; music.setState('menu'); }
-    else if (s === 'SEED_SETUP' || s === 'ARCHIVES' || (s === 'SETTINGS' && this._settingsFrom === 'MENU')) music.setState('menu');
-    else if (s === 'PAUSED') { music.pause(); this._pauseSel = -1; }
-    else if (s === 'INTRO') music.stop();
-    else if (s === 'PLAYING') {
-      if (prevState === 'MENU' || prevState === 'SEED_SETUP' || prevState === 'ARCHIVES' || (prevState === 'SETTINGS' && this._settingsFrom === 'MENU') || prevState === 'INTRO') music.setState('explore');
+    if (s === _GG_STATES.MENU) { this.menuSel = 0; this._menuTitleUnlockConsumed = false; this._menuTitleUnlockPending = false; music.setState('menu'); }
+    else if (_GG_STATE_DEFS.isMenuMusicState(s, this._settingsFrom)) music.setState('menu');
+    else if (s === _GG_STATES.PAUSED) { music.pause(); this._pauseSel = -1; }
+    else if (s === _GG_STATES.INTRO) music.stop();
+    else if (s === _GG_STATES.PLAYING) {
+      if (_GG_STATE_DEFS.isMenuMusicState(prevState, this._settingsFrom) || prevState === _GG_STATES.INTRO) music.setState('explore');
       else music.resume();
     }
-    else if (s === 'GAME_OVER' || s === 'VICTORY') music.stop();
+    else if (s === _GG_STATES.GAME_OVER || s === _GG_STATES.VICTORY) music.stop();
     // Show privacy link only on menu screen
-    try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === 'MENU' ? '' : 'none'; } catch(_){}
+    try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === _GG_STATES.MENU ? '' : 'none'; } catch(_){}
     if (callback) callback();
   },
 
@@ -4770,7 +4773,7 @@ const game = {
     else if (jp('KeyS')) { audio.menuSelect(); this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
     else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
     // Keyboard up/down selection + Enter
-    const pauseActions = ['PLAYING', 'SETTINGS', 'MENU'];
+    const pauseActions = _GG_PAUSE_ACTION_STATES;
     if (this._pauseSel == null) this._pauseSel = -1;
     if (jp(ALT_KEYS.up) || jp(km('up')))   { this._pauseSel = this._pauseSel <= 0 ? 2 : this._pauseSel - 1; audio.menuSelect(); }
     if (jp(ALT_KEYS.down) || jp(km('down'))) { this._pauseSel = this._pauseSel >= 2 ? 0 : this._pauseSel + 1; audio.menuSelect(); }
@@ -6526,7 +6529,7 @@ const game = {
       switch(this.state) {
         case 'MENU':      this.renderMenu();     break;
         case 'CHEATS':
-          if (this.dungeon && this.cheatReturnState !== 'MENU' && this.cheatReturnState !== 'SEED_SETUP' && this.cheatReturnState !== 'ARCHIVES' && this.cheatReturnState !== 'SETTINGS' && this.cheatReturnState !== 'HUB') this.renderPlaying();
+          if (this.dungeon && _GG_STATE_DEFS.shouldRenderPlayfieldBehindCheats(this.cheatReturnState)) this.renderPlaying();
           this.renderCheatMenu();
           break;
         case 'SEED_SETUP': this.renderSeedSetup(); break;
@@ -8986,7 +8989,7 @@ if (typeof NEON !== 'undefined' && NEON.telemetry) {
     : null;
   NEON.telemetry.init({ transport: _phTransport });
 }
-game.state='MENU';
+game.state=_GG_STATES.MENU;
 music.setState('menu');
 loadAppVersion();
 try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = ''; } catch(_){}

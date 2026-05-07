@@ -270,6 +270,8 @@ const _G = new Proxy({}, {
 // Browser-only: engine/viewport.js loads first via index.html and mounts
 // itself as window.NEON.viewport. No Node fallback (platform.js never runs
 // under Node — it touches `document`, `window`, `screen` at module top).
+const _PG_STATE_DEFS = /** @type {any} */ (requireNEON('gameStates', 'src/platform.js'));
+const _PG_STATES = _PG_STATE_DEFS.GAME_STATES;
 /** @type {any} */
 const _vp = /** @type {any} */ (requireNEON('viewport', 'src/platform.js'));
 
@@ -479,7 +481,7 @@ function ensureSeedSetupInput() {
   el.style.pointerEvents = 'none';
   el.style.zIndex = '-1';
   el.addEventListener('input', () => {
-    if (_G.state !== 'SEED_SETUP') return;
+    if (_G.state !== _PG_STATES.SEED_SETUP) return;
     const value = typeof _G.setSeedSetupSeed === 'function' ? _G.setSeedSetupSeed(el.value) : el.value;
     if (el.value !== value) el.value = value;
   });
@@ -521,7 +523,7 @@ function blurSeedSetupInput() {
 }
 
 function menuTitleNeedsGestureUnlock() {
-  if (_G.state !== 'MENU' || _G._menuTitleUnlockConsumed) return false;
+  if (_G.state !== _PG_STATES.MENU || _G._menuTitleUnlockConsumed) return false;
   try {
     return typeof music !== 'undefined' && music && music.isTitlePlaying && !music.isTitlePlaying();
   } catch (_) {
@@ -533,8 +535,7 @@ function menuTitleNeedsGestureUnlock() {
 function resumeInteractiveAudio(consumeMenuActivation) {
   const consumeTitleUnlock = consumeMenuActivation && menuTitleNeedsGestureUnlock();
   audio.resume();
-  const menuMusicState = _G.state === 'MENU' || _G.state === 'SEED_SETUP' || _G.state === 'ARCHIVES' ||
-    (_G.state === 'SETTINGS' && _G._settingsFrom === 'MENU');
+  const menuMusicState = _PG_STATE_DEFS.isMenuMusicState(_G.state, _G._settingsFrom);
   if (menuMusicState) {
     try { if (typeof music !== 'undefined') music.resume(); } catch (_) {}
   }
@@ -679,7 +680,7 @@ canvas.addEventListener('touchstart', e => {
     // In non-playing states, any touch acts as confirm (except NAME_ENTRY, POWERUP_CHOICE)
     if (_G.state !== 'PLAYING' && _G.state !== 'FADE') {
       if (_G.state === 'NAME_ENTRY') { nameEntryTap=[cx,cy]; continue; }
-      if (_G.state === 'SEED_SETUP') {
+      if (_G.state === _PG_STATES.SEED_SETUP) {
         if (typeof _G.seedSetupFieldHitTest === 'function' && _G.seedSetupFieldHitTest(cx, cy)) {
           focusSeedSetupInput(t.clientX, t.clientY);
           continue;
@@ -688,7 +689,7 @@ canvas.addEventListener('touchstart', e => {
         routeTouchAsMouseClick(cx, cy);
         continue;
       }
-      if (_G.state === 'POWERUP_CHOICE' || _G.state === 'WEAPON_SWAP' || _G.state === 'SHOPPING' || _G.state === 'PERK_CHOICE' || _G.state === 'AUGMENT_CHOICE' || _G.state === 'EVENT_CHOICE' || _G.state === 'READING' || _G.state === 'MAINFRAME_READER' || _G.state === 'MESSAGE_SEND' || _G.state === 'SYSTEM_MESSAGE' || _G.state === 'CHEATS') {
+      if (_PG_STATE_DEFS.TOUCH_ROUTE_AS_CLICK_STATES.has(_G.state)) {
         // Route touch position via mouse so update handler handles it
         routeTouchAsMouseClick(cx, cy);
         continue;
@@ -697,13 +698,13 @@ canvas.addEventListener('touchstart', e => {
         routeTouchAsMouseClick(cx, cy);
         continue;
       }
-      if (_G.state === 'PAUSED') {
+      if (_G.state === _PG_STATES.PAUSED) {
         // 3 zones: top third = resume, middle third = settings, bottom third = quit
         if (cy < H * 0.38) justPressed.add('Escape');
         else if (cy < H * 0.62) justPressed.add('KeyS');
         else justPressed.add('KeyQ');
       }
-      else if (_G.state === 'HUB') {
+      else if (_G.state === _PG_STATES.HUB) {
         // The Gap. Mobile users have no SPACE key to descend and no number
         // keys to pick a terminal — route taps via hub.hitTestHub which owns
         // the hub layout (single source of truth, see hub.js _layoutHub).
@@ -739,7 +740,7 @@ canvas.addEventListener('touchstart', e => {
         // Otherwise: tap on empty hub space → no-op (don't accidentally
         // activate the selected terminal).
       }
-      else if (_G.state === 'MENU') {
+      else if (_G.state === _PG_STATES.MENU) {
         const narrow = layout.compact;
         // Confirm overlay intercepts touches when active
         if (_G._newGameConfirm) {
@@ -2642,8 +2643,8 @@ let _autoPaused = false;
 let _preVisibilityState = null;
 
 // States that represent active gameplay and should auto-pause
-const _PAUSABLE_STATES = new Set(['PLAYING']);
-const _RUN_SAVE_STATES = new Set(['PLAYING', 'PAUSED', 'READING', 'SYSTEM_MESSAGE', 'POWERUP_CHOICE', 'WEAPON_SWAP', 'PERK_CHOICE', 'AUGMENT_CHOICE', 'EVENT_CHOICE', 'SHOPPING', 'MAINFRAME_READER', 'MESSAGE_SEND']);
+const _PAUSABLE_STATES = _PG_STATE_DEFS.PAUSABLE_STATES;
+const _RUN_SAVE_STATES = _PG_STATE_DEFS.RUN_SAVE_STATES;
 
 function saveRunForPageInterruption() {
   if (typeof game === 'undefined' || !_G.player || !_RUN_SAVE_STATES.has(_G.state)) return;
@@ -2666,7 +2667,7 @@ function _onVisibilityHidden() {
     // hidden→visible→still-PAUSED window so the returning player
     // sees "(auto-paused)" instead of an unexplained PAUSED screen.
     _G.wasAutoPaused = true;
-    _G.setState('PAUSED');
+    _G.setState(_PG_STATES.PAUSED);
   }
 }
 

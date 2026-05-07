@@ -5,6 +5,7 @@
 // helpers, then the large runtime coordinators that consume those globals.
 const requiredInIndex = [
   './src/neon.js',
+  './src/game-states.js',
   './engine/math.js',
   './engine/viewport.js',
   './engine/audio.js',

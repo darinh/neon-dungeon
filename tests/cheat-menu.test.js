@@ -29,7 +29,7 @@ test('FEET sequence opens the hidden cheat menu without text-entry capture', () 
   assert.match(GAME, /this\.setState\('CHEATS'\)/);
   assert.match(GAME, /case 'CHEATS':\s+this\.updateCheatMenu\(\);/);
   assert.match(GAME, /case 'CHEATS':[\s\S]*?this\.renderCheatMenu\(\);/);
-  assert.match(GAME, /cheatReturnState !== 'HUB'/);
+  assert.match(GAME, /shouldRenderPlayfieldBehindCheats\(this\.cheatReturnState\)/);
   assert.doesNotMatch(GAME, /if \(this\.updateCheatHotkey\(\)\) return/);
   assert.match(GAME, /this\.updateCheatHotkey\(\);\s*switch\(this\.state\)/);
   assert.match(GAME, /this\._cheatMenuJustOpened = true;\s*this\.setState\('CHEATS'\)/);
