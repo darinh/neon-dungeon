@@ -538,6 +538,8 @@ declare global {
   }
 
   interface EngineDungeonTopologyAPI {
+    /** Shared cardinal traversal order for extracted dungeon topology helpers. */
+    CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number]>;
     createMap(width: number, height: number, fillTile: number): Uint8Array[];
     carveRect(
       map: ArrayLike<ArrayLike<number>>,
@@ -564,11 +566,39 @@ declare global {
       rand: () => number;
       rndInt: (min: number, max: number) => number;
     }): { map: Uint8Array[]; root: unknown; rooms: any[] };
+    buildRoomGraph(
+      rooms: any[],
+      areConnected: (a: any, b: any) => boolean,
+    ): Map<any, any[]>;
     bfsRooms(
       rooms: any[],
       startRoom: any,
       areConnected: (a: any, b: any) => boolean,
     ): Map<any, number>;
+    roomContainsPoint(
+      room: { x: number; y: number; w: number; h: number },
+      x: number,
+      y: number,
+    ): boolean;
+    roomHasCorner(
+      room: { x: number; y: number; w: number; h: number },
+      x: number,
+      y: number,
+    ): boolean;
+    outsideFaceForBoundaryTile(
+      room: { x: number; y: number; w: number; h: number },
+      x: number,
+      y: number,
+    ): { x: number; y: number; dx: number; dy: number } | null;
+    /**
+     * Caller-injected boundary entrance clustering. `isOpenTile` is tested for
+     * both the room boundary tile and its outside-facing neighbour.
+     */
+    findBoundaryEntranceClusters(
+      map: ArrayLike<ArrayLike<number>>,
+      room: { x: number; y: number; w: number; h: number },
+      isOpenTile: (tile: number) => boolean,
+    ): Array<Array<{ x: number; y: number }>>;
     BSPNode: unknown;
   }
 
