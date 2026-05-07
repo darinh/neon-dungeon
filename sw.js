@@ -42,6 +42,7 @@ const ASSETS = [
   './engine/render-boundary.js',
   './engine/dungeon/topology.js',
   './engine/dungeon/reachability.js',
+  './src/content/terminals.js',
   './src/content.js',
   './src/entities.js',
   './src/render.js',
