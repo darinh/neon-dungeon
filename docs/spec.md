@@ -4547,6 +4547,12 @@ A `sw.js` at the repository root provides offline play after first visit:
 | **Activate**   | `clients.claim()` + purge old cache versions |
 | **Registration** | Separate `<script>` tag after the game script; silent `.catch()` for non-supporting browsers |
 
+**Manifest guardrail:** `scripts/manifest.js` is the machine-readable source for
+browser script order and service-worker precache expectations.
+`tests/manifest.test.js` verifies `index.html` script tags match that order,
+`sw.js` precaches the same manifest-managed assets, every manifest-managed path
+exists on disk, and generated `version.json` stays out of precache.
+
 **Update flow:** Changes that land on `main` trigger
 `.github/workflows/release-version.yml`, which computes the next semver tag and
 creates a GitHub Release at the exact `main` commit. The visible title-screen
@@ -4554,6 +4560,12 @@ version comes from same-origin `version.json` generated from that release tag in
 the Pages artifact; `sw.js` deliberately has no numeric version. App assets are
 fetched network-first and update the stable cache when online, then fall back to
 cached responses offline.
+
+**Branch policy:** Feature, fix, documentation, and agent task PRs target
+`develop`; PRs into `develop` are squash-merged. Only same-repo promotion PRs
+from `develop` target `main`, and those promotions use rebase merge. The
+release and versioning path and `.github/workflows/release-version.yml` are
+production guardrails and must remain intact during promotion work.
 
 ### Known Limitation — iOS Safari
 
@@ -4870,6 +4882,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.24 | Added a manifest drift guardrail: `scripts/manifest.js` now records browser script order, service-worker precache assets, and the generated `version.json` no-store exemption, while `tests/manifest.test.js` verifies `index.html`, `sw.js`, and disk paths stay in sync. Release-flow docs now state that feature/fix/docs PRs target `develop`, `develop` PRs squash-merge, only same-repo `develop` promotion PRs target `main`, and `develop -> main` uses rebase merge without breaking release and versioning automation. |
 | v6.1.23 | Door alignment correction: door-like entrances are moved outward from the room boundary into the adjacent corridor/wall-line tile, and the vacated room-edge tile plus any prior side-padding wall blocks are restored to floor. Generation tests now fail if door-like blockers remain inside/on a room boundary or if side-wall padding bulges into the room. |
 | v6.1.22 | Hidden FEET cheat menu shipped for local testing. Pressing keyboard `F E E Shift` or tapping mobile `F E E ⇧` outside text-entry/key-capture states opens a `CHEATS` modal with runtime-only toggles for invulnerability, no-clip movement/dashing, show-map rendering, and hyper-speed movement. Cheat state is not serialized into normal save data; show-map rendering is non-destructive and only dirties the minimap cache when toggled. Added regression coverage in `tests/cheat-menu.test.js`. |
 | v6.1.21 | Human handoff docs shipped: root `README.md`, `docs/module-map.md`, and `docs/refactor-roadmap.md` now document setup, the script-tag module architecture, file ownership, guardrail tests, new-file/service-worker rules, and the recommended incremental refactor path. The implementation architecture section now describes the current modular script-tag runtime instead of the historical single-file prototype. |

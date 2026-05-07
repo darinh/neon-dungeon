@@ -70,9 +70,10 @@ see `docs/engine-boundary.md`.
    `CONTRIBUTING.md`.
 3. Add the script tag to `index.html` after its producers and before its
    consumers.
-4. Add browser-loaded files to `sw.js` `ASSETS`. Do not add or bump a service-
-   worker version number; `sw.js` uses a stable cache name and network-first
-   refresh for app assets.
+4. Add browser-loaded files to `scripts/manifest.js` and `sw.js` `ASSETS`.
+   `tests/manifest.test.js` fails if `index.html`, the manifest, and `sw.js`
+   drift. Do not add or bump a service-worker version number; `sw.js` uses a
+   stable cache name and network-first refresh for app assets.
 5. Add or update focused tests.
 6. Run `npm run check`.
 
@@ -94,9 +95,12 @@ See `docs/refactor-roadmap.md` for the recommended order.
 - `main` is stable and deployed by GitHub Pages.
 - `develop` is the integration branch.
 - Feature branches use `anvil/<task-id>`, `feat/<name>`, `fix/<name>`, or
-  `docs/<name>` and PR into `develop`.
-- Release promotion branches PR from a linear commit based on `main` into
-  `main`.
+  `docs/<name>` and open PRs into `develop`.
+- PRs into `develop` are squash-merged so integration history stays readable.
+- Only same-repo promotion PRs from `develop` target `main`; never target
+  `main` from feature/fix branches.
+- Promotion from `develop` to `main` uses rebase merge. Do not break the
+  release and versioning PR path or `.github/workflows/release-version.yml`.
 - Use conventional commit prefixes (`feat:`, `fix:`, `docs:`, `refactor:`,
   `test:`, `chore:`).
 
