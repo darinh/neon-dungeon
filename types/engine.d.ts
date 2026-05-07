@@ -572,23 +572,36 @@ declare global {
     BSPNode: unknown;
   }
 
+  interface EngineDungeonReachabilityOptions {
+    map: ArrayLike<ArrayLike<number>>;
+    start: { x: number; y: number };
+    keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
+    requiredRooms?: any[];
+    /** Caller-injected traversal semantics for ordinary open/interactable tiles. */
+    isOpenTile: (tile: number) => boolean;
+    /** Caller-injected lock semantics; returned colours are matched against physical key pickups. */
+    lockColourForTile?: (tile: number) => string | null | undefined;
+  }
+
+  interface EngineDungeonReachabilityResult {
+    /** Fixed-point physical reachability after collecting reachable keys in dependency order. */
+    reachable: Uint8Array[];
+    /** Lock colours physically collectible from the start under caller-supplied tile semantics. */
+    collectedColours: Set<string>;
+    /** Required rooms with no reachable tile after the physical key-pickup fixed point. */
+    unreachableRooms: any[];
+    /** Lock colours present on the map but not physically collectible. */
+    missingColours: string[];
+    /** Reserved for future edge/gate diagnostics; current runtime returns an empty array. */
+    blockedEdges: any[];
+    /** Reserved for future repair policy hints; current runtime returns an empty array. */
+    repairHints: any[];
+    /** Diagnostic helper for repair passes; callers choose which lock colours to pretend are held. */
+    computeReach: (have: Set<string>) => Uint8Array[];
+  }
+
   interface EngineDungeonReachabilityAPI {
-    solveKeyLockReachability(opts: {
-      map: ArrayLike<ArrayLike<number>>;
-      start: { x: number; y: number };
-      keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
-      requiredRooms?: any[];
-      isOpenTile: (tile: number) => boolean;
-      lockColourForTile?: (tile: number) => string | null | undefined;
-    }): {
-      reachable: Uint8Array[];
-      collectedColours: Set<string>;
-      unreachableRooms: any[];
-      missingColours: string[];
-      blockedEdges: any[];
-      repairHints: any[];
-      computeReach: (have: Set<string>) => Uint8Array[];
-    };
+    solveKeyLockReachability(opts: EngineDungeonReachabilityOptions): EngineDungeonReachabilityResult;
     roomTouchesReach(room: any, reachable: Uint8Array[]): boolean;
   }
 

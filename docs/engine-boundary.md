@@ -144,6 +144,25 @@ mechanics before the floor is returned. Finishing the floor is not enough; a map
 where stairs are reachable but a vendor, special room, boss approach, or secret
 room is disconnected is invalid generation.
 
+#### Generation phase invariant checkpoints
+
+The future dungeon engine should expose topology facts at each checkpoint; the
+NEON wrapper should decide whether to repair, downgrade, retry, or reject the
+floor. The contract for today's behavior is:
+
+| Checkpoint | Engine responsibility | NEON game/content responsibility | Required invariant |
+|---|---|---|---|
+| After BSP rooms/corridors | Create rooms, corridors, and room-adjacency facts using injected wall/floor tile ids. | Pick the spawn/default start room and later decide which rooms receive content. | Every intended normal room has legal 4-direction physical connectivity before doors, locks, secrets, or gates mutate topology. |
+| After regular doors | Report door-like entrance locations and preserve room-adjacency facts. | Decide which normalized entrances become `T.DOOR`. | Closed regular doors are modeled as interact-openable for generation validation, not as permanent blockers. |
+| After locks/keys | Solve physical key/lock progression from spawn using caller-injected tile semantics. | Choose lock targets, place keys, and decide whether missing-key colours should downgrade to floor. | Traversal can collect reachable keys in dependency order and then enter every required room. An all-locks-open pass is only a repair diagnostic. |
+| After secrets/challenge gates | Treat caller-declared interactable gates as traversal semantics, not hardcoded tile ids. | Mark secret/challenge rooms, replace entrances with `T.CRACKED`/`T.CHALLENGE_GATE`, and spawn rewards/waves. | Cracked walls count as breakable for full-exploration validation; challenge gates follow runtime passability. |
+| After dead-end pruning and hallway thinning | Re-run reachability with the same solver before accepting removed corridor tiles. | Prevent cosmetic cleanup from deleting required gate exteriors or disconnecting rooms. | No pruning/thinning step may disconnect a required room or strand the outside face of a required gate. |
+| Before returning the floor | Return structured reachability facts: reachable grid, collected colours, unreachable rooms, missing colours, blocked edges, repair hints. | Apply final policy-preserving repairs, place stairs/finale terminal, and populate content only after topology is valid. | Full physical traversal from the final spawn can visit every required room and reach the stairs, finale terminal, or mainframe route endpoint. |
+
+This checkpoint table is intentionally stricter than the legacy room-center BFS:
+it describes player movement, not graph convenience. Room-center or all-locks-open
+queries are useful diagnostics, but they are not sufficient acceptance proofs.
+
 #### Physical traversal semantics
 
 Reachability checks must model what the player can actually do:

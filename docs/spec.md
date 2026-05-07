@@ -528,10 +528,15 @@ Each floor is generated fresh using Binary Space Partitioning:
    Outside-room 2×2 passable hallway blocks are iteratively narrowed without
    removing door-like tiles and only when the key/lock reachability solver still
    proves every room reachable.
-9. **Reachability guarantee**: key-cascade BFS from spawn to every room
-   respects locked doors until their physically reachable keys are collected.
-   If stairs are unreachable after generation, a rescue corridor is carved
-   from spawn to stairs as a safety net.
+9. **Reachability guarantee**: physical key-cascade BFS from spawn to every
+   required room respects locked doors until their matching keys are physically
+   collected. Required rooms are every room returned in the generated floor's
+   `rooms` array unless production code explicitly marks one optional in the
+   future; this includes secret rooms because cracked entrances are
+   interact-breakable. If stairs or a finale terminal remain unreachable after
+   generation, a rescue corridor is carved from spawn as a safety net. The
+   engine-side contract and phase checkpoints are documented in
+   `docs/engine-boundary.md`.
 
 ### Seeded generation
 
@@ -4862,6 +4867,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.23 | Dungeon-generation contract documentation now defines required rooms, physical key-pickup reachability, engine/game responsibilities, and invariant checkpoints for BSP topology, doors, locks/keys, secrets/challenge gates, pruning, and final floor return. Generation accessibility tests now explicitly cover player-interaction traversal semantics for regular doors, cracked walls, crates, challenge gates, and runtime-walkable hazards while preserving seed `1111-1111-1111` floor 2 and floor 6 regressions. |
 | v6.1.22 | Hidden FEET cheat menu shipped for local testing. Pressing keyboard `F E E Shift` or tapping mobile `F E E ⇧` outside text-entry/key-capture states opens a `CHEATS` modal with runtime-only toggles for invulnerability, no-clip movement/dashing, show-map rendering, and hyper-speed movement. Cheat state is not serialized into normal save data; show-map rendering is non-destructive and only dirties the minimap cache when toggled. Added regression coverage in `tests/cheat-menu.test.js`. |
 | v6.1.21 | Human handoff docs shipped: root `README.md`, `docs/module-map.md`, and `docs/refactor-roadmap.md` now document setup, the script-tag module architecture, file ownership, guardrail tests, new-file/service-worker rules, and the recommended incremental refactor path. The implementation architecture section now describes the current modular script-tag runtime instead of the historical single-file prototype. |
 | v6.1.20 | Story-driven event-room pass shipped: event terminals now include three Act 1 protocol trials guaranteed on non-boss floors 2, 5, and 8. `Route Proof` turns logic-puzzle framing into map reveal or locked-door bypass choices, `Cooperation Protocol` makes resource sharing versus isolated optimization affect HP/XP/cooldowns/alarms, and `Consent Lock` turns predecessor-fragment agency into request versus override consequences. Added regression coverage in `tests/story-event-rooms.test.js`. |
