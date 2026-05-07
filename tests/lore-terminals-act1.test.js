@@ -12,11 +12,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SRC = fs.readFileSync(path.resolve(process.cwd(), 'src/content.js'), 'utf8');
+const SRC = fs.readFileSync(path.resolve(process.cwd(), 'src/content/terminals.js'), 'utf8');
 
 function extractArray(name) {
   const m = SRC.match(new RegExp('const ' + name + ' = \\[([\\s\\S]*?)\\n\\];'));
-  assert.ok(m, name + ' array literal must be findable in src/content.js');
+  assert.ok(m, name + ' array literal must be findable in src/content/terminals.js');
   // eslint-disable-next-line no-eval -- structural extraction of project-controlled array literals.
   const arr = eval('[' + m[1] + ']');
   assert.ok(Array.isArray(arr), name + ' must parse to an array');
@@ -33,7 +33,7 @@ function extractFloorMins() {
 
 function extractFunctionSource(name) {
   const start = SRC.indexOf('function ' + name + '(');
-  assert.ok(start >= 0, name + ' function must be findable in src/content.js');
+  assert.ok(start >= 0, name + ' function must be findable in src/content/terminals.js');
   const braceStart = SRC.indexOf('{', start);
   assert.ok(braceStart > start, name + ' function must have a body');
   let depth = 0;

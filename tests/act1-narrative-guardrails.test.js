@@ -8,7 +8,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const GAME = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
-const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
+const TERMINALS = fs.readFileSync(path.join(ROOT, 'src/content', 'terminals.js'), 'utf8');
 const DESIGN = fs.readFileSync(path.join(ROOT, 'docs', 'vision', 'act1-system-message-design.md'), 'utf8');
 const intro = require(path.join(ROOT, 'src/meta/intro.js'));
 const whisperData = require(path.join(ROOT, 'src/data/whispers.js'));
@@ -70,13 +70,13 @@ function extractMainframeRecords() {
 }
 
 function extractLoreEntries() {
-  const src = extractArrayBlock(CONTENT, 'LORE_ENTRIES');
+  const src = extractArrayBlock(TERMINALS, 'LORE_ENTRIES');
   // eslint-disable-next-line no-eval -- structural extraction of project-owned string-literal array.
   return /** @type {string[]} */ (eval(src));
 }
 
 function extractFloorMins() {
-  const src = extractArrayBlock(CONTENT, 'LORE_ENTRY_FLOOR_MIN');
+  const src = extractArrayBlock(TERMINALS, 'LORE_ENTRY_FLOOR_MIN');
   // eslint-disable-next-line no-eval -- structural extraction of project-owned numeric array.
   return /** @type {number[]} */ (eval(src));
 }
