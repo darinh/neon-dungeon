@@ -1,0 +1,45 @@
+name: pr-branch-policy
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+jobs:
+  branch-policy:
+    name: enforce branch policy
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Validate PR branch flow
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          echo "Checking PR branch policy: ${HEAD_REPO}:${HEAD_REF} -> ${REPOSITORY}:${BASE_REF}"
+
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" != "develop" ] || [ "$HEAD_REPO" != "$REPOSITORY" ]; then
+              echo "::error title=Invalid main PR::Only this repository's develop branch may target main."
+              echo "::error::Land the work in develop first, then open develop -> main and use Rebase and merge."
+              echo "::error::release-version.yml runs after pushes to main and is not a pull-request exception."
+              exit 1
+            fi
+
+            echo "Allowed main promotion. Required merge method: Rebase and merge."
+            exit 0
+          fi
+
+          if [ "$BASE_REF" = "develop" ]; then
+            if [ "$HEAD_REF" = "main" ]; then
+              echo "::error title=Invalid develop PR::Do not merge main into develop as routine work."
+              echo "::error::If main and develop diverge, reconcile deliberately before release."
+              exit 1
+            fi
+
+            echo "Allowed develop integration. Required merge method: Squash and merge."
+            exit 0
+          fi
