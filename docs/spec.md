@@ -801,7 +801,9 @@ Semi-hidden on floor tiles, they detonate when stepped on by any entity.
 Player agency: spot and avoid, shoot to pre-detonate from range, or lure enemies
 into them. Chain reactions between clustered mines create satisfying cascades.
 
-**Entity model:** `mines[]` array (entity-based, like beacons/vcores — not tile-based).
+**Runtime:** Mine helpers live in `src/entities/mines.js` and operate on the
+shared `mines[]` array declared by `src/entities.js` (entity-based, like
+beacons/vcores — not tile-based).
 
 **Placement:**
 - Floor 3+, normal rooms only (no `roomType`), room ≥ 5×5.
@@ -4918,6 +4920,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.50 | Entity module split: proximity mine runtime now lives in `src/entities/mines.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `MINE_TRIGGER_RADIUS`, `MINE_REVEAL_RADIUS`, `MINE_BLAST_RADIUS`, `MINE_FUSE_NORMAL`, `MINE_FUSE_SHOT`, `createMine`, `armMine`, `detonateMine`, `triggerMinesInRadius`, `updateMines`, and `drawMines` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.49 | Entity module split: alarm beacon runtime now lives in `src/entities/beacons.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `BEACON_COUNTDOWN`, `createBeacon`, `damageBeacon`, `destroyBeacon`, `damageBeaconsInRadius`, `updateBeacons`, and `drawBeacons` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.48 | Entity module split: ARCHITECT placed-wall targeting and decay helpers now live in `src/entities/architect-walls.js`, loaded after `src/entities.js`. The public globals `pickArchitectTarget`, `_isTileOccupiedByActor`, and `updatePlacedWalls` remain unchanged for ARCHITECT AI and the game update loop. |
 | v6.1.47 | Entity module split: crate runtime helpers now live in `src/entities/crates.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `createCrate`, `getCrateAt`, `damageCrate`, `destroyCrate`, `damageCrateAtTile`, and `damageCratesInRadius` remain unchanged for generation, projectile, volatile-core, and damage-radius callers. |
