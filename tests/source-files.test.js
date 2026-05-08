@@ -26,6 +26,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentShop.replaceAll('\\', '/'), 'src/content/shop.js');
   assert.equal(SOURCE_FILE_PATHS.contentPerks.replaceAll('\\', '/'), 'src/content/perks.js');
   assert.equal(SOURCE_FILE_PATHS.contentEffects.replaceAll('\\', '/'), 'src/content/effects.js');
+  assert.equal(SOURCE_FILE_PATHS.contentHackware.replaceAll('\\', '/'), 'src/content/hackware.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -45,6 +46,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentShop').endsWith('src/content/shop.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentPerks').endsWith('src/content/perks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentEffects').endsWith('src/content/effects.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentHackware').endsWith('src/content/hackware.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -57,6 +59,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const shopSource = readSourceFile(__dirname, 'contentShop');
   const perkSource = readSourceFile(__dirname, 'contentPerks');
   const effectsSource = readSourceFile(__dirname, 'contentEffects');
+  const hackwareSource = readSourceFile(__dirname, 'contentHackware');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -77,8 +80,11 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(perkSource, /function\s+rollPerkChoices\s*\(/);
   assert.match(effectsSource, /function\s+spawnParticles\s*\(/);
   assert.match(effectsSource, /function\s+spawnDmgText\s*\(/);
+  assert.match(hackwareSource, /const\s+HACKWARE\s*=\s*\{/);
+  assert.match(hackwareSource, /function\s+activateHackware\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
+  assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);

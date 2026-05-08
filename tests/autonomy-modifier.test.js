@@ -3,20 +3,20 @@
 // FLOOR_MODIFIERS pool (after CASCADE, OVERCHARGE, WINDFALL,
 // SIGNAL_BOOST, REVERB, QUARTERMASTER). Hackware cooldowns are
 // reduced 25% on this floor — applied as a multiplicative factor at
-// activation time inside `activateHackware()` in src/content.js.
+// activation time inside `activateHackware()` in src/content/hackware.js.
 //
 // Stacks multiplicatively with the OVERCLOCKER augment (×0.7) for a
 // combined ×0.525 cooldown when both are active. Both reductions are
 // passive and rare-or-rolled, so the synergy rewards augment-first
 // builds without being run-defining.
 //
-// content.js is browser-only (no UMD/CommonJS exports), so these tests
+// content modules are browser-only (no UMD/CommonJS exports), so these tests
 // assert structural invariants any working AUTONOMY modifier must
 // satisfy:
 //   - Registry shape (label/desc/colour/icon) so MODIFIER_KEYS picks
 //     it up and the HUD badge in render.js renders correctly.
 //   - The activation-time gate (_CG.modifier === 'AUTONOMY') reads the
-//     canonical content.js floor-modifier global (a typo to game.modifier
+//     canonical content-module floor-modifier global (a typo to game.modifier
 //     would silently disable the bonus on every cooldown).
 //   - The 0.75 multiplier sits inside `activateHackware()` so it ONLY
 //     applies on activation (not on cooldown ticks — those count down
@@ -53,7 +53,7 @@ const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_P
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content', 'modifiers.js'), 'utf8'
 ) + '\n' + fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
 );
 const RENDER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
@@ -215,7 +215,7 @@ test('activateHackware AUTONOMY multiplier composes multiplicatively with OVERCL
     'OVERCLOCKER and AUTONOMY ternaries must compose multiplicatively (no `+` between them)');
 });
 
-test('_CG.modifier === "AUTONOMY" appears EXACTLY once in content.js', () => {
+test('_CG.modifier === "AUTONOMY" appears EXACTLY once in content modules', () => {
   // Mirror the regenerative-modifier.test.js exact-count assertion:
   // any future addition of a second AUTONOMY gate (e.g. a duplicate
   // accidentally introduced via merge / copy-paste, or a second
@@ -224,7 +224,7 @@ test('_CG.modifier === "AUTONOMY" appears EXACTLY once in content.js', () => {
   // auditable to a single touch point.
   const all = CONTENT_CODE.match(/_CG\.modifier\s*===\s*'AUTONOMY'/g) || [];
   assert.equal(all.length, 1,
-    `content.js must contain exactly 1 _CG.modifier === 'AUTONOMY' reference (activateHackware multiplier); got ${all.length}`);
+    `content modules must contain exactly 1 _CG.modifier === 'AUTONOMY' reference (activateHackware multiplier); got ${all.length}`);
 });
 
 // ─── HUD wiring (modifier badge auto-picks up AUTONOMY) ───────────────

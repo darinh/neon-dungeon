@@ -20,7 +20,7 @@
 //      consumer sees mouse.x/y already in LOGICAL (post-zoom)
 //      coordinates. NO per-site `/worldZoom` correction anywhere.
 //
-// game.js / render.js / platform.js / content.js / entities.js are all
+// game.js / render.js / platform.js / content modules / entities.js are all
 // browser-coupled (no UMD exports), so we can't exercise the runtime
 // state machine under node:test. Instead these tests assert the
 // structural invariants any working implementation must satisfy.
@@ -44,6 +44,9 @@ const PLATFORM = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_HACKWARE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
+);
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
@@ -61,6 +64,7 @@ const GAME_NC = stripComments(GAME);
 const RENDER_NC = stripComments(RENDER);
 const PLATFORM_NC = stripComments(PLATFORM);
 const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_HACKWARE_NC = stripComments(CONTENT_HACKWARE);
 const ENTITIES_NC = stripComments(ENTITIES);
 
 /** @param {string} src @param {number} fnIdx Returns the brace-balanced body of the function whose `{` opens at-or-after fnIdx. */
@@ -352,6 +356,7 @@ test('NO src file contains a `mouse.[xy] / <ident>` correction shape (host-side 
     ['game.js', GAME_NC],
     ['render.js', RENDER_NC],
     ['content.js', CONTENT_NC],
+    ['content/hackware.js', CONTENT_HACKWARE_NC],
     ['entities.js', ENTITIES_NC],
   ];
   // Forbid `mouse.x / X` and `mouse.y / X` for ANY identifier X.
@@ -368,18 +373,18 @@ test('NO src file contains a `mouse.[xy] / <ident>` correction shape (host-side 
   }
 });
 
-test('every aim-place hackware in content.js uses the unscaled `(mouse + cam) / TILE` shape (logical coords already match world units)', () => {
+test('every aim-place hackware uses the unscaled `(mouse + cam) / TILE` shape (logical coords already match world units)', () => {
   // Under the new architecture, every aim-place hackware site
   // (GRAVITY_WELL, STATIC_FIELD, HOLO_DECOY, DECOY_TURRET, BLINK,
   // EMP_LINE / hackware beam, CHRONO_LURE) must use the plain
   // `(mouse.x + cam.x) / TILE` shape. The pre-global-UI-zoom shape
   // `(mouse.x / wz + cam.x) / TILE` would over-divide.
-  const unscaledX = (CONTENT_NC.match(/\(\s*mouse\.x\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/g) || []).length;
-  const unscaledY = (CONTENT_NC.match(/\(\s*mouse\.y\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/g) || []).length;
+  const unscaledX = (CONTENT_HACKWARE_NC.match(/\(\s*mouse\.x\s*\+\s*[a-zA-Z_$][\w$]*\.x\s*\)\s*\/\s*TILE/g) || []).length;
+  const unscaledY = (CONTENT_HACKWARE_NC.match(/\(\s*mouse\.y\s*\+\s*[a-zA-Z_$][\w$]*\.y\s*\)\s*\/\s*TILE/g) || []).length;
   assert.ok(unscaledX >= 6,
-    `content.js must contain ≥ 6 unscaled \`(mouse.x + cam.x) / TILE\` aim-place sites; got ${unscaledX}`);
+    `content/hackware.js must contain ≥ 6 unscaled \`(mouse.x + cam.x) / TILE\` aim-place sites; got ${unscaledX}`);
   assert.ok(unscaledY >= 6,
-    `content.js must contain ≥ 6 unscaled \`(mouse.y + cam.y) / TILE\` aim-place sites; got ${unscaledY}`);
+    `content/hackware.js must contain ≥ 6 unscaled \`(mouse.y + cam.y) / TILE\` aim-place sites; got ${unscaledY}`);
 });
 
 test('NO src file contains the legacy `mouse.[xy] / <ident> + cam.[xy]` correction shape (catches accidental re-introduction of the pre-global-UI-zoom pattern)', () => {
@@ -392,6 +397,7 @@ test('NO src file contains the legacy `mouse.[xy] / <ident> + cam.[xy]` correcti
     ['game.js', GAME_NC],
     ['render.js', RENDER_NC],
     ['content.js', CONTENT_NC],
+    ['content/hackware.js', CONTENT_HACKWARE_NC],
     ['entities.js', ENTITIES_NC],
     ['platform.js', PLATFORM_NC],
   ];
