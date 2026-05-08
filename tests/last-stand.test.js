@@ -20,10 +20,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const { readSourceFile } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES_SRC = fs.readFileSync(path.join(ROOT, 'src/entities.js'), 'utf8');
-const CONTENT_SRC = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
+const CONTENT_SRC = readSourceFile(__dirname, 'contentPerks');
 const GAME_SRC = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
 const SW_SRC = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 

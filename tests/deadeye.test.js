@@ -19,9 +19,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT  = readSourceFile(__dirname, 'content');
+const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
 const SAVE     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'meta', 'save.js'), 'utf8');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
@@ -72,8 +74,8 @@ function extractBranch(src, openerRe) {
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
 
 test('DEADEYE is registered in PERK_POOL with name/icon/desc/colour', () => {
-  const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  const pool = CONTENT_PERKS.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
+  assert.ok(pool, 'PERK_POOL block must be locatable in content/perks.js');
   assert.match(pool[0], /DEADEYE\s*:\s*\{[^}]*name\s*:\s*['"]Deadeye['"]/,
     'PERK_POOL.DEADEYE must declare name "Deadeye"');
   assert.match(pool[0], /DEADEYE\s*:\s*\{[^}]*icon\s*:/,

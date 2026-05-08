@@ -23,7 +23,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT  = readSourceFile(__dirname, 'contentPerks');
 const EVENTS   = readSourceFile(__dirname, 'contentEvents');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
@@ -31,7 +31,7 @@ const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),        
 
 test('OVERDRIVE is registered in PERK_POOL with name/icon/desc/colour', () => {
   const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  assert.ok(pool, 'PERK_POOL block must be locatable in content/perks.js');
   assert.match(pool[0], /OVERDRIVE\s*:\s*\{[^}]*name\s*:\s*['"]Overdrive['"]/,
     'PERK_POOL.OVERDRIVE must declare name "Overdrive"');
   assert.match(pool[0], /OVERDRIVE\s*:\s*\{[^}]*icon\s*:/,

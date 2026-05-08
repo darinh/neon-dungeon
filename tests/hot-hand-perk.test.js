@@ -41,9 +41,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT  = readSourceFile(__dirname, 'content');
+const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'),  'utf8');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
 
@@ -62,8 +64,8 @@ const ENEMY_TAKE = ENTITIES.match(/takeDamage\s*\(\s*dmg\s*,\s*hitCtx\s*\)\s*\{[
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
 
 test('HOT_HAND is registered in PERK_POOL with name/icon/desc/colour', () => {
-  const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  const pool = CONTENT_PERKS.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
+  assert.ok(pool, 'PERK_POOL block must be locatable in content/perks.js');
   assert.match(pool[0], /HOT_HAND\s*:\s*\{[^}]*name\s*:\s*['"]Hot Hand['"]/,
     'PERK_POOL.HOT_HAND must declare name "Hot Hand"');
   assert.match(pool[0], /HOT_HAND\s*:\s*\{[^}]*icon\s*:/,
