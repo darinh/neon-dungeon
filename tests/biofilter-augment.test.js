@@ -19,6 +19,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
+const CONTENT_UPGRADES = fs.readFileSync(path.join(ROOT, 'src', 'content', 'upgrades.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -39,7 +40,7 @@ function stripComments(src) {
 test('BIOFILTER registered in AUGMENTS with name/icon/colour/desc', () => {
   // Single source of truth: drives the augment-choice modal, the implant
   // shrine, and makeAugmentShopOption. Lock all four fields.
-  const m = CONTENT.match(/BIOFILTER:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
+  const m = CONTENT_UPGRADES.match(/BIOFILTER:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
   assert.ok(m, 'BIOFILTER must be registered in AUGMENTS with name/icon/colour/desc');
   assert.ok(m[1].length > 0, 'BIOFILTER name must be non-empty');
   assert.ok(m[2].length > 0, 'BIOFILTER icon must be non-empty');
@@ -50,7 +51,7 @@ test('BIOFILTER registered in AUGMENTS with name/icon/colour/desc', () => {
 test('BIOFILTER auto-included in AUGMENT_KEYS for rolls', () => {
   // AUGMENT_KEYS = Object.keys(AUGMENTS). Lock the derivation so a
   // future refactor cannot silently de-list BIOFILTER from rolls/shop.
-  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT),
+  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT_UPGRADES),
     'AUGMENT_KEYS must remain Object.keys(AUGMENTS) so BIOFILTER is auto-included');
 });
 
@@ -161,7 +162,7 @@ test('AUGMENTS object remains <=15 entries (roster sanity)', () => {
   // Roster pool only affects rollAugmentChoices availability — choice modal
   // always shows 2 options regardless, so 15 is still UI-safe. Hold this
   // ceiling: future adds must trim or escalate.
-  const block = CONTENT.match(/const AUGMENTS = \{([\s\S]*?)\n\};/);
+  const block = CONTENT_UPGRADES.match(/const AUGMENTS = \{([\s\S]*?)\n\};/);
   assert.ok(block, 'AUGMENTS block must exist in content.js');
   const entries = block[1].split('\n').filter(l => /^\s*[A-Z_]+\s*:/.test(l));
   assert.ok(entries.length <= 15,

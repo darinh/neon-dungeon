@@ -15,14 +15,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
+const CONTENT_UPGRADES = fs.readFileSync(path.join(ROOT, 'src', 'content', 'upgrades.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 test('EMERGENCY_CACHE registered in AUGMENTS with name/icon/colour/desc', () => {
   // Single source of truth for the augment-choice modal, the implant shrine,
   // and the shop offer (makeAugmentShopOption derives from this entry).
-  const m = CONTENT.match(/EMERGENCY_CACHE:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
+  const m = CONTENT_UPGRADES.match(/EMERGENCY_CACHE:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
   assert.ok(m, 'EMERGENCY_CACHE must be registered in AUGMENTS with name/icon/colour/desc');
   assert.ok(m[1].length > 0, 'EMERGENCY_CACHE name must be non-empty');
   assert.ok(m[2].length > 0, 'EMERGENCY_CACHE icon must be non-empty');
@@ -34,7 +34,7 @@ test('EMERGENCY_CACHE auto-included in AUGMENT_KEYS for rolls', () => {
   // AUGMENT_KEYS = Object.keys(AUGMENTS) — drives both rollAugmentChoices
   // (implant shrine) and makeAugmentShopOption. Lock the derivation so a
   // future refactor cannot silently de-list this augment.
-  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT),
+  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT_UPGRADES),
     'AUGMENT_KEYS must remain Object.keys(AUGMENTS) so EMERGENCY_CACHE is auto-included');
 });
 
