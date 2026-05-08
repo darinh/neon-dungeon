@@ -61,6 +61,7 @@ const ASSETS = [
   './src/content/floor-generator.js',
   './src/content.js',
   './src/entities.js',
+  './src/entities/fuse-shards.js',
   './src/render.js',
   './src/game.js',
   './assets/audio/title-theme.wav',
