@@ -7,7 +7,7 @@
 // VaultCoin) and the timed-buff pickup (HARVESTER HarvestPickup): the
 // payoff here is positional / tempo (panic-eject a swarm).
 //
-// Source-text wiring tests (entities.js / content.js / game.js are
+// Source-text wiring tests (entities.js / content/pickups.js / game.js are
 // browser-only — no UMD/CommonJS exports — same pattern as
 // vaultmaster.test.js, magpie.test.js, etc).
 
@@ -21,6 +21,9 @@ const ENTITIES = fs.readFileSync(
 );
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+);
+const CONTENT_PICKUPS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'pickups.js'), 'utf8'
 );
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -37,15 +40,15 @@ const SW = fs.readFileSync(
 
 // ─── Class definition ─────────────────────────────────────────────────────
 
-test('ShockPulsePickup class is declared in content.js', () => {
-  assert.match(CONTENT, /class\s+ShockPulsePickup\s*\{/,
-    'ShockPulsePickup class must be defined in src/content.js');
+test('ShockPulsePickup class is declared in content/pickups.js', () => {
+  assert.match(CONTENT_PICKUPS, /class\s+ShockPulsePickup\s*\{/,
+    'ShockPulsePickup class must be defined in src/content/pickups.js');
 });
 
 test('ShockPulsePickup carries an isShockPulse marker for the pickup branch', () => {
   // Locate just the class body and assert the flag is set inside the
   // constructor — guards against future renames or accidental removal.
-  const m = CONTENT.match(/class\s+ShockPulsePickup\s*\{[\s\S]*?\n\}/);
+  const m = CONTENT_PICKUPS.match(/class\s+ShockPulsePickup\s*\{[\s\S]*?\n\}/);
   assert.ok(m, 'ShockPulsePickup class body must be locatable');
   assert.match(m[0], /this\.isShockPulse\s*=\s*true/,
     'constructor must set this.isShockPulse = true (pickup branch trigger)');
@@ -54,20 +57,20 @@ test('ShockPulsePickup carries an isShockPulse marker for the pickup branch', ()
 });
 
 test('ShockPulsePickup has a draw method (visible on floor)', () => {
-  const m = CONTENT.match(/class\s+ShockPulsePickup\s*\{[\s\S]*?\n\}/);
+  const m = CONTENT_PICKUPS.match(/class\s+ShockPulsePickup\s*\{[\s\S]*?\n\}/);
   assert.ok(m && /draw\s*\([^\)]*\)\s*\{/.test(m[0]),
     'ShockPulsePickup.draw(camX, camY) must exist');
 });
 
 // ─── Tunable constants ────────────────────────────────────────────────────
 
-test('SHOCK_PULSE constants are declared in content.js', () => {
+test('SHOCK_PULSE constants are declared in content/pickups.js', () => {
   // Anchor lower/upper bounds so future tuning keeps the design intent:
   // moderate radius, ~1s stun (clipped for bosses), real but bounded knockback.
-  const r = CONTENT.match(/SHOCK_PULSE_RADIUS\s*=\s*([\d.]+)/);
-  const s = CONTENT.match(/SHOCK_PULSE_STUN\s*=\s*([\d.]+)/);
-  const bs = CONTENT.match(/SHOCK_PULSE_BOSS_STUN\s*=\s*([\d.]+)/);
-  const k = CONTENT.match(/SHOCK_PULSE_KNOCK\s*=\s*([\d.]+)/);
+  const r = CONTENT_PICKUPS.match(/SHOCK_PULSE_RADIUS\s*=\s*([\d.]+)/);
+  const s = CONTENT_PICKUPS.match(/SHOCK_PULSE_STUN\s*=\s*([\d.]+)/);
+  const bs = CONTENT_PICKUPS.match(/SHOCK_PULSE_BOSS_STUN\s*=\s*([\d.]+)/);
+  const k = CONTENT_PICKUPS.match(/SHOCK_PULSE_KNOCK\s*=\s*([\d.]+)/);
   assert.ok(r && s && bs && k,
     'SHOCK_PULSE_RADIUS / _STUN / _BOSS_STUN / _KNOCK constants must all be declared');
   const radius = parseFloat(r[1]);

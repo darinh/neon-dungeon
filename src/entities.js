@@ -10477,7 +10477,7 @@ function detonateMine(m) {
   if (idx >= 0) mines.splice(idx, 1);
 }
 
-// SHOCK_PULSE pickup (src/content.js: ShockPulsePickup) detonation. AoE,
+// SHOCK_PULSE pickup (src/content/pickups.js: ShockPulsePickup) detonation. AoE,
 // LOS-gated knockback + brief stun centred on the player. NON-DAMAGING:
 // the payoff is positional (panic-eject a swarm). Bosses get a clipped
 // stun (0.3s — same cap as enemy.takeDamage's boss stunTimer branch) and
@@ -10487,7 +10487,7 @@ function detonateMine(m) {
 // ~4588): each axis is checked independently against isPassable, so an
 // enemy pinned against a wall is shoved along the open axis only and
 // never tunnels into geometry. SHOCK_PULSE_RADIUS / _STUN / _BOSS_STUN /
-// _KNOCK live in src/content.js next to the pickup class.
+// _KNOCK live in src/content/pickups.js next to the pickup class.
 function triggerShockPulse() {
   const player = _EG.player;
   const map = _EG.dungeon && _EG.dungeon.map;

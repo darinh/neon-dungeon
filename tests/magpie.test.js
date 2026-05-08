@@ -21,6 +21,9 @@ const ENTITIES = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_PICKUPS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'pickups.js'), 'utf8'
+);
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
 );
@@ -165,14 +168,14 @@ test('MAGPIE tuning constants are defined', () => {
 
 // ─── MagpieHoard pickup wiring ─────────────────────────────────────────
 
-test('MagpieHoard class exists in src/content.js with isHoard flag', () => {
+test('MagpieHoard class exists in src/content/pickups.js with isHoard flag', () => {
   // The pickup loop in game.js distinguishes pickup types by
   // boolean flags (.isKey / .isHarvest / .isWhisper / .isHoard).
   // Without isHoard the hoard would fall through to the generic
   // upgrade-roll path which ignores .amt and rolls a new option —
   // so the player would never get the banked credits back.
-  assert.match(CONTENT, /class\s+MagpieHoard\s*\{/, 'MagpieHoard class must exist');
-  const cls = CONTENT.match(/class\s+MagpieHoard\s*\{[\s\S]*?\n\}/);
+  assert.match(CONTENT_PICKUPS, /class\s+MagpieHoard\s*\{/, 'MagpieHoard class must exist');
+  const cls = CONTENT_PICKUPS.match(/class\s+MagpieHoard\s*\{[\s\S]*?\n\}/);
   assert.ok(cls, 'MagpieHoard class block not extractable');
   assert.match(cls[0], /this\.isHoard\s*=\s*true/,
     'MagpieHoard must set isHoard = true');
@@ -186,7 +189,7 @@ test('MagpieHoard.amt is sanitised against negative / NaN inputs', () => {
   // Defensive: die() reads _mgStolenCr which is always >= 0 today,
   // but the constructor should not propagate garbage if a future
   // caller passes Math.round(NaN) or a negative number.
-  const cls = CONTENT.match(/class\s+MagpieHoard\s*\{[\s\S]*?\n\}/);
+  const cls = CONTENT_PICKUPS.match(/class\s+MagpieHoard\s*\{[\s\S]*?\n\}/);
   assert.ok(cls);
   // Math.max(0, Math.round(amt || 0)) is the expected shape.
   assert.match(cls[0], /Math\.max\s*\(\s*0\s*,/,

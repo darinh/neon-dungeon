@@ -3682,7 +3682,7 @@ const game = {
           audio.pickup();
           items.splice(i, 1);
           // SCAVENGER meta upgrade: same flat per-pickup bonus as
-          // CREDIT_CACHE.fn (src/content.js ~line 4145). MagpieHoard +
+          // CREDIT_CACHE.fn (src/content/upgrades.js). MagpieHoard +
           // VaultCoin both flow through this branch (both flag .isHoard
           // = true), so this single wire covers all credit-item pickup
           // paths. Sanitize identically — see the CREDIT_CACHE.fn
