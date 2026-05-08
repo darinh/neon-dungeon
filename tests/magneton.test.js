@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -111,15 +114,15 @@ test('sw cache freshness does not use a second numeric version', () => {
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────
 //
-// vm-extract magnetonBendDir from entities.js so the tests exercise the
+// vm-extract magnetonBendDir from ai-helpers.js so the tests exercise the
 // real implementation. MAGNETON_FIELD_R / MAGNETON_BEND_STRENGTH /
 // MAGNETON_SAFE_R must be defined in the sandbox first because the helper
 // references MAGNETON_SAFE_R for the apex guard.
 
-const fnMatch = ENTITIES.match(
+const fnMatch = ENTITY_AI_HELPERS.match(
   /function\s+magnetonBendDir\s*\([\s\S]*?\n\}\n/
 );
-if (!fnMatch) throw new Error('magnetonBendDir definition not found in entities.js');
+if (!fnMatch) throw new Error('magnetonBendDir definition not found in ai-helpers.js');
 const sandbox = { MAGNETON_SAFE_R: 0.15 };
 vm.createContext(sandbox);
 vm.runInContext(`${fnMatch[0]}\nthis.magnetonBendDir = magnetonBendDir;`, sandbox);

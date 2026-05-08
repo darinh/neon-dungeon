@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -144,10 +147,10 @@ test('RESONATOR constants are defined with sane values', () => {
     `dmg mul ${mul} outside sane range`);
 });
 
-test('isInsideCone pure helper is defined in entities.js', () => {
+test('isInsideCone pure helper is defined in entity AI helpers', () => {
   // Structural source-of-truth check. The duplicate below must mirror
   // the body — if the contract changes, update both.
-  assert.match(ENTITIES,
+  assert.match(ENTITY_AI_HELPERS,
     /function\s+isInsideCone\s*\(\s*px\s*,\s*py\s*,\s*ox\s*,\s*oy\s*,\s*aimDx\s*,\s*aimDy\s*,\s*range\s*,\s*halfAngleRad\s*\)/);
 });
 
@@ -170,16 +173,16 @@ test('RESONATOR appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => 
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────
 //
-// Extract the production `isInsideCone` definition from entities.js
+// Extract the production `isInsideCone` definition from ai-helpers.js
 // source and execute it in this test context. This way the unit tests
 // exercise the REAL implementation, not a duplicate that could drift.
 // (We can't `require()` entities.js — it's a browser script with no
 // CommonJS exports and it touches DOM/audio globals on load.)
 
-const fnMatch = ENTITIES.match(
+const fnMatch = ENTITY_AI_HELPERS.match(
   /function\s+isInsideCone\s*\([\s\S]*?\n\}\n/
 );
-if (!fnMatch) throw new Error('isInsideCone definition not found in entities.js');
+if (!fnMatch) throw new Error('isInsideCone definition not found in ai-helpers.js');
 // Run the production source through node's vm so the unit tests exercise
 // the REAL implementation, not a duplicate that could drift. We can't
 // `require()` entities.js — it's a browser script with no CommonJS exports

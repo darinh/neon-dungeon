@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -111,7 +114,7 @@ test('Player has _posHistory init and getPositionAgo helper', () => {
 test('getPositionAgoFromHistory pure helper is defined', () => {
   // The structural source-of-truth check. The duplicate below must
   // mirror the body — if you change one, change the other.
-  assert.match(ENTITIES, /function\s+getPositionAgoFromHistory\s*\(\s*history\s*,\s*seconds\s*\)/);
+  assert.match(ENTITY_AI_HELPERS, /function\s+getPositionAgoFromHistory\s*\(\s*history\s*,\s*seconds\s*\)/);
 });
 
 test('platform.js exposes audio.echoerLock and audio.echoerFire', () => {
