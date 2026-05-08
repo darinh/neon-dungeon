@@ -30,6 +30,9 @@ const path = require('node:path');
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_PROJECTILES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -43,6 +46,7 @@ function stripComments(src) {
 }
 
 const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const PLATFORM_NC = stripComments(PLATFORM);
 
 // Brace-balanced extraction — copied from chrono-lure-hackware.test.js.
@@ -658,7 +662,7 @@ test('Projectile.update reads _timeMul as a per-frame velocity multiplier (the h
   // implementations may still wrap mx/my in a block; the negative
   // lookahead on `const ... = 1;` is sufficient because that's the
   // only way to shadow with a no-op value.
-  const m = CONTENT_NC.match(
+  const m = CONTENT_PROJECTILES_NC.match(
     /const\s+(\w+)\s*=\s*this\._timeMul\s*\|\|\s*1\s*;(?:(?!const\s+\w+\s*=\s*1\s*;)[\s\S]){0,400}?const\s+mx\s*=\s*this\.dx\s*\*\s*this\.spd\s*\*\s*(\w+)\s*\*\s*dt\s*,\s*my\s*=\s*this\.dy\s*\*\s*this\.spd\s*\*\s*(\w+)\s*\*\s*dt\s*;/
   );
   assert.ok(m,
@@ -678,7 +682,7 @@ test('Projectile pool _init resets _timeMul to 1 (recycled-slot inheritance guar
   // Extract the _init method body and assert _timeMul=1 lives in the
   // explicit-reset block (alongside isAllyTurret, fromPlayerShot,
   // etc.).
-  const initMatch = CONTENT_NC.match(/_init\s*\([^)]*\)\s*\{[\s\S]*?this\.isAllyTurret\s*=\s*false\s*;[\s\S]*?(?=\n\s*\}\n)/);
+  const initMatch = CONTENT_PROJECTILES_NC.match(/_init\s*\([^)]*\)\s*\{[\s\S]*?this\.isAllyTurret\s*=\s*false\s*;[\s\S]*?(?=\n\s*\}\n)/);
   assert.ok(initMatch, 'Projectile._init reset block must be locatable via the isAllyTurret = false anchor');
   assert.match(initMatch[0], /this\._timeMul\s*=\s*1/,
     'Projectile._init must reset this._timeMul = 1 (recycled-slot inheritance guard — without it, a slot last used by a slowed enemy bullet leaks 0.5 into the next shot)');
@@ -711,14 +715,14 @@ test('REVERSE_POLARITY reflect resets _timeMul on flipped projectiles (no perma-
 
 test('PARRY reflect resets _timeMul on flipped projectiles (mirrors REVERSE_POLARITY fix)', () => {
   // Same root cause as REVERSE_POLARITY (above): PARRY at
-  // content.js:~4878 also flips fromPlayer=true when a dashing
+  // content/projectiles.js also flips fromPlayer=true when a dashing
   // player intercepts an enemy bullet. The fix mirrors the
   // REVERSE_POLARITY reflect — explicit `this._timeMul = 1;` as part
   // of the ownership-flip cleanup. Caught by opus-4.6 r1 of
   // TIME_DILATION (codex + opus-4.7 only flagged REVERSE_POLARITY;
   // opus-4.6 found the second site).
   const parrySlice = sliceBetween(
-    CONTENT_NC,
+    CONTENT_PROJECTILES_NC,
     /player\.perks\.PARRY\s*&&\s*player\.dashTimer\s*>\s*0/,
     /\baudio\.reflect\(\)/
   );
