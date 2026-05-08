@@ -1,9 +1,10 @@
 // @ts-check
 'use strict';
 
-// Runtime pickup classes and pickup-specific tunables. Loaded before
-// src/content.js so content, entity, render, and game coordinators keep sharing
-// the same script-tag globals while pickup visuals live in their own module.
+// Runtime pickup classes, reward rollers, and pickup-specific tunables. Loaded
+// before src/content.js so content, entity, render, and game coordinators keep
+// sharing the same script-tag globals while pickup visuals live in their own
+// module.
 
 // HARVESTER drop — pulses, decays after 5s if uncollected. Picking it up
 // applies HARVEST_SURGE (+50% damage for 8s — see src/meta/boosts.js). Shape
@@ -237,6 +238,10 @@ class ShockPulsePickup {
   }
 }
 
+// Legacy compatibility: items on the ground still use a type for colour/visual.
+const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
+function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length - 1)]; }
+
 class Item {
   /**
    * @param {any} x
@@ -388,4 +393,20 @@ class WeaponCacheItem {
     ctx.fillRect(sx - 2, sy - 5, 4, 10);
     ctx.restore();
   }
+}
+
+/**
+ * @param {any} player
+ * @param {number} floor
+ */
+function rollSecretWeaponCacheWeapon(player, floor) {
+  const belt = player && Array.isArray(player.weapons) ? player.weapons : [];
+  const owned = new Set(belt.map((/** @type {any} */ w) => w && w._base).filter(Boolean));
+  let bases = WEAPON_KEYS.filter(k => !owned.has(k));
+  if (bases.length === 0 && player && player.weapon && player.weapon._base) {
+    bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
+  }
+  if (bases.length === 0) bases = WEAPON_KEYS.slice();
+  const baseKey = /** @type {string} */ (bases[rndInt(0, bases.length - 1, 'loot')]);
+  return rollWeapon(baseKey, Math.min(10, (floor | 0) + 2));
 }
