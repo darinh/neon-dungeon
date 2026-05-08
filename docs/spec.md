@@ -3105,8 +3105,9 @@ is regenerated fresh and the challenge room is unvisited.
 
 **Implementation:** Vendor inventory generation, shop pricing, and shop/choice
 option factories live in `src/content/shop.js`. The file is browser-loaded after
-`src/content/events.js` and before `src/content.js`, preserving the public globals
-`makeWeaponOption()`, `makeHackwareOption()`, `pickUpgradeOption()`,
+`src/content/events.js` and before `src/content.js`; hackware option callbacks
+resolve the hackware catalog from `src/content/hackware.js` at runtime. It
+preserves the public globals `makeWeaponOption()`, `makeHackwareOption()`, `pickUpgradeOption()`,
 `makeAugmentShopOption()`, `SHOP_PRICES`, `shopPrice()`, and
 `generateShopItems()` for `src/render.js`, `src/game.js`, and source-text tests.
 
@@ -4908,6 +4909,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.35 | Content module split: active hackware catalog, activation cases, persistent world-space effects, targeting/immunity helpers, and hackware drawing now live in `src/content/hackware.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `HACKWARE`, `HACKWARE_KEYS`, `hackwareEffects`, `canTargetPlayer`, `isPlayerDamageImmune`, `activateHackware`, `updateHackwareEffects`, and `drawHackwareEffects` remain unchanged for runtime callers. |
 | v6.1.34 | Content module split: gameplay feedback effects now live in `src/content/effects.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `spawnParticles`, `updateParticles`, `drawParticles`, `clearParticles`, `particleCount`, `updateAmbient`, `drawAmbient`, `spawnDmgText`, `updateFloatingTexts`, `drawFloatingTexts`, `triggerShake`, and `updateShake` remain unchanged for runtime callers. |
 | v6.1.33 | Content module split: level-up perk registry, capstone metadata, perk application, `hasAugment()`, and augment-choice rolling now live in `src/content/perks.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `PERK_POOL`, `PERK_CAPSTONE`, `PERK_LEVELS`, `rollPerkChoices`, `applyPerk`, `grantCapstone`, `hasAugment`, and `rollAugmentChoices` remain unchanged for runtime callers. |
 | v6.1.32 | Content module split: vendor inventory generation, shop pricing, and shop/choice option factories now live in `src/content/shop.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `makeWeaponOption`, `makeHackwareOption`, `pickUpgradeOption`, `makeAugmentShopOption`, `SHOP_PRICES`, `shopPrice`, and `generateShopItems` remain unchanged for runtime callers. |

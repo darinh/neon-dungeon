@@ -46,6 +46,7 @@ const { readSourceFile } = require('./_source-files.js');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const CONTENT  = readSourceFile(__dirname, 'content');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
+const CONTENT_HACKWARE = readSourceFile(__dirname, 'contentHackware');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'),  'utf8');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
 
@@ -234,7 +235,7 @@ test('Team-flip paths (REFLECTOR / PARRY / REVERSE_POLARITY) clear fromPlayerSho
   // chain only needs ONE break to be safe, but if a future flip path
   // is added without the clear, we lose the guarantee).
   const projectileSrc = stripComments(CONTENT_PROJECTILES);
-  const contentSrc = stripComments(CONTENT);
+  const contentSrc = stripComments(CONTENT + '\n' + CONTENT_HACKWARE);
 
   // REFLECTOR enemy bounces a player projectile back. Locate the block
   // by its hallmark `this.fromPlayer = false` + `ownerType = 'Reflected'`.

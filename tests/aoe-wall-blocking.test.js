@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { T, hasLOS } = require('./_generation-fixture.js');
 
-const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
+const CONTENT_HACKWARE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 
@@ -16,7 +16,7 @@ function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
-const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_HACKWARE_NC = stripComments(CONTENT_HACKWARE);
 const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const ENTITIES_NC = stripComments(ENTITIES);
 
@@ -43,7 +43,7 @@ function extractBlock(src, openerRe) {
 }
 
 test('EMP_BURST cannot collapse fields or wells through walls and doors', () => {
-  const body = extractBlock(CONTENT_NC, /case\s+'EMP_BURST':/);
+  const body = extractBlock(CONTENT_HACKWARE_NC, /case\s+'EMP_BURST':/);
   const fieldLoop = extractBlock(body, /for\s*\(\s*const\s+f\s+of\s+disruptionFields\s*\)/);
   const wellLoop = extractBlock(body, /for\s*\(\s*const\s+w\s+of\s+gravityWells\s*\)/);
 
@@ -52,7 +52,7 @@ test('EMP_BURST cannot collapse fields or wells through walls and doors', () => 
 });
 
 test('EMP_LINE cannot collapse fields or wells through walls and doors', () => {
-  const body = extractBlock(CONTENT_NC, /case\s+'EMP_LINE':/);
+  const body = extractBlock(CONTENT_HACKWARE_NC, /case\s+'EMP_LINE':/);
   const fieldLoop = extractBlock(body, /for\s*\(\s*const\s+f\s+of\s+disruptionFields\s*\)/);
   const wellLoop = extractBlock(body, /for\s*\(\s*const\s+w\s+of\s+gravityWells\s*\)/);
 

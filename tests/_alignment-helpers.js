@@ -214,7 +214,9 @@ function normaliseBadgePredicate(cond) {
  * }}
  */
 function loadAlignmentSources(testsDir) {
-  const CONTENT = readSourceFile(testsDir, 'content') + '\n' + readSourceFile(testsDir, 'contentPerks');
+  const CONTENT = readSourceFile(testsDir, 'content') + '\n'
+    + readSourceFile(testsDir, 'contentPerks') + '\n'
+    + readSourceFile(testsDir, 'contentHackware');
   const ENTITIES = readSourceFile(testsDir, 'entities');
   const CONTENT_CODE = stripComments(CONTENT);
   const ENTITIES_CODE = stripComments(ENTITIES);
