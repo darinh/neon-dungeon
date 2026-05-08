@@ -1,7 +1,7 @@
 'use strict';
 // Projectile wall/corner regression tests.
 //
-// content.js is browser-loaded, so these tests execute the Projectile slice in
+// content/projectiles.js is browser-loaded, so these tests execute the Projectile slice in
 // a VM with the minimal global surface needed by Projectile.update().
 
 const { test } = require('node:test');
@@ -10,13 +10,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+const CONTENT_PROJECTILES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8'
 );
 
 function projectileRuntime(width = 5, height = 5) {
-  const start = CONTENT.indexOf('// ─── Projectiles (pooled)');
-  const end = CONTENT.indexOf('// ─── Hazard Zones', start);
+  const start = CONTENT_PROJECTILES.indexOf('// ─── Projectiles (pooled)');
+  const end = CONTENT_PROJECTILES.indexOf('// ─── Hazard Zones', start);
   assert.notEqual(start, -1, 'Projectile section must be locatable');
   assert.notEqual(end, -1, 'Hazard section boundary must be locatable');
 
@@ -60,7 +60,7 @@ function projectileRuntime(width = 5, height = 5) {
   sandbox.spawnParticles = (x, y, type, colour, count) => { sandbox.particles.push({ x, y, type, colour, count }); };
   vm.createContext(sandbox);
   vm.runInContext(
-    `${CONTENT.slice(start, end)}\nthis.Projectile = Projectile;`,
+    `${CONTENT_PROJECTILES.slice(start, end)}\nthis.Projectile = Projectile;`,
     sandbox
   );
   return sandbox;

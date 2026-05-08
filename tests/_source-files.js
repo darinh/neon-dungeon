@@ -18,6 +18,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   contentWeapons: path.join('src', 'content', 'weapons.js'),
   contentUpgrades: path.join('src', 'content', 'upgrades.js'),
   contentPickups: path.join('src', 'content', 'pickups.js'),
+  contentProjectiles: path.join('src', 'content', 'projectiles.js'),
   content: path.join('src', 'content.js'),
   entities: path.join('src', 'entities.js'),
   render: path.join('src', 'render.js'),

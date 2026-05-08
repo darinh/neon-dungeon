@@ -6,7 +6,7 @@
 // reflected back at full damage, retargeted as fromPlayer projectiles.
 //
 // Mirrors the existing REFLECTOR enemy-side reflect (player→enemy) at
-// src/content.js:~3418 but in the opposite direction (enemy→player). Gated
+// src/content/projectiles.js but in the opposite direction (enemy→player). Gated
 // specifically on dashTimer (NOT cloak / spawn-grace) so the perk only
 // rewards active dash timing, not passive immunity windows.
 //
@@ -20,6 +20,9 @@ const path = require('node:path');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+);
+const CONTENT_PROJECTILES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8'
 );
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
@@ -45,7 +48,7 @@ test('parry reflect block is gated on player.perks.PARRY AND player.dashTimer > 
   // Both clauses must be present and gated together — never one without the
   // other. Without dashTimer gate, the perk would parry passively (broken).
   // Without perks gate, every player would parry (also broken).
-  assert.match(CONTENT,
+  assert.match(CONTENT_PROJECTILES,
     /player\.perks\.PARRY\s*&&\s*player\.dashTimer\s*>\s*0\s*&&\s*dist\(/,
     'parry block must be gated on perks.PARRY && dashTimer>0 && dist<0.5');
 });
@@ -53,7 +56,7 @@ test('parry reflect block is gated on player.perks.PARRY AND player.dashTimer > 
 test('parry reflect flips dx/dy and marks fromPlayer = true', () => {
   // Locate the parry block (between the gate and the audio.reflect() call)
   // and assert the core kinematic flip.
-  const block = CONTENT.match(
+  const block = CONTENT_PROJECTILES.match(
     /player\.perks\.PARRY[\s\S]*?audio\.reflect\(\);\s*return;/);
   assert.ok(block, 'parry reflect block must be locatable');
   assert.match(block[0], /this\.dx\s*=\s*-this\.dx/,
@@ -65,10 +68,10 @@ test('parry reflect flips dx/dy and marks fromPlayer = true', () => {
 });
 
 test('parry reflect clears stale enemy-shot state to prevent cross-team leakage', () => {
-  // Mirror the REFLECTOR pattern at content.js:~3418-3435: when ownership
+  // Mirror the REFLECTOR pattern in content/projectiles.js: when ownership
   // flips, all per-team flags must reset so SIPHON/SNIPER/etc effects don't
   // misfire and so the parried shot can hit any enemy fresh.
-  const block = CONTENT.match(
+  const block = CONTENT_PROJECTILES.match(
     /player\.perks\.PARRY[\s\S]*?audio\.reflect\(\);\s*return;/);
   assert.ok(block, 'parry reflect block must be locatable');
   assert.match(block[0], /this\._owner\s*=\s*null/,
@@ -99,17 +102,17 @@ test('parry block executes BEFORE the damage block (early return)', () => {
   // Critical ordering: parry must run before the takeDamage path so the
   // damage block is short-circuited via `return`. Otherwise a parried shot
   // could double-dip (reflect AND damage).
-  const idxParry = CONTENT.indexOf("player.perks.PARRY && player.dashTimer > 0");
-  const idxDamage = CONTENT.indexOf(
+  const idxParry = CONTENT_PROJECTILES.indexOf("player.perks.PARRY && player.dashTimer > 0");
+  const idxDamage = CONTENT_PROJECTILES.indexOf(
     "!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5");
-  assert.ok(idxParry !== -1, 'parry gate must exist in src/content.js');
-  assert.ok(idxDamage !== -1, 'damage gate must still exist in src/content.js');
+  assert.ok(idxParry !== -1, 'parry gate must exist in src/content/projectiles.js');
+  assert.ok(idxDamage !== -1, 'damage gate must still exist in src/content/projectiles.js');
   assert.ok(idxParry < idxDamage,
     'parry block must precede the damage block (early-return short-circuits damage)');
 });
 
 test('parry reflect emits visual + audio feedback', () => {
-  const block = CONTENT.match(
+  const block = CONTENT_PROJECTILES.match(
     /player\.perks\.PARRY[\s\S]*?audio\.reflect\(\);\s*return;/);
   assert.ok(block, 'parry reflect block must be locatable');
   assert.match(block[0], /spawnParticles\(this\.x,\s*this\.y,\s*'SPARK',\s*'#aaffee',/,
@@ -125,7 +128,7 @@ test('parry preserves full damage (no nerf — skill-rewarded perk)', () => {
   // skill-tied perk: precise dash timing is its cost, so the reflected shot
   // hits at full enemy damage. If this changes, the perk needs a re-balance
   // pass — this test exists to catch silent nerfs.
-  const block = CONTENT.match(
+  const block = CONTENT_PROJECTILES.match(
     /player\.perks\.PARRY[\s\S]*?audio\.reflect\(\);\s*return;/);
   assert.ok(block, 'parry reflect block must be locatable');
   assert.doesNotMatch(block[0], /this\.dmg\s*=/,

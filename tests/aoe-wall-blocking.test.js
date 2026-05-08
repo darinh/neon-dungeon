@@ -8,6 +8,7 @@ const path = require('node:path');
 const { T, hasLOS } = require('./_generation-fixture.js');
 
 const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
+const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 
 /** @param {string} src */
@@ -16,6 +17,7 @@ function stripComments(src) {
 }
 
 const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const ENTITIES_NC = stripComments(ENTITIES);
 
 /**
@@ -71,7 +73,7 @@ test('enemy death AoE and NEXUS feedback use LOS gates', () => {
 });
 
 test('grenade bomb zones keep player damage LOS-gated', () => {
-  const hazardBody = extractBlock(CONTENT_NC, /function\s+updateHazardZones\s*\(/);
+  const hazardBody = extractBlock(CONTENT_PROJECTILES_NC, /function\s+updateHazardZones\s*\(/);
   assert.match(hazardBody, /dist\(player\.x,\s*player\.y,\s*z\.x,\s*z\.y\)\s*<\s*z\.radius\s*&&\s*hasLOS\(z\.x,\s*z\.y,\s*player\.x,\s*player\.y,\s*_CG\.dungeon\.map\)/);
 });
 
