@@ -57,17 +57,17 @@ test('title music is precached for the offline PWA shell', () => {
 });
 
 test('menu state owns title music and gameplay leaves it', () => {
-  const content = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
+  const contentMusic = fs.readFileSync(path.join(ROOT, 'src', 'content', 'music.js'), 'utf8');
   const game = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
   const platform = fs.readFileSync(path.join(ROOT, 'src', 'platform.js'), 'utf8');
-  assert.match(content, /TITLE_THEME_SRC = '\.\/assets\/audio\/title-theme\.wav'/);
-  assert.match(content, /if \(s === 'menu'\)/);
-  assert.match(content, /function tryPlayTitle\(force\)/);
-  assert.match(content, /const TITLE_THEME_GAIN = 0\.28;/);
-  assert.match(content, /if \(!force && now < titleRetryAt\) return;/);
-  assert.match(content, /tryPlayTitle\(true\);/);
-  assert.match(content, /tryPlayTitle\(false\);/);
-  assert.match(content, /isTitlePlaying\(\) \{\n      return titleWanted && !!titleAudio && !titleAudio\.paused;\n    \}/);
+  assert.match(contentMusic, /TITLE_THEME_SRC = '\.\/assets\/audio\/title-theme\.wav'/);
+  assert.match(contentMusic, /if \(s === 'menu'\)/);
+  assert.match(contentMusic, /function tryPlayTitle\(force\)/);
+  assert.match(contentMusic, /const TITLE_THEME_GAIN = 0\.28;/);
+  assert.match(contentMusic, /if \(!force && now < titleRetryAt\) return;/);
+  assert.match(contentMusic, /tryPlayTitle\(true\);/);
+  assert.match(contentMusic, /tryPlayTitle\(false\);/);
+  assert.match(contentMusic, /isTitlePlaying\(\) \{\n      return titleWanted && !!titleAudio && !titleAudio\.paused;\n    \}/);
   assert.match(game, /if \(s === _GG_STATES\.MENU\) \{ this\.menuSel = 0; this\._menuTitleUnlockConsumed = false; this\._menuTitleUnlockPending = false; music\.setState\('menu'\); \}/);
   assert.match(game, /game\.state=_GG_STATES\.MENU;\nmusic\.setState\('menu'\);/);
   assert.doesNotMatch(game, /updateMenu\(dt\) \{\n    music\.setState\('menu'\);/);
