@@ -611,31 +611,40 @@ declare global {
    * marks it optional in the future. The solver reports facts only; map repair,
    * lock downgrades, and regeneration policy stay in the game/content layer.
    */
+  interface EngineDungeonReachabilityOptions {
+    map: ArrayLike<ArrayLike<number>>;
+    start: { x: number; y: number };
+    keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
+    /** Rooms that must touch the final physically reachable set. */
+    requiredRooms?: any[];
+    /** True for host-open tiles: floors, regular doors, cracked walls, hazards, etc. */
+    isOpenTile: (tile: number) => boolean;
+    /** Returns a lock colour for locked-door tiles; null/undefined otherwise. */
+    lockColourForTile?: (tile: number) => string | null | undefined;
+  }
+
+  interface EngineDungeonReachabilityResult {
+    /** Fixed-point physical reachability after collecting reachable keys in dependency order. */
+    reachable: Uint8Array[];
+    /** Lock colours physically collectible from the start under caller-supplied tile semantics. */
+    collectedColours: Set<string>;
+    /** Required rooms with no reachable tile after the physical key-pickup fixed point. */
+    unreachableRooms: any[];
+    /** Lock colours present on the map but not physically collectible. */
+    missingColours: string[];
+    /** Frontier locked tiles adjacent to the final reachable set. */
+    blockedEdges: Array<{ x: number; y: number; colour: string }>;
+    /** Advisory facts only; game/content code decides whether and how to mutate. */
+    repairHints: Array<
+      { kind: 'downgrade-lock-colour'; colour: string } |
+      { kind: 'connect-room'; room: any }
+    >;
+    /** Diagnostic helper for repair passes; callers choose which lock colours to pretend are held. */
+    computeReach: (have: Set<string>) => Uint8Array[];
+  }
+
   interface EngineDungeonReachabilityAPI {
-    solveKeyLockReachability(opts: {
-      map: ArrayLike<ArrayLike<number>>;
-      start: { x: number; y: number };
-      keys?: Array<{ x: number; y: number; colour?: string; color?: string }>;
-      /** Rooms that must touch the final physically reachable set. */
-      requiredRooms?: any[];
-      /** True for host-open tiles: floors, regular doors, cracked walls, hazards, etc. */
-      isOpenTile: (tile: number) => boolean;
-      /** Returns a lock colour for locked-door tiles; null/undefined otherwise. */
-      lockColourForTile?: (tile: number) => string | null | undefined;
-    }): {
-      reachable: Uint8Array[];
-      collectedColours: Set<string>;
-      unreachableRooms: any[];
-      missingColours: string[];
-      /** Frontier locked tiles adjacent to the final reachable set. */
-      blockedEdges: Array<{ x: number; y: number; colour: string }>;
-      /** Advisory facts only; game/content code decides whether and how to mutate. */
-      repairHints: Array<
-        { kind: 'downgrade-lock-colour'; colour: string } |
-        { kind: 'connect-room'; room: any }
-      >;
-      computeReach: (have: Set<string>) => Uint8Array[];
-    };
+    solveKeyLockReachability(opts: EngineDungeonReachabilityOptions): EngineDungeonReachabilityResult;
     roomTouchesReach(room: any, reachable: Uint8Array[]): boolean;
   }
 
