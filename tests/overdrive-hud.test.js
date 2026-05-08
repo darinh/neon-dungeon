@@ -64,28 +64,30 @@ test('getStatusEffects() function body contains an overdrive fx entry', () => {
     'getStatusEffects must contain an fx entry with id: "overdrive"');
 });
 
-test('OVERDRIVE fx entry is gated on perk-ownership AND combo.count >= 2', () => {
+test('OVERDRIVE fx entry is gated on perk-ownership AND combo count >= 2', () => {
   // Three gates required:
   //   1. player.perks — defensive null-check (legacy player shapes).
   //   2. player.perks.OVERDRIVE — perk-ownership; non-owners must NOT see
   //      a phantom badge if combo.count rises (e.g. another player's
   //      kill-streak shouldn't surface as if THIS player has the perk).
-  //   3. combo.count >= 2 — active-bonus gate; mirrors entities.js:11340
-  //      so the badge appears iff the multiplier is being applied.
+  //   3. combo count >= 2 — active-bonus gate; mirrors entities.js:11340
+  //      so the badge appears iff the multiplier is being applied. status.js
+  //      may read this through a guarded cross-file alias.
   const fnBranch = extractBranch(
     CONTENT_CODE,
     /function\s+getStatusEffects\s*\([^)]*\)\s*\{/
   );
   assert.ok(fnBranch);
-  // Locate the controlling if-statement: must include OVERDRIVE AND combo.
+  // Locate the controlling if-statement: must include OVERDRIVE AND combo
+  // count, directly or through the guarded cross-file alias.
   const ifBranch = extractBranch(
     fnBranch,
-    /if\s*\([^)]*\.perks[^)]*OVERDRIVE[^)]*combo\.count[^)]*>=\s*2[^)]*\)\s*\{/
+    /if\s*\([^)]*\.perks[^)]*OVERDRIVE[^)]*(?:combo\.count|overdriveCombo)[^)]*>=\s*2[^)]*\)\s*\{/
   );
   assert.ok(ifBranch,
-    'OVERDRIVE fx.push must sit inside an if-block that gates on player.perks.OVERDRIVE AND combo.count >= 2');
+    'OVERDRIVE fx.push must sit inside an if-block that gates on player.perks.OVERDRIVE AND combo count >= 2');
   assert.match(ifBranch, /id:\s*'overdrive'/,
-    'OVERDRIVE fx.push must be inside the perks.OVERDRIVE && combo.count >= 2 gate');
+    'OVERDRIVE fx.push must be inside the perks.OVERDRIVE && combo count >= 2 gate');
 });
 
 test('OVERDRIVE fx entry guards against undefined player.perks (defensive null-check)', () => {
@@ -98,8 +100,19 @@ test('OVERDRIVE fx entry guards against undefined player.perks (defensive null-c
   );
   assert.ok(fnBranch);
   assert.match(fnBranch,
-    /player\.perks\s*&&\s*player\.perks\.OVERDRIVE\s*&&\s*combo\.count\s*>=\s*2/,
+    /player\.perks\s*&&\s*player\.perks\.OVERDRIVE\s*&&\s*(?:combo\.count|overdriveCombo)\s*>=\s*2/,
     'OVERDRIVE gate must short-circuit on player.perks before dereferencing .OVERDRIVE');
+});
+
+test('OVERDRIVE fx entry guards the cross-file combo global', () => {
+  const fnBranch = extractBranch(
+    CONTENT_CODE,
+    /function\s+getStatusEffects\s*\([^)]*\)\s*\{/
+  );
+  assert.ok(fnBranch);
+  assert.match(fnBranch,
+    /const\s+overdriveCombo\s*=\s*\(\s*typeof\s+combo\s*!==\s*['"]undefined['"]\s*&&\s*combo\s*\)\s*\?\s*combo\.count\s*:\s*0/,
+    'status.js must guard combo before reading it because combo is declared later in src/content.js');
 });
 
 test('OVERDRIVE fx label shows the multiplier matching the entities.js bonus formula', () => {
@@ -253,7 +266,7 @@ test('OVERDRIVE HUD literals (per-step 0.03, cap 0.30, gate >=2) match entities.
   assert.match(ifBranch, hudFormulaRe,
     `HUD label must use cap=${cap} and per-step=${perStep} (matches entities.js bonus formula)`);
 
-  const hudGateRe = new RegExp(`combo\\.count\\s*>=\\s*${gate}`);
+  const hudGateRe = new RegExp(`(?:combo\\.count|overdriveCombo)\\s*>=\\s*${gate}`);
   assert.match(ifBranch, hudGateRe,
     `HUD gate must use threshold=${gate} (matches entities.js bonus formula)`);
 });
@@ -553,8 +566,8 @@ test('runtime: OVERDRIVE badge gate predicate matches the multiplier gate predic
   //   preserves the older normaliser's tolerance for equivalent forms
   //   (per gpt-5.3-codex review) — if a future refactor introduces a
   //   local `c` alias in getStatusEffects(), the alignment compare still
-  //   succeeds. In current code the badge uses `combo.count` directly so
-  //   the substitution is a no-op.
+  //   succeeds. status.js may also use the guarded `overdriveCombo` alias
+  //   because `combo` is declared later in src/content.js.
   // Side-specific RECEIVER stripping (NOT bidirectional) is the canonical
   // pattern from PRs #312/#318 — fails loudly on mixed-receiver bugs that
   // bidirectional stripping silently masks. Upgrades the OLDER pattern
@@ -572,7 +585,9 @@ test('runtime: OVERDRIVE badge gate predicate matches the multiplier gate predic
   // rewrite a property access like `obj.c` (per gpt-5.3-codex r2 review —
   // tightens the pattern that existed in the older inline normaliser).
   // `c` followed by `\b` still requires a non-word boundary after.
-  const normaliseAlias = (s) => s.replace(/(?<!\.)\bc\b/g, 'combo.count');
+  const normaliseAlias = (s) => s
+    .replace(/\boverdriveCombo\b/g, 'combo.count')
+    .replace(/(?<!\.)\bc\b/g, 'combo.count');
   const mulNorm = stripOuterParens(normaliseAlias(normaliseMultiplierPredicate(combinedCond)));
   const badgeNorm = stripOuterParens(normaliseAlias(normaliseBadgePredicate(badgeCond)));
 

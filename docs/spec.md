@@ -4680,6 +4680,11 @@ banner slides down from the top of the screen announcing the active modifier:
 
 ### Status Effect Bar
 
+**Implementation:** Status HUD rendering lives in `src/content/status.js`, loaded
+after `src/content/hackware.js` and before `src/content.js`; the public globals
+`drawDangerVignette`, `drawModBanner`, `getStatusEffects`, and `drawStatusBar`
+remain unchanged for runtime callers.
+
 Row of compact badge indicators displayed just above the HUD bar (`layout.hudTop - 16`):
 
 | Effect | Trigger | Icon | Colour |
@@ -4909,6 +4914,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.36 | Content module split: HUD status indicators now live in `src/content/status.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `drawDangerVignette`, `drawModBanner`, `getStatusEffects`, and `drawStatusBar` remain unchanged for runtime callers. |
 | v6.1.35 | Content module split: active hackware catalog, activation cases, persistent world-space effects, targeting/immunity helpers, and hackware drawing now live in `src/content/hackware.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `HACKWARE`, `HACKWARE_KEYS`, `hackwareEffects`, `canTargetPlayer`, `isPlayerDamageImmune`, `activateHackware`, `updateHackwareEffects`, and `drawHackwareEffects` remain unchanged for runtime callers. |
 | v6.1.34 | Content module split: gameplay feedback effects now live in `src/content/effects.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `spawnParticles`, `updateParticles`, `drawParticles`, `clearParticles`, `particleCount`, `updateAmbient`, `drawAmbient`, `spawnDmgText`, `updateFloatingTexts`, `drawFloatingTexts`, `triggerShake`, and `updateShake` remain unchanged for runtime callers. |
 | v6.1.33 | Content module split: level-up perk registry, capstone metadata, perk application, `hasAugment()`, and augment-choice rolling now live in `src/content/perks.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `PERK_POOL`, `PERK_CAPSTONE`, `PERK_LEVELS`, `rollPerkChoices`, `applyPerk`, `grantCapstone`, `hasAugment`, and `rollAugmentChoices` remain unchanged for runtime callers. |

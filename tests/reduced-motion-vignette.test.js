@@ -16,15 +16,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+const CONTENT_STATUS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'status.js'), 'utf8'
 );
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
-const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_NC = stripComments(CONTENT_STATUS);
 
 // ─── Source wiring ────────────────────────────────────────────────────────
 

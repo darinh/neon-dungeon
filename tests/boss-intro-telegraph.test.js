@@ -34,6 +34,9 @@ const ENTITIES = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_STATUS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'status.js'), 'utf8'
+);
 
 /** @param {string} src */
 function stripComments(src) {
@@ -45,6 +48,7 @@ const RENDER_NC = stripComments(RENDER);
 const PLATFORM_NC = stripComments(PLATFORM);
 const ENTITIES_NC = stripComments(ENTITIES);
 const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_STATUS_NC = stripComments(CONTENT_STATUS);
 
 // Brace-balanced extraction. Returns the FIRST block opened by openerRe.
 // Naive depth counter — does NOT understand string/regex literals. The
@@ -356,6 +360,7 @@ test('bossIntroTimer is written ONLY by game.js (no entities.js / content.js / r
   for (const [name, src] of /** @type {[string, string][]} */ ([
     ['entities.js', ENTITIES_NC],
     ['content.js', CONTENT_NC],
+    ['content/status.js', CONTENT_STATUS_NC],
     ['render.js', RENDER_NC],
   ])) {
     assert.ok(!/bossIntroTimer\s*=/.test(src),
@@ -405,6 +410,7 @@ test('audio.bossIntro is invoked ONLY from the seal-flip block in game.js', () =
   for (const [name, src] of /** @type {[string, string][]} */ ([
     ['entities.js', ENTITIES_NC],
     ['content.js', CONTENT_NC],
+    ['content/status.js', CONTENT_STATUS_NC],
     ['render.js', RENDER_NC],
     ['platform.js', PLATFORM_NC],
   ])) {

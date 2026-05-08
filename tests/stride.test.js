@@ -20,7 +20,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = readSourceFile(__dirname, 'content');
+const CONTENT  = readSourceFile(__dirname, 'content') + '\n' + readSourceFile(__dirname, 'contentStatus');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 

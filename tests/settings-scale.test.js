@@ -12,7 +12,7 @@
 //   4. save() round-trips the fields through localStorage
 //   5. render.js minimap helpers consume settings.minimapScale (corner
 //      MW/MH derive from it; the cached canvas invalidates on size mismatch)
-//   6. content.js drawStatusBar fs and drawFloatingTexts font scale with
+//   6. content/status.js drawStatusBar fs and content/effects.js drawFloatingTexts font scale with
 //      settings.textScale
 //   7. game.js settings UI declares the stepper rows + their wiring
 
@@ -48,8 +48,8 @@ const PLATFORM = fs.readFileSync(
 const RENDER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
 );
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+const CONTENT_STATUS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'status.js'), 'utf8'
 );
 const CONTENT_EFFECTS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content', 'effects.js'), 'utf8'
@@ -220,7 +220,7 @@ test('drawStatusBar fs scales with settings.textScale', () => {
   // (height = fs+6, width = measureText+8). Scaling fs naturally
   // rescales the whole badge. Pin the formula and a Math.max floor so
   // a tiny scale can't produce a 0-px font.
-  const statusSlice = CONTENT.match(/function\s+drawStatusBar[\s\S]{0,2500}/);
+  const statusSlice = CONTENT_STATUS.match(/function\s+drawStatusBar[\s\S]{0,2500}/);
   assert.ok(statusSlice, 'must locate drawStatusBar');
   assert.match(statusSlice[0],
     /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*\(\s*layout\.compact\s*\?\s*\d+\s*:\s*\d+\s*\)\s*\*\s*settings\.textScale\s*\)\s*\)/,
@@ -231,7 +231,7 @@ test('drawStatusBar minimap reservation scales with settings.minimapScale', () =
   // The badge strip's right edge stops `before the minimap area`. The
   // minimap is settings-scaled, so the reservation must be too — else
   // an enlarged minimap eats badges (or a shrunk minimap leaves a gap).
-  const statusSlice = CONTENT.match(/function\s+drawStatusBar[\s\S]{0,2500}/);
+  const statusSlice = CONTENT_STATUS.match(/function\s+drawStatusBar[\s\S]{0,2500}/);
   assert.ok(statusSlice, 'must locate drawStatusBar');
   assert.match(statusSlice[0],
     /Math\.round\s*\(\s*120\s*\*\s*settings\.minimapScale\s*\)/,
@@ -684,7 +684,7 @@ test('drawStatusBar badge Y-offset scales with settings.textScale to track the s
   // badge row tracks the key indicator row that drawHUD now scales.
   // Floors prevent collapse into the HUD at 0.85× (12) or into the
   // larger key row at 0.85× (24).
-  const fn = CONTENT.match(/function\s+drawStatusBar[\s\S]{0,3500}^\}/m);
+  const fn = CONTENT_STATUS.match(/function\s+drawStatusBar[\s\S]{0,3500}^\}/m);
   assert.ok(fn, 'must locate drawStatusBar');
   // Producer-side: pin the WHOLE assignment to its EXACT canonical name
   // `badgeYOffset` so a decoy `const _u1 = scaledFormula1; const _u2 =
