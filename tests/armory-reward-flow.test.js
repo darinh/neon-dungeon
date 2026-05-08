@@ -14,10 +14,11 @@ function read(file) {
 
 const GAME = read('src/game.js');
 const CONTENT = read('src/content.js');
+const CONTENT_PICKUPS = read('src/content/pickups.js');
 const PLATFORM = read('src/platform.js');
 
 test('secret rooms spawn a distinct pre-rolled weapon cache reward', () => {
-  assert.match(CONTENT, /class WeaponCacheItem[\s\S]*this\.isWeaponCache = true;/,
+  assert.match(CONTENT_PICKUPS, /class WeaponCacheItem[\s\S]*this\.isWeaponCache = true;/,
     'weapon cache must be a distinct pickup class');
   assert.match(CONTENT, /function rollSecretWeaponCacheWeapon\(player, floor\)[\s\S]*WEAPON_KEYS\.filter\(k => !owned\.has\(k\)\)/,
     'secret cache roll should prefer weapon bases not already in the belt');

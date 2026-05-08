@@ -23,6 +23,9 @@ const ENTITIES = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_PICKUPS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'pickups.js'), 'utf8'
+);
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
 );
@@ -163,13 +166,13 @@ test('die() drops a VaultCoin jackpot on VAULTMASTER death', () => {
 
 // ─── VaultCoin pickup wiring ───────────────────────────────────────────
 
-test('VaultCoin class exists in src/content.js with isHoard flag', () => {
+test('VaultCoin class exists in src/content/pickups.js with isHoard flag', () => {
   // The pickup loop in game.js distinguishes pickup types by
   // boolean flags (.isKey / .isHarvest / .isWhisper / .isHoard).
   // Without isHoard the coin would fall through to the generic
   // upgrade-roll path which ignores .amt and rolls a new option.
-  assert.match(CONTENT, /class\s+VaultCoin\s*\{/, 'VaultCoin class must exist');
-  const cls = CONTENT.match(/class\s+VaultCoin\s*\{[\s\S]*?\n\}/);
+  assert.match(CONTENT_PICKUPS, /class\s+VaultCoin\s*\{/, 'VaultCoin class must exist');
+  const cls = CONTENT_PICKUPS.match(/class\s+VaultCoin\s*\{[\s\S]*?\n\}/);
   assert.ok(cls, 'VaultCoin class block not extractable');
   assert.match(cls[0], /this\.isHoard\s*=\s*true/,
     'VaultCoin must set isHoard = true (auto-collect via game.js pickup branch)');
@@ -180,7 +183,7 @@ test('VaultCoin class exists in src/content.js with isHoard flag', () => {
 });
 
 test('VaultCoin.amt is sanitised against negative / NaN inputs', () => {
-  const cls = CONTENT.match(/class\s+VaultCoin\s*\{[\s\S]*?\n\}/);
+  const cls = CONTENT_PICKUPS.match(/class\s+VaultCoin\s*\{[\s\S]*?\n\}/);
   assert.ok(cls);
   assert.match(cls[0], /Math\.max\s*\(\s*0\s*,\s*Math\.round/,
     'VaultCoin constructor must clamp amt >= 0 and round');
