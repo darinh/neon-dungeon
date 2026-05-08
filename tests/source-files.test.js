@@ -78,6 +78,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(upgradeSource, /const\s+AUGMENTS\s*=\s*\{/);
   assert.match(pickupSource, /class\s+Item\b/);
   assert.match(pickupSource, /class\s+WeaponCacheItem\b/);
+  assert.match(pickupSource, /const\s+ITEM_TYPES\s*=/);
+  assert.match(pickupSource, /function\s+pickItemType\s*\(/);
+  assert.match(pickupSource, /function\s+rollSecretWeaponCacheWeapon\s*\(/);
   assert.match(projectileSource, /class\s+Projectile\b/);
   assert.match(projectileSource, /function\s+detonateGrenade\s*\(/);
   assert.match(musicSource, /const\s+music\s*=\s*\(\(\)\s*=>\s*\{/);
@@ -109,6 +112,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.content, /function\s+getStatusEffects\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+loadMeta\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+updateLighting\s*\(/);
+  assert.doesNotMatch(sources.content, /function\s+pickItemType\s*\(/);
+  assert.doesNotMatch(sources.content, /function\s+rollSecretWeaponCacheWeapon\s*\(/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
