@@ -4810,6 +4810,8 @@ line (between "events" and "blocked" stats), omitted when 0.
 
 Interactive event terminals offering binary choices with different risk/reward profiles. One event room per non-boss floor (2–9).
 
+**Implementation:** Event definitions, protocol-trial routing, event-effect helpers, and rare-terminal log/module drop hooks live in `src/content/events.js`. The file is browser-loaded after `src/content/modifiers.js` and before `src/content.js`, preserving the existing public globals `EVENTS`, `rollEvent()`, and `applyEventEffect()` for `src/game.js` and source-text tests.
+
 **Room Generation:**
 - Room type `'event'`, `T.EVENT_TERMINAL` tile (19) at room center.
 - Eligible rooms: not spawn/stair/special, area ≥ 16 tiles, no existing `roomType`.
@@ -4898,6 +4900,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.31 | Content module split: floor event terminal definitions and event-effect helpers now live in `src/content/events.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `EVENTS`, `STORY_PROTOCOL_TRIAL_BY_FLOOR`, `storyProtocolTrialForFloor`, `rollEvent`, `revealFloorLayout`, `openNearestLockedDoor`, `spawnProtocolAlarm`, `applyEventEffect`, `tryRareTerminalModuleDrop`, and `tryRareTerminalLogDrop` remain unchanged for runtime callers. |
 | v6.1.30 | Content module split: difficulty and floor-modifier registries now live in `src/content/modifiers.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `DIFFICULTIES`, `DIFF_ORDER`, `getDiff`, `FLOOR_MODIFIERS`, `MODIFIER_KEYS`, `getMod`, and `modSpeed` remain unchanged for runtime callers. |
 | v6.1.29 | Content module split: procedural gameplay music and rendered title/menu music state now live in `src/content/music.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The legacy global `music` surface remains unchanged for `src/platform.js` and `src/game.js`, while `src/content.js` now starts with hackware/content registries and generation orchestration. |
 | v6.1.28 | Content module split: pooled projectile runtime and grenade hazard-zone helpers now live in `src/content/projectiles.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. `src/content.js` retains dungeon generation, registries, and orchestration helpers, while projectile source-text and VM regression tests now read the dedicated projectile module. |
