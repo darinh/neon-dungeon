@@ -9,6 +9,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_DEATH_HOOKS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'death-hooks.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -64,7 +67,7 @@ test('VENGEANCE stun cancel resets rush state (preserves charges)', () => {
 
 test('notifyVengeance hook is defined and called from die()', () => {
   // Without the hook, charges never accumulate and the mob is inert.
-  assert.match(ENTITIES, /function\s+notifyVengeance\s*\(/);
+  assert.match(ENTITY_DEATH_HOOKS, /function\s+notifyVengeance\s*\(/);
   // Must be wired into die() right next to notifyGhostProjectors.
   assert.match(ENTITIES, /notifyGhostProjectors\(this\);\s*\n\s*notifyVengeance\(this\)/);
 });
@@ -73,7 +76,7 @@ test('notifyVengeance excludes shards / summons / ghosts / bosses / VENGEANCE it
   // PACIFIST / fairness invariant: only volitional kills count toward
   // retaliation. Otherwise a SUMMONER's drone dying to incidental fire
   // would charge VENGEANCEs, which is unfair.
-  const fn = ENTITIES.match(/function\s+notifyVengeance[\s\S]{0,1500}\n\}/);
+  const fn = ENTITY_DEATH_HOOKS.match(/function\s+notifyVengeance[\s\S]{0,1500}\n\}/);
   assert.ok(fn, 'notifyVengeance function body must be locatable');
   assert.match(fn[0], /deadEnemy\.type\s*===\s*'VENGEANCE'/, 'must skip VENGEANCE-on-VENGEANCE charge');
   assert.match(fn[0], /deadEnemy\._ghIsGhost/, 'must skip ghost replays');
@@ -86,7 +89,7 @@ test('notifyVengeance is room-scoped (uses enemiesByRoom)', () => {
   // A VENGEANCE in a different room shouldn't charge from a kill it
   // can't see. enemiesByRoom is the per-room indexed structure already
   // used by notifyGhostProjectors.
-  const fn = ENTITIES.match(/function\s+notifyVengeance[\s\S]{0,1500}\n\}/);
+  const fn = ENTITY_DEATH_HOOKS.match(/function\s+notifyVengeance[\s\S]{0,1500}\n\}/);
   assert.ok(fn, 'notifyVengeance function body must be locatable');
   assert.match(fn[0], /enemiesByRoom\.get\(deadEnemy\.room\)/, 'must scope by room via enemiesByRoom');
 });
@@ -169,7 +172,7 @@ test('notifyVengeance excludes _volatileKill incidental chain deaths', () => {
   // adjacent mob. notifyVengeance must do the same — otherwise an
   // EXPLOSIVE_KILLS player triggers retaliations from cascade kills
   // they did not consciously commit.
-  const fn = ENTITIES.match(/function\s+notifyVengeance[\s\S]{0,1800}\n\}/);
+  const fn = ENTITY_DEATH_HOOKS.match(/function\s+notifyVengeance[\s\S]{0,1800}\n\}/);
   assert.ok(fn, 'notifyVengeance function body must be locatable');
   assert.match(fn[0], /deadEnemy\._volatileKill/,
     'notifyVengeance must skip _volatileKill incidental chain deaths');
