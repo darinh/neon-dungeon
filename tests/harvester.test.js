@@ -113,7 +113,7 @@ test('expired HarvestPickup is pruned from items array (no draw-forever ghost)',
   // Must have a dead-item prune pass right after the items.update loop.
   assert.match(gameSrc, /for \(const it of items\) it\.update\(dt\);[\s\S]{0,800}if \(items\[i\]\.dead\) items\.splice\(i, 1\)/);
   // Belt-and-suspenders: HarvestPickup.draw also short-circuits if dead.
-  const contentSrc = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
+  const contentSrc = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'pickups.js'), 'utf8');
   const hp = contentSrc.match(/class HarvestPickup[\s\S]*?\n\}/);
   assert.ok(hp, 'HarvestPickup class found');
   assert.match(hp[0], /draw\(camX, camY\) \{\s*\n\s*if \(this\.dead\) return;/);
