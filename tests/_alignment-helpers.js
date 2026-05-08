@@ -190,8 +190,8 @@ function normaliseBadgePredicate(cond) {
 }
 
 /**
- * Load the source text of `src/content.js`, split companion content modules,
- * and `src/entities.js`, then return six derived buffers used by every
+ * Load the source text of content companion modules and `src/entities.js`,
+ * then return six derived buffers used by every
  * alignment test:
  *   - CONTENT / ENTITIES         — raw source (with comments + string literals)
  *   - CONTENT_CODE / ENTITIES_CODE — comments stripped (anchor regexes

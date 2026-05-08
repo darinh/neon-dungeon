@@ -12,7 +12,7 @@
 //   - TOXIC      : continuous damage + slow in zone
 //   - SHOCK_TILE : 0.5s movement freeze on entry (no damage)
 //
-// Source-text wiring tests (game.js / render.js / content.js are
+// Source-text wiring tests (game.js / render.js / floor-generator.js are
 // browser-only — no UMD/CommonJS exports — same pattern as
 // biome-damage-flash / bulwark-perk / nullifier).
 
@@ -23,7 +23,7 @@ const path = require('node:path');
 
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const FLOOR_GENERATOR = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'floor-generator.js'),  'utf8');
 const RENDER   = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'render.js'),   'utf8');
 
 // Strip ONLY full-line // comments so a `// if (X)` placeholder can't satisfy
@@ -296,16 +296,16 @@ test('isSafeSpawn excludes T.SHOCK_TILE (player should never spawn frozen)', () 
     'isSafeSpawn must exclude T.SHOCK_TILE so the spawn-arrival tile is never a freeze');
 });
 
-// ─── content.js generation + reachability ─────────────────────────────────
+// ─── floor-generator.js generation + reachability ─────────────────────────
 
-test('content.js trap generation can place T.SHOCK_TILE alongside spike/slow', () => {
+test('floor-generator.js trap generation can place T.SHOCK_TILE alongside spike/slow', () => {
   // The trap-spawn loop now picks from a 3-way mix instead of the original
   // 70/30 spike/slow. Pin presence of all three tile types in the picker —
   // without the SHOCK_TILE branch the new tile would be unreachable in a
   // generated dungeon.
-  const stripped = stripFullLineComments(CONTENT);
+  const stripped = stripFullLineComments(FLOOR_GENERATOR);
   const m = stripped.match(/map\[ty\]\[tx\]\s*===\s*T\.FLOOR[\s\S]{0,400}T\.SHOCK_TILE/);
-  assert.ok(m, 'content.js trap-gen block must be able to assign T.SHOCK_TILE');
+  assert.ok(m, 'floor-generator.js trap-gen block must be able to assign T.SHOCK_TILE');
   // All three trap tiles present in a small window — defends against a
   // contributor accidentally dropping spike or slow when adding shock.
   const tx = m[0];
@@ -314,14 +314,14 @@ test('content.js trap generation can place T.SHOCK_TILE alongside spike/slow', (
   assert.match(tx, /T\.SHOCK_TILE/, 'trap-gen places SHOCK_TILE');
 });
 
-test('content.js dungeon-reachability `passable` predicate counts T.SHOCK_TILE as walkable', () => {
+test('floor-generator.js dungeon-reachability `passable` predicate counts T.SHOCK_TILE as walkable', () => {
   // The reachability flood-fill (computeReach) uses a local `passable`
   // helper distinct from the runtime isPassable. SHOCK_TILE must be in
   // that list — otherwise the flood-fill could falsely conclude that a
   // SHOCK_TILE-bearing corridor is unreachable, triggering a costly
   // regen loop.
-  const m = CONTENT.match(/const\s+passable\s*=\s*\(\s*\/\*\*[\s\S]*?\)\s*=>[\s\S]*?T\.CHALLENGE_GATE\s*;/);
-  assert.ok(m, 'computeReach `passable` helper must be locatable in content.js');
+  const m = FLOOR_GENERATOR.match(/const\s+passable\s*=\s*\(\s*\/\*\*[\s\S]*?\)\s*=>[\s\S]*?T\.CHALLENGE_GATE\s*;/);
+  assert.ok(m, 'computeReach `passable` helper must be locatable in floor-generator.js');
   assert.match(m[0], /t\s*===\s*T\.SHOCK_TILE/,
     'computeReach `passable` must include t === T.SHOCK_TILE');
 });

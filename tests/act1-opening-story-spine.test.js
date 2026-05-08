@@ -12,7 +12,7 @@ const path = require('node:path');
 
 const intro = require('../src/meta/intro.js');
 const TERMINALS = fs.readFileSync(path.resolve(__dirname, '..', 'src/content/terminals.js'), 'utf8');
-const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src/content.js'), 'utf8');
+const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src/content/floor-generator.js'), 'utf8');
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src/game.js'), 'utf8');
 
 function extractLoreEntries() {
