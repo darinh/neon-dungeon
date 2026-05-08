@@ -33,8 +33,8 @@ function withNEON(neon, fn) {
 
 /** @type {Array<[string, string]>} */
 const convertedDependencies = [
-  ['dungeonTopology', 'src/content.js'],
-  ['dungeonReachability', 'src/content.js'],
+  ['dungeonTopology', 'src/content/floor-generator.js'],
+  ['dungeonReachability', 'src/content/floor-generator.js'],
   ['save', 'src/content/meta-save.js'],
   ['particles', 'src/content/effects.js'],
   ['viewport', 'src/platform.js'],
@@ -68,7 +68,7 @@ test('requireNEON throws named load-order errors for converted captures', () => 
 test('converted module-top captures call requireNEON with file ownership', () => {
   /** @type {Record<string, string>} */
   const sources = {
-    'src/content.js': read('src/content.js'),
+    'src/content/floor-generator.js': read('src/content/floor-generator.js'),
     'src/content/meta-save.js': read('src/content/meta-save.js'),
     'src/content/effects.js': read('src/content/effects.js'),
     'src/platform.js': read('src/platform.js'),
@@ -89,6 +89,7 @@ test('converted module-top captures call requireNEON with file ownership', () =>
 test('src modules do not keep module-top const NEON captures', () => {
   const srcFiles = [
     'src/content.js',
+    'src/content/floor-generator.js',
     'src/entities.js',
     'src/game.js',
     'src/meta/hub.js',

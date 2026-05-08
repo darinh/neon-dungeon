@@ -221,7 +221,9 @@ function createGenerationSandbox() {
     sandbox
   );
   vm.runInContext(
-    fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8') +
+    fs.readFileSync(path.join(ROOT, 'src/content/floor-generator.js'), 'utf8') +
+      '\n' +
+      fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8') +
       '\nthis.generateFloor = generateFloor;',
     sandbox
   );
