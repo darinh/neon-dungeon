@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_DEATH_HOOKS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'death-hooks.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -107,7 +110,7 @@ test('GHOSTABLE_TYPES is a tight allowlist of simple-AI mobs', () => {
 test('notifyGhostProjectors function exists and gates on _ghIsGhost', () => {
   // Anti-recursion: a ghost dying must not spawn another ghost. The hook
   // must explicitly exclude _ghIsGhost early.
-  const m = ENTITIES.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
+  const m = ENTITY_DEATH_HOOKS.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(m, 'notifyGhostProjectors must be defined');
   const body = m[1];
   assert.match(body, /deadEnemy\._ghIsGhost/, 'must check _ghIsGhost');
@@ -129,7 +132,7 @@ test('notifyGhostProjectors only claims the FIRST eligible projector', () => {
   // Two projectors in the same room must NOT both claim a single kill —
   // the first one wins and we early-return. Without this rule, a kill
   // streak in a 2-projector room would double-haunt.
-  const m = ENTITIES.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
+  const m = ENTITY_DEATH_HOOKS.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(m);
   const body = m[1];
   assert.match(body, /for\s*\(const\s+proj\s+of\s+inRoom\)[\s\S]*?return/,
@@ -140,7 +143,7 @@ test('notifyGhostProjectors skips projectors with pending or active ghost', () =
   // Per-projector single-projection: don't claim if a memory is already
   // pending OR if the ghost has been queued and is awaiting flush back-
   // assign OR if the active ghost is still alive.
-  const m = ENTITIES.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
+  const m = ENTITY_DEATH_HOOKS.match(/function\s+notifyGhostProjectors\s*\(deadEnemy\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(m);
   const body = m[1];
   assert.match(body, /proj\._gpPendingType[\s\S]{0,80}continue/,

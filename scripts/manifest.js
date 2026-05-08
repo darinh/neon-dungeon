@@ -59,6 +59,7 @@ const requiredInIndex = [
   './src/content/floor-generator.js',
   './src/content.js',
   './src/entities.js',
+  './src/entities/death-hooks.js',
   './src/entities/fuse-shards.js',
   './src/entities/render-passes.js',
   './src/render.js',

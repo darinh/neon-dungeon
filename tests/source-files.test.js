@@ -35,6 +35,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRenderPasses.replaceAll('\\', '/'), 'src/entities/render-passes.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -61,6 +62,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentLighting').endsWith('src/content/lighting.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentFloorGenerator').endsWith('src/content/floor-generator.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRenderPasses').endsWith('src/entities/render-passes.js'), true);
   const sources = readSourceFiles(__dirname);
@@ -82,6 +84,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const lightingSource = readSourceFile(__dirname, 'contentLighting');
   const floorGeneratorSource = readSourceFile(__dirname, 'contentFloorGenerator');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
+  const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
   const renderPassSource = readSourceFile(__dirname, 'entitiesRenderPasses');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
@@ -121,6 +124,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(floorGeneratorSource, /function\s+resolvePreferredSpawnRoom\s*\(/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
+  assert.match(deathHookSource, /function\s+notifyGhostProjectors\s*\(/);
+  assert.match(deathHookSource, /function\s+notifyVengeance\s*\(/);
   assert.match(fuseShardSource, /class\s+FuseShard\b/);
   assert.match(fuseShardSource, /function\s+_detonateBombAt\s*\(/);
   assert.match(renderPassSource, /function\s+drawReaperPlayerRings\s*\(/);
@@ -137,6 +142,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.doesNotMatch(sources.entities, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
+  assert.doesNotMatch(sources.entities, /function\s+notifyGhostProjectors\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+notifyVengeance\s*\(/);
   assert.doesNotMatch(sources.entities, /class\s+FuseShard\b/);
   assert.doesNotMatch(sources.entities, /function\s+drawReaperPlayerRings\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+drawTetherLeashes\s*\(/);
