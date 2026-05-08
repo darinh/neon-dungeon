@@ -51,6 +51,9 @@ const RENDER = fs.readFileSync(
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
+const CONTENT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'effects.js'), 'utf8'
+);
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
 );
@@ -210,7 +213,7 @@ test('drawBoostStrip MH anchor scales with settings.minimapScale', () => {
     'drawBoostStrip MH must use Math.round(80 * settings.minimapScale)');
 });
 
-// ─── Text-scale propagation in content.js ───────────────────────────────
+// ─── Text-scale propagation in content/effects.js + content.js ──────────
 
 test('drawStatusBar fs scales with settings.textScale', () => {
   // The status FX badges (above HP) derive width and height from `fs`
@@ -242,7 +245,7 @@ test('drawFloatingTexts font scales with settings.textScale (and hoists the font
   // in a local) and assigned to ctx.font from that local inside the
   // loop — NOT a fresh template-literal per iteration. Per gpt-5.3-codex
   // r1 review: heavy combat (10+ floaters) churns GC otherwise.
-  const fl = CONTENT.match(/function\s+drawFloatingTexts[\s\S]{0,1500}/);
+  const fl = CONTENT_EFFECTS.match(/function\s+drawFloatingTexts[\s\S]{0,1500}/);
   assert.ok(fl, 'must locate drawFloatingTexts');
   assert.match(fl[0],
     /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*15\s*\*\s*settings\.textScale\s*\)\s*\)/,

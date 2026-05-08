@@ -26,10 +26,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
+const CONTENT_EFFECTS = readSourceFile(__dirname, 'contentEffects');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
@@ -41,17 +40,17 @@ function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
-const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_EFFECTS_NC = stripComments(CONTENT_EFFECTS);
 const ENTITIES_NC = stripComments(ENTITIES);
 
 // ---------- spawnDmgText numeric rounding ----------
 
 test('spawnDmgText rounds numeric text so float damage shows as integer', () => {
   // Locate the spawnDmgText body and assert it rounds when text is a number.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnDmgText\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
-  assert.ok(body, 'spawnDmgText function not found in content.js');
+  assert.ok(body, 'spawnDmgText function not found in content effects module');
   assert.match(
     body[0],
     /typeof\s+text\s*===\s*['"]number['"][\s\S]{0,200}Math\.round\s*\(\s*text\s*\)/,
@@ -65,7 +64,7 @@ test('spawnDmgText rounding is finite-guarded so NaN/Infinity stays a string', (
   // (e.g. division by zero) don't get a "NaN" floater either — they fall
   // through to the String(text) cast unchanged. Asserting the guard pins
   // the contract.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnDmgText\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
   assert.ok(body);
@@ -81,7 +80,7 @@ test('spawnDmgText behavioral check: integer floater is produced for float input
   // loading the whole game. content.js is a browser-globals UMD; we
   // simulate the module scope by pulling out just the function body and
   // running it against a fake `floatingTexts` + `settings` + `TILE` + `rnd`.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnDmgText\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
   assert.ok(body, 'spawnDmgText function body must be extractable');
