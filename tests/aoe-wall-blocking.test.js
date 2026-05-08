@@ -10,6 +10,7 @@ const { T, hasLOS } = require('./_generation-fixture.js');
 const CONTENT_HACKWARE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const ENTITIES_FUSE_SHARDS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'fuse-shards.js'), 'utf8');
 
 /** @param {string} src */
 function stripComments(src) {
@@ -19,6 +20,7 @@ function stripComments(src) {
 const CONTENT_HACKWARE_NC = stripComments(CONTENT_HACKWARE);
 const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const ENTITIES_NC = stripComments(ENTITIES);
+const ENTITIES_FUSE_SHARDS_NC = stripComments(ENTITIES_FUSE_SHARDS);
 
 /**
  * @param {string} src
@@ -94,7 +96,7 @@ test('blast line-of-sight is blocked by challenge gates', () => {
 });
 
 test('fuse shard bomb damage and wall breaking are LOS-gated', () => {
-  const bombBody = extractBlock(ENTITIES_NC, /function\s+_detonateBombAt\s*\(/);
+  const bombBody = extractBlock(ENTITIES_FUSE_SHARDS_NC, /function\s+_detonateBombAt\s*\(/);
   const enemyLoop = extractBlock(bombBody, /for\s*\(\s*const\s+e\s+of\s+enemies\s*\)/);
   assert.match(enemyLoop, /map\s*&&\s*dist\(x,\s*y,\s*e\.x,\s*e\.y\)\s*<\s*BOMB_BLAST_RADIUS\s*&&\s*hasLOS\(x,\s*y,\s*e\.x,\s*e\.y,\s*map\)/);
   assert.match(bombBody, /if\s*\(\s*!hasLOS\(x,\s*y,\s*tx\s*\+\s*0\.5,\s*ty\s*\+\s*0\.5,\s*map\)\)\s*continue/);
