@@ -21,6 +21,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentPickups.replaceAll('\\', '/'), 'src/content/pickups.js');
   assert.equal(SOURCE_FILE_PATHS.contentProjectiles.replaceAll('\\', '/'), 'src/content/projectiles.js');
   assert.equal(SOURCE_FILE_PATHS.contentMusic.replaceAll('\\', '/'), 'src/content/music.js');
+  assert.equal(SOURCE_FILE_PATHS.contentModifiers.replaceAll('\\', '/'), 'src/content/modifiers.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -35,6 +36,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentPickups').endsWith('src/content/pickups.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentProjectiles').endsWith('src/content/projectiles.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentMusic').endsWith('src/content/music.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentModifiers').endsWith('src/content/modifiers.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -42,6 +44,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const pickupSource = readSourceFile(__dirname, 'contentPickups');
   const projectileSource = readSourceFile(__dirname, 'contentProjectiles');
   const musicSource = readSourceFile(__dirname, 'contentMusic');
+  const modifierSource = readSourceFile(__dirname, 'contentModifiers');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -52,6 +55,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(projectileSource, /function\s+detonateGrenade\s*\(/);
   assert.match(musicSource, /const\s+music\s*=\s*\(\(\)\s*=>\s*\{/);
   assert.match(musicSource, /function\s+tryPlayTitle\s*\(/);
+  assert.match(modifierSource, /const\s+DIFFICULTIES\s*=\s*\{/);
+  assert.match(modifierSource, /const\s+FLOOR_MODIFIERS\s*=\s*\{/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
