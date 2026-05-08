@@ -39,6 +39,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesArchitectWalls.replaceAll('\\', '/'), 'src/entities/architect-walls.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesBeacons.replaceAll('\\', '/'), 'src/entities/beacons.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCrates.replaceAll('\\', '/'), 'src/entities/crates.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesMines.replaceAll('\\', '/'), 'src/entities/mines.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRenderPasses.replaceAll('\\', '/'), 'src/entities/render-passes.js');
@@ -71,6 +72,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesBeacons').endsWith('src/entities/beacons.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCrates').endsWith('src/entities/crates.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesMines').endsWith('src/entities/mines.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRenderPasses').endsWith('src/entities/render-passes.js'), true);
@@ -98,6 +100,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
   const beaconSource = readSourceFile(__dirname, 'entitiesBeacons');
   const crateSource = readSourceFile(__dirname, 'entitiesCrates');
+  const mineSource = readSourceFile(__dirname, 'entitiesMines');
   const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
   const renderPassSource = readSourceFile(__dirname, 'entitiesRenderPasses');
@@ -160,6 +163,14 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(crateSource, /function\s+destroyCrate\s*\(/);
   assert.match(crateSource, /function\s+damageCrateAtTile\s*\(/);
   assert.match(crateSource, /function\s+damageCratesInRadius\s*\(/);
+  assert.match(mineSource, /const\s+MINE_TRIGGER_RADIUS\s*=/);
+  assert.match(mineSource, /const\s+MINE_FUSE_SHOT\s*=/);
+  assert.match(mineSource, /function\s+createMine\s*\(/);
+  assert.match(mineSource, /function\s+armMine\s*\(/);
+  assert.match(mineSource, /function\s+detonateMine\s*\(/);
+  assert.match(mineSource, /function\s+triggerMinesInRadius\s*\(/);
+  assert.match(mineSource, /function\s+updateMines\s*\(/);
+  assert.match(mineSource, /function\s+drawMines\s*\(/);
   assert.match(deathHookSource, /function\s+notifyGhostProjectors\s*\(/);
   assert.match(deathHookSource, /function\s+notifyVengeance\s*\(/);
   assert.match(fuseShardSource, /class\s+FuseShard\b/);
@@ -203,6 +214,14 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+destroyCrate\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+damageCrateAtTile\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+damageCratesInRadius\s*\(/);
+  assert.doesNotMatch(sources.entities, /const\s+MINE_TRIGGER_RADIUS\s*=/);
+  assert.doesNotMatch(sources.entities, /const\s+MINE_FUSE_SHOT\s*=/);
+  assert.doesNotMatch(sources.entities, /function\s+createMine\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+armMine\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+detonateMine\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+triggerMinesInRadius\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+updateMines\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+drawMines\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+notifyGhostProjectors\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+notifyVengeance\s*\(/);
   assert.doesNotMatch(sources.entities, /class\s+FuseShard\b/);

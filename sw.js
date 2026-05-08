@@ -66,6 +66,7 @@ const ASSETS = [
   './src/entities/architect-walls.js',
   './src/entities/beacons.js',
   './src/entities/crates.js',
+  './src/entities/mines.js',
   './src/entities/death-hooks.js',
   './src/entities/fuse-shards.js',
   './src/entities/render-passes.js',
