@@ -39,6 +39,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRenderPasses.replaceAll('\\', '/'), 'src/entities/render-passes.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesVolatileCores.replaceAll('\\', '/'), 'src/entities/volatile-cores.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -67,6 +68,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRenderPasses').endsWith('src/entities/render-passes.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesVolatileCores').endsWith('src/entities/volatile-cores.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -90,6 +92,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
   const renderPassSource = readSourceFile(__dirname, 'entitiesRenderPasses');
+  const volatileCoreSource = readSourceFile(__dirname, 'entitiesVolatileCores');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -138,6 +141,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(fuseShardSource, /function\s+_detonateBombAt\s*\(/);
   assert.match(renderPassSource, /function\s+drawReaperPlayerRings\s*\(/);
   assert.match(renderPassSource, /function\s+drawTetherLeashes\s*\(/);
+  assert.match(volatileCoreSource, /function\s+createVCore\s*\(/);
+  assert.match(volatileCoreSource, /function\s+primeVCoresInRadius\s*\(/);
+  assert.match(volatileCoreSource, /function\s+updateVCores\s*\(/);
+  assert.match(volatileCoreSource, /function\s+drawVCores\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -160,6 +167,11 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /class\s+FuseShard\b/);
   assert.doesNotMatch(sources.entities, /function\s+drawReaperPlayerRings\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+drawTetherLeashes\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+createVCore\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+primeVCoresInRadius\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+detonateVCore\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+updateVCores\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+drawVCores\s*\(/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
 });
