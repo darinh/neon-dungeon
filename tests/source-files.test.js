@@ -25,6 +25,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentEvents.replaceAll('\\', '/'), 'src/content/events.js');
   assert.equal(SOURCE_FILE_PATHS.contentShop.replaceAll('\\', '/'), 'src/content/shop.js');
   assert.equal(SOURCE_FILE_PATHS.contentPerks.replaceAll('\\', '/'), 'src/content/perks.js');
+  assert.equal(SOURCE_FILE_PATHS.contentEffects.replaceAll('\\', '/'), 'src/content/effects.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -43,6 +44,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentEvents').endsWith('src/content/events.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentShop').endsWith('src/content/shop.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentPerks').endsWith('src/content/perks.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentEffects').endsWith('src/content/effects.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -54,6 +56,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const eventSource = readSourceFile(__dirname, 'contentEvents');
   const shopSource = readSourceFile(__dirname, 'contentShop');
   const perkSource = readSourceFile(__dirname, 'contentPerks');
+  const effectsSource = readSourceFile(__dirname, 'contentEffects');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -72,6 +75,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(shopSource, /function\s+generateShopItems\s*\(/);
   assert.match(perkSource, /const\s+PERK_POOL\s*=\s*\{/);
   assert.match(perkSource, /function\s+rollPerkChoices\s*\(/);
+  assert.match(effectsSource, /function\s+spawnParticles\s*\(/);
+  assert.match(effectsSource, /function\s+spawnDmgText\s*\(/);
+  assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
+  assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);

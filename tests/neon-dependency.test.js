@@ -36,7 +36,7 @@ const convertedDependencies = [
   ['dungeonTopology', 'src/content.js'],
   ['dungeonReachability', 'src/content.js'],
   ['save', 'src/content.js'],
-  ['particles', 'src/content.js'],
+  ['particles', 'src/content/effects.js'],
   ['viewport', 'src/platform.js'],
   ['input', 'src/platform.js'],
   ['touch', 'src/platform.js'],
@@ -69,6 +69,7 @@ test('converted module-top captures call requireNEON with file ownership', () =>
   /** @type {Record<string, string>} */
   const sources = {
     'src/content.js': read('src/content.js'),
+    'src/content/effects.js': read('src/content/effects.js'),
     'src/platform.js': read('src/platform.js'),
     'src/meta/intro.js': read('src/meta/intro.js'),
     'src/render.js': read('src/render.js'),

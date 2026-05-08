@@ -14,18 +14,15 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
+const CONTENT_EFFECTS = readSourceFile(__dirname, 'contentEffects');
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
-const CONTENT_NC = stripComments(CONTENT);
+const CONTENT_EFFECTS_NC = stripComments(CONTENT_EFFECTS);
 
 test('reduced-motion-particles: spawnParticles applies the reducedMotion gate AFTER scaleBurst', () => {
   // Order matters: scaleBurst is the engine's panic damper for
@@ -33,7 +30,7 @@ test('reduced-motion-particles: spawnParticles applies the reducedMotion gate AF
   // should compose multiplicatively, with the user setting applied
   // after the engine cap so a stacking-saturated burst doesn't
   // double-discount.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnParticles\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
   assert.ok(body, 'spawnParticles function body must be findable');
@@ -53,7 +50,7 @@ test('reduced-motion-particles: gate floors at 1 so MUZZLE flashes never zero-ou
   // 3-particle burst rounds to 0 and muzzle flashes vanish entirely —
   // a critical gameplay tell. The Math.max(1, ...) floor guards
   // against that regression.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnParticles\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
   assert.ok(body);
@@ -68,7 +65,7 @@ test('reduced-motion-particles: behavioral check — gate halves count when on, 
   // Stand up a sandbox just for the spawnParticles function. We stub
   // _particleSystem.acquire to count successful spawns so we can read
   // back exactly how many particles a 30-burst yielded.
-  const body = CONTENT_NC.match(
+  const body = CONTENT_EFFECTS_NC.match(
     /function\s+spawnParticles\s*\([^)]*\)\s*\{[\s\S]*?\n\}/
   );
   assert.ok(body, 'spawnParticles function body must be extractable');
