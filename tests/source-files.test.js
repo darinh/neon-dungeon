@@ -36,6 +36,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesArchitectWalls.replaceAll('\\', '/'), 'src/entities/architect-walls.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCrates.replaceAll('\\', '/'), 'src/entities/crates.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
@@ -66,6 +67,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentFloorGenerator').endsWith('src/content/floor-generator.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCrates').endsWith('src/entities/crates.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
@@ -91,6 +93,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const floorGeneratorSource = readSourceFile(__dirname, 'contentFloorGenerator');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
   const aiHelperSource = readSourceFile(__dirname, 'entitiesAiHelpers');
+  const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
   const crateSource = readSourceFile(__dirname, 'entitiesCrates');
   const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
@@ -138,6 +141,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(aiHelperSource, /function\s+predictFromHistory\s*\(/);
   assert.match(aiHelperSource, /function\s+pickMirrorKinematics\s*\(/);
   assert.match(aiHelperSource, /function\s+magnetonBendDir\s*\(/);
+  assert.match(architectWallSource, /function\s+pickArchitectTarget\s*\(/);
+  assert.match(architectWallSource, /function\s+_isTileOccupiedByActor\s*\(/);
+  assert.match(architectWallSource, /function\s+updatePlacedWalls\s*\(/);
   assert.match(crateSource, /function\s+createCrate\s*\(/);
   assert.match(crateSource, /function\s+getCrateAt\s*\(/);
   assert.match(crateSource, /function\s+damageCrate\s*\(/);
@@ -171,6 +177,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+predictFromHistory\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+pickMirrorKinematics\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+magnetonBendDir\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+pickArchitectTarget\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+_isTileOccupiedByActor\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+updatePlacedWalls\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+createCrate\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+getCrateAt\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+damageCrate\s*\(/);
