@@ -62,6 +62,7 @@ const ASSETS = [
   './src/content/floor-generator.js',
   './src/content.js',
   './src/entities.js',
+  './src/entities/ai-helpers.js',
   './src/entities/death-hooks.js',
   './src/entities/fuse-shards.js',
   './src/entities/render-passes.js',

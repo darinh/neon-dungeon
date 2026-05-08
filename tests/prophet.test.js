@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -115,7 +118,7 @@ test('Player has getPredictedPosition helper that calls predictFromHistory', () 
 test('predictFromHistory pure helper is defined', () => {
   // Structural source-of-truth check. The duplicate below must mirror
   // the body — if you change one, change the other.
-  assert.match(ENTITIES, /function\s+predictFromHistory\s*\(\s*history\s*,\s*curX\s*,\s*curY\s*,\s*lookahead\s*,\s*sampleSec\s*,\s*velCap\s*\)/);
+  assert.match(ENTITY_AI_HELPERS, /function\s+predictFromHistory\s*\(\s*history\s*,\s*curX\s*,\s*curY\s*,\s*lookahead\s*,\s*sampleSec\s*,\s*velCap\s*\)/);
 });
 
 test('platform.js exposes audio.prophetLock and audio.prophetFire', () => {
