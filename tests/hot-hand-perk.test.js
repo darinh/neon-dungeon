@@ -33,7 +33,7 @@
 // always pass effects=[] (truthy empty array) at content.js:3770 and
 // entities.js:11050; string ctx becomes _hctx=null and is skipped.
 //
-// Source-text wiring tests (entities.js / content.js are browser-only —
+// Source-text wiring tests (entities.js / content.js / content/projectiles.js are browser-only —
 // no UMD/CommonJS exports — same pattern as bulwark / glass-cannon /
 // retribution / mark-affix / exploiter tests).
 
@@ -44,6 +44,7 @@ const path = require('node:path');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'),  'utf8');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
 
 // Strip JS comments before regex assertions so a "// if (this.perks.X)"
@@ -186,12 +187,12 @@ test('Player.shoot sets fromPlayerShot=true on melee hitCtx and ranged projectil
 });
 
 test('Projectile pool resets fromPlayerShot=false in _init (no stale flag leak)', () => {
-  // Projectile uses object pooling (content.js _projPool) — any field
+  // Projectile uses object pooling (content/projectiles.js _projPool) — any field
   // assigned by callers MUST be reset in _init, otherwise a recycled
   // pool slot could deliver a stale fromPlayerShot=true into a freshly-
   // spawned ENEMY projectile, opening a much worse leak than the one
   // this fix closes.
-  const src = stripComments(CONTENT);
+  const src = stripComments(CONTENT_PROJECTILES);
   // Locate the _init method body. Signature: `_init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {`
   const initIdx = src.search(/_init\s*\(\s*x\s*,\s*y[\s\S]*?\)\s*\{/);
   assert.ok(initIdx >= 0, 'Projectile._init signature must be locatable');
@@ -212,10 +213,10 @@ test('Projectile pool resets fromPlayerShot=false in _init (no stale flag leak)'
 
 test('Projectile-vs-enemy collision propagates fromPlayerShot into hitCtx', () => {
   // Source-text wiring: the e.takeDamage call inside the player-projectile
-  // collision path at content.js (~line 3770) must include the flag in
+  // collision path in content/projectiles.js must include the flag in
   // the spread hitCtx so the projectile's flag actually reaches the
   // HOT_HAND gate downstream.
-  const src = stripComments(CONTENT);
+  const src = stripComments(CONTENT_PROJECTILES);
   assert.match(src, /e\.takeDamage\(\s*this\.dmg\s*,\s*\{[\s\S]*?fromPlayerShot\s*:\s*this\.fromPlayerShot\s*===\s*true/,
     'Player-projectile e.takeDamage call must propagate fromPlayerShot from the projectile into hitCtx');
 });
@@ -230,23 +231,24 @@ test('Team-flip paths (REFLECTOR / PARRY / REVERSE_POLARITY) clear fromPlayerSho
   // All three flip paths must zero the flag (defense in depth — the
   // chain only needs ONE break to be safe, but if a future flip path
   // is added without the clear, we lose the guarantee).
-  const src = stripComments(CONTENT);
+  const projectileSrc = stripComments(CONTENT_PROJECTILES);
+  const contentSrc = stripComments(CONTENT);
 
   // REFLECTOR enemy bounces a player projectile back. Locate the block
   // by its hallmark `this.fromPlayer = false` + `ownerType = 'Reflected'`.
-  const reflectorMatch = src.match(/this\.fromPlayer\s*=\s*false[\s\S]{0,400}ownerType\s*=\s*['"]Reflected['"]/);
+  const reflectorMatch = projectileSrc.match(/this\.fromPlayer\s*=\s*false[\s\S]{0,400}ownerType\s*=\s*['"]Reflected['"]/);
   assert.ok(reflectorMatch, 'REFLECTOR flip block must be locatable');
   assert.match(reflectorMatch[0], /this\.fromPlayerShot\s*=\s*false/,
     'REFLECTOR flip path must clear this.fromPlayerShot');
 
   // PARRY perk: dashing player reflects an enemy projectile back as their own.
-  const parryMatch = src.match(/perks\.PARRY[\s\S]{0,400}ownerType\s*=\s*['"]Parry['"]/);
+  const parryMatch = projectileSrc.match(/perks\.PARRY[\s\S]{0,400}ownerType\s*=\s*['"]Parry['"]/);
   assert.ok(parryMatch, 'PARRY flip block must be locatable');
   assert.match(parryMatch[0], /this\.fromPlayerShot\s*=\s*false/,
     'PARRY flip path must clear this.fromPlayerShot');
 
   // REVERSE_POLARITY hackware: AoE flip enemy projectiles to player-owned.
-  const rpMatch = src.match(/p\.fromPlayer\s*=\s*true[\s\S]{0,400}ownerType\s*=\s*['"]Reverse Polarity['"]/);
+  const rpMatch = contentSrc.match(/p\.fromPlayer\s*=\s*true[\s\S]{0,400}ownerType\s*=\s*['"]Reverse Polarity['"]/);
   assert.ok(rpMatch, 'REVERSE_POLARITY flip block must be locatable');
   assert.match(rpMatch[0], /p\.fromPlayerShot\s*=\s*false/,
     'REVERSE_POLARITY flip path must clear p.fromPlayerShot');
