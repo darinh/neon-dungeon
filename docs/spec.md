@@ -522,24 +522,29 @@ Each floor is generated fresh using Binary Space Partitioning:
    (≤ 1 passable neighbour, outside any room) are iteratively filled with
    WALL so players never walk down a tunnel to nowhere.
 8. **Door and hallway normalization**: door-like entrances (`DOOR`, locked
-    doors, challenge gates, cracked secret entrances) are single-tile,
-    non-adjacent, never placed on room corners, and are relocated to a connected
-    outside corridor/wall-line tile adjacent to the room edge or to a valid
-    two-room wall bridge. The original room-edge tile is restored to floor so
-    doors sit in the surrounding wall/corridor line instead of occupying the
-    inside edge of the room or adding side-wall bulges.
-    One-sided room entrances must align on a single axis: room boundary,
-    entrance, then connected outside passage must form north/south or east/west
-    pairs. A lateral hallway beside the entrance does not count, and a one-tile
-    dead-end stub in front of the entrance is not a valid passage. Two-room
-    bridges must connect opposite room boundaries on the same axis.
-    Outside-room 2×2 passable hallway blocks are iteratively narrowed without
-    removing door-like tiles and only when the key/lock reachability solver still
-    proves every room reachable.
-9. **Reachability guarantee**: key-cascade BFS from spawn to every room
-   respects locked doors until their physically reachable keys are collected.
-   If stairs are unreachable after generation, a rescue corridor is carved
-   from spawn to stairs as a safety net.
+   doors, challenge gates, cracked secret entrances) are single-tile,
+   non-adjacent, never placed on room corners, and are relocated to a connected
+   outside corridor/wall-line tile adjacent to the room edge or to a valid
+   two-room wall bridge. The original room-edge tile is restored to floor so
+   doors sit in the surrounding wall/corridor line instead of occupying the
+   inside edge of the room or adding side-wall bulges.
+   One-sided room entrances must align on a single axis: room boundary,
+   entrance, then connected outside passage must form north/south or east/west
+   pairs. A lateral hallway beside the entrance does not count, and a one-tile
+   dead-end stub in front of the entrance is not a valid passage. Two-room
+   bridges must connect opposite room boundaries on the same axis.
+   Outside-room 2×2 passable hallway blocks are iteratively narrowed without
+   removing door-like tiles and only when the key/lock reachability solver still
+   proves every room reachable.
+9. **Reachability guarantee**: physical key-cascade BFS from spawn to every
+   required room respects locked doors until their matching keys are physically
+   collected. Required rooms are every room returned in the generated floor's
+   `rooms` array unless production code explicitly marks one optional in the
+   future; this includes secret rooms because cracked entrances are
+   interact-breakable. If stairs or a finale terminal remain unreachable after
+   generation, a rescue corridor is carved from spawn as a safety net. The
+   engine-side contract and phase checkpoints are documented in
+   `docs/engine-boundary.md`.
 
 ### Seeded generation
 
@@ -4893,6 +4898,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.25 | Dungeon-generation contract documentation now defines required rooms, physical key-pickup reachability, engine/game responsibilities, and invariant checkpoints for BSP topology, doors, locks/keys, secrets/challenge gates, pruning, and final floor return. Generation accessibility tests now explicitly cover player-interaction traversal semantics for regular doors, cracked walls, crates, challenge gates, and runtime-walkable hazards while preserving seed `1111-1111-1111` floor 2 and floor 6 regressions. |
 | v6.1.24 | Added a manifest drift guardrail: `scripts/manifest.js` now records browser script order, service-worker precache assets, and the generated `version.json` no-store exemption, while `tests/manifest.test.js` verifies `index.html`, `sw.js`, and disk paths stay in sync. Release-flow docs now state that feature/fix/docs PRs target `develop`, `develop` PRs squash-merge, only same-repo `develop` promotion PRs target `main`, and `develop -> main` uses rebase merge without breaking release and versioning automation. |
 | v6.1.23 | Door alignment correction: door-like entrances are moved outward from the room boundary into the adjacent corridor/wall-line tile, and the vacated room-edge tile plus any prior side-padding wall blocks are restored to floor. Generation tests now fail if door-like blockers remain inside/on a room boundary or if side-wall padding bulges into the room. |
 | v6.1.22 | Hidden FEET cheat menu shipped for local testing. Pressing keyboard `F E E Shift` or tapping mobile `F E E ⇧` outside text-entry/key-capture states opens a `CHEATS` modal with runtime-only toggles for invulnerability, no-clip movement/dashing, show-map rendering, and hyper-speed movement. Cheat state is not serialized into normal save data; show-map rendering is non-destructive and only dirties the minimap cache when toggled. Added regression coverage in `tests/cheat-menu.test.js`. |
