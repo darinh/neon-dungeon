@@ -20,10 +20,12 @@ const PLATFORM = read('src/platform.js');
 test('secret rooms spawn a distinct pre-rolled weapon cache reward', () => {
   assert.match(CONTENT_PICKUPS, /class WeaponCacheItem[\s\S]*this\.isWeaponCache = true;/,
     'weapon cache must be a distinct pickup class');
-  assert.match(CONTENT, /function rollSecretWeaponCacheWeapon\(player, floor\)[\s\S]*WEAPON_KEYS\.filter\(k => !owned\.has\(k\)\)/,
+  assert.match(CONTENT_PICKUPS, /function rollSecretWeaponCacheWeapon\(player, floor\)[\s\S]*WEAPON_KEYS\.filter\(k => !owned\.has\(k\)\)/,
     'secret cache roll should prefer weapon bases not already in the belt');
-  assert.match(CONTENT, /return rollWeapon\(baseKey, Math\.min\(10, \(floor \| 0\) \+ 2\)\);/,
+  assert.match(CONTENT_PICKUPS, /return rollWeapon\(baseKey, Math\.min\(10, \(floor \| 0\) \+ 2\)\);/,
     'secret cache weapons should be floor-scaled and slightly premium');
+  assert.doesNotMatch(CONTENT, /function rollSecretWeaponCacheWeapon\(player, floor\)/,
+    'secret cache reward rolling should live with pickup helpers, not generation');
 
   const revealIdx = GAME.indexOf('revealSecretRoom(sr)');
   const creditIdx = GAME.indexOf('const secretCr =', revealIdx);

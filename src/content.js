@@ -1786,23 +1786,3 @@ function generateFloor(floorNum, opts) {
 
   return { map, rooms, spawnRoom, defaultSpawnRoom, preferredSpawnResolved: !!preferredSpawn, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
 }
-
-/**
- * @param {any} player
- * @param {number} floor
- */
-function rollSecretWeaponCacheWeapon(player, floor) {
-  const belt = player && Array.isArray(player.weapons) ? player.weapons : [];
-  const owned = new Set(belt.map((/** @type {any} */ w) => w && w._base).filter(Boolean));
-  let bases = WEAPON_KEYS.filter(k => !owned.has(k));
-  if (bases.length === 0 && player && player.weapon && player.weapon._base) {
-    bases = WEAPON_KEYS.filter(k => k !== player.weapon._base);
-  }
-  if (bases.length === 0) bases = WEAPON_KEYS.slice();
-  const baseKey = /** @type {string} */ (bases[rndInt(0, bases.length - 1, 'loot')]);
-  return rollWeapon(baseKey, Math.min(10, (floor | 0) + 2));
-}
-
-// Legacy compatibility: items on the ground still use a type for colour/visual
-const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
-function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length-1)]; }
