@@ -44,6 +44,7 @@ const requiredInIndex = [
   './src/content/upgrades.js',
   './src/content/pickups.js',
   './src/content/projectiles.js',
+  './src/content/music.js',
   './src/content.js',
   './src/entities.js',
   './src/render.js',
