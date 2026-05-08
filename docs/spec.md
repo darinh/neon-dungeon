@@ -4009,7 +4009,7 @@ Skipped on saved-run resume (same guard as modifier banner).
 Renderer: `drawBiomeCard()` in `src/render.js`.
 
 **Ambient particles** — Existing emitter system (`updateAmbient` in
-`src/content.js:1292`) retains its tile-driven DUST/EMBER/ZAP/STEAM/WISP
+`src/content/effects.js`) retains its tile-driven DUST/EMBER/ZAP/STEAM/WISP
 kinds. DUST colour is biome-tinted from `BIOME_PALETTES[palette].dust`.
 Budget stays at `AMB_CAP = 80`. A dedicated perf timer records under
 `biome-ambient` (separate from `particles`) — surfaces in the F3 HUD.
@@ -4908,6 +4908,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.34 | Content module split: gameplay feedback effects now live in `src/content/effects.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `spawnParticles`, `updateParticles`, `drawParticles`, `clearParticles`, `particleCount`, `updateAmbient`, `drawAmbient`, `spawnDmgText`, `updateFloatingTexts`, `drawFloatingTexts`, `triggerShake`, and `updateShake` remain unchanged for runtime callers. |
 | v6.1.33 | Content module split: level-up perk registry, capstone metadata, perk application, `hasAugment()`, and augment-choice rolling now live in `src/content/perks.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `PERK_POOL`, `PERK_CAPSTONE`, `PERK_LEVELS`, `rollPerkChoices`, `applyPerk`, `grantCapstone`, `hasAugment`, and `rollAugmentChoices` remain unchanged for runtime callers. |
 | v6.1.32 | Content module split: vendor inventory generation, shop pricing, and shop/choice option factories now live in `src/content/shop.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `makeWeaponOption`, `makeHackwareOption`, `pickUpgradeOption`, `makeAugmentShopOption`, `SHOP_PRICES`, `shopPrice`, and `generateShopItems` remain unchanged for runtime callers. |
 | v6.1.31 | Content module split: floor event terminal definitions and event-effect helpers now live in `src/content/events.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `EVENTS`, `STORY_PROTOCOL_TRIAL_BY_FLOOR`, `storyProtocolTrialForFloor`, `rollEvent`, `revealFloorLayout`, `openNearestLockedDoor`, `spawnProtocolAlarm`, `applyEventEffect`, `tryRareTerminalModuleDrop`, and `tryRareTerminalLogDrop` remain unchanged for runtime callers. |
