@@ -37,6 +37,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesArchitectWalls.replaceAll('\\', '/'), 'src/entities/architect-walls.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesBeacons.replaceAll('\\', '/'), 'src/entities/beacons.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCrates.replaceAll('\\', '/'), 'src/entities/crates.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
@@ -68,6 +69,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesBeacons').endsWith('src/entities/beacons.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCrates').endsWith('src/entities/crates.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
@@ -94,6 +96,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
   const aiHelperSource = readSourceFile(__dirname, 'entitiesAiHelpers');
   const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
+  const beaconSource = readSourceFile(__dirname, 'entitiesBeacons');
   const crateSource = readSourceFile(__dirname, 'entitiesCrates');
   const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
@@ -144,6 +147,13 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(architectWallSource, /function\s+pickArchitectTarget\s*\(/);
   assert.match(architectWallSource, /function\s+_isTileOccupiedByActor\s*\(/);
   assert.match(architectWallSource, /function\s+updatePlacedWalls\s*\(/);
+  assert.match(beaconSource, /const\s+BEACON_COUNTDOWN\s*=/);
+  assert.match(beaconSource, /function\s+createBeacon\s*\(/);
+  assert.match(beaconSource, /function\s+damageBeacon\s*\(/);
+  assert.match(beaconSource, /function\s+destroyBeacon\s*\(/);
+  assert.match(beaconSource, /function\s+damageBeaconsInRadius\s*\(/);
+  assert.match(beaconSource, /function\s+updateBeacons\s*\(/);
+  assert.match(beaconSource, /function\s+drawBeacons\s*\(/);
   assert.match(crateSource, /function\s+createCrate\s*\(/);
   assert.match(crateSource, /function\s+getCrateAt\s*\(/);
   assert.match(crateSource, /function\s+damageCrate\s*\(/);
@@ -180,6 +190,13 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+pickArchitectTarget\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+_isTileOccupiedByActor\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+updatePlacedWalls\s*\(/);
+  assert.doesNotMatch(sources.entities, /const\s+BEACON_COUNTDOWN\s*=/);
+  assert.doesNotMatch(sources.entities, /function\s+createBeacon\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+damageBeacon\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+destroyBeacon\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+damageBeaconsInRadius\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+updateBeacons\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+drawBeacons\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+createCrate\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+getCrateAt\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+damageCrate\s*\(/);
