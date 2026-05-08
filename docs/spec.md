@@ -4498,8 +4498,9 @@ Runtime groups:
    `src/content/weapons.js` for weapon and affix catalogs, `src/content/perks.js`
    for perk and augment-choice helpers, then
    `src/content/floor-generator.js`, `src/content.js`, `src/entities.js`,
-   `src/render.js`, and `src/game.js` for floor generation, the legacy content
-   facade, actors/combat, rendering/HUD, and game-state orchestration.
+   extracted `src/entities/*.js` support modules, `src/render.js`, and
+   `src/game.js` for floor generation, the legacy content facade,
+   actors/combat, rendering/HUD, and game-state orchestration.
 
 Runtime game states are centralized in `src/game-states.js`. `src/game.js`
 captures the exported vocabulary through `requireNEON('gameStates', 'src/game.js')`;
@@ -4916,6 +4917,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.47 | Entity module split: crate runtime helpers now live in `src/entities/crates.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `createCrate`, `getCrateAt`, `damageCrate`, `destroyCrate`, `damageCrateAtTile`, and `damageCratesInRadius` remain unchanged for generation, projectile, volatile-core, and damage-radius callers. |
 | v6.1.46 | Entity module split: volatile core runtime now lives in `src/entities/volatile-cores.js`, loaded after `src/entities.js` and before `src/render.js`/`src/game.js`. The public globals `createVCore`, `primeVCoresInRadius`, `detonateVCore`, `updateVCores`, and `drawVCores` remain unchanged for generation, projectile, update, and render callers. |
 | v6.1.45 | Entity module split: pure enemy AI helpers now live in `src/entities/ai-helpers.js`, loaded after `src/entities.js`. The public helper globals `isInsideCone`, `getPositionAgoFromHistory`, `predictFromHistory`, `pickMirrorKinematics`, and `magnetonBendDir` remain unchanged for Player helpers and enemy AI methods while reusing MIRROR/MAGNETON tuning constants from `src/entities.js`. |
 | v6.1.44 | Entity module split: death notification hooks now live in `src/entities/death-hooks.js`, loaded after `src/entities.js`. The public globals `notifyGhostProjectors` and `notifyVengeance` remain unchanged for `Enemy.die()` while reusing entity tuning constants and the room index. |
