@@ -41,6 +41,7 @@ const requiredInIndex = [
   './engine/dungeon/reachability.js',
   './src/content/terminals.js',
   './src/content/weapons.js',
+  './src/content/upgrades.js',
   './src/content.js',
   './src/entities.js',
   './src/render.js',
