@@ -29,7 +29,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
 );
 
 // Strip JS comments before regex assertions so a `// case 'DECOY_TURRET':`

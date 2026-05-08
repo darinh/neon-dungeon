@@ -4,7 +4,7 @@
 // inverse of AUTONOMY: where AUTONOMY reduces hackware cooldowns by
 // 25% (×0.75), JAMMED increases them by 25% (×1.25). The two gates
 // live in the same multiplicative chain inside `activateHackware()`
-// in src/content.js, so the structure makes the symmetry obvious to
+// in src/content/hackware.js, so the structure makes the symmetry obvious to
 // any future reader and rebalances a pool that had drifted to a
 // 13:11 positive skew (PRIMED ➜ 13 positive vs 11 neg-or-neutral).
 // JAMMED brings the split back to 13:12.
@@ -17,14 +17,14 @@
 // the literal product would be ×0.75 × 1.25 = ×0.9375, a near-wash
 // that intentionally degrades gracefully rather than catastrophically.
 //
-// content.js is browser-only (no UMD/CommonJS exports), so these tests
+// content modules are browser-only (no UMD/CommonJS exports), so these tests
 // assert structural invariants any working JAMMED modifier must
 // satisfy:
 //   - Registry shape (label/desc/colour/icon) so MODIFIER_KEYS picks
 //     it up and the HUD badge in render.js renders correctly.
 //   - JAMMED is a top-level key inside FLOOR_MODIFIERS.
 //   - The activation-time gate (_CG.modifier === 'JAMMED') reads the
-//     canonical content.js floor-modifier global (a typo to
+//     canonical content-module floor-modifier global (a typo to
 //     game.modifier would silently disable the penalty).
 //   - The ×1.25 multiplier sits inside `activateHackware()` so it
 //     ONLY applies on activation (not on cooldown ticks — those count
@@ -72,7 +72,7 @@ const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_P
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content', 'modifiers.js'), 'utf8'
 ) + '\n' + fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
 );
 const RENDER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
@@ -314,7 +314,7 @@ test('activateHackware JAMMED ternary is a DIRECT multiplicative factor (no wrap
     "AUTONOMY ternary must remain a DIRECT multiplicative factor (preceded by `*`, followed by `*` for the next factor in the chain) — no wrapping neutralizer");
 });
 
-test('_CG.modifier === "JAMMED" appears EXACTLY once in content.js', () => {
+test('_CG.modifier === "JAMMED" appears EXACTLY once in content modules', () => {
   // Mirror the AUTONOMY exact-count assertion: any future addition of
   // a second JAMMED gate (e.g. a duplicate accidentally introduced via
   // merge / copy-paste, or a second cooldown-set site that double-
@@ -323,7 +323,7 @@ test('_CG.modifier === "JAMMED" appears EXACTLY once in content.js', () => {
   // point.
   const all = CONTENT_CODE.match(/_CG\.modifier\s*===\s*'JAMMED'/g) || [];
   assert.equal(all.length, 1,
-    `content.js must contain exactly 1 _CG.modifier === 'JAMMED' reference (activateHackware multiplier); got ${all.length}`);
+    `content modules must contain exactly 1 _CG.modifier === 'JAMMED' reference (activateHackware multiplier); got ${all.length}`);
 });
 
 // ─── HUD wiring (modifier badge auto-picks up JAMMED) ─────────────────

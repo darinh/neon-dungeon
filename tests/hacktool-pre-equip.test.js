@@ -52,7 +52,7 @@ const UPGRADES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'meta', 'upgrades.js'), 'utf8'
 );
 const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
 );
 
 function stripComments(src) {

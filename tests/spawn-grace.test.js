@@ -26,7 +26,7 @@ const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
 const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+  path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8'
 );
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
