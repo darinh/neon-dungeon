@@ -49,6 +49,7 @@ const ASSETS = [
   './src/content/projectiles.js',
   './src/content/music.js',
   './src/content/modifiers.js',
+  './src/content/meta-save.js',
   './src/content/combo.js',
   './src/content/events.js',
   './src/content/shop.js',
