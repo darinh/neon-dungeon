@@ -13,16 +13,18 @@
 // Stacks multiplicatively with BERSERKER through the same chokepoint
 // (entities.js Player.effectiveAtk), mirroring the established pattern.
 //
-// Source-text wiring tests (entities.js / content.js are browser-only —
+// Source-text wiring tests (entities.js / content modules are browser-only —
 // no UMD/CommonJS exports — same pattern as stride / shock-pulse tests).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const EVENTS   = readSourceFile(__dirname, 'contentEvents');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
@@ -165,7 +167,7 @@ test('combo.count reset on floor populate is preserved (anti-leak invariant)', (
 // ─── SIGNAL BOOST synergy is intentional, not exploit ─────────────────────
 
 test('OVERDRIVE behaviour matches its description (score-combo gated, not kill-only)', () => {
-  // GHOST_SIGNAL crate item directly sets combo.count = 5 (content.js).
+  // GHOST_SIGNAL crate item directly sets combo.count = 5 (content/events.js).
   // OVERDRIVE intentionally fires off raw combo state, so SIGNAL BOOST
   // granting OVERDRIVE-owners a ~12% ATK window for 3s is a designed
   // synergy — the description "Score combo buffs damage" advertises this
@@ -176,6 +178,6 @@ test('OVERDRIVE behaviour matches its description (score-combo gated, not kill-o
   assert.match(pool[0], /OVERDRIVE\s*:\s*\{[^}]*desc\s*:\s*['"][^'"]*[Ss]core[^'"]*['"]/,
     'OVERDRIVE desc must mention "score combo" so players understand SIGNAL BOOST synergy');
   // GHOST_SIGNAL must still set combo.count synthetically (the synergy hook).
-  assert.match(CONTENT, /case\s+['"]GHOST_SIGNAL['"][\s\S]*?combo\.count\s*=\s*5/,
+  assert.match(EVENTS, /case\s+['"]GHOST_SIGNAL['"][\s\S]*?combo\.count\s*=\s*5/,
     'GHOST_SIGNAL must still set combo.count = 5 (the synergy source)');
 });

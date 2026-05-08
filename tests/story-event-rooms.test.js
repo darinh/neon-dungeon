@@ -6,9 +6,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { readSourceFile } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
+const EVENTS_SRC = readSourceFile(__dirname, 'contentEvents');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'spec.md'), 'utf8');
 const biomes = require(path.join(ROOT, 'src', 'data', 'biomes.js'));
@@ -38,6 +39,27 @@ function extractArrayBlock(src, name) {
  * @param {string} src
  * @param {string} name
  */
+function extractObjectBlock(src, name) {
+  const start = src.indexOf('const ' + name + ' = {');
+  assert.ok(start >= 0, name + ' declaration must exist');
+  const open = src.indexOf('{', start);
+  assert.ok(open > start, name + ' must be an object literal');
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(open, i + 1);
+    }
+  }
+  assert.fail(name + ' object literal must be balanced');
+}
+
+/**
+ * @param {string} src
+ * @param {string} name
+ */
 function extractFunctionSource(src, name) {
   const start = src.indexOf('function ' + name + '(');
   assert.ok(start >= 0, name + ' function must exist');
@@ -58,14 +80,14 @@ function extractFunctionSource(src, name) {
 /** @returns {any} */
 function storyEventSandbox() {
   const script = [
-    'const EVENTS = ' + extractArrayBlock(CONTENT, 'EVENTS') + ';',
-    "const STORY_PROTOCOL_TRIAL_BY_FLOOR = { 2: 'ROUTE_PROOF', 5: 'COOPERATION_PROTOCOL', 8: 'CONSENT_LOCK' };",
-    extractFunctionSource(CONTENT, 'storyProtocolTrialForFloor'),
-    extractFunctionSource(CONTENT, 'rollEvent'),
-    extractFunctionSource(CONTENT, 'revealFloorLayout'),
-    extractFunctionSource(CONTENT, 'openNearestLockedDoor'),
-    extractFunctionSource(CONTENT, 'spawnProtocolAlarm'),
-    extractFunctionSource(CONTENT, 'applyEventEffect'),
+    'const EVENTS = ' + extractArrayBlock(EVENTS_SRC, 'EVENTS') + ';',
+    'const STORY_PROTOCOL_TRIAL_BY_FLOOR = ' + extractObjectBlock(EVENTS_SRC, 'STORY_PROTOCOL_TRIAL_BY_FLOOR') + ';',
+    extractFunctionSource(EVENTS_SRC, 'storyProtocolTrialForFloor'),
+    extractFunctionSource(EVENTS_SRC, 'rollEvent'),
+    extractFunctionSource(EVENTS_SRC, 'revealFloorLayout'),
+    extractFunctionSource(EVENTS_SRC, 'openNearestLockedDoor'),
+    extractFunctionSource(EVENTS_SRC, 'spawnProtocolAlarm'),
+    extractFunctionSource(EVENTS_SRC, 'applyEventEffect'),
     'this.EVENTS = EVENTS;',
     'this.rollEvent = rollEvent;',
     'this.applyEventEffect = applyEventEffect;',
@@ -107,7 +129,7 @@ function storyEventSandbox() {
 }
 
 test('event terminals include story-mechanical protocol trials', () => {
-  const events = extractArrayBlock(CONTENT, 'EVENTS');
+  const events = extractArrayBlock(EVENTS_SRC, 'EVENTS');
 
   for (const id of ['ROUTE_PROOF', 'COOPERATION_PROTOCOL', 'CONSENT_LOCK']) {
     assert.match(events, new RegExp("id:'" + id + "'"), id + ' must exist in EVENTS');
@@ -122,10 +144,10 @@ test('event terminals include story-mechanical protocol trials', () => {
 });
 
 test('rollEvent guarantees protocol trials on selected non-boss story floors', () => {
-  const rollEvent = extractFunctionSource(CONTENT, 'rollEvent');
-  const storyTrial = extractFunctionSource(CONTENT, 'storyProtocolTrialForFloor');
+  const rollEvent = extractFunctionSource(EVENTS_SRC, 'rollEvent');
+  const storyTrial = extractFunctionSource(EVENTS_SRC, 'storyProtocolTrialForFloor');
 
-  assert.match(CONTENT, /const STORY_PROTOCOL_TRIAL_BY_FLOOR = \{\s*2: 'ROUTE_PROOF',\s*5: 'COOPERATION_PROTOCOL',\s*8: 'CONSENT_LOCK',\s*\}/,
+  assert.match(EVENTS_SRC, /const STORY_PROTOCOL_TRIAL_BY_FLOOR = \{\s*2: 'ROUTE_PROOF',\s*5: 'COOPERATION_PROTOCOL',\s*8: 'CONSENT_LOCK',\s*\}/,
     'story floors must map to stable protocol trial ids');
   assert.match(storyTrial, /return STORY_PROTOCOL_TRIAL_BY_FLOOR\[floor\] \|\| null;/,
     'storyProtocolTrialForFloor must not invent non-story-floor events');
@@ -147,15 +169,15 @@ test('rollEvent guarantees protocol trials on selected non-boss story floors', (
 });
 
 test('protocol trial effects mutate real floor and run state', () => {
-  const applyEventEffect = extractFunctionSource(CONTENT, 'applyEventEffect');
+  const applyEventEffect = extractFunctionSource(EVENTS_SRC, 'applyEventEffect');
 
-  assert.match(CONTENT, /function revealFloorLayout\(gm\)[\s\S]*dungeon\.visited\[ty\]\[tx\] = 1;[\s\S]*gm\.markMinimapDirty\(\);/,
+  assert.match(EVENTS_SRC, /function revealFloorLayout\(gm\)[\s\S]*dungeon\.visited\[ty\]\[tx\] = 1;[\s\S]*gm\.markMinimapDirty\(\);/,
     'Route Proof must use a helper that reveals non-secret map tiles and marks the minimap dirty');
-  assert.match(CONTENT, /function openNearestLockedDoor\(gm, player\)[\s\S]*T\.LOCKED_R[\s\S]*T\.LOCKED_B[\s\S]*T\.LOCKED_G[\s\S]*dungeon\.map\[best\.y\]\[best\.x\] = T\.DOOR_OPEN;/,
+  assert.match(EVENTS_SRC, /function openNearestLockedDoor\(gm, player\)[\s\S]*T\.LOCKED_R[\s\S]*T\.LOCKED_B[\s\S]*T\.LOCKED_G[\s\S]*dungeon\.map\[best\.y\]\[best\.x\] = T\.DOOR_OPEN;/,
     'Route Proof patch path must actually open a locked door');
-  assert.match(CONTENT, /dungeon\.map\[best\.y\]\[best\.x\] = T\.DOOR_OPEN;[\s\S]*gm\.markMapMutated\(\);/,
+  assert.match(EVENTS_SRC, /dungeon\.map\[best\.y\]\[best\.x\] = T\.DOOR_OPEN;[\s\S]*gm\.markMapMutated\(\);/,
     'Route Proof patch path must invalidate map, LOS, and FOV caches after opening a lock');
-  assert.match(CONTENT, /function spawnProtocolAlarm\(gm, floor, count, colour\)[\s\S]*spawnEnemy\(pickEnemyType\(floor\)[\s\S]*enemies\.push\(e\);/,
+  assert.match(EVENTS_SRC, /function spawnProtocolAlarm\(gm, floor, count, colour\)[\s\S]*spawnEnemy\(pickEnemyType\(floor\)[\s\S]*enemies\.push\(e\);/,
     'riskier protocol paths must spawn real enemies through the floor enemy table');
 
   assert.match(applyEventEffect, /case 'ROUTE_PROOF': \{[\s\S]*revealFloorLayout\(gm\);[\s\S]*player\.gainXP\(xp\);/,
