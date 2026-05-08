@@ -14,13 +14,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
+const CONTENT = readSourceFile(__dirname, 'content');
+const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -28,7 +28,7 @@ const SW = fs.readFileSync(
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
 
 test('PRISTINE entry exists in PERK_POOL with required fields', () => {
-  const m = CONTENT.match(/PRISTINE\s*:\s*\{[^}]*\}/);
+  const m = CONTENT_PERKS.match(/PRISTINE\s*:\s*\{[^}]*\}/);
   assert.ok(m, 'PRISTINE must be present in PERK_POOL');
   assert.match(m[0], /name\s*:\s*'Pristine'/, 'name must be Pristine');
   assert.match(m[0], /icon\s*:/, 'icon required');
@@ -37,7 +37,7 @@ test('PRISTINE entry exists in PERK_POOL with required fields', () => {
 });
 
 test('PRISTINE desc references the 90% HP threshold and +25%', () => {
-  const m = CONTENT.match(/PRISTINE\s*:\s*\{[^}]*\}/);
+  const m = CONTENT_PERKS.match(/PRISTINE\s*:\s*\{[^}]*\}/);
   assert.ok(m);
   assert.match(m[0], /90%/, 'desc must mention 90% threshold');
   assert.match(m[0], /25%/, 'desc must mention 25% damage');

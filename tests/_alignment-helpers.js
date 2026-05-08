@@ -8,8 +8,8 @@
 // braceless) alignment-test patterns are documented.
 //
 // PURPOSE: when an HUD badge in src/content.js getStatusEffects() must
-// stay in lock-step with a runtime multiplier in src/entities.js (e.g.
-// Player.takeDamage / Player.effectiveAtk), substring-only matches
+// stay in lock-step with a runtime multiplier in src/entities.js or a
+// source-of-truth declaration in a split content module, substring-only matches
 // silently false-pass on any added conjunct/disjunct or any structural
 // refactor that hoists the if-block under an outer condition. The
 // canonical pattern parses the source text of both files, extracts the
@@ -190,8 +190,9 @@ function normaliseBadgePredicate(cond) {
 }
 
 /**
- * Load the source text of `src/content.js` and `src/entities.js` and
- * return six derived buffers used by every alignment test:
+ * Load the source text of `src/content.js`, split companion content modules,
+ * and `src/entities.js`, then return six derived buffers used by every
+ * alignment test:
  *   - CONTENT / ENTITIES         — raw source (with comments + string literals)
  *   - CONTENT_CODE / ENTITIES_CODE — comments stripped (anchor regexes
  *                                    won't accidentally match comments)
@@ -213,7 +214,7 @@ function normaliseBadgePredicate(cond) {
  * }}
  */
 function loadAlignmentSources(testsDir) {
-  const CONTENT = readSourceFile(testsDir, 'content');
+  const CONTENT = readSourceFile(testsDir, 'content') + '\n' + readSourceFile(testsDir, 'contentPerks');
   const ENTITIES = readSourceFile(testsDir, 'entities');
   const CONTENT_CODE = stripComments(CONTENT);
   const ENTITIES_CODE = stripComments(ENTITIES);

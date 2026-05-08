@@ -4493,7 +4493,8 @@ Runtime groups:
 4. `src/meta/*.js` progression, data access, and configured game systems exposed
    through `NEON.*`.
 5. `src/content/terminals.js` for lore-terminal content,
-   `src/content/weapons.js` for weapon and affix catalogs, then
+   `src/content/weapons.js` for weapon and affix catalogs, `src/content/perks.js`
+   for perk and augment-choice helpers, then
    `src/content.js`, `src/entities.js`, `src/render.js`, and `src/game.js` for
    content/generation, actors/combat, rendering/HUD, and game-state orchestration.
 
@@ -4907,6 +4908,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.33 | Content module split: level-up perk registry, capstone metadata, perk application, `hasAugment()`, and augment-choice rolling now live in `src/content/perks.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `PERK_POOL`, `PERK_CAPSTONE`, `PERK_LEVELS`, `rollPerkChoices`, `applyPerk`, `grantCapstone`, `hasAugment`, and `rollAugmentChoices` remain unchanged for runtime callers. |
 | v6.1.32 | Content module split: vendor inventory generation, shop pricing, and shop/choice option factories now live in `src/content/shop.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `makeWeaponOption`, `makeHackwareOption`, `pickUpgradeOption`, `makeAugmentShopOption`, `SHOP_PRICES`, `shopPrice`, and `generateShopItems` remain unchanged for runtime callers. |
 | v6.1.31 | Content module split: floor event terminal definitions and event-effect helpers now live in `src/content/events.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `EVENTS`, `STORY_PROTOCOL_TRIAL_BY_FLOOR`, `storyProtocolTrialForFloor`, `rollEvent`, `revealFloorLayout`, `openNearestLockedDoor`, `spawnProtocolAlarm`, `applyEventEffect`, `tryRareTerminalModuleDrop`, and `tryRareTerminalLogDrop` remain unchanged for runtime callers. |
 | v6.1.30 | Content module split: difficulty and floor-modifier registries now live in `src/content/modifiers.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `DIFFICULTIES`, `DIFF_ORDER`, `getDiff`, `FLOOR_MODIFIERS`, `MODIFIER_KEYS`, `getMod`, and `modSpeed` remain unchanged for runtime callers. |

@@ -17,10 +17,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
-);
+const CONTENT = readSourceFile(__dirname, 'contentPerks');
 const CONTENT_PROJECTILES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8'
 );
@@ -33,7 +32,7 @@ const SW = fs.readFileSync(
 test('PARRY is registered in PERK_POOL', () => {
   // Anchor on the full entry shape so a rename or accidental drop is caught.
   const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in src/content.js');
+  assert.ok(pool, 'PERK_POOL block must be locatable in src/content/perks.js');
   assert.match(pool[0], /PARRY:\s*\{[^}]*name:\s*'Phase Parry'[^}]*\}/,
     'PARRY entry must declare name: \'Phase Parry\'');
   assert.match(pool[0], /PARRY:\s*\{[^}]*icon:\s*'⇄'/,
