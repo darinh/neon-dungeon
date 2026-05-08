@@ -1,11 +1,11 @@
 'use strict';
-// Unit tests for getStatusEffects (src/content.js). Verifies that the player
+// Unit tests for getStatusEffects (src/content/status.js). Verifies that the player
 // HUD status badge list correctly reflects timed buffs/debuffs — specifically
 // the gaps closed in the status-bar-gaps task:
 //   * shock countdown text (was static "SHOCK", now shows seconds remaining)
 //   * toxic-pool slow indicator (was invisible, now shows "☣ TOXIC")
 //
-// content.js is browser-only (UMD via <script>, touches canvas globals on
+// content/status.js is browser-only (UMD via <script>, touches canvas globals on
 // load), so we extract the function source via regex + node:vm rather than
 // require() the file. Same pattern as tests/resonator.test.js.
 
@@ -15,17 +15,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const CONTENT = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8');
+const CONTENT_STATUS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'status.js'), 'utf8');
 
-const fnMatch = CONTENT.match(/function\s+getStatusEffects\s*\([\s\S]*?\n\}\n/);
-if (!fnMatch) throw new Error('getStatusEffects definition not found in content.js');
+const fnMatch = CONTENT_STATUS.match(/function\s+getStatusEffects\s*\([\s\S]*?\n\}\n/);
+if (!fnMatch) throw new Error('getStatusEffects definition not found in src/content/status.js');
 
 // Sandbox: getStatusEffects references a handful of module-scope helpers
-// (_CG, getMod, hackwareEffects, MAX_AUGMENTS, HACKWARE). Stub them so the
+// (_SG, getMod, hackwareEffects, MAX_AUGMENTS, HACKWARE). Stub them so the
 // function runs against a bare player object without pulling in the rest of
 // content.js. None of the gap tests exercise these branches.
 const sandbox = {
-  _CG: { modifier: null },
+  _SG: { modifier: null },
   getMod: () => ({ icon: '?', label: '?', colour: '#fff' }),
   hackwareEffects: [],
   MAX_AUGMENTS: 6,
