@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENTITY_RENDER_PASSES = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'render-passes.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
@@ -145,8 +146,8 @@ test('drawTetherLeashes rendered from game.js render pass', () => {
   // Leash visual must be drawn or the slow source is invisible (bad
   // UX). Game.js should call it next to drawReaperPlayerRings (same
   // "global pre-player overlay" pattern).
-  assert.match(ENTITIES, /function drawTetherLeashes/,
-    'drawTetherLeashes function must be defined in entities.js');
+  assert.match(ENTITY_RENDER_PASSES, /function drawTetherLeashes/,
+    'drawTetherLeashes function must be defined in entities render passes');
   assert.match(GAME, /drawTetherLeashes\s*\(/,
     'game.js must call drawTetherLeashes');
 });
@@ -158,9 +159,9 @@ test('drawTetherLeashes telegraph parity with aiTether range', () => {
   // Codex caught a 0.05 cutoff that created a small dead-zone where
   // slow was ~2% but no leash was drawn (pd in (1.0, 1.2]). Fixed
   // to `t <= 0` — only skip when slow is mathematically zero.
-  const idx = ENTITIES.indexOf('function drawTetherLeashes');
+  const idx = ENTITY_RENDER_PASSES.indexOf('function drawTetherLeashes');
   assert.ok(idx >= 0, 'drawTetherLeashes body not found');
-  const body = ENTITIES.slice(idx, idx + 3000);
+  const body = ENTITY_RENDER_PASSES.slice(idx, idx + 3000);
   assert.match(body, /TETHER_FIELD_RANGE/,
     'drawTetherLeashes must use TETHER_FIELD_RANGE for parity');
   // Anti-regression: no t<=0.05 / t<0.1 / t<X dead-zone cutoffs
