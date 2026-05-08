@@ -2,7 +2,7 @@
 // OVERDRIVE perk — wiring + behaviour tests.
 //
 // OVERDRIVE is a kill-streak-gated offensive perk that PIGGYBACKS on
-// the existing score-combo system (`combo.count` in content.js). While
+// the existing score-combo system (`combo.count` in content/combo.js). While
 // combo.count >= 2, Player.effectiveAtk() multiplies ATK by
 // 1 + min(0.30, (combo.count - 1) * 0.03), capping at +30% at combo 11+.
 // No new mutable state — combo.count auto-clears via COMBO_WINDOW=3s,
@@ -24,6 +24,7 @@ const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const CONTENT  = readSourceFile(__dirname, 'contentPerks');
+const COMBO    = readSourceFile(__dirname, 'contentCombo');
 const EVENTS   = readSourceFile(__dirname, 'contentEvents');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
@@ -69,9 +70,22 @@ test('OVERDRIVE branch in effectiveAtk uses tiles/sec-style fixed bonus, capped'
   assert.match(slice, /0\.03/,
     'OVERDRIVE per-combo-level bonus must be 0.03 (3% per stack)');
   // Gate must be combo.count >= 2 (single kill grants no bonus, matches the
-  // existing comboMultiplier() gate in content.js).
+  // existing comboMultiplier() gate in content/combo.js).
   assert.match(slice, />=\s*2\b/,
     'OVERDRIVE must gate on combo.count >= 2 to mirror comboMultiplier()');
+});
+
+test('score-combo helpers live in the content combo module', () => {
+  assert.match(COMBO, /const\s+combo\s*=\s*\{\s*count:\s*0,\s*timer:\s*0,\s*best:\s*0,\s*flashTimer:\s*0\s*\}/,
+    'content/combo.js must own the combo runtime state');
+  assert.match(COMBO, /const\s+COMBO_WINDOW\s*=\s*3\b/,
+    'content/combo.js must define the self-clearing combo window');
+  assert.match(COMBO, /function\s+comboMultiplier\s*\(\s*\)\s*\{[\s\S]*?combo\.count\s*<\s*2\s*\?\s*1\s*:/,
+    'comboMultiplier() must preserve the combo.count < 2 no-bonus gate');
+  assert.match(COMBO, /function\s+registerKill\s*\(/,
+    'content/combo.js must own kill registration');
+  assert.match(COMBO, /function\s+updateCombo\s*\(/,
+    'content/combo.js must own per-frame combo expiry');
 });
 
 // ─── Numerical formula sanity ─────────────────────────────────────────────
