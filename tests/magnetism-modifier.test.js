@@ -51,6 +51,8 @@ const path = require('node:path');
 const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'modifiers.js'), 'utf8'
+) + '\n' + fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
 const GAME = fs.readFileSync(
