@@ -17,21 +17,17 @@
 //      mismatched form placed bombs thousands of pixels off-screen.
 //
 // Pattern: source-text wiring assertions (matches blink-hackware.test.js
-// and other affix/perk wiring tests). content.js / entities.js are
+// and other affix/perk wiring tests). content.js / entities modules are
 // browser-only globals, so we can't invoke FuseShard.draw directly under
 // node:test, but the failing forms are syntactically distinct from the
 // fixed forms.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const CONTENT_EFFECTS = readSourceFile(__dirname, 'contentEffects');
-const ENTITIES = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-);
+const ENTITIES_FUSE_SHARDS = readSourceFile(__dirname, 'entitiesFuseShards');
 
 function stripComments(src) {
   // Remove /* … */ and // … so source-text regex assertions don't pass on
@@ -41,7 +37,7 @@ function stripComments(src) {
 }
 
 const CONTENT_EFFECTS_NC = stripComments(CONTENT_EFFECTS);
-const ENTITIES_NC = stripComments(ENTITIES);
+const ENTITIES_FUSE_SHARDS_NC = stripComments(ENTITIES_FUSE_SHARDS);
 
 // ---------- spawnDmgText numeric rounding ----------
 
@@ -124,7 +120,7 @@ test('spawnDmgText behavioral check: integer floater is produced for float input
 
 test('FuseShard.draw uses pixel-space camera (pos * TILE - cam), matching every other draw*', () => {
   // Locate the FuseShard.draw method.
-  const drawBody = ENTITIES_NC.match(
+  const drawBody = ENTITIES_FUSE_SHARDS_NC.match(
     /class\s+FuseShard[\s\S]*?draw\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\}/
   );
   assert.ok(drawBody, 'FuseShard.draw not found');

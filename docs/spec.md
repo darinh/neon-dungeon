@@ -2789,7 +2789,8 @@ There is a 20 % chance one option is a pre-rolled weapon showing exact stats.
 | XP_CHIP | XP Chip | +50 XP | 20 |
 | VOID_SHARD | Void Shard | +1 void bomb charge | 4 |
 
-Void Shard bombs (`FuseShard` → `_detonateBombAt`) deal mob damage and shatter
+Void Shard bombs (`FuseShard` → `_detonateBombAt` in
+`src/entities/fuse-shards.js`) deal mob damage and shatter
 cracked walls only when the target has blast line-of-sight from the detonation
 point. Walls, closed/locked doors, challenge gates, crates, and intervening
 cracked walls block the blast; the cracked wall being targeted can still be
@@ -4915,6 +4916,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.41 | Entity module split: tap-bomb FuseShard runtime now lives in `src/entities/fuse-shards.js`, loaded after `src/entities.js` and before `src/render.js`/`src/game.js`. The public globals `fuseShards`, `FuseShard`, `BOMB_DROP_COOLDOWN`, `updateFuseShards`, `drawFuseShards`, and `clearFuseShards` remain unchanged for player, save/restore, update, and render callers. |
 | v6.1.40 | Content module split: dungeon generation and room feature placement now live in `src/content/floor-generator.js`, loaded before the legacy `src/content.js` facade in `index.html`, `scripts/manifest.js`, and `sw.js`. The public globals `createMap`, `carveRect`, `carveCorridor`, `bfsRooms`, `resolvePreferredSpawnRoom`, and `generateFloor` remain unchanged for runtime callers. |
 | v6.1.39 | Content module split: pickup loot helpers now live in `src/content/pickups.js` with the pickup classes. The public globals `ITEM_TYPES`, `pickItemType`, and `rollSecretWeaponCacheWeapon` remain unchanged for runtime callers, while `src/content.js` is narrowed to dungeon generation and lore-terminal placement. |
 | v6.1.38 | Content module split: lighting/FOV logic now lives in `src/content/lighting.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The public global `updateLighting` remains unchanged for runtime callers; `tileHasLOS` remains colocated as the FOV LOS helper. |
