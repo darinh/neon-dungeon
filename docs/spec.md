@@ -4916,6 +4916,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.46 | Entity module split: volatile core runtime now lives in `src/entities/volatile-cores.js`, loaded after `src/entities.js` and before `src/render.js`/`src/game.js`. The public globals `createVCore`, `primeVCoresInRadius`, `detonateVCore`, `updateVCores`, and `drawVCores` remain unchanged for generation, projectile, update, and render callers. |
 | v6.1.45 | Entity module split: pure enemy AI helpers now live in `src/entities/ai-helpers.js`, loaded after `src/entities.js`. The public helper globals `isInsideCone`, `getPositionAgoFromHistory`, `predictFromHistory`, `pickMirrorKinematics`, and `magnetonBendDir` remain unchanged for Player helpers and enemy AI methods while reusing MIRROR/MAGNETON tuning constants from `src/entities.js`. |
 | v6.1.44 | Entity module split: death notification hooks now live in `src/entities/death-hooks.js`, loaded after `src/entities.js`. The public globals `notifyGhostProjectors` and `notifyVengeance` remain unchanged for `Enemy.die()` while reusing entity tuning constants and the room index. |
 | v6.1.43 | Entity module split: pre-player entity render passes now live in `src/entities/render-passes.js`, loaded after `src/entities.js` and before `src/game.js`. The public globals `drawReaperPlayerRings` and `drawTetherLeashes` remain unchanged for the game render loop while continuing to reuse entity collections and REAPER/TETHER tuning constants from `src/entities.js`. |

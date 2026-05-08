@@ -38,6 +38,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesDeathHooks: path.join('src', 'entities', 'death-hooks.js'),
   entitiesFuseShards: path.join('src', 'entities', 'fuse-shards.js'),
   entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
+  entitiesVolatileCores: path.join('src', 'entities', 'volatile-cores.js'),
   render: path.join('src', 'render.js'),
   game: path.join('src', 'game.js'),
 });
