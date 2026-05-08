@@ -27,8 +27,10 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { extractBranch, loadAlignmentSources }
   = require('./_alignment-helpers.js');
+const { readSourceFile } = require('./_source-files.js');
 
 const { ENTITIES, CONTENT, ENTITIES_CODE } = loadAlignmentSources(__dirname);
+const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
 const GAME = fs.readFileSync(
@@ -209,21 +211,21 @@ test('updatePlacedWalls is called from the main update loop', () => {
     'game.js update loop must call updatePlacedWalls(dt, dungeon.map) each frame');
 });
 
-test('updatePlacedWalls helper is defined in entities.js', () => {
-  assert.match(ENTITIES, /function\s+updatePlacedWalls\s*\(\s*dt\s*,\s*map\s*\)/,
+test('updatePlacedWalls helper is defined in architect-walls.js', () => {
+  assert.match(ARCHITECT_WALLS, /function\s+updatePlacedWalls\s*\(\s*dt\s*,\s*map\s*\)/,
     'updatePlacedWalls(dt, map) helper must exist');
 });
 
 // ─── Helper signatures ───────────────────────────────────────────────────
 
 test('pickArchitectTarget helper exists with documented signature', () => {
-  assert.match(ENTITIES,
+  assert.match(ARCHITECT_WALLS,
     /function\s+pickArchitectTarget\s*\(\s*ax\s*,\s*ay\s*,\s*px\s*,\s*py\s*,\s*map\s*,\s*player\s*\)/,
     'pickArchitectTarget(ax, ay, px, py, map, player) must exist');
 });
 
 test('_isTileOccupiedByActor helper exists', () => {
-  assert.match(ENTITIES,
+  assert.match(ARCHITECT_WALLS,
     /function\s+_isTileOccupiedByActor\s*\(\s*tx\s*,\s*ty\s*,\s*player\s*\)/,
     '_isTileOccupiedByActor(tx, ty, player) must exist');
 });
