@@ -32,6 +32,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   contentLighting: path.join('src', 'content', 'lighting.js'),
   contentFloorGenerator: path.join('src', 'content', 'floor-generator.js'),
   content: path.join('src', 'content.js'),
+  entitiesRoomIndex: path.join('src', 'entities', 'room-index.js'),
   entities: path.join('src', 'entities.js'),
   entitiesFuseShards: path.join('src', 'entities', 'fuse-shards.js'),
   render: path.join('src', 'render.js'),

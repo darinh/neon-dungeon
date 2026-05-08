@@ -48,31 +48,6 @@ function playerCheatEnabled(id) {
 // is reset). Damage uses dash-through canonical immunity.
 /** @type {any[]} */ const frostPatches = [];
 
-// Phase 2c — room-scoped enemy index. Support structure for Phase 4 broadphase
-// (wall turret acquisition, NEXUS link candidates, room-clear detection, frenzy
-// notify). Maintained by registerEnemyInRoom() from spawnEnemy() and
-// unregisterEnemyFromRoom() from Enemy.die(). Reset in populateFloor().
-const enemiesByRoom = new Map();
-/**
- * @param {any} [e]
- */
-function registerEnemyInRoom(e) {
-  if (!e || !e.room) return;
-  let set = enemiesByRoom.get(e.room);
-  if (!set) { set = new Set(); enemiesByRoom.set(e.room, set); }
-  set.add(e);
-}
-/**
- * @param {any} [e]
- */
-function unregisterEnemyFromRoom(e) {
-  if (!e || !e.room) return;
-  const set = enemiesByRoom.get(e.room);
-  if (set) set.delete(e);
-}
-function clearEnemiesByRoom() { enemiesByRoom.clear(); }
-function getEnemiesInRoom(/** @type {any} */ room) { return enemiesByRoom.get(room) || null; }
-
 // REAPER player-ring telegraph render pass. Drawn from game.js BEFORE the
 // player sprite so the ring sits underneath the player. Iterates the global
 // `enemies` list — bypasses the per-enemy FOV/cull in Enemy.draw because
@@ -161,17 +136,6 @@ function drawTetherLeashes(camX, camY) {
     ctx.restore();
   }
 }
-// Phase 4 — convenience iterator. Safe when `room` is null/undefined or empty.
-// Callers still must guard for e.dead / e._disguised / e._wrPhased etc.
-const _EMPTY_ENEMY_SET = new Set();
-/**
- * @param {any} [room]
- */
-function enemiesInRoomIter(room) {
-  if (!room) return _EMPTY_ENEMY_SET;
-  return enemiesByRoom.get(room) || _EMPTY_ENEMY_SET;
-}
-
 // GHOST_PROJECTOR kill hook. Called from Enemy.die() AFTER per-room
 // bookkeeping but BEFORE drops/credits. Walks live projectors in the
 // dead enemy's room; the first eligible projector (no pending memory,
