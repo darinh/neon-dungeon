@@ -29,6 +29,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   contentEffects: path.join('src', 'content', 'effects.js'),
   contentHackware: path.join('src', 'content', 'hackware.js'),
   contentStatus: path.join('src', 'content', 'status.js'),
+  contentLighting: path.join('src', 'content', 'lighting.js'),
   content: path.join('src', 'content.js'),
   entities: path.join('src', 'entities.js'),
   render: path.join('src', 'render.js'),

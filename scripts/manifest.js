@@ -54,6 +54,7 @@ const requiredInIndex = [
   './src/content/effects.js',
   './src/content/hackware.js',
   './src/content/status.js',
+  './src/content/lighting.js',
   './src/content.js',
   './src/entities.js',
   './src/render.js',

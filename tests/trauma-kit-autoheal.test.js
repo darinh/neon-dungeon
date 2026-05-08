@@ -191,7 +191,7 @@ test('tryTraumaKit: NaN/Infinity hp or maxHp → false, no charge drained, no Na
   // the threshold gate (NaN >= 25%maxHp is false), so every charge
   // would silently drain while hp stays NaN — soft-bricking the run.
   // Same defence pattern as sensorRadiusMult sanitization in
-  // src/content.js updateLighting (per stored memory 'FOV cache key').
+  // src/content/lighting.js updateLighting (per stored memory 'FOV cache key').
   const cases = [
     { hp: NaN,        maxHp: 100 },
     { hp: Infinity,   maxHp: 100 },
