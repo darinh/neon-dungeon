@@ -22,6 +22,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentProjectiles.replaceAll('\\', '/'), 'src/content/projectiles.js');
   assert.equal(SOURCE_FILE_PATHS.contentMusic.replaceAll('\\', '/'), 'src/content/music.js');
   assert.equal(SOURCE_FILE_PATHS.contentModifiers.replaceAll('\\', '/'), 'src/content/modifiers.js');
+  assert.equal(SOURCE_FILE_PATHS.contentCombo.replaceAll('\\', '/'), 'src/content/combo.js');
   assert.equal(SOURCE_FILE_PATHS.contentEvents.replaceAll('\\', '/'), 'src/content/events.js');
   assert.equal(SOURCE_FILE_PATHS.contentShop.replaceAll('\\', '/'), 'src/content/shop.js');
   assert.equal(SOURCE_FILE_PATHS.contentPerks.replaceAll('\\', '/'), 'src/content/perks.js');
@@ -42,6 +43,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentProjectiles').endsWith('src/content/projectiles.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentMusic').endsWith('src/content/music.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentModifiers').endsWith('src/content/modifiers.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentCombo').endsWith('src/content/combo.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentEvents').endsWith('src/content/events.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentShop').endsWith('src/content/shop.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentPerks').endsWith('src/content/perks.js'), true);
@@ -55,6 +57,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const projectileSource = readSourceFile(__dirname, 'contentProjectiles');
   const musicSource = readSourceFile(__dirname, 'contentMusic');
   const modifierSource = readSourceFile(__dirname, 'contentModifiers');
+  const comboSource = readSourceFile(__dirname, 'contentCombo');
   const eventSource = readSourceFile(__dirname, 'contentEvents');
   const shopSource = readSourceFile(__dirname, 'contentShop');
   const perkSource = readSourceFile(__dirname, 'contentPerks');
@@ -72,6 +75,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(musicSource, /function\s+tryPlayTitle\s*\(/);
   assert.match(modifierSource, /const\s+DIFFICULTIES\s*=\s*\{/);
   assert.match(modifierSource, /const\s+FLOOR_MODIFIERS\s*=\s*\{/);
+  assert.match(comboSource, /const\s+combo\s*=\s*\{/);
+  assert.match(comboSource, /function\s+registerKill\s*\(/);
   assert.match(eventSource, /const\s+EVENTS\s*=\s*\[/);
   assert.match(eventSource, /function\s+applyEventEffect\s*\(/);
   assert.match(shopSource, /const\s+SHOP_PRICES\s*=\s*\{/);
@@ -85,6 +90,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
+  assert.doesNotMatch(sources.content, /function\s+registerKill\s*\(/);
   assert.match(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
