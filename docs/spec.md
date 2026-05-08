@@ -4148,7 +4148,7 @@ A single 2-second white-noise AudioBuffer is generated once at init and reused f
 
 ### Procedural Music System
 
-The `music` module generates a continuous, layered soundtrack using Web Audio oscillators and noise — no audio files. Music responds to gameplay state, floor depth, and combat intensity.
+The `music` module in `src/content/music.js` generates a continuous, layered soundtrack using Web Audio oscillators and noise — no audio files. Music responds to gameplay state, floor depth, and combat intensity.
 
 **Layers:**
 
@@ -4898,6 +4898,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.29 | Content module split: procedural gameplay music and rendered title/menu music state now live in `src/content/music.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. The legacy global `music` surface remains unchanged for `src/platform.js` and `src/game.js`, while `src/content.js` now starts with hackware/content registries and generation orchestration. |
 | v6.1.28 | Content module split: pooled projectile runtime and grenade hazard-zone helpers now live in `src/content/projectiles.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. `src/content.js` retains dungeon generation, registries, and orchestration helpers, while projectile source-text and VM regression tests now read the dedicated projectile module. |
 | v6.1.27 | Content module split: runtime pickup classes and shock-pulse pickup constants now live in `src/content/pickups.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. `src/content.js` retains item type selection plus shop/event/spawn orchestration, while pickup source-text tests now read the dedicated pickup module. |
 | v6.1.26 | Content module split: upgrade and augment catalogs now live in `src/content/upgrades.js`, loaded before `src/content.js` in `index.html`, `scripts/manifest.js`, and `sw.js`. `src/content.js` retains shop/event orchestration and pickup/runtime classes, while tests and docs now read catalog source from the new module. |
