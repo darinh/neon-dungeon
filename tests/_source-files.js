@@ -35,6 +35,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesRoomIndex: path.join('src', 'entities', 'room-index.js'),
   entities: path.join('src', 'entities.js'),
   entitiesFuseShards: path.join('src', 'entities', 'fuse-shards.js'),
+  entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
   render: path.join('src', 'render.js'),
   game: path.join('src', 'game.js'),
 });

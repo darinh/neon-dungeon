@@ -19,6 +19,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_RENDER_PASSES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'render-passes.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -210,7 +213,7 @@ test('REAPER player ring is drawn from a global pass (not gated by enemy FOV/cul
   // so a marked player could see no warning if the ring rendered from
   // inside Enemy.draw (which culls off-screen mobs). Fix: dedicated global
   // pass invoked from game.js BEFORE player.draw.
-  assert.match(ENTITIES, /function\s+drawReaperPlayerRings\s*\(/,
+  assert.match(ENTITY_RENDER_PASSES, /function\s+drawReaperPlayerRings\s*\(/,
     'drawReaperPlayerRings global helper must exist');
   assert.match(GAME, /drawReaperPlayerRings\s*\(\s*cam\.x\s*,\s*cam\.y\s*\)/,
     'game.js must call drawReaperPlayerRings before player.draw');
