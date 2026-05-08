@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -284,18 +287,18 @@ test('sw.js cache freshness does not use a numeric cache version', () => {
   assert.match(SW, /cacheFromNetwork\(e\)/);
 });
 
-test('pickMirrorKinematics pure helper is defined in entities.js', () => {
+test('pickMirrorKinematics pure helper is defined in entity AI helpers', () => {
   // Structural source-of-truth check. We extract & vm-eval below.
-  assert.match(ENTITIES,
+  assert.match(ENTITY_AI_HELPERS,
     /function\s+pickMirrorKinematics\s*\(\s*shotHistory\s*\)/);
 });
 
 // ─── Pure helper unit tests (vm-extracted, no duplication) ─────────────
 
-const fnMatch = ENTITIES.match(
+const fnMatch = ENTITY_AI_HELPERS.match(
   /function\s+pickMirrorKinematics\s*\([\s\S]*?\n\}\n/
 );
-if (!fnMatch) throw new Error('pickMirrorKinematics definition not found in entities.js');
+if (!fnMatch) throw new Error('pickMirrorKinematics definition not found in ai-helpers.js');
 
 const vm = require('node:vm');
 // pickMirrorKinematics references three module-level constants — extract
