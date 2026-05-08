@@ -63,6 +63,7 @@ const requiredInIndex = [
   './src/entities/death-hooks.js',
   './src/entities/fuse-shards.js',
   './src/entities/render-passes.js',
+  './src/entities/volatile-cores.js',
   './src/render.js',
   './src/game.js',
 ];
