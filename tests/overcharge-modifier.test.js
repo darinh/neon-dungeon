@@ -36,6 +36,8 @@ const path = require('node:path');
 const { assertModifierIsTopLevelKey } = require('./_modifier-pool');
 
 const CONTENT = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'modifiers.js'), 'utf8'
+) + '\n' + fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
 const ENTITIES = fs.readFileSync(

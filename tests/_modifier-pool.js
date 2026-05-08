@@ -9,7 +9,7 @@
 // invariant.
 //
 // A single helper means future modifier additions touch only:
-//   1. The new modifier's entry in src/content.js FLOOR_MODIFIERS dict
+//   1. The new modifier's entry in src/content/modifiers.js FLOOR_MODIFIERS dict
 //   2. The new modifier's gameplay logic in entities.js / content.js
 //   3. EXPECTED_MODIFIER_POOL_SIZE in this file (1 line)
 //   4. The new modifier's own test file with its own pool-count
@@ -31,17 +31,17 @@ const assert = require('node:assert/strict');
 const EXPECTED_MODIFIER_POOL_SIZE = 26;
 
 /**
- * Assert that FLOOR_MODIFIERS in src/content.js contains exactly the
+ * Assert that FLOOR_MODIFIERS in a modifier source bundle contains exactly the
  * expected number of top-level entries. Counts lines matching
  * `^\s*[A-Z_]+:\s*\{` inside the FLOOR_MODIFIERS dict body — top-level
  * keys only (won't double-count nested object literals in fields).
  *
- * @param {string} content - Raw text of src/content.js.
+ * @param {string} content - Raw text containing src/content/modifiers.js.
  * @returns {void} - Throws via assert.equal on mismatch.
  */
 function assertModifierPoolSize(content) {
   const startIdx = content.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx !== -1, 'FLOOR_MODIFIERS dict must exist in content.js');
+  assert.ok(startIdx !== -1, 'FLOOR_MODIFIERS dict must exist in modifier source');
   const endIdx = content.indexOf('};', startIdx);
   assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate with };');
   const dictBody = content.slice(startIdx, endIdx);
@@ -67,7 +67,7 @@ function assertModifierPoolSize(content) {
  * `startIdx > 0` boundary bug (carried into the per-file copies before
  * being caught in adversarial review of PR #270).
  *
- * @param {string} content - Raw text of src/content.js.
+ * @param {string} content - Raw text containing src/content/modifiers.js.
  * @param {string} modifierName - Modifier key (e.g. 'CHAINREACT').
  * @returns {void} - Throws via assert.ok on missing dict, missing
  *   terminator, or modifier-key not present at top level.
@@ -76,7 +76,7 @@ function assertModifierIsTopLevelKey(content, modifierName) {
   assert.ok(typeof modifierName === 'string' && /^[A-Z_]+$/.test(modifierName),
     `modifierName must be an UPPERCASE_UNDERSCORE string; got ${modifierName}`);
   const startIdx = content.indexOf('const FLOOR_MODIFIERS');
-  assert.ok(startIdx !== -1, 'FLOOR_MODIFIERS dict must exist in content.js');
+  assert.ok(startIdx !== -1, 'FLOOR_MODIFIERS dict must exist in modifier source');
   const endIdx = content.indexOf('};', startIdx);
   assert.ok(endIdx > startIdx, 'FLOOR_MODIFIERS dict must terminate with };');
   const dictBody = content.slice(startIdx, endIdx);

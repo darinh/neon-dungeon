@@ -9554,7 +9554,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // Bosses (SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA/GENESIS) intentionally
     // unchanged — phase transitions are HP-ratio based and current tuning
     // makes those fights feel right; doubling would just stretch them.
-    // Difficulty multipliers in content.js DIFFICULTIES still apply on top
+    // Difficulty multipliers in content/modifiers.js DIFFICULTIES still apply on top
     // (EASY 0.75 / NORMAL 1.0 / HARD 1.5 / NIGHTMARE 2.0), so NIGHTMARE
     // players now effectively get 4x base. Watch for feedback.
     case 'GUARD':   hp=80;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;

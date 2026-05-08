@@ -58,7 +58,7 @@ const assert = require('node:assert/strict');
 const { assertModifierPoolSize, assertModifierIsTopLevelKey, EXPECTED_MODIFIER_POOL_SIZE } = require('./_modifier-pool');
 const { readSourceFile, stripJsComments } = require('./_source-files.js');
 
-const CONTENT = readSourceFile(__dirname, 'content');
+const CONTENT = readSourceFile(__dirname, 'contentModifiers') + '\n' + readSourceFile(__dirname, 'content');
 const ENTITIES = readSourceFile(__dirname, 'entities');
 const RENDER = readSourceFile(__dirname, 'render');
 const ENTITIES_CODE = stripJsComments(ENTITIES);
