@@ -10,8 +10,8 @@
 // — a contract the code was silently breaking. Same class of bug just
 // fixed for ghostwalk (#238) and recon (#240).
 //
-// FIX: src/content.js CREDIT_CACHE.fn (the canonical credit pickup
-// handler at line ~4145) now reads p.bonusCreditPerPickup and adds it
+// FIX: src/content/upgrades.js CREDIT_CACHE.fn (the canonical credit pickup
+// handler) now reads p.bonusCreditPerPickup and adds it
 // AS A FLAT BONUS to the awarded amount AFTER the rounding/clamp step.
 // Flat-additive (NOT multiplicative through metaMul/siphon/diffMul)
 // matches the upgrade description literally — "+1 credit per pickup
@@ -36,8 +36,8 @@
 // missed; corrected in the same commit (single-line wire in src/game.js
 // mirrors the sanitization shape of CREDIT_CACHE.fn).
 //
-// content.js is browser-only — these are source-text wiring tests using
-// the canonical brace-walked branch extraction pattern (per stored memory
+// content/upgrades.js is browser-only — these are source-text wiring tests
+// using the canonical brace-walked branch extraction pattern (per stored memory
 // 'test source-text extraction'), supplemented by a node-runnable
 // applyMetaToPlayer behavioural check via src/meta/save.js.
 
@@ -48,6 +48,9 @@ const path = require('node:path');
 
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+);
+const CONTENT_UPGRADES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'upgrades.js'), 'utf8'
 );
 const SAVE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'meta', 'save.js'), 'utf8'
@@ -66,6 +69,7 @@ function stripComments(src) {
 }
 
 const CONTENT_CODE = stripComments(CONTENT);
+const CONTENT_UPGRADES_CODE = stripComments(CONTENT_UPGRADES);
 
 /**
  * Walk braces from the regex match through balanced {} to find the matching close.
@@ -116,7 +120,7 @@ test('CREDIT_CACHE.fn reads p.bonusCreditPerPickup and adds it AS A FLAT BONUS t
   // and doesn't false-pass on a similarly-named field elsewhere
   // in the file.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    CONTENT_UPGRADES_CODE,
     /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
   );
   assert.ok(fnBody, 'CREDIT_CACHE.fn body must be locatable');
@@ -139,7 +143,7 @@ test('CREDIT_CACHE.fn sanitizes bonus against NaN / Infinity / negative / non-in
   // Pin the three guards: isFinite + non-negative, upper-bound clamp,
   // integer floor.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    CONTENT_UPGRADES_CODE,
     /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
   );
   assert.ok(fnBody, 'CREDIT_CACHE.fn body must be locatable');
@@ -163,7 +167,7 @@ test('CREDIT_CACHE.fn bonus is added AFTER the rounding/clamp (so the bonus is n
   // multiplier would get +3 * 1.5 * 1.10 * 1.0 = 4.95 → 5 CR per pickup,
   // not the advertised 3. Flat-additive means EXACTLY +N at level N.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    CONTENT_UPGRADES_CODE,
     /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
   );
   assert.ok(fnBody, 'CREDIT_CACHE.fn body must be locatable');
@@ -195,7 +199,7 @@ test('CREDIT_CACHE.fn telemetry shows the bonus-inclusive total (player gets vis
   // amount) — otherwise the player would see "+15 CR" while their
   // wallet ticks up by 18, eroding trust in the HUD.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    CONTENT_UPGRADES_CODE,
     /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
   );
   assert.ok(fnBody, 'CREDIT_CACHE.fn body must be locatable');
@@ -210,7 +214,7 @@ test('CREDIT_CACHE.fn still applies metaMul / siphon / diffMul to the BASE amoun
   // these factors, vendors and bosses would tank their credit yield
   // alongside the pickup. Pin the multiplier chain shape.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    CONTENT_UPGRADES_CODE,
     /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
   );
   assert.ok(fnBody, 'CREDIT_CACHE.fn body must be locatable');
@@ -338,7 +342,7 @@ test('CREDIT_CACHE.fn (behavioural): bonus is added as a flat per-pickup value, 
     // into a runnable arrow function. This sidesteps the requirement to
     // load all of content.js (which has many other side-effects).
     const fnBody = extractBranch(
-      CONTENT,  // raw — we want the `p` parameter name etc.
+      CONTENT_UPGRADES,  // raw — we want the `p` parameter name etc.
       /id\s*:\s*'CREDIT_CACHE'[\s\S]*?fn\s*:\s*\(\s*(?:\/\*\*[^*]*\*\/\s*)?p\s*\)\s*=>\s*\{/
     );
     assert.ok(fnBody, 'CREDIT_CACHE.fn must be locatable for behavioural test');

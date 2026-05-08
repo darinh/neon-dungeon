@@ -20,7 +20,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
+const CONTENT_UPGRADES = fs.readFileSync(path.join(ROOT, 'src', 'content', 'upgrades.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 
 function stripComments(src) {
@@ -30,7 +30,7 @@ function stripComments(src) {
 }
 
 test('KINETIC_DAMPER registered in AUGMENTS with name/icon/colour/desc', () => {
-  const m = CONTENT.match(/KINETIC_DAMPER:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
+  const m = CONTENT_UPGRADES.match(/KINETIC_DAMPER:\s*\{\s*name:\s*'([^']+)'[^}]*icon:\s*'([^']+)'[^}]*colour:\s*'(#[0-9a-fA-F]+)'[^}]*desc:\s*'([^']+)'/);
   assert.ok(m, 'KINETIC_DAMPER must be registered in AUGMENTS with name/icon/colour/desc');
   assert.ok(m[1].length > 0, 'KINETIC_DAMPER name must be non-empty');
   assert.ok(m[2].length > 0, 'KINETIC_DAMPER icon must be non-empty');
@@ -41,7 +41,7 @@ test('KINETIC_DAMPER registered in AUGMENTS with name/icon/colour/desc', () => {
 test('KINETIC_DAMPER auto-included in AUGMENT_KEYS for rolls', () => {
   // AUGMENT_KEYS = Object.keys(AUGMENTS) — drives both rollAugmentChoices
   // (implant shrine) and makeAugmentShopOption. Lock the derivation.
-  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT),
+  assert.ok(/const AUGMENT_KEYS = Object\.keys\(AUGMENTS\);/.test(CONTENT_UPGRADES),
     'AUGMENT_KEYS must remain Object.keys(AUGMENTS) so KINETIC_DAMPER is auto-included');
 });
 
