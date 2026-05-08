@@ -8,7 +8,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PLATFORM = fs.readFileSync(path.join(ROOT, 'src/platform.js'), 'utf8');
-const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content.js'), 'utf8');
+const CONTENT = fs.readFileSync(path.join(ROOT, 'src/content/floor-generator.js'), 'utf8');
 const RENDER = fs.readFileSync(path.join(ROOT, 'src/render.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
 const GAME_STATES_SRC = fs.readFileSync(path.join(ROOT, 'src/game-states.js'), 'utf8');

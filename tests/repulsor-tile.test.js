@@ -13,7 +13,7 @@
 //   - SHOCK_TILE : 0.5s movement freeze on entry (no damage)
 //   - REPULSOR   : 1.6-cell knockback opposite to facing on entry (no damage)
 //
-// Source-text wiring tests (game.js / render.js / content.js are
+// Source-text wiring tests (game.js / render.js / floor-generator.js are
 // browser-only — no UMD/CommonJS exports — same pattern as shock-tile /
 // biome-damage-flash / bulwark-perk / nullifier).
 
@@ -24,7 +24,7 @@ const path = require('node:path');
 
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const FLOOR_GENERATOR = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'floor-generator.js'),  'utf8');
 const RENDER   = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'render.js'),   'utf8');
 
 // Strip ONLY full-line // comments (per stripComments-full-line-only convention
@@ -339,15 +339,15 @@ test('isSafeSpawn excludes T.REPULSOR (player should never spawn on a launchpad)
     'isSafeSpawn must exclude T.REPULSOR so the spawn-arrival tile never punts the player');
 });
 
-// ─── content.js generation + reachability ─────────────────────────────────
+// ─── floor-generator.js generation + reachability ─────────────────────────
 
-test('content.js trap generation can place T.REPULSOR alongside spike/slow/shock', () => {
+test('floor-generator.js trap generation can place T.REPULSOR alongside spike/slow/shock', () => {
   // Trap-mix picker: 4-way (spike / slow / shock / repulsor). All four tile
   // types must be present in the picker — without the REPULSOR branch the
   // new tile would be unreachable in a generated dungeon.
-  const stripped = stripFullLineComments(CONTENT);
+  const stripped = stripFullLineComments(FLOOR_GENERATOR);
   const m = stripped.match(/map\[ty\]\[tx\]\s*===\s*T\.FLOOR[\s\S]{0,500}T\.REPULSOR/);
-  assert.ok(m, 'content.js trap-gen block must be able to assign T.REPULSOR');
+  assert.ok(m, 'floor-generator.js trap-gen block must be able to assign T.REPULSOR');
   const tx = m[0];
   assert.match(tx, /T\.TRAP_SPIKE/, 'trap-gen still places TRAP_SPIKE');
   assert.match(tx, /T\.TRAP_SLOW/,  'trap-gen still places TRAP_SLOW');
@@ -355,12 +355,12 @@ test('content.js trap generation can place T.REPULSOR alongside spike/slow/shock
   assert.match(tx, /T\.REPULSOR/,   'trap-gen places REPULSOR');
 });
 
-test('content.js trap-mix sums to 1.0 — no cumulative-roll hole that drops a hazard type', () => {
+test('floor-generator.js trap-mix sums to 1.0 — no cumulative-roll hole that drops a hazard type', () => {
   // The picker uses cumulative thresholds (`roll < 0.55 ? A : roll < 0.77 ? B : ...`).
   // A common mistake is to leave a hole (e.g. `< 0.55 ? A : < 0.70 ? B : < 0.90 ? C : D`
   // skips the 0.70–0.90 range for B). Pin: every threshold must be strictly
   // ascending and the picker must end with a default (no `: nothing`).
-  const stripped = stripFullLineComments(CONTENT);
+  const stripped = stripFullLineComments(FLOOR_GENERATOR);
   const pickerM = stripped.match(/const\s+roll\s*=\s*rand\('world'\)\s*;[\s\S]*?T\.REPULSOR\s*;/);
   assert.ok(pickerM, 'trap-mix picker must be locatable');
   const picker = pickerM[0];
@@ -379,14 +379,14 @@ test('content.js trap-mix sums to 1.0 — no cumulative-roll hole that drops a h
     `final trap-mix threshold must be < 1.0 to leave probability for the default branch (got ${nums[nums.length - 1]})`);
 });
 
-test('content.js dungeon-reachability `passable` predicate counts T.REPULSOR as walkable', () => {
+test('floor-generator.js dungeon-reachability `passable` predicate counts T.REPULSOR as walkable', () => {
   // The reachability flood-fill (computeReach) uses a local `passable`
   // helper distinct from the runtime isPassable. REPULSOR must be in
   // that list — otherwise the flood-fill could falsely conclude that a
   // REPULSOR-bearing corridor is unreachable, triggering a costly
   // regen loop.
-  const m = CONTENT.match(/const\s+passable\s*=\s*\(\s*\/\*\*[\s\S]*?\)\s*=>[\s\S]*?T\.CHALLENGE_GATE\s*;/);
-  assert.ok(m, 'computeReach `passable` helper must be locatable in content.js');
+  const m = FLOOR_GENERATOR.match(/const\s+passable\s*=\s*\(\s*\/\*\*[\s\S]*?\)\s*=>[\s\S]*?T\.CHALLENGE_GATE\s*;/);
+  assert.ok(m, 'computeReach `passable` helper must be locatable in floor-generator.js');
   assert.match(m[0], /t\s*===\s*T\.REPULSOR/,
     'computeReach `passable` must include t === T.REPULSOR');
 });

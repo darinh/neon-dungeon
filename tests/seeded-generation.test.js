@@ -19,7 +19,8 @@ function stripComments(src) {
 }
 
 const GAME = read('src/game.js');
-const CONTENT = read('src/content.js');
+const CONTENT = read('src/content/floor-generator.js');
+const CONTENT_FACADE = read('src/content.js');
 const ENTITIES = read('src/entities.js');
 const RENDER = read('src/render.js');
 const PLATFORM = read('src/platform.js');
@@ -27,7 +28,8 @@ const PLATFORM = read('src/platform.js');
 test('seeded gameplay files do not call Math.random directly', () => {
   const gameplayFiles = {
     'src/game.js': GAME,
-    'src/content.js': CONTENT,
+    'src/content/floor-generator.js': CONTENT,
+    'src/content.js': CONTENT_FACADE,
     'src/entities.js': ENTITIES,
     'src/render.js': RENDER,
   };

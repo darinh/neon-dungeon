@@ -105,9 +105,10 @@ would stay in game.
 
 ### 🟪 Dungeon generation contract (planned extraction)
 
-`src/content.js generateFloor(floorNum)` is the next mixed boundary to split.
-The reusable part is the dungeon-topology engine; the NEON-specific part is the
-floor-content policy layered on top of that topology.
+`src/content/floor-generator.js generateFloor(floorNum)` is the remaining mixed
+boundary after the content module split. The reusable part is the dungeon-
+topology engine; the NEON-specific part is the floor-content policy layered on
+top of that topology.
 
 The **engine-shaped** responsibilities are:
 

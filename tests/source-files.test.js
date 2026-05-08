@@ -31,6 +31,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentHackware.replaceAll('\\', '/'), 'src/content/hackware.js');
   assert.equal(SOURCE_FILE_PATHS.contentStatus.replaceAll('\\', '/'), 'src/content/status.js');
   assert.equal(SOURCE_FILE_PATHS.contentLighting.replaceAll('\\', '/'), 'src/content/lighting.js');
+  assert.equal(SOURCE_FILE_PATHS.contentFloorGenerator.replaceAll('\\', '/'), 'src/content/floor-generator.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -55,6 +56,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentHackware').endsWith('src/content/hackware.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentStatus').endsWith('src/content/status.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentLighting').endsWith('src/content/lighting.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'contentFloorGenerator').endsWith('src/content/floor-generator.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -72,6 +74,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const hackwareSource = readSourceFile(__dirname, 'contentHackware');
   const statusSource = readSourceFile(__dirname, 'contentStatus');
   const lightingSource = readSourceFile(__dirname, 'contentLighting');
+  const floorGeneratorSource = readSourceFile(__dirname, 'contentFloorGenerator');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -105,6 +108,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(statusSource, /function\s+drawStatusBar\s*\(/);
   assert.match(lightingSource, /function\s+updateLighting\s*\(/);
   assert.match(lightingSource, /function\s+tileHasLOS\s*\(/);
+  assert.match(floorGeneratorSource, /function\s+generateFloor\s*\(/);
+  assert.match(floorGeneratorSource, /function\s+resolvePreferredSpawnRoom\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -114,7 +119,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.content, /function\s+updateLighting\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+pickItemType\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+rollSecretWeaponCacheWeapon\s*\(/);
-  assert.match(sources.content, /function\s+generateFloor\s*\(/);
+  assert.doesNotMatch(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
