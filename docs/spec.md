@@ -724,7 +724,8 @@ Room must be ≥ 5×5 tiles. ~40% chance per eligible room. Interior position
 (≥ 2 tiles from room boundary), must be on `T.FLOOR`. Placed before enemies
 during floor population.
 
-**Entity: `beacons[]` array.** Each entry:
+**Runtime:** Beacon helpers live in `src/entities/beacons.js` and operate on
+the shared `beacons[]` array declared by `src/entities.js`. Each entry:
 `{ x, y, hp, maxHp, active, timer, dead, room, floor, bob, ringTimer }`.
 HP scales with floor: `10 + floor × 3`. Entity-only (no tile type) — does
 not block movement, projectiles, or LOS.
@@ -4917,6 +4918,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.49 | Entity module split: alarm beacon runtime now lives in `src/entities/beacons.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `BEACON_COUNTDOWN`, `createBeacon`, `damageBeacon`, `destroyBeacon`, `damageBeaconsInRadius`, `updateBeacons`, and `drawBeacons` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.48 | Entity module split: ARCHITECT placed-wall targeting and decay helpers now live in `src/entities/architect-walls.js`, loaded after `src/entities.js`. The public globals `pickArchitectTarget`, `_isTileOccupiedByActor`, and `updatePlacedWalls` remain unchanged for ARCHITECT AI and the game update loop. |
 | v6.1.47 | Entity module split: crate runtime helpers now live in `src/entities/crates.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `createCrate`, `getCrateAt`, `damageCrate`, `destroyCrate`, `damageCrateAtTile`, and `damageCratesInRadius` remain unchanged for generation, projectile, volatile-core, and damage-radius callers. |
 | v6.1.46 | Entity module split: volatile core runtime now lives in `src/entities/volatile-cores.js`, loaded after `src/entities.js` and before `src/render.js`/`src/game.js`. The public globals `createVCore`, `primeVCoresInRadius`, `detonateVCore`, `updateVCores`, and `drawVCores` remain unchanged for generation, projectile, update, and render callers. |
