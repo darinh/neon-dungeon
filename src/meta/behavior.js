@@ -132,7 +132,7 @@
     // the lethal-hit gate (NaN <= 0 is false) AND the threshold gate
     // (NaN >= ... is false), so a corrupted save with hp=NaN would
     // silently drain every charge while hp stayed NaN. Same defence as
-    // the sensorRadiusMult sanitization in src/content.js updateLighting
+    // the sensorRadiusMult sanitization in src/content/lighting.js updateLighting
     // (per stored memory 'FOV cache key').
     if (!Number.isFinite(player.hp)) return false;
     if (player.hp <= 0) return false; // leave revives to second_wind

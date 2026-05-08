@@ -9,7 +9,7 @@
 // description (src/meta/upgrades.js:38) advertises "+20% sensor radius
 // (minimap reveal) per level" — a contract the code was silently breaking.
 //
-// FIX: src/content.js updateLighting now multiplies the base FOV radius
+// FIX: src/content/lighting.js updateLighting now multiplies the base FOV radius
 // (9 normally, 5 under BLACKOUT) by player.sensorRadiusMult and rounds
 // to an integer tile count. The same loop writes dungeon.visited[y][x]
 // for every tile within `r`, so widening `r` widens both the lit area
@@ -24,7 +24,7 @@
 // extension is NOT possible here — `r` is a local const recomputed each
 // call (when the cache misses), so changes scope to the FOV pass only.
 //
-// content.js is browser-only — these are source-text wiring tests using
+// lighting.js is browser-only — these are source-text wiring tests using
 // the canonical brace-walked branch extraction pattern (per stored memory
 // 'test source-text extraction'), supplemented by a node-runnable
 // applyMetaToPlayer behavioural check via src/meta/save.js.
@@ -34,8 +34,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CONTENT = fs.readFileSync(
-  path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
+const LIGHTING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'content', 'lighting.js'), 'utf8'
 );
 const SAVE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'meta', 'save.js'), 'utf8'
@@ -53,7 +53,7 @@ function stripComments(src) {
     .replace(/\/\/[^\n]*/g, '');
 }
 
-const CONTENT_CODE = stripComments(CONTENT);
+const LIGHTING_CODE = stripComments(LIGHTING);
 
 /**
  * @param {string} src
@@ -93,21 +93,21 @@ test('save.js recon handler still writes sensorRadiusMult = ×(1 + 0.20 * level)
     "save.js recon handler must set player.sensorRadiusMult *= (1 + 0.20 * level)");
 });
 
-test('updateLighting reads _CG.player.sensorRadiusMult to widen the FOV radius (the bug-fix wire)', () => {
+test('updateLighting reads _LG.player.sensorRadiusMult to widen the FOV radius (the bug-fix wire)', () => {
   // THE bug fix: without this read, sensorRadiusMult is set/persisted
   // but the FOV (and the minimap-reveal piggybacked on it) never widens.
   // Brace-walked extraction anchored on the function header so the
   // assertion is scoped to updateLighting.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting function body must be locatable');
   // `let sensorMult = ...` (mutable so sanitization can rewrite invalid /
   // out-of-range values in place — see the sanitization test below).
   assert.match(fnBody,
-    /let\s+sensorMult\s*=\s*\(\s*_CG\.player\s*&&\s*_CG\.player\.sensorRadiusMult\s*\)\s*\|\|\s*1\s*;/,
-    'updateLighting must read let sensorMult = (_CG.player && _CG.player.sensorRadiusMult) || 1;');
+    /let\s+sensorMult\s*=\s*\(\s*_LG\.player\s*&&\s*_LG\.player\.sensorRadiusMult\s*\)\s*\|\|\s*1\s*;/,
+    'updateLighting must read let sensorMult = (_LG.player && _LG.player.sensorRadiusMult) || 1;');
   assert.match(fnBody,
     /const\s+r\s*=\s*Math\.max\(\s*1\s*,\s*Math\.round\(\s*baseR\s*\*\s*sensorMult\s*\)\s*\)\s*;/,
     'updateLighting must compute const r = Math.max(1, Math.round(baseR * sensorMult));');
@@ -115,7 +115,7 @@ test('updateLighting reads _CG.player.sensorRadiusMult to widen the FOV radius (
 
 test('updateLighting sanitizes sensorMult against NaN / Infinity / negative / non-numeric (corrupted save defence)', () => {
   // localStorage is user-writable; tampered/corrupted save data could
-  // deliver _CG.player.sensorRadiusMult = NaN ("foo"), Infinity, 0, or
+  // deliver _LG.player.sensorRadiusMult = NaN ("foo"), Infinity, 0, or
   // a negative number. Without sanitization:
   //   - "foo" -> Math.round(9 * NaN) = NaN -> Math.max(1, NaN) = NaN
   //     -> dy<=NaN is false, FOV blanks, player can see nothing.
@@ -126,7 +126,7 @@ test('updateLighting sanitizes sensorMult against NaN / Infinity / negative / no
   //     key (_fovSensor) is stable.
   // Pin the three guards: isFinite, > 0, and the upper-bound clamp.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -144,7 +144,7 @@ test('updateLighting baseR retains BLACKOUT=5 / default=9 ternary', () => {
   // If a future refactor accidentally dropped the BLACKOUT clamp (or the
   // 9-tile default), runs would silently regress to 1 tile or unbounded.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -160,7 +160,7 @@ test('updateLighting FOV cache key includes _fovSensor (defensive — recomputes
   // the cached FOV with the current radius. Pin the key extension so this
   // class of bug can't sneak in later.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -179,7 +179,7 @@ test('updateLighting visited-tile flip remains inside the r-bounded loop (so wid
   // the loop or move it to a fixed-radius scan and you've broken
   // the wire on the visited side without touching the visible side.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -201,7 +201,7 @@ test('updateLighting circular distance cutoff `if (d > r) continue` uses sensor-
   // by `if (d > baseR) continue;`. The dy/dx assertions above can't
   // catch this because both still iterate -r..r. Pin the radial gate.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -218,7 +218,7 @@ test('updateLighting r is integer-rounded and clamped to >= 1 (no fractional / z
   // becomes 0 — would blank the player's vision entirely). Both clamps
   // are surgical and cheap; pin them so a refactor can't drop them.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
@@ -303,22 +303,22 @@ test('applyMetaToPlayer (node-runnable): recon L1/L3 produce sensorRadiusMult of
     'BLACKOUT baseR=5 with sensorRadiusMult=1.60 must round to r=8 (close to baseline 9)');
 });
 
-test('updateLighting still uses _CG (the cross-file game proxy), not a fresh global', () => {
-  // content.js's _CG proxy is the canonical bridge to the runtime game
-  // object. The recon read MUST go through _CG.player to pick up the
+test('updateLighting still uses _LG (the cross-file game proxy), not a fresh global', () => {
+  // lighting.js's _LG proxy is the canonical bridge to the runtime game
+  // object. The recon read MUST go through _LG.player to pick up the
   // live player (post applyMetaToPlayer / post save restore). A common
   // failure mode would be `globalThis.game.player.sensorRadiusMult` or
   // a literal `game.player...` reference — both would bypass the proxy
-  // and break in any context where `_CG` is the sanctioned access path.
+  // and break in any context where `_LG` is the sanctioned access path.
   const fnBody = extractBranch(
-    CONTENT_CODE,
+    LIGHTING_CODE,
     /function\s+updateLighting\s*\(\s*dungeon\s*,\s*px\s*,\s*py\s*\)\s*\{/
   );
   assert.ok(fnBody, 'updateLighting body must be locatable');
-  // The read must be exactly _CG.player.sensorRadiusMult — no other
+  // The read must be exactly _LG.player.sensorRadiusMult — no other
   // accessor variant should sneak in.
   assert.ok(!/\bgame\.player\.sensorRadiusMult\b/.test(fnBody),
-    'updateLighting must NOT read game.player.sensorRadiusMult directly — use the _CG proxy');
+    'updateLighting must NOT read game.player.sensorRadiusMult directly — use the _LG proxy');
   assert.ok(!/globalThis\.[A-Za-z_]*sensorRadiusMult/.test(fnBody),
-    'updateLighting must NOT read sensorRadiusMult via globalThis — use the _CG proxy');
+    'updateLighting must NOT read sensorRadiusMult via globalThis — use the _LG proxy');
 });
