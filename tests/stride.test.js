@@ -17,9 +17,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT  = readSourceFile(__dirname, 'content');
+const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
@@ -27,8 +29,8 @@ const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),        
 test('STRIDE is registered in PERK_POOL with name/icon/desc/colour', () => {
   // Anchor inside the PERK_POOL block to ensure registration (not just a
   // stray reference in a comment).
-  const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  const pool = CONTENT_PERKS.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
+  assert.ok(pool, 'PERK_POOL block must be locatable in content/perks.js');
   assert.match(pool[0], /STRIDE\s*:\s*\{[^}]*name\s*:\s*['"]Stride['"]/,
     'PERK_POOL.STRIDE must declare name "Stride"');
   assert.match(pool[0], /STRIDE\s*:\s*\{[^}]*icon\s*:/,

@@ -27,9 +27,10 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
-const CONTENT  = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content.js'),  'utf8');
+const CONTENT  = readSourceFile(__dirname, 'contentPerks');
 
 // Strip JS comments before regex assertions so a "// if (this.perks.X)" comment
 // can't satisfy a gate-presence check (mark-affix / reverse-polarity precedent).
@@ -42,7 +43,7 @@ function stripComments(src) {
 
 test('BULWARK is registered in PERK_POOL with name/icon/desc/colour', () => {
   const pool = CONTENT.match(/const\s+PERK_POOL\s*=\s*\{[\s\S]*?\n\};/);
-  assert.ok(pool, 'PERK_POOL block must be locatable in content.js');
+  assert.ok(pool, 'PERK_POOL block must be locatable in content/perks.js');
   assert.match(pool[0], /BULWARK\s*:\s*\{[^}]*name\s*:\s*['"]Bulwark['"]/,
     'PERK_POOL.BULWARK must declare name "Bulwark"');
   assert.match(pool[0], /BULWARK\s*:\s*\{[^}]*icon\s*:/,
