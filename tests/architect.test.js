@@ -33,6 +33,7 @@ const { ENTITIES, CONTENT, ENTITIES_CODE } = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
+const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -163,9 +164,8 @@ test('ARCHITECT is excluded from elite-affix roll', () => {
   // Elite affixes (BERSERK / SHIELDED / etc.) wouldn't make sense on a
   // stationary atk=0 mob. The exclusion list in spawnEnemy must include
   // ARCHITECT alongside other special-case mobs.
-  assert.match(ENTITIES,
-    /type\s*!==\s*'WATCHER'\s*&&\s*type\s*!==\s*'ARCHITECT'/,
-    'Elite-affix roll exclusion must list ARCHITECT after WATCHER');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'ARCHITECT'[\s\S]*\]\s*\)/,
+    'Elite-affix roll exclusion must list ARCHITECT');
 });
 
 // ─── Stun-cancel branch ──────────────────────────────────────────────────

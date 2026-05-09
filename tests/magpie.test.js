@@ -24,6 +24,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -89,8 +92,8 @@ test('MAGPIE is excluded from the elite affix roll', () => {
   // First-ship caution: keeps the new non-damaging mechanic off the
   // elite surface area. Mirror the existing exclusion pattern for
   // recently-introduced mobs.
-  const re = /allowElite[\s\S]{0,1300}type\s*!==\s*'MAGPIE'/;
-  assert.match(ENTITIES, re, 'MAGPIE must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'MAGPIE'[\s\S]*\]\s*\)/,
+    'MAGPIE must be in the elite-exclusion guard');
 });
 
 test('MAGPIE has CREDIT_VALUES entry', () => {

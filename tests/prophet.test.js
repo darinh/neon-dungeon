@@ -23,6 +23,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -64,8 +67,8 @@ test('PROPHET is excluded from the elite affix roll', () => {
   // Elite affixes (SHIELDED, BERSERKER, FRENZY, PHASING, ...) interact
   // poorly with the predictive-shot mechanic — we keep PROPHET vanilla.
   // Mirrors the ECHOER/MIRROR/REAPER/GHOST_PROJECTOR exclusions.
-  const re = /allowElite[\s\S]{0,500}type\s*!==\s*'PROPHET'/;
-  assert.match(ENTITIES, re, 'PROPHET must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'PROPHET'[\s\S]*\]\s*\)/,
+    'PROPHET must be in the elite-exclusion guard');
 });
 
 test('PROPHET is dispatched in the AI switch', () => {

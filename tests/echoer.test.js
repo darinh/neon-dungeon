@@ -23,6 +23,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -67,8 +70,8 @@ test('ECHOER is excluded from the elite affix roll', () => {
   // Elite affixes (SHIELDED, BERSERKER, FRENZY, PHASING, ...) interact
   // poorly with the predictive-shot mechanic — we keep ECHOER vanilla.
   // Mirrors the SNIPER/SUMMONER/MIMIC/PULSER/TUNNELLER exclusions.
-  const re = /allowElite[\s\S]{0,400}type\s*!==\s*'ECHOER'/;
-  assert.match(ENTITIES, re, 'ECHOER must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'ECHOER'[\s\S]*\]\s*\)/,
+    'ECHOER must be in the elite-exclusion guard');
 });
 
 test('ECHOER is dispatched in the AI switch', () => {

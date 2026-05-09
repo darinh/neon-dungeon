@@ -22,6 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
+const ENEMY_CLASSIFICATION = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-classification.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const ENTITY_RENDER_PASSES = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'render-passes.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
@@ -78,9 +79,7 @@ test('TETHER excluded from elite affix roll', () => {
   // Same exclusion pattern as recent additions (HARVESTER / MAGNETON
   // / SPECTRE / SAPPER / MAGPIE). Easier to add affixes later than
   // to reason about SHIELDED / PHASING / FRENZY × leash.
-  const eliteLine = ENTITIES.match(/if \(allowElite[^\n]+floorNum >= 3[^\n]+eliteRate\)/);
-  assert.ok(eliteLine, 'elite roll guard line not found');
-  assert.match(eliteLine[0], /type\s*!==\s*'TETHER'/,
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'TETHER'[\s\S]*\]\s*\)/,
     'TETHER must be in the elite-affix exclusion list');
 });
 

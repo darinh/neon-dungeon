@@ -26,6 +26,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -67,8 +70,8 @@ test('WARDLING is excluded from the elite affix roll', () => {
   // Elite affixes (SHIELDED, BERSERKER) on a 25hp bodyguard either kill
   // its niche (SHIELDED tank) or trivialise it (BERSERKER → suicide
   // chase). Mirrors PROPHET/CRYOPHAGE/etc.
-  const re = /allowElite[\s\S]{0,700}type\s*!==\s*'WARDLING'/;
-  assert.match(ENTITIES, re, 'WARDLING must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'WARDLING'[\s\S]*\]\s*\)/,
+    'WARDLING must be in the elite-exclusion guard');
 });
 
 test('WARDLING is dispatched in the AI switch', () => {

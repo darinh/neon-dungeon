@@ -21,6 +21,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -49,8 +52,8 @@ test('CONDUIT spawn init assigns _cdEid + _cdSoloTimer + _cdLinkICD Map', () => 
 });
 
 test('CONDUIT is excluded from elite affix roll', () => {
-  const re = /allowElite[\s\S]{0,800}type\s*!==\s*'CONDUIT'/;
-  assert.match(ENTITIES, re, 'CONDUIT must be in elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'CONDUIT'[\s\S]*\]\s*\)/,
+    'CONDUIT must be in elite-exclusion guard');
 });
 
 test('CONDUIT is dispatched in the AI switch', () => {

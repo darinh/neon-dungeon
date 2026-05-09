@@ -15,6 +15,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -52,8 +55,8 @@ test('VENGEANCE spawn init zeros state + charges + rush timer', () => {
 });
 
 test('VENGEANCE is excluded from the elite affix roll', () => {
-  const re = /allowElite[\s\S]{0,800}type\s*!==\s*'VENGEANCE'/;
-  assert.match(ENTITIES, re, 'VENGEANCE must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'VENGEANCE'[\s\S]*\]\s*\)/,
+    'VENGEANCE must be in the elite-exclusion guard');
 });
 
 test('VENGEANCE is dispatched in the AI switch', () => {
