@@ -8,8 +8,8 @@
 // bookkeeping but BEFORE drops/credits. Walks live projectors in the
 // dead enemy's room; the first eligible projector (no pending memory,
 // no active ghost) claims the kill and arms a haunt. Anti-recursion:
-// ghosts (_ghIsGhost), shards, summons, bosses, and types not in
-// GHOSTABLE_TYPES are silently ignored. Stationary projectors only;
+// ghosts (_ghIsGhost), shards, summons, bosses, and types not passing
+// isGhostableEnemyType() are silently ignored. Stationary projectors only;
 // the projector itself is excluded from the allowlist so we never
 // haunt a projector death.
 /**
@@ -21,7 +21,7 @@ function notifyGhostProjectors(deadEnemy) {
   if (deadEnemy.isShard) return;
   if (deadEnemy._summoned) return;
   if (deadEnemy.isBoss) return;
-  if (!GHOSTABLE_TYPES.has(deadEnemy.type)) return;
+  if (!isGhostableEnemyType(deadEnemy.type)) return;
   // Iterate the room's enemy set. enemiesByRoom stores LIVE refs; dead
   // entries are pruned by unregisterEnemyFromRoom in die(). The dead
   // enemy itself was just unregistered above the call site.

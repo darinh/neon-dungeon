@@ -76,6 +76,13 @@ test('GHOST_PROJECTOR is excluded from the elite affix roll', () => {
     'GHOST_PROJECTOR must be in the elite-exclusion guard');
 });
 
+test('GHOST_PROJECTOR classification exports ghostable allowlist helper', () => {
+  assert.match(ENEMY_CLASSIFICATION, /const\s+GHOSTABLE_TYPES\s*=\s*new\s+Set\(/,
+    'GHOSTABLE_TYPES must live in the enemy classification module');
+  assert.match(ENEMY_CLASSIFICATION, /function\s+isGhostableEnemyType\s*\(/,
+    'isGhostableEnemyType helper must be defined');
+});
+
 test('GHOST_PROJECTOR is dispatched in the AI switch', () => {
   assert.match(ENTITIES, /case\s+'GHOST_PROJECTOR':\s*this\.aiGhostProjector\(/);
 });
@@ -103,7 +110,7 @@ test('GHOSTABLE_TYPES is a tight allowlist of simple-AI mobs', () => {
   // The set must explicitly include the listed types and EXCLUDE bosses,
   // summoners, mimics, and stationary battery mobs (their AI doesn't
   // replay cleanly without spawn-init quirks).
-  const m = ENTITIES.match(/GHOSTABLE_TYPES\s*=\s*new\s+Set\(\s*\[([\s\S]*?)\]\s*\)/);
+  const m = ENEMY_CLASSIFICATION.match(/GHOSTABLE_TYPES\s*=\s*new\s+Set\(\s*\[([\s\S]*?)\]\s*\)/);
   assert.ok(m, 'GHOSTABLE_TYPES must be defined as new Set([...])');
   const body = m[1];
   // Must include simple chasers
@@ -129,7 +136,7 @@ test('notifyGhostProjectors function exists and gates on _ghIsGhost', () => {
   assert.match(body, /deadEnemy\.isShard/, 'must exclude shards');
   assert.match(body, /deadEnemy\._summoned/, 'must exclude summons');
   assert.match(body, /deadEnemy\.isBoss/, 'must exclude bosses');
-  assert.match(body, /GHOSTABLE_TYPES\.has/, 'must gate on GHOSTABLE_TYPES allowlist');
+  assert.match(body, /isGhostableEnemyType\(deadEnemy\.type\)/, 'must gate on ghostable allowlist helper');
 });
 
 test('Enemy.die() calls notifyGhostProjectors after unregisterEnemyFromRoom', () => {
@@ -186,7 +193,7 @@ test('spawnGhost helper queues via pendingEnemySpawns (deferred — never append
   assert.doesNotMatch(body, /enemies\.push\(/, 'spawnGhost must NOT push directly to enemies[] (race with update loop)');
   assert.match(body, /_ghIsGhost\s*:\s*true/, 'pending entry must carry _ghIsGhost marker');
   assert.match(body, /_ghOwnerProjector\s*:\s*projector/, 'pending entry must carry projector ref for back-assignment');
-  assert.match(body, /GHOSTABLE_TYPES\.has\(type\)/, 'must validate type against allowlist');
+  assert.match(body, /isGhostableEnemyType\(type\)/, 'must validate type against allowlist');
 });
 
 test('PACIFIST quest counter does NOT increment on ghost kills', () => {
