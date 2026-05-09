@@ -63,6 +63,7 @@ const requiredInIndex = [
   './src/entities/enemy-stats.js',
   './src/entities/enemy-classification.js',
   './src/entities/spawn-modifiers.js',
+  './src/entities/enemy-awareness.js',
   './src/entities.js',
   './src/entities/spawn-initializers.js',
   './src/entities/elite-affixes.js',

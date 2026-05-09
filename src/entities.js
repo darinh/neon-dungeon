@@ -40,11 +40,6 @@ function playerCheatEnabled(id) {
 // placedWalls.length=0 alongside other transient arrays).
 /** @type {any[]} */ const placedWalls = [];
 
-const ENEMY_TARGET_MEMORY_SECONDS = 3;
-const ENEMY_SIGHT_RANGE = 15;
-const ENEMY_ROOM_LEASH_TILES = 8;
-const ENEMY_LEASH_DEFEND_RANGE = 2.5;
-
 // ECHOER tuning constants — exported on globalThis for cross-file test reads
 // but kept as module-local for hot-path lookup. Tweak with caution: these
 // directly drive perceived fairness of the predictive shot.
