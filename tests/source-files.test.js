@@ -40,6 +40,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesBeacons.replaceAll('\\', '/'), 'src/entities/beacons.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCrates.replaceAll('\\', '/'), 'src/entities/crates.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesMines.replaceAll('\\', '/'), 'src/entities/mines.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesShieldGenerators.replaceAll('\\', '/'), 'src/entities/shield-generators.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesDeathHooks.replaceAll('\\', '/'), 'src/entities/death-hooks.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFuseShards.replaceAll('\\', '/'), 'src/entities/fuse-shards.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRenderPasses.replaceAll('\\', '/'), 'src/entities/render-passes.js');
@@ -73,6 +74,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesBeacons').endsWith('src/entities/beacons.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCrates').endsWith('src/entities/crates.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesMines').endsWith('src/entities/mines.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesShieldGenerators').endsWith('src/entities/shield-generators.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeathHooks').endsWith('src/entities/death-hooks.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFuseShards').endsWith('src/entities/fuse-shards.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRenderPasses').endsWith('src/entities/render-passes.js'), true);
@@ -101,6 +103,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const beaconSource = readSourceFile(__dirname, 'entitiesBeacons');
   const crateSource = readSourceFile(__dirname, 'entitiesCrates');
   const mineSource = readSourceFile(__dirname, 'entitiesMines');
+  const shieldGeneratorSource = readSourceFile(__dirname, 'entitiesShieldGenerators');
   const deathHookSource = readSourceFile(__dirname, 'entitiesDeathHooks');
   const fuseShardSource = readSourceFile(__dirname, 'entitiesFuseShards');
   const renderPassSource = readSourceFile(__dirname, 'entitiesRenderPasses');
@@ -171,6 +174,14 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(mineSource, /function\s+triggerMinesInRadius\s*\(/);
   assert.match(mineSource, /function\s+updateMines\s*\(/);
   assert.match(mineSource, /function\s+drawMines\s*\(/);
+  assert.match(shieldGeneratorSource, /const\s+SHIELD_GEN_DR\s*=/);
+  assert.match(shieldGeneratorSource, /function\s+createShieldGen\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+damageShieldGen\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+destroyShieldGen\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+damageShieldGensInRadius\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+isEnemyShieldGenProtected\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+updateShieldGens\s*\(/);
+  assert.match(shieldGeneratorSource, /function\s+drawShieldGens\s*\(/);
   assert.match(deathHookSource, /function\s+notifyGhostProjectors\s*\(/);
   assert.match(deathHookSource, /function\s+notifyVengeance\s*\(/);
   assert.match(fuseShardSource, /class\s+FuseShard\b/);
@@ -222,6 +233,14 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+triggerMinesInRadius\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+updateMines\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+drawMines\s*\(/);
+  assert.doesNotMatch(sources.entities, /const\s+SHIELD_GEN_DR\s*=/);
+  assert.doesNotMatch(sources.entities, /function\s+createShieldGen\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+damageShieldGen\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+destroyShieldGen\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+damageShieldGensInRadius\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+isEnemyShieldGenProtected\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+updateShieldGens\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+drawShieldGens\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+notifyGhostProjectors\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+notifyVengeance\s*\(/);
   assert.doesNotMatch(sources.entities, /class\s+FuseShard\b/);
