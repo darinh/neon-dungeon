@@ -62,6 +62,7 @@ const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
+const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const fs = require('node:fs');
@@ -180,9 +181,8 @@ test('NULLIFIER appears in SOURCE_COLOURS with mob colour', () => {
 test('NULLIFIER is excluded from elite-affix roll', () => {
   // atk=0 spd=0 mob — elite affixes (BERSERK / SHIELDED / etc.) wouldn't
   // make sense. Mirrors WATCHER/ARCHITECT/MAGNETON exclusion convention.
-  assert.match(ENTITIES,
-    /type\s*!==\s*'ARCHITECT'\s*&&\s*type\s*!==\s*'NULLIFIER'/,
-    "Elite-affix roll exclusion must list NULLIFIER after ARCHITECT");
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'NULLIFIER'[\s\S]*\]\s*\)/,
+    "Elite-affix roll exclusion must list NULLIFIER");
 });
 
 // ─── 6. Init block ───────────────────────────────────────────────────────

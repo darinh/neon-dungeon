@@ -21,6 +21,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -78,8 +81,8 @@ test('WATCHER is excluded from the elite affix roll', () => {
   // Elite affixes (SHIELDED, BERSERKER, FRENZY, PHASING, ...) interact
   // poorly with the stationary cone mechanic and would push damage way
   // out of balance. Mirrors RESONATOR/MIRROR/GULPER exclusions.
-  const re = /allowElite[\s\S]{0,800}type\s*!==\s*'WATCHER'/;
-  assert.match(ENTITIES, re, 'WATCHER must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'WATCHER'[\s\S]*\]\s*\)/,
+    'WATCHER must be in the elite-exclusion guard');
 });
 
 test('WATCHER is dispatched in the AI switch', () => {

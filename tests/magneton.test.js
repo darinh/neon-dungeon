@@ -22,6 +22,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -65,8 +68,8 @@ test('MAGNETON is excluded from the elite affix roll', () => {
   // death explosion that scales off atk*1.5 (= 0), which is fine, but
   // SHIELDED on a stationary punching-bag stretches the kill window past
   // tolerance. Mirrors the existing stationary-mob exclusions.
-  const re = /allowElite[\s\S]{0,800}type\s*!==\s*'MAGNETON'/;
-  assert.match(ENTITIES, re, 'MAGNETON must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'MAGNETON'[\s\S]*\]\s*\)/,
+    'MAGNETON must be in the elite-exclusion guard');
 });
 
 test('MAGNETON has CREDIT_VALUES entry', () => {

@@ -25,6 +25,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -71,8 +74,8 @@ test('REAPER is excluded from the elite affix roll', () => {
   // The frenzy mechanic stacks badly with elite affixes (SHIELDED would
   // gate the threshold trigger, BERSERKER speed compounds with frenzy).
   // Mirrors MIRROR/RESONATOR/ECHOER exclusions.
-  const re = /allowElite[\s\S]{0,600}type\s*!==\s*'REAPER'/;
-  assert.match(ENTITIES, re, 'REAPER must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'REAPER'[\s\S]*\]\s*\)/,
+    'REAPER must be in the elite-exclusion guard');
 });
 
 test('REAPER is dispatched in the AI switch', () => {

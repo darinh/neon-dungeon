@@ -140,6 +140,7 @@ test('getActiveBoostList includes HARVEST_SURGE with seconds-remaining detail', 
 
 const ENTITIES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8');
+const ENEMY_CLASSIFICATION = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8');
 
 test('HARVESTER is registered in ENEMY_WEIGHTS, CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
@@ -150,7 +151,8 @@ test('HARVESTER is registered in ENEMY_WEIGHTS, CREDIT_VALUES, SOURCE_LABELS, SO
 });
 
 test('HARVESTER is excluded from elite-affix gate (matches WARDLING/CONDUIT pattern)', () => {
-  assert.match(ENTITIES_SRC, /type !== 'HARVESTER'/, 'elite exclusion present');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'HARVESTER'[\s\S]*\]\s*\)/,
+    'elite exclusion present');
 });
 
 test('HARVESTER on-death drop spawns HarvestPickup and gates summons/shards', () => {
