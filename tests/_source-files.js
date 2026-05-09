@@ -7,6 +7,7 @@ const ts = require('typescript');
 
 const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'content',
+  'entitiesSpawnModifiers',
   'entities',
   'entitiesCombatEffects',
   'entitiesDeferredSpawns',
@@ -38,6 +39,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesSpawnTable: path.join('src', 'entities', 'spawn-table.js'),
   entitiesEnemyStats: path.join('src', 'entities', 'enemy-stats.js'),
   entitiesEnemyClassification: path.join('src', 'entities', 'enemy-classification.js'),
+  entitiesSpawnModifiers: path.join('src', 'entities', 'spawn-modifiers.js'),
   entitiesRoomIndex: path.join('src', 'entities', 'room-index.js'),
   entities: path.join('src', 'entities.js'),
   entitiesEliteAffixes: path.join('src', 'entities', 'elite-affixes.js'),

@@ -20,6 +20,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'modifiers.js'), 'utf8') + '\n' +
   fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const SPAWN_MODIFIERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-modifiers.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 test('FRAGILE registered in FLOOR_MODIFIERS with label/desc/colour/icon', () => {
@@ -46,8 +47,10 @@ test('FRAGILE applies 0.55x HP to non-boss enemies in spawnEnemy', () => {
   // Sits inside the `if (!isBoss)` guard alongside SWARM (0.6x) and
   // FORTIFIED (1.4x) — bosses are intentionally unscaled because their
   // phase transitions are HP-ratio based and tuned tight.
-  const m = ENTITIES.match(/_EG\.modifier === 'FRAGILE'\)\s*hp = Math\.round\(hp \* (0\.\d+)\)/);
-  assert.ok(m, 'FRAGILE HP scaling must be wired in spawnEnemy');
+  assert.match(ENTITIES, /scaleEnemySpawnHpForModifier\(hp, _EG\.modifier, isBoss\)/,
+    'spawnEnemy must route spawn HP through the modifier-scaling helper');
+  const m = SPAWN_MODIFIERS.match(/modifier === 'FRAGILE'\)\s*return Math\.round\(hp \* (0\.\d+)\)/);
+  assert.ok(m, 'FRAGILE HP scaling must be wired in the spawn modifier helper');
   const mul = parseFloat(m[1]);
   assert.ok(mul > 0 && mul < 1, `FRAGILE HP multiplier must be < 1 (glass), got ${mul}`);
   assert.ok(mul <= 0.65, `FRAGILE HP multiplier should be more aggressive than SWARM 0.6x to justify the player-damage tradeoff, got ${mul}`);
@@ -58,10 +61,10 @@ test('FRAGILE non-boss guard — boss HP must not be scaled', () => {
   // FORTIFIED. If a future refactor moves it out, boss HP would be
   // halved and phase-transition tuning (SENTINEL/WARDEN/HIVE/CONDUCTOR/
   // OMEGA/GENESIS) would break.
-  const block = ENTITIES.match(/if \(!isBoss\)\s*\{[\s\S]{0,800}?\n\s*\}/);
-  assert.ok(block, 'spawnEnemy must contain an if (!isBoss) modifier-scaling block');
-  assert.ok(/_EG\.modifier === 'FRAGILE'/.test(block[0]),
-    'FRAGILE HP scaling must live inside the if (!isBoss) block to exempt bosses');
+  const block = SPAWN_MODIFIERS.match(/function scaleEnemySpawnHpForModifier[\s\S]{0,900}?return hp;\n\}/);
+  assert.ok(block, 'spawn modifier helper must contain the non-boss modifier-scaling logic');
+  assert.ok(/if \(isBoss\) return hp;[\s\S]*modifier === 'FRAGILE'/.test(block[0]),
+    'FRAGILE HP scaling must be guarded by the early boss return to exempt bosses');
 });
 
 test('FRAGILE amplifies damage to player in player.takeDamage', () => {
@@ -94,12 +97,12 @@ test('FRAGILE damage amp is gated on !options.ignoreDefense (anti-regression)', 
   // mention in entities.js that touches `actual` (the player damage
   // accumulator) is gated. A future second ungated branch added
   // alongside (e.g., copy-paste or a different damage shape) would
-  // bypass the round-1 fix invisibly. We allow exactly the two
-  // FRAGILE references that exist today: spawn-side HP scaling
-  // (no `actual` involvement) + takeDamage gated branch.
+  // bypass the round-1 fix invisibly. Spawn-side HP scaling now lives in
+  // src/entities/spawn-modifiers.js, so entities.js should only contain the
+  // takeDamage gated branch.
   const allFragile = ENTITIES.match(/_EG\.modifier === 'FRAGILE'[^\n]*/g) || [];
-  assert.equal(allFragile.length, 2,
-    `entities.js must contain exactly 2 _EG.modifier === 'FRAGILE' references (spawn HP + takeDamage amp); got ${allFragile.length}: ${JSON.stringify(allFragile)}`);
+  assert.equal(allFragile.length, 1,
+    `entities.js must contain exactly 1 _EG.modifier === 'FRAGILE' reference (takeDamage amp); got ${allFragile.length}: ${JSON.stringify(allFragile)}`);
   for (const ref of allFragile) {
     if (ref.includes('actual')) {
       assert.ok(ref.includes('!options.ignoreDefense'),
