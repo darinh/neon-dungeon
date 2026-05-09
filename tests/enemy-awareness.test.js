@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const ENTITIES = fs.readFileSync(path.join(__dirname, '..', 'src/entities.js'), 'utf8');
+const ENEMY_AWARENESS = fs.readFileSync(path.join(__dirname, '..', 'src/entities', 'enemy-awareness.js'), 'utf8');
 
 function sourceBetween(start, end) {
   const startIndex = ENTITIES.indexOf(start);
@@ -69,10 +70,10 @@ ${block}
 test('enemy targeting uses last-seen memory instead of live player coordinates', () => {
   const update = sourceBetween('  update(dt, player, map) {', '  // Taunt-aware targeting check');
 
-  assert.match(ENTITIES, /const ENEMY_TARGET_MEMORY_SECONDS = 3;/);
-  assert.match(ENTITIES, /const ENEMY_SIGHT_RANGE = 15;/);
-  assert.match(ENTITIES, /const ENEMY_ROOM_LEASH_TILES = 8;/);
-  assert.match(ENTITIES, /const ENEMY_LEASH_DEFEND_RANGE = 2\.5;/);
+  assert.match(ENEMY_AWARENESS, /const ENEMY_TARGET_MEMORY_SECONDS = 3;/);
+  assert.match(ENEMY_AWARENESS, /const ENEMY_SIGHT_RANGE = 15;/);
+  assert.match(ENEMY_AWARENESS, /const ENEMY_ROOM_LEASH_TILES = 8;/);
+  assert.match(ENEMY_AWARENESS, /const ENEMY_LEASH_DEFEND_RANGE = 2\.5;/);
   assert.match(update, /this\._tx = this\.patrolTarget \? this\.patrolTarget\.x : this\.x;/);
   assert.doesNotMatch(update, /this\._tx = player\.x;\s*this\._ty = player\.y;/);
   assert.match(update, /const canAcquireTarget = !targetLeashed \|\| liveTargetDist <= ENEMY_LEASH_DEFEND_RANGE;/);
