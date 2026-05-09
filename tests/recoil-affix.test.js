@@ -19,6 +19,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'weapons.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const STATUS_EFFECTS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'status-effects.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 // Strip JS comments before regex assertions so a `// if (enemy.isBoss) continue;`
@@ -152,7 +153,7 @@ test('RECOIL ICD ticks down per frame in tickStatusEffects', () => {
   // Without a tick-down the ICD would never decay and a single hit
   // would lock the enemy out of recoil forever. Same pattern as the
   // adjacent _shockICD decay.
-  assert.ok(/if \(enemy\._recoilICD > 0\) enemy\._recoilICD -= dt;/.test(stripComments(ENTITIES)),
+  assert.ok(/if \(enemy\._recoilICD > 0\) enemy\._recoilICD -= dt;/.test(stripComments(STATUS_EFFECTS)),
     'enemy._recoilICD must decay per frame alongside _shockICD in EXECUTABLE code');
 });
 

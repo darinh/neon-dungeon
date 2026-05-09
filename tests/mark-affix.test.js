@@ -24,6 +24,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const STATUS_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -39,6 +42,7 @@ function stripComments(src) {
 
 const CONTENT_NC  = stripComments(CONTENT);
 const ENTITIES_NC = stripComments(ENTITIES);
+const STATUS_EFFECTS_NC = stripComments(STATUS_EFFECTS);
 
 // Brace-balanced extraction of the mark branch — prevents over-capture into
 // the trailing `// 'explode' is handled in applyOnKill` comment region.
@@ -220,11 +224,11 @@ test('tickEnemyStatusEffects decays enemy._markedTimer with dt and clamps to 0',
   // would still pass `> 0` if the comparison ever changed to `>= 0`.
   // Pattern mirrors burnTimer/slowTimer/shockICD/recoilICD decay.
   const re = /enemy\._markedTimer\s*-=\s*dt[\s\S]{0,120}?enemy\._markedTimer\s*=\s*0/;
-  assert.match(ENTITIES_NC, re,
+  assert.match(STATUS_EFFECTS_NC, re,
     'tickEnemyStatusEffects must decrement _markedTimer by dt and clamp to 0 in EXECUTABLE code');
   // The decay must be inside tickEnemyStatusEffects (not orphaned elsewhere).
-  const fnIdx = ENTITIES_NC.search(/function\s+tickEnemyStatusEffects\s*\(/);
-  const decayIdx = ENTITIES_NC.search(/enemy\._markedTimer\s*-=\s*dt/);
+  const fnIdx = STATUS_EFFECTS_NC.search(/function\s+tickEnemyStatusEffects\s*\(/);
+  const decayIdx = STATUS_EFFECTS_NC.search(/enemy\._markedTimer\s*-=\s*dt/);
   assert.ok(fnIdx !== -1 && decayIdx > fnIdx,
     'mark decay must live inside tickEnemyStatusEffects in EXECUTABLE code');
 });

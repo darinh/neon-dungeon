@@ -39,6 +39,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesRoomIndex: path.join('src', 'entities', 'room-index.js'),
   entities: path.join('src', 'entities.js'),
   entitiesEliteAffixes: path.join('src', 'entities', 'elite-affixes.js'),
+  entitiesStatusEffects: path.join('src', 'entities', 'status-effects.js'),
   entitiesAiHelpers: path.join('src', 'entities', 'ai-helpers.js'),
   entitiesArchitectWalls: path.join('src', 'entities', 'architect-walls.js'),
   entitiesBeacons: path.join('src', 'entities', 'beacons.js'),
