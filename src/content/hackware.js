@@ -336,7 +336,7 @@ function activateHackware(player) {
         if (!bdx && !bdy) { bdx = player.facing.x; bdy = player.facing.y; }
       }
       // Wall-aware swept teleport, 4-tile range, 0.25-tile increments.
-      // Pattern lifted verbatim from triggerShockPulse() in entities.js
+      // Pattern lifted verbatim from triggerShockPulse() in entities/shock-pulse.js
       // (~line 8762): per-step axis-independent isPassable with the final
       // combined-tile guard. This honours every existing impassable tile —
       // sealed boss/challenge entrances become T.WALL on seal, locked

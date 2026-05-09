@@ -19,6 +19,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SHOCK_PULSE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'shock-pulse.js'), 'utf8'
+);
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
@@ -88,15 +91,17 @@ test('SHOCK_PULSE constants are declared in content/pickups.js', () => {
     `SHOCK_PULSE_KNOCK should be in [1,4] tiles, got ${knock}`);
 });
 
-// ─── triggerShockPulse helper (entities.js) ───────────────────────────────
+// ─── triggerShockPulse helper (entities/shock-pulse.js) ───────────────────
 
-test('triggerShockPulse() is defined in entities.js', () => {
-  assert.match(ENTITIES, /function\s+triggerShockPulse\s*\(/,
-    'triggerShockPulse() must be defined in src/entities.js');
+test('triggerShockPulse() is defined in entities/shock-pulse.js', () => {
+  assert.doesNotMatch(ENTITIES, /function\s+triggerShockPulse\s*\(/,
+    'triggerShockPulse() must not remain in src/entities.js after extraction');
+  assert.match(SHOCK_PULSE, /function\s+triggerShockPulse\s*\(/,
+    'triggerShockPulse() must be defined in src/entities/shock-pulse.js');
 });
 
 test('triggerShockPulse iterates enemies, gates by radius AND hasLOS', () => {
-  const m = ENTITIES.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  const m = SHOCK_PULSE.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
   assert.ok(m, 'triggerShockPulse body must be locatable');
   const body = m[0];
   assert.match(body, /for\s*\(\s*const\s+e\s+of\s+enemies\s*\)/,
@@ -110,7 +115,7 @@ test('triggerShockPulse iterates enemies, gates by radius AND hasLOS', () => {
 });
 
 test('triggerShockPulse applies wall-aware swept knockback (no tunneling through walls)', () => {
-  const m = ENTITIES.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  const m = SHOCK_PULSE.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
   assert.ok(m, 'triggerShockPulse body must be locatable');
   const body = m[0];
   // Sweep loop with small step size so a 2.5-tile push can't tunnel
@@ -134,14 +139,14 @@ test('triggerShockPulse skips disguised mimics (mirrors EMP precedent)', () => {
   // EMP / shield-gen EMP both skip e._disguised so a stun message
   // doesn't leak the mimic's presence before the player triggers
   // its reveal. The non-damaging shockwave shares that constraint.
-  const m = ENTITIES.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  const m = SHOCK_PULSE.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
   assert.ok(m, 'triggerShockPulse body must be locatable');
   assert.match(m[0], /e\._disguised/,
     'triggerShockPulse must skip e._disguised (mimic-leak parity with EMP)');
 });
 
 test('triggerShockPulse skips knockback on bosses but still applies a clipped stun', () => {
-  const m = ENTITIES.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  const m = SHOCK_PULSE.match(/function\s+triggerShockPulse\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
   assert.ok(m, 'triggerShockPulse body must be locatable');
   const body = m[0];
   // Boss branch: stun-only, then continue (no knockback math reached).
