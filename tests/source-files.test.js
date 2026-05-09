@@ -39,6 +39,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyClassification.replaceAll('\\', '/'), 'src/entities/enemy-classification.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEliteAffixes.replaceAll('\\', '/'), 'src/entities/elite-affixes.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesArchitectWalls.replaceAll('\\', '/'), 'src/entities/architect-walls.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesBeacons.replaceAll('\\', '/'), 'src/entities/beacons.js');
@@ -80,6 +81,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyStats').endsWith('src/entities/enemy-stats.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyClassification').endsWith('src/entities/enemy-classification.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEliteAffixes').endsWith('src/entities/elite-affixes.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesBeacons').endsWith('src/entities/beacons.js'), true);
@@ -117,6 +119,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const enemyClassificationSource = readSourceFile(__dirname, 'entitiesEnemyClassification');
   const entitySource = readSourceFile(__dirname, 'entities');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
+  const eliteAffixSource = readSourceFile(__dirname, 'entitiesEliteAffixes');
   const aiHelperSource = readSourceFile(__dirname, 'entitiesAiHelpers');
   const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
   const beaconSource = readSourceFile(__dirname, 'entitiesBeacons');
@@ -187,6 +190,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(entitySource, /allowElite[\s\S]{0,200}canRollEliteEnemyType\(type\)/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
+  assert.match(eliteAffixSource, /function\s+tickEliteAffix\s*\(/);
+  assert.match(eliteAffixSource, /function\s+notifyFrenzyElites\s*\(/);
+  assert.match(eliteAffixSource, /function\s+notifyPredatorElites\s*\(/);
   assert.match(aiHelperSource, /function\s+isInsideCone\s*\(/);
   assert.match(aiHelperSource, /function\s+getPositionAgoFromHistory\s*\(/);
   assert.match(aiHelperSource, /function\s+predictFromHistory\s*\(/);
@@ -279,6 +285,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.content, /function\s+generateFloor\s*\(/);
   assert.match(sources.entities, /class\s+Player\b/);
   assert.doesNotMatch(sources.entities, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
+  assert.doesNotMatch(sources.entities, /function\s+tickEliteAffix\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+notifyFrenzyElites\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+notifyPredatorElites\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+isInsideCone\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+getPositionAgoFromHistory\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+predictFromHistory\s*\(/);

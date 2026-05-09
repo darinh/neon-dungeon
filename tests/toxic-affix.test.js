@@ -30,6 +30,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ELITE_AFFIXES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'elite-affixes.js'), 'utf8'
+);
 
 // Strip /* ... */ and // ... comments so source-text regex assertions
 // match against EXECUTABLE source, not commentary that incidentally
@@ -45,6 +48,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const ELITE_AFFIXES_CODE = stripComments(ELITE_AFFIXES);
 const CONTENT_CODE = stripComments(CONTENT);
 
 // Brace-walked extractor for the `eff === 'poison'` branch body. Plain
@@ -181,16 +185,13 @@ test('TOXIC poison DoT branch lives in tickEnemyStatusEffects', () => {
   // per-frame status loop). If a future refactor moves it into
   // tickEliteAffix or anywhere else, non-elite enemies would never tick
   // the DoT — the affix becomes a 1-stack-on-apply no-op DoT. Anchor by
-  // checking the DoT gate appears BETWEEN tickEnemyStatusEffects and
-  // tickEliteAffix function declarations.
-  const ticksIdx = ENTITIES_CODE.indexOf('function tickEnemyStatusEffects(');
-  const tickEliteIdx = ENTITIES_CODE.indexOf('function tickEliteAffix(');
-  const poisonTickIdx = ENTITIES_CODE.indexOf('enemy.poisonTimer > 0');
-  assert.ok(ticksIdx !== -1, 'tickEnemyStatusEffects must exist');
-  assert.ok(tickEliteIdx !== -1, 'tickEliteAffix must exist');
-  assert.ok(poisonTickIdx !== -1, 'poison DoT tick must exist');
-  assert.ok(poisonTickIdx > ticksIdx && poisonTickIdx < tickEliteIdx,
-    'TOXIC poison DoT must live inside tickEnemyStatusEffects, not tickEliteAffix');
+  // extracting tickEnemyStatusEffects directly and confirming the elite
+  // affix subsystem does not contain the poison timer gate.
+  const tickBody = extractBranch(ENTITIES_CODE, /function\s+tickEnemyStatusEffects\s*\(/);
+  assert.ok(tickBody, 'tickEnemyStatusEffects body must be extractable');
+  assert.match(tickBody, /enemy\.poisonTimer > 0/, 'poison DoT tick must live inside tickEnemyStatusEffects');
+  assert.doesNotMatch(ELITE_AFFIXES_CODE, /enemy\.poisonTimer > 0/,
+    'TOXIC poison DoT must not live in tickEliteAffix/elite-affixes.js');
 });
 
 test('TOXIC DoT damage scales as poisonStacks * 0.5 * dt (FPS-independent, per-stack)', () => {
