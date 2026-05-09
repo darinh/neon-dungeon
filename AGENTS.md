@@ -18,11 +18,13 @@ first, then read `README.md`, `docs/module-map.md`, and
 - All coding, review, test, commit, push, and PR work MUST happen in a git
   worktree. Do not edit or review from the main checkout at
   `/home/darin/projects/neon-dungeon`.
-- The main checkout is only for reading instructions, checking status, and
-  creating/listing worktrees.
-- Never run `git stash` in the main checkout. If work must be moved, use
-  `git diff --binary` plus explicit copies of untracked files after verifying
-  the destination worktree exists.
+- The main checkout is only for reading instructions, checking status, fetching
+  remote refs, and creating/listing/removing worktrees. Do not `pull`, switch
+  branches, merge, commit, restore, reset, clean, stash, or otherwise mutate the
+  main checkout.
+- Never run `git stash` or other state-hiding commands in the main checkout. If
+  work must be moved, use `git diff --binary` plus explicit copies of untracked
+  files after verifying the destination worktree exists.
 - Before launching code-review subagents, stage the diff in the worktree and
   instruct reviewers to inspect `git diff --staged` only. Reviewers must not run
   mutating git commands such as `git stash`, `git checkout`, or `git restore`.
@@ -36,6 +38,9 @@ first, then read `README.md`, `docs/module-map.md`, and
   considered complete.
 - The final retrospective step is deciding whether the retrospective protocol
   itself should change. If yes, update `docs/agent-retrospective.md` immediately.
+- The work item is not complete until the two reviewers return, adopted/rejected
+  findings are recorded, required system changes are applied, and the
+  retrospective is attached to the PR, issue, session history, or final response.
 - Retrospectives are for behavior change, not ceremony: record concrete failure
   modes, earlier catches, adopted process changes, and rejected weak suggestions.
 - Retrospective reviewers get pasted evidence and must not enter the repository,
