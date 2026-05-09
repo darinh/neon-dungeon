@@ -20,6 +20,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 const CONTENT  = readSourceFile(__dirname, 'content') + '\n' + readSourceFile(__dirname, 'contentStatus');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
@@ -43,12 +44,12 @@ test('STRIDE is registered in PERK_POOL with name/icon/desc/colour', () => {
 
 // ─── Tunable constants ────────────────────────────────────────────────────
 
-test('STRIDE constants live in entities.js with sane bounds', () => {
-  const r  = ENTITIES.match(/STRIDE_MOVE_RATE\s*=\s*([\d.]+)/);
-  const ps = ENTITIES.match(/STRIDE_PER_STACK\s*=\s*([\d.]+)/);
-  const ms = ENTITIES.match(/STRIDE_MAX_STACKS\s*=\s*(\d+)/);
-  const dp = ENTITIES.match(/STRIDE_DMG_PER_STACK\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/STRIDE_RESET_GRACE\s*=\s*([\d.]+)/);
+test('STRIDE constants live in player perk tuning with sane bounds', () => {
+  const r  = PLAYER_PERK_TUNING.match(/STRIDE_MOVE_RATE\s*=\s*([\d.]+)/);
+  const ps = PLAYER_PERK_TUNING.match(/STRIDE_PER_STACK\s*=\s*([\d.]+)/);
+  const ms = PLAYER_PERK_TUNING.match(/STRIDE_MAX_STACKS\s*=\s*(\d+)/);
+  const dp = PLAYER_PERK_TUNING.match(/STRIDE_DMG_PER_STACK\s*=\s*([\d.]+)/);
+  const rg = PLAYER_PERK_TUNING.match(/STRIDE_RESET_GRACE\s*=\s*([\d.]+)/);
   assert.ok(r && ps && ms && dp && rg,
     'STRIDE_MOVE_RATE / _PER_STACK / _MAX_STACKS / _DMG_PER_STACK / _RESET_GRACE constants must all be declared');
   const rate = parseFloat(r[1]);

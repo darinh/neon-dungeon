@@ -22,6 +22,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 const CONTENT  = readSourceFile(__dirname, 'content') + '\n' + readSourceFile(__dirname, 'contentStatus');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const GAME     = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'),     'utf8');
@@ -88,10 +89,10 @@ test('DEADEYE is registered in PERK_POOL with name/icon/desc/colour', () => {
 
 // ─── Tunable constants ────────────────────────────────────────────────────
 
-test('DEADEYE constants live in entities.js with sane bounds', () => {
-  const r = ENTITIES.match(/DEADEYE_MOVE_RATE\s*=\s*([\d.]+)/);
-  const c = ENTITIES.match(/DEADEYE_CHARGE_TIME\s*=\s*([\d.]+)/);
-  const d = ENTITIES.match(/DEADEYE_DMG_MUL\s*=\s*([\d.]+)/);
+test('DEADEYE constants live in player perk tuning with sane bounds', () => {
+  const r = PLAYER_PERK_TUNING.match(/DEADEYE_MOVE_RATE\s*=\s*([\d.]+)/);
+  const c = PLAYER_PERK_TUNING.match(/DEADEYE_CHARGE_TIME\s*=\s*([\d.]+)/);
+  const d = PLAYER_PERK_TUNING.match(/DEADEYE_DMG_MUL\s*=\s*([\d.]+)/);
   assert.ok(r && c && d,
     'DEADEYE_MOVE_RATE / _CHARGE_TIME / _DMG_MUL constants must all be declared');
   const rate = parseFloat(r[1]);

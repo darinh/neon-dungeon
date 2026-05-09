@@ -115,6 +115,7 @@ Good candidates:
 - Spawn-time modifier helpers. Done for floor-modifier HP scaling and elite rolls in `src/entities/spawn-modifiers.js`.
 - Shared enemy perception/leash tuning. Done for target-memory and room-leash constants in `src/entities/enemy-awareness.js`.
 - Static per-enemy ability tuning. Done for the module-top constants consumed by enemy AI/draw/helper paths in `src/entities/enemy-ability-tuning.js`.
+- Static Player perk tuning. Done for STRIDE/DEADEYE/HOT_HAND constants in `src/entities/player-perk-tuning.js`.
 - Per-type spawn state initialization. Done for `initializeEnemySpawnState()` in `src/entities/spawn-initializers.js`.
 - Shock Pulse pickup detonation. Done for `triggerShockPulse` in `src/entities/shock-pulse.js`.
 - Boss/enemy selection helpers.
