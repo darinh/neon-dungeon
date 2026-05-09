@@ -109,8 +109,8 @@ Goal: make combat and actor behavior easier to test without moving every class.
 
 Good candidates:
 
-- Status-effect math.
-- Hit-effect application rules.
+- Status-effect math. Done for enemy status ticking in `src/entities/status-effects.js`.
+- Hit-effect application rules. Done for weapon-affix on-hit/on-kill rules in `src/entities/combat-effects.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 

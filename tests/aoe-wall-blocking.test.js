@@ -10,6 +10,7 @@ const { T, hasLOS } = require('./_generation-fixture.js');
 const CONTENT_HACKWARE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const ENTITIES_COMBAT_EFFECTS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8');
 const ENTITIES_FUSE_SHARDS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'fuse-shards.js'), 'utf8');
 
 /** @param {string} src */
@@ -20,6 +21,7 @@ function stripComments(src) {
 const CONTENT_HACKWARE_NC = stripComments(CONTENT_HACKWARE);
 const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const ENTITIES_NC = stripComments(ENTITIES);
+const ENTITIES_COMBAT_EFFECTS_NC = stripComments(ENTITIES_COMBAT_EFFECTS);
 const ENTITIES_FUSE_SHARDS_NC = stripComments(ENTITIES_FUSE_SHARDS);
 
 /**
@@ -63,7 +65,7 @@ test('EMP_LINE cannot collapse fields or wells through walls and doors', () => {
 });
 
 test('enemy death AoE and NEXUS feedback use LOS gates', () => {
-  const detonateBody = extractBlock(ENTITIES_NC, /function\s+applyOnKill\s*\(/);
+  const detonateBody = extractBlock(ENTITIES_COMBAT_EFFECTS_NC, /function\s+applyOnKill\s*\(/);
   assert.match(detonateBody, /dist\(e\.x,\s*e\.y,\s*enemy\.x,\s*enemy\.y\)\s*<\s*aoeR\s*&&\s*hasLOS\(enemy\.x,\s*enemy\.y,\s*e\.x,\s*e\.y,\s*_EG\.dungeon\.map\)/);
   assert.match(detonateBody, /dist\(p\.x,\s*p\.y,\s*enemy\.x,\s*enemy\.y\)\s*<\s*aoeR\s*&&\s*hasLOS\(enemy\.x,\s*enemy\.y,\s*p\.x,\s*p\.y,\s*_EG\.dungeon\.map\)/);
 

@@ -8,6 +8,7 @@ const ts = require('typescript');
 const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'content',
   'entities',
+  'entitiesCombatEffects',
   'render',
   'game',
 ]);
@@ -53,6 +54,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesFuseShards: path.join('src', 'entities', 'fuse-shards.js'),
   entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
   entitiesVolatileCores: path.join('src', 'entities', 'volatile-cores.js'),
+  entitiesCombatEffects: path.join('src', 'entities', 'combat-effects.js'),
   render: path.join('src', 'render.js'),
   game: path.join('src', 'game.js'),
 });

@@ -30,6 +30,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const COMBAT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
+);
 const STATUS_EFFECTS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
 );
@@ -45,6 +48,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const COMBAT_EFFECTS_CODE = stripComments(COMBAT_EFFECTS);
 const STATUS_EFFECTS_CODE = stripComments(STATUS_EFFECTS);
 const CONTENT_CODE = stripComments(CONTENT);
 
@@ -102,7 +106,7 @@ test('applyHitEffects has a stagger branch gated on eff === "stagger"', () => {
   // suffix (burn/slow/leech/chain/shock/recoil/execute/mark/siphon/poison)
   // so the loop dispatches into it. A literal string match would pass on
   // a comment that quotes 'stagger' — strip comments first.
-  assert.match(ENTITIES_CODE, /eff\s*===\s*'stagger'/,
+  assert.match(COMBAT_EFFECTS_CODE, /eff\s*===\s*'stagger'/,
     "applyHitEffects must have an `eff === 'stagger'` branch");
 });
 
@@ -113,9 +117,9 @@ test('STAGGER branch lives inside applyHitEffects (not applyOnKill)', () => {
   // scenario. Anchor by checking the stagger gate appears BETWEEN the
   // applyHitEffects function declaration and the applyOnKill function
   // declaration. Same pattern as siphon-affix.test.js.
-  const fxIdx = ENTITIES_CODE.indexOf('function applyHitEffects(');
-  const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
-  const stIdx = ENTITIES_CODE.indexOf("eff === 'stagger'");
+  const fxIdx = COMBAT_EFFECTS_CODE.indexOf('function applyHitEffects(');
+  const okIdx = COMBAT_EFFECTS_CODE.indexOf('function applyOnKill(');
+  const stIdx = COMBAT_EFFECTS_CODE.indexOf("eff === 'stagger'");
   assert.ok(fxIdx !== -1, 'applyHitEffects function must exist');
   assert.ok(okIdx !== -1, 'applyOnKill function must exist');
   assert.ok(stIdx !== -1, 'stagger branch must exist');
@@ -131,7 +135,7 @@ test('STAGGER branch checks per-enemy _staggerICD and exits when > 0', () => {
   // treated as zero — matches the recoil/shock pattern), and `continue`
   // out of the for-loop iteration when it's positive. Use brace-walked
   // extraction so the assertion is scoped to JUST the stagger branch.
-  const branch = extractBranch(ENTITIES_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
   assert.ok(branch, 'stagger branch must be extractable');
   assert.match(branch, /enemy\._staggerICD\s*\|\|\s*0/,
     'stagger branch must read enemy._staggerICD with `|| 0` nucleation');
@@ -149,7 +153,7 @@ test('STAGGER branch sets _staggerICD to 0.5 (locks the ICD duration)', () => {
   // Drifting the ICD shorter (e.g., 0.3s) would push the effective ceiling
   // toward FROST (0.7x) and eclipse FROST's design contract; longer (e.g.,
   // 1.0s) would make STAGGER feel undertuned vs FROST. Lock the value.
-  const branch = extractBranch(ENTITIES_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
   assert.ok(branch);
   assert.match(branch, /enemy\._staggerICD\s*=\s*0\.5/,
     'stagger branch must set _staggerICD = 0.5');
@@ -163,7 +167,7 @@ test('STAGGER uses stronger-wins overlap with existing slows', () => {
   // truncate the FROST timer (Math.max), AND applies STAGGER's stronger
   // 0.5x factor (Math.min) for the remainder. Anything else — straight
   // assignment, or Math.min on the timer — would be a regression.
-  const branch = extractBranch(ENTITIES_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
   assert.ok(branch);
   assert.match(branch, /enemy\.slowTimer\s*=\s*Math\.max\(\s*enemy\.slowTimer\s*\|\|\s*0\s*,\s*0\.4\s*\)/,
     'stagger must use Math.max for slowTimer (stronger-wins, never truncates a longer existing slow)');
@@ -177,7 +181,7 @@ test('STAGGER skips phased mobs (defensive: no slow on intangible WRAITH)', () =
   // already block damage to phased mobs, but if a future damage path
   // skips those filters the on-hit effects shouldn't visibly stutter
   // an intangible mob. Asserts the guard exists in the stagger branch.
-  const branch = extractBranch(ENTITIES_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
   assert.ok(branch);
   assert.match(branch, /enemy\._wrPhased[\s\S]{0,40}continue/,
     'stagger must `continue` when enemy._wrPhased is true');
@@ -211,7 +215,7 @@ test('STAGGER feedback particle uses MUZZLE shape with the affix colour', () => 
   // shape but with the affix's own #88aaff (slightly more violet) so
   // the player can visually distinguish the two slow sources. A SPARK
   // shape (used by recoil/shock) would conflict with the "stutter" feel.
-  const branch = extractBranch(ENTITIES_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /else if\s*\(\s*eff\s*===\s*'stagger'\s*\)\s*\{/);
   assert.ok(branch);
   assert.match(branch, /spawnParticles\([^)]*'MUZZLE'\s*,\s*'#88aaff'/,
     "STAGGER must spawn MUZZLE particles in #88aaff (matches affix colour)");
