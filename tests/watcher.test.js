@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -28,7 +31,7 @@ test('WATCHER appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   // Per design (mid-late zoner — positioning puzzle), minFloor must be >= 6.
   // Earlier than that the player hasn't built enough movement vocabulary
   // to read a sweeping cone as a timing puzzle.
-  const m = ENTITIES.match(/WATCHER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/WATCHER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'WATCHER must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 6, `WATCHER minFloor should be >= 6, got ${m[1]}`);
 });

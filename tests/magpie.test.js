@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -40,7 +43,7 @@ test('MAGPIE appears in ENEMY_WEIGHTS with floor 4+ gate', () => {
   // Floor 4 matches HARVESTER's introduction — the first floor where
   // dropped supplies are abundant enough that a thief feels like a
   // mid-floor pressure rather than a placeholder mob.
-  const m = ENTITIES.match(/MAGPIE:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/MAGPIE:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'MAGPIE must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 4,
     `MAGPIE minFloor should be >= 4 (after item drops are abundant), got ${m[1]}`);

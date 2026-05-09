@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const ENTITY_RENDER_PASSES = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'render-passes.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
@@ -29,7 +30,7 @@ test('TETHER appears in ENEMY_WEIGHTS with floor 5+ gate', () => {
   // Floor 5 matches the cadence of recent additions (SAPPER 5+) and
   // sits after the player has met enough kite-incentive mobs to read
   // the "closer is faster" inversion as a mechanic.
-  const m = ENTITIES.match(/TETHER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/TETHER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'TETHER must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 5,
     `TETHER minFloor should be >= 5, got ${m[1]}`);
