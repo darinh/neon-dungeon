@@ -60,6 +60,7 @@ const { readSourceFile } = require('./_source-files.js');
 const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
   = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
+const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const fs = require('node:fs');
@@ -147,7 +148,7 @@ test('NULLIFIER is registered in ENEMY_WEIGHTS spawn table with minFloor 6', () 
   // matches design (mid-late game tier — JAMMED hackware floor is too
   // punishing if it shows up before the player even has a hackware
   // module equipped, which usually happens around floor 3-5).
-  assert.match(ENTITIES,
+  assert.match(ENEMY_SPAWN_TABLE,
     /NULLIFIER:\s*\{\s*base:\s*\d+\s*,\s*perFloor:\s*\d+\s*,\s*minFloor:\s*6\b/,
     'NULLIFIER must appear in ENEMY_WEIGHTS with minFloor 6');
 });

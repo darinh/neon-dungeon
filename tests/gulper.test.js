@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const PLATFORM = fs.readFileSync(path.join(ROOT, 'src', 'platform.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -29,7 +30,7 @@ test('GULPER appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   // projectile-interference compositional mobs). Earlier floors don't
   // give the player enough projectile-spam habit to read "shots vanish
   // here" as a learnable pattern.
-  const m = ENTITIES.match(/GULPER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/GULPER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'GULPER must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 6,
     `GULPER minFloor should be >= 6, got ${m[1]}`);

@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -33,7 +36,7 @@ const SW = fs.readFileSync(
 
 test('RESONATOR appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   // Per design (mid-late zoner), minFloor must be >= 6.
-  const m = ENTITIES.match(/RESONATOR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/RESONATOR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'RESONATOR must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 6, `RESONATOR minFloor should be >= 6, got ${m[1]}`);
 });

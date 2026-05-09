@@ -21,12 +21,15 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 
 test('TUNNELLER appears in ENEMY_WEIGHTS with a floor gate', () => {
   // The weights block declares spawn rate by floor. Without an entry the
   // mob can never roll out of pickEnemyType.
   const weightsRe = /TUNNELLER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/;
-  const m = ENTITIES.match(weightsRe);
+  const m = ENEMY_SPAWN_TABLE.match(weightsRe);
   assert.ok(m, 'TUNNELLER must be registered in ENEMY_WEIGHTS');
   // Must be floor-gated (not a floor-1 mob — burrow telegraph is a mid-game
   // pressure unit per the design).

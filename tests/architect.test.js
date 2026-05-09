@@ -31,6 +31,7 @@ const { readSourceFile } = require('./_source-files.js');
 
 const { ENTITIES, CONTENT, ENTITIES_CODE } = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
+const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -78,7 +79,7 @@ test('ARCHITECT is registered in ENEMY_WEIGHTS spawn table (per gpt-5.3-codex/op
   // Per opus + gpt-5.5 review (CRITICAL): without an ENEMY_WEIGHTS entry,
   // pickEnemyType() never selects ARCHITECT and the entire mob is dead
   // code. Pin the spawn-table entry. minFloor 7 matches design (floor 7+).
-  assert.match(ENTITIES,
+  assert.match(ENEMY_SPAWN_TABLE,
     /ARCHITECT:\s*\{\s*base:\s*\d+\s*,\s*perFloor:\s*\d+\s*,\s*minFloor:\s*7\b/,
     'ARCHITECT must appear in ENEMY_WEIGHTS with minFloor 7');
 });

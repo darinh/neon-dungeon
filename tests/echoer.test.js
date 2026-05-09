@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -39,7 +42,7 @@ test('ECHOER appears in ENEMY_WEIGHTS with mid-game floor gate', () => {
   // Without a weights entry, the mob can never roll out of pickEnemyType.
   // Per design (anti-pattern punisher), ECHOER is mid-late game pressure
   // — minFloor must be >= 4.
-  const m = ENTITIES.match(/ECHOER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/ECHOER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'ECHOER must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 4, `ECHOER minFloor should be >= 4, got ${m[1]}`);
 });
