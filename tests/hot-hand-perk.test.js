@@ -44,6 +44,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 const CONTENT  = readSourceFile(__dirname, 'content');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const CONTENT_HACKWARE = readSourceFile(__dirname, 'contentHackware');
@@ -80,7 +81,7 @@ test('HOT_HAND is registered in PERK_POOL with name/icon/desc/colour', () => {
 // ─── Constants ────────────────────────────────────────────────────────────
 
 test('HOT_HAND constants are declared with documented values', () => {
-  const src = stripComments(ENTITIES);
+  const src = stripComments(PLAYER_PERK_TUNING);
   assert.match(src, /HOT_HAND_PER_STACK\s*=\s*0\.05/,
     'HOT_HAND_PER_STACK must be 0.05 (+5% per stack)');
   assert.match(src, /HOT_HAND_MAX_STACKS\s*=\s*6/,
