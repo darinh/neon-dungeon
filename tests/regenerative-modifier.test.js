@@ -20,6 +20,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'modifiers.js'), 'utf8') + '\n' +
   fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const STATUS_EFFECTS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'status-effects.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 // Strip JS comments before regex matching on executable gates. Without
@@ -33,6 +34,7 @@ function stripComments(src) {
     .replace(/\/\/[^\n]*/g, '');
 }
 const ENTITIES_CODE = stripComments(ENTITIES);
+const STATUS_EFFECTS_CODE = stripComments(STATUS_EFFECTS);
 
 test('REGENERATIVE registered in FLOOR_MODIFIERS with label/desc/colour/icon', () => {
   // Single source of truth for the announcement banner, the random roll
@@ -115,7 +117,7 @@ test('REGENERATIVE timer reset is wired in burn DoT path (anti-regression)', () 
   // the enemy actively loses HP. Caught by gpt-5.3-codex adversarial
   // review 2026-04-27. Gated on dmg > 0 (post-SHIELDED-absorb) to
   // mirror the takeDamage `actual > 0` semantics.
-  const m = ENTITIES_CODE.match(/if\s*\(dmg\s*>\s*0\s*&&\s*_EG\.modifier\s*===\s*'REGENERATIVE'\)\s*enemy\._regenTimer\s*=\s*0/);
+  const m = STATUS_EFFECTS_CODE.match(/if\s*\(dmg\s*>\s*0\s*&&\s*_EG\.modifier\s*===\s*'REGENERATIVE'\)\s*enemy\._regenTimer\s*=\s*0/);
   assert.ok(m, 'REGENERATIVE reset must be wired into the burn DoT path (tickEnemyStatusEffects) on dmg > 0');
 });
 
@@ -130,9 +132,9 @@ test('REGENERATIVE has exactly four _EG.modifier references (anti-regression)', 
   // When adding a NEW DoT path that bypasses takeDamage by direct hp
   // subtraction, you MUST add a `_regenTimer = 0` reset gated on
   // `dmg > 0 && _EG.modifier === 'REGENERATIVE'` AND bump this count.
-  const all = ENTITIES_CODE.match(/_EG\.modifier === 'REGENERATIVE'/g) || [];
+  const all = `${ENTITIES_CODE}\n${STATUS_EFFECTS_CODE}`.match(/_EG\.modifier === 'REGENERATIVE'/g) || [];
   assert.equal(all.length, 4,
-    `entities.js must contain exactly 4 _EG.modifier === 'REGENERATIVE' references (Enemy.update tick + takeDamage reset + burn-DoT reset + poison-DoT reset); got ${all.length}`);
+    `entities runtime must contain exactly 4 _EG.modifier === 'REGENERATIVE' references (Enemy.update tick + takeDamage reset + burn-DoT reset + poison-DoT reset); got ${all.length}`);
 });
 
 test('REGENERATIVE has no overlap with existing modifiers (cross-check)', () => {

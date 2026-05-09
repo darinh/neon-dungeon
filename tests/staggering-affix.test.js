@@ -30,6 +30,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const STATUS_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
+);
 
 // Strip /* ... */ and // ... comments so source-text regex assertions
 // match against EXECUTABLE source, not commentary that incidentally
@@ -42,6 +45,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const STATUS_EFFECTS_CODE = stripComments(STATUS_EFFECTS);
 const CONTENT_CODE = stripComments(CONTENT);
 
 // Brace-walked branch extraction: find the opener regex, then walk
@@ -186,7 +190,7 @@ test('Enemy.update ticks down _staggerICD by dt', () => {
   // _recoilICD in the canonical "ICD decay block" of Enemy.update.
   // Brace-walked is overkill here (a one-liner), so a tight regex is
   // fine but include `dt` to lock the rate.
-  assert.match(ENTITIES_CODE,
+  assert.match(STATUS_EFFECTS_CODE,
     /enemy\._staggerICD\s*>\s*0\)\s*enemy\._staggerICD\s*-=\s*dt/,
     'Enemy.update must decay enemy._staggerICD by dt every frame');
 });
