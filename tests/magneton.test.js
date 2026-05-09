@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -117,9 +120,9 @@ test('MAGNETON aiMagneton method exists and skips non-player projectiles', () =>
 });
 
 test('MAGNETON tuning constants are defined', () => {
-  assert.match(ENTITIES, /const\s+MAGNETON_FIELD_R\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+MAGNETON_BEND_STRENGTH\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+MAGNETON_SAFE_R\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGNETON_FIELD_R\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGNETON_BEND_STRENGTH\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGNETON_SAFE_R\s*=\s*[\d.]+/);
 });
 
 test('sw cache freshness does not use a second numeric version', () => {

@@ -19,6 +19,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -90,10 +93,10 @@ test('aiReaper method is defined', () => {
 });
 
 test('REAPER tuning constants are present and reasonable', () => {
-  const thr = ENTITIES.match(/REAPER_FRENZY_THRESHOLD\s*=\s*(\d+)/);
-  const tele = ENTITIES.match(/REAPER_TELEGRAPH\s*=\s*([\d.]+)/);
-  const dur = ENTITIES.match(/REAPER_FRENZY_DURATION\s*=\s*([\d.]+)/);
-  const mul = ENTITIES.match(/REAPER_FRENZY_SPD_MUL\s*=\s*([\d.]+)/);
+  const thr = ENEMY_ABILITY_TUNING.match(/REAPER_FRENZY_THRESHOLD\s*=\s*(\d+)/);
+  const tele = ENEMY_ABILITY_TUNING.match(/REAPER_TELEGRAPH\s*=\s*([\d.]+)/);
+  const dur = ENEMY_ABILITY_TUNING.match(/REAPER_FRENZY_DURATION\s*=\s*([\d.]+)/);
+  const mul = ENEMY_ABILITY_TUNING.match(/REAPER_FRENZY_SPD_MUL\s*=\s*([\d.]+)/);
   assert.ok(thr && parseInt(thr[1], 10) === 5, 'REAPER_FRENZY_THRESHOLD must be 5');
   assert.ok(tele && parseFloat(tele[1]) === 1.0, 'REAPER_TELEGRAPH must be 1.0s');
   assert.ok(dur && parseFloat(dur[1]) === 4.0, 'REAPER_FRENZY_DURATION must be 4.0s');
