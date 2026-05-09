@@ -9,6 +9,7 @@ const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'content',
   'entities',
   'entitiesCombatEffects',
+  'entitiesDeferredSpawns',
   'render',
   'game',
 ]);
@@ -55,6 +56,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
   entitiesVolatileCores: path.join('src', 'entities', 'volatile-cores.js'),
   entitiesCombatEffects: path.join('src', 'entities', 'combat-effects.js'),
+  entitiesDeferredSpawns: path.join('src', 'entities', 'deferred-spawns.js'),
   render: path.join('src', 'render.js'),
   game: path.join('src', 'game.js'),
 });

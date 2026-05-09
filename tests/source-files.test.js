@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entities', 'entitiesCombatEffects', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entities', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -55,6 +55,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesRenderPasses.replaceAll('\\', '/'), 'src/entities/render-passes.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesVolatileCores.replaceAll('\\', '/'), 'src/entities/volatile-cores.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCombatEffects.replaceAll('\\', '/'), 'src/entities/combat-effects.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesDeferredSpawns.replaceAll('\\', '/'), 'src/entities/deferred-spawns.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -99,6 +100,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesRenderPasses').endsWith('src/entities/render-passes.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesVolatileCores').endsWith('src/entities/volatile-cores.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCombatEffects').endsWith('src/entities/combat-effects.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesDeferredSpawns').endsWith('src/entities/deferred-spawns.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -139,6 +141,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const renderPassSource = readSourceFile(__dirname, 'entitiesRenderPasses');
   const volatileCoreSource = readSourceFile(__dirname, 'entitiesVolatileCores');
   const combatEffectSource = readSourceFile(__dirname, 'entitiesCombatEffects');
+  const deferredSpawnSource = readSourceFile(__dirname, 'entitiesDeferredSpawns');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -283,6 +286,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(combatEffectSource, /function\s+_applyStunOnlyEffects\s*\(/);
   assert.match(combatEffectSource, /function\s+applyHitEffects\s*\(/);
   assert.match(combatEffectSource, /function\s+applyOnKill\s*\(/);
+  assert.match(deferredSpawnSource, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
+  assert.match(deferredSpawnSource, /function\s+spawnGhost\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -383,9 +388,13 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+_applyStunOnlyEffects\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+applyHitEffects\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+applyOnKill\s*\(/);
+  assert.doesNotMatch(sources.entities, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
+  assert.doesNotMatch(sources.entities, /function\s+spawnGhost\s*\(/);
   assert.match(sources.entitiesCombatEffects, /function\s+_applyStunOnlyEffects\s*\(/);
   assert.match(sources.entitiesCombatEffects, /function\s+applyHitEffects\s*\(/);
   assert.match(sources.entitiesCombatEffects, /function\s+applyOnKill\s*\(/);
+  assert.match(sources.entitiesDeferredSpawns, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
+  assert.match(sources.entitiesDeferredSpawns, /function\s+spawnGhost\s*\(/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
 });

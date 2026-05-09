@@ -41,6 +41,12 @@ first, then read `README.md`, `docs/module-map.md`, and
 - The work item is not complete until the two reviewers return, adopted/rejected
   findings are recorded, required system changes are applied, and the
   retrospective is attached to the PR, issue, session history, or final response.
+- The work item is still not complete if actionable backlog remains and the agent
+  has not started the next item. Do not call `task_complete` merely because one
+  PR, issue, or retrospective is done.
+- For issue-backed work, run `npm run check:agent-continuity -- --issue <number>`
+  before `task_complete`; a nonzero exit means actionable work remains or an
+  agent-authored PR still needs monitoring.
 - Do not remove the implementation worktree until the retrospective is complete
   and attached. Worktree cleanup is the final step.
 - Retrospectives are for behavior change, not ceremony: record concrete failure

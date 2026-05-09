@@ -41,7 +41,12 @@ A work item is not complete until:
    cleanup is the final step after the retrospective is attached. If the
    implementation worktree was already removed, record that as a process
    violation and use a fresh worktree only to repair the protocol or attach
-   evidence.
+   evidence;
+8. the agent has checked for the next actionable work item and either started it
+   or recorded why no concrete work remains. Do not call `task_complete` merely
+   because one PR, issue, or retrospective is done. For issue-backed work, run
+   `npm run check:agent-continuity -- --issue <number>` and treat a nonzero exit
+   as proof that work remains.
 
 ## Required pre-verification controls
 
@@ -78,6 +83,11 @@ Before writing the retrospective:
    checks run, PR/issue links, and incidents.
 5. Confirm the main checkout has no active work or untracked files related to
    the task.
+6. Check the active backlog or issue queue before stopping; if work remains,
+   start the next work item from a worktree after attaching the retrospective.
+7. Run `npm run check:agent-continuity -- --issue <number>` for issue-backed
+   work before any `task_complete`; if it fails, keep working or record a
+   concrete blocker.
 
 ## Required inputs
 
@@ -96,6 +106,8 @@ Collect only facts that affect future behavior:
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
 - decisions that changed the plan;
+- next-work decision: started next item, no actionable work, or blocked reason;
+- continuity check result: command, exit code, and output;
 - control-scope classification for any new guard: repo, project-config,
   machine-local, CI, or human process.
 
@@ -123,7 +135,10 @@ Collect only facts that affect future behavior:
 8. **Verify pre-verification controls.** Confirm bootstrap, runtime-file surface
    audit, classic-script runtime proof, and false-positive evidence were handled
    where applicable.
-9. **Ask two other LLMs for adversarial critique.** Do this only after code
+9. **Check continuity.** Query the active issue/backlog. If actionable work
+   remains, the completion action is to start it after attaching this
+   retrospective, not to stop or call `task_complete`.
+10. **Ask two other LLMs for adversarial critique.** Do this only after code
    reviewers are done and their findings are resolved. Give each retrospective
    reviewer the same pasted evidence and the draft retrospective; do not require
    them to enter the repository or run git. Use different model families when
@@ -131,13 +146,13 @@ Collect only facts that affect future behavior:
    available because of a tool outage, the work item is blocked, not complete.
    Require concrete findings only: correctness gaps, repeated failure patterns,
    missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
-10. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
+11. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
    weak suggestions explicitly and briefly.
-11. **Change the system.** If the retrospective reveals a durable rule, update the
+12. **Change the system.** If the retrospective reveals a durable rule, update the
    relevant persistent artifact immediately from the worktree: `AGENTS.md`,
    project instructions, tests, scripts, or this protocol. Re-read the changed
    artifact and verify the guard actually landed.
-12. **Final mandatory question: should this retrospective protocol change?** If
+13. **Final mandatory question: should this retrospective protocol change?** If
    yes, edit this document as part of the same work item or the next immediate
    policy PR. If no, record that no protocol change was needed and why. The
    agent performing the retrospective may edit, commit, and push protocol
@@ -177,6 +192,7 @@ Facts:
 - Bootstrap status:
 - Runtime-file surface audit:
 - Classic-script runtime proof:
+- Next-work decision:
 - System changes made:
 - Final diff or commit range:
 - Control scopes:
@@ -204,6 +220,7 @@ Keep the retrospective short enough to be useful:
 - **Two-LLM critique**: [reviewers/models used, adopted findings, rejected findings]
 - **System changes made**:
 - **Protocol change needed**:
+- **Next-work decision**:
 ```
 
 Store the output where it will influence future work:
