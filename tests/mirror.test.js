@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -33,7 +36,7 @@ const SW = fs.readFileSync(
 
 test('MIRROR appears in ENEMY_WEIGHTS with floor 8+ gate', () => {
   // Per design (deep-floor mimic, more dangerous than RESONATOR), minFloor must be >= 8.
-  const m = ENTITIES.match(/MIRROR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/MIRROR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'MIRROR must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 8, `MIRROR minFloor should be >= 8, got ${m[1]}`);
 });

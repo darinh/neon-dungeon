@@ -33,6 +33,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   contentFloorGenerator: path.join('src', 'content', 'floor-generator.js'),
   content: path.join('src', 'content.js'),
   entitiesSourceMetadata: path.join('src', 'entities', 'source-metadata.js'),
+  entitiesSpawnTable: path.join('src', 'entities', 'spawn-table.js'),
   entitiesRoomIndex: path.join('src', 'entities', 'room-index.js'),
   entities: path.join('src', 'entities.js'),
   entitiesAiHelpers: path.join('src', 'entities', 'ai-helpers.js'),

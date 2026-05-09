@@ -24,6 +24,7 @@ const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
+const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -38,7 +39,7 @@ test('CRYOPHAGE appears in ENEMY_WEIGHTS with mid-late floor gate', () => {
   // Without a weights entry, the mob can never roll out of pickEnemyType.
   // Per design (frost-patch area denial), CRYOPHAGE is mid-late game
   // pressure — minFloor must be >= 5.
-  const m = ENTITIES.match(/CRYOPHAGE:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/CRYOPHAGE:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'CRYOPHAGE must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 5, `CRYOPHAGE minFloor should be >= 5, got ${m[1]}`);
 });

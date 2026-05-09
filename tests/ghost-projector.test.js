@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -35,7 +38,7 @@ const SW = fs.readFileSync(
 
 test('GHOST_PROJECTOR appears in ENEMY_WEIGHTS with floor 8+ gate', () => {
   // Per design (deep-floor, novel mechanic), minFloor must be >= 8.
-  const m = ENTITIES.match(/GHOST_PROJECTOR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/GHOST_PROJECTOR:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'GHOST_PROJECTOR must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 8, `GHOST_PROJECTOR minFloor should be >= 8, got ${m[1]}`);
 });

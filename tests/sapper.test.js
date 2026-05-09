@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPAWN_TABLE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -29,7 +32,7 @@ test('SAPPER appears in ENEMY_WEIGHTS with floor 5+ gate', () => {
   // Floor 5: HARVESTER (floor 4+) drops HARVEST_SURGE which is the
   // only timed boost in the world today. Spawning SAPPER before any
   // timed boost can exist would make the leech mechanic invisible.
-  const m = ENTITIES.match(/SAPPER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
+  const m = ENEMY_SPAWN_TABLE.match(/SAPPER:\s*\{\s*base:\s*\d+,\s*perFloor:\s*\d+,\s*minFloor:\s*(\d+)/);
   assert.ok(m, 'SAPPER must be registered in ENEMY_WEIGHTS');
   assert.ok(parseInt(m[1], 10) >= 5,
     `SAPPER minFloor should be >= 5 (after first timed-boost source), got ${m[1]}`);
