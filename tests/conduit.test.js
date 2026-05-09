@@ -15,6 +15,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -82,12 +85,12 @@ test('CONDUIT stun handler clears _cdLinkICD', () => {
 test('CONDUIT has tuning constants for solo + beam', () => {
   // These are the gameplay-fairness budget. A change to any of them
   // shifts the difficulty contract; a missing one is a wiring bug.
-  assert.match(ENTITIES, /const\s+CONDUIT_SOLO_FIRE_CD\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+CONDUIT_SOLO_PROJ_SPD\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+CONDUIT_SOLO_DMG_MUL\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+CONDUIT_BEAM_W\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+CONDUIT_BEAM_DMG_MUL\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+CONDUIT_BEAM_ICD\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_SOLO_FIRE_CD\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_SOLO_PROJ_SPD\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_SOLO_DMG_MUL\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_BEAM_W\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_BEAM_DMG_MUL\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+CONDUIT_BEAM_ICD\s*=\s*[\d.]+/);
 });
 
 test('aiConduit drains _cdLinkICD by raw dt (not modSpeed)', () => {
@@ -184,7 +187,7 @@ test('sw.js cache freshness is not a second numeric version', () => {
 const fnMatch = ENTITIES.match(/_cdHitsPlayer\s*\([^)]*\)\s*\{[\s\S]*?\n  \}/);
 const FN_SRC = fnMatch ? fnMatch[0] : null;
 const CONDUIT_BEAM_W = parseFloat(
-  (ENTITIES.match(/const\s+CONDUIT_BEAM_W\s*=\s*([\d.]+)/) || [])[1] || '0.4'
+  (ENEMY_ABILITY_TUNING.match(/const\s+CONDUIT_BEAM_W\s*=\s*([\d.]+)/) || [])[1] || '0.4'
 );
 
 test('_cdHitsPlayer source extractable via vm', () => {
