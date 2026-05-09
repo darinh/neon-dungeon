@@ -66,6 +66,7 @@ const ASSETS = [
   './src/entities/enemy-stats.js',
   './src/entities/enemy-classification.js',
   './src/entities.js',
+  './src/entities/elite-affixes.js',
   './src/entities/ai-helpers.js',
   './src/entities/architect-walls.js',
   './src/entities/beacons.js',
