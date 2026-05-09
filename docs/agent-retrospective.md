@@ -36,14 +36,39 @@ A work item is not complete until:
 4. any required system changes are applied and verified;
 5. the final protocol-change decision is recorded;
 6. the retrospective is attached to the PR, issue, session history, or final
-   response where future agents can find the evidence.
+   response where future agents can find the evidence;
+7. the implementation worktree is still available for inspection. Worktree
+   cleanup is the final step after the retrospective is attached. If the
+   implementation worktree was already removed, record that as a process
+   violation and use a fresh worktree only to repair the protocol or attach
+   evidence.
+
+## Required pre-verification controls
+
+Run and record these before verification or review:
+
+1. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
+   dependency directory is absent, run the repository's existing install command
+   (`npm ci` for this project) before using test failures as evidence.
+2. **New-runtime-file surface audit.** Any new browser runtime source file must
+   be checked against all registration surfaces: `index.html`,
+   `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
+   and docs. Default helper paths such as `readSourceFiles()` must cover the new
+   file when it is part of the runtime source set.
+3. **Classic-script runtime proof.** When moving top-level globals between
+   classic scripts, record why the chosen script order is safe: dependencies
+   loaded before the new file, callers loaded or executed after it, and no
+   module-evaluation-time call path that can reference the moved global early.
+4. **False-positive evidence.** Any reviewer finding rejected as a false positive
+   must be backed by a code citation, test, or runtime-order proof so the same
+   concern does not get relitigated without new evidence.
 
 ## Pre-retrospective checklist
 
 Before writing the retrospective:
 
-1. Verify the current directory is the worktree for the work item, not
-   `/home/darin/projects/neon-dungeon`.
+1. Verify the current directory is the implementation worktree for the work item,
+   not `/home/darin/projects/neon-dungeon`.
 2. Record `git worktree list`, `git rev-parse --show-toplevel`,
    `git rev-parse --git-common-dir`, `git status --porcelain`, and
    `git ls-files --others --exclude-standard`.
@@ -64,6 +89,9 @@ Collect only facts that affect future behavior:
 - files changed and PR number, if any;
 - pasted final diff or commit range for reviewers;
 - checks run and their outcomes;
+- fresh-worktree bootstrap status;
+- new-runtime-file surface audit, if a runtime file was added or moved;
+- classic-script runtime proof, if top-level globals moved;
 - review findings, including false positives and why they happened;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
@@ -92,7 +120,10 @@ Collect only facts that affect future behavior:
 7. **Verify post-merge or post-CLI state.** If a CLI command reports success but
    also emits a cleanup error, verify the remote state, local branch/worktree
    state, and remaining cleanup separately before claiming completion.
-8. **Ask two other LLMs for adversarial critique.** Do this only after code
+8. **Verify pre-verification controls.** Confirm bootstrap, runtime-file surface
+   audit, classic-script runtime proof, and false-positive evidence were handled
+   where applicable.
+9. **Ask two other LLMs for adversarial critique.** Do this only after code
    reviewers are done and their findings are resolved. Give each retrospective
    reviewer the same pasted evidence and the draft retrospective; do not require
    them to enter the repository or run git. Use different model families when
@@ -100,13 +131,13 @@ Collect only facts that affect future behavior:
    available because of a tool outage, the work item is blocked, not complete.
    Require concrete findings only: correctness gaps, repeated failure patterns,
    missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
-9. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
+10. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
    weak suggestions explicitly and briefly.
-10. **Change the system.** If the retrospective reveals a durable rule, update the
+11. **Change the system.** If the retrospective reveals a durable rule, update the
    relevant persistent artifact immediately from the worktree: `AGENTS.md`,
    project instructions, tests, scripts, or this protocol. Re-read the changed
    artifact and verify the guard actually landed.
-11. **Final mandatory question: should this retrospective protocol change?** If
+12. **Final mandatory question: should this retrospective protocol change?** If
    yes, edit this document as part of the same work item or the next immediate
    policy PR. If no, record that no protocol change was needed and why. The
    agent performing the retrospective may edit, commit, and push protocol
@@ -143,6 +174,9 @@ Facts:
 - Checks run:
 - Code-review findings:
 - Incidents or near misses:
+- Bootstrap status:
+- Runtime-file surface audit:
+- Classic-script runtime proof:
 - System changes made:
 - Final diff or commit range:
 - Control scopes:
@@ -164,6 +198,7 @@ Keep the retrospective short enough to be useful:
 - **What went wrong**:
 - **What went right**:
 - **Earlier catch**:
+- **Bootstrap/surface audit/runtime proof**:
 - **Control scopes**:
 - **Post-merge verification**:
 - **Two-LLM critique**: [reviewers/models used, adopted findings, rejected findings]
