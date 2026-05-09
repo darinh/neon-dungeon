@@ -866,7 +866,10 @@ first, or fight through the resistance.
 - Interior position (2+ tiles from room boundary), not near other
   environmental objects (crates, beacons, mines, vcores — 1.5-tile spacing).
 - Never spawns in a room that already has an alarm beacon.
-- `shieldGens[]` global entity array. `createShieldGen(x, y, floor, room)`.
+- Shield generator helpers live in `src/entities/shield-generators.js` and
+  operate on the shared `shieldGens[]` entity array declared by
+  `src/entities.js`. Public creation helper:
+  `createShieldGen(x, y, floor, room)`.
 
 **Stats:**
 - HP: `15 + floor × 4`
@@ -4920,6 +4923,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.51 | Entity module split: shield generator runtime now lives in `src/entities/shield-generators.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `SHIELD_GEN_DR`, `createShieldGen`, `damageShieldGen`, `destroyShieldGen`, `damageShieldGensInRadius`, `isEnemyShieldGenProtected`, `updateShieldGens`, and `drawShieldGens` remain unchanged for enemy mitigation, generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.50 | Entity module split: proximity mine runtime now lives in `src/entities/mines.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `MINE_TRIGGER_RADIUS`, `MINE_REVEAL_RADIUS`, `MINE_BLAST_RADIUS`, `MINE_FUSE_NORMAL`, `MINE_FUSE_SHOT`, `createMine`, `armMine`, `detonateMine`, `triggerMinesInRadius`, `updateMines`, and `drawMines` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.49 | Entity module split: alarm beacon runtime now lives in `src/entities/beacons.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `BEACON_COUNTDOWN`, `createBeacon`, `damageBeacon`, `destroyBeacon`, `damageBeaconsInRadius`, `updateBeacons`, and `drawBeacons` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.48 | Entity module split: ARCHITECT placed-wall targeting and decay helpers now live in `src/entities/architect-walls.js`, loaded after `src/entities.js`. The public globals `pickArchitectTarget`, `_isTileOccupiedByActor`, and `updatePlacedWalls` remain unchanged for ARCHITECT AI and the game update loop. |
