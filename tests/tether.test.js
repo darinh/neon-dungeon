@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
 const ENEMY_CLASSIFICATION = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-classification.js'), 'utf8');
@@ -67,7 +68,7 @@ test('TETHER aiTether method exists with the correct signature', () => {
 test('TETHER spawn init block sets _teLashPhase', () => {
   // Stagger via cosmetic RNG so a clustered pack doesn't pulse in
   // lock-step (mirrors SAPPER / MAGPIE init pattern).
-  const block = ENTITIES.match(/if\s*\(type\s*===\s*'TETHER'\)[\s\S]{0,300}\}/);
+  const block = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'TETHER'\)[\s\S]{0,300}\}/);
   assert.ok(block, 'TETHER init block missing');
   assert.match(block[0], /_teLashPhase\s*=/, 'TETHER must initialise _teLashPhase');
   assert.match(block[0], /rand\('cosmetic'\)/,

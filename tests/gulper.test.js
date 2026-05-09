@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
 const ENEMY_CLASSIFICATION = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-classification.js'), 'utf8');
@@ -171,12 +172,12 @@ test('GULPER stun-cancel block clears state, timers, AND stacks unconditionally'
     'GULPER stun guard must NOT exclude chase state (round-2 fix)');
 });
 
-test('GULPER per-instance fields initialised in spawnEnemy', () => {
+test('GULPER per-instance fields initialised in spawn initializers', () => {
   // _glState ('chase'|'charging'|'recovery'), _glStacks (0..MAX),
   // _glChargeTimer, _glRecoverTimer, _glAimAngle, _glPulse all need
   // sensible starting values.
-  const initBlock = ENTITIES.match(/if \(type==='GULPER'\)\s*\{[\s\S]*?\n  \}/);
-  assert.ok(initBlock, 'GULPER per-instance init block must exist in spawnEnemy');
+  const initBlock = SPAWN_INITIALIZERS.match(/if \(type==='GULPER'\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(initBlock, 'GULPER per-instance init block must exist in spawn initializers');
   assert.match(initBlock[0], /_glState\s*=\s*'chase'/,
     'GULPER must spawn in chase state');
   assert.match(initBlock[0], /_glStacks\s*=\s*0/,

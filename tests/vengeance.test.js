@@ -9,6 +9,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -51,7 +54,7 @@ test('VENGEANCE base spd is 0 (stationary turret)', () => {
 
 test('VENGEANCE spawn init zeros state + charges + rush timer', () => {
   const re = /if\s*\(type\s*===\s*'VENGEANCE'\)[\s\S]{0,500}_vgState\s*=\s*'idle'[\s\S]{0,300}_vgCharges\s*=\s*0[\s\S]{0,200}_vgRushTimer\s*=\s*0/;
-  assert.match(ENTITIES, re, 'VENGEANCE init must zero all per-instance state');
+  assert.match(SPAWN_INITIALIZERS, re, 'VENGEANCE init must zero all per-instance state');
 });
 
 test('VENGEANCE is excluded from the elite affix roll', () => {

@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const COMBAT_EFFECTS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
 );
@@ -63,7 +66,7 @@ test('SPECTRE has a stat row in ENEMY_BASE_STATS', () => {
 test('SPECTRE spawn init block sets _spState and _spTimer', () => {
   // Without these the AI dispatch reads undefined, NaN math breaks the
   // state machine, and the mob is permanently stuck.
-  const block = ENTITIES.match(/if\s*\(type\s*===\s*'SPECTRE'\)[\s\S]{0,500}\}/);
+  const block = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'SPECTRE'\)[\s\S]{0,500}\}/);
   assert.ok(block, 'SPECTRE init block missing');
   assert.match(block[0], /_spState\s*=\s*'phase'/, 'SPECTRE must start in phase');
   assert.match(block[0], /_spTimer\s*=/, 'SPECTRE must initialise _spTimer');

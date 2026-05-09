@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -57,8 +60,8 @@ test('MAGNETON spawn init block initialises pulse phase', () => {
   // _mgPulse must exist (used by draw branch) and ideally be staggered
   // (seeded cosmetic RNG * TWO_PI) so a clustered spawn doesn't pulse in unison.
   const re = /if\s*\(type\s*===\s*'MAGNETON'\)[\s\S]{0,400}_mgPulse\s*=/;
-  assert.match(ENTITIES, re, 'MAGNETON init must set _mgPulse');
-  const init = ENTITIES.match(/if\s*\(type\s*===\s*'MAGNETON'\)[\s\S]{0,400}\}/);
+  assert.match(SPAWN_INITIALIZERS, re, 'MAGNETON init must set _mgPulse');
+  const init = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'MAGNETON'\)[\s\S]{0,400}\}/);
   assert.ok(init && /rand\('cosmetic'\)/.test(init[0]), 'MAGNETON init must stagger _mgPulse with the cosmetic RNG');
 });
 

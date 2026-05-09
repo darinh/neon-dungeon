@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -63,7 +66,7 @@ test('WARDLING spawn init sets _wlWard=null and reacquireTimer=0', () => {
   // Null ward means "scan on first AI tick" — at spawn time the room may
   // still be populating. Timer at 0 forces an immediate scan.
   const re = /if\s*\(type\s*===\s*'WARDLING'\)[\s\S]{0,400}_wlWard\s*=\s*null[\s\S]{0,200}_wlReacquireTimer\s*=\s*0/;
-  assert.match(ENTITIES, re, 'WARDLING init must null ward + zero reacquire timer');
+  assert.match(SPAWN_INITIALIZERS, re, 'WARDLING init must null ward + zero reacquire timer');
 });
 
 test('WARDLING is excluded from the elite affix roll', () => {

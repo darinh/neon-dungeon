@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -153,15 +156,15 @@ test('hit-ICD timer is decremented in Enemy.update', () => {
     'Enemy.update must decrement _vmHitICD each frame');
 });
 
-test('createEnemy initialises _vmHitICD = 0 on VAULTMASTER spawn', () => {
+test('spawn initializers set _vmHitICD = 0 on VAULTMASTER spawn', () => {
   // Without explicit init the field is undefined; the takeDamage
   // gate uses `(this._vmHitICD || 0) <= 0` so undefined is fine
   // for the FIRST hit, but after a hit the field is set, and a
   // subsequent VAULTMASTER spawn could share the symbol if any
   // future code path branches on truthy/falsy. Defensive init.
-  assert.match(ENTITIES,
+  assert.match(SPAWN_INITIALIZERS,
     /type\s*===\s*'VAULTMASTER'[\s\S]{0,400}?e\._vmHitICD\s*=\s*0/,
-    'createEnemy VAULTMASTER block must seed _vmHitICD = 0');
+    'VAULTMASTER init block must seed _vmHitICD = 0');
 });
 
 // ─── die() jackpot drop ────────────────────────────────────────────────
