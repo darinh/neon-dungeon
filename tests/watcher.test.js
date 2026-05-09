@@ -18,6 +18,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -36,12 +39,12 @@ test('WATCHER appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   assert.ok(parseInt(m[1], 10) >= 6, `WATCHER minFloor should be >= 6, got ${m[1]}`);
 });
 
-test('WATCHER has a stat row in spawnEnemy switch and is stationary', () => {
+test('WATCHER has a stat row in ENEMY_BASE_STATS and is stationary', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
   // The mob is stationary by design — spd MUST be 0 (if it could move
   // it would chase player into perfect cone alignment, removing the
   // positioning puzzle that defines the mechanic).
-  const m = ENTITIES.match(/case\s+'WATCHER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/WATCHER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'WATCHER stat row missing');
   assert.strictEqual(parseFloat(m[3]), 0, 'WATCHER must be stationary (spd=0)');
   assert.ok(parseInt(m[1], 10) >= 40, 'WATCHER HP feels too low');

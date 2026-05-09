@@ -22,6 +22,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -50,7 +53,7 @@ test('REAPER appears in ENEMY_WEIGHTS with floor 7+ gate', () => {
 test('REAPER has stat row with melee chase speed', () => {
   // Missing case → spawnEnemy returns Enemy with hp=0, instantly dead.
   // REAPER is a melee chaser so spd must be > 0.
-  const m = ENTITIES.match(/case\s+'REAPER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/REAPER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'REAPER stat row missing');
   assert.ok(parseFloat(m[3]) > 0, 'REAPER must move (spd>0)');
   assert.ok(parseInt(m[1], 10) >= 50, 'REAPER HP feels too low');

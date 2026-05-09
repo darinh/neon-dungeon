@@ -35,6 +35,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSourceMetadata.replaceAll('\\', '/'), 'src/entities/source-metadata.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSpawnTable.replaceAll('\\', '/'), 'src/entities/spawn-table.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyStats.replaceAll('\\', '/'), 'src/entities/enemy-stats.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
@@ -75,6 +76,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentFloorGenerator').endsWith('src/content/floor-generator.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesSourceMetadata').endsWith('src/entities/source-metadata.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesSpawnTable').endsWith('src/entities/spawn-table.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyStats').endsWith('src/entities/enemy-stats.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
@@ -109,6 +111,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const floorGeneratorSource = readSourceFile(__dirname, 'contentFloorGenerator');
   const sourceMetadataSource = readSourceFile(__dirname, 'entitiesSourceMetadata');
   const spawnTableSource = readSourceFile(__dirname, 'entitiesSpawnTable');
+  const enemyStatsSource = readSourceFile(__dirname, 'entitiesEnemyStats');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
   const aiHelperSource = readSourceFile(__dirname, 'entitiesAiHelpers');
   const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
@@ -169,6 +172,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(spawnTableSource, /const\s+ENEMY_WEIGHTS\s*=\s*\{/);
   assert.match(spawnTableSource, /const\s+ENEMY_TYPES_LIST\s*=\s*Object\.keys\(ENEMY_WEIGHTS\)/);
   assert.match(spawnTableSource, /function\s+pickEnemyType\s*\(/);
+  assert.match(enemyStatsSource, /const\s+ENEMY_BASE_STATS\s*=\s*\{/);
+  assert.match(enemyStatsSource, /function\s+getEnemyBaseStats\s*\(/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
   assert.match(aiHelperSource, /function\s+isInsideCone\s*\(/);

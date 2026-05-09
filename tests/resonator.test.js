@@ -19,6 +19,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -41,10 +44,10 @@ test('RESONATOR appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   assert.ok(parseInt(m[1], 10) >= 6, `RESONATOR minFloor should be >= 6, got ${m[1]}`);
 });
 
-test('RESONATOR has a stat row in spawnEnemy switch and is stationary', () => {
+test('RESONATOR has a stat row in ENEMY_BASE_STATS and is stationary', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
   // The mob is stationary by design — spd MUST be 0.
-  const m = ENTITIES.match(/case\s+'RESONATOR':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/RESONATOR:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'RESONATOR stat row missing');
   assert.strictEqual(parseFloat(m[3]), 0, 'RESONATOR must be stationary (spd=0)');
   assert.ok(parseInt(m[1], 10) >= 40, 'RESONATOR HP feels too low');

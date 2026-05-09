@@ -12,6 +12,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -30,15 +33,15 @@ test('VENGEANCE appears in ENEMY_WEIGHTS with late-game floor gate', () => {
   assert.ok(parseInt(m[1], 10) >= 6, `VENGEANCE minFloor should be >= 6, got ${m[1]}`);
 });
 
-test('VENGEANCE has a stat row in spawnEnemy switch', () => {
-  const re = /case\s+'VENGEANCE':[^\n]*hp\s*=\s*\d+[^\n]*atk\s*=\s*\d+[^\n]*spd\s*=\s*\d/;
-  assert.match(ENTITIES, re);
+test('VENGEANCE has a stat row in ENEMY_BASE_STATS', () => {
+  const re = /VENGEANCE:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*\d/;
+  assert.match(ENEMY_STATS, re);
 });
 
 test('VENGEANCE base spd is 0 (stationary turret)', () => {
   // The whole niche depends on stationary base — the rush is the ONLY
   // movement. If base spd > 0 the mob becomes a CHARGER variant.
-  const m = ENTITIES.match(/case\s+'VENGEANCE':\s*hp\s*=\s*\d+;\s*atk\s*=\s*\d+;\s*spd\s*=\s*([\d.]+)/);
+  const m = ENEMY_STATS.match(/VENGEANCE:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*([\d.]+)/);
   assert.ok(m, 'VENGEANCE stat row must be locatable');
   assert.equal(parseFloat(m[1]), 0, `VENGEANCE base spd must be 0 (stationary), got ${m[1]}`);
 });

@@ -21,6 +21,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
+const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const PLATFORM = fs.readFileSync(path.join(ROOT, 'src', 'platform.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -36,11 +37,11 @@ test('GULPER appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
     `GULPER minFloor should be >= 6, got ${m[1]}`);
 });
 
-test('GULPER has a stat row in spawnEnemy switch with chartreuse colour', () => {
+test('GULPER has a stat row in ENEMY_BASE_STATS with chartreuse colour', () => {
   // hp=90 (mid-tank, not glass), atk=14 (chunky melee + base belch dmg),
   // spd=1.4 (slow walker — counter-play is to disengage), xpVal=28.
-  const m = ENTITIES.match(/case\s+'GULPER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)[^\n]*colour\s*=\s*'(#[0-9a-f]+)'/);
-  assert.ok(m, 'GULPER stat row missing in spawnEnemy switch');
+  const m = ENEMY_STATS.match(/GULPER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+),[^\n]*colour:\s*'(#[0-9a-f]+)'/);
+  assert.ok(m, 'GULPER stat row missing in ENEMY_BASE_STATS');
   const hp = parseInt(m[1], 10);
   const atk = parseInt(m[2], 10);
   const spd = parseFloat(m[3]);

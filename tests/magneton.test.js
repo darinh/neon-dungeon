@@ -19,6 +19,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -37,10 +40,10 @@ test('MAGNETON appears in ENEMY_WEIGHTS with floor 6+ gate', () => {
   assert.ok(parseInt(m[1], 10) >= 6, `MAGNETON minFloor should be >= 6, got ${m[1]}`);
 });
 
-test('MAGNETON has a stat row in spawnEnemy switch and is stationary, atk=0', () => {
+test('MAGNETON has a stat row in ENEMY_BASE_STATS and is stationary, atk=0', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
   // The mob is stationary AND inert (atk=0) — its threat is the field, not contact.
-  const m = ENTITIES.match(/case\s+'MAGNETON':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/MAGNETON:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'MAGNETON stat row missing');
   assert.strictEqual(parseFloat(m[3]), 0, 'MAGNETON must be stationary (spd=0)');
   assert.strictEqual(parseInt(m[2], 10), 0, 'MAGNETON must have atk=0 (no contact damage)');

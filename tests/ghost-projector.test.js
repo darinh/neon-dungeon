@@ -24,6 +24,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -47,7 +50,7 @@ test('GHOST_PROJECTOR has stat row — stationary, no native attack', () => {
   // Missing case → spawnEnemy returns Enemy with hp=0, instantly dead.
   // The projector is intentionally stationary (spd=0) and dealing no
   // direct damage (atk=0); its threat is the haunt, not melee.
-  const m = ENTITIES.match(/case\s+'GHOST_PROJECTOR':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/GHOST_PROJECTOR:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'GHOST_PROJECTOR stat row missing');
   assert.equal(parseFloat(m[3]), 0, 'GHOST_PROJECTOR must be stationary (spd=0)');
   assert.equal(parseInt(m[2], 10), 0, 'GHOST_PROJECTOR must not deal direct atk');

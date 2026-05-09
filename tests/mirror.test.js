@@ -19,6 +19,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -41,10 +44,10 @@ test('MIRROR appears in ENEMY_WEIGHTS with floor 8+ gate', () => {
   assert.ok(parseInt(m[1], 10) >= 8, `MIRROR minFloor should be >= 8, got ${m[1]}`);
 });
 
-test('MIRROR has a stat row in spawnEnemy switch and is stationary', () => {
+test('MIRROR has a stat row in ENEMY_BASE_STATS and is stationary', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
   // The mob is stationary by design — spd MUST be 0 (matches RESONATOR).
-  const m = ENTITIES.match(/case\s+'MIRROR':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/MIRROR:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'MIRROR stat row missing');
   assert.strictEqual(parseFloat(m[3]), 0, 'MIRROR must be stationary (spd=0)');
   assert.ok(parseInt(m[1], 10) >= 40, 'MIRROR HP feels too low');

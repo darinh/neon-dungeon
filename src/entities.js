@@ -8995,71 +8995,12 @@ function spawnGhost(type, x, y, room, projector) {
 function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const scale=1+0.15*(floorNum-1);
   const d=getDiff();
-  let /** @type {number} */ hp = 0, /** @type {number} */ atk = 0, /** @type {number} */ spd = 0, /** @type {number} */ xpVal = 0, /** @type {string} */ colour = '#ffffff';
-  switch(type) {
-    // 2026-04-26: doubled all non-boss base HP per playtester feedback
-    // ("mobs feel like 1-shot kills since the beginning, every floor").
-    // Bosses (SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA/GENESIS) intentionally
-    // unchanged — phase transitions are HP-ratio based and current tuning
-    // makes those fights feel right; doubling would just stretch them.
-    // Difficulty multipliers in content/modifiers.js DIFFICULTIES still apply on top
-    // (EASY 0.75 / NORMAL 1.0 / HARD 1.5 / NIGHTMARE 2.0), so NIGHTMARE
-    // players now effectively get 4x base. Watch for feedback.
-    case 'GUARD':   hp=80;  atk=8;  spd=2;   xpVal=20; colour='#ff3333'; break;
-    case 'TURRET':  hp=50;  atk=12; spd=0;   xpVal=15; colour='#ffb700'; break;
-    case 'CRAWLER': hp=40;  atk=6;  spd=4;   xpVal=10; colour='#39ff14'; break;
-    case 'SCORCHER':hp=56;  atk=9;  spd=2.6; xpVal=24; colour='#ff5522'; break;
-    case 'BRUTE':   hp=140; atk=16; spd=1.6; xpVal=30; colour='#cc3344'; break;
-    case 'PHANTOM': hp=70;  atk=10; spd=2.5; xpVal=30; colour='#cc00ff'; break;
-    case 'DRONE':   hp=30;  atk=8;  spd=3;   xpVal=12; colour='#00aaff'; break;
-    case 'SHIELDER':hp=100; atk=10; spd=1.5; xpVal=25; colour='#66eeff'; break;
-    case 'GRENADIER':hp=60; atk=10; spd=2;   xpVal=20; colour='#ff6622'; break;
-    case 'SPLITTER':hp=80;  atk=8;  spd=2.2; xpVal=25; colour='#00ff88'; break;
-    case 'TELEPORTER':hp=50;atk=12; spd=0;   xpVal=22; colour='#ff44ff'; break;
-    case 'SNIPER':   hp=40;atk=15; spd=2.5; xpVal=25; colour='#ff2266'; break;
-    case 'SUMMONER': hp=70;atk=8;  spd=1.5; xpVal=30; colour='#bb44ff'; break;
-    case 'HEALER':  hp=50;atk=6;  spd=1.8; xpVal=22; colour='#44ffaa'; break;
-    case 'CHARGER': hp=90;atk=14; spd=1.5; xpVal=22; colour='#ff6600'; break;
-    case 'LEAPER':  hp=60;atk=11; spd=3.0; xpVal=22; colour='#22ff88'; break;
-    case 'REFLECTOR':hp=80;atk=10; spd=1.8; xpVal=28; colour='#88ddff'; break;
-    case 'DISRUPTOR':hp=60;atk=9;  spd=2.0; xpVal=25; colour='#ff44aa'; break;
-    case 'WRAITH':  hp=70;atk=13; spd=2.8; xpVal=30; colour='#66ffcc'; break;
-    case 'NEXUS':   hp=80;atk=8;  spd=1.8; xpVal=35; colour='#00eedd'; break;
-    case 'SIPHON':  hp=60;atk=10; spd=2.2; xpVal=28; colour='#dd2244'; break;
-    case 'GRAVITON':hp=90;atk=8;  spd=1.5; xpVal=30; colour='#8833ff'; break;
-    case 'SEEKER':  hp=36;atk=12; spd=3.5; xpVal=12; colour='#ffdd00'; break;
-    case 'PULSER':  hp=40;atk=12; spd=1.5; xpVal=15; colour='#44ddff'; break;
-    case 'MIMIC':   hp=60;atk=14; spd=2.2; xpVal=25; colour='#cc33ff'; break;
-    case 'TUNNELLER':hp=80;atk=14; spd=2.0; xpVal=26; colour='#cc8844'; break;
-    case 'ECHOER':  hp=60;atk=12; spd=1.4; xpVal=26; colour='#aa66ff'; break;
-    case 'PROPHET': hp=55;atk=12; spd=1.3; xpVal=28; colour='#ffaa22'; break;
-    case 'RESONATOR':hp=70;atk=15; spd=0;   xpVal=28; colour='#ff66cc'; break;
-    case 'MIRROR':  hp=55;atk=12; spd=0;   xpVal=26; colour='#88ff44'; break;
-    case 'REAPER':  hp=70;atk=14; spd=2.4; xpVal=26; colour='#cc1144'; break;
-    case 'GHOST_PROJECTOR': hp=50; atk=0; spd=0; xpVal=24; colour='#cc99ff'; break;
-    case 'CRYOPHAGE': hp=70; atk=14; spd=1.0; xpVal=28; colour='#88ddff'; break;
-    case 'WARDLING':  hp=25; atk=4;  spd=2.5; xpVal=10; colour='#ffcc66'; break;
-    case 'VENGEANCE': hp=80; atk=18; spd=0;   xpVal=24; colour='#cc1166'; break;
-    case 'CONDUIT':   hp=60; atk=14; spd=0;   xpVal=20; colour='#44ffff'; break;
-    case 'HARVESTER': hp=30; atk=8;  spd=1.8; xpVal=12; colour='#ff9933'; break;
-    case 'MAGNETON':  hp=50; atk=0;  spd=0;   xpVal=22; colour='#ff44dd'; break;
-    case 'SPECTRE':   hp=28; atk=12; spd=2.4; xpVal=22; colour='#eeccff'; break;
-    case 'SAPPER':    hp=22; atk=6;  spd=2.8; xpVal=14; colour='#ddff44'; break;
-    case 'MAGPIE':    hp=28; atk=0;  spd=3.4; xpVal=12; colour='#cceeff'; break;
-    case 'TETHER':    hp=24; atk=0;  spd=2.6; xpVal=14; colour='#ff8866'; break;
-    case 'VAULTMASTER':hp=60;atk=0;  spd=2.0; xpVal=18; colour='#ffcc44'; break;
-    case 'GULPER':    hp=90; atk=14; spd=1.4; xpVal=28; colour='#bbdd33'; break;
-    case 'WATCHER':   hp=70; atk=12; spd=0;   xpVal=26; colour='#ffee66'; break;
-    case 'ARCHITECT': hp=80; atk=0;  spd=0;   xpVal=30; colour='#aa6633'; break;
-    case 'NULLIFIER': hp=70; atk=0;  spd=0;   xpVal=24; colour='#cc66dd'; break;
-    case 'SHARD':   hp=30;  atk=5;  spd=3.5; xpVal=8;  colour='#00cc66'; break;
-    case 'SENTINEL':hp=400; atk=15; spd=1.5; xpVal=200;colour='#ff4444'; break;
-    case 'WARDEN':  hp=450; atk=16; spd=1.8; xpVal=200;colour='#ff8800'; break;
-    case 'HIVE':    hp=650; atk=18; spd=1.2; xpVal=350;colour='#aa00ff'; break;
-    case 'CONDUCTOR':hp=700;atk=20; spd=1.4; xpVal=350;colour='#00ccff'; break;
-    case 'OMEGA':   hp=1300;atk=22; spd=1.8; xpVal=800;colour='#ff00c8'; break;
-    case 'GENESIS': hp=1300;atk=22; spd=1.0; xpVal=800;colour='#ffcc00'; break;
-  }
+  const baseStats = getEnemyBaseStats(type);
+  let /** @type {number} */ hp = baseStats.hp;
+  const /** @type {number} */ atk = baseStats.atk;
+  const /** @type {number} */ spd = baseStats.spd;
+  const /** @type {number} */ xpVal = baseStats.xpVal;
+  const /** @type {string} */ colour = baseStats.colour;
   const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA','GENESIS'].includes(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
   if (!isBoss) {
@@ -9068,9 +9009,8 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
     // FRAGILE: glass-cannon protocol — non-boss enemies have 0.55x HP but
     // damage to player is amplified 1.3x in player.takeDamage. Both sides
     // get more lethal: fast clears reward aggression, single mistakes cost
-    // more. Bosses are exempt (HP-ratio phase transitions are tuned tight;
-    // see GULPER stat-row comment ~7949 about boss HP being intentionally
-    // unscaled).
+    // more. Bosses are exempt because HP-ratio phase transitions are tuned
+    // tight; see the boss note in src/entities/enemy-stats.js.
     if (_EG.modifier === 'FRAGILE')   hp = Math.round(hp * 0.55);
   }
   const e=new Enemy(x,y,

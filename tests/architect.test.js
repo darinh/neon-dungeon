@@ -32,6 +32,7 @@ const { readSourceFile } = require('./_source-files.js');
 const { ENTITIES, CONTENT, ENTITIES_CODE } = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
+const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -133,9 +134,9 @@ test('ARCHITECT is registered in ENEMIES table with stat block', () => {
   // spd=0 (stationary), xpVal=30, colour #aa6633 (earth tone, distinct
   // from neon palette so player visually identifies "the brown mob is
   // the wall-builder").
-  assert.match(ENTITIES,
-    /case\s+'ARCHITECT':\s*hp=80;\s*atk=0;\s*spd=0;\s*xpVal=30;\s*colour='#aa6633'/,
-    'ENEMIES table must declare ARCHITECT with hp=80 atk=0 spd=0 xpVal=30 colour=#aa6633');
+  assert.match(ENEMY_STATS,
+    /ARCHITECT:\s*\{\s*hp:\s*80,\s*atk:\s*0,\s*spd:\s*0,\s*xpVal:\s*30,\s*colour:\s*'#aa6633'\s*\}/,
+    'ENEMY_BASE_STATS must declare ARCHITECT with hp=80 atk=0 spd=0 xpVal=30 colour=#aa6633');
 });
 
 // ─── AI dispatch wiring ──────────────────────────────────────────────────

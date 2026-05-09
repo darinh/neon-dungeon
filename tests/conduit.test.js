@@ -18,6 +18,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -33,9 +36,9 @@ test('CONDUIT appears in ENEMY_WEIGHTS gated to floor 8+', () => {
   assert.ok(parseInt(m[1], 10) >= 8, `CONDUIT minFloor should be >= 8, got ${m[1]}`);
 });
 
-test('CONDUIT has stat row in spawnEnemy switch', () => {
-  const re = /case\s+'CONDUIT':\s*hp\s*=\s*\d+;\s*atk\s*=\s*\d+;\s*spd\s*=\s*([\d.]+);/;
-  const m = ENTITIES.match(re);
+test('CONDUIT has stat row in ENEMY_BASE_STATS', () => {
+  const re = /CONDUIT:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*([\d.]+),/;
+  const m = ENEMY_STATS.match(re);
   assert.ok(m, 'CONDUIT stat row missing');
   assert.equal(parseFloat(m[1]), 0, `CONDUIT base spd must be 0 (stationary), got ${m[1]}`);
 });

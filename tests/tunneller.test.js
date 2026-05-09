@@ -24,6 +24,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 
 test('TUNNELLER appears in ENEMY_WEIGHTS with a floor gate', () => {
   // The weights block declares spawn rate by floor. Without an entry the
@@ -37,11 +40,11 @@ test('TUNNELLER appears in ENEMY_WEIGHTS with a floor gate', () => {
   assert.ok(minFloor >= 3, `TUNNELLER minFloor should be >= 3, got ${minFloor}`);
 });
 
-test('TUNNELLER has a stat row in spawnEnemy switch', () => {
-  // case 'TUNNELLER': sets hp/atk/spd/xpVal/colour. Missing → spawn returns
-  // an enemy with hp=0 and instantly dies.
-  const re = /case\s+'TUNNELLER':[^\n]*hp\s*=\s*\d+[^\n]*atk\s*=\s*\d+[^\n]*spd\s*=\s*[\d.]+[^\n]*xpVal\s*=\s*\d+[^\n]*colour\s*=/;
-  assert.match(ENTITIES, re);
+test('TUNNELLER has a stat row in ENEMY_BASE_STATS', () => {
+  // TUNNELLER sets hp/atk/spd/xpVal/colour. Missing → spawn returns an
+  // enemy with hp=0 and instantly dies.
+  const re = /TUNNELLER:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*[\d.]+,[^\n]*xpVal:\s*\d+,[^\n]*colour:\s*'/;
+  assert.match(ENEMY_STATS, re);
 });
 
 test('TUNNELLER spawn init block sets state + intangible flag', () => {
