@@ -24,6 +24,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const COMBAT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
+);
 const STATUS_EFFECTS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
 );
@@ -42,6 +45,7 @@ function stripComments(src) {
 
 const CONTENT_NC  = stripComments(CONTENT);
 const ENTITIES_NC = stripComments(ENTITIES);
+const COMBAT_EFFECTS_NC = stripComments(COMBAT_EFFECTS);
 const STATUS_EFFECTS_NC = stripComments(STATUS_EFFECTS);
 
 // Brace-balanced extraction of the mark branch — prevents over-capture into
@@ -85,7 +89,7 @@ test("applyHitEffects handles eff === 'mark'", () => {
   // Strip comments first so a `// else if (eff === 'mark') {` line
   // commented out can't satisfy the gate.
   const re = /else\s+if\s*\(\s*eff\s*===\s*'mark'\s*\)\s*\{/;
-  assert.match(ENTITIES_NC, re,
+  assert.match(COMBAT_EFFECTS_NC, re,
     "applyHitEffects must contain an `else if (eff === 'mark')` branch in EXECUTABLE code");
 });
 
@@ -93,7 +97,7 @@ function markBranch() {
   // Brace-balanced extraction → prevents over-capture (see helper note).
   // Then comment-strip so commented-out gates inside the branch can't
   // satisfy a regex check.
-  const raw = extractBranch(ENTITIES, /else\s+if\s*\(\s*eff\s*===\s*'mark'\s*\)\s*\{/);
+  const raw = extractBranch(COMBAT_EFFECTS, /else\s+if\s*\(\s*eff\s*===\s*'mark'\s*\)\s*\{/);
   assert.ok(raw, 'mark branch must be parseable (brace-balanced extraction)');
   return stripComments(raw);
 }

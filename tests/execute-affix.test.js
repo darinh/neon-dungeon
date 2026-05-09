@@ -22,6 +22,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const COMBAT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -88,7 +91,7 @@ test("applyHitEffects handles eff === 'execute'", () => {
   // Strip comments first so a `// else if (eff === 'execute') {` line
   // commented out can't satisfy the gate.
   const re = /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/;
-  assert.match(stripComments(ENTITIES), re,
+  assert.match(stripComments(COMBAT_EFFECTS), re,
     "applyHitEffects must contain an `else if (eff === 'execute')` branch in EXECUTABLE code");
 });
 
@@ -97,7 +100,7 @@ test('execute branch gates on enemy.isBoss (designed-arena protection)', () => {
   // must be exempt from instakill mechanics. Without this gate a boss
   // taking a chip-shot below 20% HP would die outright, deleting their
   // designed encounter.
-  const executeBranch = extractBranch(ENTITIES, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
+  const executeBranch = extractBranch(COMBAT_EFFECTS, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
   assert.ok(executeBranch, 'execute branch must be parseable (brace-balanced extraction)');
   const body = stripComments(executeBranch);
   assert.match(body, /if\s*\(\s*enemy\.isBoss\s*\)\s*continue/,
@@ -111,7 +114,7 @@ test('execute branch gates on _disguised and _wrPhased (defense in depth)', () =
   // _wrPhased: per weapon-affix-knockback-gates rule, intangible mobs
   // (WRAITH/TUNNELLER) must be re-checked locally even though projectile
   // prefilters drop them upstream.
-  const executeBranch = extractBranch(ENTITIES, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
+  const executeBranch = extractBranch(COMBAT_EFFECTS, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
   assert.ok(executeBranch, 'execute branch must be parseable (brace-balanced extraction)');
   const body = stripComments(executeBranch);
   assert.match(body, /if\s*\(\s*enemy\._disguised\s*\)\s*continue/,
@@ -125,7 +128,7 @@ test('execute branch threshold is exactly 20% HP (post-hit)', () => {
   // mid-game enemies into one-shots, tighter (e.g. 5%) makes the suffix
   // never proc. Pin it so an unintentional re-tune is caught in review.
   // Also pin the >0 maxHp guard so corrupted state doesn't divide-by-zero.
-  const executeBranch = extractBranch(ENTITIES, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
+  const executeBranch = extractBranch(COMBAT_EFFECTS, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
   assert.ok(executeBranch, 'execute branch must be parseable (brace-balanced extraction)');
   const body = stripComments(executeBranch);
   assert.match(body, /if\s*\(\s*!\(\s*enemy\.maxHp\s*>\s*0\s*\)\s*\)\s*continue/,
@@ -139,7 +142,7 @@ test('execute branch sets hp=0 and calls die() (terminal kill, not damage)', () 
   // enemy.hp = 0 followed by enemy.die(). die() is idempotent (entities
   // .js dead-flag guard) so the outer takeDamage's redundant
   // `if (this.hp<=0) this.die()` is a safe no-op.
-  const executeBranch = extractBranch(ENTITIES, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
+  const executeBranch = extractBranch(COMBAT_EFFECTS, /else\s+if\s*\(\s*eff\s*===\s*'execute'\s*\)\s*\{/);
   assert.ok(executeBranch, 'execute branch must be parseable (brace-balanced extraction)');
   const body = stripComments(executeBranch);
   assert.match(body, /enemy\.hp\s*=\s*0/, 'execute must set enemy.hp = 0 in EXECUTABLE code');

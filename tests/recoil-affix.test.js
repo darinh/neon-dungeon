@@ -19,6 +19,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'weapons.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const COMBAT_EFFECTS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'combat-effects.js'), 'utf8');
 const STATUS_EFFECTS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'status-effects.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
@@ -86,19 +87,19 @@ test('RECOIL is a suffix (so it stacks with a prefix and obeys the 1-suffix-per-
 test('recoil branch wired in applyHitEffects', () => {
   // Lives in the per-effect for-loop alongside burn/slow/leech/chain/
   // shock so it processes through the same hitCtx path. The non-proc
-  // gate is on the caller side (entities.js ~1529: `if (!ctx.isProc)
+  // gate is on the caller side (`if (!ctx.isProc)
   // applyHitEffects(...)`) so chain procs don't recoil — same as the
   // other suffixes. Strip comments first so a `// else if (eff === 'recoil')`
   // line commented out can't satisfy the gate.
-  assert.ok(/else if \(eff === 'recoil'\)/.test(stripComments(ENTITIES)),
+  assert.ok(/else if \(eff === 'recoil'\)/.test(stripComments(COMBAT_EFFECTS)),
     'applyHitEffects must contain an `eff === \'recoil\'` branch in EXECUTABLE code');
 });
 
 test('RECOIL skips bosses (designed-arena protection)', () => {
-  // Mirrors SHOCK_PULSE (entities.js:8748) and KNOCK_PULSE — bosses
+  // Mirrors SHOCK_PULSE and KNOCK_PULSE — bosses
   // are stationary by design (SENTINEL Phase 2 stand, OMEGA platform)
   // and their phase tuning assumes positional invariants.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   assert.ok(/if \(enemy\.isBoss\)\s*continue;/.test(body),
@@ -107,10 +108,10 @@ test('RECOIL skips bosses (designed-arena protection)', () => {
 
 test('RECOIL skips disguised mimics (no ambush leak)', () => {
   // Same precedent as EMP (content.js _disguised skip), shield-gen EMP
-  // (entities.js ~8584), and SHOCK_PULSE (entities.js ~8742). Visible
+  // and SHOCK_PULSE. Visible
   // displacement of a disguised mimic would betray its position before
   // the proximity-reveal trigger fires.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   assert.ok(/if \(enemy\._disguised\)\s*continue;/.test(body),
@@ -119,11 +120,11 @@ test('RECOIL skips disguised mimics (no ambush leak)', () => {
 
 test('RECOIL skips phased WRAITH/TUNNELLER (intangible mob defensive guard)', () => {
   // Player projectile prefilters at content.js:3411 + melee prefilter
-  // at entities.js:9588 already block damage to _wrPhased mobs, so in
+  // already block damage to _wrPhased mobs, so in
   // practice applyHitEffects never sees them. But a future damage
   // path could bypass those filters; recoil must independently
   // defend against displacing an intangible mob.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   assert.ok(/if \(enemy\._wrPhased\)\s*continue;/.test(body),
@@ -133,9 +134,9 @@ test('RECOIL skips phased WRAITH/TUNNELLER (intangible mob defensive guard)', ()
 test('RECOIL has per-enemy ICD with positive duration (prevents perma-shove from rapid-fire)', () => {
   // Without ICD a high-rate weapon (RAPID prefix + MG/SMG) would
   // perma-shove a single enemy across the room. Pattern mirrors
-  // _shockICD (entities.js ~1192). ICD should be ≥ 0.2s (2-3 hits/sec
+  // _shockICD. ICD should be ≥ 0.2s (2-3 hits/sec
   // ceiling on per-target recoil) to avoid trivializing kiting.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   const icdRead = /const icd = enemy\._recoilICD \|\| 0;/.test(body);
@@ -163,7 +164,7 @@ test('RECOIL knockback uses wall-aware swept-step pattern (not single-snap)', ()
   // ~0.4 tile so single-snap would technically be safe — but we use
   // the swept pattern anyway for consistency with SHOCK_PULSE and to
   // get free wall-sliding (axis-independent isPassable per step).
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   // Look for the swept-step signature: STEP loop with two axis flags
@@ -183,7 +184,7 @@ test('RECOIL knockback distance is small (≤ 1 tile per hit)', () => {
   // push would chain-shove enemies off-screen on rapid weapons. Keep
   // it cosmetic/utility — useful for canceling a melee swing, not
   // for trivializing positioning.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   const m = body.match(/const KNOCK = (\d*\.?\d+);/);
@@ -197,7 +198,7 @@ test('RECOIL has a final combined-tile guard (anti-corner-tunnel)', () => {
   // Per stored memory `knockback sweeping`: even with axis-independent
   // checks, a diagonal-corner case can land in a wall tile. The final
   // combined-tile guard re-verifies the resting tile.
-  const recoilBranch = extractBranch(ENTITIES, /else if \(eff === 'recoil'\) \{/);
+  const recoilBranch = extractBranch(COMBAT_EFFECTS, /else if \(eff === 'recoil'\) \{/);
   assert.ok(recoilBranch, 'recoil branch must be parseable (brace-balanced extraction)');
   const body = stripComments(recoilBranch);
   assert.ok(/const finalFx = Math\.floor\(curX\), finalFy = Math\.floor\(curY\);/.test(body),
@@ -208,7 +209,7 @@ test('RECOIL has a final combined-tile guard (anti-corner-tunnel)', () => {
 
 test('RECOIL is non-proc-gated by caller (chain/explode procs do not stack-shove)', () => {
   // The applyHitEffects entry point is gated by the caller at
-  // entities.js ~1529 (`if (!ctx.isProc) applyHitEffects(this, actual,
+  // entities.js (`if (!ctx.isProc) applyHitEffects(this, actual,
   // ctx);`). Chain lightning and detonate explosions call back into
   // takeDamage with isProc:true so the recoil branch is never reached
   // for procs — preventing chain-shove cascades.

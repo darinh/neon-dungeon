@@ -30,6 +30,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const COMBAT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
+);
 const STATUS_EFFECTS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
 );
@@ -51,6 +54,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const COMBAT_EFFECTS_CODE = stripComments(COMBAT_EFFECTS);
 const STATUS_EFFECTS_CODE = stripComments(STATUS_EFFECTS);
 const ELITE_AFFIXES_CODE = stripComments(ELITE_AFFIXES);
 const CONTENT_CODE = stripComments(CONTENT);
@@ -129,7 +133,7 @@ test('applyHitEffects has a poison branch gated on eff === "poison"', () => {
   // per-eff pattern used by every other on-hit suffix so the loop dispatches
   // into it. Strip comments first (a JSDoc / inline note quoting 'poison'
   // would false-pass).
-  assert.match(ENTITIES_CODE, /eff\s*===\s*'poison'/,
+  assert.match(COMBAT_EFFECTS_CODE, /eff\s*===\s*'poison'/,
     "applyHitEffects must have an `eff === 'poison'` branch");
 });
 
@@ -139,9 +143,9 @@ test('TOXIC poison branch lives inside applyHitEffects (not applyOnKill)', () =>
   // tick on KILLS — defeating the whole "stack while you DPS" design.
   // Anchor the gate by checking it appears BETWEEN the applyHitEffects
   // function declaration and the applyOnKill function declaration.
-  const fxIdx = ENTITIES_CODE.indexOf('function applyHitEffects(');
-  const okIdx = ENTITIES_CODE.indexOf('function applyOnKill(');
-  const poisonIdx = ENTITIES_CODE.indexOf("eff === 'poison'");
+  const fxIdx = COMBAT_EFFECTS_CODE.indexOf('function applyHitEffects(');
+  const okIdx = COMBAT_EFFECTS_CODE.indexOf('function applyOnKill(');
+  const poisonIdx = COMBAT_EFFECTS_CODE.indexOf("eff === 'poison'");
   assert.ok(fxIdx !== -1, 'applyHitEffects function must exist');
   assert.ok(okIdx !== -1, 'applyOnKill function must exist');
   assert.ok(poisonIdx !== -1, 'poison branch must exist');
@@ -155,7 +159,7 @@ test('TOXIC apply-branch increments poisonStacks with cap 5 and || 0 nucleation'
   // sustained DPS, dropping to 3 makes it weaker than FLAME. The `|| 0`
   // nucleation prevents NaN poisoning on the first hit (poisonStacks
   // starts undefined). Anchor inside the brace-walked branch body.
-  const branch = extractBranch(ENTITIES_CODE, /eff\s*===\s*'poison'/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /eff\s*===\s*'poison'/);
   assert.ok(branch, 'poison branch must exist with a brace-balanced body');
   // Match `<ident>.poisonStacks = Math.min(5, (<ident>.poisonStacks || 0) + 1)`
   // and pin both bindings to the same identifier.
@@ -178,7 +182,7 @@ test('TOXIC apply-branch refreshes poisonTimer to 4s on every hit', () => {
   // non-refreshed timer would let stacks expire mid-fight. 4s is the
   // balance lever (matches FLAME's 3s + 1s, leaving room for the
   // 5-stack ramp). Pin the value so an unintentional re-tune is caught.
-  const branch = extractBranch(ENTITIES_CODE, /eff\s*===\s*'poison'/);
+  const branch = extractBranch(COMBAT_EFFECTS_CODE, /eff\s*===\s*'poison'/);
   assert.ok(branch, 'poison branch must exist');
   assert.match(branch, /\.poisonTimer\s*=\s*4\b/,
     'TOXIC apply must set `<enemy>.poisonTimer = 4` (refresh window)');
@@ -240,7 +244,7 @@ test('TOXIC DoT routes through SHIELDED shield-first absorb (mirror burn)', () =
 });
 
 test('TOXIC DoT resets REGENERATIVE _regenTimer on dmg > 0 (anti-regression)', () => {
-  // Burn DoT has the same wiring (entities.js ~line 1271) — without it,
+  // Burn DoT has the same wiring in status-effects.js — without it,
   // poison-and-retreat would let the regen clock count up while the
   // enemy actively loses HP. Same defense-in-depth gate as REGENERATIVE
   // wired into the burn path. Caught structurally before a live regression.
@@ -299,17 +303,17 @@ test('TOXIC has exactly one apply branch and exactly one DoT branch (anti-duplic
   // A duplicate apply branch (e.g. accidentally pasted twice) would
   // double-stack on every hit, breaking the cap. A duplicate DoT branch
   // would double the per-tick damage. Lock the count.
-  const applyMatches = ENTITIES_CODE.match(/eff\s*===\s*'poison'/g) || [];
+  const applyMatches = COMBAT_EFFECTS_CODE.match(/eff\s*===\s*'poison'/g) || [];
   assert.equal(applyMatches.length, 1,
-    `entities.js must contain exactly 1 \`eff === 'poison'\` apply branch; got ${applyMatches.length}`);
+    `combat-effects.js must contain exactly 1 \`eff === 'poison'\` apply branch; got ${applyMatches.length}`);
   const tickMatches = STATUS_EFFECTS_CODE.match(/enemy\.poisonTimer\s*>\s*0/g) || [];
   assert.equal(tickMatches.length, 1,
     `status-effects.js must contain exactly 1 \`enemy.poisonTimer > 0\` DoT branch; got ${tickMatches.length}`);
 });
 
-test('TOXIC effect token is consistent between content.js registry and entities.js gate', () => {
+test('TOXIC effect token is consistent between content.js registry and combat-effects gate', () => {
   // The effect string in content.js (`effect:'poison'`) MUST match the
-  // gate string in entities.js (`eff === 'poison'`). A divergence
+  // gate string in combat-effects.js (`eff === 'poison'`). A divergence
   // (e.g. one says 'poison' and the other says 'toxin') would silently
   // make the affix a cosmetic no-op. Pin both via the same literal.
   const contentMatch = CONTENT_CODE.match(/TOXIC:[^}]*effect:\s*'([^']+)'/);
@@ -318,7 +322,7 @@ test('TOXIC effect token is consistent between content.js registry and entities.
   assert.strictEqual(effectToken, 'poison',
     `TOXIC effect token must be 'poison' (matches the gate in applyHitEffects), got '${effectToken}'`);
   const gateRe = new RegExp(`eff\\s*===\\s*'${effectToken}'`);
-  assert.match(ENTITIES_CODE, gateRe,
+  assert.match(COMBAT_EFFECTS_CODE, gateRe,
     `applyHitEffects must have a gate \`eff === '${effectToken}'\` matching content.js TOXIC.effect`);
 });
 

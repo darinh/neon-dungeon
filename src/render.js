@@ -193,7 +193,7 @@ function piercingHeartHudSuffix(player) {
  * SIGNAL_BOOST floor modifiers).
  *
  * Format: ` ◈N/3` where N = `player._siphonHits | 0` mod 3 (the counter
- * resets to 0 at >= 3 in src/entities.js applyHitEffects so values
+ * resets to 0 at >= 3 in src/entities/combat-effects.js applyHitEffects so values
  * displayed are 0..2 in normal gameplay; the % 3 guards against any
  * future code path that leaves the counter > 2). The ◈ glyph mirrors
  * the credit symbol used in the credit readout (`◈${player.credits}`
@@ -201,13 +201,13 @@ function piercingHeartHudSuffix(player) {
  * entities.js) — the player reads it as "credit accumulator" at a glance.
  *
  * Counter scope: per-RUN, lives on `_EG.player._siphonHits`. NOT
- * persisted across save/load (see src/entities.js:1182-1186 — losing
+ * persisted across save/load (see src/entities/combat-effects.js — losing
  * 0–2 hits across a Continue is acceptable to keep the save schema
  * lean). The `| 0` nucleation tolerates the post-Continue undefined
  * case AND any NaN/Infinity from corrupted localStorage (defensive
  * even though the field isn't currently saved — future-proofing).
  *
- * The threshold (3) is duplicated from src/entities.js applyHitEffects
+ * The threshold (3) is duplicated from src/entities/combat-effects.js applyHitEffects
  * — when changing the threshold, update BOTH sites.
  *
  * Surfaces ONLY when a SIPHON weapon is currently equipped. Swapping

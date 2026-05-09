@@ -108,20 +108,20 @@ test('helper renders ◈N/3 format with the credit glyph', () => {
     'helper must render the threshold denominator as /3');
 });
 
-test('helper threshold (3) matches the entities.js applyHitEffects gate', () => {
-  // The threshold is ALSO hardcoded at src/entities.js applyHitEffects
+test('helper threshold (3) matches the combat-effects applyHitEffects gate', () => {
+  // The threshold is ALSO hardcoded in src/entities/combat-effects.js
   // `_splr._siphonHits >= 3`. When changing the threshold, BOTH sites
-  // MUST be updated. This test pins the entities.js gate value so a
+  // MUST be updated. This test pins the combat-effects gate value so a
   // refactor that changes the threshold there will fail this test
   // until the HUD denominator is updated to match.
   const ENT = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
+    path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
   );
   // Anchor on the SIPHON `siphon` effect block to avoid matching some
   // other unrelated `>= 3` literal.
   assert.match(ENT,
     /siphon[\s\S]*?_siphonHits\s*>=\s*3/,
-    'entities.js applyHitEffects siphon block must still trigger at >= 3 — bump HUD denominator if changing');
+    'combat-effects.js applyHitEffects siphon block must still trigger at >= 3 — bump HUD denominator if changing');
 });
 
 test('helper does NOT branch on PIERCING_HEART or other affixes', () => {

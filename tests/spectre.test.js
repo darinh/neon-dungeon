@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const COMBAT_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -194,11 +197,11 @@ test('takeDamage routes stun-only weapon effects through phase immunity', () => 
   // applies to WRAITH (_wrPhased). The fix lives in takeDamage's
   // phase-immune early return: call the stun-only effect helper
   // BEFORE returning 0.
-  assert.match(ENTITIES, /function\s+_applyStunOnlyEffects\s*\(/,
+  assert.match(COMBAT_EFFECTS, /function\s+_applyStunOnlyEffects\s*\(/,
     '_applyStunOnlyEffects helper must exist');
   // Helper must guard isProc (procs shouldn't re-stun) and check the
   // 'shock' effect specifically (not all weapon effects bypass).
-  const helper = ENTITIES.match(/function\s+_applyStunOnlyEffects\s*\([\s\S]*?\n\}/);
+  const helper = COMBAT_EFFECTS.match(/function\s+_applyStunOnlyEffects\s*\([\s\S]*?\n\}/);
   assert.ok(helper);
   assert.match(helper[0], /isProc/, 'stun-only helper must skip procs');
   assert.match(helper[0], /'shock'/, 'stun-only helper must check shock effect');
