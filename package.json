@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check:engine": "node scripts/check-engine-purity.js",
-    "check:agent-continuity": "node scripts/agent-continuity-check.js",
+    "check:agent-continuity": "node scripts/agent-continuity-check.js --require-operator-guard",
     "check": "npm run lint && npm run typecheck && npm run check:engine && npm test"
   },
   "devDependencies": {

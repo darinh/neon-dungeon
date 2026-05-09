@@ -67,6 +67,12 @@ Run and record these before verification or review:
 4. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
+5. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+   record the resolved file path, verify it lives under the implementation
+   worktree, verify whether the path is ignored, and prove the committed project
+   extension is tracked. If a live user-scope extension is installed to protect
+   the current session, record which extension path/scope is active after reload
+   and which copy is authoritative.
 
 ## Pre-retrospective checklist
 
@@ -86,8 +92,12 @@ Before writing the retrospective:
 6. Check the active backlog or issue queue before stopping; if work remains,
    start the next work item from a worktree after attaching the retrospective.
 7. Run `npm run check:agent-continuity -- --issue <number>` for issue-backed
-   work before any `task_complete`; if it fails, keep working or record a
-   concrete blocker.
+   work before any `task_complete`; this standard npm script requires the
+   operator guard extension to be present and tracked. If it fails, keep working
+   or record a concrete blocker.
+8. If extension or trigger files were created, run a path/scope audit: actual
+   path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
+   output, and primary-checkout stray-file check.
 
 ## Required inputs
 
@@ -110,6 +120,9 @@ Collect only facts that affect future behavior:
 - continuity check result: command, exit code, and output;
 - control-scope classification for any new guard: repo, project-config,
   machine-local, CI, or human process.
+- extension/trigger provenance: scaffold target, active loaded path/scope, and
+  whether any user-scope copy is a live-session bootstrap or the durable source
+  of truth.
 
 ## Retrospective steps
 
