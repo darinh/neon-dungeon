@@ -2,9 +2,11 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const MAIN_CHECKOUT = '/home/darin/projects/neon-dungeon';
+const OPERATOR_GUARD_EXTENSION = '.github/extensions/neon-operator-guard/extension.mjs';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -45,6 +47,10 @@ function argValue(flag) {
   return process.argv[index + 1] || null;
 }
 
+function hasFlag(flag) {
+  return process.argv.includes(flag);
+}
+
 function ensureWorktree() {
   const top = run('git', ['rev-parse', '--show-toplevel']);
   if (top.status !== 0) fail('must run inside a git worktree', [top.stderr.trim()]);
@@ -52,6 +58,44 @@ function ensureWorktree() {
   if (resolvedTop === MAIN_CHECKOUT) {
     fail('refusing completion from the main checkout', [
       'Create or enter a Neon Dungeon worktree and continue there.',
+    ]);
+  }
+  return resolvedTop;
+}
+
+function ensureOperatorGuardExtension(worktreeRoot) {
+  const extensionPath = path.join(worktreeRoot, OPERATOR_GUARD_EXTENSION);
+  if (!fs.existsSync(extensionPath)) {
+    fail('operator guard extension is missing from this worktree', [
+      OPERATOR_GUARD_EXTENSION,
+      'Create it in the implementation worktree, not the main checkout.',
+    ]);
+  }
+
+  const tracked = run('git', ['ls-files', '--error-unmatch', OPERATOR_GUARD_EXTENSION], {
+    cwd: worktreeRoot,
+  });
+  if (tracked.status !== 0) {
+    const ignored = run('git', ['check-ignore', '-v', OPERATOR_GUARD_EXTENSION], {
+      cwd: worktreeRoot,
+    });
+    const addCommand = ignored.status === 0
+      ? `git add -f ${OPERATOR_GUARD_EXTENSION}`
+      : `git add ${OPERATOR_GUARD_EXTENSION}`;
+    fail('operator guard extension exists but is not tracked', [
+      ignored.stdout.trim() || '(not ignored by git)',
+      `Stage it intentionally with: ${addCommand}`,
+    ]);
+  }
+
+  const strayPrimaryExtensions = run('git', [
+    '-C', MAIN_CHECKOUT,
+    'ls-files', '--others', '--ignored', '--exclude-standard', '.github/extensions',
+  ]);
+  if (strayPrimaryExtensions.status === 0 && strayPrimaryExtensions.stdout.trim()) {
+    fail('ignored extension files are stranded in the main checkout', [
+      strayPrimaryExtensions.stdout.trim(),
+      'Remove these files from the main checkout and recreate/stage them in the implementation worktree.',
     ]);
   }
 }
@@ -85,7 +129,10 @@ function ensureTrackedIssueClosed(issueNumber) {
 }
 
 function main() {
-  ensureWorktree();
+  const worktreeRoot = ensureWorktree();
+  if (hasFlag('--require-operator-guard')) {
+    ensureOperatorGuardExtension(worktreeRoot);
+  }
   ensureNoOpenOwnPrs();
   ensureTrackedIssueClosed(argValue('--issue'));
   console.log('agent-continuity-check: no open agent PRs or tracked issue blockers found');

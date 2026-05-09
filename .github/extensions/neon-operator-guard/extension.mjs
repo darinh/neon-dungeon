@@ -59,7 +59,7 @@ async function runContinuityCheck() {
 
     const result = await execFileText(
         "node",
-        [CONTINUITY_SCRIPT, "--issue", ISSUE_NUMBER],
+        [CONTINUITY_SCRIPT, "--require-operator-guard", "--issue", ISSUE_NUMBER],
         { cwd: PROJECT_ROOT },
     );
     const output = `${result.stdout}${result.stderr}`.trim();
