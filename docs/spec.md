@@ -1140,10 +1140,11 @@ cameras: interior floor tile adjacent to a solid wall, not near doors,
 stairs, or corners (single-wall adjacency only), not within 1.5 tiles of
 other environmental entities, 2.5 tiles between wall turrets.
 
-**Entity: `wallTurrets[]` array.** Each entry:
-`{ x, y, hp, maxHp, dead, hacked, room, floor, wallSide, baseAngle,
-scanAngle, scanDir, shootTimer, disabled, disableTimer, bob, hackFlash }`.
-HP scales with floor: `12 + floor × 3`.
+**Entity: `wallTurrets[]` array.** Wall turret helpers live in
+`src/entities/wall-turrets.js` and operate on the shared collection. Each entry:
+`{ x, y, hp, maxHp, dead, hacked, room, floor, wallSide, baseAngle, scanAngle,
+scanDir, shootTimer, disabled, disableTimer, bob, hackFlash }`. HP scales with
+floor: `12 + floor × 3`.
 
 **Behavior — Hostile (default):**
 - Scans for player within 6-tile range with LOS.
@@ -4926,6 +4927,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.53 | Entity module split: wall turret runtime now lives in `src/entities/wall-turrets.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `WTURRET_*`, `createWallTurret`, `wallTurretDmg`, `damageWallTurret`, `destroyWallTurret`, `hackWallTurret`, `damageWallTurretsInRadius`, `updateWallTurrets`, and `drawWallTurrets` remain unchanged for generation, projectile, hackware, explosion, room-clear, update, and render callers. |
 | v6.1.52 | Entity module split: camera and laser tripwire runtime now lives in `src/entities/security-systems.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `CAMERA_*`, `LASER_*`, `createCamera`, `damageCamera`, `damageCamerasInRadius`, `updateCameras`, `drawCameras`, `createLaser`, `damageLaserEmitter`, `damageLasersInRadius`, `updateLasers`, and `drawLasers` remain unchanged for generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.51 | Entity module split: shield generator runtime now lives in `src/entities/shield-generators.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `SHIELD_GEN_DR`, `createShieldGen`, `damageShieldGen`, `destroyShieldGen`, `damageShieldGensInRadius`, `isEnemyShieldGenProtected`, `updateShieldGens`, and `drawShieldGens` remain unchanged for enemy mitigation, generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.50 | Entity module split: proximity mine runtime now lives in `src/entities/mines.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `MINE_TRIGGER_RADIUS`, `MINE_REVEAL_RADIUS`, `MINE_BLAST_RADIUS`, `MINE_FUSE_NORMAL`, `MINE_FUSE_SHOT`, `createMine`, `armMine`, `detonateMine`, `triggerMinesInRadius`, `updateMines`, and `drawMines` remain unchanged for generation, projectile, explosion, update, and render callers. |
