@@ -26,14 +26,27 @@ Do not use a retrospective to reboot the session or avoid continuing concrete
 work. If there is a next work item in scope, run the retrospective, apply any
 process changes, then continue from the proper worktree.
 
+## Completion gate
+
+A work item is not complete until:
+
+1. the retrospective is written from pasted evidence;
+2. both LLM retrospective reviewers have returned;
+3. adopted and rejected reviewer findings are recorded;
+4. any required system changes are applied and verified;
+5. the final protocol-change decision is recorded;
+6. the retrospective is attached to the PR, issue, session history, or final
+   response where future agents can find the evidence.
+
 ## Pre-retrospective checklist
 
 Before writing the retrospective:
 
 1. Verify the current directory is the worktree for the work item, not
    `/home/darin/projects/neon-dungeon`.
-2. Record `git worktree list`, `git rev-parse --show-toplevel`, and
-   `git status --porcelain`.
+2. Record `git worktree list`, `git rev-parse --show-toplevel`,
+   `git rev-parse --git-common-dir`, `git status --porcelain`, and
+   `git ls-files --others --exclude-standard`.
 3. Confirm code-review subagents, if any, have returned and real findings were
    addressed or explicitly rejected.
 4. Save the final evidence for reviewers: file list, staged or committed diff,
@@ -54,7 +67,9 @@ Collect only facts that affect future behavior:
 - review findings, including false positives and why they happened;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
-- decisions that changed the plan.
+- decisions that changed the plan;
+- control-scope classification for any new guard: repo, project-config,
+  machine-local, CI, or human process.
 
 ## Retrospective steps
 
@@ -70,7 +85,14 @@ Collect only facts that affect future behavior:
    human corrections found real issues.
 5. **Identify what should have caught problems earlier.** Add a concrete guard,
    prompt rule, checklist item, test, or workflow change.
-6. **Ask two other LLMs for adversarial critique.** Do this only after code
+6. **Classify controls by scope.** Do not treat all guards as equivalent. Repo
+   docs travel with the codebase, project config affects this machine's agents,
+   CI blocks remote integration, and machine-local wrappers only protect this
+   workstation when they are on `PATH`.
+7. **Verify post-merge or post-CLI state.** If a CLI command reports success but
+   also emits a cleanup error, verify the remote state, local branch/worktree
+   state, and remaining cleanup separately before claiming completion.
+8. **Ask two other LLMs for adversarial critique.** Do this only after code
    reviewers are done and their findings are resolved. Give each retrospective
    reviewer the same pasted evidence and the draft retrospective; do not require
    them to enter the repository or run git. Use different model families when
@@ -78,13 +100,13 @@ Collect only facts that affect future behavior:
    available because of a tool outage, the work item is blocked, not complete.
    Require concrete findings only: correctness gaps, repeated failure patterns,
    missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
-7. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
+9. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
    weak suggestions explicitly and briefly.
-8. **Change the system.** If the retrospective reveals a durable rule, update the
+10. **Change the system.** If the retrospective reveals a durable rule, update the
    relevant persistent artifact immediately from the worktree: `AGENTS.md`,
    project instructions, tests, scripts, or this protocol. Re-read the changed
    artifact and verify the guard actually landed.
-9. **Final mandatory question: should this retrospective protocol change?** If
+11. **Final mandatory question: should this retrospective protocol change?** If
    yes, edit this document as part of the same work item or the next immediate
    policy PR. If no, record that no protocol change was needed and why. The
    agent performing the retrospective may edit, commit, and push protocol
@@ -123,6 +145,8 @@ Facts:
 - Incidents or near misses:
 - System changes made:
 - Final diff or commit range:
+- Control scopes:
+- Post-merge or post-CLI verification:
 
 Draft retrospective:
 [paste draft]
@@ -140,6 +164,8 @@ Keep the retrospective short enough to be useful:
 - **What went wrong**:
 - **What went right**:
 - **Earlier catch**:
+- **Control scopes**:
+- **Post-merge verification**:
 - **Two-LLM critique**: [reviewers/models used, adopted findings, rejected findings]
 - **System changes made**:
 - **Protocol change needed**:
@@ -149,6 +175,8 @@ Store the output where it will influence future work:
 
 - task-specific retrospectives may live in the PR body, issue comment, or session
   history;
+- PR work should get a PR comment or PR body entry so the evidence stays attached
+  to the merged artifact;
 - durable process changes must be applied to `AGENTS.md`, project instructions,
   tests, scripts, or this file;
 - do not create permanent repo clutter for one-off notes.
