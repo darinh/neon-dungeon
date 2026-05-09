@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -164,15 +167,15 @@ test('MIRROR draw branch tints aim line/ring with the shot colour', () => {
 });
 
 test('MIRROR constants are defined with sane values', () => {
-  const ch = ENTITIES.match(/MIRROR_CHARGE\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/MIRROR_TELEGRAPH\s*=\s*([\d.]+)/);
-  const rc = ENTITIES.match(/MIRROR_RECOVERY\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/MIRROR_RANGE\s*=\s*([\d.]+)/);
-  const dm = ENTITIES.match(/MIRROR_DMG_MUL\s*=\s*([\d.]+)/);
-  const sd = ENTITIES.match(/MIRROR_PROJ_SPD_DEF\s*=\s*([\d.]+)/);
-  const smin = ENTITIES.match(/MIRROR_PROJ_SPD_MIN\s*=\s*([\d.]+)/);
-  const smax = ENTITIES.match(/MIRROR_PROJ_SPD_MAX\s*=\s*([\d.]+)/);
-  const sl = ENTITIES.match(/SHOT_HISTORY_LEN\s*=\s*([\d.]+)/);
+  const ch = ENEMY_ABILITY_TUNING.match(/MIRROR_CHARGE\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/MIRROR_TELEGRAPH\s*=\s*([\d.]+)/);
+  const rc = ENEMY_ABILITY_TUNING.match(/MIRROR_RECOVERY\s*=\s*([\d.]+)/);
+  const rg = ENEMY_ABILITY_TUNING.match(/MIRROR_RANGE\s*=\s*([\d.]+)/);
+  const dm = ENEMY_ABILITY_TUNING.match(/MIRROR_DMG_MUL\s*=\s*([\d.]+)/);
+  const sd = ENEMY_ABILITY_TUNING.match(/MIRROR_PROJ_SPD_DEF\s*=\s*([\d.]+)/);
+  const smin = ENEMY_ABILITY_TUNING.match(/MIRROR_PROJ_SPD_MIN\s*=\s*([\d.]+)/);
+  const smax = ENEMY_ABILITY_TUNING.match(/MIRROR_PROJ_SPD_MAX\s*=\s*([\d.]+)/);
+  const sl = ENEMY_ABILITY_TUNING.match(/SHOT_HISTORY_LEN\s*=\s*([\d.]+)/);
   assert.ok(ch && tg && rc && rg && dm && sd && smin && smax && sl,
     'all nine MIRROR_* / SHOT_HISTORY_LEN constants must be defined');
   assert.ok(parseFloat(tg[1]) >= 0.5,
@@ -318,7 +321,7 @@ if (!fnMatch) throw new Error('pickMirrorKinematics definition not found in ai-h
 const vm = require('node:vm');
 // pickMirrorKinematics references three module-level constants — extract
 // them too and inject into the vm sandbox so the helper executes verbatim.
-const constMatch = ENTITIES.match(
+const constMatch = ENEMY_ABILITY_TUNING.match(
   /const\s+MIRROR_PROJ_SPD_DEF\s*=\s*\d+[\s\S]*?const\s+MIRROR_PROJ_SPD_MAX\s*=\s*\d+;/
 );
 if (!constMatch) throw new Error('MIRROR_PROJ_SPD_* constants not found');

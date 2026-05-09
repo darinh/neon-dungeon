@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_ABILITY_TUNING = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8');
 const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
@@ -77,7 +78,7 @@ test('GULPER tuning constants are declared at module scope', () => {
     'GULPER_BELCH_DMG_PER_STACK',
   ];
   for (const c of constNames) {
-    assert.match(ENTITIES, new RegExp(`const\\s+${c}\\s*=`),
+    assert.match(ENEMY_ABILITY_TUNING, new RegExp(`const\\s+${c}\\s*=`),
       `tuning constant ${c} must be declared at module scope`);
   }
 });

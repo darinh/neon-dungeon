@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -173,12 +176,12 @@ test('MAGPIE draw branch exists and consumes _mgStolenCr', () => {
 });
 
 test('MAGPIE tuning constants are defined', () => {
-  assert.match(ENTITIES, /const\s+MAGPIE_SCAN_RANGE\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+MAGPIE_SCAN_PERIOD\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+MAGPIE_GRAB_RANGE\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+MAGPIE_FLEE_RANGE\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+MAGPIE_STOLEN_BASE\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+MAGPIE_STOLEN_PERFL\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_SCAN_RANGE\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_SCAN_PERIOD\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_GRAB_RANGE\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_FLEE_RANGE\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_STOLEN_BASE\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+MAGPIE_STOLEN_PERFL\s*=\s*\d+/);
 });
 
 // ─── MagpieHoard pickup wiring ─────────────────────────────────────────

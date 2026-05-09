@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -122,9 +125,9 @@ test('SAPPER aiSapper method exists with correct contract', () => {
 });
 
 test('SAPPER tuning constants are defined', () => {
-  assert.match(ENTITIES, /const\s+SAPPER_DRAIN_SECS\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+SAPPER_CHASE_RANGE\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+SAPPER_MELEE_RANGE\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SAPPER_DRAIN_SECS\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SAPPER_CHASE_RANGE\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SAPPER_MELEE_RANGE\s*=\s*[\d.]+/);
 });
 
 test('SAPPER drain hook lives inside meleeAttack and is gated on dealt > 0', () => {
