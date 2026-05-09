@@ -25,6 +25,7 @@ const ENTITIES = fs.readFileSync(
 );
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
+const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -44,10 +45,10 @@ test('CRYOPHAGE appears in ENEMY_WEIGHTS with mid-late floor gate', () => {
   assert.ok(parseInt(m[1], 10) >= 5, `CRYOPHAGE minFloor should be >= 5, got ${m[1]}`);
 });
 
-test('CRYOPHAGE has a stat row in spawnEnemy switch', () => {
+test('CRYOPHAGE has a stat row in ENEMY_BASE_STATS', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
-  const re = /case\s+'CRYOPHAGE':[^\n]*hp\s*=\s*\d+[^\n]*atk\s*=\s*\d+[^\n]*spd\s*=\s*[\d.]+[^\n]*xpVal\s*=\s*\d+[^\n]*colour\s*=/;
-  assert.match(ENTITIES, re);
+  const re = /CRYOPHAGE:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*[\d.]+,[^\n]*xpVal:\s*\d+,[^\n]*colour:\s*'/;
+  assert.match(ENEMY_STATS, re);
 });
 
 test('CRYOPHAGE spawn init block sets state + cooldown stagger', () => {

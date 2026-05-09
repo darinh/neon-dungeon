@@ -21,6 +21,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -49,9 +52,9 @@ test('MAGPIE appears in ENEMY_WEIGHTS with floor 4+ gate', () => {
     `MAGPIE minFloor should be >= 4 (after item drops are abundant), got ${m[1]}`);
 });
 
-test('MAGPIE has a stat row in spawnEnemy switch', () => {
+test('MAGPIE has a stat row in ENEMY_BASE_STATS', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
-  const m = ENTITIES.match(/case\s+'MAGPIE':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/MAGPIE:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'MAGPIE stat row missing');
   // Fragile: must die in ~1 burst from a mid-floor weapon. Anchor an
   // upper bound so the design intent ("kill before grab") can't

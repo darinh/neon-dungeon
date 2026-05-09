@@ -23,6 +23,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -49,8 +52,8 @@ test('VAULTMASTER appears in ENEMY_WEIGHTS with floor 4+ gate', () => {
 });
 
 test('VAULTMASTER has a stat row with atk === 0 and modest hp/spd', () => {
-  const m = ENTITIES.match(/case\s+'VAULTMASTER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
-  assert.ok(m, 'VAULTMASTER stat row missing in spawnEnemy switch');
+  const m = ENEMY_STATS.match(/VAULTMASTER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
+  assert.ok(m, 'VAULTMASTER stat row missing in ENEMY_BASE_STATS');
   const hp = parseInt(m[1], 10);
   // hp must be substantial enough to support several "milk" hits
   // before the killing blow — the whole loop is "hit me for coins".

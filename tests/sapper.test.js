@@ -18,6 +18,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -38,9 +41,9 @@ test('SAPPER appears in ENEMY_WEIGHTS with floor 5+ gate', () => {
     `SAPPER minFloor should be >= 5 (after first timed-boost source), got ${m[1]}`);
 });
 
-test('SAPPER has a stat row in spawnEnemy switch', () => {
+test('SAPPER has a stat row in ENEMY_BASE_STATS', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
-  const m = ENTITIES.match(/case\s+'SAPPER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/SAPPER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'SAPPER stat row missing');
   // Fragile: must be killable in ~1 burst from a mid-floor weapon.
   // Anchor an upper bound so the design intent ("kill before contact")

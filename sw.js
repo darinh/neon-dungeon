@@ -63,6 +63,7 @@ const ASSETS = [
   './src/content.js',
   './src/entities/source-metadata.js',
   './src/entities/spawn-table.js',
+  './src/entities/enemy-stats.js',
   './src/entities.js',
   './src/entities/ai-helpers.js',
   './src/entities/architect-walls.js',

@@ -20,6 +20,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -44,10 +47,10 @@ test('PROPHET appears in ENEMY_WEIGHTS with mid-game floor gate', () => {
   assert.ok(parseInt(m[1], 10) >= 4, `PROPHET minFloor should be >= 4, got ${m[1]}`);
 });
 
-test('PROPHET has a stat row in spawnEnemy switch', () => {
+test('PROPHET has a stat row in ENEMY_BASE_STATS', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
-  const re = /case\s+'PROPHET':[^\n]*hp\s*=\s*\d+[^\n]*atk\s*=\s*\d+[^\n]*spd\s*=\s*[\d.]+[^\n]*xpVal\s*=\s*\d+[^\n]*colour\s*=/;
-  assert.match(ENTITIES, re);
+  const re = /PROPHET:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*[\d.]+,[^\n]*xpVal:\s*\d+,[^\n]*colour:\s*'/;
+  assert.match(ENEMY_STATS, re);
 });
 
 test('PROPHET spawn init block sets state + cooldown stagger', () => {

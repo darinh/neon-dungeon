@@ -23,6 +23,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -38,16 +41,16 @@ test('WARDLING appears in ENEMY_WEIGHTS with mid-game floor gate', () => {
   assert.ok(parseInt(m[1], 10) >= 4, `WARDLING minFloor should be >= 4, got ${m[1]}`);
 });
 
-test('WARDLING has a stat row in spawnEnemy switch', () => {
-  const re = /case\s+'WARDLING':[^\n]*hp\s*=\s*\d+[^\n]*atk\s*=\s*\d+[^\n]*spd\s*=\s*[\d.]+[^\n]*xpVal\s*=\s*\d+[^\n]*colour\s*=/;
-  assert.match(ENTITIES, re);
+test('WARDLING has a stat row in ENEMY_BASE_STATS', () => {
+  const re = /WARDLING:\s*\{[^\n]*hp:\s*\d+,[^\n]*atk:\s*\d+,[^\n]*spd:\s*[\d.]+,[^\n]*xpVal:\s*\d+,[^\n]*colour:\s*'/;
+  assert.match(ENEMY_STATS, re);
 });
 
 test('WARDLING is fragile (low HP) — the design depends on it', () => {
   // The compositional value of WARDLING is that killing it is the easy
   // counter-play. If HP gets bumped above ~50, the bodyguard becomes
   // a tank and the niche collapses into "annoying meatshield".
-  const m = ENTITIES.match(/case\s+'WARDLING':\s*hp\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/WARDLING:\s*\{\s*hp:\s*(\d+)/);
   assert.ok(m, 'WARDLING stat row must be locatable');
   const hp = parseInt(m[1], 10);
   assert.ok(hp <= 40, `WARDLING base hp must be <= 40 (fragile design), got ${hp}`);

@@ -61,6 +61,7 @@ const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
   = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
+const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const fs = require('node:fs');
@@ -134,9 +135,9 @@ test('NULLIFIER is registered in ENEMIES stat table with full row', () => {
   // SCORCHER (24) and PROPHET (28); below ARCHITECT (30) because
   // NULLIFIER's threat is positional/economic rather than spatially
   // disruptive (no walls placed, no terrain changes).
-  assert.match(ENTITIES,
-    /case\s+'NULLIFIER':\s*hp=70;\s*atk=0;\s*spd=0;\s*xpVal=24;\s*colour='#cc66dd'/,
-    "ENEMIES table must declare NULLIFIER with hp=70 atk=0 spd=0 xpVal=24 colour=#cc66dd");
+  assert.match(ENEMY_STATS,
+    /NULLIFIER:\s*\{\s*hp:\s*70,\s*atk:\s*0,\s*spd:\s*0,\s*xpVal:\s*24,\s*colour:\s*'#cc66dd'\s*\}/,
+    "ENEMY_BASE_STATS must declare NULLIFIER with hp=70 atk=0 spd=0 xpVal=24 colour=#cc66dd");
 });
 
 // ─── 3. ENEMY_WEIGHTS spawn-table entry ──────────────────────────────────
