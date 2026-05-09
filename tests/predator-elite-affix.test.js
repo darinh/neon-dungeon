@@ -53,6 +53,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ELITE_AFFIXES = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'elite-affixes.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -68,6 +71,7 @@ function stripComments(src) {
 
 const CONTENT_NC = stripComments(CONTENT);
 const ENTITIES_NC = stripComments(ENTITIES);
+const ELITE_AFFIXES_NC = stripComments(ELITE_AFFIXES);
 const PLATFORM_NC = stripComments(PLATFORM);
 
 // Brace-balanced extraction of the FIRST block opened by openerRe in
@@ -171,12 +175,12 @@ test('ELITE_AFFIXES pool size invariant: PREDATOR brings the registry to exactly
 // ─── notifyPredatorElites helper ─────────────────────────────────────────
 
 test('notifyPredatorElites is defined as a top-level function', () => {
-  assert.match(ENTITIES_NC, /function\s+notifyPredatorElites\s*\(\s*px\s*,\s*py\s*\)/,
-    'notifyPredatorElites(px, py) must be defined as a top-level function in entities.js');
+  assert.match(ELITE_AFFIXES_NC, /function\s+notifyPredatorElites\s*\(\s*px\s*,\s*py\s*\)/,
+    'notifyPredatorElites(px, py) must be defined as a top-level function in entities/elite-affixes.js');
 });
 
 test('notifyPredatorElites filters on eliteAffix === PREDATOR and dist <= 8 tiles', () => {
-  const body = extractBlock(ENTITIES_NC, /function\s+notifyPredatorElites\s*\(/);
+  const body = extractBlock(ELITE_AFFIXES_NC, /function\s+notifyPredatorElites\s*\(/);
   assert.ok(body, 'notifyPredatorElites body must be extractable');
   // Affix gate
   assert.match(body, /e\.eliteAffix\s*!==\s*'PREDATOR'/,
@@ -190,7 +194,7 @@ test('notifyPredatorElites filters on eliteAffix === PREDATOR and dist <= 8 tile
 });
 
 test('notifyPredatorElites sets predatorBuffTimer = 3 (refresh, not stack)', () => {
-  const body = extractBlock(ENTITIES_NC, /function\s+notifyPredatorElites\s*\(/);
+  const body = extractBlock(ELITE_AFFIXES_NC, /function\s+notifyPredatorElites\s*\(/);
   assert.ok(body, 'notifyPredatorElites body must be extractable');
   // Refresh-only: assignment to literal 3, never compound (`+=`, `+`, etc.)
   assert.match(body, /e\.predatorBuffTimer\s*=\s*3\b/,
@@ -200,7 +204,7 @@ test('notifyPredatorElites sets predatorBuffTimer = 3 (refresh, not stack)', () 
   // Allowed forms: `e.predatorBuffTimer = 3` and the decay
   // `enemy.predatorBuffTimer = Math.max(0, enemy.predatorBuffTimer - dt)`
   // (which writes via Math.max, NOT a compound op). Forbid +=, -=, *=, /=.
-  assert.doesNotMatch(ENTITIES_NC, /predatorBuffTimer\s*(?:\+|-|\*\*?|\/|%)=/,
+  assert.doesNotMatch(ELITE_AFFIXES_NC, /predatorBuffTimer\s*(?:\+|-|\*\*?|\/|%)=/,
     'predatorBuffTimer must NEVER use compound assignment (would allow DoT ticks to stack the multiplier — refresh-only is the contract)');
 });
 
@@ -208,7 +212,7 @@ test('notifyPredatorElites gates audio + glow on the LEADING edge (wasInactive c
   // Leading-edge gate is critical: without it, every DoT tick frame
   // (~60/sec while in burn/toxic/arc) would re-trigger the lock-on
   // chirp and explosion particle burst — sound spam + GC churn.
-  const body = extractBlock(ENTITIES_NC, /function\s+notifyPredatorElites\s*\(/);
+  const body = extractBlock(ELITE_AFFIXES_NC, /function\s+notifyPredatorElites\s*\(/);
   assert.ok(body, 'notifyPredatorElites body must be extractable');
   assert.match(body, /predatorBuffTimer\s*<=\s*0/,
     'notifyPredatorElites must gate audio/particle cues on a "was inactive" check (predatorBuffTimer <= 0 BEFORE the refresh)');
@@ -219,7 +223,7 @@ test('notifyPredatorElites gates audio + glow on the LEADING edge (wasInactive c
 // ─── tickEliteAffix decay ────────────────────────────────────────────────
 
 test('tickEliteAffix decays predatorBuffTimer with dt (clamped at 0)', () => {
-  const body = extractBlock(ENTITIES_NC, /function\s+tickEliteAffix\s*\(/);
+  const body = extractBlock(ELITE_AFFIXES_NC, /function\s+tickEliteAffix\s*\(/);
   assert.ok(body, 'tickEliteAffix body must be extractable');
   // Decay form: Math.max(0, ... - dt) — clamps so the timer never
   // goes negative (which would break the leading-edge `<= 0` gate

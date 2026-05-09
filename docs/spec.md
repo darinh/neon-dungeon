@@ -2499,12 +2499,14 @@ red for normal enemies).
 
 **Implementation:** `ELITE_AFFIXES` table + `rollEliteAffix(enemyType)` for
 random selection with eligibility filtering (PHASING excluded from PHANTOM,
-VOLATILE excluded from SEEKER). `tickEliteAffix(enemy, dt)` handles per-frame
-logic (shield regen, HP regen, phase cycling, volatile particles).
+VOLATILE excluded from SEEKER). `src/entities/elite-affixes.js` owns
+`tickEliteAffix(enemy, dt)` and handles per-frame logic (shield regen, HP regen,
+phase cycling, volatile particles).
 `berserkerMul()` method on Enemy returns speed/cooldown multiplier for both
-BERSERKER (HP-scaled) and FRENZY (stack-scaled). `notifyFrenzyElites(x, y)`
-called on every enemy death — grants stacks to nearby FRENZY elites within
-4 tiles. VOLATILE explosion in `die()` follows the same AoE pattern as
+BERSERKER (HP-scaled) and FRENZY (stack-scaled).
+`notifyFrenzyElites(x, y)` in `src/entities/elite-affixes.js` is called on
+every enemy death — grants stacks to nearby FRENZY elites within 4 tiles.
+VOLATILE explosion in `die()` follows the same AoE pattern as
 SEEKER/VOLATILE-modifier explosions (LOS-gated, env damage helpers, dash
 immunity). Shield absorption handled in `takeDamage()` before HP damage.
 Phasing immunity checked at top of `takeDamage()`. Enemy class stores
@@ -4928,6 +4930,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.60 | Entity module split: elite-affix runtime hooks now live in `src/entities/elite-affixes.js`, loaded after `src/entities.js` and before `src/game.js`. The public globals `tickEliteAffix`, `notifyFrenzyElites`, and `notifyPredatorElites` remain unchanged for the game update loop, `Enemy.die()`, and `Player.takeDamage()` while removing elite-affix ticking/notification logic from `src/entities.js`. |
 | v6.1.59 | Entity module split: GHOST_PROJECTOR ghost replay eligibility now lives with enemy type classification in `src/entities/enemy-classification.js`. The public globals `GHOSTABLE_TYPES` and `isGhostableEnemyType` preserve the tight simple-AI allowlist used by `spawnGhost()` and `notifyGhostProjectors()` while removing the allowlist from `src/entities.js`. |
 | v6.1.58 | Entity module split: spawn-time enemy type classification now lives in `src/entities/enemy-classification.js`, loaded after enemy base stats and before `src/entities.js`. The public globals `BOSS_TYPES`, `ELITE_EXCLUDED_TYPES`, `isBossEnemyType`, and `canRollEliteEnemyType` preserve boss detection and elite-roll eligibility while removing long inline type lists from `spawnEnemy()`. |
 | v6.1.57 | Entity module split: enemy base stat rows now live in `src/entities/enemy-stats.js`, loaded after `src/entities/spawn-table.js` and before `src/entities.js`. The public globals `ENEMY_BASE_STATS` and `getEnemyBaseStats` feed `spawnEnemy()` while floor/difficulty scaling, boss detection, elite rolls, room registration, and per-type spawn initialization remain with the `Enemy` runtime in `src/entities.js`. |
