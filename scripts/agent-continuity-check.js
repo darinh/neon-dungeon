@@ -7,6 +7,10 @@ const path = require('node:path');
 
 const MAIN_CHECKOUT = '/home/darin/projects/neon-dungeon';
 const OPERATOR_GUARD_EXTENSION = '.github/extensions/neon-operator-guard/extension.mjs';
+const REPOSITORY = 'darinh/neon-dungeon';
+const DEVELOP_RULESET_NAME = 'develop: squash-only PRs';
+const DEVELOP_REF = 'refs/heads/develop';
+const ADMIN_REPOSITORY_ROLE_ID = 5;
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -114,6 +118,86 @@ function ensureNoOpenOwnPrs() {
   }
 }
 
+function hasPullRequestRule(ruleset) {
+  return (ruleset.rules || []).some((rule) => rule.type === 'pull_request');
+}
+
+function hasDevelopAdminBypass(ruleset) {
+  return (ruleset.bypass_actors || []).some((actor) => {
+    return actor.actor_type === 'RepositoryRole'
+      && actor.actor_id === ADMIN_REPOSITORY_ROLE_ID
+      && actor.bypass_mode === 'always';
+  });
+}
+
+function refPatternMatches(pattern, refName) {
+  if (pattern === refName) return true;
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escaped.replace(/\*/g, '.*')}$`);
+  return regex.test(refName);
+}
+
+function rulesetTargetsRef(ruleset, refName) {
+  if (ruleset.target !== 'branch') return false;
+  const refCondition = ruleset.conditions && ruleset.conditions.ref_name;
+  if (!refCondition) return true;
+  const excludes = refCondition.exclude || [];
+  if (excludes.some((pattern) => refPatternMatches(pattern, refName))) return false;
+  const includes = refCondition.include || [];
+  return includes.length === 0 || includes.some((pattern) => refPatternMatches(pattern, refName));
+}
+
+function ensureReleaseAlignmentBypass() {
+  const rulesets = parseJson('gh', ['api', `repos/${REPOSITORY}/rulesets`]);
+  const summary = rulesets.find((ruleset) => ruleset.name === DEVELOP_RULESET_NAME);
+  if (!summary) {
+    fail('develop release-alignment ruleset was not found', [
+      `Expected repository ruleset: ${DEVELOP_RULESET_NAME}`,
+    ]);
+  }
+
+  const ruleset = parseJson('gh', ['api', `repos/${REPOSITORY}/rulesets/${summary.id}`]);
+  if (ruleset.enforcement !== 'active') {
+    fail('develop ruleset is not active', [
+      `${DEVELOP_RULESET_NAME} enforcement=${ruleset.enforcement}`,
+    ]);
+  }
+
+  if (!hasPullRequestRule(ruleset)) {
+    fail('develop ruleset no longer requires pull requests', [
+      `${DEVELOP_RULESET_NAME} must keep its pull_request rule for normal integration.`,
+    ]);
+  }
+
+  if (!hasDevelopAdminBypass(ruleset)) {
+    fail('develop ruleset lacks the admin bypass required for post-release alignment', [
+      'After a develop -> main rebase promotion, agents must be able to force-with-lease align develop to main without temporarily deleting rules.',
+      `Add bypass actor: actor_type=RepositoryRole actor_id=${ADMIN_REPOSITORY_ROLE_ID} bypass_mode=always`,
+    ]);
+  }
+
+  const activeDevelopPullRequestRulesets = [];
+  for (const rulesetSummary of rulesets) {
+    const candidate = parseJson('gh', ['api', `repos/${REPOSITORY}/rulesets/${rulesetSummary.id}`]);
+    if (candidate.enforcement !== 'active') continue;
+    if (!rulesetTargetsRef(candidate, DEVELOP_REF)) continue;
+    if (!hasPullRequestRule(candidate)) continue;
+    activeDevelopPullRequestRulesets.push(candidate.name);
+    if (!hasDevelopAdminBypass(candidate)) {
+      fail('active develop pull-request ruleset lacks release-alignment admin bypass', [
+        candidate.name,
+        `Every active pull-request ruleset targeting ${DEVELOP_REF} must include actor_type=RepositoryRole actor_id=${ADMIN_REPOSITORY_ROLE_ID} bypass_mode=always.`,
+      ]);
+    }
+  }
+
+  if (activeDevelopPullRequestRulesets.length === 0) {
+    fail('no active pull-request ruleset targets develop', [
+      `${DEVELOP_REF} must keep PR-only normal integration with an admin bypass for release alignment.`,
+    ]);
+  }
+}
+
 function ensureTrackedIssueClosed(issueNumber) {
   if (!issueNumber) return;
   const issue = parseJson('gh', [
@@ -133,9 +217,18 @@ function main() {
   if (hasFlag('--require-operator-guard')) {
     ensureOperatorGuardExtension(worktreeRoot);
   }
+  ensureReleaseAlignmentBypass();
   ensureNoOpenOwnPrs();
   ensureTrackedIssueClosed(argValue('--issue'));
   console.log('agent-continuity-check: no open agent PRs or tracked issue blockers found');
 }
 
-main();
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    hasDevelopAdminBypass,
+    hasPullRequestRule,
+    rulesetTargetsRef,
+  };
+}

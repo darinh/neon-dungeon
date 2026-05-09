@@ -95,6 +95,9 @@ Before writing the retrospective:
    work before any `task_complete`; this standard npm script requires the
    operator guard extension to be present and tracked. If it fails, keep working
    or record a concrete blocker.
+   For post-release work, the same check must prove that the `develop:
+   squash-only PRs` ruleset still has both its pull-request rule and the admin
+   bypass needed for direct force-with-lease alignment after a rebase promotion.
 8. If extension or trigger files were created, run a path/scope audit: actual
    path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
    output, and primary-checkout stray-file check.
@@ -145,6 +148,9 @@ Collect only facts that affect future behavior:
 7. **Verify post-merge or post-CLI state.** If a CLI command reports success but
    also emits a cleanup error, verify the remote state, local branch/worktree
    state, and remaining cleanup separately before claiming completion.
+   For release promotions, verify `origin/main == origin/develop` after any
+   required post-release alignment and record whether repository rules were
+   bypassed by the durable admin bypass rather than temporary rule deletion.
 8. **Verify pre-verification controls.** Confirm bootstrap, runtime-file surface
    audit, classic-script runtime proof, and false-positive evidence were handled
    where applicable.
