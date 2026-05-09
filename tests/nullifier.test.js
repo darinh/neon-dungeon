@@ -53,11 +53,14 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { extractBranch, loadAlignmentSources }
+const { extractBranch, loadAlignmentSources, stripComments }
   = require('./_alignment-helpers.js');
+const { readSourceFile } = require('./_source-files.js');
 
 const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
   = loadAlignmentSources(__dirname);
+const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
+const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const fs = require('node:fs');
 const path = require('node:path');
 const GAME = fs.readFileSync(
@@ -357,22 +360,22 @@ test('updateNullifierJam is called from the main game.js update loop', () => {
     'updateNullifierJam must appear AFTER updateDisruptionFields');
 });
 
-test('updateNullifierJam helper is defined in entities.js', () => {
-  assert.match(ENTITIES,
+test('updateNullifierJam helper is defined in the field-effects module', () => {
+  assert.match(FIELD_EFFECTS,
     /function\s+updateNullifierJam\s*\(\s*dt\s*,\s*player\s*\)/,
-    'updateNullifierJam(dt, player) must exist in entities.js');
+    'updateNullifierJam(dt, player) must exist in field-effects.js');
 });
 
-test('isPlayerInNullifierAura helper is defined in entities.js (per codex/gpt-5.5/opus r1)', () => {
+test('isPlayerInNullifierAura helper is defined in the field-effects module (per codex/gpt-5.5/opus r1)', () => {
   // Per gpt-5.3-codex r1 + gpt-5.5 r1: the cached flag is one frame
   // stale; activateHackware needs a fresh same-frame check. Per claude-
   // opus-4.7 r1: jam aura must respect isPlayerDamageImmune (matches
   // DISRUPTOR precedent). Both fixes converge on a pure boolean helper
   // that activateHackware calls directly AND updateNullifierJam delegates
   // to. Pin the helper signature.
-  assert.match(ENTITIES,
+  assert.match(FIELD_EFFECTS,
     /function\s+isPlayerInNullifierAura\s*\(\s*player\s*\)/,
-    'isPlayerInNullifierAura(player) must exist in entities.js');
+    'isPlayerInNullifierAura(player) must exist in field-effects.js');
 });
 
 test('updateNullifierJam delegates to isPlayerInNullifierAura', () => {
@@ -380,7 +383,7 @@ test('updateNullifierJam delegates to isPlayerInNullifierAura', () => {
   // return value (single source of truth — no logic divergence between
   // the cached path and the fresh-check path).
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+updateNullifierJam\s*\(\s*dt\s*,\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'updateNullifierJam body extractable');
@@ -401,7 +404,7 @@ test('isPlayerInNullifierAura early-returns false for null player', () => {
   // Defensive guard against any caller that might pass undefined during
   // load/init transitions. Without it, `player.x` would throw.
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+isPlayerInNullifierAura\s*\(\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'isPlayerInNullifierAura body extractable');
@@ -417,7 +420,7 @@ test('isPlayerInNullifierAura gates on isPlayerDamageImmune (per opus r1)', () =
   // be an EARLY RETURN (not a late-stage filter) so the iteration
   // doesn't run when the player is immune (perf canary).
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+isPlayerInNullifierAura\s*\(\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'body extractable');
@@ -443,7 +446,7 @@ test('isPlayerInNullifierAura iterates enemies with COMPUTED-BUT-NOT-APPLIED def
   //   - the radius squared comparison (vx*vx + vy*vy < r2)
   //   - the application (return true;)
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+isPlayerInNullifierAura\s*\(\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'body extractable');
@@ -484,7 +487,7 @@ test('isPlayerInNullifierAura iteration appears EXACTLY ONCE (sibling-neutralize
   // the canonical loop could neutralise everything. Count the iteration
   // site within the helper body: must be exactly 1.
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+isPlayerInNullifierAura\s*\(\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'body extractable');
@@ -498,7 +501,7 @@ test('updateNullifierJam resets player.hackwareJammed via helper delegate', () =
   // line: `player.hackwareJammed = isPlayerInNullifierAura(player);`
   // Pin this exact form — sibling assignments would defeat it.
   const body = extractBranch(
-    ENTITIES_CODE,
+    FIELD_EFFECTS_CODE,
     /function\s+updateNullifierJam\s*\(\s*dt\s*,\s*player\s*\)\s*\{/
   );
   assert.ok(body, 'updateNullifierJam body extractable');

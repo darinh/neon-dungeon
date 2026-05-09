@@ -2002,7 +2002,8 @@ decisions to mid-to-late-game combat encounters.
   - `_dDeployTimer` (init 2.0 s), `_dFireTimer` (init 1.0 s), `_dFields[]` (active field refs, max 2).
   - At cap: oldest field removed before deploying new one.
 
-- **Disruption Fields** (`disruptionFields[]` global array):
+- **Disruption Fields** (`disruptionFields[]` global array; field helpers live
+  in `src/entities/field-effects.js` and operate on the shared collection):
   - Each: `{x, y, age, maxAge:5, radius:2, tickCd:0, dead:false}`.
   - Duration: 5 s then removed.
   - **Player effects while inside** (gated by `!isPlayerDamageImmune()`):
@@ -4927,6 +4928,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.54 | Entity module split: persistent field-effect runtime now lives in `src/entities/field-effects.js`, loaded after `src/entities.js` and before `src/render.js`/`src/game.js`. The public globals `disruptionFields`, `gravityWells`, `frostPatches`, `updateDisruptionFields`, `drawDisruptionFields`, `isPlayerInNullifierAura`, `updateNullifierJam`, `updateFrostPatches`, `drawFrostPatches`, `updateGravityWells`, and `drawGravityWells` remain unchanged for DISRUPTOR/CRYOPHAGE/GRAVITON/NULLIFIER AI, hackware, save/restore, update, and render callers. |
 | v6.1.53 | Entity module split: wall turret runtime now lives in `src/entities/wall-turrets.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `WTURRET_*`, `createWallTurret`, `wallTurretDmg`, `damageWallTurret`, `destroyWallTurret`, `hackWallTurret`, `damageWallTurretsInRadius`, `updateWallTurrets`, and `drawWallTurrets` remain unchanged for generation, projectile, hackware, explosion, room-clear, update, and render callers. |
 | v6.1.52 | Entity module split: camera and laser tripwire runtime now lives in `src/entities/security-systems.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `CAMERA_*`, `LASER_*`, `createCamera`, `damageCamera`, `damageCamerasInRadius`, `updateCameras`, `drawCameras`, `createLaser`, `damageLaserEmitter`, `damageLasersInRadius`, `updateLasers`, and `drawLasers` remain unchanged for generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.51 | Entity module split: shield generator runtime now lives in `src/entities/shield-generators.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `SHIELD_GEN_DR`, `createShieldGen`, `damageShieldGen`, `destroyShieldGen`, `damageShieldGensInRadius`, `isEnemyShieldGenProtected`, `updateShieldGens`, and `drawShieldGens` remain unchanged for enemy mitigation, generation, projectile, hackware, explosion, update, and render callers. |

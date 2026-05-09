@@ -18,10 +18,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
 );
@@ -132,7 +134,7 @@ test('CRYOPHAGE patches use the canonical dash-immune damage path', () => {
   // contract every other area-denial source honours (DISRUPTOR fields,
   // toxic pools, etc.).
   const re = /function\s+updateFrostPatches[\s\S]{0,800}!isPlayerDamageImmune\(\)/;
-  assert.match(ENTITIES, re, 'updateFrostPatches must check isPlayerDamageImmune');
+  assert.match(FIELD_EFFECTS, re, 'updateFrostPatches must check isPlayerDamageImmune');
 });
 
 test('frost patches are attributed via SOURCE_LABELS + SOURCE_COLOURS', () => {
@@ -154,7 +156,7 @@ test('CRYOPHAGE has a CREDIT_VALUES entry', () => {
 test('frostPatches global array is declared at module scope', () => {
   // Must be a top-level mutable array so aiCryophage can push commits
   // and updateFrostPatches/drawFrostPatches can iterate.
-  assert.match(ENTITIES, /const\s+frostPatches\s*=\s*\[\]/);
+  assert.match(FIELD_EFFECTS, /const\s+frostPatches\s*=\s*\[\]/);
 });
 
 test('drawFrostPatches FOV-culls per patch', () => {
@@ -164,7 +166,7 @@ test('drawFrostPatches FOV-culls per patch', () => {
   // for an out-of-vision patch — so visible-only render keeps things
   // consistent with the rest of the FOV pipeline.
   const re = /function\s+drawFrostPatches[\s\S]{0,500}_EG\.dungeon\?\.visible/;
-  assert.match(ENTITIES, re, 'drawFrostPatches must FOV-cull via dungeon.visible');
+  assert.match(FIELD_EFFECTS, re, 'drawFrostPatches must FOV-cull via dungeon.visible');
 });
 
 test('game.js wires updateFrostPatches into the per-frame update loop', () => {

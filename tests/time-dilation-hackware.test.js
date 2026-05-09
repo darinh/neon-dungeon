@@ -39,6 +39,11 @@ const PLATFORM = fs.readFileSync(
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
+const ENTITY_TIMING_SURFACES = [
+  fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'security-systems.js'), 'utf8'),
+  fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'wall-turrets.js'), 'utf8'),
+  fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'field-effects.js'), 'utf8'),
+].join('\n');
 
 /** @param {string} src */
 function stripComments(src) {
@@ -757,13 +762,8 @@ test('lasers, wallTurrets, and disruptionFields do NOT read _timeMul (anti-scope
   // (e.g. slowing laser charge would make TIME_DILATION an effective
   // counter to hazard rooms — out of scope and unintended).
   //
-  // Read entities.js (the home of these systems) and confirm
-  // _timeMul is unreferenced.
-  const ENTITIES = fs.readFileSync(
-    path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
-  );
-  assert.ok(!/\b_timeMul\b/.test(ENTITIES),
-    'src/entities.js must NOT reference _timeMul — TIME_DILATION is projectile-only (opus-4.6 r1 scope-creep guard); accidentally wiring _timeMul into laser/wallTurret/disruptionField update would silently expand TIME_DILATION beyond its design boundary');
+  assert.ok(!/\b_timeMul\b/.test(ENTITY_TIMING_SURFACES),
+    'laser, wallTurret, and disruptionField update modules must NOT reference _timeMul — TIME_DILATION is projectile-only (opus-4.6 r1 scope-creep guard); accidentally wiring _timeMul into these surfaces would silently expand TIME_DILATION beyond its design boundary');
 });
 
 // ─── Visual + audio ───────────────────────────────────────────────────────
