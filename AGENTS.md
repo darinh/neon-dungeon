@@ -41,6 +41,8 @@ first, then read `README.md`, `docs/module-map.md`, and
 - The work item is not complete until the two reviewers return, adopted/rejected
   findings are recorded, required system changes are applied, and the
   retrospective is attached to the PR, issue, session history, or final response.
+- Do not remove the implementation worktree until the retrospective is complete
+  and attached. Worktree cleanup is the final step.
 - Retrospectives are for behavior change, not ceremony: record concrete failure
   modes, earlier catches, adopted process changes, and rejected weak suggestions.
 - Retrospective reviewers get pasted evidence and must not enter the repository,
