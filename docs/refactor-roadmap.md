@@ -113,6 +113,7 @@ Good candidates:
 - Hit-effect application rules. Done for weapon-affix on-hit/on-kill rules in `src/entities/combat-effects.js`.
 - Deferred spawn queue ownership. Done for `pendingEnemySpawns` and ghost replay queueing in `src/entities/deferred-spawns.js`.
 - Spawn-time modifier helpers. Done for floor-modifier HP scaling and elite rolls in `src/entities/spawn-modifiers.js`.
+- Per-type spawn state initialization. Done for `initializeEnemySpawnState()` in `src/entities/spawn-initializers.js`.
 - Shock Pulse pickup detonation. Done for `triggerShockPulse` in `src/entities/shock-pulse.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.

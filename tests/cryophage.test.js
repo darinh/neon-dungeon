@@ -23,6 +23,7 @@ const { readSourceFile } = require('./_source-files.js');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = readSourceFile(__dirname, 'entitiesSpawnInitializers');
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
@@ -57,7 +58,7 @@ test('CRYOPHAGE spawn init block sets state + cooldown stagger', () => {
   // squadron of cryophages doesn't telegraph in unison the moment they
   // spawn.
   const re = /if\s*\(type\s*===\s*'CRYOPHAGE'\)[\s\S]{0,500}_cyState\s*=\s*'idle'[\s\S]{0,400}_cyCooldown\s*=/;
-  assert.match(ENTITIES, re, 'CRYOPHAGE init must set _cyState=idle and _cyCooldown stagger');
+  assert.match(SPAWN_INITIALIZERS, re, 'CRYOPHAGE init must set _cyState=idle and _cyCooldown stagger');
 });
 
 test('CRYOPHAGE is excluded from the elite affix roll', () => {

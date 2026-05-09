@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -63,7 +66,7 @@ test('ECHOER spawn init block sets state + cooldown stagger', () => {
   // _ecState must start 'idle', _ecCooldown must be > 0 so a fresh
   // squadron of ECHOERs doesn't fire in unison the moment they spawn.
   const re = /if\s*\(type\s*===\s*'ECHOER'\)[\s\S]{0,400}_ecState\s*=\s*'idle'[\s\S]{0,300}_ecCooldown\s*=/;
-  assert.match(ENTITIES, re, 'ECHOER init must set _ecState=idle and _ecCooldown stagger');
+  assert.match(SPAWN_INITIALIZERS, re, 'ECHOER init must set _ecState=idle and _ecCooldown stagger');
 });
 
 test('ECHOER is excluded from the elite affix roll', () => {

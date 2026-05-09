@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -59,9 +62,9 @@ test('WATCHER spawn init block sets state + randomised initial sweep angle', () 
   // (passive telegraph by design — never hidden). _wAng must be
   // randomised so a clustered spawn doesn't sweep in lock-step.
   const re = /if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}_wState\s*=\s*'sweep'[\s\S]{0,400}_wAng\s*=/;
-  assert.match(ENTITIES, re, 'WATCHER init must set _wState=sweep and randomised _wAng');
+  assert.match(SPAWN_INITIALIZERS, re, 'WATCHER init must set _wState=sweep and randomised _wAng');
   // Stagger via seeded spawn RNG — otherwise a pack telegraphs together
-  const initBlock = ENTITIES.match(/if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}\}/);
+  const initBlock = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}\}/);
   assert.ok(initBlock && /rand\('spawn'\)/.test(initBlock[0]),
     'WATCHER init must stagger _wAng via the seeded spawn RNG');
 });
@@ -69,7 +72,7 @@ test('WATCHER spawn init block sets state + randomised initial sweep angle', () 
 test('WATCHER spawn init zeroes telegraph + recovery timers', () => {
   // _wTele and _wRec must be initialised to 0 so the first fire only
   // commits after a real lock (not as a leftover from undefined state).
-  const initBlock = ENTITIES.match(/if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}\}/);
+  const initBlock = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'WATCHER'\)[\s\S]{0,800}\}/);
   assert.ok(initBlock, 'WATCHER init block missing');
   assert.match(initBlock[0], /_wTele\s*=\s*0/, 'WATCHER init must zero _wTele');
   assert.match(initBlock[0], /_wRec\s*=\s*0/, 'WATCHER init must zero _wRec');

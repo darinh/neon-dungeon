@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -77,7 +80,7 @@ test('MAGPIE has a stat row in ENEMY_BASE_STATS', () => {
 test('MAGPIE init block sets _mgScanT, _mgTarget, _mgStolenCr', () => {
   // Without these fields aiMagpie hits `undefined` on first frame and
   // either no-ops silently (best case) or throws (worst case).
-  const block = ENTITIES.match(/if\s*\(type\s*===\s*'MAGPIE'\)\s*\{[\s\S]*?\n  \}/);
+  const block = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'MAGPIE'\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(block, 'MAGPIE init block missing');
   assert.match(block[0], /_mgScanT\s*=/, 'MAGPIE must initialise _mgScanT');
   assert.match(block[0], /_mgTarget\s*=\s*null/, 'MAGPIE must initialise _mgTarget = null');
