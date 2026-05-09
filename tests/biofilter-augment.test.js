@@ -22,6 +22,7 @@ const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
 const CONTENT_UPGRADES = fs.readFileSync(path.join(ROOT, 'src', 'content', 'upgrades.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const FIELD_EFFECTS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'field-effects.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
 /**
@@ -92,14 +93,14 @@ test('TOXIC tile damage gated through hasAugment("BIOFILTER")', () => {
 });
 
 test('FROST patch tick damage gated through hasAugment("BIOFILTER")', () => {
-  // CRYOPHAGE frost patches in entities.js ~10125. Same rule as the
+  // CRYOPHAGE frost patches in field-effects.js. Same rule as the
   // game.js hazard tiles. Strip comments so an explanatory note that
   // mentions BIOFILTER does not satisfy the assertion.
   // Anchor on the takeDamage call signature, not the bare 'Frost Patch'
   // label string (which also appears in a label dictionary at ~line 883).
-  const idx = ENTITIES.indexOf("takeDamage(fdmg, 'Frost Patch'");
-  assert.ok(idx !== -1, 'Frost Patch takeDamage(fdmg,...) call must exist in entities.js');
-  const span = stripComments(ENTITIES.slice(Math.max(0, idx - 300), idx + 100));
+  const idx = FIELD_EFFECTS.indexOf("takeDamage(fdmg, 'Frost Patch'");
+  assert.ok(idx !== -1, 'Frost Patch takeDamage(fdmg,...) call must exist in field-effects.js');
+  const span = stripComments(FIELD_EFFECTS.slice(Math.max(0, idx - 300), idx + 100));
   assert.ok(/hasAugment\(\s*['"]BIOFILTER['"]\s*\)\s*\?\s*0\.5\s*:\s*1/.test(span),
     'Frost Patch dmg must be multiplied by hasAugment("BIOFILTER") ? 0.5 : 1');
 });
