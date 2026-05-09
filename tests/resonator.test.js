@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -142,12 +145,12 @@ test('RESONATOR draw branch renders a cone wedge during telegraph', () => {
 });
 
 test('RESONATOR constants are defined with sane values', () => {
-  const ch = ENTITIES.match(/RESONATOR_CHARGE\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/RESONATOR_TELEGRAPH\s*=\s*([\d.]+)/);
-  const rc = ENTITIES.match(/RESONATOR_RECOVERY\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/RESONATOR_RANGE\s*=\s*([\d.]+)/);
-  const cd = ENTITIES.match(/RESONATOR_CONE_DEG\s*=\s*([\d.]+)/);
-  const dm = ENTITIES.match(/RESONATOR_DMG_MUL\s*=\s*([\d.]+)/);
+  const ch = ENEMY_ABILITY_TUNING.match(/RESONATOR_CHARGE\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/RESONATOR_TELEGRAPH\s*=\s*([\d.]+)/);
+  const rc = ENEMY_ABILITY_TUNING.match(/RESONATOR_RECOVERY\s*=\s*([\d.]+)/);
+  const rg = ENEMY_ABILITY_TUNING.match(/RESONATOR_RANGE\s*=\s*([\d.]+)/);
+  const cd = ENEMY_ABILITY_TUNING.match(/RESONATOR_CONE_DEG\s*=\s*([\d.]+)/);
+  const dm = ENEMY_ABILITY_TUNING.match(/RESONATOR_DMG_MUL\s*=\s*([\d.]+)/);
   assert.ok(ch && tg && rc && rg && cd && dm,
     'all six RESONATOR_* tuning constants must be defined');
   assert.ok(parseFloat(tg[1]) >= 0.5,

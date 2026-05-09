@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -282,12 +285,12 @@ test('WATCHER draw uses live _wAng during sweep, locked angle during telegraph',
 });
 
 test('WATCHER constants are defined with sane fairness values', () => {
-  const sw = ENTITIES.match(/WATCHER_SWEEP_RATE\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/WATCHER_TELEGRAPH\s*=\s*([\d.]+)/);
-  const rc = ENTITIES.match(/WATCHER_RECOVERY\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/WATCHER_RANGE\s*=\s*([\d.]+)/);
-  const cd = ENTITIES.match(/WATCHER_CONE_DEG\s*=\s*([\d.]+)/);
-  const dm = ENTITIES.match(/WATCHER_DMG_MUL\s*=\s*([\d.]+)/);
+  const sw = ENEMY_ABILITY_TUNING.match(/WATCHER_SWEEP_RATE\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/WATCHER_TELEGRAPH\s*=\s*([\d.]+)/);
+  const rc = ENEMY_ABILITY_TUNING.match(/WATCHER_RECOVERY\s*=\s*([\d.]+)/);
+  const rg = ENEMY_ABILITY_TUNING.match(/WATCHER_RANGE\s*=\s*([\d.]+)/);
+  const cd = ENEMY_ABILITY_TUNING.match(/WATCHER_CONE_DEG\s*=\s*([\d.]+)/);
+  const dm = ENEMY_ABILITY_TUNING.match(/WATCHER_DMG_MUL\s*=\s*([\d.]+)/);
   assert.ok(sw && tg && rc && rg && cd && dm,
     'all six WATCHER_* tuning constants must be defined');
   // Telegraph fairness floor — anything under 0.5s reads as a one-shot.
@@ -316,7 +319,7 @@ test('WATCHER_HALF_RAD is precomputed from WATCHER_CONE_DEG', () => {
   // Single source of truth — if CONE_DEG is tweaked in tuning, HALF_RAD
   // must follow. Verify the derivation expression is in the source so
   // the two can't drift to different values across edits.
-  assert.match(ENTITIES,
+  assert.match(ENEMY_ABILITY_TUNING,
     /WATCHER_HALF_RAD\s*=\s*\(\s*WATCHER_CONE_DEG\s*\*\s*0\.5\s*\)\s*\*\s*Math\.PI\s*\/\s*180/,
     'WATCHER_HALF_RAD must be derived from WATCHER_CONE_DEG');
 });
