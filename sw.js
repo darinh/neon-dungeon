@@ -82,6 +82,7 @@ const ASSETS = [
   './src/entities/render-passes.js',
   './src/entities/volatile-cores.js',
   './src/entities/combat-effects.js',
+  './src/entities/deferred-spawns.js',
   './src/render.js',
   './src/game.js',
   './assets/audio/title-theme.wav',
