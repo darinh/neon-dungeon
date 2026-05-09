@@ -1,6 +1,11 @@
 // @ts-check
 'use strict';
 
+// Spawn-order id counter for CONDUIT link dedup. Module-scoped so it
+// survives across spawnEnemy calls; never reset (overflow is irrelevant
+// at JS Number precision for any plausible playthrough).
+let _cdEidCounter = 0;
+
 /**
  * Initialize per-enemy spawn state after the Enemy instance is constructed.
  * `src/entities.js` still owns construction, room registration, and elite rolls;
