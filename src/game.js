@@ -3703,7 +3703,7 @@ const game = {
         // feedback shape). Discharges an AoE knockback + brief stun
         // centred on the player. NON-DAMAGING — payoff is positional
         // (panic-eject a swarm), not DPS. Detonation math + LOS gate
-        // + boss carve-out live in triggerShockPulse() in entities.js.
+        // + boss carve-out live in triggerShockPulse() in entities/shock-pulse.js.
         if (it.isShockPulse) {
           items.splice(i, 1);
           const hit = (typeof triggerShockPulse === 'function') ? triggerShockPulse() : 0;
