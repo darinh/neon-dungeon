@@ -41,6 +41,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesMines: path.join('src', 'entities', 'mines.js'),
   entitiesShieldGenerators: path.join('src', 'entities', 'shield-generators.js'),
   entitiesSecuritySystems: path.join('src', 'entities', 'security-systems.js'),
+  entitiesWallTurrets: path.join('src', 'entities', 'wall-turrets.js'),
   entitiesDeathHooks: path.join('src', 'entities', 'death-hooks.js'),
   entitiesFuseShards: path.join('src', 'entities', 'fuse-shards.js'),
   entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
