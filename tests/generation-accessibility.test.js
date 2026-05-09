@@ -229,9 +229,12 @@ function tileOnRoomCorner(dungeon, x, y) {
   );
 }
 
+function isNormalOrLockedDoorTile(tile) {
+  return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B || tile === T.LOCKED_G;
+}
+
 function isDoorLikeTile(tile) {
-  return tile === T.DOOR || tile === T.LOCKED_R || tile === T.LOCKED_B ||
-    tile === T.LOCKED_G || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
+  return isNormalOrLockedDoorTile(tile) || tile === T.CHALLENGE_GATE || tile === T.CRACKED;
 }
 
 function isWallLikeTile(tile) {
@@ -311,6 +314,30 @@ function assertOutwardSingleTileEntrances(dungeon, label) {
       if (adjacentDoor) failures.push(`${label}: adjacent double door/gate tile at ${x},${y}`);
     }
   }
+  assert.deepEqual(failures, []);
+}
+
+function assertNormalLockedDoorsRelocatedOutward(dungeon, label) {
+  const failures = [];
+  let doorCount = 0;
+  for (let y = 1; y < MAP_H - 1; y++) {
+    for (let x = 1; x < MAP_W - 1; x++) {
+      const tile = dungeon.map[y][x];
+      if (!isNormalOrLockedDoorTile(tile)) continue;
+      doorCount++;
+      if (tileInsideRoom(dungeon, x, y)) failures.push(`${label}: normal/locked door is still inside a room at ${x},${y}`);
+      if (tileOnRoomBoundary(dungeon, x, y)) failures.push(`${label}: normal/locked door still occupies the room boundary at ${x},${y}`);
+      const roomSides = roomBoundaryNeighborsForEntrance(dungeon, x, y);
+      if (roomSides.length < 1 || roomSides.length > 2) {
+        failures.push(`${label}: normal/locked door should sit outside one room boundary or between two room boundaries at ${x},${y}, found ${roomSides.length}`);
+      }
+      if (roomSides.length === 1) {
+        const alignedPassage = connectedPassageOppositeRoomSide(dungeon, x, y, roomSides[0]);
+        if (!alignedPassage.ok) failures.push(`${label}: normal/locked door is not aligned with a live outside passage at ${x},${y}`);
+      }
+    }
+  }
+  if (doorCount <= 0) failures.push(`${label}: normal/locked doors must survive outside-wall relocation`);
   assert.deepEqual(failures, []);
 }
 
@@ -433,6 +460,7 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
       assertNoSpawnRoomKeys(dungeon);
       assertNoDuplicateKeyTiles(dungeon);
       assertSpecialEntranceInvariants(dungeon, `${seed} floor ${floor}`);
+      assertNormalLockedDoorsRelocatedOutward(dungeon, `${seed} floor ${floor}`);
       assertOutwardSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
       assertNoWideCorridors(dungeon, `${seed} floor ${floor}`);
     }
@@ -442,11 +470,11 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
 test('sampled seeded generation digests stay stable across topology extraction', () => {
   const fixture = createGenerationFixture();
   const expected = new Map([
-    ['1111-1111-1111 floor 2', '8fc17ed633d583ce7b5dce8588e5507dcfac42f6a270812bd9a884dde3c33008'],
-    ['1111-1111-1111 floor 6', '8f577801e10b414778ca82f35a6dca894ba2d8439d1f02c1822c37ba3bacbb52'],
-    ['FACE-FEED-BEEF floor 3', '9ce823b3af778c0ea0d306ed9a74605c87e79fe23d721cdda10d0bb96d32aba7'],
-    ['CAFE-BABE-0001 floor 8', 'cdc96a592ecd0baac180650967fbf798606a0451454c03e0f91a6d08c9cd8d72'],
-    ['DEAD-BEEF-CAFE floor 15', '2fc8edb19e4ee86a18afdca276bf43701d9d4564a05e42ee99c0f1ab6fcf39b6'],
+    ['1111-1111-1111 floor 2', '9fe099642f78901b2ee81a6677364422f4b5f35d8cd2aaf5b766fdb2051f840b'],
+    ['1111-1111-1111 floor 6', 'c90ad562686e8ac0643763438f63c2037f1a1d2c99afbd04a87f268b7f371a30'],
+    ['FACE-FEED-BEEF floor 3', 'e8bc114d6ad0cbc796b750d60498038ecff4a92da32bb1173d26028d16e236ac'],
+    ['CAFE-BABE-0001 floor 8', '1c1e5e4d17ede4489f87f8471cd5dc480e1987675b448212b4b17d017c7d0349'],
+    ['DEAD-BEEF-CAFE floor 15', '8faec8b11dbd86477a74876e4da61c8522a9f7936717b4c7c229be502d8a2f33'],
   ]);
   for (const [label, digest] of expected) {
     const [seed, , floorText] = label.split(' ');
