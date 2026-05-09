@@ -59,6 +59,7 @@ const { readSourceFile } = require('./_source-files.js');
 
 const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
   = loadAlignmentSources(__dirname);
+const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const fs = require('node:fs');
@@ -156,19 +157,19 @@ test('NULLIFIER is registered in ENEMY_WEIGHTS spawn table with minFloor 6', () 
 test('NULLIFIER is registered in CREDIT_VALUES (post-merge audit)', () => {
   // Per ARCHITECT post-merge audit: missing CREDIT_VALUES entry would
   // fall back to 5 credits — under-rewards a hp=70 xpVal=24 mob.
-  assert.match(ENTITIES, /NULLIFIER:10\b/,
+  assert.match(SOURCE_METADATA, /NULLIFIER:10\b/,
     'NULLIFIER must appear in CREDIT_VALUES with credit drop 10');
 });
 
 test('NULLIFIER appears in SOURCE_LABELS', () => {
   // Convention: every mob in ENEMIES gets entries in SOURCE_LABELS +
   // SOURCE_COLOURS, even atk=0 mobs (per ARCHITECT audit).
-  assert.match(ENTITIES, /NULLIFIER:\s*'Nullifier'/,
+  assert.match(SOURCE_METADATA, /NULLIFIER:\s*'Nullifier'/,
     "SOURCE_LABELS must contain NULLIFIER:'Nullifier'");
 });
 
 test('NULLIFIER appears in SOURCE_COLOURS with mob colour', () => {
-  assert.match(ENTITIES, /NULLIFIER:\s*'#cc66dd'/,
+  assert.match(SOURCE_METADATA, /NULLIFIER:\s*'#cc66dd'/,
     "SOURCE_COLOURS must contain NULLIFIER:'#cc66dd' (matches mob colour)");
 });
 

@@ -9,6 +9,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_DEATH_HOOKS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'death-hooks.js'), 'utf8'
 );
@@ -181,9 +184,9 @@ test('notifyVengeance excludes _volatileKill incidental chain deaths', () => {
 // ─── Attribution ────────────────────────────────────────────────────────
 
 test('VENGEANCE attribution rows present', () => {
-  assert.match(ENTITIES, /SOURCE_LABELS[\s\S]{0,2200}VENGEANCE\s*:\s*'Vengeance'/);
-  assert.match(ENTITIES, /SOURCE_COLOURS[\s\S]{0,2200}VENGEANCE\s*:\s*'#[0-9a-f]{6}'/i);
-  assert.match(ENTITIES, /CREDIT_VALUES\s*=\s*\{[^}]*VENGEANCE\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /SOURCE_LABELS[\s\S]{0,2200}VENGEANCE\s*:\s*'Vengeance'/);
+  assert.match(SOURCE_METADATA, /SOURCE_COLOURS[\s\S]{0,2200}VENGEANCE\s*:\s*'#[0-9a-f]{6}'/i);
+  assert.match(SOURCE_METADATA, /CREDIT_VALUES\s*=\s*\{[^}]*VENGEANCE\s*:\s*\d+/);
 });
 
 test('VENGEANCE draw branch renders a rush telegraph + charge pips', () => {

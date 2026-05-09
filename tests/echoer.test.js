@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
@@ -134,9 +137,9 @@ test('sw.js cache freshness does not use a numeric cache version', () => {
 });
 
 test('ECHOER appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
-  assert.match(ENTITIES, /ECHOER:\s*\d+/);            // CREDIT_VALUES row
-  assert.match(ENTITIES, /ECHOER:\s*'Echoer'/);       // SOURCE_LABELS
-  assert.match(ENTITIES, /ECHOER:\s*'#aa66ff'/);      // SOURCE_COLOURS
+  assert.match(SOURCE_METADATA, /ECHOER:\s*\d+/);            // CREDIT_VALUES row
+  assert.match(SOURCE_METADATA, /ECHOER:\s*'Echoer'/);       // SOURCE_LABELS
+  assert.match(SOURCE_METADATA, /ECHOER:\s*'#aa66ff'/);      // SOURCE_COLOURS
 });
 
 test('aiEchoer honors hologram-taunt redirection', () => {

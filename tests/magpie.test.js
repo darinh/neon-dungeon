@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
@@ -88,18 +91,18 @@ test('MAGPIE has CREDIT_VALUES entry', () => {
   // Without an entry, die() falls back to 5 credits — explicit entry
   // keeps reward tuning intentional. MAGPIE itself awards little
   // (4) since the real reward is the recovered hoard.
-  const m = ENTITIES.match(/MAGPIE\s*:\s*(\d+)/);
+  const m = SOURCE_METADATA.match(/MAGPIE\s*:\s*(\d+)/);
   assert.ok(m, 'MAGPIE must have CREDIT_VALUES entry');
   assert.ok(parseInt(m[1], 10) <= 8,
     `MAGPIE should give modest base credits (<=8) since the hoard is the real reward, got ${m[1]}`);
 });
 
 test('MAGPIE has SOURCE_LABELS entry', () => {
-  assert.match(ENTITIES, /MAGPIE\s*:\s*'Magpie'/);
+  assert.match(SOURCE_METADATA, /MAGPIE\s*:\s*'Magpie'/);
 });
 
 test('MAGPIE has SOURCE_COLOURS entry', () => {
-  assert.match(ENTITIES, /MAGPIE\s*:\s*'#[0-9a-fA-F]{3,6}'/);
+  assert.match(SOURCE_METADATA, /MAGPIE\s*:\s*'#[0-9a-fA-F]{3,6}'/);
 });
 
 test('MAGPIE has AI dispatch case', () => {

@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
@@ -165,10 +168,10 @@ test('sw.js cache name is stable and unversioned', () => {
 });
 
 test('RESONATOR appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
-  assert.match(ENTITIES, /RESONATOR:\s*\d+/);             // CREDIT_VALUES row
-  assert.match(ENTITIES, /RESONATOR:\s*'Resonator'/);     // SOURCE_LABELS
-  assert.match(ENTITIES, /RESONATOR:\s*'#ff66cc'/);       // SOURCE_COLOURS
-  assert.match(ENTITIES, /'Resonator Cone':\s*'Resonator Cone'/); // damage source label
+  assert.match(SOURCE_METADATA, /RESONATOR:\s*\d+/);             // CREDIT_VALUES row
+  assert.match(SOURCE_METADATA, /RESONATOR:\s*'Resonator'/);     // SOURCE_LABELS
+  assert.match(SOURCE_METADATA, /RESONATOR:\s*'#ff66cc'/);       // SOURCE_COLOURS
+  assert.match(SOURCE_METADATA, /'Resonator Cone':\s*'Resonator Cone'/); // damage source label
 });
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────

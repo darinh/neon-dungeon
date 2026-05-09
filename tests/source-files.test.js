@@ -33,6 +33,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.contentLighting.replaceAll('\\', '/'), 'src/content/lighting.js');
   assert.equal(SOURCE_FILE_PATHS.contentFloorGenerator.replaceAll('\\', '/'), 'src/content/floor-generator.js');
   assert.equal(SOURCE_FILE_PATHS.content.replaceAll('\\', '/'), 'src/content.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesSourceMetadata.replaceAll('\\', '/'), 'src/entities/source-metadata.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
@@ -71,6 +72,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'contentStatus').endsWith('src/content/status.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentLighting').endsWith('src/content/lighting.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'contentFloorGenerator').endsWith('src/content/floor-generator.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesSourceMetadata').endsWith('src/entities/source-metadata.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesArchitectWalls').endsWith('src/entities/architect-walls.js'), true);
@@ -103,6 +105,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const statusSource = readSourceFile(__dirname, 'contentStatus');
   const lightingSource = readSourceFile(__dirname, 'contentLighting');
   const floorGeneratorSource = readSourceFile(__dirname, 'contentFloorGenerator');
+  const sourceMetadataSource = readSourceFile(__dirname, 'entitiesSourceMetadata');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
   const aiHelperSource = readSourceFile(__dirname, 'entitiesAiHelpers');
   const architectWallSource = readSourceFile(__dirname, 'entitiesArchitectWalls');
@@ -152,6 +155,14 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(lightingSource, /function\s+tileHasLOS\s*\(/);
   assert.match(floorGeneratorSource, /function\s+generateFloor\s*\(/);
   assert.match(floorGeneratorSource, /function\s+resolvePreferredSpawnRoom\s*\(/);
+  assert.match(sourceMetadataSource, /const\s+CREDIT_VALUES\s*=\s*\{/);
+  assert.match(sourceMetadataSource, /const\s+SOURCE_LABELS\s*=\s*\{/);
+  assert.match(sourceMetadataSource, /const\s+SOURCE_COLOURS\s*=\s*\{/);
+  assert.match(sourceMetadataSource, /function\s+sourceLabel\s*\(/);
+  assert.match(sourceMetadataSource, /function\s+sourceColour\s*\(/);
+  assert.match(sourceMetadataSource, /const\s+BOSS_NAMES\s*=\s*\{/);
+  assert.match(sourceMetadataSource, /const\s+BOSS_PHASE_MARKS\s*=\s*\{/);
+  assert.match(sourceMetadataSource, /function\s+getBossPhaseMarks\s*\(/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
   assert.match(aiHelperSource, /function\s+isInsideCone\s*\(/);

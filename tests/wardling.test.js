@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -165,9 +168,9 @@ test('WARDLING re-acquisition timer is NOT bypassed when ward is null (perf guar
 // ─── Attribution (death-recap readability) ──────────────────────────────
 
 test('WARDLING attribution rows present', () => {
-  assert.match(ENTITIES, /SOURCE_LABELS[\s\S]{0,2000}WARDLING\s*:\s*'Wardling'/);
-  assert.match(ENTITIES, /SOURCE_COLOURS[\s\S]{0,2000}WARDLING\s*:\s*'#[0-9a-f]{6}'/i);
-  assert.match(ENTITIES, /CREDIT_VALUES\s*=\s*\{[^}]*WARDLING\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /SOURCE_LABELS[\s\S]{0,2000}WARDLING\s*:\s*'Wardling'/);
+  assert.match(SOURCE_METADATA, /SOURCE_COLOURS[\s\S]{0,2000}WARDLING\s*:\s*'#[0-9a-f]{6}'/i);
+  assert.match(SOURCE_METADATA, /CREDIT_VALUES\s*=\s*\{[^}]*WARDLING\s*:\s*\d+/);
 });
 
 test('WARDLING draw branch renders a link line to ward when bonded', () => {

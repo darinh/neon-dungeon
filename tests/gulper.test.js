@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const PLATFORM = fs.readFileSync(path.join(ROOT, 'src', 'platform.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
@@ -193,11 +194,11 @@ test('GULPER appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
   // SOURCE_LABELS / SOURCE_COLOURS drive damage-attribution UI (the
   // "Killed by Gulper" log line + colour). Belch projectile is
   // ownerType='GULPER' via fireAt → must resolve in both maps.
-  assert.match(ENTITIES, /GULPER:\s*\d+/,
+  assert.match(SOURCE_METADATA, /GULPER:\s*\d+/,
     'CREDIT_VALUES must include GULPER');
-  assert.match(ENTITIES, /GULPER:'Gulper'/,
+  assert.match(SOURCE_METADATA, /GULPER:'Gulper'/,
     'SOURCE_LABELS must include GULPER');
-  assert.match(ENTITIES, /GULPER:'#[0-9a-f]{6}'/,
+  assert.match(SOURCE_METADATA, /GULPER:'#[0-9a-f]{6}'/,
     'SOURCE_COLOURS must include GULPER');
 });
 
