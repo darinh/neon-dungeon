@@ -26,6 +26,7 @@ const ENTITIES = fs.readFileSync(
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
+const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -63,8 +64,8 @@ test('CRYOPHAGE is excluded from the elite affix roll', () => {
   // Elite affixes interact poorly with the area-denial mechanic — we
   // keep CRYOPHAGE vanilla. Mirrors the ECHOER/PROPHET/GHOST_PROJECTOR
   // exclusions.
-  const re = /allowElite[\s\S]{0,600}type\s*!==\s*'CRYOPHAGE'/;
-  assert.match(ENTITIES, re, 'CRYOPHAGE must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'CRYOPHAGE'[\s\S]*\]\s*\)/,
+    'CRYOPHAGE must be in the elite-exclusion guard');
 });
 
 test('CRYOPHAGE is dispatched in the AI switch', () => {

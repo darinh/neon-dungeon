@@ -24,6 +24,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -77,8 +80,8 @@ test('SPECTRE is excluded from the elite affix roll', () => {
   // SPECTRE would create two writers for the same flag and produce
   // unreadable behaviour (immunity windows that don't match the
   // phase/manifest visual). Mirror the existing exclusion pattern.
-  const re = /allowElite[\s\S]{0,1000}type\s*!==\s*'SPECTRE'/;
-  assert.match(ENTITIES, re, 'SPECTRE must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'SPECTRE'[\s\S]*\]\s*\)/,
+    'SPECTRE must be in the elite-exclusion guard');
 });
 
 test('SPECTRE has CREDIT_VALUES entry', () => {

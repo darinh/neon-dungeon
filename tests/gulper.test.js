@@ -22,6 +22,7 @@ const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
+const ENEMY_CLASSIFICATION = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-classification.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const PLATFORM = fs.readFileSync(path.join(ROOT, 'src', 'platform.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -83,9 +84,8 @@ test('GULPER tuning constants are declared at module scope', () => {
 test('GULPER is excluded from elite affix roll', () => {
   // First-ship caution: easier to add elite affixes later than to
   // reason about SHIELDED + projectile-eat or PHASING + belch state.
-  assert.match(ENTITIES,
-    /type\s*!==\s*'GULPER'\s*&&[\s\S]{0,400}floorNum\s*>=\s*3/,
-    'elite-skip list must include GULPER before the floorNum gate');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'GULPER'[\s\S]*\]\s*\)/,
+    'elite-skip list must include GULPER');
 });
 
 test('GULPER has an AI dispatch case calling aiGulper', () => {

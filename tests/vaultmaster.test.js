@@ -26,6 +26,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -80,9 +83,8 @@ test('VAULTMASTER is excluded from elite affix roll', () => {
   // Pattern is permissive about following exclusions (a future mob
   // added to the list shouldn't break this test — see magneton.test.js
   // for the same relaxation pattern after SAPPER PR).
-  assert.match(ENTITIES,
-    /type\s*!==\s*'VAULTMASTER'\s*&&[\s\S]{0,400}floorNum\s*>=\s*3/,
-    'elite-skip list must include VAULTMASTER before the floorNum gate');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'VAULTMASTER'[\s\S]*\]\s*\)/,
+    'elite-skip list must include VAULTMASTER');
 });
 
 test('VAULTMASTER has an AI dispatch case calling aiVaultmaster', () => {

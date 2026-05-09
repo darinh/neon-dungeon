@@ -9001,7 +9001,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const /** @type {number} */ spd = baseStats.spd;
   const /** @type {number} */ xpVal = baseStats.xpVal;
   const /** @type {string} */ colour = baseStats.colour;
-  const isBoss = ['SENTINEL','WARDEN','HIVE','CONDUCTOR','OMEGA','GENESIS'].includes(type);
+  const isBoss = isBossEnemyType(type);
   // Floor modifier HP scaling (before construction so maxHp stays in sync)
   if (!isBoss) {
     if (_EG.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
@@ -9278,8 +9278,9 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
-  // Elite roll: difficulty-scaled chance on floor 3+, never on bosses, snipers, summoners, or mimics
-  if (allowElite !== false && !isBoss && type !== 'SNIPER' && type !== 'SUMMONER' && type !== 'HEALER' && type !== 'MIMIC' && type !== 'SIPHON' && type !== 'SEEKER' && type !== 'PULSER' && type !== 'TUNNELLER' && type !== 'ECHOER' && type !== 'RESONATOR' && type !== 'MIRROR' && type !== 'REAPER' && type !== 'GHOST_PROJECTOR' && type !== 'PROPHET' && type !== 'CRYOPHAGE' && type !== 'WARDLING' && type !== 'VENGEANCE' && type !== 'CONDUIT' && type !== 'HARVESTER' && type !== 'MAGNETON' && type !== 'SPECTRE' && type !== 'SAPPER' && type !== 'MAGPIE' && type !== 'TETHER' && type !== 'VAULTMASTER' && type !== 'GULPER' && type !== 'WATCHER' && type !== 'ARCHITECT' && type !== 'NULLIFIER' && floorNum >= 3 && rand('spawn') < d.eliteRate) {
+  // Elite roll: difficulty-scaled chance on floor 3+, only for first-ship
+  // enemy types whose state machines are proven safe with affixes.
+  if (allowElite !== false && canRollEliteEnemyType(type) && floorNum >= 3 && rand('spawn') < d.eliteRate) {
     e.elite = true;
     e.hp = Math.round(e.hp * 1.8);
     e.maxHp = e.hp;

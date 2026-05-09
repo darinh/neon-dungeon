@@ -21,6 +21,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -73,8 +76,8 @@ test('SAPPER is excluded from the elite affix roll', () => {
   // First-ship caution: keeps the new drain mechanic off the elite
   // surface area. Mirror the existing exclusion pattern for
   // recently-introduced mobs.
-  const re = /allowElite[\s\S]{0,1200}type\s*!==\s*'SAPPER'/;
-  assert.match(ENTITIES, re, 'SAPPER must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'SAPPER'[\s\S]*\]\s*\)/,
+    'SAPPER must be in the elite-exclusion guard');
 });
 
 test('SAPPER has CREDIT_VALUES entry', () => {

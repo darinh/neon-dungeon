@@ -27,6 +27,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -69,8 +72,8 @@ test('GHOST_PROJECTOR is excluded from the elite affix roll', () => {
   // the projector itself (the projector should be soft so the player can
   // pre-empt), and we never want elite ghosts. Mirrors REAPER/MIRROR
   // exclusions.
-  const re = /allowElite[\s\S]{0,800}type\s*!==\s*'GHOST_PROJECTOR'/;
-  assert.match(ENTITIES, re, 'GHOST_PROJECTOR must be in the elite-exclusion guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'GHOST_PROJECTOR'[\s\S]*\]\s*\)/,
+    'GHOST_PROJECTOR must be in the elite-exclusion guard');
 });
 
 test('GHOST_PROJECTOR is dispatched in the AI switch', () => {

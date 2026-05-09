@@ -27,6 +27,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
 );
+const ENEMY_CLASSIFICATION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
+);
 
 test('TUNNELLER appears in ENEMY_WEIGHTS with a floor gate', () => {
   // The weights block declares spawn rate by floor. Without an entry the
@@ -60,8 +63,8 @@ test('TUNNELLER is excluded from the elite affix roll', () => {
   // affix on top would compound mechanics in unintended ways (mirrors
   // MIMIC/SEEKER/PULSER which are excluded for the same reason).
   // Look at the elite-eligibility condition that gates affix rolls.
-  const exclusionRe = /type\s*!==\s*'TUNNELLER'/;
-  assert.match(ENTITIES, exclusionRe, 'TUNNELLER must be excluded from the elite-roll guard');
+  assert.match(ENEMY_CLASSIFICATION, /ELITE_EXCLUDED_TYPES[\s\S]*'TUNNELLER'[\s\S]*\]\s*\)/,
+    'TUNNELLER must be excluded from the elite-roll guard');
 });
 
 test('TUNNELLER dispatches to aiTunneller in the per-frame switch', () => {
