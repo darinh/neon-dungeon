@@ -40,12 +40,6 @@ function playerCheatEnabled(id) {
 // placedWalls.length=0 alongside other transient arrays).
 /** @type {any[]} */ const placedWalls = [];
 
-// Spawn-order id counter for CONDUIT link dedup. Module-scoped so it
-// survives across spawnEnemy calls; never reset (overflow is irrelevant
-// at JS Number precision for any plausible playthrough).
-// eslint-disable-next-line prefer-const -- Mutated by src/entities/spawn-initializers.js.
-let _cdEidCounter = 0;
-
 class Enemy {
   /** @type {any} */ _aCommitted;
   /** @type {any} */ _aIdle;

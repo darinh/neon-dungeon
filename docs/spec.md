@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.71
+# NEON DUNGEON — Game Specification v6.1.72
 
 ## Vision
 
@@ -4933,6 +4933,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.72 | Entity module split: the CONDUIT spawn-order counter now lives beside `initializeEnemySpawnState()` in `src/entities/spawn-initializers.js`. The counter remains a page-session-scoped monotonic id source for CONDUIT link ownership, while `src/entities.js` no longer carries initializer-only mutable state. |
 | v6.1.71 | Entity module split: static Player perk tuning for STRIDE, DEADEYE, and HOT_HAND now lives in `src/entities/player-perk-tuning.js`, loaded before `src/entities.js`. Player update/shoot/effectiveAtk behavior and Enemy.takeDamage HOT_HAND state transitions remain in the entity core while source-text HUD desync tests read the tuning constants from the producer module. |
 | v6.1.70 | Entity module split: `src/entities/enemy-ability-tuning.js` now also owns the remaining module-top enemy tuning constants for ARCHITECT, NULLIFIER, MIRROR, REAPER, GHOST_PROJECTOR, MAGNETON, SPECTRE, SAPPER, TETHER, MAGPIE, VAULTMASTER, and GULPER. `src/entities.js` keeps the AI behavior, rendering branches, mutable counters, and state transitions while static tuning data stays in the producer module loaded before it. |
 | v6.1.69 | Entity module split: static per-enemy ability tuning for ECHOER, PROPHET, CRYOPHAGE, WARDLING, VENGEANCE, CONDUIT, RESONATOR, and WATCHER now lives in `src/entities/enemy-ability-tuning.js`, loaded before `src/entities.js`. The entity core still owns AI behavior, draw branches, and per-enemy state transitions while the tuning constants are isolated from the core entity class file. |
