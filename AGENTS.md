@@ -13,6 +13,20 @@ first, then read `README.md`, `docs/module-map.md`, and
 - `anvil/xxx`, `feat/xxx`, `fix/xxx`, `docs/xxx`, `chore/xxx` — short-lived
   work branches based on `develop` and targeting `develop`.
 
+## Worktree-only operating rule
+
+- All coding, review, test, commit, push, and PR work MUST happen in a git
+  worktree. Do not edit or review from the main checkout at
+  `/home/darin/projects/neon-dungeon`.
+- The main checkout is only for reading instructions, checking status, and
+  creating/listing worktrees.
+- Never run `git stash` in the main checkout. If work must be moved, use
+  `git diff --binary` plus explicit copies of untracked files after verifying
+  the destination worktree exists.
+- Before launching code-review subagents, stage the diff in the worktree and
+  instruct reviewers to inspect `git diff --staged` only. Reviewers must not run
+  mutating git commands such as `git stash`, `git checkout`, or `git restore`.
+
 ## Merge policy
 
 These are hard rules, not preferences:
