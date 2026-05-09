@@ -940,9 +940,10 @@ stacking). Mounted on interior floor tiles adjacent to a solid wall, excluding
 door-adjacent tiles and corner tiles (> 1 adjacent wall). Camera faces into the
 room perpendicular to its wall.
 
-**Entity array:** `cameras[]` in `entities.js`. Properties: `{x, y, hp, maxHp,
-dead, room, floor, wallSide, baseAngle, sweepAngle, sweepDir, state,
-alertTimer, rearmCd, bob}`.
+**Entity array:** `cameras[]` in `entities.js`. Camera helpers live in
+`src/entities/security-systems.js` and operate on the shared collection. Object
+properties: `{x, y, hp, maxHp, dead, room, floor, wallSide, baseAngle,
+sweepAngle, sweepDir, state, alertTimer, rearmCd, bob}`.
 
 **HP:** `12 + floor × 3`.
 
@@ -1005,9 +1006,11 @@ Wall-mounted laser emitter pairs that project visible beams across rooms.
 Breaking the beam deals damage and applies a brief shock. Each emitter can
 be destroyed independently — destroying either one disables the beam.
 
-**Entity:** `lasers[]` global array. Each laser has two emitter positions
-(`x1,y1` and `x2,y2`) with independent HP pools (`hpA`, `hpB`). Emitter HP:
-`10 + floor × 3`. Axis: `'H'` (horizontal) or `'V'` (vertical).
+**Entity:** `lasers[]` global array. Laser helpers live in
+`src/entities/security-systems.js` and operate on the shared collection. Each
+laser has two emitter positions (`x1,y1` and `x2,y2`) with independent HP pools
+(`hpA`, `hpB`). Emitter HP: `10 + floor × 3`. Axis: `'H'` (horizontal) or
+`'V'` (vertical).
 
 **Placement:** 0–1 per qualifying normal room on floor 3+ (not spawn, boss,
 secret, or special rooms). ~25% chance per eligible room. Room must be ≥ 5
@@ -1035,7 +1038,7 @@ rearm grace period after cycle-on prevents cheap hits.
 
 **Destructible emitters:**
 - Player projectiles hitting within 0.5 tiles of either emitter deal weapon
-  damage to that emitter's HP pool.
+  damage to that emitter's HP pool via `damageLaserEmitter()`.
 - Destroying either emitter disables the beam entirely and awards credits
   (`floor × 3 × multipliers`).
 - EMP: Disables all lasers in radius for 3 s (beam deactivates, no damage,
@@ -4923,6 +4926,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.52 | Entity module split: camera and laser tripwire runtime now lives in `src/entities/security-systems.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `CAMERA_*`, `LASER_*`, `createCamera`, `damageCamera`, `damageCamerasInRadius`, `updateCameras`, `drawCameras`, `createLaser`, `damageLaserEmitter`, `damageLasersInRadius`, `updateLasers`, and `drawLasers` remain unchanged for generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.51 | Entity module split: shield generator runtime now lives in `src/entities/shield-generators.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `SHIELD_GEN_DR`, `createShieldGen`, `damageShieldGen`, `destroyShieldGen`, `damageShieldGensInRadius`, `isEnemyShieldGenProtected`, `updateShieldGens`, and `drawShieldGens` remain unchanged for enemy mitigation, generation, projectile, hackware, explosion, update, and render callers. |
 | v6.1.50 | Entity module split: proximity mine runtime now lives in `src/entities/mines.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `MINE_TRIGGER_RADIUS`, `MINE_REVEAL_RADIUS`, `MINE_BLAST_RADIUS`, `MINE_FUSE_NORMAL`, `MINE_FUSE_SHOT`, `createMine`, `armMine`, `detonateMine`, `triggerMinesInRadius`, `updateMines`, and `drawMines` remain unchanged for generation, projectile, explosion, update, and render callers. |
 | v6.1.49 | Entity module split: alarm beacon runtime now lives in `src/entities/beacons.js`, loaded after `src/entities.js` and before `src/entities/volatile-cores.js`. The public globals `BEACON_COUNTDOWN`, `createBeacon`, `damageBeacon`, `destroyBeacon`, `damageBeaconsInRadius`, `updateBeacons`, and `drawBeacons` remain unchanged for generation, projectile, explosion, update, and render callers. |
