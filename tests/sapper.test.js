@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -65,7 +68,7 @@ test('SAPPER spawn init block sets _saPulse', () => {
   // tendril/body wobble is in lock-step across a clustered spawn.
   // Stagger via cosmetic RNG so a pack of SAPPERs reads as
   // independent agents.
-  const block = ENTITIES.match(/if\s*\(type\s*===\s*'SAPPER'\)[\s\S]{0,300}\}/);
+  const block = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'SAPPER'\)[\s\S]{0,300}\}/);
   assert.ok(block, 'SAPPER init block missing');
   assert.match(block[0], /_saPulse\s*=/, 'SAPPER must initialise _saPulse');
   assert.match(block[0], /rand\('cosmetic'\)/,

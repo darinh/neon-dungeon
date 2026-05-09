@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENTITY_DEFERRED_SPAWNS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'deferred-spawns.js'), 'utf8'
 );
@@ -67,7 +70,7 @@ test('GHOST_PROJECTOR spawn init block sets pending-memory state', () => {
   // _gpPendingType must start null and _gpActiveGhost must start null
   // so the first kill in the room can claim a memory cleanly.
   const re = /if\s*\(type\s*===\s*'GHOST_PROJECTOR'\)[\s\S]{0,800}_gpPendingType\s*=\s*null[\s\S]{0,400}_gpActiveGhost\s*=\s*null/;
-  assert.match(ENTITIES, re, 'GHOST_PROJECTOR init must zero _gpPendingType and _gpActiveGhost');
+  assert.match(SPAWN_INITIALIZERS, re, 'GHOST_PROJECTOR init must zero _gpPendingType and _gpActiveGhost');
 });
 
 test('GHOST_PROJECTOR is excluded from the elite affix roll', () => {

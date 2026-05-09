@@ -15,6 +15,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -48,7 +51,7 @@ test('CONDUIT has stat row in ENEMY_BASE_STATS', () => {
 
 test('CONDUIT spawn init assigns _cdEid + _cdSoloTimer + _cdLinkICD Map', () => {
   const re = /if\s*\(type\s*===\s*'CONDUIT'\)[\s\S]{0,500}_cdEid\s*=\s*\+\+_cdEidCounter[\s\S]{0,200}_cdSoloTimer\s*=[\s\S]{0,200}_cdLinkICD\s*=\s*new\s+Map\(\)/;
-  assert.match(ENTITIES, re, 'CONDUIT init must assign all per-instance state');
+  assert.match(SPAWN_INITIALIZERS, re, 'CONDUIT init must assign all per-instance state');
 });
 
 test('CONDUIT is excluded from elite affix roll', () => {

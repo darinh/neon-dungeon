@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -55,7 +58,7 @@ test('TUNNELLER spawn init block sets state + intangible flag', () => {
   // must start as "tunneling". Without these the mob is hittable on spawn
   // and never executes the burrow loop.
   const initRe = /if\s*\(type\s*===\s*'TUNNELLER'\)[\s\S]{0,400}_tnState\s*=\s*'tunneling'[\s\S]{0,200}_wrPhased\s*=\s*true/;
-  assert.match(ENTITIES, initRe, 'TUNNELLER init must set _tnState=tunneling and _wrPhased=true');
+  assert.match(SPAWN_INITIALIZERS, initRe, 'TUNNELLER init must set _tnState=tunneling and _wrPhased=true');
 });
 
 test('TUNNELLER is excluded from the elite affix roll', () => {

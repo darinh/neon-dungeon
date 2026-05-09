@@ -26,7 +26,7 @@
 //   4. The CREDIT_VALUES / SOURCE_LABELS / SOURCE_COLOURS registry
 //      uniformity (per the post-merge audit insight from ARCHITECT).
 //   5. The elite-roll exclusion (atk=0 spd=0 mobs don't carry affixes).
-//   6. The init block in spawnEnemy (visual pulse seed).
+//   6. The spawn-initializer block (visual pulse seed).
 //   7. The AI dispatch wiring (case 'NULLIFIER' in update switch).
 //   8. The aiNullifier method exists with documented signature.
 //   9. The cooldown-tick gate is extended with !hackwareJammed (with
@@ -60,11 +60,13 @@ const { readSourceFile } = require('./_source-files.js');
 const { ENTITIES, CONTENT, ENTITIES_CODE, CONTENT_CODE }
   = loadAlignmentSources(__dirname);
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
+const SPAWN_INITIALIZERS = readSourceFile(__dirname, 'entitiesSpawnInitializers');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
+const SPAWN_INITIALIZERS_CODE = stripComments(SPAWN_INITIALIZERS);
 const fs = require('node:fs');
 const path = require('node:path');
 const GAME = fs.readFileSync(
@@ -187,14 +189,14 @@ test('NULLIFIER is excluded from elite-affix roll', () => {
 
 // ─── 6. Init block ───────────────────────────────────────────────────────
 
-test('spawnEnemy NULLIFIER init block seeds _nlPulse with random offset', () => {
+test('NULLIFIER init block seeds _nlPulse with random offset', () => {
   // Per design: clustered spawns must not pulse in lock-step (visual
   // only, no gameplay coupling). _nlPulse seeded with cosmetic RNG *
   // TWO_PI so each instance starts at a different phase.
-  const initBlock = ENTITIES_CODE.match(
+  const initBlock = SPAWN_INITIALIZERS_CODE.match(
     /if\s*\(\s*type\s*===\s*'NULLIFIER'\s*\)\s*\{[\s\S]{0,500}?\}/
   );
-  assert.ok(initBlock, 'NULLIFIER init block must exist in spawnEnemy');
+  assert.ok(initBlock, 'NULLIFIER init block must exist in spawn initializers');
   assert.match(initBlock[0],
     /e\._nlPulse\s*=\s*rand\('cosmetic'\)\s*\*\s*TWO_PI\s*;/,
     "init block must seed e._nlPulse = rand('cosmetic') * TWO_PI;");

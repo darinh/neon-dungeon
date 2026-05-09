@@ -19,6 +19,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -67,7 +70,7 @@ test('REAPER spawn init block sets state and frenzy latch', () => {
   // _reState must start 'idle', _reHasFrenzied must start false so the
   // first kill streak in the room can trigger frenzy.
   const re = /if\s*\(type\s*===\s*'REAPER'\)[\s\S]{0,800}_reState\s*=\s*'idle'[\s\S]{0,400}_reHasFrenzied\s*=\s*false/;
-  assert.match(ENTITIES, re, 'REAPER init must set _reState=idle and _reHasFrenzied=false');
+  assert.match(SPAWN_INITIALIZERS, re, 'REAPER init must set _reState=idle and _reHasFrenzied=false');
 });
 
 test('REAPER is excluded from the elite affix roll', () => {

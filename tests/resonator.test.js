@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -61,9 +64,9 @@ test('RESONATOR spawn init block sets state + charge stagger', () => {
   // _rsState must start 'idle', _rsCharge must be > 0 (and ideally
   // randomised) so a clustered spawn doesn't telegraph in unison.
   const re = /if\s*\(type\s*===\s*'RESONATOR'\)[\s\S]{0,500}_rsState\s*=\s*'idle'[\s\S]{0,400}_rsCharge\s*=/;
-  assert.match(ENTITIES, re, 'RESONATOR init must set _rsState=idle and randomised _rsCharge');
+  assert.match(SPAWN_INITIALIZERS, re, 'RESONATOR init must set _rsState=idle and randomised _rsCharge');
   // Stagger = seeded spawn RNG involvement — otherwise a pack fires together
-  const init = ENTITIES.match(/if\s*\(type\s*===\s*'RESONATOR'\)[\s\S]{0,500}\}/);
+  const init = SPAWN_INITIALIZERS.match(/if\s*\(type\s*===\s*'RESONATOR'\)[\s\S]{0,500}\}/);
   assert.ok(init && /rand\('spawn'\)/.test(init[0]), 'RESONATOR init must stagger _rsCharge with the seeded spawn RNG');
 });
 

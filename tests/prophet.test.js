@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SPAWN_INITIALIZERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -60,7 +63,7 @@ test('PROPHET spawn init block sets state + cooldown stagger', () => {
   // _prState must start 'idle', _prCooldown must be > 0 so a fresh
   // squadron of PROPHETs doesn't fire in unison the moment they spawn.
   const re = /if\s*\(type\s*===\s*'PROPHET'\)[\s\S]{0,400}_prState\s*=\s*'idle'[\s\S]{0,300}_prCooldown\s*=/;
-  assert.match(ENTITIES, re, 'PROPHET init must set _prState=idle and _prCooldown stagger');
+  assert.match(SPAWN_INITIALIZERS, re, 'PROPHET init must set _prState=idle and _prCooldown stagger');
 });
 
 test('PROPHET is excluded from the elite affix roll', () => {
