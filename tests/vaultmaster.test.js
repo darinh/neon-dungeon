@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -109,16 +112,16 @@ test('aiVaultmaster method exists, chases on los/range, otherwise patrols', () =
 });
 
 test('VAULTMASTER tuning constants are declared at module scope', () => {
-  assert.match(ENTITIES, /const\s+VAULTMASTER_HIT_ICD\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+VAULTMASTER_COIN_AMT\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*\d+/);
-  assert.match(ENTITIES, /const\s+VAULTMASTER_EJECT_DIST\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+VAULTMASTER_ENGAGE_RANGE\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+VAULTMASTER_HIT_ICD\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+VAULTMASTER_COIN_AMT\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*\d+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+VAULTMASTER_EJECT_DIST\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+VAULTMASTER_ENGAGE_RANGE\s*=\s*\d+/);
 });
 
 test('jackpot amount is meaningfully larger than per-hit coin amount', () => {
-  const coinM = ENTITIES.match(/const\s+VAULTMASTER_COIN_AMT\s*=\s*(\d+)/);
-  const jackM = ENTITIES.match(/const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*(\d+)/);
+  const coinM = ENEMY_ABILITY_TUNING.match(/const\s+VAULTMASTER_COIN_AMT\s*=\s*(\d+)/);
+  const jackM = ENEMY_ABILITY_TUNING.match(/const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*(\d+)/);
   assert.ok(coinM && jackM, 'tuning constants must be present');
   const coin = parseInt(coinM[1], 10);
   const jack = parseInt(jackM[1], 10);
@@ -240,7 +243,7 @@ test('CREDIT_VALUES has a low VAULTMASTER baseline (most reward is in coins)', (
   const cvM = SOURCE_METADATA.match(/CREDIT_VALUES\s*=\s*\{[^}]*?VAULTMASTER\s*:\s*(\d+)/);
   assert.ok(cvM, 'CREDIT_VALUES must include a VAULTMASTER entry');
   const baseCv = parseInt(cvM[1], 10);
-  const jackM = ENTITIES.match(/const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*(\d+)/);
+  const jackM = ENEMY_ABILITY_TUNING.match(/const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*(\d+)/);
   const jack = parseInt(jackM[1], 10);
   assert.ok(baseCv < jack,
     `CREDIT_VALUES.VAULTMASTER (${baseCv}) must be < jackpot (${jack}) so coins are the dominant reward source`);

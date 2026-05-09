@@ -34,6 +34,7 @@ const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
+const ENEMY_ABILITY_TUNING = readSourceFile(__dirname, 'entitiesEnemyAbilityTuning');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -116,15 +117,15 @@ test('ARCHITECT appears in SOURCE_LABELS and SOURCE_COLOURS (per registry-comple
 test('ARCHITECT tuning constants are declared with documented values', () => {
   // Per design pass: range 8 tiles, target 1.5s, recovery 2.0s, idle 8.0s,
   // decay 12.0s. Re-tunes are intentional and require updating this test.
-  assert.match(ENTITIES, /const\s+ARCHITECT_RANGE\s*=\s*8\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+ARCHITECT_RANGE\s*=\s*8\b/,
     'ARCHITECT_RANGE must be 8 tiles');
-  assert.match(ENTITIES, /const\s+ARCHITECT_TARGET_TIME\s*=\s*1\.5\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+ARCHITECT_TARGET_TIME\s*=\s*1\.5\b/,
     'ARCHITECT_TARGET_TIME must be 1.5s');
-  assert.match(ENTITIES, /const\s+ARCHITECT_RECOVERY\s*=\s*2\.0\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+ARCHITECT_RECOVERY\s*=\s*2\.0\b/,
     'ARCHITECT_RECOVERY must be 2.0s');
-  assert.match(ENTITIES, /const\s+ARCHITECT_IDLE_BASE\s*=\s*8\.0\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+ARCHITECT_IDLE_BASE\s*=\s*8\.0\b/,
     'ARCHITECT_IDLE_BASE must be 8.0s');
-  assert.match(ENTITIES, /const\s+ARCHITECT_DECAY_TIME\s*=\s*12\.0\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+ARCHITECT_DECAY_TIME\s*=\s*12\.0\b/,
     'ARCHITECT_DECAY_TIME must be 12.0s');
 });
 

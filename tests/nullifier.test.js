@@ -64,6 +64,7 @@ const SPAWN_INITIALIZERS = readSourceFile(__dirname, 'entitiesSpawnInitializers'
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
+const ENEMY_ABILITY_TUNING = readSourceFile(__dirname, 'entitiesEnemyAbilityTuning');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const SPAWN_INITIALIZERS_CODE = stripComments(SPAWN_INITIALIZERS);
@@ -119,13 +120,13 @@ function hasDeadBranch(snippet) {
 test('NULLIFIER_FIELD_R const declared with documented value (5)', () => {
   // Per design: 5-tile radius. Distinct from MAGNETON_FIELD_R (5.5) so
   // tests can't accidentally pin the wrong field's radius.
-  assert.match(ENTITIES, /const\s+NULLIFIER_FIELD_R\s*=\s*5\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+NULLIFIER_FIELD_R\s*=\s*5\b/,
     'NULLIFIER_FIELD_R must be declared as a const with value 5');
 });
 
 test('NULLIFIER_PULSE_RATE const declared with documented value (1.8)', () => {
   // Visual pulse rate — purely cosmetic, but pinning prevents drift.
-  assert.match(ENTITIES, /const\s+NULLIFIER_PULSE_RATE\s*=\s*1\.8\b/,
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+NULLIFIER_PULSE_RATE\s*=\s*1\.8\b/,
     'NULLIFIER_PULSE_RATE must be declared as a const with value 1.8');
 });
 

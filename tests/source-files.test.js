@@ -417,6 +417,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
   assert.doesNotMatch(sources.entities, /const\s+ECHOER_LOOKBACK\s*=\s*1\.0/);
   assert.doesNotMatch(sources.entities, /const\s+WATCHER_SWEEP_RATE\s*=\s*0\.55/);
+  assert.doesNotMatch(sources.entities, /const\s+ARCHITECT_RANGE\s*=\s*8/);
+  assert.doesNotMatch(sources.entities, /const\s+MIRROR_CHARGE\s*=\s*2\.5/);
+  assert.doesNotMatch(sources.entities, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
@@ -426,6 +429,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+PROPHET_LOOKAHEAD\s*=\s*0\.6/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+CONDUIT_BEAM_W\s*=\s*0\.4/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+WATCHER_SWEEP_RATE\s*=\s*0\.55/);
+  assert.match(sources.entitiesEnemyAbilityTuning, /const\s+ARCHITECT_RANGE\s*=\s*8/);
+  assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GHOST_PROJECTOR_DELAY\s*=\s*3\.0/);
+  assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
   assert.match(sources.entitiesSpawnInitializers, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnInitializers, /type\s*===\s*'GHOST_PROJECTOR'[\s\S]{0,500}_gpPendingType\s*=\s*null/);
   assert.match(sources.entitiesCombatEffects, /function\s+_applyStunOnlyEffects\s*\(/);

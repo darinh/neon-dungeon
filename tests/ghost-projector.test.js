@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -98,10 +101,10 @@ test('aiGhostProjector method is defined', () => {
 });
 
 test('GHOST_PROJECTOR tuning constants are present and reasonable', () => {
-  const delay = ENTITIES.match(/GHOST_PROJECTOR_DELAY\s*=\s*([\d.]+)/);
-  const life  = ENTITIES.match(/GHOST_PROJECTOR_GHOST_LIFE\s*=\s*([\d.]+)/);
-  const hpMul = ENTITIES.match(/GHOST_PROJECTOR_HP_MUL\s*=\s*([\d.]+)/);
-  const atkMul = ENTITIES.match(/GHOST_PROJECTOR_ATK_MUL\s*=\s*([\d.]+)/);
+  const delay = ENEMY_ABILITY_TUNING.match(/GHOST_PROJECTOR_DELAY\s*=\s*([\d.]+)/);
+  const life  = ENEMY_ABILITY_TUNING.match(/GHOST_PROJECTOR_GHOST_LIFE\s*=\s*([\d.]+)/);
+  const hpMul = ENEMY_ABILITY_TUNING.match(/GHOST_PROJECTOR_HP_MUL\s*=\s*([\d.]+)/);
+  const atkMul = ENEMY_ABILITY_TUNING.match(/GHOST_PROJECTOR_ATK_MUL\s*=\s*([\d.]+)/);
   assert.ok(delay && parseFloat(delay[1]) >= 1.5 && parseFloat(delay[1]) <= 5,
     `GHOST_PROJECTOR_DELAY should be 1.5–5s, got ${delay && delay[1]}`);
   assert.ok(life && parseFloat(life[1]) >= 3 && parseFloat(life[1]) <= 12,

@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -138,10 +141,10 @@ test('SPECTRE aiSpectre method exists with correct contract', () => {
 });
 
 test('SPECTRE tuning constants are defined', () => {
-  assert.match(ENTITIES, /const\s+SPECTRE_PHASE_DUR\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+SPECTRE_MANIFEST_DUR\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+SPECTRE_TELEGRAPH_DUR\s*=\s*[\d.]+/);
-  assert.match(ENTITIES, /const\s+SPECTRE_MELEE_RANGE\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SPECTRE_PHASE_DUR\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SPECTRE_MANIFEST_DUR\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SPECTRE_TELEGRAPH_DUR\s*=\s*[\d.]+/);
+  assert.match(ENEMY_ABILITY_TUNING, /const\s+SPECTRE_MELEE_RANGE\s*=\s*[\d.]+/);
 });
 
 test('SPECTRE phase window is longer than manifest window', () => {
@@ -149,8 +152,8 @@ test('SPECTRE phase window is longer than manifest window', () => {
   // damage them) must be the dominant state, with manifest as a brief
   // vulnerable window. If manifest >= phase, the player can spam DPS
   // most of the time and the timing skill axis collapses.
-  const ph = ENTITIES.match(/const\s+SPECTRE_PHASE_DUR\s*=\s*([\d.]+)/);
-  const mn = ENTITIES.match(/const\s+SPECTRE_MANIFEST_DUR\s*=\s*([\d.]+)/);
+  const ph = ENEMY_ABILITY_TUNING.match(/const\s+SPECTRE_PHASE_DUR\s*=\s*([\d.]+)/);
+  const mn = ENEMY_ABILITY_TUNING.match(/const\s+SPECTRE_MANIFEST_DUR\s*=\s*([\d.]+)/);
   assert.ok(ph && mn);
   assert.ok(parseFloat(ph[1]) > parseFloat(mn[1]),
     `phase (${ph[1]}) must be > manifest (${mn[1]}) — manifest is the brief vulnerable window`);
@@ -160,8 +163,8 @@ test('SPECTRE telegraph duration fits inside the phase window', () => {
   // The "solidify" alpha ramp lives in the last SPECTRE_TELEGRAPH_DUR
   // of the phase. If telegraph >= phase, the spectre is ALWAYS in
   // telegraph and the visual loses its meaning.
-  const ph = ENTITIES.match(/const\s+SPECTRE_PHASE_DUR\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/const\s+SPECTRE_TELEGRAPH_DUR\s*=\s*([\d.]+)/);
+  const ph = ENEMY_ABILITY_TUNING.match(/const\s+SPECTRE_PHASE_DUR\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/const\s+SPECTRE_TELEGRAPH_DUR\s*=\s*([\d.]+)/);
   assert.ok(ph && tg);
   assert.ok(parseFloat(tg[1]) < parseFloat(ph[1]),
     `telegraph (${tg[1]}) must be < phase (${ph[1]}) — telegraph is a sub-window`);
@@ -241,7 +244,7 @@ test('SPECTRE draw branch renders manifest vulnerability ring', () => {
 const vm = require('node:vm');
 
 function loadSpectreSandbox() {
-  const constMatches = ENTITIES.match(
+  const constMatches = ENEMY_ABILITY_TUNING.match(
     /const\s+SPECTRE_PHASE_DUR\s*=[\s\S]*?const\s+SPECTRE_STUN_MANIFEST\s*=\s*[\d.]+;/
   );
   if (!constMatches) throw new Error('SPECTRE constants block not found');
