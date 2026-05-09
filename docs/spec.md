@@ -531,11 +531,14 @@ Each floor is generated fresh using Binary Space Partitioning:
    One-sided room entrances must align on a single axis: room boundary,
    entrance, then connected outside passage must form north/south or east/west
    pairs. A lateral hallway beside the entrance does not count, and a one-tile
-   dead-end stub in front of the entrance is not a valid passage. Two-room
-   bridges must connect opposite room boundaries on the same axis.
-   Outside-room 2×2 passable hallway blocks are iteratively narrowed without
-   removing door-like tiles and only when the key/lock reachability solver still
-   proves every room reachable.
+    dead-end stub in front of the entrance is not a valid passage. Two-room
+    bridges must connect opposite room boundaries on the same axis.
+    Door-like entrances also seal diagonal corner tiles whenever the two
+    adjacent cardinal tiles are open, preventing the player from walking around
+    a closed door, locked door, challenge gate, or cracked secret entrance.
+    Outside-room 2×2 passable hallway blocks are iteratively narrowed without
+    removing door-like tiles and only when the key/lock reachability solver still
+    proves every room reachable.
 9. **Reachability guarantee**: physical key-cascade BFS from spawn to every
    required room respects locked doors until their matching keys are physically
    collected. Required rooms are every room returned in the generated floor's
@@ -4930,6 +4933,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.66 | Door bypass regression fix: dungeon generation now seals diagonal walk-around corners beside door-like entrance blockers when both adjacent cardinal tiles are open, repairs any resulting entrance stubs, and re-runs reachability repair so all required rooms remain physically reachable. Generation accessibility tests now fail for 3×3 local door masks that allow bypassing closed doors, locked doors, challenge gates, or cracked secret entrances. |
 | v6.1.65 | Entity module split: Shock Pulse pickup detonation now lives in `src/entities/shock-pulse.js`, loaded after `src/entities.js` and before `src/game.js`. The public global `triggerShockPulse()` remains unchanged for the pickup loop while moving LOS-gated stun/knockback behavior out of the core entity class file. |
 | v6.1.64 | Entity module split: spawn-time enemy modifier helpers now live in `src/entities/spawn-modifiers.js`, loaded before `src/entities.js` and before gameplay can call `spawnEnemy()`. The helper surface preserves floor-modifier HP scaling, boss exemptions, and elite affix roll behavior while leaving enemy construction and per-type state initialization in `src/entities.js`. |
 | v6.1.63 | Entity module split: deferred enemy spawn queue ownership now lives in `src/entities/deferred-spawns.js`, loaded after `src/entities.js`/entity support modules and before render/game orchestration. The public globals `pendingEnemySpawns` and `spawnGhost` remain unchanged for SPLITTER/SUMMONER/BRUTE/CONDUCTOR/beacon/security/ghost-projector callers while removing the queue and ghost replay helper from `src/entities.js`. |
