@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entities', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entities', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -57,6 +57,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesVolatileCores.replaceAll('\\', '/'), 'src/entities/volatile-cores.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesCombatEffects.replaceAll('\\', '/'), 'src/entities/combat-effects.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesDeferredSpawns.replaceAll('\\', '/'), 'src/entities/deferred-spawns.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesShockPulse.replaceAll('\\', '/'), 'src/entities/shock-pulse.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -103,6 +104,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesVolatileCores').endsWith('src/entities/volatile-cores.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesCombatEffects').endsWith('src/entities/combat-effects.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeferredSpawns').endsWith('src/entities/deferred-spawns.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesShockPulse').endsWith('src/entities/shock-pulse.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -145,6 +147,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const volatileCoreSource = readSourceFile(__dirname, 'entitiesVolatileCores');
   const combatEffectSource = readSourceFile(__dirname, 'entitiesCombatEffects');
   const deferredSpawnSource = readSourceFile(__dirname, 'entitiesDeferredSpawns');
+  const shockPulseSource = readSourceFile(__dirname, 'entitiesShockPulse');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -293,6 +296,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(combatEffectSource, /function\s+applyOnKill\s*\(/);
   assert.match(deferredSpawnSource, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
   assert.match(deferredSpawnSource, /function\s+spawnGhost\s*\(/);
+  assert.match(shockPulseSource, /function\s+triggerShockPulse\s*\(/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -395,6 +399,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+applyOnKill\s*\(/);
   assert.doesNotMatch(sources.entities, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
   assert.doesNotMatch(sources.entities, /function\s+spawnGhost\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+triggerShockPulse\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+applyEliteSpawnRoll\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
@@ -404,6 +409,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesCombatEffects, /function\s+applyOnKill\s*\(/);
   assert.match(sources.entitiesDeferredSpawns, /const\s+pendingEnemySpawns\s*=\s*\[\]/);
   assert.match(sources.entitiesDeferredSpawns, /function\s+spawnGhost\s*\(/);
+  assert.match(sources.entitiesShockPulse, /function\s+triggerShockPulse\s*\(/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
 });
