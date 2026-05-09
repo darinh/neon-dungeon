@@ -424,6 +424,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /const\s+STRIDE_MOVE_RATE\s*=\s*0\.5/);
   assert.doesNotMatch(sources.entities, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
   assert.doesNotMatch(sources.entities, /const\s+HOT_HAND_PER_STACK\s*=\s*0\.05/);
+  assert.doesNotMatch(sources.entities, /let\s+_cdEidCounter\s*=\s*0/);
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
@@ -439,6 +440,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesPlayerPerkTuning, /const\s+STRIDE_MOVE_RATE\s*=\s*0\.5/);
   assert.match(sources.entitiesPlayerPerkTuning, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
   assert.match(sources.entitiesPlayerPerkTuning, /const\s+HOT_HAND_PER_STACK\s*=\s*0\.05/);
+  assert.match(sources.entitiesSpawnInitializers, /let\s+_cdEidCounter\s*=\s*0/);
   assert.match(sources.entitiesSpawnInitializers, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnInitializers, /type\s*===\s*'GHOST_PROJECTOR'[\s\S]{0,500}_gpPendingType\s*=\s*null/);
   assert.match(sources.entitiesCombatEffects, /function\s+_applyStunOnlyEffects\s*\(/);
