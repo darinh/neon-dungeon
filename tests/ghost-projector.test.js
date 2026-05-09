@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENTITY_DEFERRED_SPAWNS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'deferred-spawns.js'), 'utf8'
+);
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
@@ -186,7 +189,7 @@ test('spawnGhost helper queues via pendingEnemySpawns (deferred — never append
   // during iteration, so a ghost pushed directly to enemies[] would get
   // update() in the same frame it spawned (caught by gpt-5.5 review).
   // Use the established deferred-spawn pattern instead.
-  const m = ENTITIES.match(/function\s+spawnGhost\s*\([\s\S]*?\)\s*\{([\s\S]*?)\n\}/);
+  const m = ENTITY_DEFERRED_SPAWNS.match(/function\s+spawnGhost\s*\([\s\S]*?\)\s*\{([\s\S]*?)\n\}/);
   assert.ok(m, 'spawnGhost must be defined');
   const body = m[1];
   assert.match(body, /pendingEnemySpawns\.push\(/, 'spawnGhost must defer via pendingEnemySpawns');
