@@ -180,8 +180,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyStatsSource, /function\s+getEnemyBaseStats\s*\(/);
   assert.match(enemyClassificationSource, /const\s+BOSS_TYPES\s*=\s*new Set\(/);
   assert.match(enemyClassificationSource, /const\s+ELITE_EXCLUDED_TYPES\s*=\s*new Set\(/);
+  assert.match(enemyClassificationSource, /const\s+GHOSTABLE_TYPES\s*=\s*new Set\(/);
   assert.match(enemyClassificationSource, /function\s+isBossEnemyType\s*\(/);
   assert.match(enemyClassificationSource, /function\s+canRollEliteEnemyType\s*\(/);
+  assert.match(enemyClassificationSource, /function\s+isGhostableEnemyType\s*\(/);
   assert.match(entitySource, /allowElite[\s\S]{0,200}canRollEliteEnemyType\(type\)/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
@@ -352,6 +354,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /class\s+FuseShard\b/);
   assert.doesNotMatch(sources.entities, /function\s+drawReaperPlayerRings\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+drawTetherLeashes\s*\(/);
+  assert.doesNotMatch(sources.entities, /const\s+GHOSTABLE_TYPES\s*=\s*new Set\(/);
   assert.doesNotMatch(sources.entities, /function\s+createVCore\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+primeVCoresInRadius\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+detonateVCore\s*\(/);
