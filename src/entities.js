@@ -8421,17 +8421,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   const /** @type {number} */ xpVal = baseStats.xpVal;
   const /** @type {string} */ colour = baseStats.colour;
   const isBoss = isBossEnemyType(type);
-  // Floor modifier HP scaling (before construction so maxHp stays in sync)
-  if (!isBoss) {
-    if (_EG.modifier === 'SWARM')     hp = Math.round(hp * 0.6);
-    if (_EG.modifier === 'FORTIFIED') hp = Math.round(hp * 1.4);
-    // FRAGILE: glass-cannon protocol — non-boss enemies have 0.55x HP but
-    // damage to player is amplified 1.3x in player.takeDamage. Both sides
-    // get more lethal: fast clears reward aggression, single mistakes cost
-    // more. Bosses are exempt because HP-ratio phase transitions are tuned
-    // tight; see the boss note in src/entities/enemy-stats.js.
-    if (_EG.modifier === 'FRAGILE')   hp = Math.round(hp * 0.55);
-  }
+  hp = scaleEnemySpawnHpForModifier(hp, _EG.modifier, isBoss);
   const e=new Enemy(x,y,
     Math.round(hp*scale*d.enemyHp), Math.round(atk*scale*d.enemyAtk),
     spd*d.enemySpd, xpVal, colour, type);
@@ -8697,25 +8687,7 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   if (type==='GENESIS') { e._spiralSpin=0; e._lanceTelegraph=0; e._lanceLock=null;
     e.bossTimers = { spiral: 1.0, lance: 1.5, hazard: 2.0, purge: 4.0, move: 0.5 }; }
   if (isBoss) { e.maxHp=e.hp; }
-  // Elite roll: difficulty-scaled chance on floor 3+, only for first-ship
-  // enemy types whose state machines are proven safe with affixes.
-  if (allowElite !== false && canRollEliteEnemyType(type) && floorNum >= 3 && rand('spawn') < d.eliteRate) {
-    e.elite = true;
-    e.hp = Math.round(e.hp * 1.8);
-    e.maxHp = e.hp;
-    e.atk = Math.round(e.atk * 1.3);
-    e.spd *= 1.15;
-    e.xpValue = Math.round(e.xpValue * 1.25);
-    // Roll elite affix
-    e.eliteAffix = rollEliteAffix(type);
-    if (e.eliteAffix === 'SHIELDED') {
-      e.shieldMax = Math.round(e.maxHp * 0.4);
-      e.shieldHp  = e.shieldMax;
-    }
-    if (e.eliteAffix === 'PHASING') {
-      e.phaseTimer = rnd(0, 3, 'spawn'); // stagger start so not all phase together
-    }
-  }
+  applyEliteSpawnRoll(e, type, floorNum, allowElite, d);
   registerEnemyInRoom(e);
   return e;
 }
