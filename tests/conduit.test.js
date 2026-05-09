@@ -15,6 +15,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -133,17 +136,17 @@ test('aiConduit beam requires LoS between bodies (wall breaks beam)', () => {
 // ─── Source text + audio stubs ──────────────────────────────────────────
 
 test('SOURCE_LABELS contains CONDUIT and Conduit Beam', () => {
-  assert.match(ENTITIES, /CONDUIT:\s*'Conduit'/);
-  assert.match(ENTITIES, /'Conduit Beam':\s*'Conduit Beam'/);
+  assert.match(SOURCE_METADATA, /CONDUIT:\s*'Conduit'/);
+  assert.match(SOURCE_METADATA, /'Conduit Beam':\s*'Conduit Beam'/);
 });
 
 test('SOURCE_COLOURS contains CONDUIT and Conduit Beam', () => {
-  assert.match(ENTITIES, /CONDUIT:\s*'#[0-9a-f]{6}'/);
-  assert.match(ENTITIES, /'Conduit Beam':\s*'#[0-9a-f]{6}'/);
+  assert.match(SOURCE_METADATA, /CONDUIT:\s*'#[0-9a-f]{6}'/);
+  assert.match(SOURCE_METADATA, /'Conduit Beam':\s*'#[0-9a-f]{6}'/);
 });
 
 test('CREDIT_VALUES contains CONDUIT', () => {
-  assert.match(ENTITIES, /CONDUIT:\s*\d+/);
+  assert.match(SOURCE_METADATA, /CONDUIT:\s*\d+/);
 });
 
 test('platform.js defines conduitFire and conduitBeam audio stubs', () => {

@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const ENTITY_RENDER_PASSES = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'render-passes.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -85,14 +86,14 @@ test('TETHER appears in display name + colour maps', () => {
   // HUD-side wiring: kill log, health bar names, particle colour all
   // pull from these tables. A missing entry shows the raw type
   // string ('TETHER') instead of the friendly name.
-  assert.match(ENTITIES, /TETHER:'Tether'/, 'display name map missing TETHER');
-  assert.match(ENTITIES, /TETHER:'#ff8866'/, 'colour map missing TETHER');
+  assert.match(SOURCE_METADATA, /TETHER:'Tether'/, 'display name map missing TETHER');
+  assert.match(SOURCE_METADATA, /TETHER:'#ff8866'/, 'colour map missing TETHER');
 });
 
 test('TETHER has a credit value entry', () => {
   // Without the entry the game falls back to a default credit drop;
   // also keeps the explicit list audit-able as the mob roster grows.
-  assert.match(ENTITIES, /TETHER:\s*\d+/, 'TETHER missing from CREDIT_VALUES');
+  assert.match(SOURCE_METADATA, /TETHER:\s*\d+/, 'TETHER missing from CREDIT_VALUES');
 });
 
 test('TETHER has a draw branch (not a default square)', () => {

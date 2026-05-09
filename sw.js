@@ -61,6 +61,7 @@ const ASSETS = [
   './src/content/lighting.js',
   './src/content/floor-generator.js',
   './src/content.js',
+  './src/entities/source-metadata.js',
   './src/entities.js',
   './src/entities/ai-helpers.js',
   './src/entities/architect-walls.js',

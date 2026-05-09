@@ -18,6 +18,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -75,18 +78,18 @@ test('SPECTRE is excluded from the elite affix roll', () => {
 test('SPECTRE has CREDIT_VALUES entry', () => {
   // Without an entry, die() falls back to 5 credits — explicit entry
   // keeps reward tuning intentional.
-  assert.match(ENTITIES, /SPECTRE\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /SPECTRE\s*:\s*\d+/);
 });
 
 test('SPECTRE has SOURCE_LABELS entry', () => {
   // Required for damage recap / death log to show the friendly name
   // instead of the uppercase enum.
-  assert.match(ENTITIES, /SPECTRE\s*:\s*'Spectre'/);
+  assert.match(SOURCE_METADATA, /SPECTRE\s*:\s*'Spectre'/);
 });
 
 test('SPECTRE has SOURCE_COLOURS entry', () => {
   // Required so the damage recap log renders source-coloured rows.
-  assert.match(ENTITIES, /SPECTRE\s*:\s*'#[0-9a-fA-F]{3,6}'/);
+  assert.match(SOURCE_METADATA, /SPECTRE\s*:\s*'#[0-9a-fA-F]{3,6}'/);
 });
 
 test('SPECTRE has AI dispatch case', () => {

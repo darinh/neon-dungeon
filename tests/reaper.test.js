@@ -19,6 +19,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_RENDER_PASSES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'render-passes.js'), 'utf8'
 );
@@ -203,9 +206,9 @@ test('loadFloor clears killsInCurrentRoom and _currentRoom (cross-floor history)
 // ─── Death-recap wiring ─────────────────────────────────────────────────
 
 test('REAPER appears in SOURCE_LABELS, SOURCE_COLOURS, and CREDIT_VALUES', () => {
-  assert.match(ENTITIES, /REAPER:'Reaper'/, 'SOURCE_LABELS missing REAPER');
-  assert.match(ENTITIES, /REAPER:'#cc1144'/, 'SOURCE_COLOURS missing REAPER (must be crimson)');
-  assert.match(ENTITIES, /REAPER:\d+/, 'CREDIT_VALUES missing REAPER');
+  assert.match(SOURCE_METADATA, /REAPER:'Reaper'/, 'SOURCE_LABELS missing REAPER');
+  assert.match(SOURCE_METADATA, /REAPER:'#cc1144'/, 'SOURCE_COLOURS missing REAPER (must be crimson)');
+  assert.match(SOURCE_METADATA, /REAPER:\d+/, 'CREDIT_VALUES missing REAPER');
 });
 
 test('REAPER player ring is drawn from a global pass (not gated by enemy FOV/cull)', () => {
@@ -237,9 +240,9 @@ test('REAPER stun-cancel preserves _reHasFrenzied (telegraph entry latches)', ()
 });
 
 test('REAPER appears in SOURCE_LABELS, SOURCE_COLOURS, and CREDIT_VALUES', () => {
-  assert.match(ENTITIES, /REAPER:'Reaper'/, 'SOURCE_LABELS missing REAPER');
-  assert.match(ENTITIES, /REAPER:'#cc1144'/, 'SOURCE_COLOURS missing REAPER (must be crimson)');
-  assert.match(ENTITIES, /REAPER:\d+/, 'CREDIT_VALUES missing REAPER');
+  assert.match(SOURCE_METADATA, /REAPER:'Reaper'/, 'SOURCE_LABELS missing REAPER');
+  assert.match(SOURCE_METADATA, /REAPER:'#cc1144'/, 'SOURCE_COLOURS missing REAPER (must be crimson)');
+  assert.match(SOURCE_METADATA, /REAPER:\d+/, 'CREDIT_VALUES missing REAPER');
 });
 
 // ─── Audio & deployment ─────────────────────────────────────────────────

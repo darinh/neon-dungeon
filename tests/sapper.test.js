@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
@@ -71,18 +74,18 @@ test('SAPPER is excluded from the elite affix roll', () => {
 test('SAPPER has CREDIT_VALUES entry', () => {
   // Without an entry, die() falls back to 5 credits — explicit entry
   // keeps reward tuning intentional.
-  assert.match(ENTITIES, /SAPPER\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /SAPPER\s*:\s*\d+/);
 });
 
 test('SAPPER has SOURCE_LABELS entry', () => {
   // Required for damage recap / death log to show the friendly name
   // instead of the uppercase enum.
-  assert.match(ENTITIES, /SAPPER\s*:\s*'Sapper'/);
+  assert.match(SOURCE_METADATA, /SAPPER\s*:\s*'Sapper'/);
 });
 
 test('SAPPER has SOURCE_COLOURS entry', () => {
   // Required so the damage recap log renders source-coloured rows.
-  assert.match(ENTITIES, /SAPPER\s*:\s*'#[0-9a-fA-F]{3,6}'/);
+  assert.match(SOURCE_METADATA, /SAPPER\s*:\s*'#[0-9a-fA-F]{3,6}'/);
 });
 
 test('SAPPER has AI dispatch case', () => {

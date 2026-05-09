@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
@@ -132,9 +135,9 @@ test('sw.js cache freshness does not use a numeric cache version', () => {
 });
 
 test('PROPHET appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
-  assert.match(ENTITIES, /PROPHET:\s*\d+/);            // CREDIT_VALUES row
-  assert.match(ENTITIES, /PROPHET:\s*'Prophet'/);      // SOURCE_LABELS
-  assert.match(ENTITIES, /PROPHET:\s*'#ffaa22'/);      // SOURCE_COLOURS
+  assert.match(SOURCE_METADATA, /PROPHET:\s*\d+/);            // CREDIT_VALUES row
+  assert.match(SOURCE_METADATA, /PROPHET:\s*'Prophet'/);      // SOURCE_LABELS
+  assert.match(SOURCE_METADATA, /PROPHET:\s*'#ffaa22'/);      // SOURCE_COLOURS
 });
 
 test('PROPHET projectile carries owner attribution', () => {

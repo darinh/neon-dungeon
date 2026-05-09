@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const CONTENT = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content.js'), 'utf8'
 );
@@ -223,7 +226,7 @@ test('CREDIT_VALUES has a low VAULTMASTER baseline (most reward is in coins)', (
   // promise is "milking pays more than killing". If the base reward
   // is larger than VAULTMASTER_JACKPOT_AMT, the milking design
   // collapses. Anchor base <= jackpot.
-  const cvM = ENTITIES.match(/CREDIT_VALUES\s*=\s*\{[^}]*?VAULTMASTER\s*:\s*(\d+)/);
+  const cvM = SOURCE_METADATA.match(/CREDIT_VALUES\s*=\s*\{[^}]*?VAULTMASTER\s*:\s*(\d+)/);
   assert.ok(cvM, 'CREDIT_VALUES must include a VAULTMASTER entry');
   const baseCv = parseInt(cvM[1], 10);
   const jackM = ENTITIES.match(/const\s+VAULTMASTER_JACKPOT_AMT\s*=\s*(\d+)/);

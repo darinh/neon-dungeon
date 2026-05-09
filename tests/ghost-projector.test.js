@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_DEATH_HOOKS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'death-hooks.js'), 'utf8'
 );
@@ -218,12 +221,12 @@ test('GHOST_PROJECTOR has CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS entries',
   // Without the SOURCE_LABELS/COLOURS entries the death recap shows
   // generic 'Ghost Projector' with grey colour — mirrors mob-design
   // checklist enforced by every prior mob PR.
-  assert.match(ENTITIES, /GHOST_PROJECTOR\s*:\s*\d+/,
+  assert.match(SOURCE_METADATA, /GHOST_PROJECTOR\s*:\s*\d+/,
     'CREDIT_VALUES must include GHOST_PROJECTOR');
-  assert.match(ENTITIES, /GHOST_PROJECTOR\s*:\s*'Ghost Projector'/,
+  assert.match(SOURCE_METADATA, /GHOST_PROJECTOR\s*:\s*'Ghost Projector'/,
     'SOURCE_LABELS must include GHOST_PROJECTOR');
   // Colour entry: any hex string (the projector's colour is violet ~#cc99ff)
-  assert.match(ENTITIES, /GHOST_PROJECTOR\s*:\s*'#[0-9a-fA-F]{6}'/,
+  assert.match(SOURCE_METADATA, /GHOST_PROJECTOR\s*:\s*'#[0-9a-fA-F]{6}'/,
     'SOURCE_COLOURS must include GHOST_PROJECTOR with a hex colour');
 });
 

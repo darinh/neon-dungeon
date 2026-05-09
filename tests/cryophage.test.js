@@ -23,6 +23,7 @@ const { readSourceFile } = require('./_source-files.js');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -141,14 +142,14 @@ test('frost patches are attributed via SOURCE_LABELS + SOURCE_COLOURS', () => {
   // Death-recap and damage-log readability: any new damage source string
   // ('Frost Patch') must appear in both lookup tables. Pattern caught by
   // reviewers on every prior mob PR (PROPHET / MIRROR / ECHOER).
-  assert.match(ENTITIES, /SOURCE_LABELS[\s\S]{0,2000}'Frost Patch'\s*:/);
-  assert.match(ENTITIES, /SOURCE_COLOURS[\s\S]{0,2000}'Frost Patch'\s*:/);
+  assert.match(SOURCE_METADATA, /SOURCE_LABELS[\s\S]{0,2000}'Frost Patch'\s*:/);
+  assert.match(SOURCE_METADATA, /SOURCE_COLOURS[\s\S]{0,2000}'Frost Patch'\s*:/);
 });
 
 test('CRYOPHAGE has a CREDIT_VALUES entry', () => {
   // Without a CREDIT_VALUES entry, killing the mob awards 0 credits —
   // a silent regression that's only visible in the gap-shop economy.
-  assert.match(ENTITIES, /CREDIT_VALUES\s*=\s*\{[^}]*CRYOPHAGE\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /CREDIT_VALUES\s*=\s*\{[^}]*CRYOPHAGE\s*:\s*\d+/);
 });
 
 // ─── Global frostPatches lifecycle ──────────────────────────────────────

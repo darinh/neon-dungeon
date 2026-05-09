@@ -30,6 +30,7 @@ const { extractBranch, loadAlignmentSources }
 const { readSourceFile } = require('./_source-files.js');
 
 const { ENTITIES, CONTENT, ENTITIES_CODE } = loadAlignmentSources(__dirname);
+const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -86,7 +87,7 @@ test('ARCHITECT is registered in CREDIT_VALUES (per opus r1)', () => {
   // Per opus review: missing CREDIT_VALUES entry would fall back to 5
   // credits — under-rewards a hp=80 xpVal=30 mob. Pin a non-default
   // credit drop (any number, the value is tunable).
-  assert.match(ENTITIES, /ARCHITECT:\d+/,
+  assert.match(SOURCE_METADATA, /ARCHITECT:\d+/,
     'ARCHITECT must appear in CREDIT_VALUES with a non-default credit drop');
 });
 
@@ -101,9 +102,9 @@ test('ARCHITECT appears in SOURCE_LABELS and SOURCE_COLOURS (per registry-comple
   // a new entity to a system that has registries, audit ALL the
   // registries". The 3-reviewer pass on PR #355 caught ENEMY_WEIGHTS
   // and CREDIT_VALUES omissions but missed these two.
-  assert.match(ENTITIES, /ARCHITECT:\s*'Architect'/,
+  assert.match(SOURCE_METADATA, /ARCHITECT:\s*'Architect'/,
     "SOURCE_LABELS must contain ARCHITECT:'Architect'");
-  assert.match(ENTITIES, /ARCHITECT:\s*'#aa6633'/,
+  assert.match(SOURCE_METADATA, /ARCHITECT:\s*'#aa6633'/,
     "SOURCE_COLOURS must contain ARCHITECT:'#aa6633' (matches mob colour)");
 });
 
