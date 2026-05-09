@@ -53,8 +53,11 @@ first, then read `README.md`, `docs/module-map.md`, and
   before `task_complete`; a nonzero exit means actionable work remains or an
   agent-authored PR still needs monitoring.
 - The standard `npm run check:agent-continuity` command must also prove the
-  operator guard extension is present and tracked in the implementation worktree
-  and that no ignored extension files were stranded in the primary checkout.
+   operator guard extension is present and tracked in the implementation worktree
+   and that no ignored extension files were stranded in the primary checkout.
+   It also proves the `develop: squash-only PRs` ruleset keeps its pull-request
+   rule while granting the admin bypass needed for post-release
+   force-with-lease alignment.
 - Do not remove the implementation worktree until the retrospective is complete
   and attached. Worktree cleanup is the final step.
 - Retrospectives are for behavior change, not ceremony: record concrete failure
@@ -85,12 +88,13 @@ These are hard rules, not preferences:
   `main`. It cannot enforce which GitHub merge button a human clicks, so agents
   must explicitly verify and use the required merge method before merging.
 - After a `develop` -> `main` rebase promotion, verify `origin/develop` and
-  `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
-  the rebase merge, reconcile `develop` back to the released `main` tip with a
-  deliberate `--force-with-lease` update from a worktree, after verifying the
-  trees are patch-equivalent and temporarily relaxing/restoring repository rules
-  if protection requires it. Do not leave `main` and `develop` divergent after a
-  release.
+   `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
+   the rebase merge, reconcile `develop` back to the released `main` tip with a
+   deliberate `--force-with-lease` update from a worktree after verifying the
+   trees are patch-equivalent. Do not temporarily delete repository rules to do
+   this; the `develop` ruleset must retain the admin bypass verified by
+   `npm run check:agent-continuity`. Do not leave `main` and `develop` divergent
+   after a release.
 
 ## Commands
 
