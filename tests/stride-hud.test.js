@@ -65,8 +65,9 @@ const {
   loadAlignmentSources,
 } = require('./_alignment-helpers.js');
 
-const { CONTENT, ENTITIES, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
+const { CONTENT, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
   = loadAlignmentSources(__dirname);
+const PLAYER_PERK_TUNING = require('./_source-files.js').readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 
 // ─── getStatusEffects() STRIDE fx entry ─────────────────────────────────
 
@@ -211,19 +212,19 @@ test('STRIDE badge colour matches the perk-card colour (content.js PERK_POOL sou
 
 // ─── cross-file desync defence: HUD literal 0.05 ↔ STRIDE_DMG_PER_STACK ─
 
-test('STRIDE HUD per-stack literal (0.05) matches entities.js STRIDE_DMG_PER_STACK constant', () => {
+test('STRIDE HUD per-stack literal (0.05) matches player-perk-tuning STRIDE_DMG_PER_STACK constant', () => {
   // Cross-file desync defence (per stored memory 'HUD status fx', mirrors
   // PR #280 HOT_HAND HOT_HAND_PER_STACK test): the per-stack rate (0.05)
   // is hard-coded in BOTH the HUD label (content.js, as a literal `0.05`)
-  // AND the STRIDE_DMG_PER_STACK constant (entities.js:10944). A future
+  // AND the STRIDE_DMG_PER_STACK constant. A future
   // re-tune (e.g. +7% per stack) would silently desync — players would see
   // "×1.15" while taking "×1.21" damage. This test extracts the constant
-  // from entities.js and asserts the content.js HUD literal matches.
-  const constMatch = ENTITIES.match(
+  // from player-perk-tuning.js and asserts the content.js HUD literal matches.
+  const constMatch = PLAYER_PERK_TUNING.match(
     /const\s+STRIDE_DMG_PER_STACK\s*=\s*([\d.]+)\s*;/
   );
   assert.ok(constMatch,
-    'entities.js must declare `const STRIDE_DMG_PER_STACK = <number>;`');
+    'player-perk-tuning.js must declare `const STRIDE_DMG_PER_STACK = <number>;`');
   const constValue = constMatch[1]; // e.g. '0.05'
 
   // Extract the STRIDE HUD if-block from content.js.
@@ -243,7 +244,7 @@ test('STRIDE HUD per-stack literal (0.05) matches entities.js STRIDE_DMG_PER_STA
     `\\(\\s*1\\s*\\+\\s*${constValue.replace(/\./g, '\\.')}\\s*\\*\\s*ss\\s*\\)\\.toFixed\\(2\\)`
   );
   assert.match(ifBranch, hudFormulaRe,
-    `HUD label must use per-stack rate=${constValue} (matches entities.js STRIDE_DMG_PER_STACK constant). If the constant was re-tuned, update the HUD literal in content.js.`);
+    `HUD label must use per-stack rate=${constValue} (matches player-perk-tuning.js STRIDE_DMG_PER_STACK constant). If the constant was re-tuned, update the HUD literal in content.js.`);
 });
 
 // ─── runtime simulation: multiplier formula truth table ─────────────────

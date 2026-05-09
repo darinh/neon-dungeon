@@ -38,9 +38,11 @@ const {
   extractIfCondition,
   loadAlignmentSources,
 } = require('./_alignment-helpers.js');
+const { readSourceFile } = require('./_source-files.js');
 
-const { CONTENT, ENTITIES, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
+const { CONTENT, CONTENT_CODE, ENTITIES_CODE, CONTENT_BRACES }
   = loadAlignmentSources(__dirname);
+const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 void ENTITIES_CODE; // not currently used; reserved for future cross-file alignment
 
 /**
@@ -305,15 +307,15 @@ test('DEADEYE active branch icon and colour match the perk-card (content.js sour
 
 // ─── cross-file desync: charging label literal ↔ DEADEYE_CHARGE_TIME ──
 
-test('DEADEYE charging countdown literal matches entities.js DEADEYE_CHARGE_TIME', () => {
+test('DEADEYE charging countdown literal matches player-perk-tuning DEADEYE_CHARGE_TIME', () => {
   // Cross-file desync defence (per stored memory 'HUD status fx', PR #280
   // pattern): the charge time (1.0s) is hard-coded in BOTH the HUD label
   // (literal `1` in `1 - (player._steadyChargeTime || 0)`) AND the
-  // entities.js DEADEYE_CHARGE_TIME constant. A future re-tune (e.g.
+  // player-perk-tuning.js DEADEYE_CHARGE_TIME constant. A future re-tune (e.g.
   // 0.75s charge) would silently desync the readout.
-  const constMatch = ENTITIES.match(/DEADEYE_CHARGE_TIME\s*=\s*([\d.]+)/);
+  const constMatch = PLAYER_PERK_TUNING.match(/DEADEYE_CHARGE_TIME\s*=\s*([\d.]+)/);
   assert.ok(constMatch,
-    'entities.js must declare DEADEYE_CHARGE_TIME constant');
+    'player-perk-tuning.js must declare DEADEYE_CHARGE_TIME constant');
   const chargeTime = parseFloat(constMatch[1]);
   assert.ok(Number.isFinite(chargeTime) && chargeTime > 0,
     `DEADEYE_CHARGE_TIME must be a positive number; got ${constMatch[1]}`);
@@ -332,7 +334,7 @@ test('DEADEYE charging countdown literal matches entities.js DEADEYE_CHARGE_TIME
   const block = fnBranch.slice(ifIdx, cdIdx + 200);
 
   // Pin the literal: the HUD must subtract player._steadyChargeTime from
-  // the SAME number declared in entities.js. The countdown wraps the
+  // the SAME number declared in player-perk-tuning.js. The countdown wraps the
   // input in `(player._steadyChargeTime || 0)` for NaN defence — match
   // that explicit form so a future regression that drops the wrapper
   // also trips this test.
@@ -341,7 +343,7 @@ test('DEADEYE charging countdown literal matches entities.js DEADEYE_CHARGE_TIME
     `${chargeTimeStr.replace(/\./g, '\\.')}\\s*-\\s*\\(\\s*player\\._steadyChargeTime\\s*\\|\\|\\s*0\\s*\\)`
   );
   assert.match(block, chargeRe,
-    `HUD countdown must compute ${chargeTimeStr} - (player._steadyChargeTime || 0) — matches entities.js DEADEYE_CHARGE_TIME=${chargeTime}. Re-tune both sites in lockstep, and keep the (... || 0) NaN guard.`);
+    `HUD countdown must compute ${chargeTimeStr} - (player._steadyChargeTime || 0) - matches player-perk-tuning.js DEADEYE_CHARGE_TIME=${chargeTime}. Re-tune both sites in lockstep, and keep the (... || 0) NaN guard.`);
 });
 
 test('DEADEYE charging label uses .toFixed(1) + "s" sub-5s timer convention', () => {
@@ -483,12 +485,12 @@ test("shared id contract: BOTH deadeye branches push to the same statusFx slot (
 
 // ─── DEADEYE_CHARGE_TIME constant uniqueness ──────────────────────────
 
-test('DEADEYE_CHARGE_TIME is declared exactly once in entities.js (cross-file anchor uniqueness)', () => {
+test('DEADEYE_CHARGE_TIME is declared exactly once in player-perk-tuning.js (cross-file anchor uniqueness)', () => {
   // The cross-file desync test above anchors on the `DEADEYE_CHARGE_TIME =
   // <num>` declaration. If a second declaration appears (e.g. shadowing
   // in a function), the regex would match the first and the desync test
   // could miss a tuning change to the second. Pin uniqueness.
-  const decls = ENTITIES.match(/DEADEYE_CHARGE_TIME\s*=\s*[\d.]+/g) || [];
+  const decls = PLAYER_PERK_TUNING.match(/DEADEYE_CHARGE_TIME\s*=\s*[\d.]+/g) || [];
   assert.equal(decls.length, 1,
-    `DEADEYE_CHARGE_TIME must be declared exactly once in entities.js; got ${decls.length} matches — re-anchor the desync test`);
+    `DEADEYE_CHARGE_TIME must be declared exactly once in player-perk-tuning.js; got ${decls.length} matches - re-anchor the desync test`);
 });

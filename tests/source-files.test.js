@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entities', 'entitiesSpawnInitializers', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entities', 'entitiesSpawnInitializers', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -40,6 +40,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesSpawnModifiers.replaceAll('\\', '/'), 'src/entities/spawn-modifiers.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyAwareness.replaceAll('\\', '/'), 'src/entities/enemy-awareness.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyAbilityTuning.replaceAll('\\', '/'), 'src/entities/enemy-ability-tuning.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesPlayerPerkTuning.replaceAll('\\', '/'), 'src/entities/player-perk-tuning.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSpawnInitializers.replaceAll('\\', '/'), 'src/entities/spawn-initializers.js');
@@ -420,6 +421,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /const\s+ARCHITECT_RANGE\s*=\s*8/);
   assert.doesNotMatch(sources.entities, /const\s+MIRROR_CHARGE\s*=\s*2\.5/);
   assert.doesNotMatch(sources.entities, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
+  assert.doesNotMatch(sources.entities, /const\s+STRIDE_MOVE_RATE\s*=\s*0\.5/);
+  assert.doesNotMatch(sources.entities, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
+  assert.doesNotMatch(sources.entities, /const\s+HOT_HAND_PER_STACK\s*=\s*0\.05/);
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
@@ -432,6 +436,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+ARCHITECT_RANGE\s*=\s*8/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GHOST_PROJECTOR_DELAY\s*=\s*3\.0/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
+  assert.match(sources.entitiesPlayerPerkTuning, /const\s+STRIDE_MOVE_RATE\s*=\s*0\.5/);
+  assert.match(sources.entitiesPlayerPerkTuning, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
+  assert.match(sources.entitiesPlayerPerkTuning, /const\s+HOT_HAND_PER_STACK\s*=\s*0\.05/);
   assert.match(sources.entitiesSpawnInitializers, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnInitializers, /type\s*===\s*'GHOST_PROJECTOR'[\s\S]{0,500}_gpPendingType\s*=\s*null/);
   assert.match(sources.entitiesCombatEffects, /function\s+_applyStunOnlyEffects\s*\(/);

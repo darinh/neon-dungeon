@@ -29,8 +29,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { extractBranch, loadAlignmentSources } = require('./_alignment-helpers.js');
+const { readSourceFile } = require('./_source-files.js');
 
-const { CONTENT, ENTITIES, CONTENT_CODE } = loadAlignmentSources(__dirname);
+const { CONTENT, CONTENT_CODE } = loadAlignmentSources(__dirname);
+const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 
 // ─── getStatusEffects() hot-hand fx entry ─────────────────────────────
 
@@ -126,21 +128,21 @@ test('hot-hand fx entry id appears EXACTLY once in content.js', () => {
     `content.js must contain exactly 1 id: 'hot-hand' fx entry; got ${all.length}`);
 });
 
-test('hot-hand HUD literals match HOT_HAND_PER_STACK and HOT_HAND_MAX_STACKS in entities.js', () => {
+test('hot-hand HUD literals match HOT_HAND_PER_STACK and HOT_HAND_MAX_STACKS in player perk tuning', () => {
   // Cross-file desync defence: HOT_HAND tuning constants live in
-  // entities.js (browser-only, no module exports). The HUD label in
+  // player-perk-tuning.js (browser-only, no module exports). The HUD label in
   // content.js uses hard-coded numeric literals (1 + min(streak, 6) *
   // 0.05). If the entities.js constants change (e.g. retune to +10%
   // per stack, max 4 stacks), the HUD would silently report stale
-  // multipliers without any failing test — players would see "×1.30"
-  // while taking "×1.20" damage. This test parses the entities.js
+  // multipliers without any failing test — players would see "x1.30"
+  // while taking "x1.20" damage. This test parses the tuning module
   // constants and asserts the content.js HUD branch uses the same
   // numeric values, so a future re-tune fails loudly here and forces
   // the HUD to be updated in sync.
-  const perStackMatch = ENTITIES.match(/const\s+HOT_HAND_PER_STACK\s*=\s*([\d.]+)/);
-  const maxStacksMatch = ENTITIES.match(/const\s+HOT_HAND_MAX_STACKS\s*=\s*(\d+)/);
-  assert.ok(perStackMatch, 'HOT_HAND_PER_STACK constant must be locatable in entities.js');
-  assert.ok(maxStacksMatch, 'HOT_HAND_MAX_STACKS constant must be locatable in entities.js');
+  const perStackMatch = PLAYER_PERK_TUNING.match(/const\s+HOT_HAND_PER_STACK\s*=\s*([\d.]+)/);
+  const maxStacksMatch = PLAYER_PERK_TUNING.match(/const\s+HOT_HAND_MAX_STACKS\s*=\s*(\d+)/);
+  assert.ok(perStackMatch, 'HOT_HAND_PER_STACK constant must be locatable in player-perk-tuning.js');
+  assert.ok(maxStacksMatch, 'HOT_HAND_MAX_STACKS constant must be locatable in player-perk-tuning.js');
   const perStack = perStackMatch[1];   // e.g. '0.05'
   const maxStacks = maxStacksMatch[1]; // e.g. '6'
 
@@ -160,12 +162,12 @@ test('hot-hand HUD literals match HOT_HAND_PER_STACK and HOT_HAND_MAX_STACKS in 
   // Per-stack rate literal (e.g. "0.05") must appear in the HUD branch.
   const perStackInHud = new RegExp(`\\*\\s*${perStack.replace(/\./g, '\\.')}`);
   assert.match(ifBranch, perStackInHud,
-    `HUD label must use per-stack rate ${perStack} (matches HOT_HAND_PER_STACK in entities.js)`);
+    `HUD label must use per-stack rate ${perStack} (matches HOT_HAND_PER_STACK in player-perk-tuning.js)`);
 
   // Max-stacks cap literal (e.g. "6") must appear in the HUD branch.
   const maxStacksInHud = new RegExp(`Math\\.min\\([^,]+,\\s*${maxStacks}\\s*\\)`);
   assert.match(ifBranch, maxStacksInHud,
-    `HUD label must clamp streak to ${maxStacks} (matches HOT_HAND_MAX_STACKS in entities.js)`);
+    `HUD label must clamp streak to ${maxStacks} (matches HOT_HAND_MAX_STACKS in player-perk-tuning.js)`);
 });
 
 // ─── runtime simulation: multiplier formula + clamp ────────────────────

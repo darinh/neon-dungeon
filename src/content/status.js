@@ -318,8 +318,8 @@ function getStatusEffects(player) {
   //
   // Cross-file desync defence (per stored memory 'HUD status fx'): the
   // 1.0s charge time is hard-coded in BOTH the HUD label (literal `1`
-  // below) AND the entities.js DEADEYE_CHARGE_TIME constant. The
-  // companion test parses entities.js and asserts the content.js
+  // below) AND the player-perk-tuning.js DEADEYE_CHARGE_TIME constant. The
+  // companion test parses player-perk-tuning.js and asserts the content.js
   // literal matches, so a future re-tune (e.g. 0.75s charge) trips the
   // test and forces both sites to be updated in lockstep.
   //
