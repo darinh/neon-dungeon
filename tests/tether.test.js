@@ -21,6 +21,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
+const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'source-metadata.js'), 'utf8');
 const ENTITY_RENDER_PASSES = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'render-passes.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
@@ -36,10 +37,10 @@ test('TETHER appears in ENEMY_WEIGHTS with floor 5+ gate', () => {
     `TETHER minFloor should be >= 5, got ${m[1]}`);
 });
 
-test('TETHER has a stat row in spawnEnemy switch with atk=0', () => {
+test('TETHER has a stat row in ENEMY_BASE_STATS with atk=0', () => {
   // atk=0 is core to design: the slow IS the threat (it makes you
   // eat OTHER mobs' shots). A TETHER alone in a room is non-event.
-  const m = ENTITIES.match(/case\s+'TETHER':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/TETHER:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'TETHER stat row missing');
   const hp = parseInt(m[1], 10);
   const atk = parseInt(m[2], 10);

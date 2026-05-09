@@ -21,6 +21,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_SPAWN_TABLE = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8'
 );
+const ENEMY_STATS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
 const SOURCE_METADATA = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
 );
@@ -36,9 +39,9 @@ test('SPECTRE appears in ENEMY_WEIGHTS with floor 7+ gate', () => {
   assert.ok(parseInt(m[1], 10) >= 7, `SPECTRE minFloor should be >= 7, got ${m[1]}`);
 });
 
-test('SPECTRE has a stat row in spawnEnemy switch', () => {
+test('SPECTRE has a stat row in ENEMY_BASE_STATS', () => {
   // Missing case → spawnEnemy returns an Enemy with hp=0, instantly dead.
-  const m = ENTITIES.match(/case\s+'SPECTRE':[^\n]*hp\s*=\s*(\d+)[^\n]*atk\s*=\s*(\d+)[^\n]*spd\s*=\s*([\d.]+)[^\n]*xpVal\s*=\s*(\d+)/);
+  const m = ENEMY_STATS.match(/SPECTRE:\s*\{[^\n]*hp:\s*(\d+),[^\n]*atk:\s*(\d+),[^\n]*spd:\s*([\d.]+),[^\n]*xpVal:\s*(\d+)/);
   assert.ok(m, 'SPECTRE stat row missing');
   // HP must be tunable for "killable in 1-2 manifest windows" — too high
   // and the mob feels like a wall, too low and it dies in one shot.
