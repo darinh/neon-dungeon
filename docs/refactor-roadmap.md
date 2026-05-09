@@ -112,6 +112,7 @@ Good candidates:
 - Status-effect math. Done for enemy status ticking in `src/entities/status-effects.js`.
 - Hit-effect application rules. Done for weapon-affix on-hit/on-kill rules in `src/entities/combat-effects.js`.
 - Deferred spawn queue ownership. Done for `pendingEnemySpawns` and ghost replay queueing in `src/entities/deferred-spawns.js`.
+- Spawn-time modifier helpers. Done for floor-modifier HP scaling and elite rolls in `src/entities/spawn-modifiers.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
