@@ -28,6 +28,11 @@ first, then read `README.md`, `docs/module-map.md`, and
 - Before launching code-review subagents, stage the diff in the worktree and
   instruct reviewers to inspect `git diff --staged` only. Reviewers must not run
   mutating git commands such as `git stash`, `git checkout`, or `git restore`.
+- Extension and trigger scaffolding is not exempt from the worktree rule. After
+  any `extensions_manage scaffold` call, verify the actual file path is under the
+  implementation worktree, remove any accidental primary-checkout copy, and if
+  `.github/extensions/**` is ignored, force-add the intended project extension
+  deliberately.
 
 ## Retrospective requirement
 
@@ -47,6 +52,9 @@ first, then read `README.md`, `docs/module-map.md`, and
 - For issue-backed work, run `npm run check:agent-continuity -- --issue <number>`
   before `task_complete`; a nonzero exit means actionable work remains or an
   agent-authored PR still needs monitoring.
+- The standard `npm run check:agent-continuity` command must also prove the
+  operator guard extension is present and tracked in the implementation worktree
+  and that no ignored extension files were stranded in the primary checkout.
 - Do not remove the implementation worktree until the retrospective is complete
   and attached. Worktree cleanup is the final step.
 - Retrospectives are for behavior change, not ceremony: record concrete failure
