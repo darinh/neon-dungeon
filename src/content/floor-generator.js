@@ -19,6 +19,12 @@ const _CG = new Proxy({}, {
 const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/content/floor-generator.js'));
 const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content/floor-generator.js'));
 const DUNGEON_CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.CARDINAL_DIRECTIONS);
+const DUNGEON_DIAGONAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (Object.freeze([
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+]));
 
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 /** @returns {any} */
@@ -598,6 +604,51 @@ function generateFloor(floorNum, opts) {
     return degree;
   }
 
+  /** @param {any} tile */
+  function isOpenDoorBypassTile(tile) {
+    return tile !== undefined && tile !== null && tile !== T.WALL && tile !== T.VOID && !isDoorLikeEntranceTile(tile);
+  }
+
+  function sealDoorBypassCorners() {
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x])) continue;
+        for (const [dx, dy] of DUNGEON_DIAGONAL_DIRECTIONS) {
+          if (
+            isOpenDoorBypassTile(map[y]?.[x + dx]) &&
+            isOpenDoorBypassTile(map[y + dy]?.[x]) &&
+            map[y + dy]?.[x + dx] === T.FLOOR
+          ) {
+            map[y + dy][x + dx] = T.WALL;
+          }
+        }
+      }
+    }
+  }
+
+  function repairDoorBypassSealedEntranceStubs() {
+    /** @param {number} x @param {number} y */
+    const canCarveStubExtensionTile = (x, y) => {
+      if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1 || tileOnRoomCorner(x, y)) return false;
+      const tile = map[y]?.[x];
+      return tile === T.WALL || tile === T.VOID;
+    };
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+        const roomSides = outsideEntranceRoomSides(x, y);
+        const side = roomSides[0];
+        if (roomSides.length !== 1 || !side) continue;
+        const px = x - side.dx;
+        const py = y - side.dy;
+        if (!isOutsidePassageTile(px, py) || outsidePassageConnectionCount(px, py, x, y) > 0) continue;
+        const nx = px - side.dx;
+        const ny = py - side.dy;
+        if (canCarveOutsidePassageTile(nx, ny) || canCarveStubExtensionTile(nx, ny)) map[ny][nx] = T.FLOOR;
+      }
+    }
+  }
+
   /** @param {number} x @param {number} y */
   function adjacentDoorLikeEntranceCount(x, y) {
     let count = 0;
@@ -946,6 +997,41 @@ function generateFloor(floorNum, opts) {
         for (let x = 0; x < MAP_W; x++) {
           if (map[y][x] === lockTile) map[y][x] = T.DOOR;
         }
+      }
+    }
+  }
+
+  function repairReachabilityAfterDoorCornerSealing() {
+    /** @param {any} room */
+    const outsideEntranceGatesForRoom = (room) => {
+      /** @type {{x:number,y:number,ox:number,oy:number}[]} */
+      const gates = [];
+      for (let y = 1; y < MAP_H - 1; y++) {
+        for (let x = 1; x < MAP_W - 1; x++) {
+          if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+          for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
+            const bx = x + dx;
+            const by = y + dy;
+            const outside = outsideFaceForBoundaryTile(room, bx, by);
+            if (outside?.x === x && outside?.y === y) gates.push({ x, y, ox: x - dx, oy: y - dy });
+          }
+        }
+      }
+      return gates;
+    };
+    for (let repair = 0; repair < rooms.length; repair++) {
+      const solvedReach = solveProgressionReachability(rooms);
+      const blocked = solvedReach.unreachableRooms[0];
+      if (!blocked) break;
+      const gates = outsideEntranceGatesForRoom(blocked);
+      const gate = gates.find((/** @type {any} */ g) =>
+        g.ox >= 0 && g.oy >= 0 && g.ox < MAP_W && g.oy < MAP_H && !solvedReach.reachable[g.oy]?.[g.ox]
+      ) || gates[0];
+      if (gate) {
+        const outsideInBounds = gate.ox >= 0 && gate.oy >= 0 && gate.ox < MAP_W && gate.oy < MAP_H;
+        carveProtectedRescueCorridorTo(outsideInBounds ? gate.ox : gate.x, outsideInBounds ? gate.oy : gate.y);
+      } else {
+        carveProtectedRescueCorridorTo(blocked.cx, blocked.cy);
       }
     }
   }
@@ -1587,6 +1673,13 @@ function generateFloor(floorNum, opts) {
   clearDeadOutsideEntranceTiles();
   ensureSpecialRoomEntrances();
   removeKeysWithoutLiveLocks();
+  for (let repair = 0; repair < 3; repair++) {
+    sealDoorBypassCorners();
+    repairDoorBypassSealedEntranceStubs();
+    repairReachabilityAfterDoorCornerSealing();
+  }
+  sealDoorBypassCorners();
+  repairDoorBypassSealedEntranceStubs();
   for (const move of relocatedEntrances) {
     if (move.tile !== T.CHALLENGE_GATE) continue;
     const entry = challengeEntrances.find((/** @type {any} */ e) => e.x === move.fromX && e.y === move.fromY);

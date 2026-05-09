@@ -241,6 +241,20 @@ function isWallLikeTile(tile) {
   return tile === T.WALL || tile === T.VOID || tile == null;
 }
 
+function isWalkAroundDoorTile(tile) {
+  return !isWallLikeTile(tile) && !isDoorLikeTile(tile);
+}
+
+function isSealedDoorBypassCorner(dungeon, doorX, doorY, cornerX, cornerY) {
+  const dx = cornerX - doorX;
+  const dy = cornerY - doorY;
+  return Math.abs(dx) === 1 &&
+    Math.abs(dy) === 1 &&
+    isWallLikeTile(dungeon.map[cornerY]?.[cornerX]) &&
+    isWalkAroundDoorTile(dungeon.map[doorY]?.[cornerX]) &&
+    isWalkAroundDoorTile(dungeon.map[cornerY]?.[doorX]);
+}
+
 function isCorridorTile(dungeon, x, y) {
   const tile = dungeon.map[y]?.[x];
   return !tileInsideRoom(dungeon, x, y) && tile !== T.WALL && tile !== T.VOID;
@@ -249,6 +263,11 @@ function isCorridorTile(dungeon, x, y) {
 function isOutsidePassageTile(dungeon, x, y) {
   if (x <= 0 || y <= 0 || x >= MAP_W - 1 || y >= MAP_H - 1) return false;
   return !tileInsideRoom(dungeon, x, y) && !isWallLikeTile(dungeon.map[y]?.[x]);
+}
+
+function isLiveEntranceConnectionTile(dungeon, x, y) {
+  const tile = dungeon.map[y]?.[x];
+  return isOutsidePassageTile(dungeon, x, y) || (tileInsideRoom(dungeon, x, y) && isWalkAroundDoorTile(tile));
 }
 
 function roomBoundaryNeighborsForEntrance(dungeon, x, y) {
@@ -260,7 +279,7 @@ function roomBoundaryNeighborsForEntrance(dungeon, x, y) {
 function outsidePassageConnectionCount(dungeon, x, y, exceptX, exceptY) {
   return [[1, 0], [-1, 0], [0, 1], [0, -1]]
     .filter(([dx, dy]) => x + dx !== exceptX || y + dy !== exceptY)
-    .filter(([dx, dy]) => isOutsidePassageTile(dungeon, x + dx, y + dy))
+    .filter(([dx, dy]) => isLiveEntranceConnectionTile(dungeon, x + dx, y + dy))
     .length;
 }
 
@@ -296,7 +315,12 @@ function assertOutwardSingleTileEntrances(dungeon, label) {
         for (const sign of [-1, 1]) {
           const sx = side.bx + px * sign;
           const sy = side.by + py * sign;
-          if (tileInsideRoom(dungeon, sx, sy) && !tileOnRoomCorner(dungeon, sx, sy) && isWallLikeTile(dungeon.map[sy]?.[sx])) {
+          if (
+            tileInsideRoom(dungeon, sx, sy) &&
+            !tileOnRoomCorner(dungeon, sx, sy) &&
+            isWallLikeTile(dungeon.map[sy]?.[sx]) &&
+            !isSealedDoorBypassCorner(dungeon, x, y, sx, sy)
+          ) {
             failures.push(`${label}: side-wall padding still bulges into the room at ${sx},${sy}`);
           }
         }
@@ -355,6 +379,25 @@ function assertNoWideCorridors(dungeon, label) {
         ].filter(([ax, ay]) => tileInsideRoom(dungeon, ax, ay)).length;
         if (adjacentRoomEdges >= 2) continue;
         failures.push(`${label}: 2x2 corridor block at ${x},${y}`);
+      }
+    }
+  }
+  assert.deepEqual(failures, []);
+}
+
+function assertNoDoorBypassCorners(dungeon, label) {
+  const failures = [];
+  for (let y = 1; y < MAP_H - 1; y++) {
+    for (let x = 1; x < MAP_W - 1; x++) {
+      if (!isDoorLikeTile(dungeon.map[y][x])) continue;
+      for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        if (
+          isWalkAroundDoorTile(dungeon.map[y][x + dx]) &&
+          isWalkAroundDoorTile(dungeon.map[y + dy][x]) &&
+          isWalkAroundDoorTile(dungeon.map[y + dy][x + dx])
+        ) {
+          failures.push(`${label}: walk-around corner ${x + dx},${y + dy} bypasses door-like tile at ${x},${y}`);
+        }
       }
     }
   }
@@ -462,6 +505,7 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
       assertSpecialEntranceInvariants(dungeon, `${seed} floor ${floor}`);
       assertNormalLockedDoorsRelocatedOutward(dungeon, `${seed} floor ${floor}`);
       assertOutwardSingleTileEntrances(dungeon, `${seed} floor ${floor}`);
+      assertNoDoorBypassCorners(dungeon, `${seed} floor ${floor}`);
       assertNoWideCorridors(dungeon, `${seed} floor ${floor}`);
     }
   }
@@ -471,9 +515,9 @@ test('sampled seeded generation digests stay stable across topology extraction',
   const fixture = createGenerationFixture();
   const expected = new Map([
     ['1111-1111-1111 floor 2', '9fe099642f78901b2ee81a6677364422f4b5f35d8cd2aaf5b766fdb2051f840b'],
-    ['1111-1111-1111 floor 6', 'c90ad562686e8ac0643763438f63c2037f1a1d2c99afbd04a87f268b7f371a30'],
-    ['FACE-FEED-BEEF floor 3', 'e8bc114d6ad0cbc796b750d60498038ecff4a92da32bb1173d26028d16e236ac'],
-    ['CAFE-BABE-0001 floor 8', '1c1e5e4d17ede4489f87f8471cd5dc480e1987675b448212b4b17d017c7d0349'],
+    ['1111-1111-1111 floor 6', 'ade758383ac23e318b6332f490fc9c85c64455186795d8611568d9a78ac8fd1d'],
+    ['FACE-FEED-BEEF floor 3', 'f6b8ab53fac76bddc5425437e39ced77c2b7183650df74b595955799f0dbc328'],
+    ['CAFE-BABE-0001 floor 8', '17b6d82826e358a388789784d4394ad13450cd7c0e1fbadf9b8b5b5acfb33801'],
     ['DEAD-BEEF-CAFE floor 15', '8faec8b11dbd86477a74876e4da61c8522a9f7936717b4c7c229be502d8a2f33'],
   ]);
   for (const [label, digest] of expected) {
