@@ -27,6 +27,21 @@ first, then read `README.md`, `docs/module-map.md`, and
   instruct reviewers to inspect `git diff --staged` only. Reviewers must not run
   mutating git commands such as `git stash`, `git checkout`, or `git restore`.
 
+## Retrospective requirement
+
+- After every completed task, PR, issue, or coherent refactor iteration, run the
+  retrospective protocol in `docs/agent-retrospective.md` from the worktree, not
+  from the main checkout.
+- The retrospective MUST include critique from two other LLMs before the work is
+  considered complete.
+- The final retrospective step is deciding whether the retrospective protocol
+  itself should change. If yes, update `docs/agent-retrospective.md` immediately.
+- Retrospectives are for behavior change, not ceremony: record concrete failure
+  modes, earlier catches, adopted process changes, and rejected weak suggestions.
+- Retrospective reviewers get pasted evidence and must not enter the repository,
+  run git, or mutate files. Protocol-only edits made by a retrospective do not
+  trigger a second recursive retrospective.
+
 ## Merge policy
 
 These are hard rules, not preferences:
