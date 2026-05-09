@@ -30,6 +30,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const STATUS_EFFECTS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'status-effects.js'), 'utf8'
+);
 const ELITE_AFFIXES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'elite-affixes.js'), 'utf8'
 );
@@ -48,6 +51,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const STATUS_EFFECTS_CODE = stripComments(STATUS_EFFECTS);
 const ELITE_AFFIXES_CODE = stripComments(ELITE_AFFIXES);
 const CONTENT_CODE = stripComments(CONTENT);
 
@@ -187,7 +191,7 @@ test('TOXIC poison DoT branch lives in tickEnemyStatusEffects', () => {
   // the DoT — the affix becomes a 1-stack-on-apply no-op DoT. Anchor by
   // extracting tickEnemyStatusEffects directly and confirming the elite
   // affix subsystem does not contain the poison timer gate.
-  const tickBody = extractBranch(ENTITIES_CODE, /function\s+tickEnemyStatusEffects\s*\(/);
+  const tickBody = extractBranch(STATUS_EFFECTS_CODE, /function\s+tickEnemyStatusEffects\s*\(/);
   assert.ok(tickBody, 'tickEnemyStatusEffects body must be extractable');
   assert.match(tickBody, /enemy\.poisonTimer > 0/, 'poison DoT tick must live inside tickEnemyStatusEffects');
   assert.doesNotMatch(ELITE_AFFIXES_CODE, /enemy\.poisonTimer > 0/,
@@ -200,7 +204,7 @@ test('TOXIC DoT damage scales as poisonStacks * 0.5 * dt (FPS-independent, per-s
   // 120 fps tick identically). Per-stack scaling is what differentiates
   // TOXIC from FLAME's flat 3 dps. Anchor by extracting the DoT branch
   // body via brace-walk.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist with a brace-balanced body');
   // Match `let dmg = (enemy.poisonStacks || 0) * 0.5 * dt` (or any
   // equivalent shape that includes stacks, the 0.5 per-stack rate, and
@@ -215,7 +219,7 @@ test('TOXIC DoT respects PHASING / _wrPhased immunity (no damage during phase)',
   // && !enemy._wrPhased` (both PHASING elite affix AND WRAITH-class
   // phase). Without this, poison would bypass the whole defensive
   // mechanic of phase windows.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   assert.match(branch, /!enemy\.phaseImmune\s*&&\s*!enemy\._wrPhased/,
     'TOXIC DoT must gate damage on `!enemy.phaseImmune && !enemy._wrPhased` (mirror burn)');
@@ -227,7 +231,7 @@ test('TOXIC DoT routes through SHIELDED shield-first absorb (mirror burn)', () =
   // directional shield (also uses shieldHp) must NOT be drained from
   // omnidirectional DoT or its 5s broken-recovery contract breaks.
   // Anchor inside the DoT branch.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   assert.match(branch, /enemy\.eliteAffix\s*===\s*'SHIELDED'/,
     'TOXIC DoT must check `enemy.eliteAffix === \'SHIELDED\'` for shield-first absorb');
@@ -240,7 +244,7 @@ test('TOXIC DoT resets REGENERATIVE _regenTimer on dmg > 0 (anti-regression)', (
   // poison-and-retreat would let the regen clock count up while the
   // enemy actively loses HP. Same defense-in-depth gate as REGENERATIVE
   // wired into the burn path. Caught structurally before a live regression.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   assert.match(branch, /if\s*\(\s*dmg\s*>\s*0\s*&&\s*_EG\.modifier\s*===\s*'REGENERATIVE'\s*\)\s*enemy\._regenTimer\s*=\s*0/,
     'TOXIC DoT must reset _regenTimer on `dmg > 0 && _EG.modifier === \'REGENERATIVE\'` (mirror burn)');
@@ -252,7 +256,7 @@ test('TOXIC DoT-finished kill sets _lastHitCtx for on-kill affix attribution', (
   // (GREEDY/LUCKY/SALVAGE/DETONATE) credit the kill to the weapon
   // that landed the last direct hit. If no prior ctx, fall back to a
   // proc-marked Toxin ctx (no on-kill credit but the kill is recorded).
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   assert.match(branch, /if\s*\(\s*!enemy\._lastHitCtx\s*\)\s*enemy\._lastHitCtx\s*=\s*\{\s*name\s*:\s*'Toxin'/,
     'TOXIC DoT-kill must set `enemy._lastHitCtx = { name: \'Toxin\', isProc: true }` when no prior ctx');
@@ -265,7 +269,7 @@ test('TOXIC DoT timer expiry resets stacks to 0 (no carryover)', () => {
   // residual stacks into the NEXT poison apply — a single hit would
   // re-trigger the cap immediately. Mirror burn's `enemy.burnTimer = 0;
   // enemy.burnDps = 0` cleanup. Pin both fields.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   assert.match(branch, /if\s*\(\s*enemy\.poisonTimer\s*<=\s*0\s*\)\s*\{\s*enemy\.poisonTimer\s*=\s*0\s*;\s*enemy\.poisonStacks\s*=\s*0\s*;?\s*\}/,
     'TOXIC DoT must reset both poisonTimer AND poisonStacks to 0 on timer expiry');
@@ -279,7 +283,7 @@ test('TOXIC DoT damage is gated to apply only when stacks > 0 (no zero-tick leak
   // This test pins the multiplicative shape so a future refactor that
   // changes to ADDITIVE base damage (e.g. `0.5 + stacks * 0.3 * dt`)
   // would break this contract and FAIL THIS TEST.
-  const branch = extractBranch(ENTITIES_CODE, /enemy\.poisonTimer > 0/);
+  const branch = extractBranch(STATUS_EFFECTS_CODE, /enemy\.poisonTimer > 0/);
   assert.ok(branch, 'poison DoT branch must exist');
   // Stronger: assert there is no `+` between the stacks term and the dt
   // term (would imply additive base damage that fires even at 0 stacks).
@@ -298,9 +302,9 @@ test('TOXIC has exactly one apply branch and exactly one DoT branch (anti-duplic
   const applyMatches = ENTITIES_CODE.match(/eff\s*===\s*'poison'/g) || [];
   assert.equal(applyMatches.length, 1,
     `entities.js must contain exactly 1 \`eff === 'poison'\` apply branch; got ${applyMatches.length}`);
-  const tickMatches = ENTITIES_CODE.match(/enemy\.poisonTimer\s*>\s*0/g) || [];
+  const tickMatches = STATUS_EFFECTS_CODE.match(/enemy\.poisonTimer\s*>\s*0/g) || [];
   assert.equal(tickMatches.length, 1,
-    `entities.js must contain exactly 1 \`enemy.poisonTimer > 0\` DoT branch; got ${tickMatches.length}`);
+    `status-effects.js must contain exactly 1 \`enemy.poisonTimer > 0\` DoT branch; got ${tickMatches.length}`);
 });
 
 test('TOXIC effect token is consistent between content.js registry and entities.js gate', () => {

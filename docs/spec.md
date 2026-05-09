@@ -1349,7 +1349,7 @@ Weapons found on floor 2+ may roll random affixes that modify their stats and gr
 
 **Save format:** weapon saved as `{ _base: 'PULSE_PISTOL', _affixes: ['RAPID', 'FLAME'] }` instead of plain key string. `buildWeapon()` deterministically reconstructs from base + affixes on load (no re-rolling).
 
-**Implementation:** `buildWeapon(baseKey, affixIds)` for deterministic construction; `rollWeapon(baseKey, floor)` for random generation. `applyHitEffects(enemy, actualDmg, hitCtx)` centralizes on-hit logic. `applyOnKill(enemy)` handles detonation. `tickEnemyStatusEffects(enemy, dt)` processes burn/slow/shock-ICD per frame. Enemy class stores `burnTimer`, `burnDps`, `slowTimer`, `slowFactor`, `_lastHitCtx`, `_shockICD`.
+**Implementation:** `buildWeapon(baseKey, affixIds)` for deterministic construction; `rollWeapon(baseKey, floor)` for random generation. `applyHitEffects(enemy, actualDmg, hitCtx)` centralizes on-hit logic. `applyOnKill(enemy)` handles detonation. `src/entities/status-effects.js` owns `tickEnemyStatusEffects(enemy, dt)`, which processes burn/poison/slow/mark decay and shock/recoil/stagger ICDs per frame. Enemy class stores `burnTimer`, `burnDps`, `poisonTimer`, `poisonStacks`, `slowTimer`, `slowFactor`, `_markedTimer`, `_lastHitCtx`, `_shockICD`, `_recoilICD`, and `_staggerICD`.
 
 ### Level-Up Effects (automatic on XP threshold)
 
@@ -4930,6 +4930,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.61 | Entity module split: enemy status-effect ticking now lives in `src/entities/status-effects.js`, loaded after `src/entities.js` and before `src/game.js`. The public global `tickEnemyStatusEffects` remains unchanged for the game update loop while removing burn/poison/slow/mark decay and shock/recoil/stagger ICD ticking from `src/entities.js`. |
 | v6.1.60 | Entity module split: elite-affix runtime hooks now live in `src/entities/elite-affixes.js`, loaded after `src/entities.js` and before `src/game.js`. The public globals `tickEliteAffix`, `notifyFrenzyElites`, and `notifyPredatorElites` remain unchanged for the game update loop, `Enemy.die()`, and `Player.takeDamage()` while removing elite-affix ticking/notification logic from `src/entities.js`. |
 | v6.1.59 | Entity module split: GHOST_PROJECTOR ghost replay eligibility now lives with enemy type classification in `src/entities/enemy-classification.js`. The public globals `GHOSTABLE_TYPES` and `isGhostableEnemyType` preserve the tight simple-AI allowlist used by `spawnGhost()` and `notifyGhostProjectors()` while removing the allowlist from `src/entities.js`. |
 | v6.1.58 | Entity module split: spawn-time enemy type classification now lives in `src/entities/enemy-classification.js`, loaded after enemy base stats and before `src/entities.js`. The public globals `BOSS_TYPES`, `ELITE_EXCLUDED_TYPES`, `isBossEnemyType`, and `canRollEliteEnemyType` preserve boss detection and elite-roll eligibility while removing long inline type lists from `spawnEnemy()`. |
