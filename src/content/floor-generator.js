@@ -769,6 +769,15 @@ function generateFloor(floorNum, opts) {
       for (let x = 1; x < MAP_W - 1; x++) {
         if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
         const roomSides = outsideEntranceRoomSides(x, y);
+        let sealedRoomSide = false;
+        for (const side of roomSides) {
+          const roomTile = map[side.by]?.[side.bx];
+          if (roomTile === T.WALL || roomTile === T.VOID || isDoorLikeEntranceTile(roomTile)) {
+            sealedRoomSide = true;
+            break;
+          }
+        }
+        if (sealedRoomSide) { map[y][x] = T.FLOOR; continue; }
         const side = roomSides[0];
         if (roomSides.length === 1 && side && !hasConnectedPassageOppositeRoomSide(x, y, side)) map[y][x] = T.FLOOR;
       }
@@ -1026,6 +1035,9 @@ function generateFloor(floorNum, opts) {
   function clearOrphanEntranceTiles() {
     for (let y = 1; y < MAP_H - 1; y++) {
       for (let x = 1; x < MAP_W - 1; x++) {
+        // Before normalizeEntranceTilesOutsideRooms(), normal/locked doors still
+        // occupy the room boundary. Only clear already-relocated outside tiles.
+        if (tileInsideAnyRoom(x, y)) continue;
         if (isDoorLikeEntranceTile(map[y][x]) && (tileOnRoomCorner(x, y) || !hasAlignedOutsideEntrancePassage(x, y))) map[y][x] = T.FLOOR;
       }
     }
@@ -1565,6 +1577,15 @@ function generateFloor(floorNum, opts) {
   repairMisalignedOutsideEntrancePassages();
   clearDeadOutsideEntranceTiles();
   repairPostRelocationLockReachability();
+  removeKeysWithoutLiveLocks();
+  thinWideCorridors();
+  repairMisalignedOutsideEntrancePassages();
+  clearDeadOutsideEntranceTiles();
+  ensureSpecialRoomEntrances();
+  removeKeysWithoutLiveLocks();
+  thinWideCorridors();
+  clearDeadOutsideEntranceTiles();
+  ensureSpecialRoomEntrances();
   removeKeysWithoutLiveLocks();
   for (const move of relocatedEntrances) {
     if (move.tile !== T.CHALLENGE_GATE) continue;
