@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -104,11 +107,11 @@ test('ECHOER draw branch renders a telegraph (lane + ghost)', () => {
 test('ECHOER constants are defined with sane values', () => {
   // Lookback should be < 2s (otherwise hits feel disconnected) and > 0.5s
   // (otherwise the mechanic is trivial). Telegraph >= 0.5s for fairness.
-  const lb = ENTITIES.match(/ECHOER_LOOKBACK\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/ECHOER_TELEGRAPH\s*=\s*([\d.]+)/);
-  const cd = ENTITIES.match(/ECHOER_COOLDOWN\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/ECHOER_RANGE\s*=\s*([\d.]+)/);
-  const sp = ENTITIES.match(/ECHOER_PROJ_SPD\s*=\s*([\d.]+)/);
+  const lb = ENEMY_ABILITY_TUNING.match(/ECHOER_LOOKBACK\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/ECHOER_TELEGRAPH\s*=\s*([\d.]+)/);
+  const cd = ENEMY_ABILITY_TUNING.match(/ECHOER_COOLDOWN\s*=\s*([\d.]+)/);
+  const rg = ENEMY_ABILITY_TUNING.match(/ECHOER_RANGE\s*=\s*([\d.]+)/);
+  const sp = ENEMY_ABILITY_TUNING.match(/ECHOER_PROJ_SPD\s*=\s*([\d.]+)/);
   assert.ok(lb && tg && cd && rg && sp, 'all five ECHOER_* constants must be defined');
   const lbv = parseFloat(lb[1]);
   const tgv = parseFloat(tg[1]);

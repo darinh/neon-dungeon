@@ -17,6 +17,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ABILITY_TUNING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -104,14 +107,14 @@ test('PROPHET constants are defined with sane values', () => {
   // positive so a stationary player has a true safe state. VEL_CAP must
   // exceed reasonable player walking speed (~5-6) so normal motion
   // isn't clamped, while still neutralising dashes.
-  const la = ENTITIES.match(/PROPHET_LOOKAHEAD\s*=\s*([\d.]+)/);
-  const vs = ENTITIES.match(/PROPHET_VEL_SAMPLE\s*=\s*([\d.]+)/);
-  const tg = ENTITIES.match(/PROPHET_TELEGRAPH\s*=\s*([\d.]+)/);
-  const cd = ENTITIES.match(/PROPHET_COOLDOWN\s*=\s*([\d.]+)/);
-  const rg = ENTITIES.match(/PROPHET_RANGE\s*=\s*([\d.]+)/);
-  const sp = ENTITIES.match(/PROPHET_PROJ_SPD\s*=\s*([\d.]+)/);
-  const mv = ENTITIES.match(/PROPHET_MIN_VEL\s*=\s*([\d.]+)/);
-  const vc = ENTITIES.match(/PROPHET_VEL_CAP\s*=\s*([\d.]+)/);
+  const la = ENEMY_ABILITY_TUNING.match(/PROPHET_LOOKAHEAD\s*=\s*([\d.]+)/);
+  const vs = ENEMY_ABILITY_TUNING.match(/PROPHET_VEL_SAMPLE\s*=\s*([\d.]+)/);
+  const tg = ENEMY_ABILITY_TUNING.match(/PROPHET_TELEGRAPH\s*=\s*([\d.]+)/);
+  const cd = ENEMY_ABILITY_TUNING.match(/PROPHET_COOLDOWN\s*=\s*([\d.]+)/);
+  const rg = ENEMY_ABILITY_TUNING.match(/PROPHET_RANGE\s*=\s*([\d.]+)/);
+  const sp = ENEMY_ABILITY_TUNING.match(/PROPHET_PROJ_SPD\s*=\s*([\d.]+)/);
+  const mv = ENEMY_ABILITY_TUNING.match(/PROPHET_MIN_VEL\s*=\s*([\d.]+)/);
+  const vc = ENEMY_ABILITY_TUNING.match(/PROPHET_VEL_CAP\s*=\s*([\d.]+)/);
   assert.ok(la && vs && tg && cd && rg && sp && mv && vc,
     'all eight PROPHET_* constants must be defined');
   const lav = parseFloat(la[1]);

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.22
+# NEON DUNGEON — Game Specification v6.1.69
 
 ## Vision
 
@@ -4933,6 +4933,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.69 | Entity module split: static per-enemy ability tuning for ECHOER, PROPHET, CRYOPHAGE, WARDLING, VENGEANCE, CONDUIT, RESONATOR, and WATCHER now lives in `src/entities/enemy-ability-tuning.js`, loaded before `src/entities.js`. The entity core still owns AI behavior, draw branches, and per-enemy state transitions while the tuning constants are isolated from the core entity class file. |
 | v6.1.68 | Entity module split: shared enemy awareness tuning now lives in `src/entities/enemy-awareness.js`, loaded before `src/entities.js`. The `Enemy` runtime still owns target-memory and room-leash state transitions, while `ENEMY_TARGET_MEMORY_SECONDS`, `ENEMY_SIGHT_RANGE`, `ENEMY_ROOM_LEASH_TILES`, and `ENEMY_LEASH_DEFEND_RANGE` are isolated from the core entity class file. |
 | v6.1.67 | Entity module split: per-type spawn state initialization now lives in `src/entities/spawn-initializers.js`, loaded after `src/entities.js` and before gameplay can call `spawnEnemy()`. The public spawn surface remains `spawnEnemy()`, while mob-specific timers, phases, latches, and cosmetic seeds move out of the core entity class file. |
 | v6.1.66 | Door bypass regression fix: dungeon generation now seals diagonal walk-around corners beside door-like entrance blockers when both adjacent cardinal tiles are open, repairs any resulting entrance stubs, and re-runs reachability repair so all required rooms remain physically reachable. Generation accessibility tests now fail for 3×3 local door masks that allow bypassing closed doors, locked doors, challenge gates, or cracked secret entrances. |
