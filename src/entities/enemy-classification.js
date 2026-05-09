@@ -45,6 +45,11 @@ const ELITE_EXCLUDED_TYPES = new Set([
   'NULLIFIER',
 ]);
 
+const GHOSTABLE_TYPES = new Set([
+  'GUARD', 'CRAWLER', 'DRONE', 'BRUTE', 'PHANTOM',
+  'CHARGER', 'LEAPER', 'SCORCHER', 'SEEKER', 'REAPER'
+]);
+
 /**
  * @param {string} type
  * @returns {boolean}
@@ -59,4 +64,12 @@ function isBossEnemyType(type) {
  */
 function canRollEliteEnemyType(type) {
   return !isBossEnemyType(type) && !ELITE_EXCLUDED_TYPES.has(type);
+}
+
+/**
+ * @param {string} type
+ * @returns {boolean}
+ */
+function isGhostableEnemyType(type) {
+  return GHOSTABLE_TYPES.has(type);
 }

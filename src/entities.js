@@ -363,8 +363,8 @@ const REAPER_DETECT_RANGE     = 14;           // tiles — chase pickup range
 // the active ghost dies/expires, the projector becomes free again.
 //
 // Anti-recursion: the kill hook skips ghosts (no haunting from haunting),
-// shards, summons, and bosses. GHOSTABLE_TYPES is a tight allowlist of
-// "simple" mobs whose AI replays cleanly without spawn-init quirks
+// shards, summons, and bosses. isGhostableEnemyType() uses a tight allowlist
+// of "simple" mobs whose AI replays cleanly without spawn-init quirks
 // (TUNNELLER underground state, MIMIC disguise, SUMMONER cascade etc).
 //
 // Stun cancels any pending haunt (the projector forgets its memory) — a
@@ -373,10 +373,6 @@ const GHOST_PROJECTOR_DELAY     = 3.0;         // seconds — memory → ghost s
 const GHOST_PROJECTOR_GHOST_LIFE= 6.0;         // seconds — ghost lifetime
 const GHOST_PROJECTOR_HP_MUL    = 0.5;         // ghost HP fraction
 const GHOST_PROJECTOR_ATK_MUL   = 0.5;         // ghost damage fraction
-const GHOSTABLE_TYPES = new Set([
-  'GUARD', 'CRAWLER', 'DRONE', 'BRUTE', 'PHANTOM',
-  'CHARGER', 'LEAPER', 'SCORCHER', 'SEEKER', 'REAPER'
-]);
 
 // MAGNETON tuning constants. Stationary "magnetic lens" mob (floor 6+).
 // Emits a circular field that bends in-flight player projectiles toward
@@ -7100,7 +7096,7 @@ class Enemy {
     // them as "not real" at a glance. Multiplies any per-type alpha (none
     // of the ghostable types currently set their own alpha, but the
     // multiplication keeps the rule sound if PHANTOM ever joins the
-    // GHOSTABLE_TYPES set later).
+    // ghostable allowlist later).
     if (this._ghIsGhost) alpha *= 0.55;
 
     // TUNNELLER: while underground or surfacing, draw a dust mound + telegraph
@@ -8966,7 +8962,7 @@ class Enemy {
  *
  * Returns true if a spawn was queued, false on validation failure.
  *
- * @param {string} type      ghostable enemy type from GHOSTABLE_TYPES
+ * @param {string} type      ghostable enemy type
  * @param {number} x         tile x
  * @param {number} y         tile y
  * @param {any}    room      room reference (for AI room-gating)
@@ -8974,7 +8970,7 @@ class Enemy {
  * @returns {boolean}
  */
 function spawnGhost(type, x, y, room, projector) {
-  if (!_EG || !GHOSTABLE_TYPES.has(type)) return false;
+  if (!_EG || !isGhostableEnemyType(type)) return false;
   const floorNum = _EG.floor || 1;
   pendingEnemySpawns.push({
     type, x, y, floor: floorNum, room,
