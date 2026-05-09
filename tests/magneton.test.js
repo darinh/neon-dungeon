@@ -16,6 +16,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
@@ -64,7 +67,7 @@ test('MAGNETON has CREDIT_VALUES entry', () => {
   // Without an entry, die() falls back to 5 credits (CREDIT_VALUES[type] || 5).
   // Explicit entry keeps reward tuning intentional and signals MAGNETON
   // is a known type to the credit system.
-  assert.match(ENTITIES, /MAGNETON\s*:\s*\d+/);
+  assert.match(SOURCE_METADATA, /MAGNETON\s*:\s*\d+/);
 });
 
 test('MAGNETON has SOURCE_LABELS entry', () => {
@@ -72,7 +75,7 @@ test('MAGNETON has SOURCE_LABELS entry', () => {
   // is used by death recap and damage logs whenever an enemy reference is
   // displayed. Missing entry → recap shows 'MAGNETON' (uppercase enum)
   // instead of 'Magneton' (display name).
-  assert.match(ENTITIES, /MAGNETON\s*:\s*'Magneton'/);
+  assert.match(SOURCE_METADATA, /MAGNETON\s*:\s*'Magneton'/);
 });
 
 test('MAGNETON has AI dispatch case', () => {

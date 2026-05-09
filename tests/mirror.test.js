@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
@@ -175,10 +178,10 @@ test('MIRROR constants are defined with sane values', () => {
 });
 
 test('MIRROR appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
-  assert.match(ENTITIES, /MIRROR:\s*\d+/);                // CREDIT_VALUES row
-  assert.match(ENTITIES, /MIRROR:\s*'Mirror'/);           // SOURCE_LABELS
-  assert.match(ENTITIES, /MIRROR:\s*'#88ff44'/);          // SOURCE_COLOURS
-  assert.match(ENTITIES, /'Mirror Shot':\s*'Mirror Shot'/); // damage source label
+  assert.match(SOURCE_METADATA, /MIRROR:\s*\d+/);                // CREDIT_VALUES row
+  assert.match(SOURCE_METADATA, /MIRROR:\s*'Mirror'/);           // SOURCE_LABELS
+  assert.match(SOURCE_METADATA, /MIRROR:\s*'#88ff44'/);          // SOURCE_COLOURS
+  assert.match(SOURCE_METADATA, /'Mirror Shot':\s*'Mirror Shot'/); // damage source label
 });
 
 test('Player.shoot records ranged kinematics into _shotHistory', () => {

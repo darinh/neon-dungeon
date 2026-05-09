@@ -139,12 +139,13 @@ test('getActiveBoostList includes HARVEST_SURGE with seconds-remaining detail', 
 // ── Source wiring (read-the-source guards against silent regression) ──────
 
 const ENTITIES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const SOURCE_METADATA = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8');
 
 test('HARVESTER is registered in ENEMY_WEIGHTS, CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
   assert.match(ENTITIES_SRC, /HARVESTER:\s*\{ base:/, 'ENEMY_WEIGHTS entry');
-  assert.match(ENTITIES_SRC, /HARVESTER:5/, 'CREDIT_VALUES entry');
-  assert.match(ENTITIES_SRC, /HARVESTER:'Harvester'/, 'SOURCE_LABELS entry');
-  assert.match(ENTITIES_SRC, /HARVESTER:'#ff9933'/, 'SOURCE_COLOURS entry');
+  assert.match(SOURCE_METADATA, /HARVESTER:5/, 'CREDIT_VALUES entry');
+  assert.match(SOURCE_METADATA, /HARVESTER:'Harvester'/, 'SOURCE_LABELS entry');
+  assert.match(SOURCE_METADATA, /HARVESTER:'#ff9933'/, 'SOURCE_COLOURS entry');
 });
 
 test('HARVESTER is excluded from elite-affix gate (matches WARDLING/CONDUIT pattern)', () => {

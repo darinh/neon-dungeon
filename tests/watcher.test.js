@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const SOURCE_METADATA = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8'
+);
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
 );
@@ -307,11 +310,11 @@ test('WATCHER_HALF_RAD is precomputed from WATCHER_CONE_DEG', () => {
 });
 
 test('WATCHER appears in CREDIT_VALUES, SOURCE_LABELS, SOURCE_COLOURS', () => {
-  assert.match(ENTITIES, /WATCHER:\s*\d+/);             // CREDIT_VALUES row
-  assert.match(ENTITIES, /WATCHER:\s*'Watcher'/);       // SOURCE_LABELS
-  assert.match(ENTITIES, /WATCHER:\s*'#ffee66'/);       // SOURCE_COLOURS
-  assert.match(ENTITIES, /'Watcher Beam':\s*'Watcher Beam'/); // damage source label
-  assert.match(ENTITIES, /'Watcher Beam':\s*'#ffee66'/);      // damage source colour
+  assert.match(SOURCE_METADATA, /WATCHER:\s*\d+/);             // CREDIT_VALUES row
+  assert.match(SOURCE_METADATA, /WATCHER:\s*'Watcher'/);       // SOURCE_LABELS
+  assert.match(SOURCE_METADATA, /WATCHER:\s*'#ffee66'/);       // SOURCE_COLOURS
+  assert.match(SOURCE_METADATA, /'Watcher Beam':\s*'Watcher Beam'/); // damage source label
+  assert.match(SOURCE_METADATA, /'Watcher Beam':\s*'#ffee66'/);      // damage source colour
 });
 
 test('WATCHER class fields are declared on Enemy with @type any annotations', () => {
