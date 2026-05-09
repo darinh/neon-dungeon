@@ -84,6 +84,13 @@ These are hard rules, not preferences:
 - The checked-in PR branch-policy workflow enforces the source branch for PRs to
   `main`. It cannot enforce which GitHub merge button a human clicks, so agents
   must explicitly verify and use the required merge method before merging.
+- After a `develop` -> `main` rebase promotion, verify `origin/develop` and
+  `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
+  the rebase merge, reconcile `develop` back to the released `main` tip with a
+  deliberate `--force-with-lease` update from a worktree, after verifying the
+  trees are patch-equivalent and temporarily relaxing/restoring repository rules
+  if protection requires it. Do not leave `main` and `develop` divergent after a
+  release.
 
 ## Commands
 
