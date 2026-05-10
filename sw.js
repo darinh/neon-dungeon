@@ -73,6 +73,7 @@ const ASSETS = [
   './src/entities/runtime-collections.js',
   './src/entities/player-cheats.js',
   './src/entities.js',
+  './src/entities/enemy-tempo.js',
   './src/entities/enemy-projectiles.js',
   './src/entities/enemy-movement.js',
   './src/entities/spawn-initializers.js',

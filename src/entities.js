@@ -1459,25 +1459,6 @@ class Enemy {
     }
   }
 
-  // Elite affix combat tempo multiplier — scales speed and cooldowns
-  // BERSERKER: scales with missing HP (1.0 → 1.5)
-  // FRENZY: +40% per stack from nearby ally deaths (max 2 stacks = 1.8)
-  // PREDATOR: flat +30% during the 3s lock-on window after the player
-  //   takes real HP damage within 8 tiles. Refresh-only — DoTs keep the
-  //   timer alive but don't stack the multiplier. Mid-range between
-  //   BERSERKER's max (1.5 at 0 HP) and FRENZY's first stack (1.4),
-  //   intentional: PREDATOR's value isn't peak strength but reactive
-  //   uptime — it punishes the player for mistakes (hazards, DoT ticks,
-  //   bad positioning) rather than escalating with the fight. Mutually
-  //   exclusive with the other affixes (one affix per elite), so the
-  //   if/else-if early-return chain composes cleanly.
-  berserkerMul() {
-    if (this.eliteAffix === 'BERSERKER') return 1 + 0.5 * (1 - this.hp / this.maxHp);
-    if (this.eliteAffix === 'FRENZY' && this.frenzyStacks > 0) return 1 + 0.4 * this.frenzyStacks;
-    if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) return 1.3;
-    return 1;
-  }
-
   // Taunt-aware targeting check: taunted enemies can "target" the hologram
   _canTarget() {
     const t = this._tauntTarget;

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.81
+# NEON DUNGEON — Game Specification v6.1.82
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.82 | Entity module split: elite combat-tempo scaling now lives in `src/entities/enemy-tempo.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.berserkerMul()` still applies BERSERKER, FRENZY, and PREDATOR multipliers unchanged while `src/entities.js` keeps the combat and AI call sites that consume it. |
 | v6.1.81 | Entity module split: generic enemy patrol targeting now lives in `src/entities/enemy-movement.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.patrol()` still chooses in-room patrol targets with the same `rnd()` ranges and delegates movement to `Enemy.prototype.moveToward()`, while `src/entities.js` keeps direct movement and AI call sites. |
 | v6.1.80 | Entity module split: standard enemy projectile launching now lives in `src/entities/enemy-projectiles.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.fireAt()` still creates the same `Projectile`, owner metadata, projectile-array insertion, and enemy shoot audio while `src/entities.js` keeps enemy AI call sites. |
 | v6.1.79 | Entity module split: Player predictive-kinematics accessors now live in `src/entities/player-kinematics.js`, loaded after `src/entities/ai-helpers.js` and before runtime/game orchestration. `Player.prototype.getPositionAgo()` and `Player.prototype.getPredictedPosition()` still delegate to the shared pure history helpers used by ECHOER and PROPHET behavior, while `src/entities.js` keeps Player state updates and combat behavior. |
