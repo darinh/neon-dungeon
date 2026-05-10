@@ -49,6 +49,10 @@ declare global {
     } | null;
   }
 
+  interface Enemy {
+    fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
+  }
+
   function jp(code: string | null | undefined): boolean;
   function km(action: string): string | null | undefined;
   function isTouchDevice(): boolean;
