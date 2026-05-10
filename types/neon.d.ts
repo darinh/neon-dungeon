@@ -40,6 +40,7 @@ declare global {
   // ambient redeclare needed.
   interface Player {
     computeOutgoingDmgMul(): number;
+    logDamage(source: string, amount: number): void;
     _consumeSurgeShot(): number;
     getPositionAgo(seconds: number): { x: number; y: number } | null;
     getPredictedPosition(seconds: number): {
