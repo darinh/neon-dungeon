@@ -51,6 +51,7 @@ declare global {
 
   interface Enemy {
     _canTarget(): boolean;
+    _cdHitsPlayer(player: any, other: any): boolean;
     _forgetTarget(): void;
     _isLeashedFromRoom(): boolean;
     blocksProjectile(proj?: any): boolean;
