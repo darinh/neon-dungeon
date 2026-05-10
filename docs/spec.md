@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.94
+# NEON DUNGEON — Game Specification v6.1.95
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.95 | Entity module split: the Player outgoing damage multiplier delegator now lives in `src/entities/player-damage.js`, loaded after `src/entities.js` and before gameplay orchestration. `Player.prototype.computeOutgoingDmgMul()` still delegates to the tested pure `NEON.behavior.computeOutgoingDmgMul(this)` helper while `src/entities.js` keeps Player weapon firing, projectile construction, ammo/cooldown handling, SURGE consumption, and final damage multiplier orchestration. |
 | v6.1.94 | Entity module split: the Player SURGE shot-consumption delegator now lives in `src/entities/player-surge.js`, loaded after `src/entities.js` and before gameplay orchestration. `Player.prototype._consumeSurgeShot()` still delegates to the tested pure `NEON.behavior.consumeSurgeShot(this)` helper while `src/entities.js` keeps Player weapon firing, projectile construction, ammo/cooldown handling, and damage multiplier orchestration. |
 | v6.1.93 | Entity module split: the WRAITH-style emergence tile helper now lives in `src/entities/enemy-wraith.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._wrFindEmergeTile()` still samples passable tiles near the perceived target, falls back to the current passable position, and searches outward for any passable emergency tile while `src/entities.js` keeps WRAITH and TUNNELLER state transitions, phase timing, firing, movement, and audio behavior. |
 | v6.1.92 | Entity module split: the PHANTOM room reposition helper now lives in `src/entities/enemy-phantom.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._phReposition()` still picks up to 15 passable tiles inside the PHANTOM's current room, prefers candidates more than 3 tiles from the current target, and falls back to the current position when no better tile is found while `src/entities.js` keeps PHANTOM cloak, telegraph, attack burst, cooldown, and recloak behavior. |
