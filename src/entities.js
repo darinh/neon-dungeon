@@ -7763,14 +7763,6 @@ class Player {
     this.shootCooldown = 0;
   }
 
-  /**
-   * @param {any} [source]
-   * @param {any} [amount]
-   */
-  logDamage(source, amount) {
-    this.damageLog[source] = (this.damageLog[source] || 0) + amount;
-  }
-
   xpNeeded() { return this.level*80; }
 
   effectiveAtk() {

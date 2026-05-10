@@ -457,6 +457,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerKinematicsSource, /predictFromHistory\(/);
   assert.match(playerDamageSource, /Player\.prototype\.computeOutgoingDmgMul\s*=\s*function computeOutgoingDmgMul\s*\(/);
   assert.match(playerDamageSource, /NEON\.behavior\.computeOutgoingDmgMul\(this\)/);
+  assert.match(playerDamageSource, /Player\.prototype\.logDamage\s*=\s*function logDamage\s*\(/);
+  assert.match(playerDamageSource, /this\.damageLog\[source\]\s*=\s*\(this\.damageLog\[source\] \|\| 0\) \+ amount/);
   assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
   assert.match(playerSurgeSource, /NEON\.behavior\.consumeSurgeShot\(this\)/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
@@ -583,6 +585,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /computeOutgoingDmgMul\s*\(\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /logDamage\s*\(\s*source\s*,\s*amount\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_consumeSurgeShot\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+applyEliteSpawnRoll\s*\(/);
@@ -646,6 +649,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
   assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.computeOutgoingDmgMul\s*=/);
+  assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.logDamage\s*=/);
   assert.match(sources.entitiesPlayerSurge, /Player\.prototype\._consumeSurgeShot\s*=/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
