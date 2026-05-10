@@ -74,6 +74,7 @@ const ASSETS = [
   './src/entities/player-cheats.js',
   './src/entities.js',
   './src/entities/enemy-targeting.js',
+  './src/entities/enemy-projectile-defense.js',
   './src/entities/enemy-tempo.js',
   './src/entities/enemy-projectiles.js',
   './src/entities/enemy-movement.js',
