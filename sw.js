@@ -79,6 +79,7 @@ const ASSETS = [
   './src/entities/crates.js',
   './src/entities/mines.js',
   './src/entities/shield-generators.js',
+  './src/entities/wall-facing.js',
   './src/entities/security-systems.js',
   './src/entities/wall-turrets.js',
   './src/entities/field-effects.js',

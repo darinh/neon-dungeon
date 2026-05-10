@@ -52,6 +52,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesCrates.replaceAll('\\', '/'), 'src/entities/crates.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesMines.replaceAll('\\', '/'), 'src/entities/mines.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesShieldGenerators.replaceAll('\\', '/'), 'src/entities/shield-generators.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesWallFacing.replaceAll('\\', '/'), 'src/entities/wall-facing.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSecuritySystems.replaceAll('\\', '/'), 'src/entities/security-systems.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesWallTurrets.replaceAll('\\', '/'), 'src/entities/wall-turrets.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesFieldEffects.replaceAll('\\', '/'), 'src/entities/field-effects.js');
@@ -102,6 +103,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesCrates').endsWith('src/entities/crates.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesMines').endsWith('src/entities/mines.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesShieldGenerators').endsWith('src/entities/shield-generators.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesWallFacing').endsWith('src/entities/wall-facing.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesSecuritySystems').endsWith('src/entities/security-systems.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesWallTurrets').endsWith('src/entities/wall-turrets.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesFieldEffects').endsWith('src/entities/field-effects.js'), true);
@@ -147,6 +149,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const crateSource = readSourceFile(__dirname, 'entitiesCrates');
   const mineSource = readSourceFile(__dirname, 'entitiesMines');
   const shieldGeneratorSource = readSourceFile(__dirname, 'entitiesShieldGenerators');
+  const wallFacingSource = readSourceFile(__dirname, 'entitiesWallFacing');
   const securitySystemSource = readSourceFile(__dirname, 'entitiesSecuritySystems');
   const wallTurretSource = readSourceFile(__dirname, 'entitiesWallTurrets');
   const fieldEffectSource = readSourceFile(__dirname, 'entitiesFieldEffects');
@@ -261,6 +264,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(shieldGeneratorSource, /function\s+isEnemyShieldGenProtected\s*\(/);
   assert.match(shieldGeneratorSource, /function\s+updateShieldGens\s*\(/);
   assert.match(shieldGeneratorSource, /function\s+drawShieldGens\s*\(/);
+  assert.match(wallFacingSource, /const\s+WALL_FACING\s*=/);
   assert.match(securitySystemSource, /const\s+CAMERA_CONE_HALF\s*=/);
   assert.match(securitySystemSource, /function\s+createCamera\s*\(/);
   assert.match(securitySystemSource, /function\s+damageCamera\s*\(/);
@@ -425,6 +429,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
   assert.doesNotMatch(sources.entities, /const\s+HOT_HAND_PER_STACK\s*=\s*0\.05/);
   assert.doesNotMatch(sources.entities, /let\s+_cdEidCounter\s*=\s*0/);
+  assert.doesNotMatch(sources.entities, /const\s+WALL_FACING\s*=/);
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
