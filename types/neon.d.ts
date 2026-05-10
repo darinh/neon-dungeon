@@ -53,9 +53,11 @@ declare global {
     _canTarget(): boolean;
     _forgetTarget(): void;
     _isLeashedFromRoom(): boolean;
+    blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
     patrol(dt?: any, map?: any): void;
+    reflectsProjectile(proj?: any): boolean;
   }
 
   function jp(code: string | null | undefined): boolean;
