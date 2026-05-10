@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.75
+# NEON DUNGEON — Game Specification v6.1.76
 
 ## Vision
 
@@ -4933,6 +4933,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.76 | Entity module split: shared entity runtime collections now live in `src/entities/runtime-collections.js`, loaded before `src/entities.js`. Enemy, item, hazard, destructible, wall-device, field-device, and ARCHITECT placed-wall arrays keep their existing stable identities and reset/restore behavior while `src/entities.js` focuses on entity classes and behavior. |
 | v6.1.75 | Entity module split: the shared `_EG` runtime proxy now lives in `src/entities/runtime-globals.js`, loaded immediately before `src/entities.js`. The proxy still defers access to the later `game` global while giving the core entity runtime and extracted entity modules one explicit owner for runtime game-state access. |
 | v6.1.74 | Entity module split: enemy spawn construction now lives in `src/entities/enemy-spawning.js`, loaded after `src/entities.js` and `src/entities/spawn-initializers.js`. The public `spawnEnemy()` global still constructs `Enemy`, applies spawn HP modifiers, initializes per-type state, applies boss/elite flags, and registers room ownership, while `src/entities.js` keeps the core `Enemy` and `Player` runtime classes. |
 | v6.1.73 | Entity module split: shared wall-mounted-device facing angles now live in `src/entities/wall-facing.js`, loaded before `src/entities/security-systems.js` and `src/entities/wall-turrets.js`. Security cameras and wall turrets still own their creation and runtime behavior, while `src/entities.js` no longer carries wall-device orientation data it does not consume. |
