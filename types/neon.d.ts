@@ -57,6 +57,7 @@ declare global {
     _findHealTarget(): any;
     _nxFindAllyCluster(): any;
     _nxUpdateLinks(): void;
+    _phReposition(map?: any, player?: any): void;
     _wlFindWard(): any;
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
