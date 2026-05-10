@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyProjectiles', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -47,6 +47,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyProjectiles.replaceAll('\\', '/'), 'src/entities/enemy-projectiles.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyMovement.replaceAll('\\', '/'), 'src/entities/enemy-movement.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSpawnInitializers.replaceAll('\\', '/'), 'src/entities/spawn-initializers.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemySpawning.replaceAll('\\', '/'), 'src/entities/enemy-spawning.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEliteAffixes.replaceAll('\\', '/'), 'src/entities/elite-affixes.js');
@@ -104,6 +105,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerCheats').endsWith('src/entities/player-cheats.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyProjectiles').endsWith('src/entities/enemy-projectiles.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyMovement').endsWith('src/entities/enemy-movement.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesSpawnInitializers').endsWith('src/entities/spawn-initializers.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemySpawning').endsWith('src/entities/enemy-spawning.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEliteAffixes').endsWith('src/entities/elite-affixes.js'), true);
@@ -155,6 +157,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const playerCheatSource = readSourceFile(__dirname, 'entitiesPlayerCheats');
   const entitySource = readSourceFile(__dirname, 'entities');
   const enemyProjectileSource = readSourceFile(__dirname, 'entitiesEnemyProjectiles');
+  const enemyMovementSource = readSourceFile(__dirname, 'entitiesEnemyMovement');
   const spawnInitializerSource = readSourceFile(__dirname, 'entitiesSpawnInitializers');
   const enemySpawningSource = readSourceFile(__dirname, 'entitiesEnemySpawning');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
@@ -346,6 +349,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyProjectileSource, /p\.ownerType\s*=\s*this\.type/);
   assert.match(enemyProjectileSource, /p\._owner\s*=\s*this/);
   assert.match(enemyProjectileSource, /projectiles\.push\(p\)/);
+  assert.match(enemyMovementSource, /Enemy\.prototype\.patrol\s*=\s*function patrol\s*\(/);
+  assert.match(enemyMovementSource, /this\.patrolTarget\s*=\s*\{/);
+  assert.match(enemyMovementSource, /this\.moveToward\(this\.patrolTarget\.x, this\.patrolTarget\.y, this\.spd \* 0\.5, dt, map\)/);
   assert.match(playerKinematicsSource, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(playerKinematicsSource, /getPositionAgoFromHistory\(this\._posHistory, seconds\)/);
   assert.match(playerKinematicsSource, /Player\.prototype\.getPredictedPosition\s*=/);
@@ -454,6 +460,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+spawnGhost\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+triggerShockPulse\s*\(/);
   assert.doesNotMatch(sources.entities, /fireAt\s*\(\s*px\s*,\s*py\s*,\s*spd\s*,\s*dmg\s*,\s*range\s*,\s*colour\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /patrol\s*\(\s*dt\s*,\s*map\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
@@ -506,6 +513,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesDeferredSpawns, /function\s+spawnGhost\s*\(/);
   assert.match(sources.entitiesShockPulse, /function\s+triggerShockPulse\s*\(/);
   assert.match(sources.entitiesEnemyProjectiles, /Enemy\.prototype\.fireAt\s*=/);
+  assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.patrol\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);

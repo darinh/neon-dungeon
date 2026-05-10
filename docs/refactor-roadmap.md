@@ -123,6 +123,7 @@ Good candidates:
 - Wall-device orientation tuning. Done for the shared `WALL_FACING` table in `src/entities/wall-facing.js`.
 - Shock Pulse pickup detonation. Done for `triggerShockPulse` in `src/entities/shock-pulse.js`.
 - Standard enemy projectile launching. Done for `Enemy.prototype.fireAt()` in `src/entities/enemy-projectiles.js`.
+- Generic enemy patrol targeting. Done for `Enemy.prototype.patrol()` in `src/entities/enemy-movement.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
