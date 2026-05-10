@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'entitiesPlayerSurge', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -82,6 +82,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesDeferredSpawns.replaceAll('\\', '/'), 'src/entities/deferred-spawns.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesShockPulse.replaceAll('\\', '/'), 'src/entities/shock-pulse.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerKinematics.replaceAll('\\', '/'), 'src/entities/player-kinematics.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesPlayerSurge.replaceAll('\\', '/'), 'src/entities/player-surge.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -152,6 +153,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeferredSpawns').endsWith('src/entities/deferred-spawns.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesShockPulse').endsWith('src/entities/shock-pulse.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerKinematics').endsWith('src/entities/player-kinematics.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerSurge').endsWith('src/entities/player-surge.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -217,6 +219,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const deferredSpawnSource = readSourceFile(__dirname, 'entitiesDeferredSpawns');
   const shockPulseSource = readSourceFile(__dirname, 'entitiesShockPulse');
   const playerKinematicsSource = readSourceFile(__dirname, 'entitiesPlayerKinematics');
+  const playerSurgeSource = readSourceFile(__dirname, 'entitiesPlayerSurge');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -449,6 +452,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerKinematicsSource, /getPositionAgoFromHistory\(this\._posHistory, seconds\)/);
   assert.match(playerKinematicsSource, /Player\.prototype\.getPredictedPosition\s*=/);
   assert.match(playerKinematicsSource, /predictFromHistory\(/);
+  assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
+  assert.match(playerSurgeSource, /NEON\.behavior\.consumeSurgeShot\(this\)/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -572,6 +577,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /patrol\s*\(\s*dt\s*,\s*map\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /_consumeSurgeShot\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+applyEliteSpawnRoll\s*\(/);
   assert.doesNotMatch(sources.entities, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
@@ -633,6 +639,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.patrol\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
+  assert.match(sources.entitiesPlayerSurge, /Player\.prototype\._consumeSurgeShot\s*=/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
 });
