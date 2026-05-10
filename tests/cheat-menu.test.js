@@ -15,6 +15,7 @@ function read(file) {
 
 const GAME = read('src/game.js');
 const ENTITIES = read('src/entities.js');
+const ENTITIES_PLAYER_CHEATS = read('src/entities/player-cheats.js');
 const RENDER = read('src/render.js');
 const PLATFORM = read('src/platform.js');
 
@@ -72,7 +73,8 @@ test('cheat menu exposes runtime-only toggles and dirties minimap on show-map ch
 });
 
 test('gameplay cheat hooks cover damage, movement, speed, and map reveal', () => {
-  assert.match(ENTITIES, /function playerCheatEnabled\(id\)[\s\S]*?_EG\.cheats && _EG\.cheats\[id\]/);
+  assert.match(ENTITIES_PLAYER_CHEATS, /function playerCheatEnabled\(id\)[\s\S]*?_EG\.cheats && _EG\.cheats\[id\]/);
+  assert.doesNotMatch(ENTITIES, /function playerCheatEnabled\(id\)/);
   assert.match(ENTITIES, /playerCheatEnabled\('invulnerable'\) && !options\.ignoreCheats/);
   assert.equal(
     (ENTITIES.match(/noClip \|\| isPassable/g) || []).length,

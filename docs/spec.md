@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.77
+# NEON DUNGEON — Game Specification v6.1.78
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.78 | Entity module split: Player cheat lookup now lives in `src/entities/player-cheats.js`, loaded after the shared `_EG` proxy and runtime collections and before `src/entities.js`. The public `playerCheatEnabled()` helper still reads runtime-only `game.cheats` through `_EG`, while `src/entities.js` keeps Player and Enemy behavior. |
 | v6.1.77 | Door-placement regression fix: normalized door-like entrances now seal any open diagonal bypass trio rather than only bare-floor corner tiles. This preserves valid T, L, and four-way doorway shapes while preventing walk-around side paths next to closed doors, locked doors, challenge gates, and cracked secret entrances even when hazards or feature tiles occupy the bypass corner. |
 | v6.1.76 | Entity module split: shared entity runtime collections now live in `src/entities/runtime-collections.js`, loaded before `src/entities.js`. Enemy, item, hazard, destructible, wall-device, field-device, and ARCHITECT placed-wall arrays keep their existing stable identities and reset/restore behavior while `src/entities.js` focuses on entity classes and behavior. |
 | v6.1.75 | Entity module split: the shared `_EG` runtime proxy now lives in `src/entities/runtime-globals.js`, loaded immediately before `src/entities.js`. The proxy still defers access to the later `game` global while giving the core entity runtime and extracted entity modules one explicit owner for runtime game-state access. |

@@ -1,11 +1,6 @@
 // @ts-check
 'use strict';
 
-/** @param {string} id */
-function playerCheatEnabled(id) {
-  return !!(_EG.cheats && _EG.cheats[id]);
-}
-
 // ─── Enemies ─────────────────────────────────────────────────────────────────
 
 class Enemy {
