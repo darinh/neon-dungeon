@@ -6,7 +6,7 @@
 // structural invariants the mob needs by regex-matching the source
 // text. We additionally duplicate the pure `predictFromHistory` helper
 // here for unit testing — the duplicate MUST stay in lock-step with
-// the source-of-truth definition in src/entities.js (a structural
+// the source-of-truth definition in src/entities/ai-helpers.js (a structural
 // assertion below guards against drift).
 
 const { test } = require('node:test');
@@ -37,6 +37,9 @@ const SOURCE_METADATA = fs.readFileSync(
 );
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
+const PLAYER_KINEMATICS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'player-kinematics.js'), 'utf8'
 );
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
@@ -130,7 +133,8 @@ test('PROPHET constants are defined with sane values', () => {
 test('Player has getPredictedPosition helper that calls predictFromHistory', () => {
   // The shared player history ring is reused (already initialised for
   // ECHOER); PROPHET reads via getPredictedPosition.
-  assert.match(ENTITIES, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{[\s\S]{0,300}predictFromHistory\s*\(/);
+  assert.match(PLAYER_KINEMATICS, /Player\.prototype\.getPredictedPosition\s*=\s*function getPredictedPosition\s*\(\s*seconds\s*\)[\s\S]{0,300}predictFromHistory\s*\(/);
+  assert.doesNotMatch(ENTITIES, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{/);
 });
 
 test('predictFromHistory pure helper is defined', () => {
@@ -209,7 +213,7 @@ test('aiProphet enforces a stillness gate (MIN_VEL)', () => {
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────
 //
-// MUST mirror predictFromHistory in src/entities.js. If the behavior
+// MUST mirror predictFromHistory in src/entities/ai-helpers.js. If the behavior
 // contract changes, update both the source-of-truth function and this
 // duplicate. The structural-assertion test above catches the case where
 // the function disappears entirely.

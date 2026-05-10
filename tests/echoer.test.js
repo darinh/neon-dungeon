@@ -6,7 +6,7 @@
 // the mob needs by regex-matching the source text. We additionally
 // duplicate the pure `getPositionAgoFromHistory` helper here for unit
 // testing — the duplicate MUST stay in lock-step with the source-of-
-// truth definition in src/entities.js (a structural assertion below
+// truth definition in src/entities/ai-helpers.js (a structural assertion below
 // guards against drift).
 
 const { test } = require('node:test');
@@ -37,6 +37,9 @@ const SOURCE_METADATA = fs.readFileSync(
 );
 const ENTITY_AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
+);
+const PLAYER_KINEMATICS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'player-kinematics.js'), 'utf8'
 );
 const PLATFORM = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8'
@@ -123,7 +126,8 @@ test('Player has _posHistory init and getPositionAgo helper', () => {
   // The shared player history ring must be initialised in reset() and
   // sampled in update(). Helper method must call the pure helper.
   assert.match(ENTITIES, /this\._posHistory\s*=\s*\[\]/);
-  assert.match(ENTITIES, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{[\s\S]{0,200}getPositionAgoFromHistory\s*\(/);
+  assert.match(PLAYER_KINEMATICS, /Player\.prototype\.getPositionAgo\s*=\s*function getPositionAgo\s*\(\s*seconds\s*\)[\s\S]{0,200}getPositionAgoFromHistory\s*\(/);
+  assert.doesNotMatch(ENTITIES, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{/);
   // Sampling block in Player.update — must push {t,x,y} and trim by age
   assert.match(ENTITIES, /this\._posHistory\.push\(\s*\{\s*t:\s*0\s*,\s*x:\s*this\.x\s*,\s*y:\s*this\.y\s*\}\s*\)/);
   assert.match(ENTITIES, /PLAYER_HISTORY_WINDOW/);
@@ -180,7 +184,7 @@ test('aiEchoer honors hologram-taunt redirection', () => {
 
 // ─── Pure helper unit tests ─────────────────────────────────────────────
 //
-// MUST mirror getPositionAgoFromHistory in src/entities.js. If the
+// MUST mirror getPositionAgoFromHistory in src/entities/ai-helpers.js. If the
 // behavior contract changes, update both the source-of-truth function
 // and this duplicate. The structural-assertion test above catches the
 // case where the function disappears entirely.
