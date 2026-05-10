@@ -3174,25 +3174,6 @@ class Enemy {
     if (d < 1.2) this.meleeAttack(player);
   }
 
-  /**
-   * Find the nearest non-WARDLING, non-shard, non-boss enemy in this
-   * wardling's room. Returns null if no such enemy exists.
-   * @returns {any}
-   */
-  _wlFindWard() {
-    let best = null;
-    let bestD = Infinity;
-    for (const e of enemies) {
-      if (e === this || e.dead) continue;
-      if (e.type === 'WARDLING') continue;   // wardlings don't guard each other (no infinite chains)
-      if (e.isShard || e.isBoss) continue;   // bosses have their own kit; shards are short-lived
-      if (e.room !== this.room) continue;    // room-scoped only
-      const d = dist(this.x, this.y, e.x, e.y);
-      if (d < bestD) { bestD = d; best = e; }
-    }
-    return best;
-  }
-
   // ─── VENGEANCE AI — Kill-Charged Retaliator ────────────────────────────
   // Stationary turret (spd=0 base) that listens for in-room kills via the
   // notifyVengeance hook and accumulates _vgCharges. On reaching
