@@ -135,6 +135,7 @@ Good candidates:
 - MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
 - NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
+- WRAITH-style emergence helper. Done for `_wrFindEmergeTile()` in `src/entities/enemy-wraith.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
