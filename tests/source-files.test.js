@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -53,6 +53,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyHealer.replaceAll('\\', '/'), 'src/entities/enemy-healer.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyGrenadier.replaceAll('\\', '/'), 'src/entities/enemy-grenadier.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyMimic.replaceAll('\\', '/'), 'src/entities/enemy-mimic.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyNexus.replaceAll('\\', '/'), 'src/entities/enemy-nexus.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemySummoner.replaceAll('\\', '/'), 'src/entities/enemy-summoner.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyTempo.replaceAll('\\', '/'), 'src/entities/enemy-tempo.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyProjectiles.replaceAll('\\', '/'), 'src/entities/enemy-projectiles.js');
@@ -120,6 +121,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyHealer').endsWith('src/entities/enemy-healer.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyGrenadier').endsWith('src/entities/enemy-grenadier.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyMimic').endsWith('src/entities/enemy-mimic.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyNexus').endsWith('src/entities/enemy-nexus.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemySummoner').endsWith('src/entities/enemy-summoner.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyTempo').endsWith('src/entities/enemy-tempo.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyProjectiles').endsWith('src/entities/enemy-projectiles.js'), true);
@@ -181,6 +183,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const enemyHealerSource = readSourceFile(__dirname, 'entitiesEnemyHealer');
   const enemyGrenadierSource = readSourceFile(__dirname, 'entitiesEnemyGrenadier');
   const enemyMimicSource = readSourceFile(__dirname, 'entitiesEnemyMimic');
+  const enemyNexusSource = readSourceFile(__dirname, 'entitiesEnemyNexus');
   const enemySummonerSource = readSourceFile(__dirname, 'entitiesEnemySummoner');
   const enemyTempoSource = readSourceFile(__dirname, 'entitiesEnemyTempo');
   const enemyProjectileSource = readSourceFile(__dirname, 'entitiesEnemyProjectiles');
@@ -404,6 +407,13 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyMimicSource, /audio\.mimicReveal\(\)/);
   assert.match(enemyMimicSource, /_EG\.msg\('⚠ MIMIC!', '#cc33ff'\)/);
   assert.match(enemyMimicSource, /norm\(this\._tx - this\.x, this\._ty - this\.y\)/);
+  assert.match(enemyNexusSource, /Enemy\.prototype\._nxUpdateLinks\s*=\s*function _nxUpdateLinks\s*\(/);
+  assert.match(enemyNexusSource, /enemiesInRoomIter\(this\.room\)/);
+  assert.match(enemyNexusSource, /e\.type === 'NEXUS'/);
+  assert.match(enemyNexusSource, /e\._wrPhased/);
+  assert.match(enemyNexusSource, /e\._disguised/);
+  assert.match(enemyNexusSource, /audio\.nexusLink\(\)/);
+  assert.match(enemyNexusSource, /Enemy\.prototype\._nxFindAllyCluster\s*=\s*function _nxFindAllyCluster\s*\(/);
   assert.match(enemySummonerSource, /Enemy\.prototype\.summonMinion\s*=\s*function summonMinion\s*\(/);
   assert.match(enemySummonerSource, /pendingEnemySpawns\.push\(\{/);
   assert.match(enemySummonerSource, /type:\s*'DRONE'/);
@@ -536,6 +546,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /_findHealTarget\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /lobGrenade\s*\(\s*tx\s*,\s*ty\s*,\s*map\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /revealMimic\s*\(\s*player\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /_nxUpdateLinks\s*\(\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /_nxFindAllyCluster\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /summonMinion\s*\(\s*map\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /blocksProjectile\s*\(\s*proj\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /reflectsProjectile\s*\(\s*proj\s*\)\s*\{/);
