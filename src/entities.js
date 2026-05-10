@@ -7769,10 +7769,6 @@ class Player {
     return NEON.behavior.computeOutgoingDmgMul(this);
   }
 
-  _consumeSurgeShot() {
-    return NEON.behavior.consumeSurgeShot(this);
-  }
-
   /**
    * @param {any} [source]
    * @param {any} [amount]

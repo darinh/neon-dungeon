@@ -39,6 +39,7 @@ declare global {
   // type. Cross-file consumers see it via the shared Script Realm — no
   // ambient redeclare needed.
   interface Player {
+    _consumeSurgeShot(): number;
     getPositionAgo(seconds: number): { x: number; y: number } | null;
     getPredictedPosition(seconds: number): {
       x: number;
