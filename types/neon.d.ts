@@ -54,6 +54,7 @@ declare global {
     _cdHitsPlayer(player: any, other: any): boolean;
     _forgetTarget(): void;
     _isLeashedFromRoom(): boolean;
+    _findHealTarget(): any;
     _wlFindWard(): any;
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
