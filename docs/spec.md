@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.84
+# NEON DUNGEON — Game Specification v6.1.85
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.85 | Entity module split: the CONDUIT beam geometry helper now lives in `src/entities/enemy-conduit.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._cdHitsPlayer()` preserves segment-only beam hit testing, perpendicular width checks, and degenerate-link rejection while `src/entities.js` keeps `aiConduit()` pairing, ICD, LoS, solo-fire, and damage orchestration. |
 | v6.1.84 | Entity module split: enemy projectile defense helpers now live in `src/entities/enemy-projectile-defense.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.blocksProjectile()` and `reflectsProjectile()` preserve SHIELDER block arcs and REFLECTOR block/reflect arcs while projectile collision callers stay in `src/content/projectiles.js`. |
 | v6.1.83 | Entity module split: enemy target-eligibility, target-memory clearing, and room-leash checks now live in `src/entities/enemy-targeting.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._canTarget()`, `_forgetTarget()`, and `_isLeashedFromRoom()` preserve taunt, cloak/decoy, target-memory, and room-leash behavior while `src/entities.js` keeps the update state machine and AI call sites. |
 | v6.1.82 | Entity module split: elite combat-tempo scaling now lives in `src/entities/enemy-tempo.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.berserkerMul()` still applies BERSERKER, FRENZY, and PREDATOR multipliers unchanged while `src/entities.js` keeps the combat and AI call sites that consume it. |

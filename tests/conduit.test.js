@@ -18,6 +18,9 @@ const ENTITIES = fs.readFileSync(
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
+const ENEMY_CONDUIT = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-conduit.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -71,7 +74,8 @@ test('aiConduit method is defined with canonical signature', () => {
 });
 
 test('_cdHitsPlayer geometric helper is defined', () => {
-  assert.match(ENTITIES, /_cdHitsPlayer\s*\(/);
+  assert.doesNotMatch(ENTITIES, /_cdHitsPlayer\s*\(\s*player\s*,\s*other\s*\)\s*\{/);
+  assert.match(ENEMY_CONDUIT, /Enemy\.prototype\._cdHitsPlayer\s*=\s*function _cdHitsPlayer\s*\(/);
 });
 
 test('CONDUIT stun handler clears _cdLinkICD', () => {
@@ -179,12 +183,12 @@ test('sw.js cache freshness is not a second numeric version', () => {
 
 // ─── Geometric hit-test (vm-extracted) ──────────────────────────────────
 //
-// Extract _cdHitsPlayer via node:vm (entities.js is browser-only — no
+// Extract _cdHitsPlayer via node:vm (enemy-conduit.js is browser-only — no
 // CommonJS exports). The extracted function is run against synthetic
 // player+conduit positions so we test the actual implementation, not a
 // duplicated copy.
 
-const fnMatch = ENTITIES.match(/_cdHitsPlayer\s*\([^)]*\)\s*\{[\s\S]*?\n  \}/);
+const fnMatch = ENEMY_CONDUIT.match(/function _cdHitsPlayer\s*\([^)]*\)\s*\{[\s\S]*?\n\}/);
 const FN_SRC = fnMatch ? fnMatch[0] : null;
 const CONDUIT_BEAM_W = parseFloat(
   (ENEMY_ABILITY_TUNING.match(/const\s+CONDUIT_BEAM_W\s*=\s*([\d.]+)/) || [])[1] || '0.4'
@@ -200,7 +204,7 @@ function makeCtx() {
   // Wrap as a standalone function. The method has `this.x/this.y` from the
   // owning conduit. Build a wrapper that takes A,B,P explicitly.
   const wrapped = `
-    function _cdHitsPlayer(player, other) ${FN_SRC.slice(FN_SRC.indexOf('{'))}
+    ${FN_SRC}
     function hits(ax, ay, bx, by, px, py) {
       const self = { x: ax, y: ay };
       return _cdHitsPlayer.call(self, { x: px, y: py }, { x: bx, y: by });
