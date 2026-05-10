@@ -7855,10 +7855,6 @@ function spawnEnemy(type,x,y,floorNum,room,allowElite) {
   return e;
 }
 
-// Wall direction → base facing angle (into room)
-/** @type {Record<string, number>} */
-const WALL_FACING = { N: Math.PI / 2, S: -Math.PI / 2, E: Math.PI, W: 0 };
-
 // ─── Player ───────────────────────────────────────────────────────────────────
 
 class Player {
