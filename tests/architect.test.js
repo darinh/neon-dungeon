@@ -35,6 +35,7 @@ const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const ENEMY_ABILITY_TUNING = readSourceFile(__dirname, 'entitiesEnemyAbilityTuning');
+const RUNTIME_COLLECTIONS = readSourceFile(__dirname, 'entitiesRuntimeCollections');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -194,7 +195,7 @@ test('Stun cancels ARCHITECT target → recovery (defuses pending wall)', () => 
 test('placedWalls module-level array is declared', () => {
   // The shared list of ARCHITECT-placed walls. Each entry:
   // { tx, ty, origTile, decayTimer, owner }.
-  assert.match(ENTITIES,
+  assert.match(RUNTIME_COLLECTIONS,
     /const\s+placedWalls\s*=\s*\[\]/,
     'placedWalls module-level array must exist');
 });
