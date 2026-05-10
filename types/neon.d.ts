@@ -59,6 +59,7 @@ declare global {
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
+    lobGrenade(tx?: any, ty?: any, map?: any): void;
     patrol(dt?: any, map?: any): void;
     reflectsProjectile(proj?: any): boolean;
   }
