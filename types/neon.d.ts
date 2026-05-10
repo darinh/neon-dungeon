@@ -50,6 +50,9 @@ declare global {
   }
 
   interface Enemy {
+    _canTarget(): boolean;
+    _forgetTarget(): void;
+    _isLeashedFromRoom(): boolean;
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
     patrol(dt?: any, map?: any): void;
