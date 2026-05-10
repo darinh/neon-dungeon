@@ -78,6 +78,7 @@ const requiredInIndex = [
   './src/entities/enemy-grenadier.js',
   './src/entities/enemy-mimic.js',
   './src/entities/enemy-nexus.js',
+  './src/entities/enemy-phantom.js',
   './src/entities/enemy-tempo.js',
   './src/entities/enemy-projectiles.js',
   './src/entities/enemy-movement.js',
