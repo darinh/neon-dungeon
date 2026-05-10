@@ -132,6 +132,7 @@ Good candidates:
 - HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
 - GRENADIER grenade launch helper. Done for `lobGrenade()` in `src/entities/enemy-grenadier.js`.
 - SUMMONER minion enqueue helper. Done for `summonMinion()` in `src/entities/enemy-summoner.js`.
+- MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 

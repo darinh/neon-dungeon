@@ -61,6 +61,7 @@ declare global {
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
     lobGrenade(tx?: any, ty?: any, map?: any): void;
     patrol(dt?: any, map?: any): void;
+    revealMimic(player?: any): void;
     reflectsProjectile(proj?: any): boolean;
     summonMinion(map?: any): void;
   }
