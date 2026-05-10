@@ -1,18 +1,6 @@
 // @ts-check
 'use strict';
 
-// Phase 3D batch 5: Proxy-based alias for the cross-file `game` global.
-// entities.js touches many runtime-added game props (player, dungeon,
-// _chainBolts, etc.) that don't appear on the typed shape declared in
-// src/game.js. The proxy widens access to any and defers resolution.
-// Mirrors src/render.js (_RG), src/platform.js (_G), src/content.js (_CG).
-/** @type {any} */
-const _EG = new Proxy({}, {
-  get: (_t, p) => /** @type {any} */ (game)[p],
-  set: (_t, p, v) => { /** @type {any} */ (game)[p] = v; return true; },
-  has: (_t, p) => p in /** @type {any} */ (game),
-});
-
 /** @param {string} id */
 function playerCheatEnabled(id) {
   return !!(_EG.cheats && _EG.cheats[id]);
