@@ -133,6 +133,7 @@ Good candidates:
 - GRENADIER grenade launch helper. Done for `lobGrenade()` in `src/entities/enemy-grenadier.js`.
 - SUMMONER minion enqueue helper. Done for `summonMinion()` in `src/entities/enemy-summoner.js`.
 - MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
+- NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
