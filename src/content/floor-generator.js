@@ -617,7 +617,7 @@ function generateFloor(floorNum, opts) {
           if (
             isOpenDoorBypassTile(map[y]?.[x + dx]) &&
             isOpenDoorBypassTile(map[y + dy]?.[x]) &&
-            map[y + dy]?.[x + dx] === T.FLOOR
+            isOpenDoorBypassTile(map[y + dy]?.[x + dx])
           ) {
             map[y + dy][x + dx] = T.WALL;
           }
@@ -1680,6 +1680,7 @@ function generateFloor(floorNum, opts) {
   }
   sealDoorBypassCorners();
   repairDoorBypassSealedEntranceStubs();
+  sealDoorBypassCorners();
   for (const move of relocatedEntrances) {
     if (move.tile !== T.CHALLENGE_GATE) continue;
     const entry = challengeEntrances.find((/** @type {any} */ e) => e.x === move.fromX && e.y === move.fromY);

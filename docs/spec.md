@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.76
+# NEON DUNGEON — Game Specification v6.1.77
 
 ## Vision
 
@@ -533,9 +533,12 @@ Each floor is generated fresh using Binary Space Partitioning:
    pairs. A lateral hallway beside the entrance does not count, and a one-tile
     dead-end stub in front of the entrance is not a valid passage. Two-room
     bridges must connect opposite room boundaries on the same axis.
-    Door-like entrances also seal diagonal corner tiles whenever the two
-    adjacent cardinal tiles are open, preventing the player from walking around
-    a closed door, locked door, challenge gate, or cracked secret entrance.
+    Door-like entrances also seal a tile in any diagonal bypass trio whenever
+     both adjacent cardinal tiles and the diagonal corner are open walk-around
+     tiles, preventing the player from walking around a closed door, locked door,
+     challenge gate, or cracked secret entrance. The bypass check treats all
+     non-wall, non-void, non-door-like tiles as open for this invariant, not just
+     bare floor, so hazards and feature tiles cannot reopen a side path.
     Outside-room 2×2 passable hallway blocks are iteratively narrowed without
     removing door-like tiles and only when the key/lock reachability solver still
     proves every room reachable.
@@ -577,12 +580,12 @@ LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | 
 
 ### Doors & Locked Doors
 
-**Regular doors:** Placed on the room boundary tile, in line with the room's
-wall edge, using entrance clustering. Multi-tile entrance clusters are narrowed
-to a single flush doorway tile before door/lock/secret/challenge placement, so
-door-like tiles do not protrude into the hallway and adjacent double-door
-openings are collapsed. Each eligible single-tile entrance has a 50 % chance of
-receiving a regular `T.DOOR`.
+**Regular doors:** Chosen from single-tile room-boundary entrance clusters, then
+normalized outward to the surrounding wall/corridor line adjacent to the restored
+room edge. Multi-tile entrance clusters are narrowed to a single flush doorway
+tile before door/lock/secret/challenge placement, so door-like tiles do not
+protrude into the room and adjacent double-door openings are collapsed. Each
+eligible single-tile entrance has a 50 % chance of receiving a regular `T.DOOR`.
 
 **Locked doors (floor 2+):** Gate high-value rooms using coloured keys (red,
 blue, gold). Target priority:
@@ -4933,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.77 | Door-placement regression fix: normalized door-like entrances now seal any open diagonal bypass trio rather than only bare-floor corner tiles. This preserves valid T, L, and four-way doorway shapes while preventing walk-around side paths next to closed doors, locked doors, challenge gates, and cracked secret entrances even when hazards or feature tiles occupy the bypass corner. |
 | v6.1.76 | Entity module split: shared entity runtime collections now live in `src/entities/runtime-collections.js`, loaded before `src/entities.js`. Enemy, item, hazard, destructible, wall-device, field-device, and ARCHITECT placed-wall arrays keep their existing stable identities and reset/restore behavior while `src/entities.js` focuses on entity classes and behavior. |
 | v6.1.75 | Entity module split: the shared `_EG` runtime proxy now lives in `src/entities/runtime-globals.js`, loaded immediately before `src/entities.js`. The proxy still defers access to the later `game` global while giving the core entity runtime and extracted entity modules one explicit owner for runtime game-state access. |
 | v6.1.74 | Entity module split: enemy spawn construction now lives in `src/entities/enemy-spawning.js`, loaded after `src/entities.js` and `src/entities/spawn-initializers.js`. The public `spawnEnemy()` global still constructs `Enemy`, applies spawn HP modifiers, initializes per-type state, applies boss/elite flags, and registers room ownership, while `src/entities.js` keeps the core `Enemy` and `Player` runtime classes. |
