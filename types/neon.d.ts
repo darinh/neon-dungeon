@@ -39,6 +39,10 @@ declare global {
   // type. Cross-file consumers see it via the shared Script Realm — no
   // ambient redeclare needed.
   interface Player {
+    cycleWeapon(dir?: number): void;
+    collectWeapon(w: any): boolean;
+    swapWeapon(slotIdx: number, w: any): void;
+    equipWeapon(w: any): void;
     computeOutgoingDmgMul(): number;
     logDamage(source: string, amount: number): void;
     _consumeSurgeShot(): number;
