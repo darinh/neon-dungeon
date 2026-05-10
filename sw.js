@@ -70,6 +70,7 @@ const ASSETS = [
   './src/entities/enemy-ability-tuning.js',
   './src/entities/player-perk-tuning.js',
   './src/entities/runtime-globals.js',
+  './src/entities/runtime-collections.js',
   './src/entities.js',
   './src/entities/spawn-initializers.js',
   './src/entities/enemy-spawning.js',
