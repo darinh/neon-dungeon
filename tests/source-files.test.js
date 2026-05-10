@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'entitiesPlayerDamage', 'entitiesPlayerSurge', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerSurge', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -82,6 +82,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesDeferredSpawns.replaceAll('\\', '/'), 'src/entities/deferred-spawns.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesShockPulse.replaceAll('\\', '/'), 'src/entities/shock-pulse.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerKinematics.replaceAll('\\', '/'), 'src/entities/player-kinematics.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesPlayerWeapons.replaceAll('\\', '/'), 'src/entities/player-weapons.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerDamage.replaceAll('\\', '/'), 'src/entities/player-damage.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerSurge.replaceAll('\\', '/'), 'src/entities/player-surge.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -154,6 +155,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesDeferredSpawns').endsWith('src/entities/deferred-spawns.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesShockPulse').endsWith('src/entities/shock-pulse.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerKinematics').endsWith('src/entities/player-kinematics.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerWeapons').endsWith('src/entities/player-weapons.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerDamage').endsWith('src/entities/player-damage.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerSurge').endsWith('src/entities/player-surge.js'), true);
   const sources = readSourceFiles(__dirname);
@@ -221,6 +223,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const deferredSpawnSource = readSourceFile(__dirname, 'entitiesDeferredSpawns');
   const shockPulseSource = readSourceFile(__dirname, 'entitiesShockPulse');
   const playerKinematicsSource = readSourceFile(__dirname, 'entitiesPlayerKinematics');
+  const playerWeaponSource = readSourceFile(__dirname, 'entitiesPlayerWeapons');
   const playerDamageSource = readSourceFile(__dirname, 'entitiesPlayerDamage');
   const playerSurgeSource = readSourceFile(__dirname, 'entitiesPlayerSurge');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
@@ -455,6 +458,11 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerKinematicsSource, /getPositionAgoFromHistory\(this\._posHistory, seconds\)/);
   assert.match(playerKinematicsSource, /Player\.prototype\.getPredictedPosition\s*=/);
   assert.match(playerKinematicsSource, /predictFromHistory\(/);
+  assert.match(playerWeaponSource, /Player\.prototype\.cycleWeapon\s*=\s*function cycleWeapon\s*\(/);
+  assert.match(playerWeaponSource, /Player\.prototype\.collectWeapon\s*=\s*function collectWeapon\s*\(/);
+  assert.match(playerWeaponSource, /Player\.prototype\.swapWeapon\s*=\s*function swapWeapon\s*\(/);
+  assert.match(playerWeaponSource, /Player\.prototype\.equipWeapon\s*=\s*function equipWeapon\s*\(/);
+  assert.match(playerWeaponSource, /const MAX_BELT = 3/);
   assert.match(playerDamageSource, /Player\.prototype\.computeOutgoingDmgMul\s*=\s*function computeOutgoingDmgMul\s*\(/);
   assert.match(playerDamageSource, /NEON\.behavior\.computeOutgoingDmgMul\(this\)/);
   assert.match(playerDamageSource, /Player\.prototype\.logDamage\s*=\s*function logDamage\s*\(/);
@@ -582,6 +590,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /berserkerMul\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /fireAt\s*\(\s*px\s*,\s*py\s*,\s*spd\s*,\s*dmg\s*,\s*range\s*,\s*colour\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /patrol\s*\(\s*dt\s*,\s*map\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /cycleWeapon\s*\(\s*dir\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /collectWeapon\s*\(\s*w\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /swapWeapon\s*\(\s*slotIdx\s*,\s*w\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /equipWeapon\s*\(\s*w\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPositionAgo\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /getPredictedPosition\s*\(\s*seconds\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /computeOutgoingDmgMul\s*\(\s*\)\s*\{/);
@@ -648,6 +660,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.patrol\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
+  assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.cycleWeapon\s*=/);
+  assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.collectWeapon\s*=/);
+  assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.swapWeapon\s*=/);
+  assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.equipWeapon\s*=/);
   assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.computeOutgoingDmgMul\s*=/);
   assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.logDamage\s*=/);
   assert.match(sources.entitiesPlayerSurge, /Player\.prototype\._consumeSurgeShot\s*=/);

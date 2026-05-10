@@ -7719,50 +7719,6 @@ class Player {
     this._hotHandTimer=0;
   }
 
-  // ── Weapon Belt ──────────────────────────────────────────────────────
-  /**
-   * @param {any} [dir]
-   */
-  cycleWeapon(dir) {
-    if (!this.weapons || this.weapons.length <= 1) return;
-    this.weaponIdx = (this.weaponIdx + (dir || 1) + this.weapons.length) % this.weapons.length;
-    this.weapon = this.weapons[this.weaponIdx];
-    this.shootCooldown = 0;
-  }
-
-  /**
-   * @param {any} [w]
-   */
-  collectWeapon(w) {
-    if (!this.weapons) { this.weapons = [this.weapon]; this.weaponIdx = 0; }
-    const MAX_BELT = 3;
-    if (this.weapons.length < MAX_BELT) {
-      this.weapons.push(w);
-      return true; // collected into belt — no choice needed
-    }
-    return false; // belt full — caller should show swap UI
-  }
-
-  /**
-   * @param {any} [slotIdx]
-   * @param {any} [w]
-   */
-  swapWeapon(slotIdx, w) {
-    if (!this.weapons || slotIdx < 0 || slotIdx >= this.weapons.length) return;
-    this.weapons[slotIdx] = w;
-    if (slotIdx === this.weaponIdx) this.weapon = w;
-  }
-
-  /**
-   * @param {any} [w]
-   */
-  equipWeapon(w) {
-    if (!this.weapons) { this.weapons = []; this.weaponIdx = 0; }
-    this.weapon = w;
-    this.weapons[this.weaponIdx] = w;
-    this.shootCooldown = 0;
-  }
-
   xpNeeded() { return this.level*80; }
 
   effectiveAtk() {
