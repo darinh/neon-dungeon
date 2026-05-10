@@ -62,6 +62,7 @@ declare global {
     lobGrenade(tx?: any, ty?: any, map?: any): void;
     patrol(dt?: any, map?: any): void;
     reflectsProjectile(proj?: any): boolean;
+    summonMinion(map?: any): void;
   }
 
   function jp(code: string | null | undefined): boolean;

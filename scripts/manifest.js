@@ -100,6 +100,7 @@ const requiredInIndex = [
   './src/entities/volatile-cores.js',
   './src/entities/combat-effects.js',
   './src/entities/deferred-spawns.js',
+  './src/entities/enemy-summoner.js',
   './src/entities/shock-pulse.js',
   './src/render.js',
   './src/game.js',
