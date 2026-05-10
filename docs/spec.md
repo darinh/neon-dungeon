@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.87
+# NEON DUNGEON — Game Specification v6.1.88
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.88 | Entity module split: the GRENADIER grenade launch helper now lives in `src/entities/enemy-grenadier.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.lobGrenade()` still creates owner-positioned grenade projectiles with explicit target coordinates, floor-scaled `grenadeDmg`, projectile pool insertion, and `audio.grenadeLob()` while `src/entities.js` keeps `aiGrenadier()` retreat, range, and cooldown behavior. |
 | v6.1.87 | Entity module split: the HEALER wounded-ally selection helper now lives in `src/entities/enemy-healer.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._findHealTarget()` still selects the lowest health-ratio wounded non-boss ally within 6 tiles while skipping self, dead enemies, and phased WRAITHs; `src/entities.js` keeps `aiHealer()` retreat, heal timing, beam, audio, and particle behavior. |
 | v6.1.86 | Entity module split: the WARDLING ward-acquisition helper now lives in `src/entities/enemy-wardling.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._wlFindWard()` still rejects WARDLING chains, shards, bosses, dead/self targets, and cross-room targets while `src/entities.js` keeps `aiWardling()` timing, panic, interception, and melee behavior. |
 | v6.1.85 | Entity module split: the CONDUIT beam geometry helper now lives in `src/entities/enemy-conduit.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._cdHitsPlayer()` preserves segment-only beam hit testing, perpendicular width checks, and degenerate-link rejection while `src/entities.js` keeps `aiConduit()` pairing, ICD, LoS, solo-fire, and damage orchestration. |
