@@ -129,6 +129,7 @@ Good candidates:
 - Enemy projectile defense helpers. Done for `blocksProjectile()` and `reflectsProjectile()` in `src/entities/enemy-projectile-defense.js`.
 - CONDUIT beam geometry helper. Done for `_cdHitsPlayer()` in `src/entities/enemy-conduit.js`.
 - WARDLING ward acquisition helper. Done for `_wlFindWard()` in `src/entities/enemy-wardling.js`.
+- HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
