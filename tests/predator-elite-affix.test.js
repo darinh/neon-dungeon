@@ -53,6 +53,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_TEMPO = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-tempo.js'), 'utf8'
+);
 const ELITE_AFFIXES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'elite-affixes.js'), 'utf8'
 );
@@ -71,6 +74,7 @@ function stripComments(src) {
 
 const CONTENT_NC = stripComments(CONTENT);
 const ENTITIES_NC = stripComments(ENTITIES);
+const ENEMY_TEMPO_NC = stripComments(ENEMY_TEMPO);
 const ELITE_AFFIXES_NC = stripComments(ELITE_AFFIXES);
 const PLATFORM_NC = stripComments(PLATFORM);
 
@@ -236,7 +240,7 @@ test('tickEliteAffix decays predatorBuffTimer with dt (clamped at 0)', () => {
 // ─── berserkerMul branch ─────────────────────────────────────────────────
 
 test('berserkerMul returns 1.3 for PREDATOR while predatorBuffTimer > 0', () => {
-  const body = extractBlock(ENTITIES_NC, /berserkerMul\s*\(\s*\)\s*\{/);
+  const body = extractBlock(ENEMY_TEMPO_NC, /Enemy\.prototype\.berserkerMul\s*=\s*function berserkerMul\s*\(\s*\)\s*\{/);
   assert.ok(body, 'berserkerMul body must be extractable');
   // The +30% multiplier is the design-canonical value. Pinned exactly
   // because shifting to e.g. 1.5 would put PREDATOR above BERSERKER's
