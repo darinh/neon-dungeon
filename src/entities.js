@@ -4084,47 +4084,6 @@ class Enemy {
   }
 
   /**
-   * @param {any} [proj]
-   */
-  blocksProjectile(proj) {
-    // SHIELDER: 120° frontal arc — blocks player projectiles (not piercing/
-    // orbitals). Shield is now BREAKABLE: each blocked hit deals damage to
-    // shieldHp at the call site (content.js). When shieldHp drops to 0 the
-    // shield disappears for ~3s, blinks back in over the next 2s, and is
-    // fully operational again at 5s. shieldBrokenTimer is the time elapsed
-    // since the shield broke (-1 means not broken).
-    if (this.type === 'SHIELDER' && !this.dead && this.shieldHp > 0) {
-      const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
-      let diff = incomingAngle - this.shieldAngle;
-      while (diff > Math.PI) diff -= TWO_PI;
-      while (diff < -Math.PI) diff += TWO_PI;
-      return Math.abs(diff) < Math.PI / 3;
-    }
-    // REFLECTOR: 90° arc — blocks ally turret projectiles (player projs are reflected instead)
-    if (this.type === 'REFLECTOR' && !this.dead) {
-      const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
-      let diff = incomingAngle - this._rfAngle;
-      while (diff > Math.PI) diff -= TWO_PI;
-      while (diff < -Math.PI) diff += TWO_PI;
-      return Math.abs(diff) < Math.PI / 4;
-    }
-    return false;
-  }
-
-  /**
-   * @param {any} [proj]
-   */
-  reflectsProjectile(proj) {
-    // REFLECTOR: 90° frontal arc reflects player projectiles back at them
-    if (this.type !== 'REFLECTOR' || this.dead) return false;
-    const incomingAngle = Math.atan2(-proj.dy, -proj.dx);
-    let diff = incomingAngle - this._rfAngle;
-    while (diff > Math.PI) diff -= TWO_PI;
-    while (diff < -Math.PI) diff += TWO_PI;
-    return Math.abs(diff) < Math.PI / 4;
-  }
-
-  /**
    * @param {any} [dt]
    * @param {any} [player]
    * @param {any} [map]
