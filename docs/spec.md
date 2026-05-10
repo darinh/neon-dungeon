@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.92
+# NEON DUNGEON — Game Specification v6.1.93
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.93 | Entity module split: the WRAITH-style emergence tile helper now lives in `src/entities/enemy-wraith.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._wrFindEmergeTile()` still samples passable tiles near the perceived target, falls back to the current passable position, and searches outward for any passable emergency tile while `src/entities.js` keeps WRAITH and TUNNELLER state transitions, phase timing, firing, movement, and audio behavior. |
 | v6.1.92 | Entity module split: the PHANTOM room reposition helper now lives in `src/entities/enemy-phantom.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._phReposition()` still picks up to 15 passable tiles inside the PHANTOM's current room, prefers candidates more than 3 tiles from the current target, and falls back to the current position when no better tile is found while `src/entities.js` keeps PHANTOM cloak, telegraph, attack burst, cooldown, and recloak behavior. |
 | v6.1.91 | Entity module split: the NEXUS link-maintenance helpers now live in `src/entities/enemy-nexus.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._nxUpdateLinks()` still refreshes room-scoped links, breaks links while stunned, skips bosses/NEXUS/phased/disguised/invisible targets, applies `_nxBoosted`, and plays `audio.nexusLink()` on new links; `Enemy.prototype._nxFindAllyCluster()` still selects a nearby ally cluster for NEXUS retreat/drift while `src/entities.js` keeps `aiNexus()` timing, firing, movement, and death-feedback behavior. |
 | v6.1.90 | Entity module split: the MIMIC reveal helper now lives in `src/entities/enemy-mimic.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.revealMimic()` still clears disguise state, starts the reveal telegraph, plays reveal audio/particles/shake/message, and locks the lunge direction toward `_tx/_ty` while `src/entities.js` keeps `aiMimic()` proximity, telegraph, burst chase, and melee behavior. |
