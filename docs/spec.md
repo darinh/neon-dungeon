@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.89
+# NEON DUNGEON — Game Specification v6.1.90
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.90 | Entity module split: the MIMIC reveal helper now lives in `src/entities/enemy-mimic.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.revealMimic()` still clears disguise state, starts the reveal telegraph, plays reveal audio/particles/shake/message, and locks the lunge direction toward `_tx/_ty` while `src/entities.js` keeps `aiMimic()` proximity, telegraph, burst chase, and melee behavior. |
 | v6.1.89 | Entity module split: the SUMMONER minion enqueue helper now lives in `src/entities/enemy-summoner.js`, loaded after `src/entities.js` and `src/entities/deferred-spawns.js` but before gameplay orchestration. `Enemy.prototype.summonMinion()` still selects a nearby passable spawn tile, falls back to the summoner position, marks deferred DRONE spawns as summoned with `_summonerRef`, and plays summon audio/particles while `src/entities.js` keeps `aiSummoner()` retreat, range, and cooldown behavior. |
 | v6.1.88 | Entity module split: the GRENADIER grenade launch helper now lives in `src/entities/enemy-grenadier.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.lobGrenade()` still creates owner-positioned grenade projectiles with explicit target coordinates, floor-scaled `grenadeDmg`, projectile pool insertion, and `audio.grenadeLob()` while `src/entities.js` keeps `aiGrenadier()` retreat, range, and cooldown behavior. |
 | v6.1.87 | Entity module split: the HEALER wounded-ally selection helper now lives in `src/entities/enemy-healer.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._findHealTarget()` still selects the lowest health-ratio wounded non-boss ally within 6 tiles while skipping self, dead enemies, and phased WRAITHs; `src/entities.js` keeps `aiHealer()` retreat, heal timing, beam, audio, and particle behavior. |
