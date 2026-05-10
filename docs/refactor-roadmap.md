@@ -130,6 +130,7 @@ Good candidates:
 - CONDUIT beam geometry helper. Done for `_cdHitsPlayer()` in `src/entities/enemy-conduit.js`.
 - WARDLING ward acquisition helper. Done for `_wlFindWard()` in `src/entities/enemy-wardling.js`.
 - HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
+- GRENADIER grenade launch helper. Done for `lobGrenade()` in `src/entities/enemy-grenadier.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
