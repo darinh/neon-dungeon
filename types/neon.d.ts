@@ -55,6 +55,8 @@ declare global {
     _forgetTarget(): void;
     _isLeashedFromRoom(): boolean;
     _findHealTarget(): any;
+    _nxFindAllyCluster(): any;
+    _nxUpdateLinks(): void;
     _wlFindWard(): any;
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
