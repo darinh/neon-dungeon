@@ -20,6 +20,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_WARDLING = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-wardling.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -91,7 +94,7 @@ test('_wlFindWard excludes other WARDLINGs (no infinite chains)', () => {
   // If WARDLING could ward another WARDLING, you'd get long chains and
   // the player might never reach the actual threat. Hard exclusion.
   const re = /_wlFindWard[\s\S]{0,800}e\.type\s*===\s*'WARDLING'/;
-  assert.match(ENTITIES, re, '_wlFindWard must reject WARDLING-type wards');
+  assert.match(ENEMY_WARDLING, re, '_wlFindWard must reject WARDLING-type wards');
 });
 
 test('_wlFindWard excludes bosses and shards', () => {
@@ -100,14 +103,14 @@ test('_wlFindWard excludes bosses and shards', () => {
   // lived (SPLITTER children) and would constantly re-trigger ward
   // re-acquisition.
   const re = /_wlFindWard[\s\S]{0,800}e\.isShard\s*\|\|\s*e\.isBoss/;
-  assert.match(ENTITIES, re, '_wlFindWard must skip shards and bosses');
+  assert.match(ENEMY_WARDLING, re, '_wlFindWard must skip shards and bosses');
 });
 
 test('_wlFindWard is room-scoped', () => {
   // A WARDLING bonding to an enemy in a different room would walk
   // through walls (or get stuck) and ruin the local-priority puzzle.
   const re = /_wlFindWard[\s\S]{0,800}e\.room\s*!==\s*this\.room/;
-  assert.match(ENTITIES, re, '_wlFindWard must be room-scoped');
+  assert.match(ENEMY_WARDLING, re, '_wlFindWard must be room-scoped');
 });
 
 // ─── Behaviour invariants ───────────────────────────────────────────────
@@ -124,7 +127,7 @@ test('WARDLING positions itself between TARGET (_tx/_ty) and ward', () => {
   // The interception point uses _tx/_ty (taunt-aware) NOT player.x/y.
   // This is the lesson from ECHOER PR — any mob that samples player
   // outside _tx/_ty fails the hologram-decoy contract.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}_wlFindWard\s*\(\s*\)/);
+  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Must compute interception relative to _tx/_ty:
   assert.match(block[0], /this\._tx\s*-\s*ward\.x/, 'interception vector must use this._tx (taunt-aware), not player.x');
@@ -135,7 +138,7 @@ test('WARDLING handles player-on-ward degenerate case (vector mag ~ 0)', () => {
   // If _tx==ward.x and _ty==ward.y the unit vector is undefined. Code
   // must guard with a near-zero magnitude check or it produces NaN
   // positions.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}_wlFindWard\s*\(\s*\)/);
+  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // pmag guard with a small epsilon
   assert.match(block[0], /pmag\s*<\s*0\.\d+/, 'aiWardling must guard against zero-magnitude pdx,pdy (player-on-ward)');
@@ -150,7 +153,7 @@ test('WARDLING calls meleeAttack on body contact (atk would otherwise be decorat
   // player) and the guarding branch (player runs INTO the bodyguard
   // mid-flank). meleeAttack itself is taunt-aware (real-player distance
   // check inside), so hologram bait still defuses the contact.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}_wlFindWard\s*\(\s*\)/);
+  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Count meleeAttack calls — must be at least 2 (panic + guarding paths).
   const meleeCalls = (block[0].match(/this\.meleeAttack\s*\(\s*player\s*\)/g) || []).length;
@@ -165,7 +168,7 @@ test('WARDLING re-acquisition timer is NOT bypassed when ward is null (perf guar
   // throttle the comment promises. Fix: timer ALWAYS gates the scan;
   // only an alive ward dying triggers an extra immediate scan.
   // The pattern we MUST NOT have: starting the predicate with `!this._wlWard ||`
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}_wlFindWard\s*\(\s*\)/);
+  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Negative assertion: a re-acquire `if` whose condition starts with
   // `!this._wlWard ||` would defeat the timer — flag any such pattern.
