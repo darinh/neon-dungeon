@@ -8210,37 +8210,6 @@ class Player {
   }
 
   /**
-   * Returns the player's recorded position from `seconds` ago, or null
-   * if the history doesn't go back that far (e.g. just spawned, just
-   * crossed a floor). Used by ECHOER to fire predictively at where the
-   * player WAS, rewarding unpredictable movement and punishing patterns.
-   * Linear scan, history is small (<= ~96 entries @ 60fps over 1.6s).
-   * @param {number} seconds
-   * @returns {{x:number, y:number} | null}
-   */
-  getPositionAgo(seconds) {
-    return getPositionAgoFromHistory(this._posHistory, seconds);
-  }
-
-  /**
-   * Returns the player's PREDICTED position `seconds` in the future,
-   * extrapolated linearly from velocity (current pos vs ~0.2s ago),
-   * with velocity clamped to PROPHET_VEL_CAP to neutralise dash/teleport
-   * blowups. Returns null if history doesn't reach back the velocity-
-   * sample window (e.g. just spawned, just changed floors). Used by
-   * PROPHET to fire at where the player WILL BE — the inverse of
-   * getPositionAgo (where the player WAS, used by ECHOER).
-   * @param {number} seconds lookahead in seconds
-   * @returns {{x:number, y:number, vx:number, vy:number, vmag:number} | null}
-   */
-  getPredictedPosition(seconds) {
-    return predictFromHistory(
-      this._posHistory, this.x, this.y,
-      seconds, PROPHET_VEL_SAMPLE, PROPHET_VEL_CAP
-    );
-  }
-
-  /**
    * @param {any} [dmg]
    * @param {any} [source]
    * @param {any} [opts]
