@@ -7763,12 +7763,6 @@ class Player {
     this.shootCooldown = 0;
   }
 
-  // Outgoing damage multiplier for player weapon hits. Delegated to the
-  // testable pure module (src/meta/behavior.js).
-  computeOutgoingDmgMul() {
-    return NEON.behavior.computeOutgoingDmgMul(this);
-  }
-
   /**
    * @param {any} [source]
    * @param {any} [amount]

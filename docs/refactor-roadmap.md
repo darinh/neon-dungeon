@@ -136,6 +136,7 @@ Good candidates:
 - NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
 - WRAITH-style emergence helper. Done for `_wrFindEmergeTile()` in `src/entities/enemy-wraith.js`.
+- Player outgoing damage multiplier delegator. Done for `computeOutgoingDmgMul()` in `src/entities/player-damage.js`.
 - Player SURGE shot-consumption delegator. Done for `_consumeSurgeShot()` in `src/entities/player-surge.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
