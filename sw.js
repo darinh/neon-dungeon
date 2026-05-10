@@ -71,6 +71,7 @@ const ASSETS = [
   './src/entities/player-perk-tuning.js',
   './src/entities.js',
   './src/entities/spawn-initializers.js',
+  './src/entities/enemy-spawning.js',
   './src/entities/elite-affixes.js',
   './src/entities/status-effects.js',
   './src/entities/ai-helpers.js',
