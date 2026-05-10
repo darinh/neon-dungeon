@@ -51,6 +51,7 @@ declare global {
 
   interface Enemy {
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
+    patrol(dt?: any, map?: any): void;
   }
 
   function jp(code: string | null | undefined): boolean;
