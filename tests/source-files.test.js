@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entities', 'entitiesSpawnInitializers', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entities', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesShockPulse', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -44,6 +44,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesRoomIndex.replaceAll('\\', '/'), 'src/entities/room-index.js');
   assert.equal(SOURCE_FILE_PATHS.entities.replaceAll('\\', '/'), 'src/entities.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesSpawnInitializers.replaceAll('\\', '/'), 'src/entities/spawn-initializers.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemySpawning.replaceAll('\\', '/'), 'src/entities/enemy-spawning.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEliteAffixes.replaceAll('\\', '/'), 'src/entities/elite-affixes.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesStatusEffects.replaceAll('\\', '/'), 'src/entities/status-effects.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesAiHelpers.replaceAll('\\', '/'), 'src/entities/ai-helpers.js');
@@ -95,6 +96,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyAbilityTuning').endsWith('src/entities/enemy-ability-tuning.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesRoomIndex').endsWith('src/entities/room-index.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesSpawnInitializers').endsWith('src/entities/spawn-initializers.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemySpawning').endsWith('src/entities/enemy-spawning.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEliteAffixes').endsWith('src/entities/elite-affixes.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesStatusEffects').endsWith('src/entities/status-effects.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesAiHelpers').endsWith('src/entities/ai-helpers.js'), true);
@@ -140,6 +142,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const enemyAwarenessSource = readSourceFile(__dirname, 'entitiesEnemyAwareness');
   const entitySource = readSourceFile(__dirname, 'entities');
   const spawnInitializerSource = readSourceFile(__dirname, 'entitiesSpawnInitializers');
+  const enemySpawningSource = readSourceFile(__dirname, 'entitiesEnemySpawning');
   const roomIndexSource = readSourceFile(__dirname, 'entitiesRoomIndex');
   const eliteAffixSource = readSourceFile(__dirname, 'entitiesEliteAffixes');
   const statusEffectSource = readSourceFile(__dirname, 'entitiesStatusEffects');
@@ -221,6 +224,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyAwarenessSource, /const\s+ENEMY_ROOM_LEASH_TILES\s*=\s*8/);
   assert.match(spawnInitializerSource, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(spawnInitializerSource, /type\s*===\s*'GHOST_PROJECTOR'[\s\S]{0,500}_gpPendingType\s*=\s*null/);
+  assert.match(enemySpawningSource, /function\s+spawnEnemy\s*\(/);
+  assert.match(enemySpawningSource, /scaleEnemySpawnHpForModifier\(hp, _EG\.modifier, isBoss\)/);
   assert.match(roomIndexSource, /const\s+enemiesByRoom\s*=\s*new Map\(\)/);
   assert.match(roomIndexSource, /function\s+enemiesInRoomIter\s*\(/);
   assert.match(eliteAffixSource, /function\s+tickEliteAffix\s*\(/);
@@ -431,6 +436,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /let\s+_cdEidCounter\s*=\s*0/);
   assert.doesNotMatch(sources.entities, /const\s+WALL_FACING\s*=/);
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
+  assert.doesNotMatch(sources.entities, /function\s+spawnEnemy\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
   assert.match(sources.entitiesEnemyAwareness, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
@@ -448,6 +454,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesSpawnInitializers, /let\s+_cdEidCounter\s*=\s*0/);
   assert.match(sources.entitiesSpawnInitializers, /function\s+initializeEnemySpawnState\s*\(/);
   assert.match(sources.entitiesSpawnInitializers, /type\s*===\s*'GHOST_PROJECTOR'[\s\S]{0,500}_gpPendingType\s*=\s*null/);
+  assert.match(sources.entitiesEnemySpawning, /function\s+spawnEnemy\s*\(/);
+  assert.match(sources.entitiesEnemySpawning, /registerEnemyInRoom\(e\)/);
   assert.match(sources.entitiesCombatEffects, /function\s+_applyStunOnlyEffects\s*\(/);
   assert.match(sources.entitiesCombatEffects, /function\s+applyHitEffects\s*\(/);
   assert.match(sources.entitiesCombatEffects, /function\s+applyOnKill\s*\(/);
