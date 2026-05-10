@@ -24,6 +24,7 @@ const {
 } = require('./_generation-fixture.js');
 
 const GAME = fs.readFileSync(path.join(__dirname, '..', 'src', 'game.js'), 'utf8');
+const FLOOR_GENERATOR = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'floor-generator.js'), 'utf8');
 
 function reachWithAllLocksOpen(dungeon) {
   return computeReach(dungeon, new Set(['red', 'blue', 'gold']));
@@ -403,6 +404,61 @@ function assertNoDoorBypassCorners(dungeon, label) {
   }
   assert.deepEqual(failures, []);
 }
+
+function gridHasDoorBypassCorner(grid) {
+  for (let y = 1; y < grid.length - 1; y++) {
+    for (let x = 1; x < grid[y].length - 1; x++) {
+      if (!isDoorLikeTile(grid[y][x])) continue;
+      for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        if (
+          isWalkAroundDoorTile(grid[y][x + dx]) &&
+          isWalkAroundDoorTile(grid[y + dy][x]) &&
+          isWalkAroundDoorTile(grid[y + dy][x + dx])
+        ) return true;
+      }
+    }
+  }
+  return false;
+}
+
+test('door placement invariant rejects walk-around 3x3 door bypasses', () => {
+  const F = T.FLOOR;
+  const W = T.WALL;
+  const D = T.DOOR;
+  const cases = [
+    {
+      label: 'reported floor bypass',
+      grid: [[F, W, F], [F, D, F], [F, F, F]],
+      bypass: true,
+    },
+    {
+      label: 'non-floor walkable bypass corner',
+      grid: [[F, W, F], [F, D, F], [F, T.TRAP_SPIKE, T.PLASMA]],
+      bypass: true,
+    },
+    {
+      label: 'normal T intersection',
+      grid: [[F, W, F], [F, D, F], [W, F, W]],
+      bypass: false,
+    },
+    {
+      label: 'L path door',
+      grid: [[W, W, W], [F, D, W], [W, F, W]],
+      bypass: false,
+    },
+    {
+      label: 'four-way intersection',
+      grid: [[W, F, W], [F, D, F], [W, F, W]],
+      bypass: false,
+    },
+  ];
+  for (const c of cases) assert.equal(gridHasDoorBypassCorner(c.grid), c.bypass, c.label);
+});
+
+test('floor generator door bypass sealer checks open corners, not only floor corners', () => {
+  assert.match(FLOOR_GENERATOR, /isOpenDoorBypassTile\(map\[y \+ dy\]\?\.\[x \+ dx\]\)/);
+  assert.doesNotMatch(FLOOR_GENERATOR, /map\[y \+ dy\]\?\.\[x \+ dx\] === T\.FLOOR/);
+});
 
 function assertNormalRuntimeStart(runtime, reason = '') {
   const prefix = reason ? `[${reason}] ` : '';
