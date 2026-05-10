@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.82
+# NEON DUNGEON — Game Specification v6.1.83
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.83 | Entity module split: enemy target-eligibility, target-memory clearing, and room-leash checks now live in `src/entities/enemy-targeting.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype._canTarget()`, `_forgetTarget()`, and `_isLeashedFromRoom()` preserve taunt, cloak/decoy, target-memory, and room-leash behavior while `src/entities.js` keeps the update state machine and AI call sites. |
 | v6.1.82 | Entity module split: elite combat-tempo scaling now lives in `src/entities/enemy-tempo.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.berserkerMul()` still applies BERSERKER, FRENZY, and PREDATOR multipliers unchanged while `src/entities.js` keeps the combat and AI call sites that consume it. |
 | v6.1.81 | Entity module split: generic enemy patrol targeting now lives in `src/entities/enemy-movement.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.patrol()` still chooses in-room patrol targets with the same `rnd()` ranges and delegates movement to `Enemy.prototype.moveToward()`, while `src/entities.js` keeps direct movement and AI call sites. |
 | v6.1.80 | Entity module split: standard enemy projectile launching now lives in `src/entities/enemy-projectiles.js`, loaded after `src/entities.js` and before gameplay orchestration. `Enemy.prototype.fireAt()` still creates the same `Projectile`, owner metadata, projectile-array insertion, and enemy shoot audio while `src/entities.js` keeps enemy AI call sites. |

@@ -125,6 +125,7 @@ Good candidates:
 - Standard enemy projectile launching. Done for `Enemy.prototype.fireAt()` in `src/entities/enemy-projectiles.js`.
 - Generic enemy patrol targeting. Done for `Enemy.prototype.patrol()` in `src/entities/enemy-movement.js`.
 - Elite combat-tempo scaling. Done for `Enemy.prototype.berserkerMul()` in `src/entities/enemy-tempo.js`.
+- Enemy target eligibility and leash helpers. Done for `_canTarget()`, `_forgetTarget()`, and `_isLeashedFromRoom()` in `src/entities/enemy-targeting.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 

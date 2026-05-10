@@ -8,13 +8,14 @@ const vm = require('node:vm');
 
 const ENTITIES = fs.readFileSync(path.join(__dirname, '..', 'src/entities.js'), 'utf8');
 const ENEMY_AWARENESS = fs.readFileSync(path.join(__dirname, '..', 'src/entities', 'enemy-awareness.js'), 'utf8');
+const ENEMY_TARGETING = fs.readFileSync(path.join(__dirname, '..', 'src/entities', 'enemy-targeting.js'), 'utf8');
 
-function sourceBetween(start, end) {
-  const startIndex = ENTITIES.indexOf(start);
+function sourceBetween(start, end, source = ENTITIES) {
+  const startIndex = source.indexOf(start);
   assert.notEqual(startIndex, -1, `missing start marker ${start}`);
-  const endIndex = ENTITIES.indexOf(end, startIndex + start.length);
+  const endIndex = source.indexOf(end, startIndex + start.length);
   assert.notEqual(endIndex, -1, `missing end marker ${end}`);
-  return ENTITIES.slice(startIndex, endIndex);
+  return source.slice(startIndex, endIndex);
 }
 
 function targetMemoryHarness({ canTarget = true, los = true } = {}) {
@@ -68,7 +69,7 @@ ${block}
 }
 
 test('enemy targeting uses last-seen memory instead of live player coordinates', () => {
-  const update = sourceBetween('  update(dt, player, map) {', '  // Taunt-aware targeting check');
+  const update = sourceBetween('  update(dt, player, map) {', '  /**\n   * @param {any} [tx]');
 
   assert.match(ENEMY_AWARENESS, /const ENEMY_TARGET_MEMORY_SECONDS = 3;/);
   assert.match(ENEMY_AWARENESS, /const ENEMY_SIGHT_RANGE = 15;/);
@@ -88,9 +89,9 @@ test('enemy targeting uses last-seen memory instead of live player coordinates',
 });
 
 test('_canTarget and room leash depend on active target knowledge', () => {
-  const canTarget = sourceBetween('  _canTarget() {', '  _forgetTarget()');
-  const forget = sourceBetween('  _forgetTarget() {', '  _isLeashedFromRoom()');
-  const leash = sourceBetween('  _isLeashedFromRoom() {', '  moveToward(tx,ty,spd,dt,map,ignoreWalls) {');
+  const canTarget = sourceBetween('Enemy.prototype._canTarget = function _canTarget() {', 'Enemy.prototype._forgetTarget', ENEMY_TARGETING);
+  const forget = sourceBetween('Enemy.prototype._forgetTarget = function _forgetTarget() {', 'Enemy.prototype._isLeashedFromRoom', ENEMY_TARGETING);
+  const leash = sourceBetween('Enemy.prototype._isLeashedFromRoom = function _isLeashedFromRoom() {', '};', ENEMY_TARGETING);
 
   assert.match(canTarget, /this\._targetKnown && canTargetPlayer\(\)/);
   assert.match(forget, /this\._targetKnown = false;/);
