@@ -20,6 +20,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'modifiers.js'), 'utf8') + '\n' +
   fs.readFileSync(path.join(ROOT, 'src', 'content.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_SPAWNING = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-spawning.js'), 'utf8');
 const SPAWN_MODIFIERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-modifiers.js'), 'utf8');
 const SW = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 
@@ -47,7 +48,7 @@ test('FRAGILE applies 0.55x HP to non-boss enemies in spawnEnemy', () => {
   // Sits inside the `if (!isBoss)` guard alongside SWARM (0.6x) and
   // FORTIFIED (1.4x) — bosses are intentionally unscaled because their
   // phase transitions are HP-ratio based and tuned tight.
-  assert.match(ENTITIES, /scaleEnemySpawnHpForModifier\(hp, _EG\.modifier, isBoss\)/,
+  assert.match(ENEMY_SPAWNING, /scaleEnemySpawnHpForModifier\(hp, _EG\.modifier, isBoss\)/,
     'spawnEnemy must route spawn HP through the modifier-scaling helper');
   const m = SPAWN_MODIFIERS.match(/modifier === 'FRAGILE'\)\s*return Math\.round\(hp \* (0\.\d+)\)/);
   assert.ok(m, 'FRAGILE HP scaling must be wired in the spawn modifier helper');

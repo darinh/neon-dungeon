@@ -117,6 +117,7 @@ Good candidates:
 - Static per-enemy ability tuning. Done for the module-top constants consumed by enemy AI/draw/helper paths in `src/entities/enemy-ability-tuning.js`.
 - Static Player perk tuning. Done for STRIDE/DEADEYE/HOT_HAND constants in `src/entities/player-perk-tuning.js`.
 - Per-type spawn state initialization. Done for `initializeEnemySpawnState()` and the CONDUIT spawn-order counter in `src/entities/spawn-initializers.js`.
+- Enemy spawn construction orchestration. Done for `spawnEnemy()` in `src/entities/enemy-spawning.js`.
 - Wall-device orientation tuning. Done for the shared `WALL_FACING` table in `src/entities/wall-facing.js`.
 - Shock Pulse pickup detonation. Done for `triggerShockPulse` in `src/entities/shock-pulse.js`.
 - Boss/enemy selection helpers.
