@@ -20,6 +20,7 @@ const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'entitiesCombatEffects',
   'entitiesDeferredSpawns',
   'entitiesShockPulse',
+  'entitiesPlayerKinematics',
   'render',
   'game',
 ]);
@@ -62,6 +63,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesEliteAffixes: path.join('src', 'entities', 'elite-affixes.js'),
   entitiesStatusEffects: path.join('src', 'entities', 'status-effects.js'),
   entitiesAiHelpers: path.join('src', 'entities', 'ai-helpers.js'),
+  entitiesPlayerKinematics: path.join('src', 'entities', 'player-kinematics.js'),
   entitiesArchitectWalls: path.join('src', 'entities', 'architect-walls.js'),
   entitiesBeacons: path.join('src', 'entities', 'beacons.js'),
   entitiesCrates: path.join('src', 'entities', 'crates.js'),

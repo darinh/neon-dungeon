@@ -38,6 +38,17 @@ declare global {
   // src/game.js (which is @ts-checked) with a `Record<string, any>` JSDoc
   // type. Cross-file consumers see it via the shared Script Realm — no
   // ambient redeclare needed.
+  interface Player {
+    getPositionAgo(seconds: number): { x: number; y: number } | null;
+    getPredictedPosition(seconds: number): {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      vmag: number;
+    } | null;
+  }
+
   function jp(code: string | null | undefined): boolean;
   function km(action: string): string | null | undefined;
   function isTouchDevice(): boolean;
