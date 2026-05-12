@@ -53,6 +53,7 @@ const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'entitiesEnemySeeker',
   'entitiesEnemyEchoer',
   'entitiesEnemyProphet',
+  'entitiesEnemyCryophage',
   'render',
   'game',
 ]);
@@ -141,6 +142,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesEnemySeeker: path.join('src', 'entities', 'enemy-seeker.js'),
   entitiesEnemyEchoer: path.join('src', 'entities', 'enemy-echoer.js'),
   entitiesEnemyProphet: path.join('src', 'entities', 'enemy-prophet.js'),
+  entitiesEnemyCryophage: path.join('src', 'entities', 'enemy-cryophage.js'),
   entitiesCombatEffects: path.join('src', 'entities', 'combat-effects.js'),
   entitiesDeferredSpawns: path.join('src', 'entities', 'deferred-spawns.js'),
   entitiesShockPulse: path.join('src', 'entities', 'shock-pulse.js'),
