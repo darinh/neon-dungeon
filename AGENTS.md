@@ -87,10 +87,21 @@ These are hard rules, not preferences:
 - The checked-in PR branch-policy workflow enforces the source branch for PRs to
   `main`. It cannot enforce which GitHub merge button a human clicks, so agents
   must explicitly verify and use the required merge method before merging.
+- Immediately before any `gh pr merge`, run a fresh
+  `gh pr view --json state,mergeStateStatus,statusCheckRollup,headRefName,baseRefName`
+  and inspect it. If `state` is not `OPEN`, do not run the merge command; fetch
+  branch tips and create or use a valid replacement PR instead. Existing
+  `develop` -> `main` promotion PRs may be used only after verifying they are
+  open, target `main`, come from this repository's `develop`, and include the
+  commits intended for promotion.
 - If `gh pr merge` exits nonzero after printing a successful remote merge, treat
   the result as ambiguous until `gh pr view --json state,mergedAt,mergeCommit`
   proves whether the PR merged. Do not retry, repair, or clean up based only on
   the local exit code.
+- `gh pr edit` failures caused by GitHub CLI GraphQL field deprecations are
+  non-fatal for cosmetic title/body updates. If the edit is materially required,
+  use `gh api repos/:owner/:repo/pulls/:number -X PATCH`; otherwise leave the PR
+  text unchanged and proceed.
 - After a `develop` -> `main` rebase promotion, verify `origin/develop` and
    `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
    the rebase merge, reconcile `develop` back to the released `main` tip with a
