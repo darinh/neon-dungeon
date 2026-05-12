@@ -699,6 +699,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /aiTether\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiVaultmaster\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiNullifier\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiSeeker\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.match(sources.entities, /_lpHasActivePeer\(\)\)\s*\{[\s\S]{0,160}this\._lpState\s*=\s*'windup'/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
@@ -781,7 +782,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesPlayerProgression, /Player\.prototype\.xpNeeded\s*=/);
   assert.match(sources.entitiesPlayerProgression, /Player\.prototype\.gainXP\s*=/);
   assert.match(sources.entitiesPlayerSurge, /Player\.prototype\._consumeSurgeShot\s*=/);
+  assert.match(sources.entitiesEnemySeeker, /Enemy\.prototype\.aiSeeker\s*=\s*function\s+aiSeeker\s*\(/);
   assert.match(sources.entitiesEnemySeeker, /Enemy\.prototype\._seekerDetonate\s*=/);
+  assert.match(sources.entitiesEnemySeeker, /this\._seekerDetonate\(player,\s*map\)/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
 });
