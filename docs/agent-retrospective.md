@@ -83,7 +83,11 @@ Run and record these before verification or review:
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
-6. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+6. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+   assume the worktree may be partially modified. Before retrying, record
+   `git status --porcelain`, inspect every touched target or the affected diff,
+   and retry with smaller patches grouped by file or tightly related surface.
+7. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
@@ -135,6 +139,9 @@ Collect only facts that affect future behavior:
 - fresh-worktree bootstrap status;
 - new-runtime-file surface audit, if a runtime file was added or moved;
 - classic-script runtime proof, if top-level globals moved;
+- reviewed change identity: reviewed commit SHA or unstaged-diff description, plus
+  merge/release tree-equivalence proof when squash or rebase promotion rewrites
+  commit SHAs;
 - review findings, including false positives and why they happened;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
