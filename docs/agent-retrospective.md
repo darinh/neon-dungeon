@@ -88,16 +88,19 @@ Run and record these before verification or review:
    replaced a method that depends on dynamic `this`. Static checks and source
    greps are not enough for a moved dispatch path: identify which test exercises
    the new path through the runtime receiver/export/event handler. If none does,
-    add a focused behavioral smoke test before review. For prototype helpers,
-    also verify the helper is callable from an instance so class-field shadowing
-    cannot pass source-only tests. Preserve domain comments and invariant notes
-    from moved blocks, or record why each omitted comment is obsolete; semantic
-    comments are behavior evidence, not formatting. For extracted domain
-    behavior, require at least one review pass to check invariant/comment
-    preservation explicitly instead of relying only on generic code review.
+   add a focused behavioral smoke test before review. For prototype helpers,
+   also verify the helper is callable from an instance so class-field shadowing
+   cannot pass source-only tests. Preserve domain comments and invariant notes
+   from moved blocks, or record why each omitted comment is obsolete; semantic
+   comments are behavior evidence, not formatting. For extracted domain
+   behavior, require at least one review pass to check invariant/comment
+   preservation explicitly instead of relying only on generic code review.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
-   concern does not get relitigated without new evidence.
+   concern does not get relitigated without new evidence. Any reviewer claim
+   that a removed invariant, comment, symbol, or behavior is "preserved
+   elsewhere" must cite the destination file and line range, and the agent must
+   verify that citation before accepting the claim.
 6. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
@@ -224,11 +227,23 @@ Collect only facts that affect future behavior:
    remote side effects, verify the remote state, local branch/worktree state,
    and remaining cleanup separately before retrying or claiming completion.
    For `gh pr merge` ambiguity, verify with
-    `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
-    merge failed or only local cleanup failed. If a local worktree already has
-    the target branch checked out, omit `--delete-branch` on the merge command or
-    perform remote cleanup separately so expected local cleanup failures do not
-    obscure the remote outcome.
+   `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
+   merge failed or only local cleanup failed. Before any merge command, use a
+   parsed state preflight that hard-stops unless the PR is still open; printing
+   JSON is not enough:
+
+   ```bash
+   state=$(gh pr view "$pr" --json state --jq .state)
+   if [ "$state" != "OPEN" ]; then
+     echo "PR #$pr is $state; aborting merge"
+     exit 1
+   fi
+   gh pr merge "$pr" --squash
+   ```
+
+   If a local worktree already has the target branch checked out, omit
+   `--delete-branch` on the merge command or perform remote cleanup separately
+   so expected local cleanup failures do not obscure the remote outcome.
    For release promotions, verify `origin/main == origin/develop` after any
    required post-release alignment and record whether repository rules were
    bypassed by the durable admin bypass rather than temporary rule deletion.
