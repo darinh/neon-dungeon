@@ -153,7 +153,9 @@ Good candidates:
 - MAGPIE stale-target detection. Done for `isMagpieTargetStale()` in `src/entities/ai-helpers.js`.
 - MAGPIE grab-range detection. Done for `isMagpieTargetInGrabRange()` in `src/entities/ai-helpers.js`.
 - MAGPIE carrying flee decision. Done for `shouldMagpieFlee()` in `src/entities/ai-helpers.js`.
+- MAGPIE AI presentation. Done for `aiMagpie()` in `src/entities/enemy-magpie.js`.
 - MAGNETON AI presentation. Done for `aiMagneton()` in `src/entities/enemy-magneton.js`.
+- SPECTRE AI presentation. Done for `aiSpectre()` in `src/entities/enemy-spectre.js`.
 - TETHER AI presentation and slow-aura accumulation. Done for `aiTether()` in `src/entities/enemy-tether.js`.
 - VAULTMASTER AI presentation. Done for `aiVaultmaster()` in `src/entities/enemy-vaultmaster.js`.
 - NULLIFIER AI presentation. Done for `aiNullifier()` in `src/entities/enemy-nullifier.js`.
