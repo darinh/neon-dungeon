@@ -87,6 +87,10 @@ These are hard rules, not preferences:
 - The checked-in PR branch-policy workflow enforces the source branch for PRs to
   `main`. It cannot enforce which GitHub merge button a human clicks, so agents
   must explicitly verify and use the required merge method before merging.
+- If `gh pr merge` exits nonzero after printing a successful remote merge, treat
+  the result as ambiguous until `gh pr view --json state,mergedAt,mergeCommit`
+  proves whether the PR merged. Do not retry, repair, or clean up based only on
+  the local exit code.
 - After a `develop` -> `main` rebase promotion, verify `origin/develop` and
    `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
    the rebase merge, reconcile `develop` back to the released `main` tip with a
@@ -100,6 +104,7 @@ These are hard rules, not preferences:
 
 | Command | Purpose |
 |---|---|
+| `npm ci` | Install exact locked dependencies in a fresh worktree before baseline verification. Use this instead of `npm install` when `node_modules/` is absent. |
 | `npm test` | Run the full test suite (Node built-in test runner, 2300+ tests). Must exit 0. |
 | `npm run typecheck` | Run `tsc --noEmit` over `src/` + `engine/` + `tests/` + `types/`. Only files with `// @ts-check` are checked. As of 2026-04-26 every `src/**/*.js` has `// @ts-check`; engine modules are also included by `tsconfig.json`. Must exit 0. |
 | `npm run lint` | Run `eslint .` over the repository. Currently exits 0 with no errors and no warnings — keep it that way. |
@@ -137,6 +142,9 @@ These are hard rules, not preferences:
 - New code: add `// @ts-check` at top of every new `.js` file. Use JSDoc `@param`/`@returns`/`@typedef` for shapes.
 - Existing code: opt in file-by-file. When you add `// @ts-check`, fix all `tsc --noEmit` errors that file produces (or use `// @ts-expect-error` with a tracking todo).
 - Shared shapes: declare in `types/*.d.ts` (see `types/engine.d.ts`, `types/game.d.ts`, `types/neon.d.ts`).
+- When moving a prototype method or other typed global surface, inspect and
+  update `types/neon.d.ts` (or the relevant `types/*.d.ts`) before the first full
+  `npm run check`; source-text tests alone do not prove the type surface moved.
 - Do not satisfy typecheck for extracted prototype helpers by adding a matching
   class field. JavaScript class fields create own instance properties and shadow
   later `Class.prototype.helper = function helper(...)` assignments. Use a
