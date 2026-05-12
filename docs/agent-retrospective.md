@@ -79,7 +79,12 @@ Run and record these before verification or review:
    extraction or a stable terminator, never indentation-only closing-brace
    regexes such as `\n\s{2}\}`. When converting class methods to prototype
    assignments, use named `function` expressions and verify no arrow function
-   replaced a method that depends on dynamic `this`.
+   replaced a method that depends on dynamic `this`. Static checks and source
+   greps are not enough for a moved dispatch path: identify which test exercises
+   the new path through the runtime receiver/export/event handler. If none does,
+   add a focused behavioral smoke test before review. For prototype helpers,
+   also verify the helper is callable from an instance so class-field shadowing
+   cannot pass source-only tests.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
