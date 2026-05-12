@@ -114,6 +114,7 @@ const ASSETS = [
   './src/entities/enemy-harvester.js',
   './src/entities/enemy-tether.js',
   './src/entities/enemy-vaultmaster.js',
+  './src/entities/enemy-nullifier.js',
   './src/entities/enemy-seeker.js',
   './src/entities/combat-effects.js',
   './src/entities/deferred-spawns.js',
