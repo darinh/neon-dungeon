@@ -1846,7 +1846,7 @@ class Enemy {
     //    player would fail this gate during a DECOY taunt and fall
     //    through to patrol. Flee always tracks the actual player.
     const pd = dist(this.x, this.y, player.x, player.y);
-    if ((this._mgStolenCr || 0) > 0 && pd < MAGPIE_FLEE_RANGE) {
+    if (shouldMagpieFlee(this._mgStolenCr, pd, MAGPIE_FLEE_RANGE)) {
       const { x: fx, y: fy } = pickMagpieFleeTarget(this.x, this.y, player.x, player.y, MAGPIE_FLEE_RANGE);
       this.moveToward(fx, fy, this.spd, dt, map);
       return;
