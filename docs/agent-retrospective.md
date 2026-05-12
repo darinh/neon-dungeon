@@ -41,14 +41,16 @@ A work item is not complete until:
    this protocol says critique is not required). Never leave a completed
    retrospective with critique status `pending`;
 7. the final protocol-change decision is recorded;
-8. the retrospective is attached to the PR, issue, session history, or final
+8. no output field that affects follow-up behavior is left as `pending`; use
+   `N/A` only with a reason and only when the field truly does not apply;
+9. the retrospective is attached to the PR, issue, session history, or final
    response where future agents can find the evidence;
-9. the implementation worktree is still available for inspection. Worktree
-   cleanup is the final step after the retrospective is attached. If the
-   implementation worktree was already removed, record that as a process
-   violation and use a fresh worktree only to repair the protocol or attach
-   evidence;
-10. the agent has checked for the next actionable work item and either started it
+10. the implementation worktree is still available for inspection. Worktree
+    cleanup is the final step after the retrospective is attached. If the
+    implementation worktree was already removed, record that as a process
+    violation and use a fresh worktree only to repair the protocol or attach
+    evidence;
+11. the agent has checked for the next actionable work item and either started it
     or recorded why no concrete work remains. Do not call `task_complete` merely
     because one PR, issue, or retrospective is done. For issue-backed work, run
     `npm run check:agent-continuity -- --issue <number>` and treat a nonzero exit
@@ -99,6 +101,27 @@ Run and record these before verification or review:
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
+8. **Pre-promotion authority/range audit.** Before opening or merging any PR
+   targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
+   repository branch-policy workflow or status checks for allowed source
+   branches, and record the exact commit range with authorship
+   (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
+   `develop` promotion). For this audit, treat any commit whose author email is
+   not a known agent identity (`bropilot-cli[bot]`, `Copilot`, or another
+   configured agent account) as human-authored. If policy only allows this
+   repository's `develop -> main`, do not open isolated feature-branch-to-main
+   PRs. If the range includes human-authored commits, quote the active project or
+   repository instruction that explicitly permits `develop -> main` promotion
+   with those commits; a general autonomy, yolo, or feature-work instruction is
+   not enough. If that authority is absent or conflicts with another active rule,
+   stop instead of inferring approval. A closed PR whose source branch was
+   changed or replaced should not be treated as reopenable; open a replacement PR
+   from a fresh branch.
+9. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+   subsystem, check whether equivalent work has already landed upstream or in an
+   open PR so the slice can shift to reinforcement instead of duplicating work.
+   When editing roadmap or checklist-style docs, search for duplicate entries
+   before review and again after conflict resolution.
 
 ## Pre-retrospective checklist
 
@@ -127,10 +150,15 @@ Before writing the retrospective:
 8. If extension or trigger files were created, run a path/scope audit: actual
    path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
    output, and primary-checkout stray-file check.
-9. If resuming after a restart, a handoff gap, or a user reference to "last
-   session", an issue number, or a prior finding, query session history/checkpoints
-   for that reference before assuming the current shell directory is the active
-   work context.
+9. If the work item opens or merges a PR targeting `main`, include the
+   pre-promotion authority/range audit evidence: allowed source branch, exact
+   commit range, commit/PR authors, any human-authored commits by the audit
+   definition above, and the quoted project or repository instruction that
+   permits the promotion.
+10. If resuming after a restart, a handoff gap, or a user reference to "last
+    session", an issue number, or a prior finding, query session history/checkpoints
+    for that reference before assuming the current shell directory is the active
+    work context.
 
 ## Required inputs
 
@@ -155,6 +183,8 @@ Collect only facts that affect future behavior:
   reason no guard was added;
 - tool/version incompatibilities encountered and the canonical fallback command
   shape used afterward;
+- pre-promotion authority/range audit for PRs targeting `main`, including the
+  branch policy, commit range, commit/PR authors, and cited merge authority;
 - decisions that changed the plan;
 - next-work decision: started next item, no actionable work, or blocked reason;
 - continuity check result: command, exit code, and output;
