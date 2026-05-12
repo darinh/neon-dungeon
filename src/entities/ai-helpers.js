@@ -188,3 +188,29 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
   if (len <= 1e-9) return [dx, dy];
   return [ndx / len, ndy / len];
 }
+
+/**
+ * Pick the nearest loot target a MAGPIE may steal. Returns the original item
+ * object so aiMagpie can later mark that exact pickup dead when it is grabbed.
+ *
+ * @param {Array<any>} candidates
+ * @param {number} x
+ * @param {number} y
+ * @param {number} scanRange
+ * @returns {any | null}
+ */
+function pickMagpieTarget(candidates, x, y, scanRange) {
+  let best = null;
+  let bestD2 = scanRange * scanRange;
+  for (const it of candidates) {
+    if (!it || it.dead) continue;
+    if (it.isKey || it.isHarvest || it.isWhisper || it.isHoard) continue;
+    const dx = it.x - x, dy = it.y - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = it;
+    }
+  }
+  return best;
+}
