@@ -1,21 +1,22 @@
 'use strict';
 // MAGNETON mob — source-text wiring tests + pure bend-helper unit tests.
 //
-// entities.js is browser-only (no UMD/CommonJS exports), so we follow the
-// same pattern as resonator.test.js / mirror.test.js: assert structural
-// invariants the mob needs by regex-matching the source text. We also
-// vm-extract the pure `magnetonBendDir` helper from the source so the
-// unit tests exercise the REAL implementation (no duplicate to drift).
+// entities.js is browser-only (no UMD/CommonJS exports), so we assert
+// structural invariants by regex-matching the source text. We also
+// vm-extract the pure `magnetonBendDir` helper and prototype AI helper so
+// the unit tests exercise the REAL implementation (no duplicate to drift).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_MAGNETON = readSourceFile(__dirname, 'entitiesEnemyMagneton');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -40,6 +41,16 @@ const ENTITY_AI_HELPERS = fs.readFileSync(
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
+
+function numericConst(src, name) {
+  const match = src.match(new RegExp(`const\\s+${name}\\s*=\\s*([\\d.]+)`));
+  assert.ok(match, `${name} constant missing`);
+  return Number(match[1]);
+}
+
+const MAGNETON_FIELD_R = numericConst(ENEMY_ABILITY_TUNING, 'MAGNETON_FIELD_R');
+const MAGNETON_BEND_STRENGTH = numericConst(ENEMY_ABILITY_TUNING, 'MAGNETON_BEND_STRENGTH');
+const MAGNETON_SAFE_R = numericConst(ENEMY_ABILITY_TUNING, 'MAGNETON_SAFE_R');
 
 // ─── Wiring assertions ──────────────────────────────────────────────────
 
@@ -98,9 +109,7 @@ test('MAGNETON has AI dispatch case', () => {
 });
 
 test('MAGNETON aiMagneton method exists and skips non-player projectiles', () => {
-  // Anchor on the method definition (no `this.` prefix and starts at column 2)
-  // so we don't accidentally match the dispatch switch case.
-  const fn = ENTITIES.match(/\n  aiMagneton\s*\([\s\S]*?\n  \}\n/);
+  const fn = ENEMY_MAGNETON.match(/Enemy\.prototype\.aiMagneton\s*=\s*function\s+aiMagneton\s*\([\s\S]*?\n\};/);
   assert.ok(fn, 'aiMagneton method must exist');
   // Must filter to fromPlayer projectiles only — bending enemy projectiles
   // (MIRROR/ECHOER/PROPHET shots) toward the magneton would be confusing
@@ -117,6 +126,53 @@ test('MAGNETON aiMagneton method exists and skips non-player projectiles', () =>
   assert.match(fn[0], /\.homing/, 'aiMagneton must skip homing projectiles');
   // Must use LOS gate to avoid bending shots through walls.
   assert.match(fn[0], /hasLOS/, 'aiMagneton must LOS-gate the bend');
+});
+
+test('aiMagneton prototype helper is callable and bends only valid LOS player shots', () => {
+  const bendCalls = [];
+  const losCalls = [];
+  const projectiles = [
+    { x: 3, y: 0, dx: 1, dy: 0, fromPlayer: true },
+    { x: 3, y: 1, dx: 1, dy: 0, fromPlayer: false },
+    { x: 3, y: 2, dx: 1, dy: 0, fromPlayer: true, dead: true },
+    { x: 3, y: 3, dx: 1, dy: 0, fromPlayer: true, isGrenade: true },
+    { x: 3, y: 4, dx: 1, dy: 0, fromPlayer: true, homing: true },
+    { x: MAGNETON_FIELD_R + 1, y: 0, dx: 1, dy: 0, fromPlayer: true },
+    { x: 2, y: 2, dx: 1, dy: 0, fromPlayer: true },
+  ];
+  const sandbox = {
+    Enemy: function Enemy() {},
+    MAGNETON_FIELD_R,
+    MAGNETON_BEND_STRENGTH,
+    projectiles,
+    hasLOS(mx, my, px, py, map) {
+      losCalls.push([mx, my, px, py, map]);
+      return py !== 2;
+    },
+    magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
+      bendCalls.push([px, py, dx, dy, mx, my, fieldR, strength, dt]);
+      return [-0.25, 0.75];
+    },
+  };
+  vm.runInNewContext(ENEMY_MAGNETON, sandbox);
+  const magneton = new sandbox.Enemy();
+  Object.assign(magneton, { x: 0, y: 0, _mgPulse: 0 });
+
+  magneton.aiMagneton(0.5, {}, { id: 'map' }, 9, true);
+
+  assert.equal(magneton._mgPulse, 0.5);
+  assert.deepEqual(bendCalls, [
+    [3, 0, 1, 0, 0, 0, MAGNETON_FIELD_R, MAGNETON_BEND_STRENGTH, 0.5],
+  ]);
+  assert.equal(projectiles[0].dx, -0.25);
+  assert.equal(projectiles[0].dy, 0.75);
+  assert.equal(projectiles[6].dx, 1, 'LOS-blocked player projectile must not bend');
+  assert.equal(losCalls.length, 2, 'LOS should run only after cheap validity and range rejects');
+});
+
+test('aiMagneton implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiMagneton\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'aiMagneton body should stay extracted from src/entities.js');
 });
 
 test('MAGNETON tuning constants are defined', () => {
@@ -141,13 +197,13 @@ const fnMatch = ENTITY_AI_HELPERS.match(
   /function\s+magnetonBendDir\s*\([\s\S]*?\n\}\n/
 );
 if (!fnMatch) throw new Error('magnetonBendDir definition not found in ai-helpers.js');
-const sandbox = { MAGNETON_SAFE_R: 0.15 };
+const sandbox = { MAGNETON_SAFE_R };
 vm.createContext(sandbox);
 vm.runInContext(`${fnMatch[0]}\nthis.magnetonBendDir = magnetonBendDir;`, sandbox);
 const magnetonBendDir = sandbox.magnetonBendDir;
 
-const FIELD_R = 5.5;
-const STRENGTH = 6.0;
+const FIELD_R = MAGNETON_FIELD_R;
+const STRENGTH = MAGNETON_BEND_STRENGTH;
 
 test('magnetonBendDir: out of field range returns input direction unchanged', () => {
   // Projectile 10 tiles east of magneton at origin, flying east. Should pass through.
