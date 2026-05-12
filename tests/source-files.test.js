@@ -732,6 +732,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
   assert.match(enemyMagnetonSource, /Enemy\.prototype\.aiMagneton\s*=\s*function\s+aiMagneton\s*\(/);
   assert.match(enemyMagnetonSource, /magnetonBendDir/);
+  assert.match(entitySource, /case\s+'PHANTOM':\s*this\.aiPhantom\(/);
+  assert.doesNotMatch(entitySource, /aiPhantom\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyPhantomSource, /Enemy\.prototype\.aiPhantom\s*=\s*function\s+aiPhantom\s*\(/);
+  assert.match(enemyPhantomSource, /audio\.phantomUncloak/);
   assert.match(enemySpectreSource, /Enemy\.prototype\.aiSpectre\s*=\s*function\s+aiSpectre\s*\(/);
   assert.match(enemySpectreSource, /SPECTRE_PHASE_DUR/);
   assert.match(enemyBasicAiSource, /Enemy\.prototype\.aiGuard\s*=\s*function\s+aiGuard\s*\(/);
