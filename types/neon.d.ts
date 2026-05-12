@@ -44,6 +44,7 @@ declare global {
     swapWeapon(slotIdx: number, w: any): void;
     equipWeapon(w: any): void;
     tapBombKey(): void;
+    effectiveAtk(): number;
     computeOutgoingDmgMul(): number;
     logDamage(source: string, amount: number): void;
     _consumeSurgeShot(): number;

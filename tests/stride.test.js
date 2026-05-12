@@ -20,6 +20,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
 const CONTENT  = readSourceFile(__dirname, 'content') + '\n' + readSourceFile(__dirname, 'contentStatus');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
@@ -99,7 +100,7 @@ test('Player constructor initialises _stride* to 0', () => {
 test('effectiveAtk multiplies by (1 + STRIDE_DMG_PER_STACK * stacks) when STRIDE owned & stacks > 0', () => {
   // Locate the effectiveAtk method body precisely so we don't grep stray
   // matches elsewhere in the file.
-  const m = ENTITIES.match(/effectiveAtk\s*\([^)]*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  const m = PLAYER_DAMAGE.match(/effectiveAtk\s*\([^)]*\)\s*\{[\s\S]*?return a;\s*\}/);
   assert.ok(m, 'effectiveAtk method body must be locatable');
   assert.match(m[0], /this\.perks\.STRIDE/,
     'effectiveAtk must gate the STRIDE bonus on this.perks.STRIDE');

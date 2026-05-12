@@ -138,6 +138,7 @@ Good candidates:
 - WRAITH-style emergence helper. Done for `_wrFindEmergeTile()` in `src/entities/enemy-wraith.js`.
 - Player weapon-belt helpers. Done for `cycleWeapon()`, `collectWeapon()`, `swapWeapon()`, and `equipWeapon()` in `src/entities/player-weapons.js`.
 - Player tap-bomb input handling. Done for `tapBombKey()` in `src/entities/player-bombs.js`.
+- Player effective attack calculation. Done for `effectiveAtk()` in `src/entities/player-damage.js`.
 - Player outgoing damage multiplier delegator. Done for `computeOutgoingDmgMul()` in `src/entities/player-damage.js`.
 - Player damage-source logging. Done for `logDamage()` in `src/entities/player-damage.js`.
 - Player SURGE shot-consumption delegator. Done for `_consumeSurgeShot()` in `src/entities/player-surge.js`.

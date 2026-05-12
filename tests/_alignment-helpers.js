@@ -190,7 +190,8 @@ function normaliseBadgePredicate(cond) {
 }
 
 /**
- * Load the source text of content companion modules and `src/entities.js`,
+ * Load the source text of content companion modules and the Player runtime
+ * entity sources,
  * then return six derived buffers used by every
  * alignment test:
  *   - CONTENT / ENTITIES         — raw source (with comments + string literals)
@@ -218,7 +219,8 @@ function loadAlignmentSources(testsDir) {
     + readSourceFile(testsDir, 'contentPerks') + '\n'
     + readSourceFile(testsDir, 'contentHackware') + '\n'
     + readSourceFile(testsDir, 'contentStatus');
-  const ENTITIES = readSourceFile(testsDir, 'entities');
+  const ENTITIES = readSourceFile(testsDir, 'entities') + '\n'
+    + readSourceFile(testsDir, 'entitiesPlayerDamage');
   const CONTENT_CODE = stripComments(CONTENT);
   const ENTITIES_CODE = stripComments(ENTITIES);
   const CONTENT_BRACES = blankStringContents(CONTENT_CODE);

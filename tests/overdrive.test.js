@@ -23,6 +23,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const CONTENT  = readSourceFile(__dirname, 'contentPerks');
 const COMBO    = readSourceFile(__dirname, 'contentCombo');
 const EVENTS   = readSourceFile(__dirname, 'contentEvents');
@@ -47,8 +48,8 @@ test('OVERDRIVE is registered in PERK_POOL with name/icon/desc/colour', () => {
 
 test('OVERDRIVE is wired into Player.effectiveAtk()', () => {
   // Locate the effectiveAtk method body and assert OVERDRIVE branch is inside.
-  const m = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.effectiveAtk() block must be locatable in entities.js');
+  const m = PLAYER_DAMAGE.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
+  assert.ok(m, 'Player.effectiveAtk() block must be locatable in player-damage.js');
   assert.match(m[0], /this\.perks\.OVERDRIVE/,
     'effectiveAtk() must reference this.perks.OVERDRIVE');
   // Verify the combo.count gate is present inside the method body.
@@ -62,9 +63,9 @@ test('OVERDRIVE branch in effectiveAtk uses tiles/sec-style fixed bonus, capped'
   // for the cap and a per-stack increment of 0.03 (3% per combo level).
   // Use a generous slice after the OVERDRIVE branch entry so the test is
   // robust to indentation/comment changes.
-  const idx = ENTITIES.indexOf('this.perks.OVERDRIVE');
-  assert.ok(idx >= 0, 'OVERDRIVE branch entry must exist in entities.js');
-  const slice = ENTITIES.slice(idx, idx + 800);
+  const idx = PLAYER_DAMAGE.indexOf('this.perks.OVERDRIVE');
+  assert.ok(idx >= 0, 'OVERDRIVE branch entry must exist in player-damage.js');
+  const slice = PLAYER_DAMAGE.slice(idx, idx + 800);
   assert.match(slice, /Math\.min\s*\(\s*0\.30?\s*,/,
     'OVERDRIVE bonus must be capped via Math.min(0.30, …)');
   assert.match(slice, /0\.03/,
