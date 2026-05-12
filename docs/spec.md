@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.102
+# NEON DUNGEON — Game Specification v6.1.104
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.104 | Entity module split: MAGPIE loot-target selection now lives in `src/entities/ai-helpers.js` as `pickMagpieTarget()`. `Enemy.prototype.aiMagpie()` still owns scan throttling, stale-target clearing, movement, grab banking, flee behavior, and patrol fallback, while the helper preserves nearest eligible generic-item selection, protected pickup exclusions, strict scan-range boundary behavior, and object-reference identity for later grab mutation. |
 | v6.1.103 | Entity module split: LEAPER active-peer coordination now lives with enemy movement helpers in `src/entities/enemy-movement.js`. `Enemy.prototype._lpHasActivePeer()` still scans the current room for other live LEAPERs already in `windup` or `airborne` state before allowing a new leap windup, while `src/entities.js` keeps the LEAPER state machine, landing shockwave, target locking, and melee/patrol branches. |
 | v6.1.102 | Entity module split: the shared enemy movement helper now lives with patrol targeting in `src/entities/enemy-movement.js`. `Enemy.prototype.moveToward()` still applies `modSpeed()`, slow factor, elite berserker scaling, and TEMPORAL_DILATION before moving on each axis with the same passability checks and `ignoreWalls` bypass, while `src/entities.js` keeps enemy AI state orchestration and direct call sites. |
 | v6.1.101 | Entity module split: the SEEKER detonation helper now lives in `src/entities/enemy-seeker.js`, loaded after `src/entities/volatile-cores.js` and before gameplay orchestration. `Enemy.prototype._seekerDetonate()` still performs LOS-gated player/enemy blast damage, skips phased WRAITHs, triggers environmental chain reactions, plays detonation feedback, and kills the SEEKER through the normal death path while `src/entities.js` keeps `aiSeeker()` timing, pursuit, and fuse behavior. |

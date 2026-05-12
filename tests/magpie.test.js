@@ -14,6 +14,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
@@ -29,6 +30,9 @@ const ENEMY_SPAWN_TABLE = fs.readFileSync(
 );
 const ENEMY_STATS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-stats.js'), 'utf8'
+);
+const AI_HELPERS = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
 const ENEMY_CLASSIFICATION = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
@@ -134,13 +138,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
   // Class-of-bug caught on the VENGEANCE PR (moveToward modifiers).
   assert.match(fn[0], /moveToward\s*\([\s\S]*?,\s*this\.spd/,
     'aiMagpie chase must call moveToward with raw this.spd');
-  // Must filter out keys, harvest, and whisper pickups so it doesn't
-  // steal progression-critical or story content. Hoards too — to
-  // prevent a second MAGPIE infinite-looping a sibling's drop.
-  assert.match(fn[0], /isKey/,    'aiMagpie scan must filter out keys');
-  assert.match(fn[0], /isHarvest/,'aiMagpie scan must filter out harvest pickups');
-  assert.match(fn[0], /isWhisper/,'aiMagpie scan must filter out whisper pickups');
-  assert.match(fn[0], /isHoard/,  'aiMagpie scan must filter out existing hoards');
+  assert.match(fn[0], /pickMagpieTarget\s*\(\s*items\s*,\s*this\.x\s*,\s*this\.y\s*,\s*MAGPIE_SCAN_RANGE\s*\)/,
+    'aiMagpie scan must delegate target selection through pickMagpieTarget');
   // Must mark the consumed item as dead so game.js's items prune
   // splices it out — splicing here would corrupt iteration if
   // multiple MAGPIEs target items in the same frame.
@@ -149,6 +148,79 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
   // Must increment banked value when grabbing.
   assert.match(fn[0], /_mgStolenCr/,
     'aiMagpie grab must update _mgStolenCr');
+});
+
+test('MAGPIE target selection helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+pickMagpieTarget\s*\(/,
+    'MAGPIE target selection helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/,
+    'MAGPIE inline target scan must not remain in entities.js');
+});
+
+function extractFunctionSource(src, name) {
+  const startRe = new RegExp(`function\\s+${name}\\s*\\(`);
+  const match = startRe.exec(src);
+  if (!match) throw new Error(`${name} definition not found`);
+  const bodyStart = src.indexOf('{', match.index);
+  if (bodyStart === -1) throw new Error(`${name} body not found`);
+  let depth = 0;
+  for (let i = bodyStart; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(match.index, i + 1);
+    }
+  }
+  throw new Error(`${name} closing brace not found`);
+}
+
+const magpieHelperSandbox = {};
+vm.createContext(magpieHelperSandbox);
+vm.runInContext(
+  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\nthis.pickMagpieTarget = pickMagpieTarget;`,
+  magpieHelperSandbox
+);
+const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
+
+test('pickMagpieTarget returns the nearest eligible item reference', () => {
+  const far = { x: 4, y: 0, dead: false };
+  const near = { x: 2, y: 0, dead: false };
+  const target = pickMagpieTarget([far, near], 0, 0, 10);
+  assert.strictEqual(target, near);
+});
+
+test('pickMagpieTarget uses negative filtering for generic item objects', () => {
+  const generic = { x: 1, y: 0, dead: false };
+  assert.strictEqual(pickMagpieTarget([generic], 0, 0, 10), generic,
+    'plain dropped item objects without marker flags must remain stealable');
+});
+
+test('pickMagpieTarget skips protected, dead, null, and hoard pickups', () => {
+  const eligible = { x: 5, y: 0, dead: false };
+  const target = pickMagpieTarget([
+    null,
+    { x: 1, y: 0, dead: true },
+    { x: 1, y: 0, dead: false, isKey: true },
+    { x: 1, y: 0, dead: false, isHarvest: true },
+    { x: 1, y: 0, dead: false, isWhisper: true },
+    { x: 1, y: 0, dead: false, isHoard: true },
+    eligible,
+  ], 0, 0, 10);
+  assert.strictEqual(target, eligible);
+});
+
+test('pickMagpieTarget preserves exclusive scan-range boundary', () => {
+  assert.strictEqual(pickMagpieTarget([{ x: 10, y: 0, dead: false }], 0, 0, 10), null,
+    'item exactly at scan range is excluded by the original strict-distance gate');
+  const justInside = { x: 9.99, y: 0, dead: false };
+  assert.strictEqual(pickMagpieTarget([justInside], 0, 0, 10), justInside);
+});
+
+test('pickMagpieTarget preserves first-in-array tie breaking', () => {
+  const first = { x: 2, y: 0, dead: false };
+  const second = { x: 0, y: 2, dead: false };
+  assert.strictEqual(pickMagpieTarget([first, second], 0, 0, 10), first);
 });
 
 test('MAGPIE die() drop branch pushes MagpieHoard with banked value', () => {
