@@ -71,7 +71,7 @@ Run and record these before verification or review:
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
 4. **Moved-symbol source audit.** Before the first full gate on any extraction
-    from `src/entities.js` or another classic-script monolith, search tests,
+   from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
    shared source loaders, type surfaces, and alignment helpers before treating
