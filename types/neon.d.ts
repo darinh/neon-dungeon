@@ -72,6 +72,7 @@ declare global {
     _seekerDetonate(player?: any, map?: any): void;
     _wrFindEmergeTile(map?: any, player?: any): { x: number; y: number } | null;
     _wlFindWard(): any;
+    aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTether(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiVaultmaster(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     blocksProjectile(proj?: any): boolean;
