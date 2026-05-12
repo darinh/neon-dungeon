@@ -30,6 +30,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const CONTENT  = readSourceFile(__dirname, 'contentPerks');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
@@ -42,6 +43,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_NC = stripComments(ENTITIES);
+const PLAYER_DAMAGE_NC = stripComments(PLAYER_DAMAGE);
 const CONTENT_NC  = stripComments(CONTENT);
 
 // ─── PERK_POOL entry ──────────────────────────────────────────────────────
@@ -83,8 +85,8 @@ test('Player constructor initialises this.retributionTimer = 0', () => {
 // ─── effectiveAtk hook ────────────────────────────────────────────────────
 
 test('RETRIBUTION is wired into Player.effectiveAtk()', () => {
-  const m = ENTITIES_NC.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.effectiveAtk() block must be locatable in entities.js (post-strip)');
+  const m = PLAYER_DAMAGE_NC.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
+  assert.ok(m, 'Player.effectiveAtk() block must be locatable in player-damage.js (post-strip)');
   assert.match(m[0], /this\.perks\.RETRIBUTION/,
     'effectiveAtk() must reference this.perks.RETRIBUTION in EXECUTABLE code');
   assert.match(m[0], /this\.retributionTimer\s*>\s*0/,

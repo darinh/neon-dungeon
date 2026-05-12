@@ -19,6 +19,7 @@ const { readSourceFile } = require('./_source-files.js');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const CONTENT = readSourceFile(__dirname, 'content') + '\n' + readSourceFile(__dirname, 'contentStatus');
 const CONTENT_PERKS = readSourceFile(__dirname, 'contentPerks');
 const SW = fs.readFileSync(
@@ -47,7 +48,7 @@ test('PRISTINE desc references the 90% HP threshold and +25%', () => {
 
 test('effectiveAtk multiplies by 1.25 when PRISTINE && hp/maxHp >= 0.90', () => {
   // Locate the effectiveAtk method body and assert the gate + multiplier.
-  const m = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  const m = PLAYER_DAMAGE.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
   assert.ok(m, 'effectiveAtk method must be locatable');
   assert.match(m[0], /this\.perks\.PRISTINE/,
     'effectiveAtk must check this.perks.PRISTINE');
@@ -60,7 +61,7 @@ test('effectiveAtk multiplies by 1.25 when PRISTINE && hp/maxHp >= 0.90', () => 
 });
 
 test('effectiveAtk PRISTINE branch sits AFTER BERSERKER branch (mirror order)', () => {
-  const m = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  const m = PLAYER_DAMAGE.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
   assert.ok(m);
   const berserkerIdx = m[0].indexOf('BERSERKER');
   const pristineIdx = m[0].indexOf('PRISTINE');

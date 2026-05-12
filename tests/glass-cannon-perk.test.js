@@ -27,6 +27,7 @@ const path = require('node:path');
 const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const CONTENT  = readSourceFile(__dirname, 'contentPerks');
 const SW       = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'),              'utf8');
 
@@ -56,8 +57,8 @@ test('GLASS_CANNON is registered in PERK_POOL with name/icon/desc/colour', () =>
 // ─── effectiveAtk hook ────────────────────────────────────────────────────
 
 test('GLASS_CANNON is wired into Player.effectiveAtk()', () => {
-  const m = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
-  assert.ok(m, 'Player.effectiveAtk() block must be locatable in entities.js');
+  const m = PLAYER_DAMAGE.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
+  assert.ok(m, 'Player.effectiveAtk() block must be locatable in player-damage.js');
   const body = stripComments(m[0]);
   assert.match(body, /this\.perks\.GLASS_CANNON/,
     'effectiveAtk() must reference this.perks.GLASS_CANNON (executable, not comment)');
@@ -150,7 +151,7 @@ test('GLASS_CANNON does not introduce a movement/timer accumulator', () => {
     'GLASS_CANNON must not introduce a _glassXxx accumulator field');
   // Spot-check the effectiveAtk and takeDamage GLASS_CANNON branches don't
   // reference moved/dt. Permissive — `moved` may legitimately appear elsewhere.
-  const eff = ENTITIES.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
+  const eff = PLAYER_DAMAGE.match(/effectiveAtk\s*\(\s*\)\s*\{[\s\S]*?return a;\s*\}/);
   assert.ok(eff, 'effectiveAtk block must be locatable');
   const effIdx = eff[0].search(/this\.perks\.GLASS_CANNON/);
   assert.ok(effIdx >= 0, 'GLASS_CANNON must appear in effectiveAtk');

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.98
+# NEON DUNGEON — Game Specification v6.1.99
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.99 | Entity module split: Player effective attack calculation now lives in `src/entities/player-damage.js`, alongside other Player damage helpers. `Player.prototype.effectiveAtk()` still applies BERSERKER, LAST_STAND, PRISTINE, STRIDE, OVERDRIVE, RETRIBUTION, and GLASS_CANNON modifiers in the same order, while weapon firing and defensive damage resolution remain in `src/entities.js`. |
 | v6.1.98 | Entity module split: Player tap-bomb input handling now lives in `src/entities/player-bombs.js`, loaded after `src/entities/fuse-shards.js` and before gameplay orchestration. `Player.prototype.tapBombKey()` still panic-detonates active fuses before dropping a new `FuseShard` and applying `BOMB_DROP_COOLDOWN`, while FuseShard ticking, rendering, save/restore, and detonation remain in `src/entities/fuse-shards.js`. |
 | v6.1.97 | Entity module split: Player weapon-belt helpers now live in `src/entities/player-weapons.js`, loaded after `src/entities.js` and before gameplay orchestration. `Player.prototype.cycleWeapon()`, `collectWeapon()`, `swapWeapon()`, and `equipWeapon()` preserve active-slot, belt-cap, replacement, and cooldown-reset behavior while `src/entities.js` keeps weapon firing and projectile construction. |
 | v6.1.96 | Entity module split: Player damage bookkeeping now lives with the Player damage delegator in `src/entities/player-damage.js`. `Player.prototype.logDamage(source, amount)` still accumulates real HP damage by source in `player.damageLog`, while `src/entities.js` keeps the defensive damage pipeline and calls the extracted method after real damage lands. |
