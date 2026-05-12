@@ -233,3 +233,15 @@ function pickMagpieFleeTarget(x, y, playerX, playerY, fleeRange) {
     y: y + (dy / len) * fleeRange,
   };
 }
+
+/**
+ * Compute how many credits a MAGPIE banks when it steals a generic pickup.
+ *
+ * @param {number} floorNum
+ * @param {number} base
+ * @param {number} perFloor
+ * @returns {number}
+ */
+function magpieStolenCreditsForFloor(floorNum, base, perFloor) {
+  return base + floorNum * perFloor;
+}
