@@ -80,9 +80,11 @@ declare global {
     aiSplitter(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiShard(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiNullifier(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSapper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiMagpie(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTether(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiVaultmaster(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     blocksProjectile(proj?: any): boolean;

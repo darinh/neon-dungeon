@@ -15,10 +15,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_MAGPIE = readSourceFile(__dirname, 'entitiesEnemyMagpie');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -52,6 +54,19 @@ const GAME = fs.readFileSync(
 const SW = fs.readFileSync(
   path.resolve(__dirname, '..', 'sw.js'), 'utf8'
 );
+
+function numericConst(src, name) {
+  const match = src.match(new RegExp(`const\\s+${name}\\s*=\\s*([\\d.]+)`));
+  assert.ok(match, `${name} constant missing`);
+  return Number(match[1]);
+}
+
+const MAGPIE_SCAN_PERIOD = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_SCAN_PERIOD');
+const MAGPIE_SCAN_RANGE = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_SCAN_RANGE');
+const MAGPIE_GRAB_RANGE = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_GRAB_RANGE');
+const MAGPIE_FLEE_RANGE = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_FLEE_RANGE');
+const MAGPIE_STOLEN_BASE = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_STOLEN_BASE');
+const MAGPIE_STOLEN_PERFL = numericConst(ENEMY_ABILITY_TUNING, 'MAGPIE_STOLEN_PERFL');
 
 // ─── Wiring assertions ──────────────────────────────────────────────────
 
@@ -129,9 +144,7 @@ test('MAGPIE has AI dispatch case', () => {
 });
 
 test('MAGPIE aiMagpie method exists with correct contract', () => {
-  // Anchor on the method definition (no `this.` prefix and starts at
-  // column 2) so we don't accidentally match the dispatch switch case.
-  const fn = ENTITIES.match(/\n  aiMagpie\s*\([\s\S]*?\n  \}\n/);
+  const fn = ENEMY_MAGPIE.match(/Enemy\.prototype\.aiMagpie\s*=\s*function\s+aiMagpie\s*\([\s\S]*?\n\};/);
   assert.ok(fn, 'aiMagpie method must exist');
   // Must use moveToward with raw this.spd so the modSpeed / berserker
   // / slowFactor modifiers apply internally — never pre-multiply.
@@ -158,6 +171,64 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
   // Must increment banked value when grabbing.
   assert.match(fn[0], /_mgStolenCr/,
     'aiMagpie grab must update _mgStolenCr');
+});
+
+test('aiMagpie implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiMagpie\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'aiMagpie body should stay extracted from src/entities.js');
+});
+
+test('aiMagpie prototype helper is callable and preserves grab side effects', () => {
+  const moveCalls = [];
+  const dmgTextCalls = [];
+  const particleCalls = [];
+  const target = { x: 1, y: 0, dead: false };
+  const sandbox = {
+    Enemy: function Enemy() {},
+    items: [target],
+    MAGPIE_SCAN_PERIOD,
+    MAGPIE_SCAN_RANGE,
+    MAGPIE_GRAB_RANGE,
+    MAGPIE_FLEE_RANGE,
+    MAGPIE_STOLEN_BASE,
+    MAGPIE_STOLEN_PERFL,
+    _EG: { floor: 2 },
+    audio: { pickup() { this.pickupCalls = (this.pickupCalls || 0) + 1; } },
+    dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); },
+    isMagpieTargetStale() { return false; },
+    pickMagpieTarget() { return target; },
+    isMagpieTargetInGrabRange() { return true; },
+    shouldMagpieFlee() { return false; },
+    pickMagpieFleeTarget() { return { x: 9, y: 0 }; },
+    magpieStolenCreditsForFloor(floorNum, base, perFloor) {
+      return base + floorNum * perFloor;
+    },
+    spawnDmgText(...args) { dmgTextCalls.push(args); },
+    spawnParticles(...args) { particleCalls.push(args); },
+  };
+  vm.runInNewContext(ENEMY_MAGPIE, sandbox);
+  const magpie = new sandbox.Enemy();
+  Object.assign(magpie, {
+    x: 0,
+    y: 0,
+    spd: 3.4,
+    _mgScanT: 0,
+    _mgTarget: null,
+    _mgStolenCr: 0,
+    moveToward(...args) { moveCalls.push(args); },
+    patrol() { throw new Error('grab branch must not patrol'); },
+  });
+
+  magpie.aiMagpie(0.1, { x: 5, y: 0 }, { id: 'map' }, 5, false);
+
+  assert.deepEqual(moveCalls, [[1, 0, 3.4, 0.1, { id: 'map' }]]);
+  assert.equal(target.dead, true, 'grabbed target must be marked dead for item prune');
+  assert.equal(magpie._mgStolenCr, MAGPIE_STOLEN_BASE + 2 * MAGPIE_STOLEN_PERFL);
+  assert.equal(magpie._mgTarget, null);
+  assert.equal(magpie._mgScanT, 0);
+  assert.equal(sandbox.audio.pickupCalls, 1);
+  assert.equal(dmgTextCalls.length, 1);
+  assert.equal(particleCalls.length, 1);
 });
 
 test('MAGPIE target selection helper is defined outside entities.js', () => {
