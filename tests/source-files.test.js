@@ -498,6 +498,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerProgressionSource, /getMetaXPMultiplier\(\) \* augMul \* overflowMul/);
   assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
   assert.match(playerSurgeSource, /NEON\.behavior\.consumeSurgeShot\(this\)/);
+  assert.match(enemyTetherSource, /Enemy\.prototype\.aiTether\s*=\s*function aiTether\s*\(/);
+  assert.match(enemyTetherSource, /dist\(this\.x, this\.y, player\.x, player\.y\)/);
+  assert.match(enemyTetherSource, /player\._tetherSlowFactor\s*=\s*Math\.max\(TETHER_MIN_FACTOR \* 0\.6, cur \* factor\)/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -519,6 +522,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+predictFromHistory\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+pickMirrorKinematics\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+magnetonBendDir\s*\(/);
+  assert.doesNotMatch(sources.entities, /aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/);
   assert.doesNotMatch(sources.entities, /Math\.hypot\(dx,\s*dy\)\s*\|\|\s*1/);
   assert.doesNotMatch(sources.entities, /MAGPIE_STOLEN_BASE\s*\+\s*floorNum\s*\*\s*MAGPIE_STOLEN_PERFL/);
