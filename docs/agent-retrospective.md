@@ -92,7 +92,10 @@ Run and record these before verification or review:
    also verify the helper is callable from an instance so class-field shadowing
    cannot pass source-only tests. Preserve domain comments and invariant notes
    from moved blocks, or record why each omitted comment is obsolete; semantic
-   comments are behavior evidence, not formatting. For extracted domain
+   comments are behavior evidence, not formatting. Before review, perform a
+   moved-code fidelity pass: compare each moved block against the source block
+   and document every intentional textual change, including comments,
+   punctuation, Unicode arrows/dashes, and inline notes. For extracted domain
    behavior, require at least one review pass to check invariant/comment
    preservation explicitly instead of relying only on generic code review. VM
    behavior tests for extracted AI must use production tuning constants by
