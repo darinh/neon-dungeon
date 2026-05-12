@@ -129,8 +129,8 @@ test('aiSapper prototype helper is callable and preserves chase/patrol/melee dec
   const calls = [];
   const sandbox = {
     Enemy: function Enemy() {},
-    SAPPER_CHASE_RANGE: 7,
-    SAPPER_MELEE_RANGE: 1.1,
+    SAPPER_CHASE_RANGE: 11,
+    SAPPER_MELEE_RANGE: 1.2,
   };
   vm.runInNewContext(ENEMY_SAPPER, sandbox);
   const sapper = new sandbox.Enemy();
@@ -155,7 +155,7 @@ test('aiSapper prototype helper is callable and preserves chase/patrol/melee dec
   ]);
 
   calls.length = 0;
-  sapper.aiSapper(0.5, player, map, 9, false);
+  sapper.aiSapper(0.5, player, map, 12, false);
   assert.deepEqual(calls, [
     ['patrol', 0.5, map],
   ]);
