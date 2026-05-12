@@ -123,7 +123,7 @@ Good candidates:
 - Wall-device orientation tuning. Done for the shared `WALL_FACING` table in `src/entities/wall-facing.js`.
 - Shock Pulse pickup detonation. Done for `triggerShockPulse` in `src/entities/shock-pulse.js`.
 - Standard enemy projectile launching. Done for `Enemy.prototype.fireAt()` in `src/entities/enemy-projectiles.js`.
-- Generic enemy patrol targeting. Done for `Enemy.prototype.patrol()` in `src/entities/enemy-movement.js`.
+- Generic enemy movement helpers. Done for `Enemy.prototype.moveToward()` and `Enemy.prototype.patrol()` in `src/entities/enemy-movement.js`.
 - Elite combat-tempo scaling. Done for `Enemy.prototype.berserkerMul()` in `src/entities/enemy-tempo.js`.
 - Enemy target eligibility and leash helpers. Done for `_canTarget()`, `_forgetTarget()`, and `_isLeashedFromRoom()` in `src/entities/enemy-targeting.js`.
 - Enemy projectile defense helpers. Done for `blocksProjectile()` and `reflectsProjectile()` in `src/entities/enemy-projectile-defense.js`.

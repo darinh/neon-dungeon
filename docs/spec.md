@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.101
+# NEON DUNGEON — Game Specification v6.1.102
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.102 | Entity module split: the shared enemy movement helper now lives with patrol targeting in `src/entities/enemy-movement.js`. `Enemy.prototype.moveToward()` still applies `modSpeed()`, slow factor, elite berserker scaling, and TEMPORAL_DILATION before moving on each axis with the same passability checks and `ignoreWalls` bypass, while `src/entities.js` keeps enemy AI state orchestration and direct call sites. |
 | v6.1.101 | Entity module split: the SEEKER detonation helper now lives in `src/entities/enemy-seeker.js`, loaded after `src/entities/volatile-cores.js` and before gameplay orchestration. `Enemy.prototype._seekerDetonate()` still performs LOS-gated player/enemy blast damage, skips phased WRAITHs, triggers environmental chain reactions, plays detonation feedback, and kills the SEEKER through the normal death path while `src/entities.js` keeps `aiSeeker()` timing, pursuit, and fuse behavior. |
 | v6.1.100 | Entity module split: Player progression helpers now live in `src/entities/player-progression.js`, loaded after `src/entities/player-damage.js` and before gameplay orchestration. `Player.prototype.xpNeeded()` still returns the level-scaled XP threshold, and `Player.prototype.gainXP()` preserves NEURAL_LINK, meta-XP, OVERFLOW floor-modifier multiplication, integer rounding, level-up stat grants, perk-choice enqueueing, capstone grants, and deferred perk-choice UI opening. |
 | v6.1.99 | Entity module split: Player effective attack calculation now lives in `src/entities/player-damage.js`, alongside other Player damage helpers. `Player.prototype.effectiveAtk()` still applies BERSERKER, LAST_STAND, PRISTINE, STRIDE, OVERDRIVE, RETRIBUTION, and GLASS_CANNON modifiers in the same order, while weapon firing and defensive damage resolution remain in `src/entities.js`. |

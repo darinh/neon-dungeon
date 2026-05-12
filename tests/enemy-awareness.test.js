@@ -69,7 +69,7 @@ ${block}
 }
 
 test('enemy targeting uses last-seen memory instead of live player coordinates', () => {
-  const update = sourceBetween('  update(dt, player, map) {', '  /**\n   * @param {any} [tx]');
+  const update = sourceBetween('  update(dt, player, map) {', '  meleeAttack(player) {');
 
   assert.match(ENEMY_AWARENESS, /const ENEMY_TARGET_MEMORY_SECONDS = 3;/);
   assert.match(ENEMY_AWARENESS, /const ENEMY_SIGHT_RANGE = 15;/);
