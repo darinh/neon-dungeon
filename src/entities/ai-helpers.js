@@ -190,6 +190,17 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 }
 
 /**
+ * Decide whether a MAGPIE's remembered pickup target can no longer be chased.
+ *
+ * @param {any | null | undefined} target
+ * @param {Array<any>} candidates
+ * @returns {boolean}
+ */
+function isMagpieTargetStale(target, candidates) {
+  return !!target && (target.dead || candidates.indexOf(target) === -1);
+}
+
+/**
  * Pick the nearest loot target a MAGPIE may steal. Returns the original item
  * object so aiMagpie can later mark that exact pickup dead when it is grabbed.
  *
