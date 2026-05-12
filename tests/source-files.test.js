@@ -3,6 +3,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const {
   CORE_RUNTIME_SOURCE_KEYS,
   SOURCE_FILE_PATHS,
@@ -637,6 +638,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+spawnEnemy\s*\(/);
   assert.doesNotMatch(sources.entities, /_seekerDetonate\s*\(player,\s*map\)\s*\{/);
   assert.doesNotMatch(sources.entities, /moveToward\s*\(\s*tx\s*,\s*ty\s*,\s*spd\s*,\s*dt\s*,\s*map\s*,\s*ignoreWalls\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /_lpHasActivePeer\s*\(\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /_lpHasActivePeer\s*;/);
+  assert.doesNotMatch(sources.entities, /let\s+anotherLeaping\s*=/);
+  assert.match(sources.entities, /_lpHasActivePeer\(\)\)\s*\{[\s\S]{0,160}this\._lpState\s*=\s*'windup'/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
   assert.match(sources.entitiesEnemyAwareness, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
@@ -681,6 +686,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyMovement, /hasAugment\('TEMPORAL_DILATION'\) \? 0\.85 : 1/);
   assert.match(sources.entitiesEnemyMovement, /isPassable\(map\[fy\]\[fx\]\)/);
   assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.patrol\s*=/);
+  assert.match(sources.entitiesEnemyMovement, /_lpHasActivePeer\s*=\s*function _lpHasActivePeer\s*\(/);
+  assert.match(sources.entitiesEnemyMovement, /enemiesInRoomIter\(this\.room\)/);
+  assert.match(sources.entitiesEnemyMovement, /e\._lpState === 'windup' \|\| e\._lpState === 'airborne'/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
   assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.cycleWeapon\s*=/);
@@ -703,6 +711,28 @@ test('source file facade rejects unknown keys loudly', () => {
     () => readSourceFile(__dirname, 'contents'),
     /Unknown source file key: contents/
   );
+});
+
+test('LEAPER active-peer helper remains callable as a prototype method', () => {
+  const enemyMovementSource = readSourceFile(__dirname, 'entitiesEnemyMovement');
+  class Enemy {}
+  const peers = [
+    { room: 'r1', type: 'LEAPER', dead: false, _lpState: 'idle' },
+    { room: 'r1', type: 'LEAPER', dead: false, _lpState: 'windup' },
+    { room: 'r2', type: 'LEAPER', dead: false, _lpState: 'airborne' },
+  ];
+  const self = new Enemy();
+  Object.assign(self, { room: 'r1', type: 'LEAPER', dead: false, _lpState: 'idle' });
+  const context = vm.createContext({
+    Enemy,
+    enemiesInRoomIter: room => peers.filter(e => e.room === room),
+  });
+  vm.runInContext(enemyMovementSource, context);
+
+  assert.equal(typeof self._lpHasActivePeer, 'function');
+  assert.equal(self._lpHasActivePeer(), true);
+  peers[1]._lpState = 'recovery';
+  assert.equal(self._lpHasActivePeer(), false);
 });
 
 test('stripJsComments preserves comment-like text in strings and regex literals', () => {
