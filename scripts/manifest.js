@@ -118,6 +118,7 @@ const requiredInIndex = [
   './src/entities/enemy-magpie.js',
   './src/entities/enemy-gulper.js',
   './src/entities/enemy-seeker.js',
+  './src/entities/enemy-echoer.js',
   './src/entities/combat-effects.js',
   './src/entities/deferred-spawns.js',
   './src/entities/enemy-summoner.js',
