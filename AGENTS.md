@@ -137,6 +137,11 @@ These are hard rules, not preferences:
 - New code: add `// @ts-check` at top of every new `.js` file. Use JSDoc `@param`/`@returns`/`@typedef` for shapes.
 - Existing code: opt in file-by-file. When you add `// @ts-check`, fix all `tsc --noEmit` errors that file produces (or use `// @ts-expect-error` with a tracking todo).
 - Shared shapes: declare in `types/*.d.ts` (see `types/engine.d.ts`, `types/game.d.ts`, `types/neon.d.ts`).
+- Do not satisfy typecheck for extracted prototype helpers by adding a matching
+  class field. JavaScript class fields create own instance properties and shadow
+  later `Class.prototype.helper = function helper(...)` assignments. Use a
+  non-emitting JSDoc cast or a declaration pattern that does not create an own
+  field, and add a callable-path test when moving prototype behavior.
 
 ### Linting
 - `// eslint-disable-next-line <rule> -- <reason>` is acceptable when justified, with a comment explaining why.
