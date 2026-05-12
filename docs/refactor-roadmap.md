@@ -153,7 +153,6 @@ Good candidates:
 - MAGPIE carrying flee decision. Done for `shouldMagpieFlee()` in `src/entities/ai-helpers.js`.
 - TETHER AI presentation and slow-aura accumulation. Done for `aiTether()` in `src/entities/enemy-tether.js`.
 - VAULTMASTER AI presentation. Done for `aiVaultmaster()` in `src/entities/enemy-vaultmaster.js`.
-- TETHER leash-chaser AI. Done for `aiTether()` in `src/entities/enemy-tether.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
