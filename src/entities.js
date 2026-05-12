@@ -3808,35 +3808,6 @@ class Enemy {
     }
   }
 
-  // ─── SEEKER AI — Guided Explosive Drone ───────────────────────────────────
-  /**
-   * @param {any} [dt]
-   * @param {any} [player]
-   * @param {any} [map]
-   * @param {any} [d]
-   * @param {any} [los]
-   */
-  aiSeeker(dt, player, map, d, los) {
-    // Proximity glow ramp (used by draw)
-    this._skProximity = los ? Math.max(0, 1 - d / 6) : 0;
-
-    if (los && this._canTarget() && d <= 1.2 && player.dashTimer <= 0) {
-      // Detonate on contact
-      this._seekerDetonate(player, map);
-      return;
-    }
-
-    if (los && this._canTarget()) {
-      // Rush directly toward player at full speed
-      this.moveToward(this._tx, this._ty, this.spd, dt, map);
-      // Trail particles — intensity ramps with proximity
-      if (rand('cosmetic') < dt * (6 + this._skProximity * 12))
-        spawnParticles(this.x, this.y, 'SPARK', '#ffdd00', 1);
-    } else {
-      this.patrol(dt, map);
-    }
-  }
-
   // ─── PULSER AI ────────────────────────────────────────────────────────────
   /**
    * @param {any} [dt]
