@@ -148,6 +148,7 @@ Good candidates:
 - MAGPIE loot-target selection. Done for `pickMagpieTarget()` in `src/entities/ai-helpers.js`.
 - MAGPIE carrying flee-target projection. Done for `pickMagpieFleeTarget()` in `src/entities/ai-helpers.js`.
 - MAGPIE stolen-credit scaling. Done for `magpieStolenCreditsForFloor()` in `src/entities/ai-helpers.js`.
+- MAGPIE stale-target detection. Done for `isMagpieTargetStale()` in `src/entities/ai-helpers.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 

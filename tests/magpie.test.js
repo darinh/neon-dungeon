@@ -140,6 +140,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
     'aiMagpie chase must call moveToward with raw this.spd');
   assert.match(fn[0], /pickMagpieTarget\s*\(\s*items\s*,\s*this\.x\s*,\s*this\.y\s*,\s*MAGPIE_SCAN_RANGE\s*\)/,
     'aiMagpie scan must delegate target selection through pickMagpieTarget');
+  assert.match(fn[0], /isMagpieTargetStale\s*\(\s*this\._mgTarget\s*,\s*items\s*\)/,
+    'aiMagpie stale-target clearing must delegate through isMagpieTargetStale');
   assert.match(fn[0], /pickMagpieFleeTarget\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
     'aiMagpie carrying flee branch must delegate flee target projection through pickMagpieFleeTarget');
   assert.match(fn[0], /magpieStolenCreditsForFloor\s*\(\s*floorNum\s*,\s*MAGPIE_STOLEN_BASE\s*,\s*MAGPIE_STOLEN_PERFL\s*\)/,
@@ -159,6 +161,13 @@ test('MAGPIE target selection helper is defined outside entities.js', () => {
     'MAGPIE target selection helper must live in ai-helpers.js');
   assert.doesNotMatch(ENTITIES, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/,
     'MAGPIE inline target scan must not remain in entities.js');
+});
+
+test('MAGPIE stale target helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+isMagpieTargetStale\s*\(/,
+    'MAGPIE stale target helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /this\._mgTarget\s*&&\s*\(\s*this\._mgTarget\.dead\s*\|\|\s*items\.indexOf\(this\._mgTarget\)\s*===\s*-1\s*\)/,
+    'MAGPIE inline stale target predicate must not remain in entities.js');
 });
 
 test('MAGPIE flee target helper is defined outside entities.js', () => {
@@ -196,12 +205,31 @@ function extractFunctionSource(src, name) {
 const magpieHelperSandbox = {};
 vm.createContext(magpieHelperSandbox);
 vm.runInContext(
-  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
+  `${extractFunctionSource(AI_HELPERS, 'isMagpieTargetStale')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.isMagpieTargetStale = isMagpieTargetStale;\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
   magpieHelperSandbox
 );
+const isMagpieTargetStale = magpieHelperSandbox.isMagpieTargetStale;
 const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
 const pickMagpieFleeTarget = magpieHelperSandbox.pickMagpieFleeTarget;
 const magpieStolenCreditsForFloor = magpieHelperSandbox.magpieStolenCreditsForFloor;
+
+test('isMagpieTargetStale treats missing targets as not stale', () => {
+  assert.equal(isMagpieTargetStale(null, []), false);
+  assert.equal(isMagpieTargetStale(undefined, []), false);
+});
+
+test('isMagpieTargetStale preserves dead-or-removed target clearing', () => {
+  const live = { x: 1, y: 1, dead: false };
+  const dead = { x: 2, y: 2, dead: true };
+  const removed = { x: 3, y: 3, dead: false };
+
+  assert.equal(isMagpieTargetStale(live, [live]), false,
+    'live target still in items[] must remain chaseable');
+  assert.equal(isMagpieTargetStale(dead, [dead]), true,
+    'dead target still in items[] must be cleared');
+  assert.equal(isMagpieTargetStale(removed, [live]), true,
+    'target missing from items[] must be cleared');
+});
 
 test('pickMagpieTarget returns the nearest eligible item reference', () => {
   const far = { x: 4, y: 0, dead: false };
