@@ -13,10 +13,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_PROPHET = readSourceFile(__dirname, 'entitiesEnemyProphet');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -85,7 +87,8 @@ test('PROPHET is dispatched in the AI switch', () => {
 });
 
 test('aiProphet method is defined', () => {
-  assert.match(ENTITIES, /aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_PROPHET, /Enemy\.prototype\.aiProphet\s*=\s*function\s+aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
 });
 
 test('PROPHET stun cancel path resets aiming', () => {
@@ -164,11 +167,11 @@ test('PROPHET projectile carries owner attribution', () => {
   // it the death-recap and damage logs fall back to generic 'Projectile'
   // and SOURCE_LABELS / SOURCE_COLOURS entries become useless.
   // (Class of bug — caught on MIRROR PR #134 by 3 reviewers.)
-  const sigRe = /^\s*aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiProphet\s*=\s*function\s+aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/;
+  const sigMatch = ENEMY_PROPHET.match(sigRe);
   assert.ok(sigMatch, 'aiProphet method definition not found');
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_PROPHET.slice(aiStart, aiStart + 5000);
   assert.match(aiBody, /new\s+Projectile\(/);
   assert.match(aiBody, /p\.ownerType\s*=\s*'Prophet Shot'/);
   // Order: ownerType assignment BEFORE the push (otherwise hit-path
@@ -183,11 +186,11 @@ test('aiProphet honors hologram-taunt redirection', () => {
   // PROPHET samples player state (predicted position) outside the
   // canonical _tx/_ty path — without an explicit taunt branch it would
   // ignore decoys. Same lesson learned from ECHOER PR review.
-  const sigRe = /^\s*aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiProphet\s*=\s*function\s+aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/;
+  const sigMatch = ENEMY_PROPHET.match(sigRe);
   assert.ok(sigMatch, 'aiProphet method definition not found');
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_PROPHET.slice(aiStart, aiStart + 5000);
   assert.match(aiBody, /_tauntTarget/, 'aiProphet must reference _tauntTarget');
   assert.match(aiBody, /getPredictedPosition/, 'aiProphet must call getPredictedPosition');
   // Order check: taunt branch should be evaluated before the prediction
@@ -202,11 +205,11 @@ test('aiProphet enforces a stillness gate (MIN_VEL)', () => {
   // The whole point of PROPHET's niche: stillness is safe. Without the
   // vmag >= MIN_VEL gate, PROPHET degenerates into a slow-telegraph
   // basic shooter.
-  const sigRe = /^\s*aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiProphet\s*=\s*function\s+aiProphet\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/;
+  const sigMatch = ENEMY_PROPHET.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_PROPHET.slice(aiStart, aiStart + 5000);
   assert.match(aiBody, /vmag\s*>=\s*PROPHET_MIN_VEL/,
     'aiProphet must check vmag >= PROPHET_MIN_VEL before locking');
 });
