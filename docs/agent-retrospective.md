@@ -76,8 +76,11 @@ Run and record these before verification or review:
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
-   shared source loaders, type surfaces, and alignment helpers before treating
-   full-gate failures as surprising. Source
+   shared source loaders, type surfaces, `types/*.d.ts` members, JSDoc field or
+   `@type` annotations, and alignment helpers before treating full-gate failures
+   as surprising. Re-run this surface audit after any rebase or conflict
+   resolution that touches source inventories, docs, type declarations, or the
+   moved symbol's new/old files. Source
    tests for moved prototype methods with nested blocks must use brace-walked
    extraction or a stable terminator, never indentation-only closing-brace
    regexes such as `\n\s{2}\}`. When converting class methods to prototype
@@ -89,7 +92,9 @@ Run and record these before verification or review:
     also verify the helper is callable from an instance so class-field shadowing
     cannot pass source-only tests. Preserve domain comments and invariant notes
     from moved blocks, or record why each omitted comment is obsolete; semantic
-    comments are behavior evidence, not formatting.
+    comments are behavior evidence, not formatting. For extracted domain
+    behavior, require at least one review pass to check invariant/comment
+    preservation explicitly instead of relying only on generic code review.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
@@ -248,6 +253,9 @@ Collect only facts that affect future behavior:
     available because of a tool outage, the work item is blocked, not complete.
     Require concrete findings only: correctness gaps, repeated failure patterns,
     missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
+    A final retrospective must name the reviewers/models used and the adopted or
+    rejected findings; do not attach or file a completed retrospective with this
+    field left as `pending`.
 12. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
     weak suggestions explicitly and briefly.
 13. **Change the system.** If the retrospective reveals a durable rule, update the
