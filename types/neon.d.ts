@@ -86,6 +86,7 @@ declare global {
     aiSapper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagpie(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiGulper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiSeeker(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTether(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiVaultmaster(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     blocksProjectile(proj?: any): boolean;
