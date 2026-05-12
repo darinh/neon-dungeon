@@ -85,9 +85,11 @@ Run and record these before verification or review:
    replaced a method that depends on dynamic `this`. Static checks and source
    greps are not enough for a moved dispatch path: identify which test exercises
    the new path through the runtime receiver/export/event handler. If none does,
-   add a focused behavioral smoke test before review. For prototype helpers,
-   also verify the helper is callable from an instance so class-field shadowing
-   cannot pass source-only tests.
+    add a focused behavioral smoke test before review. For prototype helpers,
+    also verify the helper is callable from an instance so class-field shadowing
+    cannot pass source-only tests. Preserve domain comments and invariant notes
+    from moved blocks, or record why each omitted comment is obsolete; semantic
+    comments are behavior evidence, not formatting.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
@@ -217,8 +219,11 @@ Collect only facts that affect future behavior:
    remote side effects, verify the remote state, local branch/worktree state,
    and remaining cleanup separately before retrying or claiming completion.
    For `gh pr merge` ambiguity, verify with
-   `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
-   merge failed or only local cleanup failed.
+    `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
+    merge failed or only local cleanup failed. If a local worktree already has
+    the target branch checked out, omit `--delete-branch` on the merge command or
+    perform remote cleanup separately so expected local cleanup failures do not
+    obscure the remote outcome.
    For release promotions, verify `origin/main == origin/develop` after any
    required post-release alignment and record whether repository rules were
    bypassed by the durable admin bypass rather than temporary rule deletion.
