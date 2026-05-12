@@ -69,6 +69,7 @@ declare global {
     _nxFindAllyCluster(): any;
     _nxUpdateLinks(): void;
     _phReposition(map?: any, player?: any): void;
+    _seekerDetonate(player?: any, map?: any): void;
     _wrFindEmergeTile(map?: any, player?: any): { x: number; y: number } | null;
     _wlFindWard(): any;
     blocksProjectile(proj?: any): boolean;
