@@ -215,6 +215,18 @@ function isMagpieTargetInGrabRange(target, x, y, grabRange) {
 }
 
 /**
+ * Decide whether a MAGPIE carrying stolen credits should flee the real player.
+ *
+ * @param {number} stolenCredits
+ * @param {number} playerDistance
+ * @param {number} fleeRange
+ * @returns {boolean}
+ */
+function shouldMagpieFlee(stolenCredits, playerDistance, fleeRange) {
+  return (stolenCredits || 0) > 0 && playerDistance < fleeRange;
+}
+
+/**
  * Pick the nearest loot target a MAGPIE may steal. Returns the original item
  * object so aiMagpie can later mark that exact pickup dead when it is grabbed.
  *
