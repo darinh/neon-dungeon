@@ -1910,49 +1910,6 @@ class Enemy {
   }
 
   /**
-   * VAULTMASTER — economic-inverse mob (floor 4+, hp=60, atk=0, spd=2.0).
-   *
-   * Concept: the inverse of MAGPIE. MAGPIE STEALS credits (you race to
-   * recover them); VAULTMASTER GIVES credits (you choose to milk them
-   * before killing). No contact damage — the threat is OPPORTUNITY COST.
-   * Every survived hit ejects a small VaultCoin pickup (5 cr,
-   * VAULTMASTER_HIT_ICD-throttled so multi-pellet weapons can't money-
-   * print on a single attack), and the killing blow drops a jackpot
-   * VaultCoin (25 cr). Tradeoff: kill fast for safety (skip milking,
-   * the body crowds the room with no other threat) or milk slowly for
-   * raw credit upside (each hit adds VAULTMASTER_COIN_AMT to the floor's
-   * loot economy, and the hp pool of 60 supports ~12 pre-jackpot ejects
-   * at 1-dmg pinpricks).
-   *
-   * AI: just chase the player. No attack, no special movement, no
-   * fleeing. The mob has to PRESENT itself to be hit — that's the whole
-   * loop. Patrol when no LOS / out of engage range so it isn't a static
-   * blob; when los OR within VAULTMASTER_ENGAGE_RANGE of the perceived
-   * target (taunt-aware via _tx/_ty, like every other AI in this file),
-   * trundle toward it at base spd.
-   *
-   * Coin ejection lives in takeDamage (NOT in this method) because
-   * that's the only place we have hit-context (actual dmg dealt,
-   * hitCtx.isProc filter, post-shield/post-DR resolution). _vmHitICD
-   * is a per-mob throttle decremented in update() before AI dispatch.
-   *
-   * Excluded from the elite affix roll: same first-ship caution as the
-   * recently-introduced economic-mob siblings (MAGPIE / SAPPER) — easier
-   * to add elite affixes later than to reason about SHIELDED interactions
-   * for an ICD-throttled coin printer.
-   *
-   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
-   */
-  aiVaultmaster(dt, player, map, d, los) {
-    void player;
-    if (los || (d < VAULTMASTER_ENGAGE_RANGE && this._canTarget())) {
-      this.moveToward(this._tx, this._ty, this.spd, dt, map);
-    } else {
-      this.patrol(dt, map);
-    }
-  }
-
-  /**
    * GULPER — projectile-eating mid-tank (floor 6+, hp=90, atk=14,
    * spd=1.4). See GULPER_* tuning constants for design intent.
    *
