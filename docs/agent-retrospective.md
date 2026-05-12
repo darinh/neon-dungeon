@@ -34,19 +34,25 @@ A work item is not complete until:
 2. both LLM retrospective reviewers have returned;
 3. adopted and rejected reviewer findings are recorded;
 4. any required system changes are applied and verified;
-5. the final protocol-change decision is recorded;
-6. the retrospective is attached to the PR, issue, session history, or final
+5. repeated incidents and tool incompatibilities have either produced a concrete
+   recurrence-prevention guard or have an explicit evidence-backed reason for no
+   new guard;
+6. the two-LLM critique status is final (`complete`, or `not required` only when
+   this protocol says critique is not required). Never leave a completed
+   retrospective with critique status `pending`;
+7. the final protocol-change decision is recorded;
+8. the retrospective is attached to the PR, issue, session history, or final
    response where future agents can find the evidence;
-7. the implementation worktree is still available for inspection. Worktree
+9. the implementation worktree is still available for inspection. Worktree
    cleanup is the final step after the retrospective is attached. If the
    implementation worktree was already removed, record that as a process
    violation and use a fresh worktree only to repair the protocol or attach
    evidence;
-8. the agent has checked for the next actionable work item and either started it
-   or recorded why no concrete work remains. Do not call `task_complete` merely
-   because one PR, issue, or retrospective is done. For issue-backed work, run
-   `npm run check:agent-continuity -- --issue <number>` and treat a nonzero exit
-   as proof that work remains.
+10. the agent has checked for the next actionable work item and either started it
+    or recorded why no concrete work remains. Do not call `task_complete` merely
+    because one PR, issue, or retrospective is done. For issue-backed work, run
+    `npm run check:agent-continuity -- --issue <number>` and treat a nonzero exit
+    as proof that work remains.
 
 ## Required pre-verification controls
 
@@ -101,6 +107,10 @@ Before writing the retrospective:
 8. If extension or trigger files were created, run a path/scope audit: actual
    path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
    output, and primary-checkout stray-file check.
+9. If resuming after a restart, a handoff gap, or a user reference to "last
+   session", an issue number, or a prior finding, query session history/checkpoints
+   for that reference before assuming the current shell directory is the active
+   work context.
 
 ## Required inputs
 
@@ -118,6 +128,10 @@ Collect only facts that affect future behavior:
 - review findings, including false positives and why they happened;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
+- repeated incidents and the concrete guard adopted, or the evidence-backed
+  reason no guard was added;
+- tool/version incompatibilities encountered and the canonical fallback command
+  shape used afterward;
 - decisions that changed the plan;
 - next-work decision: started next item, no actionable work, or blocked reason;
 - continuity check result: command, exit code, and output;
@@ -146,36 +160,44 @@ Collect only facts that affect future behavior:
    CI blocks remote integration, and machine-local wrappers only protect this
    workstation when they are on `PATH`.
 7. **Verify post-merge or post-CLI state.** If a CLI command reports success but
-   also emits a cleanup error, verify the remote state, local branch/worktree
-   state, and remaining cleanup separately before claiming completion.
+   also emits a cleanup error, or exits nonzero after it may have performed
+   remote side effects, verify the remote state, local branch/worktree state,
+   and remaining cleanup separately before retrying or claiming completion.
    For release promotions, verify `origin/main == origin/develop` after any
    required post-release alignment and record whether repository rules were
    bypassed by the durable admin bypass rather than temporary rule deletion.
+   If force-aligning branches after a rebase promotion, record the precondition:
+   the branches are patch-equivalent and the force-with-lease protects the
+   observed old target SHA.
 8. **Verify pre-verification controls.** Confirm bootstrap, runtime-file surface
    audit, classic-script runtime proof, and false-positive evidence were handled
    where applicable.
 9. **Check continuity.** Query the active issue/backlog. If actionable work
    remains, the completion action is to start it after attaching this
    retrospective, not to stop or call `task_complete`.
-10. **Ask two other LLMs for adversarial critique.** Do this only after code
-   reviewers are done and their findings are resolved. Give each retrospective
-   reviewer the same pasted evidence and the draft retrospective; do not require
-   them to enter the repository or run git. Use different model families when
-   available; otherwise use different agent roles. If two LLM reviewers are not
-   available because of a tool outage, the work item is blocked, not complete.
-   Require concrete findings only: correctness gaps, repeated failure patterns,
-   missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
-11. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
-   weak suggestions explicitly and briefly.
-12. **Change the system.** If the retrospective reveals a durable rule, update the
-   relevant persistent artifact immediately from the worktree: `AGENTS.md`,
-   project instructions, tests, scripts, or this protocol. Re-read the changed
-   artifact and verify the guard actually landed.
-13. **Final mandatory question: should this retrospective protocol change?** If
-   yes, edit this document as part of the same work item or the next immediate
-   policy PR. If no, record that no protocol change was needed and why. The
-   agent performing the retrospective may edit, commit, and push protocol
-   changes from the worktree; the two retrospective reviewers may not.
+10. **Identify recurrence-prevention changes.** For every repeated incident,
+    tool/version mismatch, context-recovery failure, or command with ambiguous
+    side effects, name the new guard or explicitly reject adding one with
+    evidence. Vague "do better next time" statements are not sufficient.
+11. **Ask two other LLMs for adversarial critique.** Do this only after code
+    reviewers are done and their findings are resolved. Give each retrospective
+    reviewer the same pasted evidence and the draft retrospective; do not require
+    them to enter the repository or run git. Use different model families when
+    available; otherwise use different agent roles. If two LLM reviewers are not
+    available because of a tool outage, the work item is blocked, not complete.
+    Require concrete findings only: correctness gaps, repeated failure patterns,
+    missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
+12. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
+    weak suggestions explicitly and briefly.
+13. **Change the system.** If the retrospective reveals a durable rule, update the
+    relevant persistent artifact immediately from the worktree: `AGENTS.md`,
+    project instructions, tests, scripts, or this protocol. Re-read the changed
+    artifact and verify the guard actually landed.
+14. **Final mandatory question: should this retrospective protocol change?** If
+    yes, edit this document as part of the same work item or the next immediate
+    policy PR. If no, record that no protocol change was needed and why. The
+    agent performing the retrospective may edit, commit, and push protocol
+    changes from the worktree; the two retrospective reviewers may not.
 
 ## Two-LLM critique prompt
 
@@ -208,6 +230,8 @@ Facts:
 - Checks run:
 - Code-review findings:
 - Incidents or near misses:
+- Repeated incidents and adopted/rejected recurrence-prevention guards:
+- Tool/version incompatibilities and canonical fallback commands:
 - Bootstrap status:
 - Runtime-file surface audit:
 - Classic-script runtime proof:
@@ -237,6 +261,7 @@ Keep the retrospective short enough to be useful:
 - **Control scopes**:
 - **Post-merge verification**:
 - **Two-LLM critique**: [reviewers/models used, adopted findings, rejected findings]
+- **Recurrence-prevention guards**: [new guards added, or rejected with evidence]
 - **System changes made**:
 - **Protocol change needed**:
 - **Next-work decision**:
