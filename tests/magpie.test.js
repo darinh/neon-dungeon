@@ -142,6 +142,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
     'aiMagpie scan must delegate target selection through pickMagpieTarget');
   assert.match(fn[0], /isMagpieTargetStale\s*\(\s*this\._mgTarget\s*,\s*items\s*\)/,
     'aiMagpie stale-target clearing must delegate through isMagpieTargetStale');
+  assert.match(fn[0], /isMagpieTargetInGrabRange\s*\(\s*this\._mgTarget\s*,\s*this\.x\s*,\s*this\.y\s*,\s*MAGPIE_GRAB_RANGE\s*\)/,
+    'aiMagpie grab range check must delegate through isMagpieTargetInGrabRange');
   assert.match(fn[0], /pickMagpieFleeTarget\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
     'aiMagpie carrying flee branch must delegate flee target projection through pickMagpieFleeTarget');
   assert.match(fn[0], /magpieStolenCreditsForFloor\s*\(\s*floorNum\s*,\s*MAGPIE_STOLEN_BASE\s*,\s*MAGPIE_STOLEN_PERFL\s*\)/,
@@ -168,6 +170,13 @@ test('MAGPIE stale target helper is defined outside entities.js', () => {
     'MAGPIE stale target helper must live in ai-helpers.js');
   assert.doesNotMatch(ENTITIES, /this\._mgTarget\s*&&\s*\(\s*this\._mgTarget\.dead\s*\|\|\s*items\.indexOf\(this\._mgTarget\)\s*===\s*-1\s*\)/,
     'MAGPIE inline stale target predicate must not remain in entities.js');
+});
+
+test('MAGPIE grab range helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+isMagpieTargetInGrabRange\s*\(/,
+    'MAGPIE grab range helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /const\s+gx\s*=\s*this\._mgTarget\.x\s*-\s*this\.x\s*,\s*gy\s*=\s*this\._mgTarget\.y\s*-\s*this\.y/,
+    'MAGPIE inline grab range vector must not remain in entities.js');
 });
 
 test('MAGPIE flee target helper is defined outside entities.js', () => {
@@ -205,10 +214,11 @@ function extractFunctionSource(src, name) {
 const magpieHelperSandbox = {};
 vm.createContext(magpieHelperSandbox);
 vm.runInContext(
-  `${extractFunctionSource(AI_HELPERS, 'isMagpieTargetStale')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.isMagpieTargetStale = isMagpieTargetStale;\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
+  `${extractFunctionSource(AI_HELPERS, 'isMagpieTargetStale')}\n${extractFunctionSource(AI_HELPERS, 'isMagpieTargetInGrabRange')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.isMagpieTargetStale = isMagpieTargetStale;\nthis.isMagpieTargetInGrabRange = isMagpieTargetInGrabRange;\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
   magpieHelperSandbox
 );
 const isMagpieTargetStale = magpieHelperSandbox.isMagpieTargetStale;
+const isMagpieTargetInGrabRange = magpieHelperSandbox.isMagpieTargetInGrabRange;
 const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
 const pickMagpieFleeTarget = magpieHelperSandbox.pickMagpieFleeTarget;
 const magpieStolenCreditsForFloor = magpieHelperSandbox.magpieStolenCreditsForFloor;
@@ -229,6 +239,18 @@ test('isMagpieTargetStale preserves dead-or-removed target clearing', () => {
     'dead target still in items[] must be cleared');
   assert.equal(isMagpieTargetStale(removed, [live]), true,
     'target missing from items[] must be cleared');
+});
+
+test('isMagpieTargetInGrabRange preserves inclusive squared-distance gate', () => {
+  assert.equal(isMagpieTargetInGrabRange({ x: 3, y: 4 }, 0, 0, 5), true,
+    'target exactly at grab range remains grabbable');
+  assert.equal(isMagpieTargetInGrabRange({ x: 3.01, y: 4 }, 0, 0, 5), false,
+    'target just outside grab range remains ungrabbable');
+});
+
+test('isMagpieTargetInGrabRange uses the original target object coordinates', () => {
+  const target = { x: -2, y: 1 };
+  assert.equal(isMagpieTargetInGrabRange(target, -3, 1, 1), true);
 });
 
 test('pickMagpieTarget returns the nearest eligible item reference', () => {

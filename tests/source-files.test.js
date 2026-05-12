@@ -315,6 +315,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(aiHelperSource, /function\s+pickMirrorKinematics\s*\(/);
   assert.match(aiHelperSource, /function\s+magnetonBendDir\s*\(/);
   assert.match(aiHelperSource, /function\s+isMagpieTargetStale\s*\(/);
+  assert.match(aiHelperSource, /function\s+isMagpieTargetInGrabRange\s*\(/);
   assert.match(aiHelperSource, /function\s+pickMagpieTarget\s*\(/);
   assert.match(aiHelperSource, /function\s+pickMagpieFleeTarget\s*\(/);
   assert.match(aiHelperSource, /function\s+magpieStolenCreditsForFloor\s*\(/);

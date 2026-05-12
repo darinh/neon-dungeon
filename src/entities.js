@@ -1819,8 +1819,7 @@ class Enemy {
     // 1) Have a target — race for it.
     if (this._mgTarget) {
       this.moveToward(this._mgTarget.x, this._mgTarget.y, this.spd, dt, map);
-      const gx = this._mgTarget.x - this.x, gy = this._mgTarget.y - this.y;
-      if (gx * gx + gy * gy <= MAGPIE_GRAB_RANGE * MAGPIE_GRAB_RANGE) {
+      if (isMagpieTargetInGrabRange(this._mgTarget, this.x, this.y, MAGPIE_GRAB_RANGE)) {
         // Consume the item. Mark dead so game.js's prune (after enemy
         // updates) splices it from items[]. Cannot splice here
         // because we're iterating items[] indirectly across multiple
