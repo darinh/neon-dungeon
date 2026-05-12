@@ -110,6 +110,7 @@ const ASSETS = [
   './src/entities/player-bombs.js',
   './src/entities/render-passes.js',
   './src/entities/volatile-cores.js',
+  './src/entities/enemy-seeker.js',
   './src/entities/combat-effects.js',
   './src/entities/deferred-spawns.js',
   './src/entities/enemy-summoner.js',
