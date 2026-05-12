@@ -23,6 +23,7 @@ const { readSourceFile } = require('./_source-files.js');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_CRYOPHAGE = readSourceFile(__dirname, 'entitiesEnemyCryophage');
 const SPAWN_INITIALIZERS = readSourceFile(__dirname, 'entitiesSpawnInitializers');
 const SOURCE_METADATA = readSourceFile(__dirname, 'entitiesSourceMetadata');
 const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
@@ -74,7 +75,8 @@ test('CRYOPHAGE is dispatched in the AI switch', () => {
 });
 
 test('aiCryophage method is defined', () => {
-  assert.match(ENTITIES, /aiCryophage\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiCryophage\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_CRYOPHAGE, /Enemy\.prototype\.aiCryophage\s*=\s*function\s+aiCryophage\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
 });
 
 test('CRYOPHAGE stun cancel path resets aiming', () => {
@@ -101,7 +103,7 @@ test('CRYOPHAGE telegraph commits on a 5-tile + lattice', () => {
   // change here is gameplay-significant (changes the area-denial footprint).
   // Boundary uses the AI section header (durable to method insertions
   // between aiCryophage and aiResonator).
-  const block = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\/\/\s*─+\s*(WARDLING|RESONATOR) AI/);
+  const block = ENEMY_CRYOPHAGE.match(/Enemy\.prototype\.aiCryophage[\s\S]{0,5500}\n\};/);
   assert.ok(block, 'aiCryophage method block must be locatable');
   const candidatesMatch = block[0].match(/const\s+candidates\s*=\s*\[([\s\S]*?)\];/);
   assert.ok(candidatesMatch, 'aiCryophage lock must build a candidates array');
@@ -117,7 +119,7 @@ test('CRYOPHAGE filters lattice tiles at LOCK time, not commit time (parity guar
   // commit had isPassable filter, draw rendered all 5 unconditionally.
   // Fix: pre-filter into _cyTiles at lock time, both consumers read it.
   // Also guards against OOB tiles bypassing the passability check.
-  const aiBlock = ENTITIES.match(/aiCryophage[\s\S]{0,5500}\/\/\s*─+\s*(WARDLING|RESONATOR) AI/);
+  const aiBlock = ENEMY_CRYOPHAGE.match(/Enemy\.prototype\.aiCryophage[\s\S]{0,5500}\n\};/);
   assert.ok(aiBlock, 'aiCryophage block must be locatable');
   // Lock branch must populate _cyTiles
   assert.match(aiBlock[0], /this\._cyTiles\s*=\s*tiles/, 'lock must store filtered tiles in _cyTiles');
