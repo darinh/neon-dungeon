@@ -636,6 +636,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+initializeEnemySpawnState\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+spawnEnemy\s*\(/);
   assert.doesNotMatch(sources.entities, /_seekerDetonate\s*\(player,\s*map\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /moveToward\s*\(\s*tx\s*,\s*ty\s*,\s*spd\s*,\s*dt\s*,\s*map\s*,\s*ignoreWalls\s*\)\s*\{/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+scaleEnemySpawnHpForModifier\s*\(/);
   assert.match(sources.entitiesSpawnModifiers, /function\s+applyEliteSpawnRoll\s*\(/);
   assert.match(sources.entitiesEnemyAwareness, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
@@ -676,6 +677,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyWardling, /Enemy\.prototype\._wlFindWard\s*=/);
   assert.match(sources.entitiesEnemyTempo, /Enemy\.prototype\.berserkerMul\s*=/);
   assert.match(sources.entitiesEnemyProjectiles, /Enemy\.prototype\.fireAt\s*=/);
+  assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.moveToward\s*=/);
+  assert.match(sources.entitiesEnemyMovement, /hasAugment\('TEMPORAL_DILATION'\) \? 0\.85 : 1/);
+  assert.match(sources.entitiesEnemyMovement, /isPassable\(map\[fy\]\[fx\]\)/);
   assert.match(sources.entitiesEnemyMovement, /Enemy\.prototype\.patrol\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPositionAgo\s*=/);
   assert.match(sources.entitiesPlayerKinematics, /Player\.prototype\.getPredictedPosition\s*=/);
