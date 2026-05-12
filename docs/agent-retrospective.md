@@ -94,7 +94,11 @@ Run and record these before verification or review:
    from moved blocks, or record why each omitted comment is obsolete; semantic
    comments are behavior evidence, not formatting. For extracted domain
    behavior, require at least one review pass to check invariant/comment
-   preservation explicitly instead of relying only on generic code review.
+   preservation explicitly instead of relying only on generic code review. VM
+   behavior tests for extracted AI must use production tuning constants by
+   loading or parsing the production source; if a synthetic value is intentional,
+   name and comment it as a synthetic fixture so it is not mistaken for behavior
+   parity.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. Any reviewer claim
