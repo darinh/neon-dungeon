@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.108
+# NEON DUNGEON — Game Specification v6.1.109
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.109 | Entity module split: MAGPIE carrying-flee decision now lives in `src/entities/ai-helpers.js` as `shouldMagpieFlee()`. `Enemy.prototype.aiMagpie()` still computes real-player distance, projects the flee target, and moves with raw `this.spd`, while the helper preserves the original stolen-credit carry gate and strict `pd < MAGPIE_FLEE_RANGE` distance check. |
 | v6.1.108 | Entity module split: MAGPIE grab-range detection now lives in `src/entities/ai-helpers.js` as `isMagpieTargetInGrabRange()`. `Enemy.prototype.aiMagpie()` still decides when to consume the target and owns marking it dead, floor fallback, credit banking, feedback, target clearing, and scan reset, while the helper preserves the original inclusive squared-distance check against `MAGPIE_GRAB_RANGE`. |
 | v6.1.107 | Entity module split: MAGPIE stale-target detection now lives in `src/entities/ai-helpers.js` as `isMagpieTargetStale()`. `Enemy.prototype.aiMagpie()` still decides when to clear `_mgTarget` and owns all subsequent scan, movement, grab, banking, and flee side effects, while the helper preserves the original dead-or-missing-from-`items` predicate. |
 | v6.1.106 | Entity module split: MAGPIE stolen-credit scaling now lives in `src/entities/ai-helpers.js` as `magpieStolenCreditsForFloor()`. `Enemy.prototype.aiMagpie()` still decides when a target is grabbed, marks that exact pickup dead, resolves the current floor fallback, accumulates `_mgStolenCr`, and emits feedback, while the helper preserves the base plus per-floor credit calculation. |

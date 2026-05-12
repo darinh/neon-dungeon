@@ -144,6 +144,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
     'aiMagpie stale-target clearing must delegate through isMagpieTargetStale');
   assert.match(fn[0], /isMagpieTargetInGrabRange\s*\(\s*this\._mgTarget\s*,\s*this\.x\s*,\s*this\.y\s*,\s*MAGPIE_GRAB_RANGE\s*\)/,
     'aiMagpie grab range check must delegate through isMagpieTargetInGrabRange');
+  assert.match(fn[0], /shouldMagpieFlee\s*\(\s*this\._mgStolenCr\s*,\s*pd\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
+    'aiMagpie carrying flee gate must delegate through shouldMagpieFlee');
   assert.match(fn[0], /pickMagpieFleeTarget\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
     'aiMagpie carrying flee branch must delegate flee target projection through pickMagpieFleeTarget');
   assert.match(fn[0], /magpieStolenCreditsForFloor\s*\(\s*floorNum\s*,\s*MAGPIE_STOLEN_BASE\s*,\s*MAGPIE_STOLEN_PERFL\s*\)/,
@@ -177,6 +179,13 @@ test('MAGPIE grab range helper is defined outside entities.js', () => {
     'MAGPIE grab range helper must live in ai-helpers.js');
   assert.doesNotMatch(ENTITIES, /const\s+gx\s*=\s*this\._mgTarget\.x\s*-\s*this\.x\s*,\s*gy\s*=\s*this\._mgTarget\.y\s*-\s*this\.y/,
     'MAGPIE inline grab range vector must not remain in entities.js');
+});
+
+test('MAGPIE carrying flee decision helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+shouldMagpieFlee\s*\(/,
+    'MAGPIE carrying flee decision helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /\(this\._mgStolenCr\s*\|\|\s*0\)\s*>\s*0\s*&&\s*pd\s*<\s*MAGPIE_FLEE_RANGE/,
+    'MAGPIE inline carrying flee predicate must not remain in entities.js');
 });
 
 test('MAGPIE flee target helper is defined outside entities.js', () => {
@@ -214,11 +223,12 @@ function extractFunctionSource(src, name) {
 const magpieHelperSandbox = {};
 vm.createContext(magpieHelperSandbox);
 vm.runInContext(
-  `${extractFunctionSource(AI_HELPERS, 'isMagpieTargetStale')}\n${extractFunctionSource(AI_HELPERS, 'isMagpieTargetInGrabRange')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.isMagpieTargetStale = isMagpieTargetStale;\nthis.isMagpieTargetInGrabRange = isMagpieTargetInGrabRange;\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
+  `${extractFunctionSource(AI_HELPERS, 'isMagpieTargetStale')}\n${extractFunctionSource(AI_HELPERS, 'isMagpieTargetInGrabRange')}\n${extractFunctionSource(AI_HELPERS, 'shouldMagpieFlee')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.isMagpieTargetStale = isMagpieTargetStale;\nthis.isMagpieTargetInGrabRange = isMagpieTargetInGrabRange;\nthis.shouldMagpieFlee = shouldMagpieFlee;\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
   magpieHelperSandbox
 );
 const isMagpieTargetStale = magpieHelperSandbox.isMagpieTargetStale;
 const isMagpieTargetInGrabRange = magpieHelperSandbox.isMagpieTargetInGrabRange;
+const shouldMagpieFlee = magpieHelperSandbox.shouldMagpieFlee;
 const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
 const pickMagpieFleeTarget = magpieHelperSandbox.pickMagpieFleeTarget;
 const magpieStolenCreditsForFloor = magpieHelperSandbox.magpieStolenCreditsForFloor;
@@ -251,6 +261,21 @@ test('isMagpieTargetInGrabRange preserves inclusive squared-distance gate', () =
 test('isMagpieTargetInGrabRange uses the original target object coordinates', () => {
   const target = { x: -2, y: 1 };
   assert.equal(isMagpieTargetInGrabRange(target, -3, 1, 1), true);
+});
+
+test('shouldMagpieFlee requires carried credits and real-player distance inside flee range', () => {
+  assert.equal(shouldMagpieFlee(0, 1, 8), false,
+    'MAGPIE with no banked stolen credits must not flee');
+  assert.equal(shouldMagpieFlee(undefined, 1, 8), false,
+    'undefined stolen-credit state preserves the original no-carry fallback');
+  assert.equal(shouldMagpieFlee(5, 7.99, 8), true,
+    'carrying MAGPIE inside flee range must flee');
+});
+
+test('shouldMagpieFlee preserves strict flee-range boundary', () => {
+  assert.equal(shouldMagpieFlee(5, 8, 8), false,
+    'MAGPIE exactly at flee range is excluded by the original strict-distance gate');
+  assert.equal(shouldMagpieFlee(5, 8.01, 8), false);
 });
 
 test('pickMagpieTarget returns the nearest eligible item reference', () => {
