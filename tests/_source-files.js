@@ -40,6 +40,7 @@ const CORE_RUNTIME_SOURCE_KEYS = Object.freeze([
   'entitiesPlayerDamage',
   'entitiesPlayerProgression',
   'entitiesPlayerSurge',
+  'entitiesEnemySeeker',
   'render',
   'game',
 ]);
@@ -115,6 +116,7 @@ const SOURCE_FILE_PATHS = Object.freeze({
   entitiesPlayerBombs: path.join('src', 'entities', 'player-bombs.js'),
   entitiesRenderPasses: path.join('src', 'entities', 'render-passes.js'),
   entitiesVolatileCores: path.join('src', 'entities', 'volatile-cores.js'),
+  entitiesEnemySeeker: path.join('src', 'entities', 'enemy-seeker.js'),
   entitiesCombatEffects: path.join('src', 'entities', 'combat-effects.js'),
   entitiesDeferredSpawns: path.join('src', 'entities', 'deferred-spawns.js'),
   entitiesShockPulse: path.join('src', 'entities', 'shock-pulse.js'),
