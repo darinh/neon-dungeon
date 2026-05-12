@@ -314,6 +314,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(aiHelperSource, /function\s+predictFromHistory\s*\(/);
   assert.match(aiHelperSource, /function\s+pickMirrorKinematics\s*\(/);
   assert.match(aiHelperSource, /function\s+magnetonBendDir\s*\(/);
+  assert.match(aiHelperSource, /function\s+pickMagpieTarget\s*\(/);
   assert.match(architectWallSource, /function\s+pickArchitectTarget\s*\(/);
   assert.match(architectWallSource, /function\s+_isTileOccupiedByActor\s*\(/);
   assert.match(architectWallSource, /function\s+updatePlacedWalls\s*\(/);
@@ -507,6 +508,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+predictFromHistory\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+pickMirrorKinematics\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+magnetonBendDir\s*\(/);
+  assert.doesNotMatch(sources.entities, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/);
   assert.doesNotMatch(sources.entities, /function\s+pickArchitectTarget\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+_isTileOccupiedByActor\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+updatePlacedWalls\s*\(/);

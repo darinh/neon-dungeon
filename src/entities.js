@@ -1813,20 +1813,7 @@ class Enemy {
     // Re-scan when throttle expired OR when we have no current target.
     if (!this._mgTarget || this._mgScanT <= 0) {
       this._mgScanT = MAGPIE_SCAN_PERIOD;
-      let best = null;
-      let bestD2 = MAGPIE_SCAN_RANGE * MAGPIE_SCAN_RANGE;
-      for (const it of items) {
-        if (!it || it.dead) continue;
-        // Filter: only generic Items. Keys / harvest / whispers /
-        // existing hoards are off-limits.
-        if (it.isKey || it.isHarvest || it.isWhisper || it.isHoard) continue;
-        const dx = it.x - this.x, dy = it.y - this.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) {
-          bestD2 = d2;
-          best = it;
-        }
-      }
+      const best = pickMagpieTarget(items, this.x, this.y, MAGPIE_SCAN_RANGE);
       if (best) this._mgTarget = best;
     }
     // 1) Have a target — race for it.
