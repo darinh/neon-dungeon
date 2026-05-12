@@ -17,9 +17,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_TETHER = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-tether.js'), 'utf8');
 const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
@@ -61,7 +63,7 @@ test('TETHER dispatch case wired in update switch', () => {
 });
 
 test('TETHER aiTether method exists with the correct signature', () => {
-  const m = ENTITIES.match(/aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
+  const m = ENEMY_TETHER.match(/Enemy\.prototype\.aiTether\s*=\s*function\s+aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
   assert.ok(m, 'aiTether(dt,player,map,d,los) method must exist');
 });
 
@@ -128,9 +130,9 @@ test('aiTether uses REAL player distance (not taunt-aware d)', () => {
   // that must track the REAL player must recompute dist locally
   // because `d` is dist to _tx/_ty (which can be a hologram).
   // Without this, a DECOY would yank the slow off the player.
-  const idx = ENTITIES.indexOf('aiTether(dt, player, map, d, los) {');
+  const idx = ENEMY_TETHER.indexOf('function aiTether(dt, player, map, d, los) {');
   assert.ok(idx >= 0, 'aiTether body not found');
-  const body = ENTITIES.slice(idx, idx + 2500);
+  const body = ENEMY_TETHER.slice(idx, idx + 2500);
   assert.match(body, /dist\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*\)/,
     'aiTether must compute REAL player distance via dist(this.x,this.y,player.x,player.y)');
 });
@@ -138,11 +140,45 @@ test('aiTether uses REAL player distance (not taunt-aware d)', () => {
 test('aiTether guards against missing/dead player', () => {
   // Field-application path runs every frame inside the enemy loop;
   // a null/dead player crash here would be a hard-to-repro bug.
-  const idx = ENTITIES.indexOf('aiTether(dt, player, map, d, los) {');
+  const idx = ENEMY_TETHER.indexOf('function aiTether(dt, player, map, d, los) {');
   assert.ok(idx >= 0, 'aiTether body not found');
-  const body = ENTITIES.slice(idx, idx + 2500);
+  const body = ENEMY_TETHER.slice(idx, idx + 2500);
   assert.match(body, /if\s*\(\s*!player\s*\|\|\s*player\.dead\s*\)/,
     'aiTether must early-return on missing or dead player');
+});
+
+test('aiTether prototype helper is callable and slows the real player', () => {
+  const sandbox = {
+    Enemy: function Enemy() {},
+    TETHER_CHASE_RANGE: 11,
+    TETHER_FIELD_RANGE: 5,
+    TETHER_MELEE_RANGE: 1,
+    TETHER_MIN_FACTOR: 0.55,
+    dist: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
+  };
+  vm.runInNewContext(ENEMY_TETHER, sandbox);
+  const tether = new sandbox.Enemy();
+  Object.assign(tether, {
+    x: 0,
+    y: 0,
+    _tx: 100,
+    _ty: 100,
+    spd: 2.6,
+    _canTarget: () => true,
+    moveToward: () => { tether.moved = true; },
+    patrol: () => { tether.patrolled = true; },
+  });
+  const player = { x: 4, y: 0, _tetherSlowFactor: 1 };
+
+  tether.aiTether(0.016, player, {}, 100, false);
+
+  assert.equal(tether.patrolled, true, 'blind/out-of-range TETHER should patrol');
+  assert.ok(player._tetherSlowFactor < 1, 'TETHER should still slow the real player by player distance');
+});
+
+test('aiTether implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiTether\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/,
+    'aiTether body should stay extracted from src/entities.js');
 });
 
 test('drawTetherLeashes rendered from game.js render pass', () => {
