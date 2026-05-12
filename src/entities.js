@@ -1807,7 +1807,7 @@ class Enemy {
     // Drop stale targets early so the dispatch logic below doesn't
     // chase a freshly-collected pickup. Item.dead is set by the player
     // pickup path AND by a previous MAGPIE's grab.
-    if (this._mgTarget && (this._mgTarget.dead || items.indexOf(this._mgTarget) === -1)) {
+    if (isMagpieTargetStale(this._mgTarget, items)) {
       this._mgTarget = null;
     }
     // Re-scan when throttle expired OR when we have no current target.

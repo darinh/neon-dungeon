@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.106
+# NEON DUNGEON — Game Specification v6.1.107
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.107 | Entity module split: MAGPIE stale-target detection now lives in `src/entities/ai-helpers.js` as `isMagpieTargetStale()`. `Enemy.prototype.aiMagpie()` still decides when to clear `_mgTarget` and owns all subsequent scan, movement, grab, banking, and flee side effects, while the helper preserves the original dead-or-missing-from-`items` predicate. |
 | v6.1.106 | Entity module split: MAGPIE stolen-credit scaling now lives in `src/entities/ai-helpers.js` as `magpieStolenCreditsForFloor()`. `Enemy.prototype.aiMagpie()` still decides when a target is grabbed, marks that exact pickup dead, resolves the current floor fallback, accumulates `_mgStolenCr`, and emits feedback, while the helper preserves the base plus per-floor credit calculation. |
 | v6.1.105 | Entity module split: MAGPIE carrying flee-target projection now lives in `src/entities/ai-helpers.js` as `pickMagpieFleeTarget()`. `Enemy.prototype.aiMagpie()` still decides when the thief is carrying loot and close enough to flee, then moves with raw `this.spd`; the helper preserves the real-player vector projection, normalized flee range, and zero-distance fallback. |
 | v6.1.104 | Entity module split: MAGPIE loot-target selection now lives in `src/entities/ai-helpers.js` as `pickMagpieTarget()`. `Enemy.prototype.aiMagpie()` still owns scan throttling, stale-target clearing, movement, grab banking, flee behavior, and patrol fallback, while the helper preserves nearest eligible generic-item selection, protected pickup exclusions, strict scan-range boundary behavior, and object-reference identity for later grab mutation. |
