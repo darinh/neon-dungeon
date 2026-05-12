@@ -14,7 +14,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerSurge', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -85,6 +85,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerKinematics.replaceAll('\\', '/'), 'src/entities/player-kinematics.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerWeapons.replaceAll('\\', '/'), 'src/entities/player-weapons.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerDamage.replaceAll('\\', '/'), 'src/entities/player-damage.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesPlayerProgression.replaceAll('\\', '/'), 'src/entities/player-progression.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerSurge.replaceAll('\\', '/'), 'src/entities/player-surge.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
@@ -159,6 +160,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerKinematics').endsWith('src/entities/player-kinematics.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerWeapons').endsWith('src/entities/player-weapons.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerDamage').endsWith('src/entities/player-damage.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerProgression').endsWith('src/entities/player-progression.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerSurge').endsWith('src/entities/player-surge.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
@@ -228,6 +230,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const playerKinematicsSource = readSourceFile(__dirname, 'entitiesPlayerKinematics');
   const playerWeaponSource = readSourceFile(__dirname, 'entitiesPlayerWeapons');
   const playerDamageSource = readSourceFile(__dirname, 'entitiesPlayerDamage');
+  const playerProgressionSource = readSourceFile(__dirname, 'entitiesPlayerProgression');
   const playerSurgeSource = readSourceFile(__dirname, 'entitiesPlayerSurge');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
@@ -476,6 +479,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerDamageSource, /this\.perks\.GLASS_CANNON[\s\S]{0,120}Math\.round\(a \* 1\.30\)/);
   assert.match(playerDamageSource, /Player\.prototype\.logDamage\s*=\s*function logDamage\s*\(/);
   assert.match(playerDamageSource, /this\.damageLog\[source\]\s*=\s*\(this\.damageLog\[source\] \|\| 0\) \+ amount/);
+  assert.match(playerProgressionSource, /Player\.prototype\.xpNeeded\s*=\s*function xpNeeded\s*\(/);
+  assert.match(playerProgressionSource, /return this\.level \* 80/);
+  assert.match(playerProgressionSource, /Player\.prototype\.gainXP\s*=\s*function gainXP\s*\(/);
+  assert.match(playerProgressionSource, /getMetaXPMultiplier\(\) \* augMul \* overflowMul/);
   assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
   assert.match(playerSurgeSource, /NEON\.behavior\.consumeSurgeShot\(this\)/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
@@ -677,6 +684,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesPlayerWeapons, /Player\.prototype\.equipWeapon\s*=/);
   assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.computeOutgoingDmgMul\s*=/);
   assert.match(sources.entitiesPlayerDamage, /Player\.prototype\.logDamage\s*=/);
+  assert.match(sources.entitiesPlayerProgression, /Player\.prototype\.xpNeeded\s*=/);
+  assert.match(sources.entitiesPlayerProgression, /Player\.prototype\.gainXP\s*=/);
   assert.match(sources.entitiesPlayerSurge, /Player\.prototype\._consumeSurgeShot\s*=/);
   assert.match(sources.render, /function\s+drawWorld\s*\(/);
   assert.match(sources.game, /const\s+game\s*=/);
