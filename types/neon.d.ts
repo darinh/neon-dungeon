@@ -76,6 +76,7 @@ declare global {
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
     lobGrenade(tx?: any, ty?: any, map?: any): void;
+    moveToward(tx?: any, ty?: any, spd?: any, dt?: any, map?: any, ignoreWalls?: any): void;
     patrol(dt?: any, map?: any): void;
     revealMimic(player?: any): void;
     reflectsProjectile(proj?: any): boolean;
