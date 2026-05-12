@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_TETHER = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-tether.js'), 'utf8');
 const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_STATS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-stats.js'), 'utf8');
@@ -61,7 +62,7 @@ test('TETHER dispatch case wired in update switch', () => {
 });
 
 test('TETHER aiTether method exists with the correct signature', () => {
-  const m = ENTITIES.match(/aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
+  const m = ENEMY_TETHER.match(/aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
   assert.ok(m, 'aiTether(dt,player,map,d,los) method must exist');
 });
 
@@ -128,9 +129,9 @@ test('aiTether uses REAL player distance (not taunt-aware d)', () => {
   // that must track the REAL player must recompute dist locally
   // because `d` is dist to _tx/_ty (which can be a hologram).
   // Without this, a DECOY would yank the slow off the player.
-  const idx = ENTITIES.indexOf('aiTether(dt, player, map, d, los) {');
+  const idx = ENEMY_TETHER.indexOf('Enemy.prototype.aiTether = function aiTether(dt, player, map, d, los) {');
   assert.ok(idx >= 0, 'aiTether body not found');
-  const body = ENTITIES.slice(idx, idx + 2500);
+  const body = ENEMY_TETHER.slice(idx, idx + 2500);
   assert.match(body, /dist\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*\)/,
     'aiTether must compute REAL player distance via dist(this.x,this.y,player.x,player.y)');
 });
@@ -138,9 +139,9 @@ test('aiTether uses REAL player distance (not taunt-aware d)', () => {
 test('aiTether guards against missing/dead player', () => {
   // Field-application path runs every frame inside the enemy loop;
   // a null/dead player crash here would be a hard-to-repro bug.
-  const idx = ENTITIES.indexOf('aiTether(dt, player, map, d, los) {');
+  const idx = ENEMY_TETHER.indexOf('Enemy.prototype.aiTether = function aiTether(dt, player, map, d, los) {');
   assert.ok(idx >= 0, 'aiTether body not found');
-  const body = ENTITIES.slice(idx, idx + 2500);
+  const body = ENEMY_TETHER.slice(idx, idx + 2500);
   assert.match(body, /if\s*\(\s*!player\s*\|\|\s*player\.dead\s*\)/,
     'aiTether must early-return on missing or dead player');
 });

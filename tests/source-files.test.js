@@ -15,7 +15,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyVaultmaster', 'entitiesEnemySeeker', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyVaultmaster', 'entitiesEnemyTether', 'entitiesEnemySeeker', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -89,6 +89,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerProgression.replaceAll('\\', '/'), 'src/entities/player-progression.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerSurge.replaceAll('\\', '/'), 'src/entities/player-surge.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyVaultmaster.replaceAll('\\', '/'), 'src/entities/enemy-vaultmaster.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyTether.replaceAll('\\', '/'), 'src/entities/enemy-tether.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -165,6 +166,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerProgression').endsWith('src/entities/player-progression.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerSurge').endsWith('src/entities/player-surge.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyVaultmaster').endsWith('src/entities/enemy-vaultmaster.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyTether').endsWith('src/entities/enemy-tether.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -236,6 +238,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const playerProgressionSource = readSourceFile(__dirname, 'entitiesPlayerProgression');
   const playerSurgeSource = readSourceFile(__dirname, 'entitiesPlayerSurge');
   const enemyVaultmasterSource = readSourceFile(__dirname, 'entitiesEnemyVaultmaster');
+  const enemyTetherSource = readSourceFile(__dirname, 'entitiesEnemyTether');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -495,6 +498,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerProgressionSource, /getMetaXPMultiplier\(\) \* augMul \* overflowMul/);
   assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
   assert.match(playerSurgeSource, /NEON\.behavior\.consumeSurgeShot\(this\)/);
+  assert.match(enemyTetherSource, /Enemy\.prototype\.aiTether\s*=\s*function aiTether\s*\(/);
+  assert.match(enemyTetherSource, /dist\(this\.x, this\.y, player\.x, player\.y\)/);
+  assert.match(enemyTetherSource, /player\._tetherSlowFactor\s*=\s*Math\.max\(TETHER_MIN_FACTOR \* 0\.6, cur \* factor\)/);
   assert.doesNotMatch(sources.content, /function\s+spawnParticles\s*\(/);
   assert.doesNotMatch(sources.content, /const\s+ambientParticles\s*=/);
   assert.doesNotMatch(sources.content, /function\s+activateHackware\s*\(/);
@@ -516,6 +522,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /function\s+predictFromHistory\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+pickMirrorKinematics\s*\(/);
   assert.doesNotMatch(sources.entities, /function\s+magnetonBendDir\s*\(/);
+  assert.doesNotMatch(sources.entities, /aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/);
   assert.doesNotMatch(sources.entities, /Math\.hypot\(dx,\s*dy\)\s*\|\|\s*1/);
   assert.doesNotMatch(sources.entities, /MAGPIE_STOLEN_BASE\s*\+\s*floorNum\s*\*\s*MAGPIE_STOLEN_PERFL/);
