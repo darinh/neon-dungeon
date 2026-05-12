@@ -77,7 +77,9 @@ Run and record these before verification or review:
    alignment helpers before treating full-gate failures as surprising. Source
    tests for moved prototype methods with nested blocks must use brace-walked
    extraction or a stable terminator, never indentation-only closing-brace
-   regexes such as `\n\s{2}\}`.
+   regexes such as `\n\s{2}\}`. When converting class methods to prototype
+   assignments, use named `function` expressions and verify no arrow function
+   replaced a method that depends on dynamic `this`.
 5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
