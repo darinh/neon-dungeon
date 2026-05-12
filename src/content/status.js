@@ -225,7 +225,7 @@ function getStatusEffects(player) {
   }
   // STRIDE active (movement-built dmg stacks). Distinct from BERSERKER (HP gate)
   // and PRISTINE (high-HP gate) — STRIDE is purely movement-gated and stacks
-  // multiplicatively with both via Player.effectiveAtk() at entities.js:11331.
+  // multiplicatively with both via Player.effectiveAtk() in player-damage.js.
   //
   // Display: ⇶ RUSH ×1.05 ... ×1.25 — multiplier-readout style mirroring
   // HOT_HAND (PR #280), MOMENTUM (PR #282), OVERDRIVE (PR #302). Pre-PR
@@ -238,7 +238,7 @@ function getStatusEffects(player) {
   // identity style for HP/state-gated buff badges) so the badge remains
   // visually identifiable as STRIDE-the-perk, not just "another ×N".
   //
-  // Local alias `ss` mirrors the entities.js:11330 alias of the same
+  // Local alias `ss` mirrors the player-damage.js alias of the same
   // name — keeps the badge gate predicate STRUCTURALLY IDENTICAL to the
   // multiplier gate after `this.`/`player.` receiver normalisation, so
   // the cross-file alignment test (tests/stride-hud.test.js) can compare
@@ -248,8 +248,8 @@ function getStatusEffects(player) {
   // (legacy player shapes that bypass the ctor may lack .perks). Cross-
   // file desync defence (per stored memory 'HUD status fx'): the per-
   // stack rate (0.05) is a literal in BOTH the HUD label here AND the
-  // STRIDE_DMG_PER_STACK constant at entities.js:10944. The companion
-  // test parses entities.js and asserts the literals match.
+  // STRIDE_DMG_PER_STACK constant in player-perk-tuning.js. The companion
+  // test parses the tuning source and asserts the literals match.
   const ss = (player._strideStacks || 0);
   if (player.perks && player.perks.STRIDE && ss > 0) {
     const mul = (1 + 0.05 * ss).toFixed(2);

@@ -24,6 +24,7 @@ const { readSourceFile } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES_SRC = fs.readFileSync(path.join(ROOT, 'src/entities.js'), 'utf8');
+const PLAYER_DAMAGE_SRC = readSourceFile(__dirname, 'entitiesPlayerDamage');
 const CONTENT_SRC = readSourceFile(__dirname, 'contentPerks');
 const GAME_SRC = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
 const SW_SRC = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -136,7 +137,7 @@ test('takeDamage applies DR in the same flow (between trigger and hp deduction)'
 test('effectiveAtk applies +75% multiplier while lastStandTimer > 0', () => {
   // Mirrors BERSERKER pattern in the same method — both stack
   // multiplicatively on purpose (low-HP rewards both fire at once).
-  const m = ENTITIES_SRC.match(/effectiveAtk\(\)\s*\{[\s\S]*?return a;\s*\}/);
+  const m = PLAYER_DAMAGE_SRC.match(/effectiveAtk\(\)\s*\{[\s\S]*?return a;\s*\}/);
   assert.ok(m, 'effectiveAtk method must exist');
   assert.match(m[0], /if \(this\.lastStandTimer > 0\) a = Math\.round\(a \* 1\.75\)/);
 });

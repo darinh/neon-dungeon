@@ -472,6 +472,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(playerWeaponSource, /const MAX_BELT = 3/);
   assert.match(playerDamageSource, /Player\.prototype\.computeOutgoingDmgMul\s*=\s*function computeOutgoingDmgMul\s*\(/);
   assert.match(playerDamageSource, /NEON\.behavior\.computeOutgoingDmgMul\(this\)/);
+  assert.match(playerDamageSource, /Player\.prototype\.effectiveAtk\s*=\s*function effectiveAtk\s*\(/);
+  assert.match(playerDamageSource, /this\.perks\.GLASS_CANNON[\s\S]{0,120}Math\.round\(a \* 1\.30\)/);
   assert.match(playerDamageSource, /Player\.prototype\.logDamage\s*=\s*function logDamage\s*\(/);
   assert.match(playerDamageSource, /this\.damageLog\[source\]\s*=\s*\(this\.damageLog\[source\] \|\| 0\) \+ amount/);
   assert.match(playerSurgeSource, /Player\.prototype\._consumeSurgeShot\s*=\s*function _consumeSurgeShot\s*\(/);
