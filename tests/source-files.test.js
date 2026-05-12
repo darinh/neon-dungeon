@@ -15,7 +15,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyMagneton', 'entitiesEnemySpectre', 'entitiesEnemyBasicAi', 'entitiesEnemyHarvester', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemyNullifier', 'entitiesEnemySapper', 'entitiesEnemyMagpie', 'entitiesEnemySeeker', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyMagneton', 'entitiesEnemySpectre', 'entitiesEnemyBasicAi', 'entitiesEnemyHarvester', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemyNullifier', 'entitiesEnemySapper', 'entitiesEnemyMagpie', 'entitiesEnemyGulper', 'entitiesEnemySeeker', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -97,6 +97,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyNullifier.replaceAll('\\', '/'), 'src/entities/enemy-nullifier.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemySapper.replaceAll('\\', '/'), 'src/entities/enemy-sapper.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyMagpie.replaceAll('\\', '/'), 'src/entities/enemy-magpie.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyGulper.replaceAll('\\', '/'), 'src/entities/enemy-gulper.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
   assert.equal(SOURCE_FILE_PATHS.game.replaceAll('\\', '/'), 'src/game.js');
 });
@@ -181,6 +182,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyNullifier').endsWith('src/entities/enemy-nullifier.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemySapper').endsWith('src/entities/enemy-sapper.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyMagpie').endsWith('src/entities/enemy-magpie.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyGulper').endsWith('src/entities/enemy-gulper.js'), true);
   const sources = readSourceFiles(__dirname);
   const terminalSource = readSourceFile(__dirname, 'contentTerminals');
   const weaponSource = readSourceFile(__dirname, 'contentWeapons');
@@ -260,6 +262,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const enemyNullifierSource = readSourceFile(__dirname, 'entitiesEnemyNullifier');
   const enemySapperSource = readSourceFile(__dirname, 'entitiesEnemySapper');
   const enemyMagpieSource = readSourceFile(__dirname, 'entitiesEnemyMagpie');
+  const enemyGulperSource = readSourceFile(__dirname, 'entitiesEnemyGulper');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
   assert.match(weaponSource, /const\s+WEAPON_AFFIXES\s*=\s*\{/);
   assert.match(upgradeSource, /const\s+UPGRADES\s*=\s*\[/);
@@ -547,6 +550,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /aiSpectre\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiTether\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiMagpie\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiGulper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/);
   assert.doesNotMatch(sources.entities, /Math\.hypot\(dx,\s*dy\)\s*\|\|\s*1/);
   assert.doesNotMatch(sources.entities, /MAGPIE_STOLEN_BASE\s*\+\s*floorNum\s*\*\s*MAGPIE_STOLEN_PERFL/);
@@ -732,6 +736,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyNullifierSource, /Enemy\.prototype\.aiNullifier\s*=\s*function\s+aiNullifier\s*\(/);
   assert.match(enemySapperSource, /Enemy\.prototype\.aiSapper\s*=\s*function\s+aiSapper\s*\(/);
   assert.match(enemyMagpieSource, /Enemy\.prototype\.aiMagpie\s*=\s*function\s+aiMagpie\s*\(/);
+  assert.match(enemyGulperSource, /Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\(/);
+  assert.match(enemyGulperSource, /GULPER_MOUTH_RANGE/);
   assert.match(enemyNullifierSource, /NULLIFIER_PULSE_RATE/);
   assert.match(sources.entitiesPlayerPerkTuning, /const\s+STRIDE_MOVE_RATE\s*=\s*0\.5/);
   assert.match(sources.entitiesPlayerPerkTuning, /const\s+DEADEYE_CHARGE_TIME\s*=\s*1\.0/);
