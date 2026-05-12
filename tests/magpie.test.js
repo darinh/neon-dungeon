@@ -142,6 +142,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
     'aiMagpie scan must delegate target selection through pickMagpieTarget');
   assert.match(fn[0], /pickMagpieFleeTarget\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
     'aiMagpie carrying flee branch must delegate flee target projection through pickMagpieFleeTarget');
+  assert.match(fn[0], /magpieStolenCreditsForFloor\s*\(\s*floorNum\s*,\s*MAGPIE_STOLEN_BASE\s*,\s*MAGPIE_STOLEN_PERFL\s*\)/,
+    'aiMagpie grab branch must delegate stolen credit math through magpieStolenCreditsForFloor');
   // Must mark the consumed item as dead so game.js's items prune
   // splices it out — splicing here would corrupt iteration if
   // multiple MAGPIEs target items in the same frame.
@@ -166,6 +168,13 @@ test('MAGPIE flee target helper is defined outside entities.js', () => {
     'MAGPIE inline flee projection must not remain in entities.js');
 });
 
+test('MAGPIE stolen credit helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+magpieStolenCreditsForFloor\s*\(/,
+    'MAGPIE stolen credit helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /MAGPIE_STOLEN_BASE\s*\+\s*floorNum\s*\*\s*MAGPIE_STOLEN_PERFL/,
+    'MAGPIE inline stolen credit formula must not remain in entities.js');
+});
+
 function extractFunctionSource(src, name) {
   const startRe = new RegExp(`function\\s+${name}\\s*\\(`);
   const match = startRe.exec(src);
@@ -187,11 +196,12 @@ function extractFunctionSource(src, name) {
 const magpieHelperSandbox = {};
 vm.createContext(magpieHelperSandbox);
 vm.runInContext(
-  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;`,
+  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\n${extractFunctionSource(AI_HELPERS, 'magpieStolenCreditsForFloor')}\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;\nthis.magpieStolenCreditsForFloor = magpieStolenCreditsForFloor;`,
   magpieHelperSandbox
 );
 const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
 const pickMagpieFleeTarget = magpieHelperSandbox.pickMagpieFleeTarget;
+const magpieStolenCreditsForFloor = magpieHelperSandbox.magpieStolenCreditsForFloor;
 
 test('pickMagpieTarget returns the nearest eligible item reference', () => {
   const far = { x: 4, y: 0, dead: false };
@@ -255,6 +265,11 @@ test('pickMagpieFleeTarget preserves zero-distance fallback', () => {
   const target = pickMagpieFleeTarget(4, 4, 4, 4, 10);
   assert.equal(target.x, 4);
   assert.equal(target.y, 4);
+});
+
+test('magpieStolenCreditsForFloor preserves base plus per-floor scaling', () => {
+  assert.equal(magpieStolenCreditsForFloor(1, 2, 3), 5);
+  assert.equal(magpieStolenCreditsForFloor(6, 2, 3), 20);
 });
 
 test('MAGPIE die() drop branch pushes MagpieHoard with banked value', () => {

@@ -1827,7 +1827,7 @@ class Enemy {
         // MAGPIEs in the same enemy update loop.
         this._mgTarget.dead = true;
         const floorNum = (_EG && _EG.floor) || 1;
-        const banked = MAGPIE_STOLEN_BASE + floorNum * MAGPIE_STOLEN_PERFL;
+        const banked = magpieStolenCreditsForFloor(floorNum, MAGPIE_STOLEN_BASE, MAGPIE_STOLEN_PERFL);
         this._mgStolenCr = (this._mgStolenCr || 0) + banked;
         spawnDmgText(this.x, this.y, '+' + banked + ' CR', '#cceeff');
         spawnParticles(this.x, this.y, 'SPARK', '#cceeff', 8);
