@@ -38,6 +38,9 @@ const AI_HELPERS = fs.readFileSync(
 const ENEMY_VAULTMASTER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-vaultmaster.js'), 'utf8'
 );
+const ENEMY_MAGPIE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-magpie.js'), 'utf8'
+);
 const ENEMY_CLASSIFICATION = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
 );
@@ -238,7 +241,7 @@ test('MAGPIE thief-scan filter excludes isHoard items (so thieves do not steal v
   // VaultCoins mid-fight, which would feel like a bug rather than
   // counterplay. The scan filter now lives in pickMagpieTarget — anchor it
   // there so a future refactor can't drop the gate.
-  assert.match(ENTITIES, /pickMagpieTarget\s*\(\s*items\s*,/,
+  assert.match(ENEMY_MAGPIE, /pickMagpieTarget\s*\(\s*items\s*,/,
     'aiMagpie must delegate thief target selection through pickMagpieTarget');
   assert.match(AI_HELPERS, /it\.isHoard/,
     'pickMagpieTarget scan filter must skip isHoard items (protects VaultCoin + MagpieHoard)');

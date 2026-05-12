@@ -14,10 +14,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SPECTRE = readSourceFile(__dirname, 'entitiesEnemySpectre');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -115,9 +117,7 @@ test('SPECTRE has AI dispatch case', () => {
 });
 
 test('SPECTRE aiSpectre method exists with correct contract', () => {
-  // Anchor on the method definition (no `this.` prefix and starts at
-  // column 2) so we don't accidentally match the dispatch switch case.
-  const fn = ENTITIES.match(/\n  aiSpectre\s*\([\s\S]*?\n  \}\n/);
+  const fn = ENEMY_SPECTRE.match(/Enemy\.prototype\.aiSpectre\s*=\s*function\s+aiSpectre\s*\([\s\S]*?\n\};/);
   assert.ok(fn, 'aiSpectre method must exist');
   // Must distinguish phase vs manifest — both states are required.
   assert.match(fn[0], /'phase'/, 'aiSpectre must reference the phase state');
@@ -138,6 +138,11 @@ test('SPECTRE aiSpectre method exists with correct contract', () => {
   // pre-multiply.
   assert.match(fn[0], /moveToward\s*\(\s*this\._tx,\s*this\._ty,\s*this\.spd/,
     'aiSpectre phase chase must call moveToward with raw this.spd (modifiers apply internally)');
+});
+
+test('aiSpectre implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiSpectre\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'aiSpectre body should stay extracted from src/entities.js');
 });
 
 test('SPECTRE tuning constants are defined', () => {
@@ -248,12 +253,8 @@ function loadSpectreSandbox() {
     /const\s+SPECTRE_PHASE_DUR\s*=[\s\S]*?const\s+SPECTRE_STUN_MANIFEST\s*=\s*[\d.]+;/
   );
   if (!constMatches) throw new Error('SPECTRE constants block not found');
-  const fnMatch = ENTITIES.match(/\n  aiSpectre\s*\([\s\S]*?\n  \}\n/);
-  if (!fnMatch) throw new Error('aiSpectre method body not found');
-  // Wrap as a free function (drop the leading whitespace + method name
-  // notation, prepend `function aiSpectre`).
-  const body = fnMatch[0].replace(/^\n  aiSpectre/, 'function aiSpectre');
   const sandbox = {
+    Enemy: function Enemy() {},
     spawnParticles: () => {},
     moveToward(_tx, _ty, _spd, _dt, _map) { this._moveCalls = (this._moveCalls || 0) + 1; },
     patrol(_dt, _map) { this._patrolCalls = (this._patrolCalls || 0) + 1; },
@@ -261,7 +262,7 @@ function loadSpectreSandbox() {
     _canTarget() { return true; },
   };
   vm.createContext(sandbox);
-  vm.runInContext(`${constMatches[0]}\n${body}\nthis.aiSpectre = aiSpectre;\nthis.SPECTRE_PHASE_DUR = SPECTRE_PHASE_DUR;\nthis.SPECTRE_MANIFEST_DUR = SPECTRE_MANIFEST_DUR;`, sandbox);
+  vm.runInContext(`${constMatches[0]}\n${ENEMY_SPECTRE}\nthis.aiSpectre = Enemy.prototype.aiSpectre;\nthis.SPECTRE_PHASE_DUR = SPECTRE_PHASE_DUR;\nthis.SPECTRE_MANIFEST_DUR = SPECTRE_MANIFEST_DUR;`, sandbox);
   return sandbox;
 }
 
