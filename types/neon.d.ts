@@ -72,6 +72,7 @@ declare global {
     _seekerDetonate(player?: any, map?: any): void;
     _wrFindEmergeTile(map?: any, player?: any): { x: number; y: number } | null;
     _wlFindWard(): any;
+    aiVaultmaster(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;

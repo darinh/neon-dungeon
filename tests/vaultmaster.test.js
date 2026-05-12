@@ -35,6 +35,9 @@ const ENEMY_STATS = fs.readFileSync(
 const AI_HELPERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'ai-helpers.js'), 'utf8'
 );
+const ENEMY_VAULTMASTER = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-vaultmaster.js'), 'utf8'
+);
 const ENEMY_CLASSIFICATION = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8'
 );
@@ -103,8 +106,8 @@ test('VAULTMASTER has an AI dispatch case calling aiVaultmaster', () => {
 });
 
 test('aiVaultmaster method exists, chases on los/range, otherwise patrols', () => {
-  assert.match(ENTITIES, /aiVaultmaster\s*\([^\)]*\)\s*\{/, 'aiVaultmaster method must exist');
-  const fn = ENTITIES.match(/aiVaultmaster\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  assert.match(ENEMY_VAULTMASTER, /Enemy\.prototype\.aiVaultmaster\s*=\s*function\s+aiVaultmaster\s*\([^\)]*\)\s*\{/, 'aiVaultmaster method must exist');
+  const fn = ENEMY_VAULTMASTER.match(/Enemy\.prototype\.aiVaultmaster\s*=\s*function\s+aiVaultmaster\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiVaultmaster body must be extractable');
   // Body should call moveToward (chase) and patrol (idle), and gate
   // chase on either LOS or VAULTMASTER_ENGAGE_RANGE.
@@ -112,6 +115,11 @@ test('aiVaultmaster method exists, chases on los/range, otherwise patrols', () =
   assert.match(fn[0], /this\.patrol\s*\(/, 'aiVaultmaster must fall back to patrol');
   assert.match(fn[0], /VAULTMASTER_ENGAGE_RANGE/,
     'aiVaultmaster must gate chase on VAULTMASTER_ENGAGE_RANGE');
+});
+
+test('aiVaultmaster implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiVaultmaster\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/,
+    'aiVaultmaster body should stay extracted from src/entities.js');
 });
 
 test('VAULTMASTER tuning constants are declared at module scope', () => {
