@@ -28,7 +28,7 @@
 //   5. The elite-roll exclusion (atk=0 spd=0 mobs don't carry affixes).
 //   6. The spawn-initializer block (visual pulse seed).
 //   7. The AI dispatch wiring (case 'NULLIFIER' in update switch).
-//   8. The aiNullifier method exists with documented signature.
+//   8. The extracted aiNullifier prototype helper exists with documented signature.
 //   9. The cooldown-tick gate is extended with !hackwareJammed (with
 //      anti-bypass armour: the gate must be a SINGLE && conjunction in
 //      the canonical line — sibling-neutralizer / hasDeadBranch /
@@ -53,6 +53,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const { extractBranch, loadAlignmentSources, stripComments }
   = require('./_alignment-helpers.js');
 const { readSourceFile } = require('./_source-files.js');
@@ -65,6 +66,7 @@ const ENEMY_SPAWN_TABLE = readSourceFile(__dirname, 'entitiesSpawnTable');
 const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const ENEMY_ABILITY_TUNING = readSourceFile(__dirname, 'entitiesEnemyAbilityTuning');
+const ENEMY_NULLIFIER = readSourceFile(__dirname, 'entitiesEnemyNullifier');
 const FIELD_EFFECTS = readSourceFile(__dirname, 'entitiesFieldEffects');
 const FIELD_EFFECTS_CODE = stripComments(FIELD_EFFECTS);
 const SPAWN_INITIALIZERS_CODE = stripComments(SPAWN_INITIALIZERS);
@@ -216,17 +218,18 @@ test("AI dispatch switch routes NULLIFIER to aiNullifier()", () => {
     'AI dispatch must route NULLIFIER to aiNullifier()');
 });
 
-test('aiNullifier method exists on Enemy class with documented signature', () => {
-  assert.match(ENTITIES, /aiNullifier\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,/,
-    'Enemy.aiNullifier(dt, player, map, ...) must exist');
+test('aiNullifier prototype helper exists with documented signature', () => {
+  assert.match(ENEMY_NULLIFIER,
+    /Enemy\.prototype\.aiNullifier\s*=\s*function\s+aiNullifier\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,/,
+    'Enemy.prototype.aiNullifier = function aiNullifier(dt, player, map, ...) must exist');
 });
 
 test('aiNullifier advances _nlPulse using NULLIFIER_PULSE_RATE', () => {
   // The visual pulse must advance per real-time dt. Pinning the rate
   // multiplication keeps the visual readable across framerates.
   // Anti-bypass: full statement anchored ;.
-  const aiBody = ENTITIES_CODE.match(
-    /aiNullifier\s*\(\s*dt[\s\S]{0,400}?\n\s*\}/
+  const aiBody = ENEMY_NULLIFIER.match(
+    /Enemy\.prototype\.aiNullifier\s*=\s*function\s+aiNullifier\s*\(\s*dt[\s\S]{0,400}?\n\};/
   );
   assert.ok(aiBody, 'aiNullifier body must be extractable');
   assert.match(aiBody[0],
@@ -234,6 +237,26 @@ test('aiNullifier advances _nlPulse using NULLIFIER_PULSE_RATE', () => {
     'aiNullifier must advance _nlPulse by dt * NULLIFIER_PULSE_RATE; (full statement anchored)');
   assert.ok(!hasDeadBranch(aiBody[0]),
     'aiNullifier body must not contain dead branches');
+});
+
+test('aiNullifier prototype helper is callable and advances pulse', () => {
+  const sandbox = {
+    Enemy: function Enemy() {},
+    NULLIFIER_PULSE_RATE: 1.8,
+  };
+  vm.runInNewContext(ENEMY_NULLIFIER, sandbox);
+  const nullifier = new sandbox.Enemy();
+
+  nullifier.aiNullifier(0.5, {}, {}, 0, true);
+  assert.equal(nullifier._nlPulse, 0.9);
+
+  nullifier.aiNullifier(0.25, {}, {}, 0, false);
+  assert.equal(nullifier._nlPulse, 1.35);
+});
+
+test('aiNullifier implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiNullifier\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'aiNullifier body should stay extracted from src/entities.js');
 });
 
 // ─── 8. Cooldown-tick gate (extended with !hackwareJammed) ───────────────
