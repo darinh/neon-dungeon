@@ -105,33 +105,41 @@ Run and record these before verification or review:
    that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
-6. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+6. **Review-fix shipment proof.** Before replying that a review finding is
+   addressed, verify the fix commit is present in the PR head (`headRefOid` or
+   `gh pr view --json commits`) and that the changed file content is present in
+   the branch or merge commit that will ship. If a PR was already merged, verify
+   the target branch tree, not just the local feature branch.
+7. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
    and retry with smaller patches grouped by file or tightly related surface.
-7. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+8. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-8. **Pre-promotion authority/range audit.** Before opening or merging any PR
+9. **Pre-promotion authority/range audit.** Before opening or merging any PR
    targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
    repository branch-policy workflow or status checks for allowed source
    branches, and record the exact commit range with authorship
    (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
    `develop` promotion). For this audit, treat any commit whose author email is
    not a known agent identity (`bropilot-cli[bot]`, `Copilot`, or another
-   configured agent account) as human-authored. If policy only allows this
-   repository's `develop -> main`, do not open isolated feature-branch-to-main
-   PRs. If the range includes human-authored commits, quote the active project or
-   repository instruction that explicitly permits `develop -> main` promotion
-   with those commits; a general autonomy, yolo, or feature-work instruction is
-   not enough. If that authority is absent or conflicts with another active rule,
-   stop instead of inferring approval. A closed PR whose source branch was
-   changed or replaced should not be treated as reopenable; open a replacement PR
-   from a fresh branch.
-9. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+   configured agent account) as human-authored. Record PR opener, squash/rebase
+   commit author, and original PR commit authors separately; a Darin-opened PR
+   can legitimately produce a Darin-authored squash commit even when the PR
+   commits were agent-authored. If policy only allows this repository's
+   `develop -> main`, do not open isolated feature-branch-to-main PRs. If the
+   range includes human-authored commits, quote the active project or repository
+   instruction that explicitly permits `develop -> main` promotion with those
+   commits; a general autonomy, yolo, or feature-work instruction is not enough.
+   If that authority is absent or conflicts with another active rule, stop
+   instead of inferring approval. A closed PR whose source branch was changed or
+   replaced should not be treated as reopenable; open a replacement PR from a
+   fresh branch.
+10. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
    subsystem, check whether equivalent work has already landed upstream or in an
    open PR so the slice can shift to reinforcement instead of duplicating work.
    When editing roadmap or checklist-style docs, search for duplicate entries
@@ -169,7 +177,7 @@ Before writing the retrospective:
    commit range, commit/PR authors, any human-authored commits by the audit
    definition above, and the quoted project or repository instruction that
    permits the promotion.
-10. If resuming after a restart, a handoff gap, or a user reference to "last
+11. If resuming after a restart, a handoff gap, or a user reference to "last
     session", an issue number, or a prior finding, query session history/checkpoints
     for that reference before assuming the current shell directory is the active
     work context.
@@ -191,6 +199,8 @@ Collect only facts that affect future behavior:
   merge/release tree-equivalence proof when squash or rebase promotion rewrites
   commit SHAs;
 - review findings, including false positives and why they happened;
+- review-fix shipment proof: PR head/commit evidence and target-branch content
+  evidence for every claim that a review finding was addressed;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
 - repeated incidents and the concrete guard adopted, or the evidence-backed
@@ -198,7 +208,9 @@ Collect only facts that affect future behavior:
 - tool/version incompatibilities encountered and the canonical fallback command
   shape used afterward;
 - pre-promotion authority/range audit for PRs targeting `main`, including the
-  branch policy, commit range, commit/PR authors, and cited merge authority;
+  branch policy, commit range, PR opener, squash/rebase commit author, original
+  PR commit authors, any human-authored commits by the audit definition, and
+  cited merge authority;
 - decisions that changed the plan;
 - next-work decision: started next item, no actionable work, or blocked reason;
 - continuity check result: command, exit code, and output;
