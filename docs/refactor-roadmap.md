@@ -149,6 +149,7 @@ Good candidates:
 - ECHOER AI presentation. Done for `aiEchoer()` in `src/entities/enemy-echoer.js`.
 - PROPHET AI presentation. Done for `aiProphet()` in `src/entities/enemy-prophet.js`.
 - CRYOPHAGE AI presentation. Done for `aiCryophage()` in `src/entities/enemy-cryophage.js`.
+- SCORCHER AI presentation. Done for `aiScorcher()` in `src/entities/enemy-scorcher.js`.
 - Basic enemy AI presentation. Done for GUARD/TURRET/CRAWLER/BRUTE/DRONE/SPLITTER/SHARD in `src/entities/enemy-basic-ai.js`.
 - HARVESTER AI presentation. Done for `aiHarvester()` in `src/entities/enemy-harvester.js`.
 - MAGPIE loot-target selection. Done for `pickMagpieTarget()` in `src/entities/ai-helpers.js`.
