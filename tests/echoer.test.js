@@ -13,10 +13,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_ECHOER = readSourceFile(__dirname, 'entitiesEnemyEchoer');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -88,7 +90,8 @@ test('ECHOER is dispatched in the AI switch', () => {
 });
 
 test('aiEchoer method is defined', () => {
-  assert.match(ENTITIES, /aiEchoer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiEchoer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_ECHOER, /Enemy\.prototype\.aiEchoer\s*=\s*function\s+aiEchoer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)/);
 });
 
 test('ECHOER stun cancel path resets aiming', () => {
@@ -167,11 +170,11 @@ test('aiEchoer honors hologram-taunt redirection', () => {
   // not the real player's history — otherwise it's the only enemy in the
   // game that ignores decoys. Slice the aiEchoer METHOD body (not the
   // dispatch call) and assert both branches exist within it.
-  const sigRe = /^\s*aiEchoer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiEchoer\s*=\s*function\s+aiEchoer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/;
+  const sigMatch = ENEMY_ECHOER.match(sigRe);
   assert.ok(sigMatch, 'aiEchoer method definition not found');
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 4500);
+  const aiBody = ENEMY_ECHOER.slice(aiStart, aiStart + 4500);
   assert.match(aiBody, /_tauntTarget/,   'aiEchoer must reference _tauntTarget');
   assert.match(aiBody, /getPositionAgo/, 'aiEchoer must call getPositionAgo');
   // Order check: taunt branch should be evaluated before/around the
