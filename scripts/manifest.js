@@ -91,6 +91,7 @@ const requiredInIndex = [
   './src/entities/player-kinematics.js',
   './src/entities/player-weapons.js',
   './src/entities/player-damage.js',
+  './src/entities/player-progression.js',
   './src/entities/player-surge.js',
   './src/entities/architect-walls.js',
   './src/entities/beacons.js',
