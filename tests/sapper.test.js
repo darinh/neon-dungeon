@@ -41,6 +41,15 @@ const SW = fs.readFileSync(
 );
 const boosts = require('../src/meta/boosts.js');
 
+function numericConst(src, name) {
+  const match = src.match(new RegExp(`const\\s+${name}\\s*=\\s*([\\d.]+)`));
+  assert.ok(match, `${name} constant missing`);
+  return Number(match[1]);
+}
+
+const SAPPER_CHASE_RANGE = numericConst(ENEMY_ABILITY_TUNING, 'SAPPER_CHASE_RANGE');
+const SAPPER_MELEE_RANGE = numericConst(ENEMY_ABILITY_TUNING, 'SAPPER_MELEE_RANGE');
+
 // ─── Wiring assertions ──────────────────────────────────────────────────
 
 test('SAPPER appears in ENEMY_WEIGHTS with floor 5+ gate', () => {
@@ -129,8 +138,8 @@ test('aiSapper prototype helper is callable and preserves chase/patrol/melee dec
   const calls = [];
   const sandbox = {
     Enemy: function Enemy() {},
-    SAPPER_CHASE_RANGE: 11,
-    SAPPER_MELEE_RANGE: 1.2,
+    SAPPER_CHASE_RANGE,
+    SAPPER_MELEE_RANGE,
   };
   vm.runInNewContext(ENEMY_SAPPER, sandbox);
   const sapper = new sandbox.Enemy();
@@ -155,7 +164,7 @@ test('aiSapper prototype helper is callable and preserves chase/patrol/melee dec
   ]);
 
   calls.length = 0;
-  sapper.aiSapper(0.5, player, map, 12, false);
+  sapper.aiSapper(0.5, player, map, SAPPER_CHASE_RANGE + 1, false);
   assert.deepEqual(calls, [
     ['patrol', 0.5, map],
   ]);
