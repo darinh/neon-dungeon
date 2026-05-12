@@ -17,9 +17,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
+const ENEMY_GULPER = readSourceFile(__dirname, 'entitiesEnemyGulper');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8');
 const SPAWN_INITIALIZERS = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-initializers.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.join(ROOT, 'src', 'entities', 'spawn-table.js'), 'utf8');
@@ -97,8 +99,8 @@ test('GULPER has an AI dispatch case calling aiGulper', () => {
 });
 
 test('aiGulper method exists and uses the canonical ai-method shape', () => {
-  assert.match(ENTITIES, /aiGulper\s*\([^\)]*\)\s*\{/, 'aiGulper method must exist');
-  const fn = ENTITIES.match(/aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  assert.doesNotMatch(ENTITIES, /aiGulper\s*\([^\)]*\)\s*\{/, 'aiGulper method must not remain in entities.js');
+  const fn = ENEMY_GULPER.match(/Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiGulper body must be extractable');
   // Must use isInsideCone for mouth-cone test (REUSING existing helper
   // rather than re-implementing geometry — single source of truth).
@@ -133,7 +135,7 @@ test('aiGulper aims via taunt-aware _tx/_ty (not raw player.x/y)', () => {
   // the locked _glAimAngle is consumed by the belch. So taunt-
   // awareness flows: _tx/_ty → _glAimAngle (chase) → aimDx/aimDy →
   // belch direction. Test asserts the smooth-lerp source IS _tx/_ty.
-  const fn = ENTITIES.match(/aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  const fn = ENEMY_GULPER.match(/Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiGulper body must be extractable');
   assert.match(fn[0], /Math\.atan2\(\s*this\._ty\s*-\s*this\.y\s*,\s*this\._tx\s*-\s*this\.x\s*\)/,
     'aiGulper smooth-lerp must source target angle from _tx/_ty (taunt-aware)');
@@ -222,7 +224,7 @@ test('GULPER draw branch uses smooth-lerped aim and consumes tuning constants', 
   // GULPER_MOUTH_HALF_ANGLE) so balance tweaks stay in lock-step.
   // Anti-regression for the 'draw cutoff parity' stored memory and
   // the 'telegraph commit parity' stored memory.
-  const drawBranch = ENTITIES.match(/this\.type === 'GULPER'[\s\S]*?ctx\.restore\(\);\s*\}/);
+  const drawBranch = ENTITIES.match(/this\.type === 'GULPER'\)\s*\{\s*ctx\.save\(\);[\s\S]*?ctx\.restore\(\);\s*\}/);
   assert.ok(drawBranch, 'GULPER draw branch must exist');
   assert.match(drawBranch[0], /GULPER_MOUTH_RANGE/,
     'draw branch must use GULPER_MOUTH_RANGE (same source of truth as AI)');
@@ -238,7 +240,7 @@ test('GULPER stacks are hard-capped at MAX (no hidden over-cap damage)', () => {
   // clamped display at MAX, hiding ~47% extra damage from the player.
   // Fix: gameplay caps eat at MAX. This test asserts the cap matches
   // the visual ceiling so future refactors can't reintroduce the gap.
-  const fn = ENTITIES.match(/aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  const fn = ENEMY_GULPER.match(/Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiGulper body must be extractable');
   // The stack-increment line must use Math.min(GULPER_MAX_STACKS, ...)
   // — NOT GULPER_MAX_STACKS + N or any other ceiling.
@@ -257,7 +259,7 @@ test('GULPER eat is gated to chase state only (no eating during charge/recovery)
   // AND charging, but draw rendered "active" cone in all states. Fix:
   // eat only during chase. Cone draws differently per state so the
   // player can read "no eating right now" during charge/recovery.
-  const fn = ENTITIES.match(/aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  const fn = ENEMY_GULPER.match(/Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiGulper body must be extractable');
   assert.match(fn[0], /this\._glState\s*===\s*'chase'\s*&&\s*this\._glStacks\s*<\s*GULPER_MAX_STACKS/,
     'eat must be gated on chase + not-saturated (gameplay/draw parity)');
@@ -274,7 +276,7 @@ test('GULPER belch fires along LOCKED _glAimAngle (telegraph/commit parity)', ()
   //   (a) fireAt is called with this.x + aimDx, this.y + aimDy
   //   (b) the smooth-lerp branch is gated on _glState === 'chase'
   //       so the aim is FROZEN once charging begins
-  const fn = ENTITIES.match(/aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?^\s\s\}/m);
+  const fn = ENEMY_GULPER.match(/Enemy\.prototype\.aiGulper\s*=\s*function\s+aiGulper\s*\([^\)]*\)\s*\{[\s\S]*?\n\};/);
   assert.ok(fn, 'aiGulper body must be extractable');
   assert.match(fn[0],
     /fireAt\s*\(\s*tx\s*,\s*ty\s*,/,
