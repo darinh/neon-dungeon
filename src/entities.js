@@ -4461,13 +4461,7 @@ class Enemy {
     // ── Idle: patrol, approach, or initiate leap ──
     if (this.stunTimer > 0) return; // stun prevents leap initiation
     if (los && d >= 3 && d <= 10 && this._lpCooldown <= 0) {
-      // Check no other leaper is already airborne/winding up (scoped to room)
-      let anotherLeaping = false;
-      for (const e of enemiesInRoomIter(this.room)) {
-        if (e === this || e.dead || e.type !== 'LEAPER') continue;
-        if (e._lpState === 'windup' || e._lpState === 'airborne') { anotherLeaping = true; break; }
-      }
-      if (!anotherLeaping) {
+      if (!/** @type {any} */ (this)._lpHasActivePeer()) {
         this._lpState = 'windup';
         this._lpWindup = 0.5;
         this._lpTargetX = this._tx;
