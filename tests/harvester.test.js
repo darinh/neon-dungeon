@@ -12,6 +12,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const vm = require('node:vm');
 
 const boosts = require(path.resolve(__dirname, '..', 'src', 'meta', 'boosts.js'));
 
@@ -139,6 +140,7 @@ test('getActiveBoostList includes HARVEST_SURGE with seconds-remaining detail', 
 // ── Source wiring (read-the-source guards against silent regression) ──────
 
 const ENTITIES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const ENEMY_HARVESTER_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'enemy-harvester.js'), 'utf8');
 const ENEMY_SPAWN_TABLE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'spawn-table.js'), 'utf8');
 const ENEMY_CLASSIFICATION = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'enemy-classification.js'), 'utf8');
 const SOURCE_METADATA = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8');
@@ -167,10 +169,44 @@ test('aiHarvester dispatches and uses moveToward+meleeAttack (no double-mod, has
   // Stored memory: moveToward applies modSpeed+berserkerMul internally, so
   // callers must not pre-multiply. And every melee mob needs an explicit
   // meleeAttack(player) call (no generic body collision damage).
-  const m = ENTITIES_SRC.match(/\n  aiHarvester\([\s\S]*?\n  \}/);
+  assert.match(ENTITIES_SRC, /case\s+'HARVESTER':\s*this\.aiHarvester\(dt,player,map,d,los\);/);
+  const m = ENEMY_HARVESTER_SRC.match(/Enemy\.prototype\.aiHarvester\s*=\s*function\s+aiHarvester\([\s\S]*?\n\};/);
   assert.ok(m, 'aiHarvester method should exist');
-  assert.match(m[0], /this\.moveToward\(this\._tx,this\._ty,this\.spd,dt,map\)/, 'raw spd, no pre-mul');
+  assert.match(m[0], /this\.moveToward\(this\._tx,\s*this\._ty,\s*this\.spd,\s*dt,\s*map\)/, 'raw spd, no pre-mul');
   assert.match(m[0], /this\.meleeAttack\(player\)/, 'explicit meleeAttack call');
+});
+
+test('aiHarvester prototype helper is callable for chase and patrol branches', () => {
+  const sandbox = { Enemy: function Enemy() {} };
+  vm.runInNewContext(ENEMY_HARVESTER_SRC, sandbox);
+  const harvester = new sandbox.Enemy();
+  Object.assign(harvester, {
+    _tx: 7,
+    _ty: 8,
+    spd: 1.8,
+    _canTarget: () => true,
+    moveToward: (...args) => { harvester.moved = args; },
+    meleeAttack: (target) => { harvester.meleeTarget = target; },
+    patrol: (...args) => { harvester.patrolled = args; },
+  });
+  const player = { id: 'player' };
+
+  harvester.aiHarvester(0.016, player, {}, 1.1, true);
+
+  assert.deepEqual(harvester.moved, [7, 8, 1.8, 0.016, {}]);
+  assert.equal(harvester.meleeTarget, player);
+
+  harvester.moved = undefined;
+  harvester.meleeTarget = undefined;
+  harvester.aiHarvester(0.032, player, { blocked: true }, 10, false);
+
+  assert.equal(harvester.moved, undefined);
+  assert.deepEqual(harvester.patrolled, [0.032, { blocked: true }]);
+});
+
+test('aiHarvester implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES_SRC, /aiHarvester\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/,
+    'aiHarvester body should stay extracted from src/entities.js');
 });
 
 const GAME_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');

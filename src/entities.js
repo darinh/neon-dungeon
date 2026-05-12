@@ -1548,22 +1548,6 @@ class Enemy {
   }
 
   /**
-   * HARVESTER — fragile melee chaser (hp=30, atk=8, spd=1.8). Pursues the
-   * player in a direct line within an 8-tile detect range. No telegraph, no
-   * special tells — its identity comes from the on-death drop (see Enemy.die
-   * HARVESTER branch → HarvestPickup → HARVEST_SURGE +50% damage for 8s).
-   * Glass-cannon design: easy to kill, rewarding to hunt.
-   *
-   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
-   */
-  aiHarvester(dt,player,map,d,los) {
-    if (los||(d<8 && this._canTarget())) {
-      this.moveToward(this._tx,this._ty,this.spd,dt,map);
-      if (d<1.2) this.meleeAttack(player);
-    } else this.patrol(dt,map);
-  }
-
-  /**
    * MAGNETON — stationary projectile-bender (floor 6+, hp=50, atk=0, spd=0).
    *
    * Threat model: emits a circular MAGNETON_FIELD_R-tile field that bends

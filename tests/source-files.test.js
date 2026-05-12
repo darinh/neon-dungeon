@@ -15,7 +15,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemySeeker', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyHarvester', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemySeeker', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -88,6 +88,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerDamage.replaceAll('\\', '/'), 'src/entities/player-damage.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerProgression.replaceAll('\\', '/'), 'src/entities/player-progression.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesPlayerSurge.replaceAll('\\', '/'), 'src/entities/player-surge.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyHarvester.replaceAll('\\', '/'), 'src/entities/enemy-harvester.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyTether.replaceAll('\\', '/'), 'src/entities/enemy-tether.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyVaultmaster.replaceAll('\\', '/'), 'src/entities/enemy-vaultmaster.js');
   assert.equal(SOURCE_FILE_PATHS.render.replaceAll('\\', '/'), 'src/render.js');
@@ -165,6 +166,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerDamage').endsWith('src/entities/player-damage.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerProgression').endsWith('src/entities/player-progression.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesPlayerSurge').endsWith('src/entities/player-surge.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyHarvester').endsWith('src/entities/enemy-harvester.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyTether').endsWith('src/entities/enemy-tether.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyVaultmaster').endsWith('src/entities/enemy-vaultmaster.js'), true);
   const sources = readSourceFiles(__dirname);
@@ -237,6 +239,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const playerDamageSource = readSourceFile(__dirname, 'entitiesPlayerDamage');
   const playerProgressionSource = readSourceFile(__dirname, 'entitiesPlayerProgression');
   const playerSurgeSource = readSourceFile(__dirname, 'entitiesPlayerSurge');
+  const enemyHarvesterSource = readSourceFile(__dirname, 'entitiesEnemyHarvester');
   const enemyTetherSource = readSourceFile(__dirname, 'entitiesEnemyTether');
   const enemyVaultmasterSource = readSourceFile(__dirname, 'entitiesEnemyVaultmaster');
   assert.match(terminalSource, /const\s+LORE_ENTRIES\s*=\s*\[/);
@@ -660,6 +663,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /_lpHasActivePeer\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_lpHasActivePeer\s*;/);
   assert.doesNotMatch(sources.entities, /let\s+anotherLeaping\s*=/);
+  assert.doesNotMatch(sources.entities, /aiHarvester\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiTether\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiVaultmaster\s*\(dt,\s*player,\s*map,\s*d,\s*los\)\s*\{/);
   assert.match(sources.entities, /_lpHasActivePeer\(\)\)\s*\{[\s\S]{0,160}this\._lpState\s*=\s*'windup'/);
@@ -679,6 +683,8 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+ARCHITECT_RANGE\s*=\s*8/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GHOST_PROJECTOR_DELAY\s*=\s*3\.0/);
   assert.match(sources.entitiesEnemyAbilityTuning, /const\s+GULPER_MOUTH_RANGE\s*=\s*3\.5/);
+  assert.match(enemyHarvesterSource, /Enemy\.prototype\.aiHarvester\s*=\s*function\s+aiHarvester\s*\(/);
+  assert.match(enemyHarvesterSource, /this\.moveToward\(this\._tx,\s*this\._ty,\s*this\.spd,\s*dt,\s*map\)/);
   assert.match(enemyTetherSource, /Enemy\.prototype\.aiTether\s*=\s*function\s+aiTether\s*\(/);
   assert.match(enemyTetherSource, /TETHER_FIELD_RANGE/);
   assert.match(enemyVaultmasterSource, /Enemy\.prototype\.aiVaultmaster\s*=\s*function\s+aiVaultmaster\s*\(/);

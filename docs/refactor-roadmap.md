@@ -145,6 +145,7 @@ Good candidates:
 - Player progression helpers. Done for `xpNeeded()` and `gainXP()` in `src/entities/player-progression.js`.
 - Player SURGE shot-consumption delegator. Done for `_consumeSurgeShot()` in `src/entities/player-surge.js`.
 - SEEKER detonation helper. Done for `_seekerDetonate()` in `src/entities/enemy-seeker.js`.
+- HARVESTER AI presentation. Done for `aiHarvester()` in `src/entities/enemy-harvester.js`.
 - MAGPIE loot-target selection. Done for `pickMagpieTarget()` in `src/entities/ai-helpers.js`.
 - MAGPIE carrying flee-target projection. Done for `pickMagpieFleeTarget()` in `src/entities/ai-helpers.js`.
 - MAGPIE stolen-credit scaling. Done for `magpieStolenCreditsForFloor()` in `src/entities/ai-helpers.js`.
