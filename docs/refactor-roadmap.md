@@ -156,6 +156,7 @@ Good candidates:
 - TETHER AI presentation and slow-aura accumulation. Done for `aiTether()` in `src/entities/enemy-tether.js`.
 - VAULTMASTER AI presentation. Done for `aiVaultmaster()` in `src/entities/enemy-vaultmaster.js`.
 - NULLIFIER AI presentation. Done for `aiNullifier()` in `src/entities/enemy-nullifier.js`.
+- SAPPER AI presentation. Done for `aiSapper()` in `src/entities/enemy-sapper.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
