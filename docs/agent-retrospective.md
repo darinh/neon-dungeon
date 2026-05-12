@@ -70,10 +70,18 @@ Run and record these before verification or review:
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
-4. **False-positive evidence.** Any reviewer finding rejected as a false positive
+4. **Moved-symbol source audit.** Before the first full gate on any extraction
+   from `src/entities.js` or another classic-script monolith, search tests,
+   source helpers, docs, and runtime files for the moved symbol and the old file
+   path. Update direct source-text assertions, shared source loaders, and
+   alignment helpers before treating full-gate failures as surprising. Source
+   tests for moved prototype methods with nested blocks must use brace-walked
+   extraction or a stable terminator, never indentation-only closing-brace
+   regexes such as `\n\s{2}\}`.
+5. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence.
-5. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+6. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
@@ -163,6 +171,9 @@ Collect only facts that affect future behavior:
    also emits a cleanup error, or exits nonzero after it may have performed
    remote side effects, verify the remote state, local branch/worktree state,
    and remaining cleanup separately before retrying or claiming completion.
+   For `gh pr merge` ambiguity, verify with
+   `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
+   merge failed or only local cleanup failed.
    For release promotions, verify `origin/main == origin/develop` after any
    required post-release alignment and record whether repository rules were
    bypassed by the durable admin bypass rather than temporary rule deletion.
@@ -193,11 +204,12 @@ Collect only facts that affect future behavior:
     relevant persistent artifact immediately from the worktree: `AGENTS.md`,
     project instructions, tests, scripts, or this protocol. Re-read the changed
     artifact and verify the guard actually landed.
-14. **Final mandatory question: should this retrospective protocol change?** If
-    yes, edit this document as part of the same work item or the next immediate
-    policy PR. If no, record that no protocol change was needed and why. The
-    agent performing the retrospective may edit, commit, and push protocol
-    changes from the worktree; the two retrospective reviewers may not.
+14. **Final mandatory question: should this retrospective protocol change?** Ask
+    and answer only after reviewer findings are reconciled. If yes, edit this
+    document as part of the same work item or the next immediate policy PR. If
+    no, record that no protocol change was needed and why. The agent performing
+    the retrospective may edit, commit, and push protocol changes from the
+    worktree; the two retrospective reviewers may not.
 
 ## Two-LLM critique prompt
 
