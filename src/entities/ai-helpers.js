@@ -214,3 +214,22 @@ function pickMagpieTarget(candidates, x, y, scanRange) {
   }
   return best;
 }
+
+/**
+ * Project a MAGPIE flee target away from the real player while it carries loot.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {number} playerX
+ * @param {number} playerY
+ * @param {number} fleeRange
+ * @returns {{x:number, y:number}}
+ */
+function pickMagpieFleeTarget(x, y, playerX, playerY, fleeRange) {
+  const dx = x - playerX, dy = y - playerY;
+  const len = Math.hypot(dx, dy) || 1;
+  return {
+    x: x + (dx / len) * fleeRange,
+    y: y + (dy / len) * fleeRange,
+  };
+}

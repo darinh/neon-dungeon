@@ -1848,10 +1848,7 @@ class Enemy {
     //    through to patrol. Flee always tracks the actual player.
     const pd = dist(this.x, this.y, player.x, player.y);
     if ((this._mgStolenCr || 0) > 0 && pd < MAGPIE_FLEE_RANGE) {
-      const dx = this.x - player.x, dy = this.y - player.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const fx = this.x + (dx / len) * MAGPIE_FLEE_RANGE;
-      const fy = this.y + (dy / len) * MAGPIE_FLEE_RANGE;
+      const { x: fx, y: fy } = pickMagpieFleeTarget(this.x, this.y, player.x, player.y, MAGPIE_FLEE_RANGE);
       this.moveToward(fx, fy, this.spd, dt, map);
       return;
     }

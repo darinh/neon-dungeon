@@ -140,6 +140,8 @@ test('MAGPIE aiMagpie method exists with correct contract', () => {
     'aiMagpie chase must call moveToward with raw this.spd');
   assert.match(fn[0], /pickMagpieTarget\s*\(\s*items\s*,\s*this\.x\s*,\s*this\.y\s*,\s*MAGPIE_SCAN_RANGE\s*\)/,
     'aiMagpie scan must delegate target selection through pickMagpieTarget');
+  assert.match(fn[0], /pickMagpieFleeTarget\s*\(\s*this\.x\s*,\s*this\.y\s*,\s*player\.x\s*,\s*player\.y\s*,\s*MAGPIE_FLEE_RANGE\s*\)/,
+    'aiMagpie carrying flee branch must delegate flee target projection through pickMagpieFleeTarget');
   // Must mark the consumed item as dead so game.js's items prune
   // splices it out — splicing here would corrupt iteration if
   // multiple MAGPIEs target items in the same frame.
@@ -155,6 +157,13 @@ test('MAGPIE target selection helper is defined outside entities.js', () => {
     'MAGPIE target selection helper must live in ai-helpers.js');
   assert.doesNotMatch(ENTITIES, /let\s+bestD2\s*=\s*MAGPIE_SCAN_RANGE\s*\*\s*MAGPIE_SCAN_RANGE/,
     'MAGPIE inline target scan must not remain in entities.js');
+});
+
+test('MAGPIE flee target helper is defined outside entities.js', () => {
+  assert.match(AI_HELPERS, /function\s+pickMagpieFleeTarget\s*\(/,
+    'MAGPIE flee target helper must live in ai-helpers.js');
+  assert.doesNotMatch(ENTITIES, /Math\.hypot\(dx,\s*dy\)\s*\|\|\s*1/,
+    'MAGPIE inline flee projection must not remain in entities.js');
 });
 
 function extractFunctionSource(src, name) {
@@ -178,10 +187,11 @@ function extractFunctionSource(src, name) {
 const magpieHelperSandbox = {};
 vm.createContext(magpieHelperSandbox);
 vm.runInContext(
-  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\nthis.pickMagpieTarget = pickMagpieTarget;`,
+  `${extractFunctionSource(AI_HELPERS, 'pickMagpieTarget')}\n${extractFunctionSource(AI_HELPERS, 'pickMagpieFleeTarget')}\nthis.pickMagpieTarget = pickMagpieTarget;\nthis.pickMagpieFleeTarget = pickMagpieFleeTarget;`,
   magpieHelperSandbox
 );
 const pickMagpieTarget = magpieHelperSandbox.pickMagpieTarget;
+const pickMagpieFleeTarget = magpieHelperSandbox.pickMagpieFleeTarget;
 
 test('pickMagpieTarget returns the nearest eligible item reference', () => {
   const far = { x: 4, y: 0, dead: false };
@@ -221,6 +231,30 @@ test('pickMagpieTarget preserves first-in-array tie breaking', () => {
   const first = { x: 2, y: 0, dead: false };
   const second = { x: 0, y: 2, dead: false };
   assert.strictEqual(pickMagpieTarget([first, second], 0, 0, 10), first);
+});
+
+test('pickMagpieFleeTarget projects away from the real player by flee range', () => {
+  const east = pickMagpieFleeTarget(5, 5, 1, 5, 8);
+  assert.equal(east.x, 13);
+  assert.equal(east.y, 5);
+  const south = pickMagpieFleeTarget(5, 5, 5, 1, 8);
+  assert.equal(south.x, 5);
+  assert.equal(south.y, 13);
+});
+
+test('pickMagpieFleeTarget normalises diagonal flee direction', () => {
+  const target = pickMagpieFleeTarget(4, 4, 1, 0, 10);
+  const dx = target.x - 4;
+  const dy = target.y - 4;
+  assert.ok(Math.abs(Math.hypot(dx, dy) - 10) < 1e-9);
+  assert.ok(dx > 0);
+  assert.ok(dy > 0);
+});
+
+test('pickMagpieFleeTarget preserves zero-distance fallback', () => {
+  const target = pickMagpieFleeTarget(4, 4, 4, 4, 10);
+  assert.equal(target.x, 4);
+  assert.equal(target.y, 4);
 });
 
 test('MAGPIE die() drop branch pushes MagpieHoard with banked value', () => {
