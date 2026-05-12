@@ -44,3 +44,17 @@ Enemy.prototype.patrol = function patrol(dt, map) {
   }
   if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, this.spd * 0.5, dt, map);
 };
+
+/**
+ * True when another LEAPER in this enemy's room is already winding up or airborne.
+ *
+ * @this {Enemy}
+ * @returns {boolean}
+ */
+/** @type {any} */ (Enemy.prototype)._lpHasActivePeer = function _lpHasActivePeer() {
+  for (const e of enemiesInRoomIter(this.room)) {
+    if (e === this || e.dead || e.type !== 'LEAPER') continue;
+    if (e._lpState === 'windup' || e._lpState === 'airborne') return true;
+  }
+  return false;
+};
