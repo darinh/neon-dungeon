@@ -192,6 +192,11 @@ Collect only facts that affect future behavior:
 - files changed and PR number, if any;
 - pasted final diff or commit range for reviewers;
 - checks run and their outcomes;
+- primary claim evidence: map the main success claim (for example, behavior
+  preservation, runtime wiring, or policy compliance) to the specific tests,
+  source citations, runtime-order proof, or post-final-rebase review that proves
+  it. Pre-rebase reviews may be historical context, but they are not the
+  load-bearing review evidence for the shipped tree;
 - fresh-worktree bootstrap status;
 - new-runtime-file surface audit, if a runtime file was added or moved;
 - classic-script runtime proof, if top-level globals moved;
@@ -361,6 +366,7 @@ Keep the retrospective short enough to be useful:
 - **Worktree/branch**:
 - **What went wrong**:
 - **What went right**:
+- **Primary claim evidence**:
 - **Earlier catch**:
 - **Bootstrap/surface audit/runtime proof**:
 - **Control scopes**:
