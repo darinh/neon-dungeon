@@ -43,6 +43,7 @@ declare global {
     collectWeapon(w: any): boolean;
     swapWeapon(slotIdx: number, w: any): void;
     equipWeapon(w: any): void;
+    tapBombKey(): void;
     computeOutgoingDmgMul(): number;
     logDamage(source: string, amount: number): void;
     _consumeSurgeShot(): number;

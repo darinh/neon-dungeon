@@ -8405,26 +8405,6 @@ class Player {
     this.shootCooldown = (1/w.rate) * (this.perks.RAPID_FIRE ? 0.85 : 1);
   }
 
-  // Tap-tap fuse bomb (Metroid-style infinite, gated by drop cooldown).
-  // First tap: drop a fuse bomb at feet (3s telegraph: slow→fast→rapid flash).
-  // Second tap while ANY fuse is active: detonate ALL active fuses immediately
-  // (the panic-detonate, preserves the V-shard "oh shit" feel).
-  // Drop cooldown prevents literal spam without limiting strategic chains.
-  // Replaces the consumable VOID_SHARD; player.shards field is now vestigial
-  // (kept for save back-compat at game.js:858/952; never read).
-  tapBombKey() {
-    // Panic mode: any unfused bomb? Detonate them all.
-    let detonatedAny = false;
-    for (const fs of fuseShards) {
-      if (!fs.dead) { fs.detonate(); detonatedAny = true; }
-    }
-    if (detonatedAny) return;
-    // Drop mode: gated by cooldown (prevents tap-spam carpet bombing).
-    if (this.bombCooldown > 0) return;
-    fuseShards.push(new FuseShard(this.x, this.y));
-    this.bombCooldown = BOMB_DROP_COOLDOWN;
-  }
-
   /**
    * @param {any} [dt]
    * @param {any} [map]
