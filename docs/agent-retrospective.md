@@ -72,9 +72,10 @@ Run and record these before verification or review:
    module-evaluation-time call path that can reference the moved global early.
 4. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
-   source helpers, docs, and runtime files for the moved symbol and the old file
-   path. Update direct source-text assertions, shared source loaders, and
-   alignment helpers before treating full-gate failures as surprising. Source
+   source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
+   moved symbol and the old file path. Update direct source-text assertions,
+   shared source loaders, type surfaces, and alignment helpers before treating
+   full-gate failures as surprising. Source
    tests for moved prototype methods with nested blocks must use brace-walked
    extraction or a stable terminator, never indentation-only closing-brace
    regexes such as `\n\s{2}\}`. When converting class methods to prototype
@@ -224,6 +225,10 @@ Collect only facts that affect future behavior:
     no, record that no protocol change was needed and why. The agent performing
     the retrospective may edit, commit, and push protocol changes from the
     worktree; the two retrospective reviewers may not.
+    Before answering "no" because an existing document already covers a miss,
+    quote the exact guard text and cite the file/line. If exact text cannot be
+    found, the guard is absent and must be added or explicitly rejected with
+    evidence.
 
 ## Two-LLM critique prompt
 
