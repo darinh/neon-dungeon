@@ -1857,59 +1857,6 @@ class Enemy {
   }
 
   /**
-   * TETHER — anti-kiting slow-aura chaser (floor 5+, hp=24, atk=0, spd=2.6).
-   *
-   * Slowly chases the player with LOS gating, patrols when blind. Has
-   * NO contact damage and no projectiles — its sole mechanic is the
-   * passive leash field: every frame, if the player is within
-   * TETHER_FIELD_RANGE tiles, multiply player._tetherSlowFactor by a
-   * distance-proportional factor (1.0 at body contact, dropping
-   * linearly to TETHER_MIN_FACTOR at the field edge).
-   *
-   * Distance is computed against the REAL player (not the taunt-aware
-   * `_tx/_ty`). Per stored convention: any mechanic whose threat must
-   * track the real player must recompute dist(this.x,this.y,player.x,
-   * player.y) locally — `d` arg is taunt-distance and would let a
-   * hologram pull the slow off the player.
-   *
-   * The slow is APPLIED in player.update by reading
-   * `player._tetherSlowFactor`, then resetting it to 1 each frame
-   * (consume-and-clear pattern, mirroring how toxicSlowActive works
-   * but accumulator-style across multiple TETHERs).
-   *
-   * Excluded from the elite affix roll: same first-ship caution as
-   * recently-introduced mobs (HARVESTER / MAGNETON / SPECTRE /
-   * SAPPER / MAGPIE) — easier to add elite affixes later than to
-   * reason about SHIELDED / PHASING / FRENZY interactions for a
-   * brand-new aura mechanic.
-   *
-   * @param {any} [dt] @param {any} [player] @param {any} [map] @param {any} [d] @param {any} [los]
-   */
-  aiTether(dt, player, map, d, los) {
-    if (los || (d < TETHER_CHASE_RANGE && this._canTarget())) {
-      this.moveToward(this._tx, this._ty, this.spd, dt, map);
-    } else {
-      this.patrol(dt, map);
-    }
-    // Apply the leash slow. Use REAL player distance (not taunt `d`)
-    // so a hologram cannot drag the slow off the player. Skip when
-    // player is missing or already dead.
-    if (!player || player.dead) return;
-    const pd = dist(this.x, this.y, player.x, player.y);
-    if (pd >= TETHER_FIELD_RANGE) return;
-    // Linear interpolation: at pd <= TETHER_MELEE_RANGE → factor 1
-    // (no slow, you can melee me); at pd >= TETHER_FIELD_RANGE →
-    // factor TETHER_MIN_FACTOR (max slow). Between, lerp.
-    let t = (pd - TETHER_MELEE_RANGE) / (TETHER_FIELD_RANGE - TETHER_MELEE_RANGE);
-    if (t < 0) t = 0; else if (t > 1) t = 1;
-    const factor = 1 - t * (1 - TETHER_MIN_FACTOR);
-    // Multiply onto the per-frame accumulator. Stack multiplicatively
-    // across TETHERs but never below the per-mob floor (TETHER_MIN_FACTOR).
-    const cur = (player._tetherSlowFactor == null) ? 1 : player._tetherSlowFactor;
-    player._tetherSlowFactor = Math.max(TETHER_MIN_FACTOR * 0.6, cur * factor);
-  }
-
-  /**
    * GULPER — projectile-eating mid-tank (floor 6+, hp=90, atk=14,
    * spd=1.4). See GULPER_* tuning constants for design intent.
    *
