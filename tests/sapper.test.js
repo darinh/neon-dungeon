@@ -11,10 +11,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const { readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_SAPPER = readSourceFile(__dirname, 'entitiesEnemySapper');
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -108,9 +111,7 @@ test('SAPPER has AI dispatch case', () => {
 });
 
 test('SAPPER aiSapper method exists with correct contract', () => {
-  // Anchor on the method definition (no `this.` prefix and starts at
-  // column 2) so we don't accidentally match the dispatch switch case.
-  const fn = ENTITIES.match(/\n  aiSapper\s*\([\s\S]*?\n  \}\n/);
+  const fn = ENEMY_SAPPER.match(/Enemy\.prototype\.aiSapper\s*=\s*function\s+aiSapper\s*\([\s\S]*?\n\};/);
   assert.ok(fn, 'aiSapper method must exist');
   // Must call meleeAttack on contact — without this, atk is decorative
   // (no generic enemy-body collision damage path exists). Class of
@@ -122,6 +123,47 @@ test('SAPPER aiSapper method exists with correct contract', () => {
   // Class of bug caught on the VENGEANCE PR (moveToward modifiers).
   assert.match(fn[0], /moveToward\s*\(\s*this\._tx,\s*this\._ty,\s*this\.spd/,
     'aiSapper chase must call moveToward with raw this.spd');
+});
+
+test('aiSapper prototype helper is callable and preserves chase/patrol/melee decisions', () => {
+  const calls = [];
+  const sandbox = {
+    Enemy: function Enemy() {},
+    SAPPER_CHASE_RANGE: 7,
+    SAPPER_MELEE_RANGE: 1.1,
+  };
+  vm.runInNewContext(ENEMY_SAPPER, sandbox);
+  const sapper = new sandbox.Enemy();
+  Object.assign(sapper, {
+    _tx: 4,
+    _ty: 5,
+    spd: 2.8,
+    _canTarget() { calls.push(['canTarget']); return true; },
+    moveToward(tx, ty, spd, dt, map) { calls.push(['moveToward', tx, ty, spd, dt, map]); },
+    patrol(dt, map) { calls.push(['patrol', dt, map]); },
+    meleeAttack(player) { calls.push(['meleeAttack', player]); },
+  });
+  const player = { id: 'player' };
+  const map = { id: 'map' };
+
+  sapper.aiSapper(0.25, player, map, 0.9, false);
+
+  assert.deepEqual(calls, [
+    ['canTarget'],
+    ['moveToward', 4, 5, 2.8, 0.25, map],
+    ['meleeAttack', player],
+  ]);
+
+  calls.length = 0;
+  sapper.aiSapper(0.5, player, map, 9, false);
+  assert.deepEqual(calls, [
+    ['patrol', 0.5, map],
+  ]);
+});
+
+test('aiSapper implementation lives outside src/entities.js', () => {
+  assert.doesNotMatch(ENTITIES, /aiSapper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'aiSapper body should stay extracted from src/entities.js');
 });
 
 test('SAPPER tuning constants are defined', () => {
