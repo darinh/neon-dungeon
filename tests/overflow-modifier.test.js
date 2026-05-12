@@ -3,7 +3,7 @@
 // and the 11th positive modifier (balancing the 11 negative-or-neutral
 // entries). OVERFLOW grants +25% XP gain on this floor.
 //
-// Wired in Player.gainXP() in entities.js as a passive multiplier that
+// Wired in Player.gainXP() in player-progression.js as a passive multiplier that
 // composes multiplicatively with the existing chain:
 //   xp += round(amount * getMetaXPMultiplier() * augMul * overflowMul)
 // where:
@@ -16,7 +16,7 @@
 // OVERFLOW + HARDENED can't co-occur — but the multiplicative chain
 // is the canonical compose order for any future stacking design.
 //
-// content.js / entities.js are browser-only (no UMD/CommonJS exports),
+// content.js / entity modules are browser-only (no UMD/CommonJS exports),
 // so these tests assert structural invariants any working OVERFLOW
 // modifier must satisfy:
 //   - Registry shape (label/desc/colour/icon) so MODIFIER_KEYS picks
@@ -60,6 +60,9 @@ const CONTENT = fs.readFileSync(
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const PLAYER_PROGRESSION = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'player-progression.js'), 'utf8'
+);
 const RENDER = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'render.js'), 'utf8'
 );
@@ -71,6 +74,7 @@ function stripComments(src) {
 }
 
 const ENTITIES_CODE = stripComments(ENTITIES);
+const PLAYER_PROGRESSION_CODE = stripComments(PLAYER_PROGRESSION);
 
 /**
  * Brace-walked entry extraction for registry entries (KEY: { ... }).
@@ -141,7 +145,7 @@ test('Player.gainXP composes the OVERFLOW multiplier into the multiplicative cha
   // multiplied INTO the existing chain (not added). The full match
   // verifies the chain shape: amount * getMetaXPMultiplier() * augMul
   // * overflowMul, all wrapped in Math.round so integer-XP holds.
-  const m = ENTITIES_CODE.match(
+  const m = PLAYER_PROGRESSION_CODE.match(
     /const\s+overflowMul\s*=\s*\(?\s*_EG\.modifier\s*===\s*'OVERFLOW'\s*\)?\s*\?\s*1\.25\s*:\s*1\s*;[\s\S]{0,300}?this\.xp\s*\+=\s*Math\.round\s*\(\s*amount\s*\*\s*getMetaXPMultiplier\s*\(\s*\)\s*\*\s*augMul\s*\*\s*overflowMul\s*\)\s*;/
   );
   assert.ok(m,
@@ -154,7 +158,7 @@ test('OVERFLOW multiplier uses 1.25 (NOT 1.2, NOT 1.5)', () => {
   // most perks on level-pace impact for a passive floor effect; 1.2
   // would be too weak to feel against the meta-XP ladder. Keep 1.25.
   // This guard catches accidental tuning drift in either direction.
-  const block = ENTITIES_CODE.match(
+  const block = PLAYER_PROGRESSION_CODE.match(
     /_EG\.modifier\s*===\s*'OVERFLOW'[\s\S]{0,100}?\?\s*([\d.]+)\s*:/
   );
   assert.ok(block, 'OVERFLOW multiplier expression not found in gainXP');
@@ -162,13 +166,13 @@ test('OVERFLOW multiplier uses 1.25 (NOT 1.2, NOT 1.5)', () => {
     `OVERFLOW multiplier must be 1.25 (+25%); found ${block[1]}. NEURAL_LINK aug is also 1.25 — keep this in sync if retuning either.`);
 });
 
-test('OVERFLOW is referenced exactly once in entities.js', () => {
+test('OVERFLOW is referenced exactly once in player-progression.js', () => {
   // Defends against accidental duplication (copy-paste could
   // double-apply the gate). Mirrors the magnetism / regenerative /
   // hardened exactly-once invariant.
-  const matches = ENTITIES_CODE.match(/_EG\.modifier\s*===\s*'OVERFLOW'/g) || [];
+  const matches = PLAYER_PROGRESSION_CODE.match(/_EG\.modifier\s*===\s*'OVERFLOW'/g) || [];
   assert.equal(matches.length, 1,
-    `OVERFLOW modifier check must appear exactly once in entities.js (Player.gainXP gate). Found ${matches.length}. Duplicate gates would double-apply the multiplier.`);
+    `OVERFLOW modifier check must appear exactly once in player-progression.js (Player.gainXP gate). Found ${matches.length}. Duplicate gates would double-apply the multiplier.`);
 });
 
 test('OVERFLOW multiplier is applied INSIDE Math.round (integer-XP contract)', () => {
@@ -179,7 +183,7 @@ test('OVERFLOW multiplier is applied INSIDE Math.round (integer-XP contract)', (
   // a 25% boost on a 17-XP gain would produce 21.25 — a fractional
   // value that breaks the xp >= xpNeeded comparison contract. Pin
   // that overflowMul lives inside the round.
-  const fn = ENTITIES_CODE.match(/gainXP\s*\(\s*amount\s*\)\s*\{[\s\S]{0,800}?\n\s{0,4}\}/);
+  const fn = PLAYER_PROGRESSION_CODE.match(/gainXP\s*\(\s*amount\s*\)\s*\{[\s\S]*?openNextPerkChoice\(\);\s*\n\s*\}\s*\n\};/);
   assert.ok(fn, 'must locate gainXP function body');
   // The "this.xp += Math.round(...overflowMul...)" pattern must match.
   // A regression "Math.round(amount * ...) * overflowMul" would NOT
