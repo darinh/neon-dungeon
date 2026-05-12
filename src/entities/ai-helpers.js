@@ -201,6 +201,20 @@ function isMagpieTargetStale(target, candidates) {
 }
 
 /**
+ * Decide whether a MAGPIE is close enough to consume its remembered target.
+ *
+ * @param {any} target
+ * @param {number} x
+ * @param {number} y
+ * @param {number} grabRange
+ * @returns {boolean}
+ */
+function isMagpieTargetInGrabRange(target, x, y, grabRange) {
+  const dx = target.x - x, dy = target.y - y;
+  return dx * dx + dy * dy <= grabRange * grabRange;
+}
+
+/**
  * Pick the nearest loot target a MAGPIE may steal. Returns the original item
  * object so aiMagpie can later mark that exact pickup dead when it is grabbed.
  *
