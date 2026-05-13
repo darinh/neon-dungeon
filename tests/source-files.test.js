@@ -543,6 +543,11 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyHealerSource, /e === this \|\| e\.dead \|\| e\.isBoss/);
   assert.match(enemyHealerSource, /e\._wrPhased/);
   assert.match(enemyHealerSource, /ed > 6/);
+  assert.match(entitySource, /case\s+'HEALER':\s*this\.aiHealer\(/);
+  assert.doesNotMatch(entitySource, /aiHealer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyHealerSource, /Enemy\.prototype\.aiHealer\s*=\s*function\s+aiHealer\s*\(/);
+  assert.match(enemyHealerSource, /const target = this\._findHealTarget\(\)/);
+  assert.match(enemyHealerSource, /target\.hp = Math\.min\(target\.maxHp, target\.hp \+ healAmt\)/);
   assert.match(enemyGrenadierSource, /Enemy\.prototype\.lobGrenade\s*=\s*function lobGrenade\s*\(/);
   assert.match(entitySource, /case\s+'GRENADIER':\s*this\.aiGrenadier\(/);
   assert.doesNotMatch(entitySource, /aiGrenadier\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
@@ -734,6 +739,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /_isLeashedFromRoom\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_wlFindWard\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_findHealTarget\s*\(\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiHealer\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /lobGrenade\s*\(\s*tx\s*,\s*ty\s*,\s*map\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /revealMimic\s*\(\s*player\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_nxUpdateLinks\s*\(\s*\)\s*\{/);
