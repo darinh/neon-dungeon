@@ -98,6 +98,41 @@ test('dungeon topology outside entrance room sides skip corner boundary tiles', 
   assert.deepEqual(topology.findOutsideEntranceRoomSides([matchingRoom, cornerBlocker], 5, 5), []);
 });
 
+test('dungeon topology aligned outside passage repair preserves existing opposite connections', () => {
+  const passages = new Set(['5,3']);
+  const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);
+  const canCarveOutsidePassageTile = () => false;
+
+  assert.deepEqual(
+    topology.findAlignedOutsidePassageRepair(5, 5, { dx: 0, dy: 1 }, isOutsidePassageTile, canCarveOutsidePassageTile),
+    { px: 5, py: 4, cx: -1, cy: -1 }
+  );
+});
+
+test('dungeon topology aligned outside passage repair scans perpendicular directions in cardinal order', () => {
+  const passages = new Set(['6,5', '4,5']);
+  const carveable = new Set(['5,4', '6,4', '4,4']);
+  const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);
+  const canCarveOutsidePassageTile = (x, y) => carveable.has(x + ',' + y);
+
+  assert.deepEqual(
+    topology.findAlignedOutsidePassageRepair(5, 5, { dx: 0, dy: 1 }, isOutsidePassageTile, canCarveOutsidePassageTile),
+    { px: 5, py: 4, cx: 6, cy: 4 },
+    'east-side repair must win before west because CARDINAL_DIRECTIONS starts with east'
+  );
+});
+
+test('dungeon topology aligned outside passage repair rejects blocked opposite tiles', () => {
+  const passages = new Set(['6,5']);
+  const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);
+  const canCarveOutsidePassageTile = () => false;
+
+  assert.equal(
+    topology.findAlignedOutsidePassageRepair(5, 5, { dx: 0, dy: 1 }, isOutsidePassageTile, canCarveOutsidePassageTile),
+    null
+  );
+});
+
 test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
   const rect = { x: 5, y: 5, w: 4, h: 4 };
   const touching = { x: 9, y: 6, w: 2, h: 2 };

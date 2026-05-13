@@ -628,6 +628,17 @@ declare global {
       y: number,
     ): Array<{ dx: number; dy: number; bx: number; by: number }>;
     /**
+     * Finds positions that align a one-sided outside entrance with an existing
+     * outside passage. Tile semantics are caller-injected.
+     */
+    findAlignedOutsidePassageRepair(
+      x: number,
+      y: number,
+      side: { dx: number; dy: number },
+      isOutsidePassageTile: (x: number, y: number) => boolean,
+      canCarveOutsidePassageTile: (x: number, y: number) => boolean,
+    ): { px: number; py: number; cx: number; cy: number } | null;
+    /**
      * Caller-injected boundary entrance clustering. `isOpenTile` is tested for
      * both the room boundary tile and its outside-facing neighbour.
      */
