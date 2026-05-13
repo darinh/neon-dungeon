@@ -152,43 +152,19 @@ function generateFloor(floorNum, opts) {
     const MAINFRAME_MIN_H = 10;
     const originalFarthest = farthest;
     /**
-     * @param {number} x
-     * @param {number} y
-     * @param {number} w
-     * @param {number} h
-     * @param {any} ignoredRoom
-     */
-    const overlapsOtherRoom = (x, y, w, h, ignoredRoom) => {
-      const ox1 = x - 1, oy1 = y - 1, ox2 = x + w + 1, oy2 = y + h + 1;
-      for (const r of rooms) {
-        if (r === ignoredRoom) continue;
-        const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
-        if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) return true;
-      }
-      return false;
-    };
-    /**
      * @param {any} room
      */
     const findMainframeRectForRoom = (room) => {
-      const w = Math.max(room.w, MAINFRAME_MIN_W);
-      const h = Math.max(room.h, MAINFRAME_MIN_H);
-      const desiredX = Math.max(1, Math.min(MAP_W - w - 1, room.cx - Math.floor(w / 2)));
-      const desiredY = Math.max(1, Math.min(MAP_H - h - 1, room.cy - Math.floor(h / 2)));
-      const xMin = Math.max(1, room.cx - w + 1);
-      const xMax = Math.min(room.cx, MAP_W - w - 1);
-      const yMin = Math.max(1, room.cy - h + 1);
-      const yMax = Math.min(room.cy, MAP_H - h - 1);
-      let best = null;
-      let bestScore = Infinity;
-      for (let x = xMin; x <= xMax; x++) {
-        for (let y = yMin; y <= yMax; y++) {
-          if (overlapsOtherRoom(x, y, w, h, room)) continue;
-          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
-          if (score < bestScore) { bestScore = score; best = { x, y, w, h }; }
-        }
-      }
-      return best;
+      return dungeonTopology.findExpandedRoomPlacement({
+        room,
+        rooms,
+        minWidth: MAINFRAME_MIN_W,
+        minHeight: MAINFRAME_MIN_H,
+        mapWidth: MAP_W,
+        mapHeight: MAP_H,
+        margin: 1,
+        padding: 1,
+      });
     };
     const mainframeCandidates = [...rooms]
       .filter((/** @type {any} */ r) => r !== spawnRoom)
@@ -204,7 +180,7 @@ function generateFloor(floorNum, opts) {
       let bestScore = Infinity;
       for (let x = 1; x <= MAP_W - MAINFRAME_MIN_W - 1; x++) {
         for (let y = 1; y <= MAP_H - MAINFRAME_MIN_H - 1; y++) {
-          if (overlapsOtherRoom(x, y, MAINFRAME_MIN_W, MAINFRAME_MIN_H, null)) continue;
+          if (dungeonTopology.rectOverlapsAnyRoom({ x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }, rooms, null, 1)) continue;
           const cx = Math.floor(x + MAINFRAME_MIN_W / 2);
           const cy = Math.floor(y + MAINFRAME_MIN_H / 2);
           const score = Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
@@ -221,9 +197,7 @@ function generateFloor(floorNum, opts) {
             let overlapPenalty = 0;
             for (const r of rooms) {
               if (r === spawnRoom) continue;
-              const ox = Math.max(0, Math.min(x + MAINFRAME_MIN_W + 1, r.x + r.w) - Math.max(x - 1, r.x));
-              const oy = Math.max(0, Math.min(y + MAINFRAME_MIN_H + 1, r.y + r.h) - Math.max(y - 1, r.y));
-              overlapPenalty += ox * oy;
+              overlapPenalty += dungeonTopology.rectOverlapArea({ x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }, r, 1);
             }
             const score = overlapPenalty * 1000 + Math.abs(cx - originalFarthest.cx) + Math.abs(cy - originalFarthest.cy);
             if (score < bestScore) { bestScore = score; best = { x, y, w: MAINFRAME_MIN_W, h: MAINFRAME_MIN_H }; }
@@ -233,9 +207,7 @@ function generateFloor(floorNum, opts) {
           for (let i = rooms.length - 1; i >= 0; i--) {
             const r = rooms[i];
             if (r === spawnRoom) continue;
-            const ox = Math.max(0, Math.min(best.x + best.w + 1, r.x + r.w) - Math.max(best.x - 1, r.x));
-            const oy = Math.max(0, Math.min(best.y + best.h + 1, r.y + r.h) - Math.max(best.y - 1, r.y));
-            if (ox * oy > 0) rooms.splice(i, 1);
+            if (dungeonTopology.rectOverlapArea(best, r, 1) > 0) rooms.splice(i, 1);
           }
         }
       }
@@ -277,39 +249,24 @@ function generateFloor(floorNum, opts) {
     bossRoom = br || rooms[Math.floor(rooms.length/2)];
 
     // Enforce minimum boss room size (15×15) by expanding if needed
-    const MIN_BOSS = 15;
-    if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
-      const nw = Math.max(bossRoom.w, MIN_BOSS);
-      const nh = Math.max(bossRoom.h, MIN_BOSS);
-      const desiredX = Math.max(1, Math.min(MAP_W - nw - 1, bossRoom.cx - Math.floor(nw/2)));
-      const desiredY = Math.max(1, Math.min(MAP_H - nh - 1, bossRoom.cy - Math.floor(nh/2)));
-      const xMin = Math.max(1, bossRoom.cx - nw + 1);
-      const xMax = Math.min(bossRoom.cx, MAP_W - nw - 1);
-      const yMin = Math.max(1, bossRoom.cy - nh + 1);
-      const yMax = Math.min(bossRoom.cy, MAP_H - nh - 1);
-      /** @type {{x:number,y:number}|null} */
-      let bossRect = null;
-      let bestScore = Infinity;
-      for (let x = xMin; x <= xMax; x++) {
-        for (let y = yMin; y <= yMax; y++) {
-          const ox1 = x - 1, oy1 = y - 1, ox2 = x + nw + 1, oy2 = y + nh + 1;
-          let blocked = false;
-          for (const r of rooms) {
-            if (r === bossRoom) continue;
-            const rx1 = r.x, ry1 = r.y, rx2 = r.x + r.w, ry2 = r.y + r.h;
-            if (ox1 < rx2 && ox2 > rx1 && oy1 < ry2 && oy2 > ry1) { blocked = true; break; }
-          }
-          if (blocked) continue;
-          const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
-          if (score < bestScore) { bestScore = score; bossRect = { x, y }; }
-        }
-      }
-      if (bossRect) {
-        const nx = bossRect.x;
-        const ny = bossRect.y;
-        bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = nw; bossRoom.h = nh;
-        bossRoom.cx = Math.floor(nx + nw/2); bossRoom.cy = Math.floor(ny + nh/2);
-        carveRect(map, nx, ny, nw, nh, T.FLOOR);
+      const MIN_BOSS = 15;
+      if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
+        const bossRect = dungeonTopology.findExpandedRoomPlacement({
+          room: bossRoom,
+          rooms,
+          minWidth: MIN_BOSS,
+          minHeight: MIN_BOSS,
+          mapWidth: MAP_W,
+          mapHeight: MAP_H,
+          margin: 1,
+          padding: 1,
+        });
+        if (bossRect) {
+          const nx = bossRect.x;
+          const ny = bossRect.y;
+          bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = bossRect.w; bossRoom.h = bossRect.h;
+          bossRoom.cx = Math.floor(nx + bossRect.w/2); bossRoom.cy = Math.floor(ny + bossRect.h/2);
+          carveRect(map, nx, ny, bossRect.w, bossRect.h, T.FLOOR);
         // re-carve corridors to this room from neighbours, never through the mainframe.
         for (const r of rooms) {
           if (r === bossRoom || r.roomType === 'mainframe') continue;

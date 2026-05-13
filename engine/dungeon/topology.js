@@ -218,6 +218,82 @@
   }
 
   /**
+   * Overlap area between a candidate rectangle, optionally expanded by
+   * candidate-side padding, and an existing room rectangle.
+   *
+   * @param {{x:number,y:number,w:number,h:number}} rect
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {number} [padding]
+   */
+  function rectOverlapArea(rect, room, padding = 0) {
+    const ax1 = rect.x - padding, ay1 = rect.y - padding;
+    const ax2 = rect.x + rect.w + padding, ay2 = rect.y + rect.h + padding;
+    const bx1 = room.x, by1 = room.y, bx2 = room.x + room.w, by2 = room.y + room.h;
+    const ox = Math.max(0, Math.min(ax2, bx2) - Math.max(ax1, bx1));
+    const oy = Math.max(0, Math.min(ay2, by2) - Math.max(ay1, by1));
+    return ox * oy;
+  }
+
+  /**
+   * @param {{x:number,y:number,w:number,h:number}} rect
+   * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
+   * @param {{x:number,y:number,w:number,h:number}|null|undefined} ignoredRoom
+   * @param {number} [padding]
+   */
+  function rectOverlapsAnyRoom(rect, rooms, ignoredRoom, padding = 0) {
+    for (const room of rooms) {
+      if (room === ignoredRoom) continue;
+      if (rectOverlapArea(rect, room, padding) > 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Finds the closest placement for a rectangle expanded around a room centre.
+   * Scan order intentionally preserves legacy generation tie-breaks: x is the
+   * outer loop, y is the inner loop, and equal scores keep the first candidate.
+   *
+   * @param {{
+   *   room: {x:number,y:number,w:number,h:number,cx:number,cy:number},
+   *   rooms: Array<{x:number,y:number,w:number,h:number}>,
+   *   minWidth: number,
+   *   minHeight: number,
+   *   mapWidth: number,
+   *   mapHeight: number,
+   *   margin?: number,
+   *   padding?: number,
+   * }} opts
+   * @returns {{x:number,y:number,w:number,h:number}|null}
+   */
+  function findExpandedRoomPlacement(opts) {
+    const room = opts.room;
+    const w = Math.max(room.w, opts.minWidth);
+    const h = Math.max(room.h, opts.minHeight);
+    const margin = opts.margin ?? 1;
+    const padding = opts.padding ?? 1;
+    const maxX = opts.mapWidth - w - margin;
+    const maxY = opts.mapHeight - h - margin;
+    const desiredX = Math.max(margin, Math.min(maxX, room.cx - Math.floor(w / 2)));
+    const desiredY = Math.max(margin, Math.min(maxY, room.cy - Math.floor(h / 2)));
+    const xMin = Math.max(margin, room.cx - w + 1);
+    const xMax = Math.min(room.cx, maxX);
+    const yMin = Math.max(margin, room.cy - h + 1);
+    const yMax = Math.min(room.cy, maxY);
+    /** @type {{x:number,y:number,w:number,h:number}|null} */
+    let best = null;
+    let bestScore = Infinity;
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        const rect = { x, y, w, h };
+        if (rectOverlapsAnyRoom(rect, opts.rooms, room, padding)) continue;
+        const score = Math.abs(x - desiredX) + Math.abs(y - desiredY);
+        if (score < bestScore) { bestScore = score; best = rect; }
+      }
+    }
+    return best;
+  }
+
+  /**
    * Resolve a preferred spawn point by cardinally searching for the first
    * passable tile that belongs to a generated room. The host owns tile
    * semantics through `isPassable`; this helper only owns grid search/order.
@@ -369,6 +445,9 @@
     buildRoomGraph,
     bfsRooms,
     roomContainsPoint,
+    rectOverlapArea,
+    rectOverlapsAnyRoom,
+    findExpandedRoomPlacement,
     resolvePreferredSpawnRoom,
     roomHasCorner,
     outsideFaceForBoundaryTile,
