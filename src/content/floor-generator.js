@@ -74,40 +74,13 @@ function bfsRooms(rooms, startRoom, map) {
  * @returns {{pos:{x:number,y:number}, room:any}|null}
  */
 function resolvePreferredSpawnRoom(map, rooms, preferred) {
-  if (!preferred || !map || !rooms || !rooms.length) return null;
-  const h = map.length;
-  const w = map[0] ? map[0].length : 0;
-  if (!h || !w) return null;
-  const sx = Math.max(0, Math.min(w - 1, Math.floor(preferred.x)));
-  const sy = Math.max(0, Math.min(h - 1, Math.floor(preferred.y)));
-  const visited = new Set();
-  /** @type {{x:number,y:number,d:number}[]} */
-  const q = [{ x: sx, y: sy, d: 0 }];
-  visited.add(sy * w + sx);
-  while (q.length) {
-    const cur = q.shift();
-    if (!cur || cur.d > 12) continue;
-    const tile = map[cur.y]?.[cur.x];
-    if (isPassable(tile)) {
-      const pos = { x: cur.x + 0.5, y: cur.y + 0.5 };
-      const room = rooms.find((/** @type {any} */ r) =>
-        pos.x >= r.x && pos.x < r.x + r.w && pos.y >= r.y && pos.y < r.y + r.h
-      );
-      if (room) return { pos, room };
-    }
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (let i = 0; i < dirs.length; i++) {
-      const dir = dirs[i];
-      if (!dir) continue;
-      const nx = cur.x + (dir[0] || 0), ny = cur.y + (dir[1] || 0);
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-      const key = ny * w + nx;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      q.push({ x: nx, y: ny, d: cur.d + 1 });
-    }
-  }
-  return null;
+  return dungeonTopology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred,
+    isPassable: (/** @type {number} */ tile) => isPassable(tile),
+    searchRadius: 12,
+  });
 }
 
 /**
