@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.140
+# NEON DUNGEON — Game Specification v6.1.141
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.141 | Dungeon engine extraction: room-neighbourhood tile scanning now lives in `engine/dungeon/topology.js` as `NEON.dungeonTopology.findRoomNeighborhoodTile(map, room, isTargetTile, padding?)`. `src/content/floor-generator.js` keeps NEON-specific special-entrance repair policy while delegating the generic y-major room-plus-padding search used for challenge-gate and cracked-wall presence checks to the engine topology surface. |
 | v6.1.140 | Dungeon engine extraction: corner-inclusive room-boundary opening scans now live in `engine/dungeon/topology.js` as `NEON.dungeonTopology.findRoomBoundaryOpenings(map, room, isOpenTile, isPositionExcluded?)`. `src/content/floor-generator.js` keeps NEON-specific boss-arena fallback policy while delegating the generic perimeter scan and coordinate-exclusion checks to the engine topology surface. |
 | v6.1.139 | Dungeon engine extraction: room-rectangle overlap and expanded-room placement now live in `engine/dungeon/topology.js` as `NEON.dungeonTopology.rectOverlapArea(rect, room, padding?)`, `rectOverlapsAnyRoom(rect, rooms, ignoredRoom?, padding?)`, and `findExpandedRoomPlacement({ room, rooms, minWidth, minHeight, mapWidth, mapHeight, margin?, padding? })`. `src/content/floor-generator.js` keeps NEON-specific mainframe and boss-room policy while delegating the deterministic no-overlap placement search and overlap penalty math to the engine topology surface. |
 | v6.1.138 | Dungeon engine extraction: preferred-spawn room resolution now lives in `engine/dungeon/topology.js` as `NEON.dungeonTopology.resolvePreferredSpawnRoom({ map, rooms, preferred, isPassable, searchRadius })`. `src/content/floor-generator.js` keeps the public `resolvePreferredSpawnRoom(map, rooms, preferred)` wrapper and passes NEON's current `isPassable(tile)` semantics plus the 12-tile search radius, preserving descent carryover behavior while moving the cardinal grid search into the engine topology surface. |
