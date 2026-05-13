@@ -71,6 +71,33 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology engine finds outside entrance room sides in cardinal order', () => {
+  const outside = { x: 5, y: 5 };
+  const rooms = [
+    { id: 'east', x: 6, y: 4, w: 3, h: 3 },
+    { id: 'west', x: 2, y: 4, w: 3, h: 3 },
+    { id: 'south', x: 4, y: 6, w: 3, h: 3 },
+    { id: 'north', x: 4, y: 2, w: 3, h: 3 },
+  ];
+
+  assert.deepEqual(topology.findOutsideEntranceRoomSides(rooms, outside.x, outside.y), [
+    { dx: 1, dy: 0, bx: 6, by: 5 },
+    { dx: -1, dy: 0, bx: 4, by: 5 },
+    { dx: 0, dy: 1, bx: 5, by: 6 },
+    { dx: 0, dy: -1, bx: 5, by: 4 },
+  ]);
+});
+
+test('dungeon topology outside entrance room sides skip corner boundary tiles', () => {
+  const matchingRoom = { id: 'east', x: 6, y: 4, w: 3, h: 3 };
+  const cornerBlocker = { id: 'corner', x: 6, y: 5, w: 2, h: 2 };
+
+  assert.deepEqual(topology.findOutsideEntranceRoomSides([matchingRoom], 5, 5), [
+    { dx: 1, dy: 0, bx: 6, by: 5 },
+  ]);
+  assert.deepEqual(topology.findOutsideEntranceRoomSides([matchingRoom, cornerBlocker], 5, 5), []);
+});
+
 test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
   const rect = { x: 5, y: 5, w: 4, h: 4 };
   const touching = { x: 9, y: 6, w: 2, h: 2 };

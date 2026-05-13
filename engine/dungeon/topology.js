@@ -381,6 +381,31 @@
   }
 
   /**
+   * Finds room boundary sides adjacent to an outside entrance tile. Scan order
+   * follows `CARDINAL_DIRECTIONS`, and boundary tiles that are corners of any
+   * room are skipped to preserve single-face entrance semantics.
+   *
+   * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
+   * @param {number} x
+   * @param {number} y
+   * @returns {{dx:number,dy:number,bx:number,by:number}[]}
+   */
+  function findOutsideEntranceRoomSides(rooms, x, y) {
+    /** @type {{dx:number,dy:number,bx:number,by:number}[]} */
+    const roomSides = [];
+    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+      const bx = x + dx;
+      const by = y + dy;
+      if (rooms.some((room) => roomHasCorner(room, bx, by))) continue;
+      if (rooms.some((room) => {
+        const outside = outsideFaceForBoundaryTile(room, bx, by);
+        return outside?.x === x && outside?.y === y;
+      })) roomSides.push({ dx, dy, bx, by });
+    }
+    return roomSides;
+  }
+
+  /**
    * Finds boundary tiles where both the room edge and the outside-facing tile
    * satisfy the caller's open-tile predicate, then groups cardinal-adjacent
    * boundary tiles. Scan order intentionally mirrors the legacy generator:
@@ -538,6 +563,7 @@
     resolvePreferredSpawnRoom,
     roomHasCorner,
     outsideFaceForBoundaryTile,
+    findOutsideEntranceRoomSides,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
     findRoomNeighborhoodTile,
