@@ -90,6 +90,7 @@ const ASSETS = [
   './src/entities/enemy-ghost-projector.js',
   './src/entities/enemy-healer.js',
   './src/entities/enemy-grenadier.js',
+  './src/entities/enemy-teleporter.js',
   './src/entities/enemy-mimic.js',
   './src/entities/enemy-nexus.js',
   './src/entities/enemy-phantom.js',
