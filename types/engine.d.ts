@@ -580,6 +580,27 @@ declare global {
       x: number,
       y: number,
     ): boolean;
+    rectOverlapArea(
+      rect: { x: number; y: number; w: number; h: number },
+      room: { x: number; y: number; w: number; h: number },
+      padding?: number,
+    ): number;
+    rectOverlapsAnyRoom(
+      rect: { x: number; y: number; w: number; h: number },
+      rooms: Array<{ x: number; y: number; w: number; h: number }>,
+      ignoredRoom?: { x: number; y: number; w: number; h: number } | null,
+      padding?: number,
+    ): boolean;
+    findExpandedRoomPlacement(opts: {
+      room: { x: number; y: number; w: number; h: number; cx: number; cy: number };
+      rooms: Array<{ x: number; y: number; w: number; h: number }>;
+      minWidth: number;
+      minHeight: number;
+      mapWidth: number;
+      mapHeight: number;
+      margin?: number;
+      padding?: number;
+    }): { x: number; y: number; w: number; h: number } | null;
     resolvePreferredSpawnRoom(opts: {
       map: ArrayLike<ArrayLike<number>>;
       rooms: Array<{ x: number; y: number; w: number; h: number }>;
