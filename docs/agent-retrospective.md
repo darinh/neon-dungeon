@@ -81,9 +81,14 @@ Run and record these before verification or review:
    moved symbol and the old file path. Update direct source-text assertions,
    shared source loaders, type surfaces, `types/*.d.ts` members, JSDoc field or
    `@type` annotations, and alignment helpers before treating full-gate failures
-   as surprising. Re-run this surface audit after any rebase or conflict
-   resolution that touches source inventories, docs, type declarations, or the
-   moved symbol's new/old files. Source
+   as surprising. Run this audit immediately after the code move and before the
+   first full check, and record an explicit surface list in the evidence
+   (`source`, `tests`, `types`, `docs/spec`, and runtime registration surfaces)
+   with each surface marked checked or updated. For moved prototype methods, the
+   audit must explicitly confirm the corresponding `types/*.d.ts` interface
+   contains the moved method name before the first full check. Re-run this
+   surface audit after any rebase or conflict resolution that touches source
+   inventories, docs, type declarations, or the moved symbol's new/old files. Source
    tests for moved prototype methods with nested blocks must use brace-walked
    extraction or a stable terminator, never indentation-only closing-brace
    regexes such as `\n\s{2}\}`. When converting class methods to prototype
