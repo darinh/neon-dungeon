@@ -147,6 +147,7 @@ Good candidates:
 - SEEKER detonation helper. Done for `_seekerDetonate()` in `src/entities/enemy-seeker.js`.
 - SEEKER AI presentation. Done for `aiSeeker()` in `src/entities/enemy-seeker.js`.
 - PHANTOM AI presentation. Done for `aiPhantom()` in `src/entities/enemy-phantom.js`.
+- SHIELDER AI presentation. Done for `aiShielder()` in `src/entities/enemy-shielder.js`.
 - ECHOER AI presentation. Done for `aiEchoer()` in `src/entities/enemy-echoer.js`.
 - PROPHET AI presentation. Done for `aiProphet()` in `src/entities/enemy-prophet.js`.
 - CRYOPHAGE AI presentation. Done for `aiCryophage()` in `src/entities/enemy-cryophage.js`.
