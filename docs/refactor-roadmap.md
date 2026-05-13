@@ -137,6 +137,7 @@ Good candidates:
 - NEXUS link-maintenance helpers and AI presentation. Done for `_nxUpdateLinks()`, `_nxFindAllyCluster()`, and `aiNexus()` in `src/entities/enemy-nexus.js`.
 - SIPHON AI presentation. Done for `aiSiphon()` in `src/entities/enemy-siphon.js`.
 - GRAVITON AI presentation. Done for `aiGraviton()` in `src/entities/enemy-graviton.js`.
+- Boss AI presentation. Done for `aiBossSentinel()`, `aiBossWarden()`, `aiBossHive()`, `aiBossConductor()`, `aiBossOmega()`, and `aiBossGenesis()` in `src/entities/boss-ai.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
 - WRAITH-style emergence helper and AI presentation. Done for `_wrFindEmergeTile()` and `aiWraith()` in `src/entities/enemy-wraith.js`.
 - TUNNELLER AI presentation. Done for `aiTunneller()` in `src/entities/enemy-tunneller.js`.

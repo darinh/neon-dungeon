@@ -106,6 +106,12 @@ declare global {
     aiNexus(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSiphon(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiGraviton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossSentinel(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossWarden(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossHive(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossConductor(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossOmega(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossGenesis(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
