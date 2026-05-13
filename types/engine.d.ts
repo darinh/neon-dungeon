@@ -627,6 +627,17 @@ declare global {
       room: { x: number; y: number; w: number; h: number },
       isOpenTile: (tile: number) => boolean,
     ): Array<Array<{ x: number; y: number }>>;
+    /**
+     * Corner-inclusive flat boundary opening scan. `isOpenTile` is tested for
+     * both the room boundary tile and its outside-facing neighbour; optional
+     * `isPositionExcluded` rejects either position by coordinate.
+     */
+    findRoomBoundaryOpenings(
+      map: ArrayLike<ArrayLike<number>>,
+      room: { x: number; y: number; w: number; h: number },
+      isOpenTile: (tile: number) => boolean,
+      isPositionExcluded?: (x: number, y: number) => boolean,
+    ): Array<{ x: number; y: number }>;
     BSPNode: unknown;
   }
 
