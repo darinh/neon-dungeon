@@ -128,7 +128,7 @@ Good candidates:
 - Elite combat-tempo scaling. Done for `Enemy.prototype.berserkerMul()` in `src/entities/enemy-tempo.js`.
 - Enemy target eligibility and leash helpers. Done for `_canTarget()`, `_forgetTarget()`, and `_isLeashedFromRoom()` in `src/entities/enemy-targeting.js`.
 - Enemy projectile defense helpers. Done for `blocksProjectile()` and `reflectsProjectile()` in `src/entities/enemy-projectile-defense.js`.
-- CONDUIT beam geometry helper. Done for `_cdHitsPlayer()` in `src/entities/enemy-conduit.js`.
+- CONDUIT AI presentation and beam geometry helper. Done for `aiConduit()` and `_cdHitsPlayer()` in `src/entities/enemy-conduit.js`.
 - WARDLING ward acquisition helper and AI presentation. Done for `_wlFindWard()` and `aiWardling()` in `src/entities/enemy-wardling.js`.
 - HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
 - GRENADIER grenade launch helper. Done for `lobGrenade()` in `src/entities/enemy-grenadier.js`.

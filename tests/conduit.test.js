@@ -70,7 +70,10 @@ test('CONDUIT is dispatched in the AI switch', () => {
 });
 
 test('aiConduit method is defined with canonical signature', () => {
-  assert.match(ENTITIES, /aiConduit\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiConduit\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'Enemy.aiConduit must stay out of src/entities.js after sidecar extraction');
+  assert.match(ENEMY_CONDUIT,
+    /Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
 });
 
 test('_cdHitsPlayer geometric helper is defined', () => {
@@ -100,7 +103,7 @@ test('CONDUIT has tuning constants for solo + beam', () => {
 test('aiConduit drains _cdLinkICD by raw dt (not modSpeed)', () => {
   // ICD is a fairness contract — must not be sped up by OVERCLOCK or
   // berserker. The drain block uses raw dt explicitly.
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch, 'aiConduit body must be locatable');
   const fn = fnMatch[0];
   // Drain block uses dt, NOT dt * ocMul or dt * bm.
@@ -109,14 +112,14 @@ test('aiConduit drains _cdLinkICD by raw dt (not modSpeed)', () => {
 });
 
 test('aiConduit only the lower-eid conduit owns the link (no double-damage)', () => {
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch);
   // The dedup guard `this._cdEid >= other._cdEid` skips higher-eid.
   assert.match(fnMatch[0], /this\._cdEid\s*>=\s*other\._cdEid/);
 });
 
 test('aiConduit beam damage uses Conduit Beam source label', () => {
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch);
   assert.match(fnMatch[0], /takeDamage\([^)]*'Conduit Beam'/);
 });
@@ -127,7 +130,7 @@ test('aiConduit gates solo fire on no-pair AND drains timer ONLY while solo', ()
   // timer drain MUST be gated on pairCount===0 — otherwise the survivor
   // of a long-paired room would fire instantly the frame the partner
   // dies (caught by codex+gpt-5.5+opus reviewers on initial PR).
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch);
   const fn = fnMatch[0];
   // Drain must be inside an `if (pairCount === 0)` branch.
@@ -138,14 +141,14 @@ test('aiConduit gates solo fire on no-pair AND drains timer ONLY while solo', ()
 
 test('aiConduit beam skips stunned partners (fairness contract)', () => {
   // Stunned mob can't form a coherent beam — flagged by gpt-5.5 review.
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch);
   // The pair scan loop must skip on `other.stunTimer && other.stunTimer > 0`.
   assert.match(fnMatch[0], /other\.stunTimer\s*&&\s*other\.stunTimer\s*>\s*0/);
 });
 
 test('aiConduit beam requires LoS between bodies (wall breaks beam)', () => {
-  const fnMatch = ENTITIES.match(/\n  aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n  \}/);
+  const fnMatch = ENEMY_CONDUIT.match(/Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(\s*dt[\s\S]{0,5000}?\n\};/);
   assert.ok(fnMatch);
   // hasLOS(this.x, this.y, other.x, other.y, map) must be checked
   // before the hit-test in the pair loop.
