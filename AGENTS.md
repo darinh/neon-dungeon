@@ -94,6 +94,11 @@ These are hard rules, not preferences:
   `develop` -> `main` promotion PRs may be used only after verifying they are
   open, target `main`, come from this repository's `develop`, and include the
   commits intended for promotion.
+- For issue-backed work, verify before the promotion merge that the PR landing on
+  the default branch contains the closing keyword for the tracked issue, or record
+  the explicit manual-close command/comment that will run immediately after
+  promotion. A `develop`-only PR closing keyword is not enough to prove default
+  branch issue closure.
 - If `gh pr merge` exits nonzero after printing a successful remote merge, treat
   the result as ambiguous until `gh pr view --json state,mergedAt,mergeCommit`
   proves whether the PR merged. Do not retry, repair, or clean up based only on
