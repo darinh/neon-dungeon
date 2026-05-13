@@ -603,18 +603,13 @@ function generateFloor(floorNum, opts) {
    * @param {{dx:number,dy:number}} side
    */
   function findAlignedOutsidePassageRepair(x, y, side) {
-    const px = x - side.dx;
-    const py = y - side.dy;
-    if (outsidePassageConnectionCount(px, py, x, y) > 0) return { px, py, cx: -1, cy: -1 };
-    if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      if (dx * side.dx + dy * side.dy !== 0) continue;
-      if (!isOutsidePassageTile(x + dx, y + dy)) continue;
-      const cx = px + dx;
-      const cy = py + dy;
-      if (isOutsidePassageTile(cx, cy) || canCarveOutsidePassageTile(cx, cy)) return { px, py, cx, cy };
-    }
-    return null;
+    return dungeonTopology.findAlignedOutsidePassageRepair(
+      x,
+      y,
+      side,
+      isOutsidePassageTile,
+      canCarveOutsidePassageTile
+    );
   }
 
   /** @param {number} x @param {number} y @param {{dx:number,dy:number}} side */

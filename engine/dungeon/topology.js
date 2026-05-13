@@ -406,6 +406,40 @@
   }
 
   /**
+   * Finds the topology-only repair positions needed to align a one-sided
+   * outside entrance with an existing outside passage. The host injects tile
+   * semantics; this helper only owns coordinate search and cardinal order.
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {{dx:number,dy:number}} side
+   * @param {(x:number,y:number) => boolean} isOutsidePassageTile
+   * @param {(x:number,y:number) => boolean} canCarveOutsidePassageTile
+   * @returns {{px:number,py:number,cx:number,cy:number}|null}
+   */
+  function findAlignedOutsidePassageRepair(x, y, side, isOutsidePassageTile, canCarveOutsidePassageTile) {
+    const px = x - side.dx;
+    const py = y - side.dy;
+    let degree = 0;
+    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+      const nx = px + dx;
+      const ny = py + dy;
+      if (nx === x && ny === y) continue;
+      if (isOutsidePassageTile(nx, ny)) degree++;
+    }
+    if (degree > 0) return { px, py, cx: -1, cy: -1 };
+    if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
+    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+      if (dx * side.dx + dy * side.dy !== 0) continue;
+      if (!isOutsidePassageTile(x + dx, y + dy)) continue;
+      const cx = px + dx;
+      const cy = py + dy;
+      if (isOutsidePassageTile(cx, cy) || canCarveOutsidePassageTile(cx, cy)) return { px, py, cx, cy };
+    }
+    return null;
+  }
+
+  /**
    * Finds boundary tiles where both the room edge and the outside-facing tile
    * satisfy the caller's open-tile predicate, then groups cardinal-adjacent
    * boundary tiles. Scan order intentionally mirrors the legacy generator:
@@ -564,6 +598,7 @@
     roomHasCorner,
     outsideFaceForBoundaryTile,
     findOutsideEntranceRoomSides,
+    findAlignedOutsidePassageRepair,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
     findRoomNeighborhoodTile,
