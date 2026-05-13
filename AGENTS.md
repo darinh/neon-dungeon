@@ -87,22 +87,22 @@ These are hard rules, not preferences:
 - The checked-in PR branch-policy workflow enforces the source branch for PRs to
   `main`. It cannot enforce which GitHub merge button a human clicks, so agents
   must explicitly verify and use the required merge method before merging.
-- Immediately before any `gh pr merge`, run a fresh
-  `gh pr view --json state,mergeStateStatus,statusCheckRollup,headRefName,baseRefName`
-  and inspect it. If `state` is not `OPEN`, do not run the merge command; fetch
-  branch tips and create or use a valid replacement PR instead. Existing
-  `develop` -> `main` promotion PRs may be used only after verifying they are
-  open, target `main`, come from this repository's `develop`, and include the
-  commits intended for promotion.
+- Merge PRs with the guarded wrapper, not raw `gh pr merge`:
+  `npm run merge:pr -- <pr> --method squash|rebase`. The wrapper parses PR
+  state, hard-stops unless `state` is `OPEN`, enforces squash for `develop` and
+  rebase for `main`, refuses `--delete-branch`, checks statuses, and verifies the
+  remote merge result. Existing `develop` -> `main` promotion PRs may be used
+  only after verifying they are open, target `main`, come from this repository's
+  `develop`, and include the commits intended for promotion.
 - For issue-backed work, verify before the promotion merge that the PR landing on
   the default branch contains the closing keyword for the tracked issue, or record
   the explicit manual-close command/comment that will run immediately after
   promotion. A `develop`-only PR closing keyword is not enough to prove default
   branch issue closure.
-- If `gh pr merge` exits nonzero after printing a successful remote merge, treat
-  the result as ambiguous until `gh pr view --json state,mergedAt,mergeCommit`
-  proves whether the PR merged. Do not retry, repair, or clean up based only on
-  the local exit code.
+- If a raw `gh pr merge` command exits nonzero after printing a successful
+  remote merge, treat the result as ambiguous until
+  `gh pr view --json state,mergedAt,mergeCommit` proves whether the PR merged.
+  Do not retry, repair, or clean up based only on the local exit code.
 - `gh pr edit` failures caused by GitHub CLI GraphQL field deprecations are
   non-fatal for cosmetic title/body updates. If the edit is materially required,
   use `gh api repos/:owner/:repo/pulls/:number -X PATCH`; otherwise leave the PR
