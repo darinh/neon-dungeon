@@ -76,3 +76,57 @@ Enemy.prototype._nxFindAllyCluster = function _nxFindAllyCluster() {
   }
   return best;
 };
+
+/**
+ * NEXUS: Neural Command Node — links to nearby allies, buffing with DR.
+ * Maintains ally links, retreats toward clusters, and fires linked shots.
+ *
+ * @this {Enemy}
+ * @param {any} [dt]
+ * @param {any} [player]
+ * @param {any} [map]
+ * @param {any} [d]
+ * @param {any} [los]
+ */
+Enemy.prototype.aiNexus = function aiNexus(dt, player, map, d, los) {
+  void player;
+  const bm = this.berserkerMul();
+  // Update links every 0.5s
+  this._nxLinkTimer = Math.max(0, (this._nxLinkTimer || 0) - dt);
+  if (this._nxLinkTimer <= 0) {
+    this._nxUpdateLinks();
+    this._nxLinkTimer = 0.5;
+  }
+  // Fire rate scales with link count: 2.0s base → 1.0s with 3 links
+  this._nxFireTimer = Math.max(0, (this._nxFireTimer || 0) - dt);
+  const linkCount = this._nxLinks ? this._nxLinks.length : 0;
+  const fireInterval = Math.max(1.0, 2.0 - linkCount * 0.33) / (_EG.modifier === 'OVERCLOCK' ? 1.2 : 1) / bm;
+
+  if (los && d < 4) {
+    // Too close — retreat toward nearest ally cluster
+    const ally = this._nxFindAllyCluster();
+    let tx, ty;
+    if (ally) {
+      tx = ally.x; ty = ally.y;
+    } else {
+      tx = this.x + (this.x - this._tx);
+      ty = this.y + (this.y - this._ty);
+    }
+    this.moveToward(tx, ty, this.spd, dt, map);
+  } else if (los && d <= 10) {
+    // In range — fire at player
+    if (this._nxFireTimer <= 0) {
+      this.fireAt(this._tx, this._ty, 6, this.atk, 12, '#00eedd');
+      this._nxFireTimer = fireInterval;
+    }
+    // Drift toward ally cluster to maintain links
+    const ally = this._nxFindAllyCluster();
+    if (ally && dist(this.x, this.y, ally.x, ally.y) > 3) {
+      this.moveToward(ally.x, ally.y, this.spd * 0.4, dt, map);
+    }
+  } else if (d > 10 && los) {
+    this.moveToward(this._tx, this._ty, this.spd * 0.5, dt, map);
+  } else {
+    this.patrol(dt, map);
+  }
+};

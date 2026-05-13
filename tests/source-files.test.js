@@ -612,6 +612,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyMimicSource, /audio\.mimicReveal\(\)/);
   assert.match(enemyMimicSource, /_EG\.msg\('⚠ MIMIC!', '#cc33ff'\)/);
   assert.match(enemyMimicSource, /norm\(this\._tx - this\.x, this\._ty - this\.y\)/);
+  assert.match(entitySource, /case\s+'MIMIC':\s*this\.aiMimic\(/);
+  assert.doesNotMatch(entitySource, /aiMimic\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyMimicSource, /Enemy\.prototype\.aiMimic\s*=\s*function\s+aiMimic\s*\(/);
+  assert.match(enemyMimicSource, /this\.revealMimic\(player\)/);
   assert.match(enemyNexusSource, /Enemy\.prototype\._nxUpdateLinks\s*=\s*function _nxUpdateLinks\s*\(/);
   assert.match(enemyNexusSource, /enemiesInRoomIter\(this\.room\)/);
   assert.match(enemyNexusSource, /e\.type === 'NEXUS'/);
@@ -619,6 +623,11 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyNexusSource, /e\._disguised/);
   assert.match(enemyNexusSource, /audio\.nexusLink\(\)/);
   assert.match(enemyNexusSource, /Enemy\.prototype\._nxFindAllyCluster\s*=\s*function _nxFindAllyCluster\s*\(/);
+  assert.match(entitySource, /case\s+'NEXUS':\s*this\.aiNexus\(/);
+  assert.doesNotMatch(entitySource, /aiNexus\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyNexusSource, /Enemy\.prototype\.aiNexus\s*=\s*function\s+aiNexus\s*\(/);
+  assert.match(enemyNexusSource, /this\._nxUpdateLinks\(\)/);
+  assert.match(enemyNexusSource, /this\.fireAt\(this\._tx,\s*this\._ty,\s*6,\s*this\.atk,\s*12,\s*'#00eedd'\)/);
   assert.match(enemyPhantomSource, /Enemy\.prototype\._phReposition\s*=\s*function _phReposition\s*\(/);
   assert.match(enemyPhantomSource, /this\.room\.x \+ rnd\(1, this\.room\.w - 1\)/);
   assert.match(enemyPhantomSource, /isPassable\(map\[fy\]\[fx\]\)/);
@@ -796,8 +805,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /aiLeaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /aiPulser\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /revealMimic\s*\(\s*player\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiMimic\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_nxUpdateLinks\s*\(\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_nxFindAllyCluster\s*\(\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiNexus\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_phReposition\s*\(\s*map\s*,\s*player\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_wrFindEmergeTile\s*\(\s*map\s*,\s*player\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /summonMinion\s*\(\s*map\s*\)\s*\{/);

@@ -133,8 +133,8 @@ Good candidates:
 - HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
 - GRENADIER AI presentation and grenade launch helper. Done for `aiGrenadier()` and `lobGrenade()` in `src/entities/enemy-grenadier.js`.
 - SUMMONER minion enqueue helper. Done for `summonMinion()` in `src/entities/enemy-summoner.js`.
-- MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
-- NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
+- MIMIC reveal helper and AI presentation. Done for `revealMimic()` and `aiMimic()` in `src/entities/enemy-mimic.js`.
+- NEXUS link-maintenance helpers and AI presentation. Done for `_nxUpdateLinks()`, `_nxFindAllyCluster()`, and `aiNexus()` in `src/entities/enemy-nexus.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
 - WRAITH-style emergence helper and AI presentation. Done for `_wrFindEmergeTile()` and `aiWraith()` in `src/entities/enemy-wraith.js`.
 - TUNNELLER AI presentation. Done for `aiTunneller()` in `src/entities/enemy-tunneller.js`.
