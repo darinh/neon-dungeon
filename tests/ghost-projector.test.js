@@ -21,6 +21,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_GHOST_PROJECTOR = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ghost-projector.js'), 'utf8'
+);
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -97,7 +100,10 @@ test('GHOST_PROJECTOR is dispatched in the AI switch', () => {
 });
 
 test('aiGhostProjector method is defined', () => {
-  assert.match(ENTITIES, /aiGhostProjector\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiGhostProjector\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'Enemy.aiGhostProjector must stay out of src/entities.js after sidecar extraction');
+  assert.match(ENEMY_GHOST_PROJECTOR,
+    /Enemy\.prototype\.aiGhostProjector\s*=\s*function\s+aiGhostProjector\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
 });
 
 test('GHOST_PROJECTOR tuning constants are present and reasonable', () => {
