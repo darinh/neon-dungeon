@@ -220,6 +220,37 @@ test('dungeon topology room boundary openings honor bounds and position exclusio
   assert.notDeepEqual(topology.findRoomBoundaryOpenings(map, room, (tile) => tile === FLOOR), []);
 });
 
+test('dungeon topology engine finds room-neighborhood tiles in legacy y-major order', () => {
+  const WALL = 1, FLOOR = 2, TARGET = 9;
+  const map = topology.createMap(7, 6, WALL);
+  const room = { x: 2, y: 2, w: 3, h: 2 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+  map[1][5] = TARGET;
+  map[2][1] = TARGET;
+  map[4][2] = TARGET;
+
+  assert.deepEqual(
+    topology.findRoomNeighborhoodTile(map, room, (tile) => tile === TARGET),
+    { x: 5, y: 1 },
+    'scan order must be y-major over the one-tile padded room neighbourhood'
+  );
+  map[1][5] = WALL;
+  assert.deepEqual(topology.findRoomNeighborhoodTile(map, room, (tile) => tile === TARGET), { x: 1, y: 2 });
+  assert.equal(topology.findRoomNeighborhoodTile(map, room, (tile) => tile === TARGET, 0), null);
+});
+
+test('dungeon topology room-neighborhood tile scan clamps to map bounds', () => {
+  const WALL = 1, TARGET = 9;
+  const map = topology.createMap(4, 4, WALL);
+  const room = { x: 0, y: 0, w: 2, h: 2 };
+  map[2][2] = TARGET;
+
+  assert.deepEqual(topology.findRoomNeighborhoodTile(map, room, (tile) => tile === TARGET), { x: 2, y: 2 });
+  assert.equal(topology.findRoomNeighborhoodTile([], room, (tile) => tile === TARGET), null);
+});
+
 test('dungeon topology engine resolves preferred spawn rooms with injected passability', () => {
   const WALL = 1, FLOOR = 2;
   const map = topology.createMap(8, 6, WALL);

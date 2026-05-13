@@ -132,6 +132,8 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'boss entrance fallback policy must stay in the game layer');
   assert.match(CONTENT, /dungeonTopology\.findRoomBoundaryOpenings\(map,\s*bossRoom,\s*isOpenBossEntranceTile\)/,
     'unfiltered boss entrance fallback must preserve original open-floor scan semantics');
+  assert.match(CONTENT, /dungeonTopology\.findRoomNeighborhoodTile\(map,\s*room,\s*\([\s\S]*?\)\s*=>\s*candidate\s*===\s*tile\)/,
+    'special entrance repair must delegate room-neighborhood tile scans to the dungeon topology engine');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 

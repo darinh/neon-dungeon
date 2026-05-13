@@ -638,6 +638,16 @@ declare global {
       isOpenTile: (tile: number) => boolean,
       isPositionExcluded?: (x: number, y: number) => boolean,
     ): Array<{ x: number; y: number }>;
+    /**
+     * Finds the first matching tile in the room rectangle plus optional padded
+     * neighbourhood, scanning y-major then x-min to x-max.
+     */
+    findRoomNeighborhoodTile(
+      map: ArrayLike<ArrayLike<number>>,
+      room: { x: number; y: number; w: number; h: number },
+      isTargetTile: (tile: number) => boolean,
+      padding?: number,
+    ): { x: number; y: number } | null;
     BSPNode: unknown;
   }
 
