@@ -181,6 +181,12 @@ Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `s
 ### Code review policy
 **Every commit that changes code must have at least 1 adversarial code-review subagent before pushing.** No exceptions for Small tasks. 🔴 files (game.js, entities.js, content.js, platform.js, sw.js, save.js, anything auth/crypto/payments/concurrency) escalate to 3 reviewers.
 
+For extraction work, finish a self-check before launching reviewers:
+each moved public/prototype method needs at least one behavioral side-effect
+assertion, not just dispatch or existence coverage; every touched versioned spec
+or changelog must be checked against the current highest version in the file
+before editing.
+
 ## Service worker
 
 `sw.js` must not carry a numeric app/cache version such as `neon-dungeon-vNNN`.
