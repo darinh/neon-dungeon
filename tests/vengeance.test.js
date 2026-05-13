@@ -9,6 +9,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_VENGEANCE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-vengeance.js'), 'utf8'
+);
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
 );
@@ -67,7 +70,7 @@ test('VENGEANCE is dispatched in the AI switch', () => {
 });
 
 test('aiVengeance method is defined', () => {
-  assert.match(ENTITIES, /aiVengeance\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_VENGEANCE, /Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(/);
 });
 
 test('VENGEANCE stun cancel resets rush state (preserves charges)', () => {
@@ -116,7 +119,7 @@ test('aiVengeance rush uses _tx/_ty (taunt-aware)', () => {
   // _tx/_ty fails the hologram-decoy contract.
   // Anchor on the method DEFINITION (` aiVengeance` with leading space —
   // the dispatch case is `this.aiVengeance`).
-  const block = ENTITIES.match(/\n  aiVengeance\s*\(\s*dt[\s\S]{0,3500}\}\s*\n\s*\n\s*\/\/\s*─+\s*RESONATOR/);
+  const block = ENEMY_VENGEANCE.match(/Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(\s*dt[\s\S]{0,3500}\};/);
   assert.ok(block, 'aiVengeance method definition must be locatable');
   // Must reference _tx and _ty for both the rush move target AND the
   // rush-arm range/LoS check.
@@ -128,7 +131,7 @@ test('aiVengeance rush calls meleeAttack(player) on contact (atk lives here)', (
   // VENGEANCE has no projectile — atk=18 is delivered via melee on the
   // strike sub-phase. Without this call the rush is a harmless dance.
   // Lesson from WARDLING PR — atk wired without melee call dealt zero damage.
-  const block = ENTITIES.match(/\n  aiVengeance\s*\(\s*dt[\s\S]{0,3500}\}\s*\n\s*\n\s*\/\/\s*─+\s*RESONATOR/);
+  const block = ENEMY_VENGEANCE.match(/Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(\s*dt[\s\S]{0,3500}\};/);
   assert.ok(block, 'aiVengeance method definition must be locatable');
   const meleeCalls = (block[0].match(/this\.meleeAttack\s*\(\s*player\s*\)/g) || []).length;
   assert.ok(meleeCalls >= 1, `aiVengeance must call meleeAttack(player) at least once (strike phase), found ${meleeCalls}`);
@@ -139,7 +142,7 @@ test('aiVengeance rush has both telegraph + strike sub-phases (combined timer)',
   // While > VENGEANCE_RUSH_DURATION → telegraph (no movement). After →
   // strike (rush move). Both sub-phases are critical for fairness:
   // missing the telegraph = no warning; missing the strike = no threat.
-  const block = ENTITIES.match(/\n  aiVengeance\s*\(\s*dt[\s\S]{0,3500}\}\s*\n\s*\n\s*\/\/\s*─+\s*RESONATOR/);
+  const block = ENEMY_VENGEANCE.match(/Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(\s*dt[\s\S]{0,3500}\};/);
   assert.ok(block, 'aiVengeance method definition must be locatable');
   // Combined-timer assertion: when armed, _vgRushTimer set to TELEGRAPH+DURATION
   assert.match(block[0], /VENGEANCE_TELEGRAPH\s*\+\s*VENGEANCE_RUSH_DURATION/,
@@ -153,7 +156,7 @@ test('aiVengeance threshold check uses VENGEANCE_THRESHOLD constant (no magic nu
   // If the AI compared `_vgCharges >= 3` directly the threshold could
   // diverge from the comment / future tuning. Constant must be the
   // single source of truth.
-  const block = ENTITIES.match(/\n  aiVengeance\s*\(\s*dt[\s\S]{0,3500}\}\s*\n\s*\n\s*\/\/\s*─+\s*RESONATOR/);
+  const block = ENEMY_VENGEANCE.match(/Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(\s*dt[\s\S]{0,3500}\};/);
   assert.ok(block, 'aiVengeance method definition must be locatable');
   assert.match(block[0], /this\._vgCharges\s*>=\s*VENGEANCE_THRESHOLD/,
     'threshold check must use VENGEANCE_THRESHOLD (not magic 3)');
@@ -166,7 +169,7 @@ test('aiVengeance does NOT pre-multiply rush speed (avoids double-applying OVERC
   // internally at entities.js:1556). The fix is to pass the raw
   // constant. Negative assertion: the rush-strike moveToward call
   // MUST NOT contain `* ocMul` or `* bm`.
-  const block = ENTITIES.match(/\n  aiVengeance\s*\(\s*dt[\s\S]{0,3500}\}\s*\n\s*\n\s*\/\/\s*─+\s*RESONATOR/);
+  const block = ENEMY_VENGEANCE.match(/Enemy\.prototype\.aiVengeance\s*=\s*function\s+aiVengeance\s*\(\s*dt[\s\S]{0,3500}\};/);
   assert.ok(block, 'aiVengeance method definition must be locatable');
   // The rush-speed line must use VENGEANCE_RUSH_SPD directly (no `* `
   // multiplication inside the moveToward call's spd argument).
