@@ -101,6 +101,7 @@ declare global {
     aiCharger(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiLeaper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiPulser(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiMimic(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSummoner(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
