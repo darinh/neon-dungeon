@@ -183,6 +183,7 @@ Good candidates:
 - CHARGER AI presentation. Done for `aiCharger()` in `src/entities/enemy-charger.js`.
 - LEAPER AI presentation. Done for `aiLeaper()` in `src/entities/enemy-leaper.js`.
 - PULSER AI presentation. Done for `aiPulser()` in `src/entities/enemy-pulser.js`.
+- SIPHON AI presentation. Done for `aiSiphon()` in `src/entities/enemy-siphon.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
