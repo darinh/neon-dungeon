@@ -10,6 +10,7 @@ const { T, hasLOS } = require('./_generation-fixture.js');
 const CONTENT_HACKWARE = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'hackware.js'), 'utf8');
 const CONTENT_PROJECTILES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8');
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
+const ENTITIES_ENEMY_TUNNELLER = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'enemy-tunneller.js'), 'utf8');
 const ENTITIES_COMBAT_EFFECTS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'combat-effects.js'), 'utf8');
 const ENTITIES_FUSE_SHARDS = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'fuse-shards.js'), 'utf8');
 
@@ -21,6 +22,7 @@ function stripComments(src) {
 const CONTENT_HACKWARE_NC = stripComments(CONTENT_HACKWARE);
 const CONTENT_PROJECTILES_NC = stripComments(CONTENT_PROJECTILES);
 const ENTITIES_NC = stripComments(ENTITIES);
+const ENTITIES_ENEMY_TUNNELLER_NC = stripComments(ENTITIES_ENEMY_TUNNELLER);
 const ENTITIES_COMBAT_EFFECTS_NC = stripComments(ENTITIES_COMBAT_EFFECTS);
 const ENTITIES_FUSE_SHARDS_NC = stripComments(ENTITIES_FUSE_SHARDS);
 
@@ -105,6 +107,6 @@ test('fuse shard bomb damage and wall breaking are LOS-gated', () => {
 });
 
 test('tunneller eruption AoE is LOS-gated', () => {
-  const tunnellerBody = extractBlock(ENTITIES_NC, /aiTunneller\s*\([^)]*\)\s*\{/);
+  const tunnellerBody = extractBlock(ENTITIES_ENEMY_TUNNELLER_NC, /Enemy\.prototype\.aiTunneller\s*=\s*function\s+aiTunneller\s*\([^)]*\)\s*\{/);
   assert.match(tunnellerBody, /dist\(this\.x,\s*this\.y,\s*player\.x,\s*player\.y\)\s*<\s*aoeR\s*&&\s*this\._canTarget\(\)\s*&&\s*hasLOS\(this\.x,\s*this\.y,\s*player\.x,\s*player\.y,\s*map\)/);
 });
