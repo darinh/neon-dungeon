@@ -98,6 +98,7 @@ declare global {
     aiGrenadier(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTeleporter(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSniper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiCharger(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSummoner(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
