@@ -152,6 +152,74 @@ test('dungeon topology engine clusters room boundary entrances with injected ope
   ]);
 });
 
+test('dungeon topology engine scans corner-inclusive room boundary openings in legacy order', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(5, 5, WALL);
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[y].length; x++) map[y][x] = FLOOR;
+  }
+
+  const openings = topology.findRoomBoundaryOpenings(
+    map,
+    { x: 1, y: 1, w: 3, h: 3 },
+    (tile) => tile === FLOOR
+  );
+
+  assert.deepEqual(openings, [
+    { x: 1, y: 1 },
+    { x: 1, y: 3 },
+    { x: 2, y: 1 },
+    { x: 2, y: 3 },
+    { x: 3, y: 1 },
+    { x: 3, y: 3 },
+    { x: 1, y: 2 },
+    { x: 3, y: 2 },
+  ]);
+});
+
+test('dungeon topology room boundary openings honor bounds and position exclusions', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(6, 6, WALL);
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[y].length; x++) map[y][x] = FLOOR;
+  }
+  const room = { x: 1, y: 1, w: 3, h: 3 };
+
+  assert.deepEqual(topology.findRoomBoundaryOpenings(
+    map,
+    room,
+    (tile) => tile === FLOOR,
+    (x, y) => (x === 2 && y === 1) || (x === 0 && y === 2)
+  ), [
+    { x: 1, y: 1 },
+    { x: 1, y: 3 },
+    { x: 2, y: 3 },
+    { x: 3, y: 1 },
+    { x: 3, y: 3 },
+    { x: 3, y: 2 },
+  ]);
+
+  assert.deepEqual(topology.findRoomBoundaryOpenings(
+    map,
+    { x: 0, y: 0, w: 3, h: 3 },
+    (tile) => tile === FLOOR
+  ), [
+    { x: 0, y: 2 },
+    { x: 1, y: 2 },
+    { x: 2, y: 2 },
+    { x: 2, y: 0 },
+    { x: 2, y: 1 },
+  ]);
+
+  assert.deepEqual(topology.findRoomBoundaryOpenings(
+    map,
+    room,
+    (tile) => tile === FLOOR,
+    () => true
+  ), []);
+  assert.notDeepEqual(topology.findRoomBoundaryOpenings(map, room, (tile) => tile === FLOOR), []);
+});
+
 test('dungeon topology engine resolves preferred spawn rooms with injected passability', () => {
   const WALL = 1, FLOOR = 2;
   const map = topology.createMap(8, 6, WALL);

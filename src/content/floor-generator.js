@@ -238,7 +238,7 @@ function generateFloor(floorNum, opts) {
 
   // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
   /** @type {any} */ let bossRoom = null;
-  /** @type {any[]} */ let bossEntrances = [];
+  /** @type {any[]} */ const bossEntrances = [];
   if (_isBossFloor) {
     // use the room furthest from spawn that isn't the stair room
     let br = null, bd = 0;
@@ -297,7 +297,6 @@ function generateFloor(floorNum, opts) {
     // another room — boundary check catches overlapping-rect gen edge
     // cases (where the boundary tile itself is shared); outside check
     // catches abutting-rooms (most common case).
-    const rx=bossRoom.x, ry=bossRoom.y, rw=bossRoom.w, rh=bossRoom.h;
     /** @param {number} px @param {number} py */
     const isInsideAnotherRoom = (px, py) => {
       for (const r of rooms) {
@@ -306,31 +305,15 @@ function generateFloor(floorNum, opts) {
       }
       return false;
     };
+    const isOpenBossEntranceTile = (/** @type {number} */ tile) => tile === T.FLOOR;
     /** Filtered + safe scan — both edge tile and outside tile must be
      *  outside any other room. */
-    const _scanFiltered = () => {
-      /** @type {Array<{x:number,y:number}>} */
-      const out = [];
-      for (let tx=rx; tx<rx+rw; tx++) {
-        if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR
-            && !isInsideAnotherRoom(tx, ry) && !isInsideAnotherRoom(tx, ry-1))
-          out.push({x:tx, y:ry});
-        const by=ry+rh-1;
-        if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR
-            && !isInsideAnotherRoom(tx, by) && !isInsideAnotherRoom(tx, by+1))
-          out.push({x:tx, y:by});
-      }
-      for (let ty=ry; ty<ry+rh; ty++) {
-        if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR
-            && !isInsideAnotherRoom(rx, ty) && !isInsideAnotherRoom(rx-1, ty))
-          out.push({x:rx, y:ty});
-        const bx=rx+rw-1;
-        if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR
-            && !isInsideAnotherRoom(bx, ty) && !isInsideAnotherRoom(bx+1, ty))
-          out.push({x:bx, y:ty});
-      }
-      return out;
-    };
+    const _scanFiltered = () => dungeonTopology.findRoomBoundaryOpenings(
+      map,
+      bossRoom,
+      isOpenBossEntranceTile,
+      isInsideAnotherRoom
+    );
     /** Unfiltered fallback — original logic, keeps lock-arena mechanic
      *  working even in the degenerate case where the boss room only
      *  shares boundaries with other rooms (no corridor entrance). The
@@ -338,31 +321,10 @@ function generateFloor(floorNum, opts) {
      *  practice but the fallback is here for safety: the lesser evil
      *  is the original cosmetic bug (wall poking into neighbour) vs
      *  losing boss arena lockout entirely. */
-    const _scanUnfiltered = () => {
-      /** @type {Array<{x:number,y:number}>} */
-      const out = [];
-      for (let tx=rx; tx<rx+rw; tx++) {
-        if (ry>0 && map[ry][tx]===T.FLOOR && map[ry-1][tx]===T.FLOOR) out.push({x:tx, y:ry});
-        const by=ry+rh-1;
-        if (by<MAP_H-1 && map[by][tx]===T.FLOOR && map[by+1][tx]===T.FLOOR) out.push({x:tx, y:by});
-      }
-      for (let ty=ry; ty<ry+rh; ty++) {
-        if (rx>0 && map[ty][rx]===T.FLOOR && map[ty][rx-1]===T.FLOOR) out.push({x:rx, y:ty});
-        const bx=rx+rw-1;
-        if (bx<MAP_W-1 && map[ty][bx]===T.FLOOR && map[ty][bx+1]===T.FLOOR) out.push({x:bx, y:ty});
-      }
-      return out;
-    };
+    const _scanUnfiltered = () => dungeonTopology.findRoomBoundaryOpenings(map, bossRoom, isOpenBossEntranceTile);
     const filtered = _scanFiltered();
     const chosen = filtered.length > 0 ? filtered : _scanUnfiltered();
     for (const e of chosen) bossEntrances.push(e);
-    // Deduplicate — corners scanned by both edge loops cause permanent seal bug
-    const seen = new Set();
-    bossEntrances = bossEntrances.filter(e => {
-      const k = e.x + ',' + e.y;
-      if (seen.has(k)) return false;
-      seen.add(k); return true;
-    });
   }
 
   if (mainframeRoom && mainframeRoom.interactables) {
