@@ -249,6 +249,20 @@
   }
 
   /**
+   * @param {{x:number,y:number}[]} positions
+   * @returns {{x:number,y:number}[]}
+   */
+  function dedupPositions(positions) {
+    const seen = new Set();
+    return positions.filter((p) => {
+      const key = p.x + ',' + p.y;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
    * Finds the closest placement for a rectangle expanded around a room centre.
    * Scan order intentionally preserves legacy generation tie-breaks: x is the
    * outer loop, y is the inner loop, and equal scores keep the first candidate.
@@ -404,13 +418,7 @@
         edges.push({ x: bx, y: ty });
       }
     }
-    const seen = new Set();
-    const dedup = edges.filter((e) => {
-      const k = e.x + ',' + e.y;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const dedup = dedupPositions(edges);
     const used = new Set();
     /** @type {{x:number,y:number}[][]} */
     const clusters = [];
@@ -436,6 +444,57 @@
     return clusters;
   }
 
+  /**
+   * Finds open room-boundary tiles with open outside-facing neighbours. Unlike
+   * `findBoundaryEntranceClusters`, this flat scan intentionally includes room
+   * corners and preserves the legacy perimeter order: top/bottom per x, then
+   * left/right per y. Duplicate corner hits keep their first occurrence.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {(tile:number) => boolean} isOpenTile
+   * @param {(x:number, y:number) => boolean} [isPositionExcluded]
+   * @returns {{x:number,y:number}[]}
+   */
+  function findRoomBoundaryOpenings(map, room, isOpenTile, isPositionExcluded) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    /** @type {{x:number,y:number}[]} */
+    const openings = [];
+    const isAllowedPosition = (/** @type {number} */ x, /** @type {number} */ y) =>
+      !isPositionExcluded || !isPositionExcluded(x, y);
+    const topY = room.y;
+    const bottomY = room.y + room.h - 1;
+    const leftX = room.x;
+    const rightX = room.x + room.w - 1;
+
+    for (let tx = room.x; tx < room.x + room.w; tx++) {
+      if (topY > 0 && tx >= 0 && tx < width &&
+          isOpenTile(Number(map[topY]?.[tx])) && isOpenTile(Number(map[topY - 1]?.[tx])) &&
+          isAllowedPosition(tx, topY) && isAllowedPosition(tx, topY - 1)) {
+        openings.push({ x: tx, y: topY });
+      }
+      if (bottomY < height - 1 && tx >= 0 && tx < width &&
+          isOpenTile(Number(map[bottomY]?.[tx])) && isOpenTile(Number(map[bottomY + 1]?.[tx])) &&
+          isAllowedPosition(tx, bottomY) && isAllowedPosition(tx, bottomY + 1)) {
+        openings.push({ x: tx, y: bottomY });
+      }
+    }
+    for (let ty = room.y; ty < room.y + room.h; ty++) {
+      if (leftX > 0 && leftX < width && ty >= 0 && ty < height &&
+          isOpenTile(Number(map[ty]?.[leftX])) && isOpenTile(Number(map[ty]?.[leftX - 1])) &&
+          isAllowedPosition(leftX, ty) && isAllowedPosition(leftX - 1, ty)) {
+        openings.push({ x: leftX, y: ty });
+      }
+      if (rightX < width - 1 && rightX >= 0 && ty >= 0 && ty < height &&
+          isOpenTile(Number(map[ty]?.[rightX])) && isOpenTile(Number(map[ty]?.[rightX + 1])) &&
+          isAllowedPosition(rightX, ty) && isAllowedPosition(rightX + 1, ty)) {
+        openings.push({ x: rightX, y: ty });
+      }
+    }
+    return dedupPositions(openings);
+  }
+
   return {
     CARDINAL_DIRECTIONS,
     createMap,
@@ -452,6 +511,7 @@
     roomHasCorner,
     outsideFaceForBoundaryTile,
     findBoundaryEntranceClusters,
+    findRoomBoundaryOpenings,
     BSPNode,
   };
 }));

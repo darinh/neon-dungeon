@@ -126,6 +126,12 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'boss selection must use fresh distances after mainframe fallback mutates rooms');
   assert.match(CONTENT, /if\s*\(r\s*===\s*bossRoom\s*\|\|\s*r\.roomType\s*===\s*'mainframe'\)\s*continue;/,
     'boss expansion recarve must not tunnel through the already placed mainframe');
+  assert.match(CONTENT, /dungeonTopology\.findRoomBoundaryOpenings\(\s*map,\s*bossRoom,\s*isOpenBossEntranceTile,\s*isInsideAnotherRoom\s*\)/,
+    'filtered boss entrance scanning must delegate corner-inclusive boundary topology while excluding other rooms');
+  assert.match(CONTENT, /filtered\.length\s*>\s*0\s*\?\s*filtered\s*:\s*_scanUnfiltered\(\)/,
+    'boss entrance fallback policy must stay in the game layer');
+  assert.match(CONTENT, /dungeonTopology\.findRoomBoundaryOpenings\(map,\s*bossRoom,\s*isOpenBossEntranceTile\)/,
+    'unfiltered boss entrance fallback must preserve original open-floor scan semantics');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 
