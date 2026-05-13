@@ -5,7 +5,7 @@
 // the AI directly under node:test. Instead these tests assert the
 // structural invariants that any working TUNNELLER wiring must satisfy:
 // it is registered in the spawn weights, has a stat row, an init block,
-// a dispatch entry, an AI method, an FOV-gating exception (the dust-mound
+// a dispatch entry, an extracted AI method, an FOV-gating exception (the dust-mound
 // must be visible through fog so the telegraph is fair), a draw branch
 // that early-returns to hide the body while underground, and is excluded
 // from the elite affix roll.
@@ -20,6 +20,9 @@ const path = require('node:path');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
+);
+const TUNNELLER_AI = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-tunneller.js'), 'utf8'
 );
 const SPAWN_INITIALIZERS = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'spawn-initializers.js'), 'utf8'
@@ -78,12 +81,10 @@ test('TUNNELLER dispatches to aiTunneller in the per-frame switch', () => {
 test('aiTunneller method exists and implements all 3 states', () => {
   // Method body must include the three state branches: tunneling,
   // surfacing, surfaced. If any disappears in a refactor the mob softlocks.
-  // Skip the dispatch site (`this.aiTunneller(...)`) and find the actual
-  // method definition (no leading `this.`).
-  const methodRe = /\n\s{2}aiTunneller\s*\(/;
-  const methodMatch = methodRe.exec(ENTITIES);
+  const methodRe = /Enemy\.prototype\.aiTunneller\s*=\s*function\s+aiTunneller\s*\(/;
+  const methodMatch = methodRe.exec(TUNNELLER_AI);
   assert.ok(methodMatch, 'aiTunneller(...) method definition must exist');
-  const body = ENTITIES.slice(methodMatch.index, methodMatch.index + 5000);
+  const body = TUNNELLER_AI.slice(methodMatch.index, methodMatch.index + 5000);
   assert.match(body, /this\._tnState\s*===\s*'tunneling'/);
   assert.match(body, /this\._tnState\s*===\s*'surfacing'/);
   assert.match(body, /this\._tnState\s*===\s*'surfaced'/);
@@ -92,10 +93,10 @@ test('aiTunneller method exists and implements all 3 states', () => {
 test('aiTunneller surfacing state deals telegraphed AoE damage to player', () => {
   // The AoE-on-emerge is the entire payoff of the mechanic. If the
   // takeDamage call disappears the mob becomes a pure nuisance — no threat.
-  const methodRe = /\n\s{2}aiTunneller\s*\(/;
-  const methodMatch = methodRe.exec(ENTITIES);
+  const methodRe = /Enemy\.prototype\.aiTunneller\s*=\s*function\s+aiTunneller\s*\(/;
+  const methodMatch = methodRe.exec(TUNNELLER_AI);
   assert.ok(methodMatch, 'aiTunneller(...) method definition must exist');
-  const body = ENTITIES.slice(methodMatch.index, methodMatch.index + 5000);
+  const body = TUNNELLER_AI.slice(methodMatch.index, methodMatch.index + 5000);
   assert.match(body, /player\.takeDamage\s*\([^)]*Tunneller Eruption/);
 });
 

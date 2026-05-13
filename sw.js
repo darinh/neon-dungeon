@@ -86,6 +86,7 @@ const ASSETS = [
   './src/entities/enemy-nexus.js',
   './src/entities/enemy-phantom.js',
   './src/entities/enemy-wraith.js',
+  './src/entities/enemy-tunneller.js',
   './src/entities/enemy-tempo.js',
   './src/entities/enemy-projectiles.js',
   './src/entities/enemy-movement.js',
