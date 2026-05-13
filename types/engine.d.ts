@@ -619,6 +619,15 @@ declare global {
       y: number,
     ): { x: number; y: number; dx: number; dy: number } | null;
     /**
+     * Finds room boundary sides adjacent to an outside entrance tile, preserving
+     * cardinal scan order and skipping corner boundary tiles.
+     */
+    findOutsideEntranceRoomSides(
+      rooms: Array<{ x: number; y: number; w: number; h: number }>,
+      x: number,
+      y: number,
+    ): Array<{ dx: number; dy: number; bx: number; by: number }>;
+    /**
      * Caller-injected boundary entrance clustering. `isOpenTile` is tested for
      * both the room boundary tile and its outside-facing neighbour.
      */
