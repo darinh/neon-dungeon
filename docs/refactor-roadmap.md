@@ -136,7 +136,7 @@ Good candidates:
 - MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
 - NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
-- WRAITH-style emergence helper. Done for `_wrFindEmergeTile()` in `src/entities/enemy-wraith.js`.
+- WRAITH-style emergence helper and AI presentation. Done for `_wrFindEmergeTile()` and `aiWraith()` in `src/entities/enemy-wraith.js`.
 - Player weapon-belt helpers. Done for `cycleWeapon()`, `collectWeapon()`, `swapWeapon()`, and `equipWeapon()` in `src/entities/player-weapons.js`.
 - Player tap-bomb input handling. Done for `tapBombKey()` in `src/entities/player-bombs.js`.
 - Player effective attack calculation. Done for `effectiveAtk()` in `src/entities/player-damage.js`.

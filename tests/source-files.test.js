@@ -480,6 +480,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(entitySource, /aiDisruptor\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.match(enemyDisruptorSource, /Enemy\.prototype\.aiDisruptor\s*=\s*function\s+aiDisruptor\s*\(/);
   assert.match(enemyDisruptorSource, /disruptionFields\.push/);
+  assert.match(entitySource, /case\s+'WRAITH':\s*this\.aiWraith\(/);
+  assert.doesNotMatch(entitySource, /aiWraith\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyWraithSource, /Enemy\.prototype\.aiWraith\s*=\s*function\s+aiWraith\s*\(/);
+  assert.match(enemyWraithSource, /audio\.wraithPhaseIn/);
   assert.match(enemyConduitSource, /Enemy\.prototype\._cdHitsPlayer\s*=\s*function _cdHitsPlayer\s*\(/);
   assert.match(enemyConduitSource, /CONDUIT_BEAM_W \* CONDUIT_BEAM_W/);
   assert.match(enemyConduitSource, /t < 0 \|\| t > 1/);
