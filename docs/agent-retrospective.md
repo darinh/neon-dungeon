@@ -167,10 +167,16 @@ Run and record these before verification or review:
    replaced should not be treated as reopenable; open a replacement PR from a
    fresh branch.
 10. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
-   subsystem, check whether equivalent work has already landed upstream or in an
-   open PR so the slice can shift to reinforcement instead of duplicating work.
-   When editing roadmap or checklist-style docs, search for duplicate entries
-   before review and again after conflict resolution.
+    subsystem, check whether equivalent work has already landed upstream or in an
+    open PR so the slice can shift to reinforcement instead of duplicating work.
+    When editing roadmap or checklist-style docs, search for duplicate entries
+    before review and again after conflict resolution.
+11. **Contractual iteration-order proof.** When extracting or reimplementing
+    legacy behavior where scan, traversal, RNG, tie-break, or insertion order is
+    part of the contract, derive the expected order directly from the source loop
+    structure before writing tests or helper JSDoc. Record the loop shape in the
+    evidence (for example, "top/bottom per x, then left/right per y") and add a
+    characterization test that asserts the exact output order before review.
 
 ## Pre-retrospective checklist
 
