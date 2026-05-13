@@ -6,7 +6,7 @@
 // invariants the mob needs by regex-matching the source text. We also
 // duplicate the pure `isInsideCone` helper here for unit testing — the
 // duplicate MUST stay in lock-step with the source-of-truth definition
-// in src/entities.js (a structural assertion below guards against drift).
+// in src/entities/ai-helpers.js (a structural assertion below guards against drift).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,6 +15,9 @@ const path = require('node:path');
 
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
+);
+const ENEMY_RESONATOR = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-resonator.js'), 'utf8'
 );
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
@@ -86,7 +89,7 @@ test('RESONATOR is dispatched in the AI switch', () => {
 });
 
 test('aiResonator method is defined', () => {
-  assert.match(ENTITIES, /aiResonator\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_RESONATOR, /Enemy\.prototype\.aiResonator\s*=\s*function\s+aiResonator\s*\(/);
 });
 
 test('RESONATOR stun-cancel path drops telegraph to recovery', () => {
@@ -104,11 +107,11 @@ test('RESONATOR aim source is _tx/_ty so taunt redirection works', () => {
   // the cone with no special branch (unlike ECHOER which needed one).
   // Slice the aiResonator method body and assert the lock pulls from
   // _tx/_ty before computing aim direction.
-  const sigRe = /^\s*aiResonator\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiResonator\s*=\s*function\s+aiResonator\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
+  const sigMatch = ENEMY_RESONATOR.match(sigRe);
   assert.ok(sigMatch, 'aiResonator method definition not found');
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_RESONATOR.slice(aiStart, aiStart + 5000);
   // The lock-and-aim block must norm() over (this._tx - this.x, this._ty - this.y).
   assert.match(aiBody,
     /norm\(\s*this\._tx\s*-\s*this\.x\s*,\s*this\._ty\s*-\s*this\.y\s*\)/,
@@ -120,11 +123,11 @@ test('RESONATOR fire honors player damage immunity (dash i-frames)', () => {
   // isPlayerDamageImmune unless ignoreImmunity is set. Make sure the
   // RESONATOR call site does NOT pass ignoreImmunity — otherwise dash
   // pass-through (the canonical counter-play) silently breaks.
-  const sigRe = /^\s*aiResonator\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiResonator\s*=\s*function\s+aiResonator\s*\(/m;
+  const sigMatch = ENEMY_RESONATOR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_RESONATOR.slice(aiStart, aiStart + 5000);
   const callMatch = aiBody.match(/player\.takeDamage\([^)]*\)/);
   assert.ok(callMatch, 'aiResonator must call player.takeDamage');
   assert.ok(!/ignoreImmunity/.test(callMatch[0]),
@@ -270,11 +273,11 @@ test('aiResonator lock guards against zero-aim (player on apex)', () => {
   // a [0,0] aim vector — the draw branch would render an east-pointing
   // wedge while the hit-test could never hit. Verify the source
   // explicitly guards the lock with a positive distance check.
-  const sigRe = /^\s*aiResonator\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiResonator\s*=\s*function\s+aiResonator\s*\(/m;
+  const sigMatch = ENEMY_RESONATOR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_RESONATOR.slice(aiStart, aiStart + 5000);
   // Either an explicit positive lower bound, or some equivalent guard.
   assert.match(aiBody, /dLock\s*>\s*[\d.]+\s*&&\s*dLock\s*<=?\s*RESONATOR_RANGE/,
     'aiResonator must guard the lock with a positive minimum distance');
