@@ -87,6 +87,7 @@ declare global {
     aiTunneller(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiWardling(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiVengeance(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiResonator(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
