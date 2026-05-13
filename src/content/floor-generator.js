@@ -557,18 +557,7 @@ function generateFloor(floorNum, opts) {
 
   /** @param {number} x @param {number} y */
   function outsideEntranceRoomSides(x, y) {
-    /** @type {{dx:number,dy:number,bx:number,by:number}[]} */
-    const roomSides = [];
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      const bx = x + dx;
-      const by = y + dy;
-      if (tileOnRoomCorner(bx, by)) continue;
-      if (rooms.some((/** @type {any} */ r) => {
-        const outside = outsideFaceForBoundaryTile(r, bx, by);
-        return outside?.x === x && outside?.y === y;
-      })) roomSides.push({ dx, dy, bx, by });
-    }
-    return roomSides;
+    return dungeonTopology.findOutsideEntranceRoomSides(rooms, x, y);
   }
 
   /** @param {number} x @param {number} y */
