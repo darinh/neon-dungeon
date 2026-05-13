@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.109
+# NEON DUNGEON — Game Specification v6.1.137
 
 ## Vision
 
@@ -4936,6 +4936,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.137 | Entity module split: boss AI presentation now lives in `src/entities/boss-ai.js`, loaded after `src/entities.js` and the recently extracted SIPHON/GRAVITON modules. `Enemy.prototype.aiBossSentinel()`, `aiBossWarden()`, `aiBossHive()`, `aiBossConductor()`, `aiBossOmega()`, and `aiBossGenesis()` preserve their original phase transitions, projectile/add spawning, room and hazard-zone side effects, and GENESIS `_unchainedPhase` phase-3 lock while boss dispatch stays in `src/entities.js`. |
 | v6.1.136 | Entity module split: SIPHON and GRAVITON AI presentation now live in `src/entities/enemy-siphon.js` and `src/entities/enemy-graviton.js`, loaded after the core `Enemy` class. `Enemy.prototype.aiSiphon()` still latches frenzy below 40% HP, fades the drain beam, retreats when too close, fires drain projectiles at mid range, advances at long range, and patrols without line of sight; `Enemy.prototype.aiGraviton()` still prunes gravity-well refs, retreats at close range, deploys capped wells near the player with room ownership derived from well position, fires fallback projectiles, advances at long range, and patrols without line of sight while dispatch remains in `src/entities.js`. |
 | v6.1.135 | Entity module split: MIMIC and NEXUS AI presentation now live with their existing helpers in `src/entities/enemy-mimic.js` and `src/entities/enemy-nexus.js`, loaded after the core `Enemy` class. `Enemy.prototype.aiMimic()` still preserves disguised bobbing, reveal telegraph timing, burst chase, zigzag offset, target eligibility checks, and melee behavior; `Enemy.prototype.aiNexus()` still refreshes links, scales fire timing by link count/OVERCLOCK/berserker state, retreats toward ally clusters when rushed, fires linked shots, drifts to maintain links, and patrols without line of sight while dispatch remains in `src/entities.js`. |
 | v6.1.134 | Entity module split: GRENADIER AI presentation now lives with its grenade launch helper in `src/entities/enemy-grenadier.js`, loaded after the core `Enemy` class. `Enemy.prototype.aiGrenadier()` still decrements grenade cooldowns, retreats from close LOS targets with the same temporal-dilation speed calculation and passability checks, lobs grenades at mid-range LOS targets with the same floor/modifier/berserker cooldown scaling, advances toward far LOS targets, patrols otherwise, and keeps spawn initialization, grenade projectile construction, detonation, hazard-zone behavior, and source attribution in their existing modules. |
