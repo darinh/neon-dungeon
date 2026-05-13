@@ -83,6 +83,7 @@ const ASSETS = [
   './src/entities/enemy-wardling.js',
   './src/entities/enemy-vengeance.js',
   './src/entities/enemy-resonator.js',
+  './src/entities/enemy-watcher.js',
   './src/entities/enemy-healer.js',
   './src/entities/enemy-grenadier.js',
   './src/entities/enemy-mimic.js',
