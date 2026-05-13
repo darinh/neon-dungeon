@@ -101,6 +101,7 @@ const ASSETS = [
   './src/entities/enemy-tempo.js',
   './src/entities/enemy-projectiles.js',
   './src/entities/enemy-movement.js',
+  './src/entities/enemy-pulser.js',
   './src/entities/spawn-initializers.js',
   './src/entities/enemy-spawning.js',
   './src/entities/elite-affixes.js',
