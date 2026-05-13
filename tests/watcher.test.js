@@ -15,6 +15,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_WATCHER = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-watcher.js'), 'utf8'
+);
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -96,7 +99,7 @@ test('WATCHER is dispatched in the AI switch', () => {
 });
 
 test('aiWatcher method is defined with canonical AI signature', () => {
-  assert.match(ENTITIES, /aiWatcher\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_WATCHER, /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
 });
 
 test('WATCHER stun-cancel path drops telegraph to recovery', () => {
@@ -114,11 +117,11 @@ test('WATCHER fire honors player damage immunity (dash i-frames)', () => {
   // isPlayerDamageImmune unless ignoreImmunity is set. Make sure the
   // WATCHER call site does NOT pass ignoreImmunity — otherwise dash
   // pass-through (the canonical counter-play) silently breaks.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   const callMatch = aiBody.match(/player\.takeDamage\([^)]*\)/);
   assert.ok(callMatch, 'aiWatcher must call player.takeDamage');
   assert.ok(!/ignoreImmunity/.test(callMatch[0]),
@@ -129,11 +132,11 @@ test('WATCHER fire uses Watcher Beam source label', () => {
   // The damage-source label must be 'Watcher Beam' for HUD hit-feedback
   // (SOURCE_LABELS / SOURCE_COLOURS map this label to a display name
   // and colour). Verify the takeDamage call passes it.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   assert.match(aiBody, /player\.takeDamage\([^,)]*,\s*'Watcher Beam'\s*\)/,
     'aiWatcher must label damage as Watcher Beam');
 });
@@ -143,11 +146,11 @@ test('WATCHER fires via locked angle, not live sweep angle', () => {
   // If the source accidentally reads _wAng at fire time the player would
   // get hit by a "phantom" beam in a different direction than the visible
   // telegraph. Verify the fire-block hit-test consumes _wLockAng.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   // Find the telegraph branch (between the 'telegraph' guard and its return).
   const telegraphBranch = aiBody.match(/_wState\s*===\s*'telegraph'[\s\S]*?\n\s{0,8}return;/);
   assert.ok(telegraphBranch, 'telegraph branch in aiWatcher not found');
@@ -162,11 +165,11 @@ test('WATCHER sweep advances _wAng at WATCHER_SWEEP_RATE per second', () => {
   // aiWatcher's sweep branch. Verify _wAng is incremented by dt *
   // WATCHER_SWEEP_RATE somewhere outside the telegraph/recovery
   // branches (which are the EARLY-RETURN guards above the sweep).
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   assert.match(aiBody,
     /this\._wAng\s*=[\s\S]{0,80}dt\s*\*\s*WATCHER_SWEEP_RATE/,
     'aiWatcher sweep branch must rotate _wAng by dt * WATCHER_SWEEP_RATE');
@@ -181,11 +184,11 @@ test('WATCHER sweep gates LOCK on inRoom + canTarget + range + cone + LOS', () =
   //   hasLOS (LOS rechecked at fire-time too — defense in depth)
   // Skipping any of these creates a class of "I can't see why I got hit"
   // bugs.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6500);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6500);
   assert.ok(/inRoom/.test(aiBody), 'aiWatcher sweep must gate on inRoom');
   assert.ok(/this\._canTarget\(\)/.test(aiBody), 'aiWatcher sweep must gate on _canTarget');
   assert.ok(/WATCHER_RANGE\s*\*\s*WATCHER_RANGE/.test(aiBody),
@@ -205,11 +208,11 @@ test('WATCHER lock-test uses taunt-aware _tx/_ty (hologram triggers lock)', () =
   // player.x/y) let a hologram inside the room redirect engagement onto
   // the real player even when the real player is outside the room.
   // Mirrors RESONATOR/MIRROR convention (both aim via _tx/_ty).
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6500);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6500);
   // Slice the SWEEP branch — everything after the recovery early-return.
   // It's the tail of aiWatcher; the sweep advance line anchors it.
   const sweepStart = aiBody.indexOf('this._wAng = (this._wAng');
@@ -236,11 +239,11 @@ test('WATCHER lock transitions sweep -> telegraph and arms _wTele', () => {
   // The LOCK must set _wState='telegraph', cache _wLockAng from _wAng,
   // and arm _wTele = WATCHER_TELEGRAPH. Without arming the timer the
   // telegraph branch's countdown would underflow on first tick.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   assert.match(aiBody, /this\._wLockAng\s*=\s*this\._wAng/,
     'lock must cache _wLockAng from current sweep _wAng');
   assert.match(aiBody, /this\._wState\s*=\s*'telegraph'/,
@@ -360,11 +363,11 @@ test('WATCHER fire branch sets _wFired=true so beam flash renders for real shots
   // _wFired=true so the render branch shows the "this is the angle that
   // hit you" feedback flash. Without this, the render gate (now
   // _wFired-gated) would suppress the flash for legitimate fires too.
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   // Find the telegraph-fire branch and assert _wFired = true is set
   // alongside the recovery transition.
   const fireBranch = aiBody.match(/_wTele\s*<=\s*0[\s\S]*?_wFired\s*=\s*true/);
@@ -391,11 +394,11 @@ test('WATCHER recovery sweep-resume clears _wFired so flash re-arms cleanly', ()
   // cycle starts with _wFired=false. Without this, the second beam in
   // the same WATCHER's lifetime would inherit a stale _wFired=true
   // (harmless mid-fire, but a code-smell for future contributors).
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 6000);
+  const aiBody = ENEMY_WATCHER.slice(aiStart, aiStart + 6000);
   const recoveryToSweep = aiBody.match(/_wState\s*=\s*'sweep'[\s\S]{0,200}_wFired\s*=\s*false/);
   assert.ok(recoveryToSweep,
     'recovery-to-sweep transition must clear _wFired');
@@ -421,26 +424,17 @@ test('platform.js exposes audio.watcherCharge and audio.watcherFire', () => {
 });
 
 test('aiWatcher uses bespoke watcher SFX, not resonator placeholder SFX', () => {
-  // Scope the assertion to the FULL aiWatcher method body (signature →
-  // next `aiX(` method signature, exclusive). The 6000-char window other
+  // Scope the assertion to the FULL aiWatcher method body in its extracted
+  // helper file. The 6000-char window other
   // tests in this file use is sufficient for matching positive patterns
   // near the start of the method, but `doesNotMatch` requires the FULL
   // body — a stale resonator call near the end of aiWatcher would
   // false-pass otherwise (per gpt-5.3-codex review of this PR).
-  const sigRe = /^\s*aiWatcher\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiWatcher\s*=\s*function\s+aiWatcher\s*\(/m;
+  const sigMatch = ENEMY_WATCHER.match(sigRe);
   assert.ok(sigMatch, 'aiWatcher signature not found');
   const aiStart = sigMatch.index || 0;
-  // Find the next method-ish signature in the same class to bound the slice.
-  // Pattern: optional whitespace, an identifier starting with `ai` followed
-  // by an upper-case letter (e.g. aiMirror, aiResonator, aiPhantom), then
-  // `(`. Anchored AFTER aiStart so we skip aiWatcher's own signature.
-  const nextSigRe = /^\s*ai[A-Z]\w*\s*\(/m;
-  const tail = ENTITIES.slice(aiStart + sigMatch[0].length);
-  const nextMatch = tail.match(nextSigRe);
-  assert.ok(nextMatch,
-    'no following ai*(...) method found after aiWatcher — extraction anchor regression?');
-  const aiBody = tail.slice(0, nextMatch.index);
+  const aiBody = ENEMY_WATCHER.slice(aiStart);
   // Sanity: extracted body should contain telltale aiWatcher symbols.
   assert.match(aiBody, /_wState/,
     'extracted aiWatcher body must contain _wState — extraction anchor regression?');
