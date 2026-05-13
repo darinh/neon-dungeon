@@ -80,6 +80,7 @@ declare global {
     aiSplitter(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiShard(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiPhantom(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiShielder(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
