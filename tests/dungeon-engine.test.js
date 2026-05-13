@@ -97,6 +97,111 @@ test('dungeon topology engine clusters room boundary entrances with injected ope
   ]);
 });
 
+test('dungeon topology engine resolves preferred spawn rooms with injected passability', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(8, 6, WALL);
+  const rooms = [
+    { id: 'near-east', x: 3, y: 2, w: 2, h: 2 },
+    { id: 'south', x: 1, y: 4, w: 2, h: 1 },
+  ];
+  map[2][3] = FLOOR;
+  map[3][3] = FLOOR;
+  map[4][1] = FLOOR;
+  /** @type {number[]} */
+  const predicateInputs = [];
+
+  const resolved = topology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred: { x: -20, y: 2.7 },
+    isPassable(tile) {
+      predicateInputs.push(tile);
+      return tile === FLOOR;
+    },
+    searchRadius: 12,
+  });
+
+  assert.deepEqual(resolved && { pos: resolved.pos, roomId: resolved.room.id }, {
+    pos: { x: 3.5, y: 2.5 },
+    roomId: 'near-east',
+  });
+  assert.ok(predicateInputs.every((tile) => typeof tile === 'number'), 'predicate receives tile codes');
+});
+
+test('dungeon topology preferred-spawn search stays cardinal and deterministic', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(5, 5, WALL);
+  map[2][3] = FLOOR;
+  map[2][1] = FLOOR;
+  map[3][2] = FLOOR;
+  const rooms = [
+    { id: 'east', x: 3, y: 2, w: 1, h: 1 },
+    { id: 'west', x: 1, y: 2, w: 1, h: 1 },
+    { id: 'south', x: 2, y: 3, w: 1, h: 1 },
+  ];
+
+  const resolved = topology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred: { x: 2, y: 2 },
+    isPassable: (tile) => tile === FLOOR,
+    searchRadius: 1,
+  });
+
+  assert.equal(resolved?.room.id, 'east', 'cardinal order preserves +x, -x, +y, -y tie-break');
+  map[2][3] = WALL;
+  map[2][1] = WALL;
+  map[3][2] = WALL;
+  map[3][3] = FLOOR;
+  assert.equal(
+    topology.resolvePreferredSpawnRoom({
+      map,
+      rooms: [{ id: 'diagonal', x: 3, y: 3, w: 1, h: 1 }],
+      preferred: { x: 2, y: 2 },
+      isPassable: (tile) => tile === FLOOR,
+      searchRadius: 1,
+    }),
+    null,
+    'diagonal-only passable tiles are not found within a cardinal radius of 1'
+  );
+});
+
+test('dungeon topology preferred-spawn search handles empty inputs and bounded radius', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(6, 3, WALL);
+  const rooms = [{ id: 'far', x: 5, y: 1, w: 1, h: 1 }];
+  map[1][5] = FLOOR;
+
+  assert.equal(topology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred: null,
+    isPassable: (tile) => tile === FLOOR,
+    searchRadius: 12,
+  }), null);
+  assert.equal(topology.resolvePreferredSpawnRoom({
+    map,
+    rooms: [],
+    preferred: { x: 1, y: 1 },
+    isPassable: (tile) => tile === FLOOR,
+    searchRadius: 12,
+  }), null);
+  assert.equal(topology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred: { x: 1, y: 1 },
+    isPassable: (tile) => tile === FLOOR,
+    searchRadius: 2,
+  }), null);
+  assert.equal(topology.resolvePreferredSpawnRoom({
+    map,
+    rooms,
+    preferred: { x: Number.NaN, y: 1 },
+    isPassable: (tile) => tile === FLOOR,
+    searchRadius: 12,
+  }), null);
+});
+
 test('dungeon reachability solver reports physical key-lock progression facts', () => {
   const W = 8, H = 4;
   const map = Array.from({ length: H }, () => new Uint8Array(W).fill(1));

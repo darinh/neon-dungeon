@@ -218,6 +218,55 @@
   }
 
   /**
+   * Resolve a preferred spawn point by cardinally searching for the first
+   * passable tile that belongs to a generated room. The host owns tile
+   * semantics through `isPassable`; this helper only owns grid search/order.
+   *
+   * @param {{
+   *   map: ArrayLike<ArrayLike<number>>,
+   *   rooms: Array<{x:number,y:number,w:number,h:number}>,
+   *   preferred?: {x:number,y:number}|null,
+   *   isPassable: (tile:number) => boolean,
+   *   searchRadius: number,
+   * }} opts
+   * @returns {{pos:{x:number,y:number}, room:any}|null}
+   */
+  function resolvePreferredSpawnRoom(opts) {
+    const map = opts.map;
+    const rooms = opts.rooms;
+    const preferred = opts.preferred;
+    if (!preferred || !map || !rooms || !rooms.length) return null;
+    const h = map.length;
+    const w = h > 0 ? (map[0]?.length || 0) : 0;
+    if (!h || !w) return null;
+    const sx = Math.max(0, Math.min(w - 1, Math.floor(preferred.x)));
+    const sy = Math.max(0, Math.min(h - 1, Math.floor(preferred.y)));
+    const visited = new Set();
+    /** @type {{x:number,y:number,d:number}[]} */
+    const q = [{ x: sx, y: sy, d: 0 }];
+    visited.add(sy * w + sx);
+    while (q.length) {
+      const cur = q.shift();
+      if (!cur || cur.d > opts.searchRadius) continue;
+      const tile = Number(map[cur.y]?.[cur.x]);
+      if (opts.isPassable(tile)) {
+        const pos = { x: cur.x + 0.5, y: cur.y + 0.5 };
+        const room = rooms.find((r) => roomContainsPoint(r, pos.x, pos.y));
+        if (room) return { pos, room };
+      }
+      for (const dir of CARDINAL_DIRECTIONS) {
+        const nx = cur.x + (dir[0] || 0), ny = cur.y + (dir[1] || 0);
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const key = ny * w + nx;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        q.push({ x: nx, y: ny, d: cur.d + 1 });
+      }
+    }
+    return null;
+  }
+
+  /**
    * @param {{x:number,y:number,w:number,h:number}} room
    * @param {number} x
    * @param {number} y
@@ -320,6 +369,7 @@
     buildRoomGraph,
     bfsRooms,
     roomContainsPoint,
+    resolvePreferredSpawnRoom,
     roomHasCorner,
     outsideFaceForBoundaryTile,
     findBoundaryEntranceClusters,

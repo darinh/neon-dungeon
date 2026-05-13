@@ -580,6 +580,13 @@ declare global {
       x: number,
       y: number,
     ): boolean;
+    resolvePreferredSpawnRoom(opts: {
+      map: ArrayLike<ArrayLike<number>>;
+      rooms: Array<{ x: number; y: number; w: number; h: number }>;
+      preferred?: { x: number; y: number } | null;
+      isPassable: (tile: number) => boolean;
+      searchRadius: number;
+    }): { pos: { x: number; y: number }; room: any } | null;
     roomHasCorner(
       room: { x: number; y: number; w: number; h: number },
       x: number,
