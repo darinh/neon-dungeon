@@ -62,7 +62,8 @@ Run and record these before verification or review:
 
 1. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
-   (`npm ci` for this project) before using test failures as evidence.
+   (`npm ci` for this project) before recording baseline verification or using
+   test failures as evidence.
 2. **New-runtime-file surface audit.** Any new browser runtime source file must
    be checked against all registration surfaces: `index.html`,
    `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
@@ -72,6 +73,8 @@ Run and record these before verification or review:
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
+   Label each proof as executed runtime evidence or static/order inference; if
+   no executed runtime path was run, record why static proof is sufficient.
 4. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
