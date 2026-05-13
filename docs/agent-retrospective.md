@@ -107,13 +107,13 @@ Run and record these before verification or review:
    cannot pass source-only tests. Preserve domain comments and invariant notes
    from moved blocks, or record why each omitted comment is obsolete; semantic
    comments are behavior evidence, not formatting. Before review, perform a
-    moved-code fidelity pass: compare each moved block against the source block
-    and document every intentional textual change, including comments,
-    punctuation, Unicode arrows/dashes, and inline notes. The fidelity pass must
-    leave an auditable receipt before review: record the old source range, new
-    source range, comparison command or method, and every intentional textual
-    delta. If the comparison is expected to be identical except for wrapper
-    conversion or comment normalization, say that explicitly. For extracted domain
+   moved-code fidelity pass: compare each moved block against the source block
+   and document every intentional textual change, including comments,
+   punctuation, Unicode arrows/dashes, and inline notes. The fidelity pass must
+   leave an auditable receipt before review: record the old source range, new
+   source range, comparison command or method, and every intentional textual
+   delta. If the comparison is expected to be identical except for wrapper
+   conversion or comment normalization, say that explicitly. For extracted domain
    behavior, require at least one review pass to check invariant/comment
    preservation explicitly instead of relying only on generic code review. VM
    behavior tests for extracted AI must use production tuning constants by
