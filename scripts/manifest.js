@@ -121,6 +121,7 @@ const requiredInIndex = [
   './src/entities/player-bombs.js',
   './src/entities/render-passes.js',
   './src/entities/volatile-cores.js',
+  './src/entities/enemy-leaper.js',
   './src/entities/enemy-magneton.js',
   './src/entities/enemy-spectre.js',
   './src/entities/enemy-basic-ai.js',
