@@ -131,7 +131,7 @@ Good candidates:
 - CONDUIT AI presentation and beam geometry helper. Done for `aiConduit()` and `_cdHitsPlayer()` in `src/entities/enemy-conduit.js`.
 - WARDLING ward acquisition helper and AI presentation. Done for `_wlFindWard()` and `aiWardling()` in `src/entities/enemy-wardling.js`.
 - HEALER wounded-ally target selection helper. Done for `_findHealTarget()` in `src/entities/enemy-healer.js`.
-- GRENADIER grenade launch helper. Done for `lobGrenade()` in `src/entities/enemy-grenadier.js`.
+- GRENADIER AI presentation and grenade launch helper. Done for `aiGrenadier()` and `lobGrenade()` in `src/entities/enemy-grenadier.js`.
 - SUMMONER minion enqueue helper. Done for `summonMinion()` in `src/entities/enemy-summoner.js`.
 - MIMIC reveal helper. Done for `revealMimic()` in `src/entities/enemy-mimic.js`.
 - NEXUS link-maintenance helpers. Done for `_nxUpdateLinks()` and `_nxFindAllyCluster()` in `src/entities/enemy-nexus.js`.
