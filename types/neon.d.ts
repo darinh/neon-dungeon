@@ -105,6 +105,7 @@ declare global {
     aiMimic(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiNexus(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSiphon(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiGraviton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
