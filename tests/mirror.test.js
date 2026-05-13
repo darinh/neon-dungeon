@@ -16,6 +16,9 @@ const path = require('node:path');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_MIRROR = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-mirror.js'), 'utf8'
+);
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -86,7 +89,10 @@ test('MIRROR is dispatched in the AI switch', () => {
 });
 
 test('aiMirror method is defined', () => {
-  assert.match(ENTITIES, /aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'Enemy.aiMirror must stay out of src/entities.js after sidecar extraction');
+  assert.match(ENEMY_MIRROR,
+    /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
 });
 
 test('MIRROR stun-cancel path drops telegraph to recovery', () => {
@@ -102,11 +108,11 @@ test('MIRROR aim source is _tx/_ty so taunt redirection works', () => {
   // MIRROR aims via this._tx/_ty (the canonical taunt-aware target)
   // rather than reading player.x/y directly, so hologram decoys redirect
   // the shot with no special branch (unlike ECHOER which needed one).
-  const sigRe = /^\s*aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch, 'aiMirror method definition not found');
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   // The lock-and-aim block must norm() over (this._tx - this.x, this._ty - this.y).
   assert.match(aiBody,
     /norm\(\s*this\._tx\s*-\s*this\.x\s*,\s*this\._ty\s*-\s*this\.y\s*\)/,
@@ -114,11 +120,11 @@ test('MIRROR aim source is _tx/_ty so taunt redirection works', () => {
 });
 
 test('MIRROR range gate uses dLock > 0.1 && dLock <= MIRROR_RANGE (zero-aim guard + inclusive bound)', () => {
-  const sigRe = /^\s*aiMirror\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   // Both clauses must be present: the zero-aim guard (>0.1) and the
   // inclusive upper bound (<=MIRROR_RANGE). Lessons from RESONATOR PR #133.
   assert.match(aiBody,
@@ -130,11 +136,11 @@ test('MIRROR fires a vanilla Projectile (no piercing, no homing)', () => {
   // The replayed projectile must NEVER be piercing or homing — otherwise
   // late-game player perks (PIERCING_ROUNDS, RICOCHET) leak into enemy
   // projectiles. Projectile ctor signature ends with (..., piercing, friendly).
-  const sigRe = /^\s*aiMirror\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   // new Projectile(... ax, ay, spd, dmg, MIRROR_PROJ_RANGE, colour, false, false)
   assert.match(aiBody, /new Projectile\([\s\S]*?MIRROR_PROJ_RANGE[\s\S]*?,\s*false\s*,\s*false\s*\)/,
     'aiMirror must spawn a non-piercing, non-friendly Projectile');
@@ -143,11 +149,11 @@ test('MIRROR fires a vanilla Projectile (no piercing, no homing)', () => {
 test('MIRROR damage is mob-scaled (atk * MIRROR_DMG_MUL), not player-scaled', () => {
   // The player's damage roll must NEVER be replayed — late-game crits +
   // perks could yield 200+ dmg returns. Damage MUST come from this.atk.
-  const sigRe = /^\s*aiMirror\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   assert.match(aiBody, /this\.atk\s*\*\s*MIRROR_DMG_MUL/,
     'aiMirror damage must scale from this.atk * MIRROR_DMG_MUL');
 });
@@ -256,11 +262,11 @@ test('aiMirror overrides p.spd after construction so CHARGED modifier cannot byp
   // CHARGED *1.4 unconditionally, escaping MIRROR_PROJ_SPD_MAX. Fix:
   // MIRROR overwrites p.spd after `new Projectile(...)` with the clamped
   // value so the fair band stays authoritative.
-  const sigRe = /^\s*aiMirror\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   // Must assign p.spd = spd (or equivalent) AFTER `new Projectile(...)`.
   assert.match(aiBody, /new Projectile\([\s\S]*?\)[\s\S]{0,300}\bp\.spd\s*=\s*spd\b/,
     'aiMirror must overwrite p.spd after construction to enforce the clamp');
@@ -271,11 +277,11 @@ test('aiMirror sets p.ownerType for damage attribution', () => {
   // logs damage as generic "Projectile", making MIRROR / Mirror Shot
   // labels and colours useless for death recap and damage logs. Compare
   // to ECHOER and PULSER which both set ownerType after construction.
-  const sigRe = /^\s*aiMirror\s*\(/m;
-  const sigMatch = ENTITIES.match(sigRe);
+  const sigRe = /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/m;
+  const sigMatch = ENEMY_MIRROR.match(sigRe);
   assert.ok(sigMatch);
   const aiStart = sigMatch.index || 0;
-  const aiBody = ENTITIES.slice(aiStart, aiStart + 5000);
+  const aiBody = ENEMY_MIRROR.slice(aiStart, aiStart + 5000);
   assert.match(aiBody, /\bp\.ownerType\s*=\s*['"]Mirror Shot['"]/,
     'aiMirror must tag the projectile with ownerType="Mirror Shot"');
 });

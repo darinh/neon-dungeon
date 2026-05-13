@@ -15,7 +15,7 @@ const {
 } = require('./_source-files.js');
 
 test('source file facade records the script-tag runtime source tail', () => {
-  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyShielder', 'entitiesEnemyReflector', 'entitiesEnemyDisruptor', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyVengeance', 'entitiesEnemyResonator', 'entitiesEnemyWatcher', 'entitiesEnemyArchitect', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTunneller', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyMagneton', 'entitiesEnemySpectre', 'entitiesEnemyBasicAi', 'entitiesEnemyHarvester', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemyNullifier', 'entitiesEnemySapper', 'entitiesEnemyMagpie', 'entitiesEnemyGulper', 'entitiesEnemySeeker', 'entitiesEnemyEchoer', 'entitiesEnemyProphet', 'entitiesEnemyCryophage', 'entitiesEnemyScorcher', 'render', 'game']);
+  assert.deepEqual(CORE_RUNTIME_SOURCE_KEYS, ['content', 'entitiesSpawnModifiers', 'entitiesEnemyAwareness', 'entitiesEnemyAbilityTuning', 'entitiesPlayerPerkTuning', 'entitiesRuntimeGlobals', 'entitiesRuntimeCollections', 'entitiesPlayerCheats', 'entities', 'entitiesEnemyTargeting', 'entitiesEnemyProjectileDefense', 'entitiesEnemyShielder', 'entitiesEnemyReflector', 'entitiesEnemyDisruptor', 'entitiesEnemyConduit', 'entitiesEnemyWardling', 'entitiesEnemyVengeance', 'entitiesEnemyResonator', 'entitiesEnemyWatcher', 'entitiesEnemyArchitect', 'entitiesEnemyMirror', 'entitiesEnemyHealer', 'entitiesEnemyGrenadier', 'entitiesEnemyMimic', 'entitiesEnemyNexus', 'entitiesEnemyPhantom', 'entitiesEnemyWraith', 'entitiesEnemyTunneller', 'entitiesEnemyTempo', 'entitiesEnemyProjectiles', 'entitiesEnemyMovement', 'entitiesSpawnInitializers', 'entitiesEnemySpawning', 'entitiesCombatEffects', 'entitiesDeferredSpawns', 'entitiesEnemySummoner', 'entitiesShockPulse', 'entitiesPlayerBombs', 'entitiesPlayerKinematics', 'entitiesPlayerWeapons', 'entitiesPlayerDamage', 'entitiesPlayerProgression', 'entitiesPlayerSurge', 'entitiesEnemyMagneton', 'entitiesEnemySpectre', 'entitiesEnemyBasicAi', 'entitiesEnemyHarvester', 'entitiesEnemyTether', 'entitiesEnemyVaultmaster', 'entitiesEnemyNullifier', 'entitiesEnemySapper', 'entitiesEnemyMagpie', 'entitiesEnemyGulper', 'entitiesEnemySeeker', 'entitiesEnemyEchoer', 'entitiesEnemyProphet', 'entitiesEnemyCryophage', 'entitiesEnemyScorcher', 'render', 'game']);
   assert.equal(SOURCE_FILE_PATHS.contentTerminals.replaceAll('\\', '/'), 'src/content/terminals.js');
   assert.equal(SOURCE_FILE_PATHS.contentWeapons.replaceAll('\\', '/'), 'src/content/weapons.js');
   assert.equal(SOURCE_FILE_PATHS.contentUpgrades.replaceAll('\\', '/'), 'src/content/upgrades.js');
@@ -58,6 +58,7 @@ test('source file facade records the script-tag runtime source tail', () => {
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyResonator.replaceAll('\\', '/'), 'src/entities/enemy-resonator.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyWatcher.replaceAll('\\', '/'), 'src/entities/enemy-watcher.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyArchitect.replaceAll('\\', '/'), 'src/entities/enemy-architect.js');
+  assert.equal(SOURCE_FILE_PATHS.entitiesEnemyMirror.replaceAll('\\', '/'), 'src/entities/enemy-mirror.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyHealer.replaceAll('\\', '/'), 'src/entities/enemy-healer.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyGrenadier.replaceAll('\\', '/'), 'src/entities/enemy-grenadier.js');
   assert.equal(SOURCE_FILE_PATHS.entitiesEnemyMimic.replaceAll('\\', '/'), 'src/entities/enemy-mimic.js');
@@ -155,6 +156,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyResonator').endsWith('src/entities/enemy-resonator.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyWatcher').endsWith('src/entities/enemy-watcher.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyArchitect').endsWith('src/entities/enemy-architect.js'), true);
+  assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyMirror').endsWith('src/entities/enemy-mirror.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyHealer').endsWith('src/entities/enemy-healer.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyGrenadier').endsWith('src/entities/enemy-grenadier.js'), true);
   assert.equal(resolveSourceFile(__dirname, 'entitiesEnemyMimic').endsWith('src/entities/enemy-mimic.js'), true);
@@ -246,6 +248,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   const enemyResonatorSource = readSourceFile(__dirname, 'entitiesEnemyResonator');
   const enemyWatcherSource = readSourceFile(__dirname, 'entitiesEnemyWatcher');
   const enemyArchitectSource = readSourceFile(__dirname, 'entitiesEnemyArchitect');
+  const enemyMirrorSource = readSourceFile(__dirname, 'entitiesEnemyMirror');
   const enemyHealerSource = readSourceFile(__dirname, 'entitiesEnemyHealer');
   const enemyGrenadierSource = readSourceFile(__dirname, 'entitiesEnemyGrenadier');
   const enemyMimicSource = readSourceFile(__dirname, 'entitiesEnemyMimic');
@@ -820,6 +823,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(entitySource, /aiArchitect\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.match(enemyArchitectSource, /Enemy\.prototype\.aiArchitect\s*=\s*function\s+aiArchitect\s*\(/);
   assert.match(enemyArchitectSource, /pickArchitectTarget/);
+  assert.match(entitySource, /case\s+'MIRROR':\s*this\.aiMirror\(/);
+  assert.doesNotMatch(entitySource, /aiMirror\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyMirrorSource, /Enemy\.prototype\.aiMirror\s*=\s*function\s+aiMirror\s*\(/);
+  assert.match(enemyMirrorSource, /pickMirrorKinematics/);
   assert.match(enemyEchoerSource, /Enemy\.prototype\.aiEchoer\s*=\s*function\s+aiEchoer\s*\(/);
   assert.match(enemyEchoerSource, /ECHOER_LOOKBACK/);
   assert.match(entitySource, /case\s+'PROPHET':\s*this\.aiProphet\(/);
