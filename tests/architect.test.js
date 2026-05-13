@@ -36,6 +36,8 @@ const ENEMY_STATS = readSourceFile(__dirname, 'entitiesEnemyStats');
 const ENEMY_CLASSIFICATION = readSourceFile(__dirname, 'entitiesEnemyClassification');
 const ENEMY_ABILITY_TUNING = readSourceFile(__dirname, 'entitiesEnemyAbilityTuning');
 const RUNTIME_COLLECTIONS = readSourceFile(__dirname, 'entitiesRuntimeCollections');
+const ENEMY_ARCHITECT = readSourceFile(__dirname, 'entitiesEnemyArchitect');
+const ENEMY_ARCHITECT_CODE = ENEMY_ARCHITECT.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
 const ARCHITECT_WALLS = readSourceFile(__dirname, 'entitiesArchitectWalls');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -56,10 +58,10 @@ test('aiArchitect cancels target if player moves adjacent during telegraph (per 
   // commits adjacent — defeating the whole point of the rule.
   // Pin two facts: (1) cancelledAdjacent is computed against
   // player.x/y; (2) the cancel OR-chain includes cancelledAdjacent.
-  assert.match(ENTITIES_CODE,
+  assert.match(ENEMY_ARCHITECT_CODE,
     /cancelledAdjacent\s*=\s*t\s*&&\s*Math\.max\([\s\S]{0,200}player\.x[\s\S]{0,200}player\.y/,
     'cancelledAdjacent must be computed against Math.floor(player.x/y)');
-  assert.match(ENTITIES_CODE,
+  assert.match(ENEMY_ARCHITECT_CODE,
     /cancelledLOS\s*\|\|\s*cancelledOccupied\s*\|\|\s*cancelledTileType\s*\|\|\s*cancelledAdjacent/,
     'cancellation OR chain must include cancelledAdjacent');
 });
@@ -70,7 +72,7 @@ test('aiArchitect spawns particles on the target tile during the telegraph (visi
   // to occupy). Pin the per-tick particle spawn on _aTarget during
   // 'target' state. The particle density is intentionally low (~33%
   // per tick) so the visual is readable but not a particle storm.
-  const targetBlock = ENTITIES_CODE.match(
+  const targetBlock = ENEMY_ARCHITECT_CODE.match(
     /this\._aState\s*===\s*'target'[\s\S]{0,800}spawnParticles\s*\(\s*this\._aTarget\.tx[\s\S]{0,100}_aTarget\.ty/
   );
   assert.ok(targetBlock,
@@ -156,8 +158,10 @@ test("AI dispatch switch routes ARCHITECT to aiArchitect()", () => {
 
 test('aiArchitect method exists on Enemy class', () => {
   // Pin existence of the method.
-  assert.match(ENTITIES, /aiArchitect\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,/,
-    'Enemy.aiArchitect(dt, player, map, ...) must exist');
+  assert.doesNotMatch(ENTITIES, /aiArchitect\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'Enemy.aiArchitect must stay out of src/entities.js after sidecar extraction');
+  assert.match(ENEMY_ARCHITECT, /Enemy\.prototype\.aiArchitect\s*=\s*function\s+aiArchitect\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,/,
+    'Enemy.prototype.aiArchitect(dt, player, map, ...) must exist in enemy-architect.js');
 });
 
 // ─── Elite-roll exclusion ────────────────────────────────────────────────
