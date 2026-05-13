@@ -498,6 +498,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyWardlingSource, /e\.type === 'WARDLING'/);
   assert.match(enemyWardlingSource, /e\.isShard \|\| e\.isBoss/);
   assert.match(enemyWardlingSource, /e\.room !== this\.room/);
+  assert.match(entitySource, /case\s+'WARDLING':\s*this\.aiWardling\(/);
+  assert.doesNotMatch(entitySource, /aiWardling\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyWardlingSource, /Enemy\.prototype\.aiWardling\s*=\s*function\s+aiWardling\s*\(/);
+  assert.match(enemyWardlingSource, /WARDLING_PANIC_MUL/);
   assert.match(enemyHealerSource, /Enemy\.prototype\._findHealTarget\s*=\s*function _findHealTarget\s*\(/);
   assert.match(enemyHealerSource, /e === this \|\| e\.dead \|\| e\.isBoss/);
   assert.match(enemyHealerSource, /e\._wrPhased/);
