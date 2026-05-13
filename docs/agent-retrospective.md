@@ -43,6 +43,8 @@ A work item is not complete until:
 7. the final protocol-change decision is recorded;
 8. no output field that affects follow-up behavior is left as `pending`; use
    `N/A` only with a reason and only when the field truly does not apply;
+   before attachment, scan the final text for placeholders such as `pending`,
+   `TODO`, and `TBD` and replace them with a final value or an explicit reason;
 9. the retrospective is attached to the PR, issue, session history, or final
    response where future agents can find the evidence;
 10. the implementation worktree is still available for inspection. Worktree
@@ -274,10 +276,15 @@ Collect only facts that affect future behavior:
    and remaining cleanup separately before retrying or claiming completion.
    For `gh pr merge` ambiguity, verify with
    `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
-   merge failed or only local cleanup failed. Before any merge command, use a
-   parsed state preflight that hard-stops unless the PR is still open; printing
-   JSON is not enough, and the retrospective evidence must include the parsed
-   state value or the hard-stop output:
+   merge failed or only local cleanup failed. Before any merge command, use
+   `npm run merge:pr -- <pr> --method squash|rebase`; the wrapper performs the
+   parsed state preflight, refuses `--delete-branch`, enforces the expected merge
+   method for `develop` and `main`, checks statuses, and verifies the remote
+   merge result. If a retrospective finds that this wrapper or its parsed-state
+   guard was skipped, the recurrence-prevention response must be mechanical
+   (script, wrapper, or CI/continuity check), not a restatement of this text.
+   If using the underlying command manually, the retrospective evidence must
+   include the parsed state value or the hard-stop output:
 
    ```bash
    state=$(gh pr view "$pr" --json state --jq .state)
