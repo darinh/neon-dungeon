@@ -100,20 +100,20 @@ Run and record these before verification or review:
    regexes such as `\n\s{2}\}`. When converting class methods to prototype
    assignments, use named `function` expressions and verify no arrow function
    replaced a method that depends on dynamic `this`. Static checks and source
-    greps are not enough for a moved dispatch path: identify which test exercises
-    the new path through the runtime receiver/export/event handler. If none does,
-    add a focused behavioral smoke test before review. This evidence must name
-    the test file and test case before review; a blank or source-only answer is a
-    blocker. For AI smoke tests, enumerate the moved function's guard, timer, and
-    range/branch decisions and either cover each one or record why a branch is
-    intentionally out of scope. For prototype helpers, also verify the helper is
-    callable from an instance so class-field shadowing cannot pass source-only
-    tests. Preserve domain comments and invariant notes from moved blocks, or
-    record why each omitted comment is obsolete; semantic comments are behavior
-    evidence, not formatting. Before review, perform a moved-code fidelity pass:
-    compare each moved block against the source block and document every
-    intentional textual change, including comments, punctuation, Unicode
-    arrows/dashes, and inline notes. The fidelity pass must
+   greps are not enough for a moved dispatch path: identify which test exercises
+   the new path through the runtime receiver/export/event handler. If none does,
+   add a focused behavioral smoke test before review. This evidence must name
+   the test file and test case before review; a blank or source-only answer is a
+   blocker. For AI smoke tests, enumerate the moved function's guard, timer, and
+   range/branch decisions and either cover each one or record why a branch is
+   intentionally out of scope. For prototype helpers, also verify the helper is
+   callable from an instance so class-field shadowing cannot pass source-only
+   tests. Preserve domain comments and invariant notes from moved blocks, or
+   record why each omitted comment is obsolete; semantic comments are behavior
+   evidence, not formatting. Before review, perform a moved-code fidelity pass:
+   compare each moved block against the source block and document every
+   intentional textual change, including comments, punctuation, Unicode
+   arrows/dashes, and inline notes. The fidelity pass must
    leave an auditable receipt before review: record the old source range, new
    source range, comparison command or method, and every intentional textual
    delta. If the comparison is expected to be identical except for wrapper
@@ -272,12 +272,12 @@ Collect only facts that affect future behavior:
    also emits a cleanup error, or exits nonzero after it may have performed
    remote side effects, verify the remote state, local branch/worktree state,
    and remaining cleanup separately before retrying or claiming completion.
-    For `gh pr merge` ambiguity, verify with
-    `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
-    merge failed or only local cleanup failed. Before any merge command, use a
-    parsed state preflight that hard-stops unless the PR is still open; printing
-    JSON is not enough, and the retrospective evidence must include the parsed
-    state value or the hard-stop output:
+   For `gh pr merge` ambiguity, verify with
+   `gh pr view --json state,mergedAt,mergeCommit` before deciding whether the
+   merge failed or only local cleanup failed. Before any merge command, use a
+   parsed state preflight that hard-stops unless the PR is still open; printing
+   JSON is not enough, and the retrospective evidence must include the parsed
+   state value or the hard-stop output:
 
    ```bash
    state=$(gh pr view "$pr" --json state --jq .state)
