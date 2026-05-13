@@ -578,6 +578,9 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemySummonerSource, /type:\s*'DRONE'/);
   assert.match(enemySummonerSource, /_summoned:\s*true,\s*_summonerRef:\s*this/);
   assert.match(enemySummonerSource, /audio\.summon\(\)/);
+  assert.match(enemySummonerSource, /Enemy\.prototype\.aiSummoner\s*=\s*function aiSummoner\s*\(/);
+  assert.match(enemySummonerSource, /this\.summonMinion\(map\)/);
+  assert.match(enemySummonerSource, /this\._summonTimer = Math\.max\(3\.5, 5 - \(_EG\.floor \|\| 1\) \* 0\.15\)/);
   assert.match(enemyTempoSource, /Enemy\.prototype\.berserkerMul\s*=\s*function berserkerMul\s*\(/);
   assert.match(enemyTempoSource, /this\.eliteAffix\s*===\s*'BERSERKER'[\s\S]{0,80}this\.hp \/ this\.maxHp/);
   assert.match(enemyTempoSource, /this\.eliteAffix\s*===\s*'FRENZY'[\s\S]{0,80}this\.frenzyStacks/);
@@ -738,6 +741,7 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.doesNotMatch(sources.entities, /_phReposition\s*\(\s*map\s*,\s*player\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /_wrFindEmergeTile\s*\(\s*map\s*,\s*player\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /summonMinion\s*\(\s*map\s*\)\s*\{/);
+  assert.doesNotMatch(sources.entities, /aiSummoner\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /blocksProjectile\s*\(\s*proj\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /reflectsProjectile\s*\(\s*proj\s*\)\s*\{/);
   assert.doesNotMatch(sources.entities, /berserkerMul\s*\(\s*\)\s*\{/);
