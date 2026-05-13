@@ -515,6 +515,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyConduitSource, /Enemy\.prototype\._cdHitsPlayer\s*=\s*function _cdHitsPlayer\s*\(/);
   assert.match(enemyConduitSource, /CONDUIT_BEAM_W \* CONDUIT_BEAM_W/);
   assert.match(enemyConduitSource, /t < 0 \|\| t > 1/);
+  assert.match(entitySource, /case\s+'CONDUIT':\s*this\.aiConduit\(/);
+  assert.doesNotMatch(entitySource, /aiConduit\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyConduitSource, /Enemy\.prototype\.aiConduit\s*=\s*function\s+aiConduit\s*\(/);
+  assert.match(enemyConduitSource, /CONDUIT_BEAM_ICD/);
   assert.match(enemyWardlingSource, /Enemy\.prototype\._wlFindWard\s*=\s*function _wlFindWard\s*\(/);
   assert.match(enemyWardlingSource, /e\.type === 'WARDLING'/);
   assert.match(enemyWardlingSource, /e\.isShard \|\| e\.isBoss/);

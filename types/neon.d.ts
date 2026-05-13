@@ -83,6 +83,7 @@ declare global {
     aiShielder(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiReflector(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiDisruptor(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiConduit(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiWraith(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTunneller(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiWardling(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
