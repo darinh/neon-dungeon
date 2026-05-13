@@ -75,6 +75,11 @@ Run and record these before verification or review:
    module-evaluation-time call path that can reference the moved global early.
    Label each proof as executed runtime evidence or static/order inference; if
    no executed runtime path was run, record why static proof is sufficient.
+   Before the first full gate for a new classic-script runtime file, enumerate
+   every free/global helper, prototype helper, and runtime collection the moved
+   code references, cite where each dependency is defined, and verify each
+   definition loads before the new file or is only called after the dependency
+   is initialized. Manifest/source equality alone is not dependency proof.
 4. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
