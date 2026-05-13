@@ -495,6 +495,34 @@
     return dedupPositions(openings);
   }
 
+  /**
+   * Finds the first tile matching `isTargetTile` inside the room rectangle plus
+   * a caller-selected surrounding padding. Scan order is y-major, then x-min to
+   * x-max, preserving legacy room-neighbourhood searches.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {(tile:number) => boolean} isTargetTile
+   * @param {number} [padding]
+   * @returns {{x:number,y:number}|null}
+   */
+  function findRoomNeighborhoodTile(map, room, isTargetTile, padding = 1) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    if (!height || !width) return null;
+    const pad = Math.max(0, Math.floor(padding));
+    const yMin = Math.max(0, room.y - pad);
+    const yMax = Math.min(height - 1, room.y + room.h + pad - 1);
+    const xMin = Math.max(0, room.x - pad);
+    const xMax = Math.min(width - 1, room.x + room.w + pad - 1);
+    for (let y = yMin; y <= yMax; y++) {
+      for (let x = xMin; x <= xMax; x++) {
+        if (isTargetTile(Number(map[y]?.[x]))) return { x, y };
+      }
+    }
+    return null;
+  }
+
   return {
     CARDINAL_DIRECTIONS,
     createMap,
@@ -512,6 +540,7 @@
     outsideFaceForBoundaryTile,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
+    findRoomNeighborhoodTile,
     BSPNode,
   };
 }));

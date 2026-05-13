@@ -734,12 +734,7 @@ function generateFloor(floorNum, opts) {
 
   /** @param {any} room @param {any} tile */
   function findRingTile(room, tile) {
-    for (let y = Math.max(0, room.y - 1); y <= Math.min(MAP_H - 1, room.y + room.h); y++) {
-      for (let x = Math.max(0, room.x - 1); x <= Math.min(MAP_W - 1, room.x + room.w); x++) {
-        if (map[y]?.[x] === tile) return { x, y };
-      }
-    }
-    return null;
+    return dungeonTopology.findRoomNeighborhoodTile(map, room, (/** @type {number} */ candidate) => candidate === tile);
   }
 
   /** @param {any} room @param {any} tile */
