@@ -135,6 +135,8 @@ Good candidates:
 - SUMMONER minion enqueue helper. Done for `summonMinion()` in `src/entities/enemy-summoner.js`.
 - MIMIC reveal helper and AI presentation. Done for `revealMimic()` and `aiMimic()` in `src/entities/enemy-mimic.js`.
 - NEXUS link-maintenance helpers and AI presentation. Done for `_nxUpdateLinks()`, `_nxFindAllyCluster()`, and `aiNexus()` in `src/entities/enemy-nexus.js`.
+- SIPHON AI presentation. Done for `aiSiphon()` in `src/entities/enemy-siphon.js`.
+- GRAVITON AI presentation. Done for `aiGraviton()` in `src/entities/enemy-graviton.js`.
 - PHANTOM reposition helper. Done for `_phReposition()` in `src/entities/enemy-phantom.js`.
 - WRAITH-style emergence helper and AI presentation. Done for `_wrFindEmergeTile()` and `aiWraith()` in `src/entities/enemy-wraith.js`.
 - TUNNELLER AI presentation. Done for `aiTunneller()` in `src/entities/enemy-tunneller.js`.
@@ -184,6 +186,7 @@ Good candidates:
 - LEAPER AI presentation. Done for `aiLeaper()` in `src/entities/enemy-leaper.js`.
 - PULSER AI presentation. Done for `aiPulser()` in `src/entities/enemy-pulser.js`.
 - SIPHON AI presentation. Done for `aiSiphon()` in `src/entities/enemy-siphon.js`.
+- GRAVITON AI presentation. Done for `aiGraviton()` in `src/entities/enemy-graviton.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
