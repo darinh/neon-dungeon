@@ -94,6 +94,7 @@ declare global {
     aiMirror(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiReaper(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiGhostProjector(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiGrenadier(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiMagneton(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiSpectre(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiHarvester(dt?: any, player?: any, map?: any, d?: any, los?: any): void;

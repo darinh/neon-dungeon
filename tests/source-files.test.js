@@ -544,6 +544,10 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyHealerSource, /e\._wrPhased/);
   assert.match(enemyHealerSource, /ed > 6/);
   assert.match(enemyGrenadierSource, /Enemy\.prototype\.lobGrenade\s*=\s*function lobGrenade\s*\(/);
+  assert.match(entitySource, /case\s+'GRENADIER':\s*this\.aiGrenadier\(/);
+  assert.doesNotMatch(entitySource, /aiGrenadier\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(enemyGrenadierSource, /Enemy\.prototype\.aiGrenadier\s*=\s*function\s+aiGrenadier\s*\(/);
+  assert.match(enemyGrenadierSource, /this\.lobGrenade\(this\._tx,\s*this\._ty,\s*map\)/);
   assert.match(enemyGrenadierSource, /new Projectile\(this\.x, this\.y, dx, dy, 6, 0, 20, '#ff6622', false, false\)/);
   assert.match(enemyGrenadierSource, /g\.isGrenade\s*=\s*true/);
   assert.match(enemyGrenadierSource, /g\.grenadeDmg\s*=\s*this\.atk/);
