@@ -19,6 +19,9 @@ const vm = require('node:vm');
 const ENTITIES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
 );
+const ENEMY_REAPER = fs.readFileSync(
+  path.resolve(__dirname, '..', 'src', 'entities', 'enemy-reaper.js'), 'utf8'
+);
 const ENEMY_ABILITY_TUNING = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'entities', 'enemy-ability-tuning.js'), 'utf8'
 );
@@ -89,7 +92,10 @@ test('REAPER is dispatched in the AI switch', () => {
 });
 
 test('aiReaper method is defined', () => {
-  assert.match(ENTITIES, /aiReaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.doesNotMatch(ENTITIES, /aiReaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/,
+    'Enemy.aiReaper must stay out of src/entities.js after sidecar extraction');
+  assert.match(ENEMY_REAPER,
+    /Enemy\.prototype\.aiReaper\s*=\s*function\s+aiReaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
 });
 
 test('REAPER tuning constants are present and reasonable', () => {
@@ -126,9 +132,7 @@ test('REAPER ai pauses telegraph & frenzy when player out of room (fairness)', (
   // off-screen while the player is in a corridor, the player escapes the
   // punish for free. Both timers must be gated on a `playerInRoom` check
   // INSIDE the telegraph and frenzy state branches.
-  const aiBlock = ENTITIES.match(/aiReaper\s*\([^)]*\)\s*\{[\s\S]*?(?=\n  [a-z][a-zA-Z]*\s*\([^)]*\)\s*\{)/);
-  assert.ok(aiBlock, 'aiReaper body must be locatable');
-  const body = aiBlock[0];
+  const body = extractAiReaper();
   assert.match(body, /const\s+playerInRoom\s*=/, 'must compute playerInRoom inside aiReaper');
   // Telegraph branch: timer decrement must be gated on playerInRoom
   assert.match(body, /_reState\s*===\s*'telegraph'[\s\S]{0,400}if\s*\(\s*playerInRoom\s*\)[\s\S]{0,200}_reTele\s*-=\s*dt/,
@@ -141,9 +145,7 @@ test('REAPER ai pauses telegraph & frenzy when player out of room (fairness)', (
 test('REAPER chase uses local chaseSpd multiplier — never mutates this.spd', () => {
   // Reviewers flagged speed-leak as the obvious failure. Frenzy must
   // multiply at the call site; this.spd must remain the immutable base.
-  const aiBlock = ENTITIES.match(/aiReaper\s*\([^)]*\)\s*\{[\s\S]*?(?=\n  [a-z][a-zA-Z]*\s*\([^)]*\)\s*\{)/);
-  assert.ok(aiBlock);
-  const body = aiBlock[0];
+  const body = extractAiReaper();
   // Look for the local chase multiplier pattern
   assert.match(body, /this\.spd\s*\*\s*\(\s*this\._reFrenzied\s*\?\s*REAPER_FRENZY_SPD_MUL/,
     'frenzy must apply via local chaseSpd, not by mutating this.spd');
@@ -156,9 +158,7 @@ test('REAPER threshold check requires player in room AND not already frenzied', 
   // room, (b) we haven't frenzied this room visit, (c) kill count crossed
   // threshold. Without the _reHasFrenzied gate the reaper would re-trigger
   // every frame after threshold.
-  const aiBlock = ENTITIES.match(/aiReaper\s*\([^)]*\)\s*\{[\s\S]*?(?=\n  [a-z][a-zA-Z]*\s*\([^)]*\)\s*\{)/);
-  assert.ok(aiBlock);
-  const body = aiBlock[0];
+  const body = extractAiReaper();
   assert.match(body,
     /playerInRoom\s*&&\s*!this\._reHasFrenzied\s*&&\s*kills\s*>=\s*REAPER_FRENZY_THRESHOLD/,
     'arm condition must include playerInRoom + !_reHasFrenzied + threshold');
@@ -245,9 +245,7 @@ test('REAPER stun-cancel preserves _reHasFrenzied (telegraph entry latches)', ()
   // during telegraph let the reaper immediately re-arm because
   // _reHasFrenzied was never set. Fix: latch on telegraph ENTRY so cancel
   // naturally consumes the per-room one-shot.
-  const aiBlock = ENTITIES.match(/aiReaper\s*\([^)]*\)\s*\{[\s\S]*?(?=\n  [a-z][a-zA-Z]*\s*\([^)]*\)\s*\{)/);
-  assert.ok(aiBlock);
-  const body = aiBlock[0];
+  const body = extractAiReaper();
   const armBlock = body.match(/_reState\s*=\s*'telegraph'[\s\S]{0,500}/);
   assert.ok(armBlock, 'telegraph-entry block must exist');
   assert.match(armBlock[0], /this\._reHasFrenzied\s*=\s*true/,
@@ -278,11 +276,11 @@ test('sw.js cache freshness does not require a numeric cache version', () => {
 // `this` that matches the surface aiReaper touches.
 
 function extractAiReaper() {
-  // Match `aiReaper(dt, player, map, d, los) { ... }` — body terminates at
-  // the next sibling method declaration `\n  identifier(...) {`.
-  const m = ENTITIES.match(/aiReaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{[\s\S]*?\n  \}\n/);
+  // Match the extracted sidecar prototype assignment, then wrap it as a
+  // standalone function for node:vm behaviour checks.
+  const m = ENEMY_REAPER.match(/Enemy\.prototype\.aiReaper\s*=\s*function\s+aiReaper\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{([\s\S]*?)\n\};\n?/);
   if (!m) throw new Error('aiReaper extraction failed');
-  return m[0];
+  return `function aiReaper(dt, player, map, d, los) {${m[1]}\n}`;
 }
 
 function makeReaperHarness() {
@@ -302,7 +300,7 @@ function makeReaperHarness() {
   };
   vm.createContext(sandbox);
   // Wrap the method as a standalone function we can call with a mock `this`.
-  const fnSrc = `(function(){ ${extractAiReaper().replace(/^aiReaper/, 'function aiReaper')} return aiReaper; })()`;
+  const fnSrc = `(function(){ ${extractAiReaper()} return aiReaper; })()`;
   const aiReaper = vm.runInContext(fnSrc, sandbox);
   return { aiReaper, captured };
 }

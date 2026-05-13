@@ -143,6 +143,7 @@ Good candidates:
 - WATCHER AI presentation. Done for `aiWatcher()` in `src/entities/enemy-watcher.js`.
 - ARCHITECT AI presentation. Done for `aiArchitect()` in `src/entities/enemy-architect.js`.
 - MIRROR AI presentation. Done for `aiMirror()` in `src/entities/enemy-mirror.js`.
+- REAPER AI presentation. Done for `aiReaper()` in `src/entities/enemy-reaper.js`.
 - Player weapon-belt helpers. Done for `cycleWeapon()`, `collectWeapon()`, `swapWeapon()`, and `equipWeapon()` in `src/entities/player-weapons.js`.
 - Player tap-bomb input handling. Done for `tapBombKey()` in `src/entities/player-bombs.js`.
 - Player effective attack calculation. Done for `effectiveAtk()` in `src/entities/player-damage.js`.
