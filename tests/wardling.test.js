@@ -85,7 +85,7 @@ test('WARDLING is dispatched in the AI switch', () => {
 });
 
 test('aiWardling method is defined', () => {
-  assert.match(ENTITIES, /aiWardling\s*\(\s*dt\s*,\s*player\s*,\s*map\s*,\s*d\s*,\s*los\s*\)\s*\{/);
+  assert.match(ENEMY_WARDLING, /Enemy\.prototype\.aiWardling\s*=\s*function\s+aiWardling\s*\(/);
 });
 
 // ─── Ward-finder invariants (compositional safety) ──────────────────────
@@ -120,14 +120,14 @@ test('WARDLING enters PANIC speed multiplier when no ward exists', () => {
   // spawns are free XP). Panic uses WARDLING_PANIC_MUL on speed and
   // chases the canonical _tx/_ty target.
   const re = /aiWardling[\s\S]{0,2500}WARDLING_PANIC_MUL/;
-  assert.match(ENTITIES, re, 'aiWardling must reference WARDLING_PANIC_MUL in panic branch');
+  assert.match(ENEMY_WARDLING, re, 'aiWardling must reference WARDLING_PANIC_MUL in panic branch');
 });
 
 test('WARDLING positions itself between TARGET (_tx/_ty) and ward', () => {
   // The interception point uses _tx/_ty (taunt-aware) NOT player.x/y.
   // This is the lesson from ECHOER PR — any mob that samples player
   // outside _tx/_ty fails the hologram-decoy contract.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
+  const block = ENEMY_WARDLING.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Must compute interception relative to _tx/_ty:
   assert.match(block[0], /this\._tx\s*-\s*ward\.x/, 'interception vector must use this._tx (taunt-aware), not player.x');
@@ -138,7 +138,7 @@ test('WARDLING handles player-on-ward degenerate case (vector mag ~ 0)', () => {
   // If _tx==ward.x and _ty==ward.y the unit vector is undefined. Code
   // must guard with a near-zero magnitude check or it produces NaN
   // positions.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
+  const block = ENEMY_WARDLING.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // pmag guard with a small epsilon
   assert.match(block[0], /pmag\s*<\s*0\.\d+/, 'aiWardling must guard against zero-magnitude pdx,pdy (player-on-ward)');
@@ -153,7 +153,7 @@ test('WARDLING calls meleeAttack on body contact (atk would otherwise be decorat
   // player) and the guarding branch (player runs INTO the bodyguard
   // mid-flank). meleeAttack itself is taunt-aware (real-player distance
   // check inside), so hologram bait still defuses the contact.
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
+  const block = ENEMY_WARDLING.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Count meleeAttack calls — must be at least 2 (panic + guarding paths).
   const meleeCalls = (block[0].match(/this\.meleeAttack\s*\(\s*player\s*\)/g) || []).length;
@@ -168,7 +168,7 @@ test('WARDLING re-acquisition timer is NOT bypassed when ward is null (perf guar
   // throttle the comment promises. Fix: timer ALWAYS gates the scan;
   // only an alive ward dying triggers an extra immediate scan.
   // The pattern we MUST NOT have: starting the predicate with `!this._wlWard ||`
-  const block = ENTITIES.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
+  const block = ENEMY_WARDLING.match(/aiWardling\s*\(\s*dt[\s\S]{0,4000}this\.meleeAttack\s*\(\s*player\s*\)/);
   assert.ok(block, 'aiWardling block must be locatable');
   // Negative assertion: a re-acquire `if` whose condition starts with
   // `!this._wlWard ||` would defeat the timer — flag any such pattern.
