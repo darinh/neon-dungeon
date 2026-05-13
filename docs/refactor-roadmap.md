@@ -178,6 +178,7 @@ Good candidates:
 - VAULTMASTER AI presentation. Done for `aiVaultmaster()` in `src/entities/enemy-vaultmaster.js`.
 - NULLIFIER AI presentation. Done for `aiNullifier()` in `src/entities/enemy-nullifier.js`.
 - SAPPER AI presentation. Done for `aiSapper()` in `src/entities/enemy-sapper.js`.
+- TELEPORTER AI presentation. Done for `aiTeleporter()` in `src/entities/enemy-teleporter.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 
