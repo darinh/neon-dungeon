@@ -113,10 +113,12 @@ test('final floor generation builds a safe mainframe room with all interaction p
   assert.match(CONTENT, /return\s*{[\s\S]*mainframeRoom[\s\S]*}/);
   assert.match(CONTENT, /const\s+MAINFRAME_MIN_W\s*=\s*18/);
   assert.match(CONTENT, /const\s+MAINFRAME_MIN_H\s*=\s*10/);
-  assert.match(CONTENT, /const\s+overlapsOtherRoom\s*=\s*\(x,\s*y,\s*w,\s*h,\s*ignoredRoom\)\s*=>/);
-  assert.match(CONTENT, /if\s*\(r\s*===\s*ignoredRoom\)\s*continue;/);
-  assert.match(CONTENT, /if\s*\(overlapsOtherRoom\(x,\s*y,\s*w,\s*h,\s*room\)\)\s*continue;/,
-    'mainframe expansion must avoid other rooms before boss selection computes entrances');
+  assert.match(CONTENT, /dungeonTopology\.findExpandedRoomPlacement\({[\s\S]*minWidth:\s*MAINFRAME_MIN_W[\s\S]*padding:\s*1/,
+    'mainframe expansion must delegate no-overlap rectangle placement to the dungeon topology engine');
+  assert.match(CONTENT, /dungeonTopology\.rectOverlapsAnyRoom\({\s*x,\s*y,\s*w:\s*MAINFRAME_MIN_W,\s*h:\s*MAINFRAME_MIN_H\s*},\s*rooms,\s*null,\s*1\)/,
+    'mainframe fallback must avoid other rooms before boss selection computes entrances');
+  assert.match(CONTENT, /dungeonTopology\.rectOverlapArea\({\s*x,\s*y,\s*w:\s*MAINFRAME_MIN_W,\s*h:\s*MAINFRAME_MIN_H\s*},\s*r,\s*1\)/,
+    'mainframe overlap fallback must keep overlap penalty math explicit');
   assert.doesNotMatch(CONTENT, /if\s*\(!rect\)\s*rect\s*=\s*base/,
     'mainframe generation must not fall back to an undersized or overlapping base room');
   assert.match(CONTENT, /let\s+dist\s*=\s*bfsRooms\(rooms,\s*spawnRoom,\s*map\)/);

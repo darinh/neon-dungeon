@@ -71,6 +71,61 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
+  const rect = { x: 5, y: 5, w: 4, h: 4 };
+  const touching = { x: 9, y: 6, w: 2, h: 2 };
+  const overlapping = { x: 8, y: 8, w: 3, h: 3 };
+
+  assert.equal(topology.rectOverlapArea(rect, touching, 0), 0);
+  assert.equal(topology.rectOverlapArea(rect, touching, 1), 2);
+  assert.equal(topology.rectOverlapArea(rect, overlapping, 0), 1);
+  assert.equal(topology.rectOverlapsAnyRoom(rect, [touching], null, 0), false);
+  assert.equal(topology.rectOverlapsAnyRoom(rect, [touching], null, 1), true);
+  assert.equal(topology.rectOverlapsAnyRoom(rect, [touching], touching, 1), false);
+});
+
+test('dungeon topology engine places expanded room rectangles with legacy scoring', () => {
+  const room = { id: 'target', x: 10, y: 6, w: 4, h: 3, cx: 12, cy: 7 };
+  const placement = topology.findExpandedRoomPlacement({
+    room,
+    rooms: [room],
+    minWidth: 7,
+    minHeight: 5,
+    mapWidth: 40,
+    mapHeight: 25,
+    margin: 1,
+    padding: 1,
+  });
+
+  assert.deepEqual(placement, { x: 9, y: 5, w: 7, h: 5 });
+});
+
+test('dungeon topology expanded room placement rejects padded overlaps and empty windows', () => {
+  const room = { id: 'target', x: 10, y: 6, w: 4, h: 3, cx: 12, cy: 7 };
+  const blocker = { id: 'blocker', x: 9, y: 5, w: 7, h: 5 };
+
+  assert.equal(topology.findExpandedRoomPlacement({
+    room,
+    rooms: [room, blocker],
+    minWidth: 7,
+    minHeight: 5,
+    mapWidth: 20,
+    mapHeight: 14,
+    margin: 1,
+    padding: 1,
+  }), null);
+  assert.equal(topology.findExpandedRoomPlacement({
+    room: { id: 'edge', x: 1, y: 1, w: 2, h: 2, cx: 2, cy: 2 },
+    rooms: [],
+    minWidth: 20,
+    minHeight: 20,
+    mapWidth: 12,
+    mapHeight: 12,
+    margin: 1,
+    padding: 1,
+  }), null);
+});
+
 test('dungeon topology engine clusters room boundary entrances with injected open-tile semantics', () => {
   const WALL = 1, FLOOR = 2, DOOR = 5, LOCKED = 7;
   const map = topology.createMap(8, 8, WALL);
