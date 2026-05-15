@@ -147,6 +147,7 @@ const ASSETS = [
   './src/entities/deferred-spawns.js',
   './src/entities/enemy-summoner.js',
   './src/entities/shock-pulse.js',
+  './src/entities/enemy-boss-ai.js',
   './src/render.js',
   './src/game.js',
   './assets/audio/title-theme.wav',

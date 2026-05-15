@@ -187,6 +187,7 @@ Good candidates:
 - PULSER AI presentation. Done for `aiPulser()` in `src/entities/enemy-pulser.js`.
 - SIPHON AI presentation. Done for `aiSiphon()` in `src/entities/enemy-siphon.js`.
 - GRAVITON AI presentation. Done for `aiGraviton()` in `src/entities/enemy-graviton.js`.
+- Boss AI presentation. Done for `aiBossSentinel()`, `aiBossWarden()`, `aiBossHive()`, `aiBossConductor()`, `aiBossOmega()`, and `aiBossGenesis()` in `src/entities/enemy-boss-ai.js`.
 - Boss/enemy selection helpers.
 - Small pure movement/targeting decisions.
 

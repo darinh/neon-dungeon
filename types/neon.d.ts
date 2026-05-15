@@ -120,6 +120,12 @@ declare global {
     aiScorcher(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiTether(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     aiVaultmaster(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossSentinel(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossWarden(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossHive(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossConductor(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossOmega(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
+    aiBossGenesis(dt?: any, player?: any, map?: any, d?: any, los?: any): void;
     blocksProjectile(proj?: any): boolean;
     berserkerMul(): number;
     fireAt(px?: any, py?: any, spd?: any, dmg?: any, range?: any, colour?: any): void;
