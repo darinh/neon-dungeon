@@ -555,6 +555,36 @@
   }
 
   /**
+   * Finds caller-defined gate tiles on a room perimeter and reports the
+   * outside-facing coordinate for each one. Scan order preserves the legacy
+   * generator's repair order: top/bottom per x, then left/right per y. Corner
+   * gates can be reported twice, once for each outside face.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {(tile:number) => boolean} isGateTile
+   * @returns {{x:number,y:number,ox:number,oy:number}[]}
+   */
+  function findRoomBoundaryGates(map, room, isGateTile) {
+    /** @type {{x:number,y:number,ox:number,oy:number}[]} */
+    const gates = [];
+    const topY = room.y;
+    const bottomY = room.y + room.h - 1;
+    const leftX = room.x;
+    const rightX = room.x + room.w - 1;
+
+    for (let tx = room.x; tx < room.x + room.w; tx++) {
+      if (isGateTile(Number(map[topY]?.[tx]))) gates.push({ x: tx, y: topY, ox: tx, oy: topY - 1 });
+      if (isGateTile(Number(map[bottomY]?.[tx]))) gates.push({ x: tx, y: bottomY, ox: tx, oy: bottomY + 1 });
+    }
+    for (let ty = room.y; ty < room.y + room.h; ty++) {
+      if (isGateTile(Number(map[ty]?.[leftX]))) gates.push({ x: leftX, y: ty, ox: leftX - 1, oy: ty });
+      if (isGateTile(Number(map[ty]?.[rightX]))) gates.push({ x: rightX, y: ty, ox: rightX + 1, oy: ty });
+    }
+    return gates;
+  }
+
+  /**
    * Finds the first tile matching `isTargetTile` inside the room rectangle plus
    * a caller-selected surrounding padding. Scan order is y-major, then x-min to
    * x-max, preserving legacy room-neighbourhood searches.
@@ -601,6 +631,7 @@
     findAlignedOutsidePassageRepair,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
+    findRoomBoundaryGates,
     findRoomNeighborhoodTile,
     BSPNode,
   };
