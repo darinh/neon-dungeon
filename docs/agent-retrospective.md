@@ -62,17 +62,39 @@ A work item is not complete until:
 
 Run and record these before verification or review:
 
-1. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
+1. **Stale-resume preflight.** Before continuing any branch, worktree, staged
+   diff, or handoff/session-history work that predates the current session, has
+   not fetched in the current session, or may have fallen behind the target
+   branch, run a freshness check before any review request, commit, push, or PR
+   action. This guard reinforces the session-start continuity protocol; if the
+   agent skipped fetch, issue, PR, or session-history checks, record that as
+   protocol non-compliance, not only as a missing guard. The freshness check must
+   fetch `origin`, verify any issue is still open and not already completed,
+   search open and merged PRs for the same issue, title terms, scope, symbols,
+   and file paths, compare the branch point and target-branch commits against
+   `origin/develop`, and inspect the target branch for equivalent moved symbols
+   or files. Do not rely on title or issue matching alone; symbol, file, and
+   behavior equivalence must be checked because duplicate work can land under a
+   different path. If the work is closed, superseded, already landed, or
+   equivalent upstream, stop immediately before spending reviewer cycles or
+   opening a PR; abandon or close the duplicate work and record the evidence.
+2. **Review-risk triage.** Before requesting code review, list every changed
+   code-bearing path and state whether it matches a red-risk designation or is
+   ambiguous enough to use the higher reviewer count. Record the number of
+   adversarial reviewers required and used. If a path resembles a red-risk file
+   but is intentionally treated differently, cite the exact instruction text or
+   choose the safer higher-review path; do not leave applicability implicit.
+3. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using
    test failures as evidence. Check and record this bootstrap status before the
    first npm verification command in a fresh implementation worktree.
-2. **New-runtime-file surface audit.** Any new browser runtime source file must
+4. **New-runtime-file surface audit.** Any new browser runtime source file must
    be checked against all registration surfaces: `index.html`,
    `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
    and docs. Default helper paths such as `readSourceFiles()` must cover the new
    file when it is part of the runtime source set.
-3. **Classic-script runtime proof.** When moving top-level globals between
+5. **Classic-script runtime proof.** When moving top-level globals between
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
@@ -83,7 +105,7 @@ Run and record these before verification or review:
    code references, cite where each dependency is defined, and verify each
    definition loads before the new file or is only called after the dependency
    is initialized. Manifest/source equality alone is not dependency proof.
-4. **Moved-symbol source audit.** Before the first full gate on any extraction
+6. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
@@ -126,29 +148,29 @@ Run and record these before verification or review:
    loading or parsing the production source; if a synthetic value is intentional,
    name and comment it as a synthetic fixture so it is not mistaken for behavior
    parity.
-5. **False-positive evidence.** Any reviewer finding rejected as a false positive
+7. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. Any reviewer claim
    that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
-6. **Review-fix shipment proof.** Before replying that a review finding is
+8. **Review-fix shipment proof.** Before replying that a review finding is
    addressed, verify the fix commit is present in the PR head (`headRefOid` or
    `gh pr view --json commits`) and that the changed file content is present in
    the branch or merge commit that will ship. If a PR was already merged, verify
    the target branch tree, not just the local feature branch.
-7. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+9. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
    and retry with smaller patches grouped by file or tightly related surface.
-8. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+10. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-9. **Pre-promotion authority/range audit.** Before opening or merging any PR
-   targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
+11. **Pre-promotion authority/range audit.** Before opening or merging any PR
+    targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
    repository branch-policy workflow or status checks for allowed source
    branches, and record the exact commit range with authorship
    (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
@@ -166,12 +188,12 @@ Run and record these before verification or review:
    instead of inferring approval. A closed PR whose source branch was changed or
    replaced should not be treated as reopenable; open a replacement PR from a
    fresh branch.
-10. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+12. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
     When editing roadmap or checklist-style docs, search for duplicate entries
     before review and again after conflict resolution.
-11. **Contractual iteration-order proof.** When extracting or reimplementing
+13. **Contractual iteration-order proof.** When extracting or reimplementing
     legacy behavior where scan, traversal, RNG, tie-break, or insertion order is
     part of the contract, derive the expected order directly from the source loop
     structure before writing tests or helper JSDoc. Record the loop shape in the
@@ -210,7 +232,7 @@ Before writing the retrospective:
    commit range, commit/PR authors, any human-authored commits by the audit
    definition above, and the quoted project or repository instruction that
    permits the promotion.
-11. If resuming after a restart, a handoff gap, or a user reference to "last
+10. If resuming after a restart, a handoff gap, or a user reference to "last
     session", an issue number, or a prior finding, query session history/checkpoints
     for that reference before assuming the current shell directory is the active
     work context.
@@ -230,6 +252,11 @@ Collect only facts that affect future behavior:
   source citations, runtime-order proof, or post-final-rebase review that proves
   it. Pre-rebase reviews may be historical context, but they are not the
   load-bearing review evidence for the shipped tree;
+- stale-resume preflight status, if the work item resumed existing branch,
+  worktree, staged diff, handoff, session-history work, or any branch that had
+  not fetched in the current session;
+- review-risk triage: changed code-bearing paths, red-risk or ambiguous
+  applicability, reviewer count required, and reviewer count actually used;
 - fresh-worktree bootstrap status;
 - new-runtime-file surface audit, if a runtime file was added or moved;
 - classic-script runtime proof, if top-level globals moved;
