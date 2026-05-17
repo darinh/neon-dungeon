@@ -211,3 +211,6 @@ If you add a brand-new file under `ASSETS`, add the path to the precache list in
 - New tests follow the existing CommonJS pattern unless the surrounding file uses
   ESM: `const { test } = require('node:test'); const assert = require('node:assert/strict');`.
 - Some tests load source via `require()` UMD-style (see `tests/cores.test.js`); preserve that pattern.
+- Geometry and input-hitbox tests must assert the complete rectangle: origin X,
+  origin Y, width, height, and all four boundary conditions (left, right, top,
+  bottom). Partial coverage of a rectangle is a review finding.

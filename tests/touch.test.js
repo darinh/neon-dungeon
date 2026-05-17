@@ -165,3 +165,22 @@ test('touch routing sends hit-tested modal taps through coordinates instead of a
   assert.match(PLATFORM, /else\s*\{\s*justPressed\.add\('Enter'\);\s*justPressed\.add\('MouseLeft'\);\s*\}/,
     'generic fallback remains for states that intentionally treat touch as confirm');
 });
+
+test('mobile minimap touch expansion hitbox scales with settings.minimapScale', () => {
+  assert.match(PLATFORM, /const\s+_miniW\s*=\s*Math\.round\(\s*120\s*\*\s*settings\.minimapScale\s*\)/,
+    'minimap touch hitbox width must match the rendered minimap width');
+  assert.match(PLATFORM, /const\s+_miniH\s*=\s*Math\.round\(\s*80\s*\*\s*settings\.minimapScale\s*\)/,
+    'minimap touch hitbox height must match the rendered minimap height');
+  assert.match(PLATFORM, /const\s+_mx\s*=\s*W\s*-\s*_miniW\s*-\s*8\s*-\s*safeRight/,
+    'minimap touch hitbox anchor must reserve the scaled minimap width from the right edge');
+  assert.match(PLATFORM, /_my\s*=\s*8\s*\+\s*safeTop/,
+    'minimap touch hitbox Y anchor must match the rendered minimap top edge');
+  assert.match(PLATFORM, /cx\s*>=\s*_mx\s*-\s*2/,
+    'minimap touch hitbox must extend 2px left of the scaled minimap');
+  assert.match(PLATFORM, /cx\s*<=\s*_mx\s*\+\s*_miniW\s*\+\s*2/,
+    'minimap touch hitbox must extend 2px right of the scaled minimap');
+  assert.match(PLATFORM, /cy\s*>=\s*_my\s*-\s*2/,
+    'minimap touch hitbox must extend 2px above the scaled minimap');
+  assert.match(PLATFORM, /cy\s*<=\s*_my\s*\+\s*_miniH\s*\+\s*2/,
+    'minimap touch hitbox must extend 2px below the scaled minimap');
+});
