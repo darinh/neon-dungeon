@@ -843,8 +843,10 @@ canvas.addEventListener('touchstart', e => {
     if (hitBtn(cx,cy,BTNS.DASH))  { touch.btnDash=t.identifier; justPressed.add('CheatShift'); justPressed.add(km('dash')); continue; }
     if (hitBtn(cx,cy,BTNS.PAUSE)) { touch.btnPause=t.identifier; justPressed.add('Escape'); continue; }
     // Tap minimap area to expand (after buttons so pause isn't stolen)
-    const _mx = W - 120 - 8 - safeRight, _my = 8 + safeTop;
-    if (cx >= _mx - 2 && cx <= _mx + 122 && cy >= _my - 2 && cy <= _my + 82) { justPressed.add('Tab'); continue; }
+    const _miniW = Math.round(120 * settings.minimapScale);
+    const _miniH = Math.round(80 * settings.minimapScale);
+    const _mx = W - _miniW - 8 - safeRight, _my = 8 + safeTop;
+    if (cx >= _mx - 2 && cx <= _mx + _miniW + 2 && cy >= _my - 2 && cy <= _my + _miniH + 2) { justPressed.add('Tab'); continue; }
     // left half = joystick
     if (cx < W/2 && !touch.joystick.active) {
       touch.joystick.active=true; touch.joystick.id=t.identifier;
