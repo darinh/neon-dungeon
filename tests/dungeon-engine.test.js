@@ -282,6 +282,34 @@ test('dungeon topology room boundary openings honor bounds and position exclusio
   assert.notDeepEqual(topology.findRoomBoundaryOpenings(map, room, (tile) => tile === FLOOR), []);
 });
 
+test('dungeon topology engine scans room boundary gates with outside faces', () => {
+  const WALL = 1, FLOOR = 2, LOCKED = 7, CRACKED = 15, CHALLENGE_GATE = 17;
+  const map = topology.createMap(5, 5, WALL);
+  const room = { x: 1, y: 1, w: 3, h: 3 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+  map[1][1] = LOCKED;
+  map[1][2] = CRACKED;
+  map[3][3] = CHALLENGE_GATE;
+
+  assert.deepEqual(
+    topology.findRoomBoundaryGates(
+      map,
+      room,
+      (tile) => tile === LOCKED || tile === CRACKED || tile === CHALLENGE_GATE
+    ),
+    [
+      { x: 1, y: 1, ox: 1, oy: 0 },
+      { x: 2, y: 1, ox: 2, oy: 0 },
+      { x: 3, y: 3, ox: 3, oy: 4 },
+      { x: 1, y: 1, ox: 0, oy: 1 },
+      { x: 3, y: 3, ox: 4, oy: 3 },
+    ],
+    'scan order and corner duplicate faces must match the legacy repair code'
+  );
+});
+
 test('dungeon topology engine finds room-neighborhood tiles in legacy y-major order', () => {
   const WALL = 1, FLOOR = 2, TARGET = 9;
   const map = topology.createMap(7, 6, WALL);
