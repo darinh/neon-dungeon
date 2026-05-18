@@ -540,6 +540,13 @@ declare global {
   interface EngineDungeonTopologyAPI {
     /** Shared cardinal traversal order for extracted dungeon topology helpers. */
     CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number]>;
+    /** Counts caller-defined cardinal neighbours around a coordinate. */
+    countCardinalNeighbors(
+      x: number,
+      y: number,
+      matchesNeighbor: (x: number, y: number) => boolean,
+      isExcluded?: (x: number, y: number) => boolean,
+    ): number;
     createMap(width: number, height: number, fillTile: number): Uint8Array[];
     carveRect(
       map: ArrayLike<ArrayLike<number>>,
