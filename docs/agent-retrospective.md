@@ -92,13 +92,19 @@ Run and record these before verification or review:
 4. **Bounded command preflight.** Before running repository-wide discovery
    commands in long-lived checkouts, prefer exact queries over broad listings and
    bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
-   line limit. Any startup or discovery command expected to print more than 50
-   lines must be narrowed before it runs, not after the pager opens; examples are
-   `git branch --list 'pattern' --no-column`, a bounded `git worktree list
-   --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
-   Use tool names that are known to exist in this environment (`python3`, not
-   `python`) or preflight them with `command -v`. For startup continuity checks,
-   do not run unbounded branch/worktree/history listings; use targeted commands
+    line limit. Any startup or discovery command expected to print more than 50
+    lines must be narrowed before it runs, not after the pager opens; examples are
+    `git branch --list 'pattern' --no-column`, a bounded `git worktree list
+    --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
+    Never display raw `git branch --no-merged ...` output in startup or
+    continuity preflight. If unmerged-branch information is needed, use a count
+    (`GIT_PAGER=cat git branch --no-merged <base> | wc -l`) or a narrowed
+    pattern/list with `--no-column` and an explicit line limit in the same
+    command. A remembered warning about broad branch listings is not sufficient
+    mitigation after a repeat pager incident.
+    Use tool names that are known to exist in this environment (`python3`, not
+    `python`) or preflight them with `command -v`. For startup continuity checks,
+    do not run unbounded branch/worktree/history listings; use targeted commands
    such as `git for-each-ref --format='%(refname:short)' refs/heads/<prefix>`,
    `git branch --list '<pattern>' --no-column`, or `gh pr list --limit N --json`.
    Treat a command that pages through stale branches, worktrees, or history as a
