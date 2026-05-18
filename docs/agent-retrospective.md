@@ -89,12 +89,24 @@ Run and record these before verification or review:
    (`npm ci` for this project) before recording baseline verification or using
    test failures as evidence. Check and record this bootstrap status before the
    first npm verification command in a fresh implementation worktree.
-4. **New-runtime-file surface audit.** Any new browser runtime source file must
+4. **Bounded command preflight.** Before running repository-wide discovery
+   commands in long-lived checkouts, prefer exact queries over broad listings and
+   bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
+   line limit. Treat a command that pages through stale branches, worktrees, or
+   history as a process miss and replace it with a narrower query before
+   continuing.
+5. **CI failure classification.** Before changing code, workflows, or release
+   state for a failed check, read the failed job log and classify the failure as
+   checkout/runner infrastructure, dependency/bootstrap, or product code. For
+   self-hosted runner checkout failures, inspect the runner workspace cache
+   first; corrupt object or checkout-cache failures should be repaired and rerun
+   before any repository change is considered.
+6. **New-runtime-file surface audit.** Any new browser runtime source file must
    be checked against all registration surfaces: `index.html`,
    `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
    and docs. Default helper paths such as `readSourceFiles()` must cover the new
    file when it is part of the runtime source set.
-5. **Classic-script runtime proof.** When moving top-level globals between
+7. **Classic-script runtime proof.** When moving top-level globals between
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
@@ -105,7 +117,7 @@ Run and record these before verification or review:
    code references, cite where each dependency is defined, and verify each
    definition loads before the new file or is only called after the dependency
    is initialized. Manifest/source equality alone is not dependency proof.
-6. **Moved-symbol source audit.** Before the first full gate on any extraction
+8. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
@@ -148,28 +160,28 @@ Run and record these before verification or review:
    loading or parsing the production source; if a synthetic value is intentional,
    name and comment it as a synthetic fixture so it is not mistaken for behavior
    parity.
-7. **False-positive evidence.** Any reviewer finding rejected as a false positive
+9. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. Any reviewer claim
    that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
-8. **Review-fix shipment proof.** Before replying that a review finding is
+10. **Review-fix shipment proof.** Before replying that a review finding is
    addressed, verify the fix commit is present in the PR head (`headRefOid` or
    `gh pr view --json commits`) and that the changed file content is present in
    the branch or merge commit that will ship. If a PR was already merged, verify
    the target branch tree, not just the local feature branch.
-9. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+11. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
    and retry with smaller patches grouped by file or tightly related surface.
-10. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+12. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-11. **Pre-promotion authority/range audit.** Before opening or merging any PR
+13. **Pre-promotion authority/range audit.** Before opening or merging any PR
     targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
    repository branch-policy workflow or status checks for allowed source
    branches, and record the exact commit range with authorship
@@ -188,12 +200,12 @@ Run and record these before verification or review:
    instead of inferring approval. A closed PR whose source branch was changed or
    replaced should not be treated as reopenable; open a replacement PR from a
    fresh branch.
-12. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+14. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
     When editing roadmap or checklist-style docs, search for duplicate entries
     before review and again after conflict resolution.
-13. **Contractual iteration-order proof.** When extracting or reimplementing
+15. **Contractual iteration-order proof.** When extracting or reimplementing
     legacy behavior where scan, traversal, RNG, tie-break, or insertion order is
     part of the contract, derive the expected order directly from the source loop
     structure before writing tests or helper JSDoc. Record the loop shape in the
@@ -337,9 +349,9 @@ Collect only facts that affect future behavior:
    If force-aligning branches after a rebase promotion, record the precondition:
    the branches are patch-equivalent and the force-with-lease protects the
    observed old target SHA.
-8. **Verify pre-verification controls.** Confirm bootstrap, runtime-file surface
-   audit, classic-script runtime proof, and false-positive evidence were handled
-   where applicable.
+8. **Verify pre-verification controls.** Confirm every numbered
+   pre-verification control was handled where applicable, including explicit
+   `not applicable` reasons for controls outside the work item's scope.
 9. **Check continuity.** Query the active issue/backlog. If actionable work
    remains, the completion action is to start it after attaching this
    retrospective, not to stop or call `task_complete`.
