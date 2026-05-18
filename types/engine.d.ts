@@ -705,6 +705,17 @@ declare global {
       isTargetTile: (tile: number) => boolean,
       padding?: number,
     ): { x: number; y: number } | null;
+    /**
+     * Finds a cardinal BFS path through the interior coordinate grid only,
+     * ignoring map tile contents. Returns target-to-start coordinates excluding
+     * the start so hosts can apply their own tile mutation policy.
+     */
+    findInteriorGridBfsPath(
+      width: number,
+      height: number,
+      start: { x: number; y: number },
+      target: { x: number; y: number },
+    ): Array<{ x: number; y: number }> | null;
     BSPNode: unknown;
   }
 

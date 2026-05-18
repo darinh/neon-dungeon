@@ -928,35 +928,8 @@ function generateFloor(floorNum, opts) {
   function carveProtectedRescueCorridorTo(tx, ty) {
     const sx = spawnRoom.cx;
     const sy = spawnRoom.cy;
-    /** @type {{x:number,y:number}[]} */
-    const q = [{ x: sx, y: sy }];
-    /** @type {Int16Array[]} */
-    const prev = Array.from({ length: MAP_H }, () => new Int16Array(MAP_W).fill(-1));
-    const startRow = prev[sy];
-    if (!startRow) return;
-    startRow[sx] = sy * MAP_W + sx;
-    for (let qi = 0; qi < q.length; qi++) {
-      const current = q[qi];
-      if (!current) continue;
-      const { x, y } = current;
-      if (x === tx && y === ty) break;
-      const dirs = /** @type {const} */ ([[1, 0], [-1, 0], [0, 1], [0, -1]]);
-      for (const dir of dirs) {
-        const dx = dir[0];
-        const dy = dir[1];
-        const nx = x + dx;
-        const ny = y + dy;
-        const prevRow = prev[ny];
-        if (nx <= 0 || ny <= 0 || nx >= MAP_W - 1 || ny >= MAP_H - 1 || !prevRow) continue;
-        const seen = prevRow[nx];
-        if (seen === undefined || seen >= 0) continue;
-        prevRow[nx] = y * MAP_W + x;
-        q.push({ x: nx, y: ny });
-      }
-    }
-    const targetRow = prev[ty];
-    const targetSeen = targetRow?.[tx];
-    if (targetSeen === undefined || targetSeen < 0) {
+    const path = dungeonTopology.findInteriorGridBfsPath(MAP_W, MAP_H, { x: sx, y: sy }, { x: tx, y: ty });
+    if (!path) {
       let cx = sx, cy = sy;
       while (cx !== tx) {
         if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
@@ -969,16 +942,8 @@ function generateFloor(floorNum, opts) {
       if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
       return;
     }
-    let cx = tx;
-    let cy = ty;
-    while (!(cx === sx && cy === sy)) {
+    for (const { x: cx, y: cy } of path) {
       if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR;
-      const pathRow = prev[cy];
-      if (!pathRow) break;
-      const p = pathRow[cx];
-      if (p === undefined || p < 0) break;
-      cy = Math.floor(p / MAP_W);
-      cx = p % MAP_W;
     }
   }
 
