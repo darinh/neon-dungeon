@@ -684,6 +684,67 @@
     return null;
   }
 
+  /**
+   * Finds a cardinal BFS path across the interior grid only, ignoring map tile
+   * contents entirely. This is topology coordinate search: callers own all
+   * walkability and mutation policy.
+   *
+   * Returns coordinates from target back toward start, excluding start, matching
+   * the legacy rescue-corridor backtracking order.
+   *
+   * @param {number} width
+   * @param {number} height
+   * @param {{x:number,y:number}} start
+   * @param {{x:number,y:number}} target
+   * @returns {{x:number,y:number}[]|null}
+   */
+  function findInteriorGridBfsPath(width, height, start, target) {
+    const sx = start.x;
+    const sy = start.y;
+    const tx = target.x;
+    const ty = target.y;
+    const inInterior = (/** @type {number} */ x, /** @type {number} */ y) =>
+      Number.isInteger(x) && Number.isInteger(y) && x > 0 && y > 0 && x < width - 1 && y < height - 1;
+    if (!inInterior(sx, sy) || !inInterior(tx, ty)) return null;
+    /** @type {{x:number,y:number}[]} */
+    const q = [{ x: sx, y: sy }];
+    /** @type {Int32Array[]} */
+    const prev = Array.from({ length: height }, () => new Int32Array(width).fill(-1));
+    const startRow = prev[sy];
+    if (!startRow) return null;
+    startRow[sx] = sy * width + sx;
+    for (let qi = 0; qi < q.length; qi++) {
+      const current = q[qi];
+      if (!current) continue;
+      const { x, y } = current;
+      if (x === tx && y === ty) break;
+      for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const prevRow = prev[ny];
+        if (nx <= 0 || ny <= 0 || nx >= width - 1 || ny >= height - 1 || !prevRow) continue;
+        const seen = prevRow[nx];
+        if (seen === undefined || seen >= 0) continue;
+        prevRow[nx] = y * width + x;
+        q.push({ x: nx, y: ny });
+      }
+    }
+    const targetSeen = prev[ty]?.[tx];
+    if (targetSeen === undefined || targetSeen < 0) return null;
+    /** @type {{x:number,y:number}[]} */
+    const path = [];
+    let cx = tx;
+    let cy = ty;
+    while (!(cx === sx && cy === sy)) {
+      path.push({ x: cx, y: cy });
+      const p = prev[cy]?.[cx];
+      if (p === undefined || p < 0) return null;
+      cy = Math.floor(p / width);
+      cx = p % width;
+    }
+    return path;
+  }
+
   return {
     CARDINAL_DIRECTIONS,
     countCardinalNeighbors,
@@ -708,6 +769,7 @@
     findRoomBoundaryGates,
     findOutsideEntranceGatesForRoom,
     findRoomNeighborhoodTile,
+    findInteriorGridBfsPath,
     BSPNode,
   };
 }));
