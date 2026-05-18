@@ -92,9 +92,14 @@ Run and record these before verification or review:
 4. **Bounded command preflight.** Before running repository-wide discovery
    commands in long-lived checkouts, prefer exact queries over broad listings and
    bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
-   line limit. Treat a command that pages through stale branches, worktrees, or
-   history as a process miss and replace it with a narrower query before
-   continuing.
+   line limit. Any startup or discovery command expected to print more than 50
+   lines must be narrowed before it runs, not after the pager opens; examples are
+   `git branch --list 'pattern' --no-column`, a bounded `git worktree list
+   --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
+   Use tool names that are known to exist in this environment (`python3`, not
+   `python`) or preflight them with `command -v`. Treat a command that pages
+   through stale branches, worktrees, or history as a process miss and replace it
+   with a narrower query before continuing.
 5. **CI failure classification.** Before changing code, workflows, or release
    state for a failed check, read the failed job log and classify the failure as
    checkout/runner infrastructure, dependency/bootstrap, or product code. For
@@ -214,6 +219,20 @@ Run and record these before verification or review:
     structure before writing tests or helper JSDoc. Record the loop shape in the
     evidence (for example, "top/bottom per x, then left/right per y") and add a
     characterization test that asserts the exact output order before review.
+16. **Extraction equivalence and smoke proof.** For each extracted function or
+    helper, add a focused characterization/equivalence test that covers the moved
+    behavior's contract, including edge cases that made the original code
+    non-trivial. If one test is sufficient, say why; if no new test is added,
+    record the existing test name that already covers the extracted contract. For
+    dungeon-generation, render, input, or other hot-path/runtime extractions, run
+    a focused smoke test that exercises the integrated caller before review or
+    immediately after release if the smoke depends on shipped artifacts.
+17. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
+    that is not already used successfully in the current session, either preflight
+    the help/version output or be prepared to record the exact fallback command
+    that succeeded. A tool-version mismatch is not resolved by retrying once; the
+    retrospective must name the canonical compatible command shape used after the
+    mismatch.
 
 ## Pre-retrospective checklist
 
@@ -251,6 +270,11 @@ Before writing the retrospective:
     session", an issue number, or a prior finding, query session history/checkpoints
     for that reference before assuming the current shell directory is the active
     work context.
+11. If `origin/main` and `origin/develop` diverged during release promotion,
+    record the deliberate reconciliation evidence: likely root cause, exact
+    pre-alignment SHAs, tree IDs, patch-equivalence proof, force-with-lease target
+    SHA, and the post-alignment SHAs. Do not treat "trees matched" as sufficient
+    without explaining why alignment was safe for open PRs and active work.
 
 ## Required inputs
 
@@ -262,6 +286,9 @@ Collect only facts that affect future behavior:
 - files changed and PR number, if any;
 - pasted final diff or commit range for reviewers;
 - checks run and their outcomes;
+- extraction/refactor characterization evidence: the new or existing tests that
+  prove the moved behavior's contract, plus the focused integrated smoke test for
+  runtime/hot-path extractions;
 - primary claim evidence: map the main success claim (for example, behavior
   preservation, runtime wiring, or policy compliance) to the specific tests,
   source citations, runtime-order proof, or post-final-rebase review that proves
@@ -279,6 +306,9 @@ Collect only facts that affect future behavior:
   merge/release tree-equivalence proof when squash or rebase promotion rewrites
   commit SHAs;
 - review findings, including false positives and why they happened;
+- reviewer scope summary: whether reviewers inspected the staged diff or shipped
+  tree, the invariants they were asked to check, and any requested changes or
+  explicit no-issue verdicts;
 - review-fix shipment proof: PR head/commit evidence and target-branch content
   evidence for every claim that a review finding was addressed;
 - incidents, near misses, user corrections, or places where the agent wasted
@@ -291,6 +321,9 @@ Collect only facts that affect future behavior:
   branch policy, commit range, PR opener, squash/rebase commit author, original
   PR commit authors, any human-authored commits by the audit definition, and
   cited merge authority;
+- branch-divergence reconciliation evidence when `main` and `develop` differ by
+  SHA after a promotion: root cause, tree IDs, patch-equivalence proof,
+  force-with-lease target, and post-alignment SHAs;
 - decisions that changed the plan;
 - next-work decision: started next item, no actionable work, or blocked reason;
 - continuity check result: command, exit code, and output;
