@@ -626,6 +626,17 @@ declare global {
       y: number,
     ): { x: number; y: number; dx: number; dy: number } | null;
     /**
+     * Finds room-interior side-padding coordinates perpendicular to a former
+     * boundary entrance. Tile mutation and blocked-tile semantics stay in the host.
+     */
+    findFormerEntranceSidePaddingTiles(
+      room: { x: number; y: number; w: number; h: number },
+      x: number,
+      y: number,
+      dx: number,
+      dy: number,
+    ): Array<{ x: number; y: number }>;
+    /**
      * Finds room boundary sides adjacent to an outside entrance tile, preserving
      * cardinal scan order and skipping corner boundary tiles.
      */

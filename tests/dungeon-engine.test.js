@@ -127,6 +127,21 @@ test('dungeon topology outside entrance room sides skip corner boundary tiles', 
   assert.deepEqual(topology.findOutsideEntranceRoomSides([matchingRoom, cornerBlocker], 5, 5), []);
 });
 
+test('dungeon topology finds former entrance side padding tiles without corners', () => {
+  const room = { x: 2, y: 2, w: 5, h: 4 };
+
+  assert.deepEqual(
+    topology.findFormerEntranceSidePaddingTiles(room, 4, 2, 0, -1),
+    [{ x: 3, y: 2 }, { x: 5, y: 2 }],
+    'top/bottom entrances inspect horizontal side padding in legacy sign order'
+  );
+  assert.deepEqual(
+    topology.findFormerEntranceSidePaddingTiles(room, 2, 4, -1, 0),
+    [{ x: 2, y: 3 }],
+    'left/right entrances inspect vertical side padding and skip the room corner'
+  );
+});
+
 test('dungeon topology aligned outside passage repair preserves existing opposite connections', () => {
   const passages = new Set(['5,3']);
   const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);
