@@ -5,9 +5,14 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { joinSession } from "@github/copilot-sdk/extension";
 
-const ISSUE_NUMBER = "578";
+const require = createRequire(import.meta.url);
+const {
+    ACTIVE_ISSUE_NUMBER,
+    commandRunsRawGhPrMerge,
+} = require("../../../scripts/operator-guard-rules.js");
 const PRIMARY_CHECKOUT = "/home/darin/projects/neon-dungeon";
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(EXTENSION_DIR, "../../..");
@@ -59,7 +64,7 @@ async function runContinuityCheck() {
 
     const result = await execFileText(
         "node",
-        [CONTINUITY_SCRIPT, "--require-operator-guard", "--issue", ISSUE_NUMBER],
+        [CONTINUITY_SCRIPT, "--require-operator-guard", "--issue", ACTIVE_ISSUE_NUMBER],
         { cwd: PROJECT_ROOT },
     );
     const output = `${result.stdout}${result.stderr}`.trim();
@@ -75,13 +80,13 @@ const session = await joinSession({
             additionalContext: [
                 "NEON DUNGEON operator guard is active.",
                 "Use implementation worktrees for all code edits, commits, PRs, and test runs.",
-                `Before calling task_complete or handoff, run npm run check:agent-continuity -- --issue ${ISSUE_NUMBER}; if it fails, continue the next work item instead.`,
+                `Before calling task_complete or handoff, run npm run check:agent-continuity -- --issue ${ACTIVE_ISSUE_NUMBER}; if it fails, continue the next work item instead.`,
             ].join("\n"),
         }),
         onUserPromptSubmitted: async () => ({
             additionalContext: [
                 "NEON DUNGEON operator guard reminder: all implementation work belongs in a git worktree, not the primary checkout.",
-                `Issue #${ISSUE_NUMBER} continuity is enforceable through npm run check:agent-continuity -- --issue ${ISSUE_NUMBER}.`,
+                `Issue #${ACTIVE_ISSUE_NUMBER} continuity is enforceable through npm run check:agent-continuity -- --issue ${ACTIVE_ISSUE_NUMBER}.`,
             ].join("\n"),
         }),
         onPreToolUse: async (input) => {
@@ -100,6 +105,12 @@ const session = await joinSession({
 
             if (toolName.endsWith("bash")) {
                 const command = String(toolArgs?.command || "");
+                if (commandRunsRawGhPrMerge(command)) {
+                    return {
+                        permissionDecision: "deny",
+                        permissionDecisionReason: "NEON DUNGEON guard: raw `gh pr merge` is blocked; use `npm run merge:pr -- <pr> --method squash|rebase` so the repository merge wrapper performs its preflight.",
+                    };
+                }
                 if (
                     (cwdIsPrimaryCheckout(input.cwd) || commandTargetsPrimaryCheckout(command)) &&
                     DANGEROUS_MAIN_CHECKOUT_GIT.test(command)
@@ -137,7 +148,7 @@ const session = await joinSession({
     tools: [
         {
             name: "neon_operator_status",
-            description: "Runs the NEON DUNGEON continuity guard for issue #578 and reports whether completion is allowed.",
+            description: `Runs the NEON DUNGEON continuity guard for issue #${ACTIVE_ISSUE_NUMBER} and reports whether completion is allowed.`,
             parameters: { type: "object", properties: {} },
             skipPermission: true,
             handler: async () => {

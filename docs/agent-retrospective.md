@@ -162,8 +162,11 @@ Run and record these before verification or review:
    parity.
 9. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
-   concern does not get relitigated without new evidence. Any reviewer claim
-   that a removed invariant, comment, symbol, or behavior is "preserved
+   concern does not get relitigated without new evidence. A critique claim based
+   on repository shape or file existence must cite current-repo evidence before
+   it can block or redirect work; if it lacks that evidence, treat the stale claim
+   as a critique-process miss and verify it directly before acting. Any reviewer
+   claim that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
 10. **Review-fix shipment proof.** Before replying that a review finding is
@@ -325,9 +328,13 @@ Collect only facts that affect future behavior:
    `npm run merge:pr -- <pr> --method squash|rebase`; the wrapper performs the
    parsed state preflight, refuses `--delete-branch`, enforces the expected merge
    method for `develop` and `main`, checks statuses, and verifies the remote
-   merge result. If a retrospective finds that this wrapper or its parsed-state
-   guard was skipped, the recurrence-prevention response must be mechanical
-   (script, wrapper, or CI/continuity check), not a restatement of this text.
+   merge result. The operator guard extension blocks raw `gh pr merge` bash
+   commands so agents must use the wrapper path. If a retrospective finds that
+   this wrapper, its parsed-state guard, or the raw-merge tool block was skipped,
+   the recurrence-prevention response must be mechanical (script, wrapper,
+   extension hook, or CI/continuity check), not a restatement of this text.
+   Successful post-merge verification is detective evidence only; it does not
+   convert a skipped preventive guard into an acceptable merge path.
    If using the underlying command manually, the retrospective evidence must
    include the parsed state value or the hard-stop output:
 
