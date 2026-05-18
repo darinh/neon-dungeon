@@ -401,6 +401,33 @@
   }
 
   /**
+   * Returns the two room-interior side-padding coordinates perpendicular to a
+   * former boundary entrance, preserving legacy sign order and corner skipping.
+   * The host owns tile mutation and blocked-tile semantics.
+   *
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {number} x
+   * @param {number} y
+   * @param {number} dx
+   * @param {number} dy
+   * @returns {{x:number,y:number}[]}
+   */
+  function findFormerEntranceSidePaddingTiles(room, x, y, dx, dy) {
+    const px = dy === 0 ? 0 : 1;
+    const py = dx === 0 ? 0 : 1;
+    /** @type {{x:number,y:number}[]} */
+    const tiles = [];
+    for (const sign of [-1, 1]) {
+      const sx = x + px * sign;
+      const sy = y + py * sign;
+      if (sx < room.x || sx >= room.x + room.w || sy < room.y || sy >= room.y + room.h) continue;
+      if (roomHasCorner(room, sx, sy)) continue;
+      tiles.push({ x: sx, y: sy });
+    }
+    return tiles;
+  }
+
+  /**
    * Finds room boundary sides adjacent to an outside entrance tile. Scan order
    * follows `CARDINAL_DIRECTIONS`, and boundary tiles that are corners of any
    * room are skipped to preserve single-face entrance semantics.
@@ -673,6 +700,7 @@
     resolvePreferredSpawnRoom,
     roomHasCorner,
     outsideFaceForBoundaryTile,
+    findFormerEntranceSidePaddingTiles,
     findOutsideEntranceRoomSides,
     findAlignedOutsidePassageRepair,
     findBoundaryEntranceClusters,
