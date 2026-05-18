@@ -540,6 +540,23 @@ test('dungeon topology preferred-spawn search handles empty inputs and bounded r
   }), null);
 });
 
+test('dungeon topology interior grid BFS path preserves cardinal tie-breaks', () => {
+  assert.deepEqual(
+    topology.findInteriorGridBfsPath(6, 6, { x: 2, y: 2 }, { x: 4, y: 4 }),
+    [
+      { x: 4, y: 4 },
+      { x: 4, y: 3 },
+      { x: 4, y: 2 },
+      { x: 3, y: 2 },
+    ]
+  );
+});
+
+test('dungeon topology interior grid BFS path rejects boundary targets and handles start target', () => {
+  assert.equal(topology.findInteriorGridBfsPath(6, 6, { x: 2, y: 2 }, { x: 0, y: 2 }), null);
+  assert.deepEqual(topology.findInteriorGridBfsPath(6, 6, { x: 2, y: 2 }, { x: 2, y: 2 }), []);
+});
+
 test('dungeon reachability solver reports physical key-lock progression facts', () => {
   const W = 8, H = 4;
   const map = Array.from({ length: H }, () => new Uint8Array(W).fill(1));

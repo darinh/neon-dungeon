@@ -146,6 +146,10 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'reachability repair must delegate room-boundary gate scans to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findOutsideEntranceGatesForRoom\(\s*map,\s*room,\s*isDoorLikeEntranceTile,\s*tileInsideAnyRoom\s*\)/,
     'door-corner reachability repair must delegate outside entrance gate scans to the dungeon topology engine');
+  assert.match(CONTENT, /dungeonTopology\.findInteriorGridBfsPath\(MAP_W,\s*MAP_H,\s*{\s*x:\s*sx,\s*y:\s*sy\s*},\s*{\s*x:\s*tx,\s*y:\s*ty\s*}\)/,
+    'rescue corridor carving must delegate generic interior grid BFS search to the dungeon topology engine');
+  assert.doesNotMatch(CONTENT, /function\s+carveProtectedRescueCorridorTo[\s\S]*?new\s+Int16Array\(MAP_W\)\.fill\(-1\)[\s\S]*?function\s+clearOrphanEntranceTiles/,
+    'rescue corridor path search should not keep its old inline predecessor grid in floor-generator');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 
