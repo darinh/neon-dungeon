@@ -97,9 +97,15 @@ Run and record these before verification or review:
    `git branch --list 'pattern' --no-column`, a bounded `git worktree list
    --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
    Use tool names that are known to exist in this environment (`python3`, not
-   `python`) or preflight them with `command -v`. Treat a command that pages
-   through stale branches, worktrees, or history as a process miss and replace it
-   with a narrower query before continuing.
+   `python`) or preflight them with `command -v`. For startup continuity checks,
+   do not run unbounded branch/worktree/history listings; use targeted commands
+   such as `git for-each-ref --format='%(refname:short)' refs/heads/<prefix>`,
+   `git branch --list '<pattern>' --no-column`, or `gh pr list --limit N --json`.
+   Treat a command that pages through stale branches, worktrees, or history as a
+   process miss and replace it with a narrower query before continuing. If the
+   same pager class recurs after this guard was already in force, record why the
+   documented guard failed and add a stronger repo, extension, or shell-level
+   prevention instead of only restating the rule.
 5. **CI failure classification.** Before changing code, workflows, or release
    state for a failed check, read the failed job log and classify the failure as
    checkout/runner infrastructure, dependency/bootstrap, or product code. For
@@ -226,13 +232,27 @@ Run and record these before verification or review:
     record the existing test name that already covers the extracted contract. For
     dungeon-generation, render, input, or other hot-path/runtime extractions, run
     a focused smoke test that exercises the integrated caller before review or
-    immediately after release if the smoke depends on shipped artifacts.
+    immediately after release if the smoke depends on shipped artifacts. For
+    behavior-preserving dungeon-generation refactors, include deterministic
+    seeded-output evidence before and after the change: either a before/after
+    digest comparison for representative seeds/floors, or an existing checked-in
+    digest test that was run both before and after. Record the exact seeds/floors
+    and test names so "behavior-preserving" is backed by reproducible output,
+    not only by source-motion review.
 17. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
     that is not already used successfully in the current session, either preflight
     the help/version output or be prepared to record the exact fallback command
     that succeeded. A tool-version mismatch is not resolved by retrying once; the
     retrospective must name the canonical compatible command shape used after the
     mismatch.
+18. **Shared-branch force alignment guard.** Before force-with-lease aligning a
+    shared branch after a deliberate rebase promotion, fetch the remote branch,
+    record the exact old and new SHAs, prove the source and target trees match,
+    and check for open PRs or unexpected commits that would be overwritten. If
+    the target changed since the promotion PR was opened or contains work outside
+    the just-promoted range, stop and reconcile deliberately instead of force
+    pushing. The retrospective must include the command evidence that made the
+    alignment safe.
 
 ## Pre-retrospective checklist
 
@@ -289,6 +309,8 @@ Collect only facts that affect future behavior:
 - extraction/refactor characterization evidence: the new or existing tests that
   prove the moved behavior's contract, plus the focused integrated smoke test for
   runtime/hot-path extractions;
+- test delta itemization: every new or removed test name, file, and purpose, plus
+  how the focused/full test-count changes map to those tests;
 - primary claim evidence: map the main success claim (for example, behavior
   preservation, runtime wiring, or policy compliance) to the specific tests,
   source citations, runtime-order proof, or post-final-rebase review that proves
@@ -308,7 +330,8 @@ Collect only facts that affect future behavior:
 - review findings, including false positives and why they happened;
 - reviewer scope summary: whether reviewers inspected the staged diff or shipped
   tree, the invariants they were asked to check, and any requested changes or
-  explicit no-issue verdicts;
+  explicit no-issue verdicts; include short reviewer-output excerpts for each
+  load-bearing review instead of only summarizing "no issues";
 - review-fix shipment proof: PR head/commit evidence and target-branch content
   evidence for every claim that a review finding was addressed;
 - incidents, near misses, user corrections, or places where the agent wasted
