@@ -100,6 +100,49 @@ test('dungeon topology counts cardinal neighbors with injected semantics', () =>
   ]);
 });
 
+test('dungeon topology finds cardinal-connected positions in traversal order', () => {
+  const open = new Set(['3,3', '4,3', '3,4', '2,4', '3,5']);
+  const calls = [];
+
+  const cluster = topology.findCardinalConnectedPositions(3, 3, (x, y) => {
+    calls.push(x + ',' + y);
+    return open.has(x + ',' + y);
+  });
+
+  assert.deepEqual(cluster, [
+    { x: 3, y: 3 },
+    { x: 4, y: 3 },
+    { x: 3, y: 4 },
+    { x: 2, y: 4 },
+    { x: 3, y: 5 },
+  ]);
+  assert.deepEqual(calls.slice(0, 9), [
+    '3,3',
+    '4,3',
+    '2,3',
+    '3,4',
+    '3,2',
+    '5,3',
+    '4,4',
+    '4,2',
+    '4,4',
+  ]);
+});
+
+test('dungeon topology connected-position predicate owns bounds and start eligibility', () => {
+  const width = 3;
+  const height = 3;
+  const open = new Set(['0,0', '1,0']);
+  const matches = (/** @type {number} */ x, /** @type {number} */ y) =>
+    x >= 0 && y >= 0 && x < width && y < height && open.has(x + ',' + y);
+
+  assert.deepEqual(topology.findCardinalConnectedPositions(0, 0, matches), [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+  ]);
+  assert.deepEqual(topology.findCardinalConnectedPositions(2, 2, matches), []);
+});
+
 test('dungeon topology engine finds outside entrance room sides in cardinal order', () => {
   const outside = { x: 5, y: 5 };
   const rooms = [
