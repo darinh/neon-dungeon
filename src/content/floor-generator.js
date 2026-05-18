@@ -888,22 +888,12 @@ function generateFloor(floorNum, opts) {
 
   function repairReachabilityAfterDoorCornerSealing() {
     /** @param {any} room */
-    const outsideEntranceGatesForRoom = (room) => {
-      /** @type {{x:number,y:number,ox:number,oy:number}[]} */
-      const gates = [];
-      for (let y = 1; y < MAP_H - 1; y++) {
-        for (let x = 1; x < MAP_W - 1; x++) {
-          if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
-          for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-            const bx = x + dx;
-            const by = y + dy;
-            const outside = outsideFaceForBoundaryTile(room, bx, by);
-            if (outside?.x === x && outside?.y === y) gates.push({ x, y, ox: x - dx, oy: y - dy });
-          }
-        }
-      }
-      return gates;
-    };
+    const outsideEntranceGatesForRoom = (room) => dungeonTopology.findOutsideEntranceGatesForRoom(
+      map,
+      room,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom
+    );
     for (let repair = 0; repair < rooms.length; repair++) {
       const solvedReach = solveProgressionReachability(rooms);
       const blocked = solvedReach.unreachableRooms[0];
