@@ -449,13 +449,8 @@ function generateFloor(floorNum, opts) {
    * @param {number} dy
    */
   function repairFormerEntranceSidePadding(room, x, y, dx, dy) {
-    const px = dy === 0 ? 0 : 1;
-    const py = dx === 0 ? 0 : 1;
-    for (const sign of [-1, 1]) {
-      const sx = x + px * sign;
-      const sy = y + py * sign;
-      if (sx < room.x || sx >= room.x + room.w || sy < room.y || sy >= room.y + room.h) continue;
-      if ((sx === room.x || sx === room.x + room.w - 1) && (sy === room.y || sy === room.y + room.h - 1)) continue;
+    const paddingTiles = dungeonTopology.findFormerEntranceSidePaddingTiles(room, x, y, dx, dy);
+    for (const { x: sx, y: sy } of paddingTiles) {
       if (map[sy]?.[sx] === T.WALL || map[sy]?.[sx] === T.VOID) map[sy][sx] = T.FLOOR;
     }
   }
