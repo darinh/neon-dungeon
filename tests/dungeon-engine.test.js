@@ -71,6 +71,35 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology counts cardinal neighbors with injected semantics', () => {
+  const calls = [];
+  const open = new Set(['4,3', '3,4']);
+
+  const count = topology.countCardinalNeighbors(
+    3,
+    3,
+    (x, y) => {
+      calls.push(`match:${x},${y}`);
+      return open.has(x + ',' + y);
+    },
+    (x, y) => {
+      calls.push(`exclude:${x},${y}`);
+      return x === 2 && y === 3;
+    }
+  );
+
+  assert.equal(count, 2);
+  assert.deepEqual(calls, [
+    'exclude:4,3',
+    'match:4,3',
+    'exclude:2,3',
+    'exclude:3,4',
+    'match:3,4',
+    'exclude:3,2',
+    'match:3,2',
+  ]);
+});
+
 test('dungeon topology engine finds outside entrance room sides in cardinal order', () => {
   const outside = { x: 5, y: 5 };
   const rooms = [

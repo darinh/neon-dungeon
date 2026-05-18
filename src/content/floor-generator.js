@@ -499,15 +499,11 @@ function generateFloor(floorNum, opts) {
 
   /** @param {number} x @param {number} y */
   function outsidePassageDegree(x, y) {
-    let degree = 0;
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (tileInsideAnyRoom(nx, ny)) continue;
+    return dungeonTopology.countCardinalNeighbors(x, y, /** @type {(nx:number, ny:number) => boolean} */ ((nx, ny) => {
+      if (tileInsideAnyRoom(nx, ny)) return false;
       const t = map[ny]?.[nx];
-      if (t !== T.WALL && t !== T.VOID) degree++;
-    }
-    return degree;
+      return t !== T.WALL && t !== T.VOID;
+    }));
   }
 
   /** @param {any} tile */
@@ -557,11 +553,11 @@ function generateFloor(floorNum, opts) {
 
   /** @param {number} x @param {number} y */
   function adjacentDoorLikeEntranceCount(x, y) {
-    let count = 0;
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      if (isDoorLikeEntranceTile(map[y + dy]?.[x + dx])) count++;
-    }
-    return count;
+    return dungeonTopology.countCardinalNeighbors(
+      x,
+      y,
+      /** @type {(nx:number, ny:number) => boolean} */ ((nx, ny) => isDoorLikeEntranceTile(map[ny]?.[nx]))
+    );
   }
 
   /** @param {any} tile */
@@ -594,14 +590,12 @@ function generateFloor(floorNum, opts) {
    * @param {number} exceptY
    */
   function outsidePassageConnectionCount(x, y, exceptX, exceptY) {
-    let degree = 0;
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx === exceptX && ny === exceptY) continue;
-      if (isOutsidePassageTile(nx, ny)) degree++;
-    }
-    return degree;
+    return dungeonTopology.countCardinalNeighbors(
+      x,
+      y,
+      isOutsidePassageTile,
+      /** @type {(nx:number, ny:number) => boolean} */ ((nx, ny) => nx === exceptX && ny === exceptY)
+    );
   }
 
   /** @param {number} x @param {number} y @param {{dx:number,dy:number}} side */

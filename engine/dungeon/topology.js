@@ -22,6 +22,26 @@
   ]));
 
   /**
+   * Counts caller-defined cardinal neighbours around a grid position. The engine
+   * owns only traversal order and coordinate math; callers inject tile semantics.
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {(x:number, y:number) => boolean} matchesNeighbor
+   * @param {(x:number, y:number) => boolean} [isExcluded]
+   */
+  function countCardinalNeighbors(x, y, matchesNeighbor, isExcluded) {
+    let count = 0;
+    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (isExcluded && isExcluded(nx, ny)) continue;
+      if (matchesNeighbor(nx, ny)) count++;
+    }
+    return count;
+  }
+
+  /**
    * @param {number} width
    * @param {number} height
    * @param {number} fillTile
@@ -420,13 +440,7 @@
   function findAlignedOutsidePassageRepair(x, y, side, isOutsidePassageTile, canCarveOutsidePassageTile) {
     const px = x - side.dx;
     const py = y - side.dy;
-    let degree = 0;
-    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
-      const nx = px + dx;
-      const ny = py + dy;
-      if (nx === x && ny === y) continue;
-      if (isOutsidePassageTile(nx, ny)) degree++;
-    }
+    const degree = countCardinalNeighbors(px, py, isOutsidePassageTile, (nx, ny) => nx === x && ny === y);
     if (degree > 0) return { px, py, cx: -1, cy: -1 };
     if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
     for (const [dx, dy] of CARDINAL_DIRECTIONS) {
@@ -645,6 +659,7 @@
 
   return {
     CARDINAL_DIRECTIONS,
+    countCardinalNeighbors,
     createMap,
     carveRect,
     carveCorridor,
