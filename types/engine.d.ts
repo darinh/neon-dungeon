@@ -668,6 +668,16 @@ declare global {
       isGateTile: (tile: number) => boolean,
     ): Array<{ x: number; y: number; ox: number; oy: number }>;
     /**
+     * Finds outside entrance tiles adjacent to a room boundary and returns the
+     * opposite-side outside coordinate used by host repair policy.
+     */
+    findOutsideEntranceGatesForRoom(
+      map: ArrayLike<ArrayLike<number>>,
+      room: { x: number; y: number; w: number; h: number },
+      isEntranceTile: (tile: number) => boolean,
+      isInsideRoomTile: (x: number, y: number) => boolean,
+    ): Array<{ x: number; y: number; ox: number; oy: number }>;
+    /**
      * Finds the first matching tile in the room rectangle plus optional padded
      * neighbourhood, scanning y-major then x-min to x-max.
      */
