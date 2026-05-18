@@ -310,6 +310,56 @@ test('dungeon topology engine scans room boundary gates with outside faces', () 
   );
 });
 
+test('dungeon topology engine scans outside entrance gates for a room', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5, LOCKED = 7;
+  const map = topology.createMap(7, 7, WALL);
+  const room = { x: 2, y: 2, w: 3, h: 3 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+  map[1][3] = DOOR;
+  map[3][1] = LOCKED;
+  map[3][5] = DOOR;
+  map[5][3] = LOCKED;
+
+  assert.deepEqual(
+    topology.findOutsideEntranceGatesForRoom(
+      map,
+      room,
+      (tile) => tile === DOOR || tile === LOCKED,
+      (x, y) => topology.roomContainsPoint(room, x, y)
+    ),
+    [
+      { x: 3, y: 1, ox: 3, oy: 0 },
+      { x: 1, y: 3, ox: 0, oy: 3 },
+      { x: 5, y: 3, ox: 6, oy: 3 },
+      { x: 3, y: 5, ox: 3, oy: 6 },
+    ],
+    'scan order must stay y-major/x-major with cardinal face matching'
+  );
+});
+
+test('dungeon topology outside entrance gate scan skips room-interior gates', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5;
+  const map = topology.createMap(7, 7, WALL);
+  const room = { x: 2, y: 2, w: 3, h: 3 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+  map[1][3] = DOOR;
+  map[2][3] = DOOR;
+
+  assert.deepEqual(
+    topology.findOutsideEntranceGatesForRoom(
+      map,
+      room,
+      (tile) => tile === DOOR,
+      (x, y) => topology.roomContainsPoint(room, x, y)
+    ),
+    [{ x: 3, y: 1, ox: 3, oy: 0 }]
+  );
+});
+
 test('dungeon topology engine finds room-neighborhood tiles in legacy y-major order', () => {
   const WALL = 1, FLOOR = 2, TARGET = 9;
   const map = topology.createMap(7, 6, WALL);

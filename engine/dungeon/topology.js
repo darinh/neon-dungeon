@@ -585,6 +585,37 @@
   }
 
   /**
+   * Finds outside entrance tiles adjacent to a specific room boundary and
+   * reports the tile outside the entrance on the opposite side. The host injects
+   * both entrance tile semantics and room-occupancy semantics; this helper owns
+   * only the map scan, boundary-face matching, and cardinal order.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number,w:number,h:number}} room
+   * @param {(tile:number) => boolean} isEntranceTile
+   * @param {(x:number, y:number) => boolean} isInsideRoomTile
+   * @returns {{x:number,y:number,ox:number,oy:number}[]}
+   */
+  function findOutsideEntranceGatesForRoom(map, room, isEntranceTile, isInsideRoomTile) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    /** @type {{x:number,y:number,ox:number,oy:number}[]} */
+    const gates = [];
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (!isEntranceTile(Number(map[y]?.[x])) || isInsideRoomTile(x, y)) continue;
+        for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+          const bx = x + dx;
+          const by = y + dy;
+          const outside = outsideFaceForBoundaryTile(room, bx, by);
+          if (outside?.x === x && outside?.y === y) gates.push({ x, y, ox: x - dx, oy: y - dy });
+        }
+      }
+    }
+    return gates;
+  }
+
+  /**
    * Finds the first tile matching `isTargetTile` inside the room rectangle plus
    * a caller-selected surrounding padding. Scan order is y-major, then x-min to
    * x-max, preserving legacy room-neighbourhood searches.
@@ -632,6 +663,7 @@
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
     findRoomBoundaryGates,
+    findOutsideEntranceGatesForRoom,
     findRoomNeighborhoodTile,
     BSPNode,
   };

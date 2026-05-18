@@ -140,6 +140,8 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'outside entrance repair must delegate aligned passage search to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findRoomBoundaryGates\(map,\s*room,\s*isRepairGateTile\)/,
     'reachability repair must delegate room-boundary gate scans to the dungeon topology engine');
+  assert.match(CONTENT, /dungeonTopology\.findOutsideEntranceGatesForRoom\(\s*map,\s*room,\s*isDoorLikeEntranceTile,\s*tileInsideAnyRoom\s*\)/,
+    'door-corner reachability repair must delegate outside entrance gate scans to the dungeon topology engine');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 
