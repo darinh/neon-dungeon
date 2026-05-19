@@ -716,6 +716,54 @@
   }
 
   /**
+   * Iteratively fills caller-defined interior dead-end tiles. The engine owns
+   * scan order and cardinal adjacency; callers inject tile semantics and any
+   * coordinate exclusions such as room interiors.
+   *
+   * @param {{
+   *   map: ArrayLike<ArrayLike<number>>,
+   *   fillTile: number,
+   *   isPrunableTile: (tile:number, x:number, y:number) => boolean,
+   *   connectsTile: (tile:number, x:number, y:number) => boolean,
+   *   isPositionExcluded?: (x:number, y:number) => boolean,
+   *   maxConnections?: number,
+   * }} opts
+   * @returns {number}
+   */
+  function pruneDeadEndGridTiles(opts) {
+    const map = opts.map;
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    if (!height || !width) return 0;
+    const maxConnections = opts.maxConnections ?? 1;
+    let totalPruned = 0;
+    let pruned = true;
+    while (pruned) {
+      pruned = false;
+      for (let y = 1; y < height - 1; y++) {
+        const row = /** @type {any} */ (map[y]);
+        if (!row) continue;
+        for (let x = 1; x < width - 1; x++) {
+          if (opts.isPositionExcluded && opts.isPositionExcluded(x, y)) continue;
+          const tile = Number(row[x]);
+          if (tile === opts.fillTile) continue;
+          if (!opts.isPrunableTile(tile, x, y)) continue;
+          const adjacent = countCardinalNeighbors(
+            x,
+            y,
+            (nx, ny) => opts.connectsTile(Number(map[ny]?.[nx]), nx, ny)
+          );
+          if (adjacent > maxConnections) continue;
+          row[x] = opts.fillTile;
+          totalPruned++;
+          pruned = true;
+        }
+      }
+    }
+    return totalPruned;
+  }
+
+  /**
    * Reports whether `target` is reachable from `start` over caller-defined open
    * map tiles. The start coordinate is considered reachable without probing its
    * tile, matching legacy generation guards that already chose a legal start.
@@ -847,6 +895,7 @@
     findRoomBoundaryGates,
     findOutsideEntranceGatesForRoom,
     findRoomNeighborhoodTile,
+    pruneDeadEndGridTiles,
     canReachGridPosition,
     findInteriorGridBfsPath,
     BSPNode,
