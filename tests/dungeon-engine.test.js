@@ -351,6 +351,44 @@ test('dungeon topology median cluster selection handles singleton and empty clus
   assert.deepEqual(topology.selectMedianClusterPosition([]), { keep: null, discard: [] });
 });
 
+test('dungeon topology selects first preferred sorted cluster tile without mutating', () => {
+  const west = { x: 4, y: 5 };
+  const east = { x: 5, y: 5 };
+  const north = { x: 4, y: 4 };
+  const south = { x: 4, y: 6 };
+  const cluster = [south, east, north, west];
+  const visited = [];
+
+  const selection = topology.selectPreferredClusterPosition(cluster, (position) => {
+    visited.push(position);
+    return position === east;
+  });
+
+  assert.equal(selection.keep, east);
+  assert.deepEqual(selection.discard, [north, west, south]);
+  assert.deepEqual(visited, [north, west, east], 'preference scans y/x order and stops at the first match');
+  assert.deepEqual(cluster, [south, east, north, west], 'input cluster order stays caller-owned');
+  assert.ok(selection.discard.every((position) => cluster.includes(position)), 'discard positions preserve caller references');
+});
+
+test('dungeon topology preferred cluster selection falls back to median and handles degenerate clusters', () => {
+  const only = { x: 9, y: 3 };
+  const west = { x: 4, y: 5 };
+  const east = { x: 5, y: 5 };
+  const north = { x: 4, y: 4 };
+  const south = { x: 4, y: 6 };
+
+  assert.deepEqual(
+    topology.selectPreferredClusterPosition([south, east, north, west], () => false),
+    { keep: east, discard: [north, west, south] },
+    'no preferred position keeps the y/x median'
+  );
+  assert.deepEqual(topology.selectPreferredClusterPosition([only], () => false), { keep: only, discard: [] });
+  assert.deepEqual(topology.selectPreferredClusterPosition([], () => {
+    assert.fail('empty cluster should not invoke the preference predicate');
+  }), { keep: null, discard: [] });
+});
+
 test('dungeon topology engine places expanded room rectangles with legacy scoring', () => {
   const room = { id: 'target', x: 10, y: 6, w: 4, h: 3, cx: 12, cy: 7 };
   const placement = topology.findExpandedRoomPlacement({

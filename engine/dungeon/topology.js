@@ -346,6 +346,28 @@
   }
 
   /**
+   * @param {Array<{x:number,y:number}>} cluster
+   * @returns {Array<{x:number,y:number}>}
+   */
+  function sortClusterYThenX(cluster) {
+    return cluster.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  }
+
+  /**
+   * @param {Array<{x:number,y:number}>} sorted
+   * @param {{x:number,y:number}|null} keep
+   * @returns {{keep:{x:number,y:number}|null, discard:Array<{x:number,y:number}>}}
+   */
+  function clusterSelection(sorted, keep) {
+    /** @type {Array<{x:number,y:number}>} */
+    const discard = [];
+    for (const position of sorted) {
+      if (position !== keep) discard.push(position);
+    }
+    return { keep, discard };
+  }
+
+  /**
    * Selects the y-major, then x-major median position from a cluster and returns
    * the other positions for caller-owned mutation. This helper is intentionally
    * position-only; callers needing tile-aware keep policy should not use it.
@@ -354,14 +376,31 @@
    * @returns {{keep:{x:number,y:number}|null, discard:Array<{x:number,y:number}>}}
    */
   function selectMedianClusterPosition(cluster) {
-    const sorted = cluster.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const sorted = sortClusterYThenX(cluster);
     const keep = sorted[Math.floor(sorted.length / 2)] || null;
-    /** @type {Array<{x:number,y:number}>} */
-    const discard = [];
+    return clusterSelection(sorted, keep);
+  }
+
+  /**
+   * Selects the first y-major, then x-major cluster position matching the
+   * caller-defined preference, falling back to the median sorted position.
+   * The preference predicate runs in sorted order and stops at the first match.
+   *
+   * @param {Array<{x:number,y:number}>} cluster
+   * @param {(position:{x:number,y:number}) => boolean} isPreferred
+   * @returns {{keep:{x:number,y:number}|null, discard:Array<{x:number,y:number}>}}
+   */
+  function selectPreferredClusterPosition(cluster, isPreferred) {
+    const sorted = sortClusterYThenX(cluster);
+    let keep = null;
     for (const position of sorted) {
-      if (position !== keep) discard.push(position);
+      if (isPreferred(position)) {
+        keep = position;
+        break;
+      }
     }
-    return { keep, discard };
+    if (!keep) keep = sorted[Math.floor(sorted.length / 2)] || null;
+    return clusterSelection(sorted, keep);
   }
 
   /**
@@ -1023,6 +1062,7 @@
     rectOverlapArea,
     rectOverlapsAnyRoom,
     selectMedianClusterPosition,
+    selectPreferredClusterPosition,
     findExpandedRoomPlacement,
     resolvePreferredSpawnRoom,
     roomHasCorner,
