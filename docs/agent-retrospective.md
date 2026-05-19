@@ -129,6 +129,13 @@ Run and record these before verification or review:
    same pager class recurs after this guard was already in force, record why the
    documented guard failed and add a stronger repo, extension, or shell-level
    prevention instead of only restating the rule.
+   Before any manual startup or continuity discovery, confirm the operator guard
+   extension is actually loaded. If no NEON DUNGEON guard extension is running,
+   use `npm run check:agent-startup -- --issue <number>` first and treat raw
+   broad discovery commands as prohibited until the tracked guard is loaded or a
+   live user-scope bootstrap extension has been installed, reloaded, inspected,
+   and recorded with its path and scope. A checked-in guard that exists only on a
+   stale checkout is not an active control.
 5. **Focused-test command scope.** Before describing a verification command as
    focused, check how package scripts forward arguments. In this repository,
    `npm test -- tests/foo.test.js` still runs the package script
@@ -286,6 +293,13 @@ Run and record these before verification or review:
     digest test that was run both before and after. Record the exact seeds/floors
     and test names so "behavior-preserving" is backed by reproducible output,
     not only by source-motion review.
+    Before review, enumerate the user-visible invariants the refactor could
+    affect, especially visibility, reachability, input hitboxes, rendering,
+    loot/combat outcomes, and generation entrances. Map each invariant to an
+    existing or new test, or explicitly mark it out of scope with a reason.
+    Tests for required generated structures must assert the structure exists
+    before direct indexing; do not use optional chaining, `||`, or `??` fallbacks
+    in assertions that are supposed to prove required data exists.
 19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
      that is not already used successfully in the current session, either preflight
      the help/version output or be prepared to record the exact fallback command
