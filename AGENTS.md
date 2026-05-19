@@ -22,6 +22,11 @@ first, then read `README.md`, `docs/module-map.md`, and
   remote refs, and creating/listing/removing worktrees. Do not `pull`, switch
   branches, merge, commit, restore, reset, clean, stash, or otherwise mutate the
   main checkout.
+- Before relying on main-checkout instructions or npm scripts, fetch remote refs
+  and compare the main checkout to `origin/develop`. If it is behind or lacks a
+  referenced script, treat it as diagnostic-only and use the active implementation
+  worktree's `AGENTS.md`, `docs/agent-retrospective.md`, and npm scripts as the
+  operative source for the task.
 - Never run `git stash` or other state-hiding commands in the main checkout. If
   work must be moved, use `git diff --binary` plus explicit copies of untracked
   files after verifying the destination worktree exists.
@@ -127,6 +132,12 @@ These are hard rules, not preferences:
 | `npm run lint` | Run `eslint .` over the repository. Currently exits 0 with no errors and no warnings — keep it that way. |
 | `npm run lint:fix` | Auto-fix what eslint can. |
 | `npm run check` | Run lint + typecheck + engine-purity + tests in sequence. **This is the canonical pre-commit gate.** |
+
+## Shell safety
+
+- For Markdown-heavy `gh pr create`, `gh pr edit`, and `gh pr comment` bodies,
+  use `--body-file` with a temporary file or a single-quoted heredoc. Do not put
+  backticks inside a double-quoted `--body` argument.
 
 ## Type-safety status
 
