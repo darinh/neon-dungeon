@@ -290,39 +290,45 @@ Before writing the retrospective:
 2. Record `git worktree list`, `git rev-parse --show-toplevel`,
    `git rev-parse --git-common-dir`, `git status --porcelain`, and
    `git ls-files --others --exclude-standard`.
-3. Confirm code-review subagents, if any, have returned and real findings were
+3. Record every branch, worktree, or no-merged discovery command run during
+   startup/continuity for the current session, and confirm each command bounded
+   output with a count, format, explicit ref pattern, or line limit. If any
+   command was unbounded or produced large output, record it as an incident and
+   name the stronger guard adopted or the evidence-backed reason no stronger
+   guard is available.
+4. Confirm code-review subagents, if any, have returned and real findings were
    addressed or explicitly rejected.
-4. Save the final evidence for reviewers: file list, staged or committed diff,
+5. Save the final evidence for reviewers: file list, staged or committed diff,
    checks run, PR/issue links, and incidents.
-5. Confirm the main checkout has no active work or untracked files related to
+6. Confirm the main checkout has no active work or untracked files related to
    the task.
-6. Check the active backlog or issue queue before stopping; if work remains,
+7. Check the active backlog or issue queue before stopping; if work remains,
    start the next work item from a worktree after attaching the retrospective.
-7. Run `npm run check:agent-continuity -- --issue <number>` for issue-backed
+8. Run `npm run check:agent-continuity -- --issue <number>` for issue-backed
    work before any `task_complete`; this standard npm script requires the
    operator guard extension to be present and tracked. If it fails, keep working
    or record a concrete blocker.
    For post-release work, the same check must prove that the `develop:
    squash-only PRs` ruleset still has both its pull-request rule and the admin
    bypass needed for direct force-with-lease alignment after a rebase promotion.
-8. If extension or trigger files were created, run a path/scope audit: actual
+9. If extension or trigger files were created, run a path/scope audit: actual
    path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
    output, and primary-checkout stray-file check.
-9. If the work item opens or merges a PR targeting `main`, include the
+10. If the work item opens or merges a PR targeting `main`, include the
    pre-promotion authority/range audit evidence: allowed source branch, exact
    commit range, commit/PR authors, any human-authored commits by the audit
    definition above, and the quoted project or repository instruction that
    permits the promotion.
-10. If resuming after a restart, a handoff gap, or a user reference to "last
+11. If resuming after a restart, a handoff gap, or a user reference to "last
     session", an issue number, or a prior finding, query session history/checkpoints
     for that reference before assuming the current shell directory is the active
     work context.
-11. If `origin/main` and `origin/develop` diverged during release promotion,
+12. If `origin/main` and `origin/develop` diverged during release promotion,
     record the deliberate reconciliation evidence: likely root cause, exact
     pre-alignment SHAs, tree IDs, patch-equivalence proof, force-with-lease target
     SHA, and the post-alignment SHAs. Do not treat "trees matched" as sufficient
     without explaining why alignment was safe for open PRs and active work.
-12. Before attaching the retrospective, verify every version number, PR number,
+13. Before attaching the retrospective, verify every version number, PR number,
     commit SHA, branch tip, and release tag cited in the text against the source
     artifact (`gh pr view`, `gh release view`, `git rev-parse`, workflow output,
     or deployed `version.json`). If the work has both an in-spec changelog version
