@@ -177,6 +177,12 @@ The codebase uses `<script>` tag UMD loading. Every `src/*.js` declares top-leve
 ### Type lib scoping
 `tsconfig.json` sets `lib: ["ES2020","DOM"]` and `types: ["node"]`. The `node` types are added so test files (which use `node:test`, `node:assert/strict`, etc.) can be `// @ts-check`ed. **Do not introduce Node globals (`process`, `Buffer`, `__dirname`, etc.) into `src/` browser code** — even though tsc won't flag them, they will crash in the browser. Code reviewers must catch this.
 
+### Map-mutating topology helpers
+Any helper that iterates a map and fills tiles based on caller-supplied
+predicates must only count progress when the tile value changes, and must include
+a progress-safety test for fill predicates that would otherwise match the filled
+tile.
+
 ### Hot-path memory
 `src/render.js drawWorld` and per-tile decor loops run thousands of times per frame. Any allocation there (object literals, array literals, lambdas) accumulates GC churn. Hoist to module scope. See stored memory `render hot path`.
 
