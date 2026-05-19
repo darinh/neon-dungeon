@@ -72,6 +72,23 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology engine builds clipped room membership grids', () => {
+  const grid = topology.createRoomMembershipGrid(6, 5, [
+    { x: 1, y: 1, w: 3, h: 2 },
+    { x: -1, y: 3, w: 3, h: 3 },
+    { x: 5, y: -1, w: 3, h: 3 },
+  ]);
+
+  assert.equal(grid.length, 5);
+  assert.equal(grid[0].length, 6);
+  assert.ok(grid.every((row) => row instanceof Uint8Array));
+  assert.deepEqual(Array.from(grid[0]), [0, 0, 0, 0, 0, 1]);
+  assert.deepEqual(Array.from(grid[1]), [0, 1, 1, 1, 0, 1]);
+  assert.deepEqual(Array.from(grid[2]), [0, 1, 1, 1, 0, 0]);
+  assert.deepEqual(Array.from(grid[3]), [1, 1, 0, 0, 0, 0]);
+  assert.deepEqual(Array.from(grid[4]), [1, 1, 0, 0, 0, 0]);
+});
+
 test('dungeon topology counts cardinal neighbors with injected semantics', () => {
   const calls = [];
   const open = new Set(['4,3', '3,4']);
