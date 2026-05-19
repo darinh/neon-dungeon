@@ -197,7 +197,16 @@ Run and record these before verification or review:
    loading or parsing the production source; if a synthetic value is intentional,
    name and comment it as a synthetic fixture so it is not mistaken for behavior
    parity.
-10. **False-positive evidence.** Any reviewer finding rejected as a false positive
+10. **Engine-surface export checklist.** When a slice adds, renames, or moves an
+    engine public export, shared coordinate table, or engine-facing constant,
+    update the runtime export, `types/engine.d.ts`, `docs/engine-boundary.md`,
+    `docs/spec.md`, and at least one direct engine test in the same commit.
+    Constant/table moves must preserve value and order with a direct shape/value
+    assertion or an explicit side-by-side equivalence note. The verification
+    record must state which semantics remain caller-owned, such as NEON tile
+    vocabulary, mutation policy, sequential mutation order, or runtime side
+    effects.
+11. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. A critique claim based
    on repository shape or file existence must cite current-repo evidence before
@@ -206,22 +215,22 @@ Run and record these before verification or review:
    claim that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
-10. **Review-fix shipment proof.** Before replying that a review finding is
+12. **Review-fix shipment proof.** Before replying that a review finding is
    addressed, verify the fix commit is present in the PR head (`headRefOid` or
    `gh pr view --json commits`) and that the changed file content is present in
    the branch or merge commit that will ship. If a PR was already merged, verify
    the target branch tree, not just the local feature branch.
-11. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+13. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
    and retry with smaller patches grouped by file or tightly related surface.
-12. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+14. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-13. **Pre-promotion authority/range audit.** Before opening or merging any PR
+15. **Pre-promotion authority/range audit.** Before opening or merging any PR
     targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
    repository branch-policy workflow or status checks for allowed source
    branches, and record the exact commit range with authorship
@@ -240,18 +249,18 @@ Run and record these before verification or review:
    instead of inferring approval. A closed PR whose source branch was changed or
    replaced should not be treated as reopenable; open a replacement PR from a
    fresh branch.
-14. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+16. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
     When editing roadmap or checklist-style docs, search for duplicate entries
     before review and again after conflict resolution.
-15. **Contractual iteration-order proof.** When extracting or reimplementing
+17. **Contractual iteration-order proof.** When extracting or reimplementing
     legacy behavior where scan, traversal, RNG, tie-break, or insertion order is
     part of the contract, derive the expected order directly from the source loop
     structure before writing tests or helper JSDoc. Record the loop shape in the
     evidence (for example, "top/bottom per x, then left/right per y") and add a
     characterization test that asserts the exact output order before review.
-16. **Extraction equivalence and smoke proof.** For each extracted function or
+18. **Extraction equivalence and smoke proof.** For each extracted function or
     helper, add a focused characterization/equivalence test that covers the moved
     behavior's contract, including edge cases that made the original code
     non-trivial. If one test is sufficient, say why; if no new test is added,
@@ -265,13 +274,13 @@ Run and record these before verification or review:
     digest test that was run both before and after. Record the exact seeds/floors
     and test names so "behavior-preserving" is backed by reproducible output,
     not only by source-motion review.
-17. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
+19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
     that is not already used successfully in the current session, either preflight
     the help/version output or be prepared to record the exact fallback command
     that succeeded. A tool-version mismatch is not resolved by retrying once; the
     retrospective must name the canonical compatible command shape used after the
     mismatch.
-18. **Shared-branch force alignment guard.** Before force-with-lease aligning a
+20. **Shared-branch force alignment guard.** Before force-with-lease aligning a
     shared branch after a deliberate rebase promotion, fetch the remote branch,
     record the exact old and new SHAs, prove the source and target trees match,
     and check for open PRs or unexpected commits that would be overwritten. If
@@ -279,7 +288,7 @@ Run and record these before verification or review:
     the just-promoted range, stop and reconcile deliberately instead of force
     pushing. The retrospective must include the command evidence that made the
     alignment safe.
-19. **Pre-merge instruction conflict check.** Before merging any PR, compare the
+21. **Pre-merge instruction conflict check.** Before merging any PR, compare the
     merge instructions that apply from the repository protocol, project
     instructions, and current operator/user directive. If they disagree on tool,
     merge method, authority, or post-merge verification, resolve the conflict
@@ -307,11 +316,22 @@ Before writing the retrospective:
    guard is available.
 4. Confirm code-review subagents, if any, have returned and real findings were
    addressed or explicitly rejected.
-5. Save the final evidence for reviewers: file list, staged or committed diff,
+5. Record the review-risk triage decision for every code-bearing path that
+   resembles a red-risk file or subsystem. For example, `src/content/*` changes
+   must say whether they are the literal red `src/content.js` file, Medium
+   content-submodule work, or escalated because the specific change touches a
+   red-risk domain.
+6. For engine public-surface changes, record the surface checklist: export,
+   direct test, type declaration, engine-boundary docs, spec entry, and
+   caller-owned semantics.
+7. For any `develop` force-with-lease alignment after a main rebase promotion,
+   record tree-equivalence of the old `develop` tip and new `main` tip plus the
+   bounded remote-ref containment result for the old tip before the push.
+8. Save the final evidence for reviewers: file list, staged or committed diff,
    checks run, PR/issue links, and incidents.
-6. Confirm the main checkout has no active work or untracked files related to
+9. Confirm the main checkout has no active work or untracked files related to
    the task.
-7. Check the active backlog or issue queue before stopping; if work remains,
+10. Check the active backlog or issue queue before stopping; if work remains,
    start the next work item from a worktree after attaching the retrospective.
 8. Run `npm run check:agent-continuity -- --issue <number>` for issue-backed
    work before any `task_complete`; this standard npm script requires the

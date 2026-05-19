@@ -197,7 +197,10 @@ For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect
 assertion, not just dispatch or existence coverage; every touched versioned spec
 or changelog must be checked against the current highest version in the file
-before editing.
+before editing. Each new or moved engine public export, shared coordinate table,
+or engine-facing constant must have a direct shape/value or behavior assertion,
+a matching `types/engine.d.ts` declaration, engine-boundary/spec documentation,
+and an explicit note of which semantics remain caller-owned.
 
 ## Service worker
 
