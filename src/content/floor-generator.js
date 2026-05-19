@@ -1246,22 +1246,14 @@ function generateFloor(floorNum, opts) {
         for (let tx = r.x; tx < r.x + r.w; tx++)
           if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
     }
-    let pruned = true;
     const connects = (/** @type {any} */ t) => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
-    while (pruned) {
-      pruned = false;
-      for (let y = 1; y < MAP_H - 1; y++) {
-        for (let x = 1; x < MAP_W - 1; x++) {
-          if (map[y][x] !== T.FLOOR || inRoom[y][x]) continue;
-          let adj = 0;
-          if (connects(map[y-1][x])) adj++;
-          if (connects(map[y+1][x])) adj++;
-          if (connects(map[y][x-1])) adj++;
-          if (connects(map[y][x+1])) adj++;
-          if (adj <= 1) { map[y][x] = T.WALL; pruned = true; }
-        }
-      }
-    }
+    dungeonTopology.pruneDeadEndGridTiles({
+      map,
+      fillTile: T.WALL,
+      isPrunableTile: (/** @type {number} */ tile) => tile === T.FLOOR,
+      connectsTile: connects,
+      isPositionExcluded: (/** @type {number} */ x, /** @type {number} */ y) => !!inRoom[y]?.[x],
+    });
   }
 
   thinWideCorridors();

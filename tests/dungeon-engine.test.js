@@ -503,6 +503,70 @@ test('dungeon topology room-neighborhood tile scan clamps to map bounds', () => 
   assert.equal(topology.findRoomNeighborhoodTile([], room, (tile) => tile === TARGET), null);
 });
 
+test('dungeon topology prunes interior dead-end grid tiles with injected semantics', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5;
+  const map = topology.createMap(7, 5, WALL);
+  map[2][1] = FLOOR;
+  map[2][2] = FLOOR;
+  map[2][3] = FLOOR;
+  map[2][4] = DOOR;
+
+  const pruned = topology.pruneDeadEndGridTiles({
+    map,
+    fillTile: WALL,
+    isPrunableTile: (tile) => tile === FLOOR,
+    connectsTile: (tile) => tile !== WALL,
+  });
+
+  assert.equal(pruned, 3);
+  assert.equal(map[2][1], WALL);
+  assert.equal(map[2][2], WALL);
+  assert.equal(map[2][3], WALL);
+  assert.equal(map[2][4], DOOR);
+});
+
+test('dungeon topology dead-end pruning honors coordinate exclusions', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(6, 5, WALL);
+  map[2][1] = FLOOR;
+  map[2][2] = FLOOR;
+  map[2][3] = FLOOR;
+  const calls = [];
+
+  const pruned = topology.pruneDeadEndGridTiles({
+    map,
+    fillTile: WALL,
+    isPrunableTile: (tile) => tile === FLOOR,
+    connectsTile(tile, x, y) {
+      calls.push({ tile, x, y });
+      return tile === FLOOR;
+    },
+    isPositionExcluded: (x, y) => x === 3 && y === 2,
+  });
+
+  assert.equal(pruned, 2);
+  assert.equal(map[2][1], WALL);
+  assert.equal(map[2][2], WALL);
+  assert.equal(map[2][3], FLOOR);
+  assert.ok(calls.some((call) => call.x === 3 && call.y === 2), 'connectivity predicate receives neighbour coordinates');
+});
+
+test('dungeon topology dead-end pruning makes progress even with unsafe fill predicates', () => {
+  const FLOOR = 2;
+  const map = topology.createMap(4, 4, 0);
+  map[1][1] = FLOOR;
+
+  const pruned = topology.pruneDeadEndGridTiles({
+    map,
+    fillTile: FLOOR,
+    isPrunableTile: (tile) => tile === FLOOR,
+    connectsTile: () => false,
+  });
+
+  assert.equal(pruned, 0);
+  assert.equal(map[1][1], FLOOR);
+});
+
 test('dungeon topology engine resolves preferred spawn rooms with injected passability', () => {
   const WALL = 1, FLOOR = 2;
   const map = topology.createMap(8, 6, WALL);

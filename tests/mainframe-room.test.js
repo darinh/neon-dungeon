@@ -175,6 +175,10 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'spawn-to-stairs reachability guard must delegate generic grid BFS traversal to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /const\s+q\s*=\s*\[\{\s*x:\s*sx,\s*y:\s*sy\s*\}\][\s\S]*?while\s*\(\s*q\.length\s*\)[\s\S]*?T\.VOID[\s\S]*?q\.push\(\{\s*x:\s*nx,\s*y:\s*ny\s*\}\)/,
     'spawn-to-stairs reachability guard should not keep inline grid BFS traversal in floor-generator');
+  assert.match(CONTENT, /dungeonTopology\.pruneDeadEndGridTiles\({[\s\S]*?fillTile:\s*T\.WALL[\s\S]*?isPrunableTile:\s*\([\s\S]*?\)\s*=>\s*tile\s*===\s*T\.FLOOR[\s\S]*?connectsTile:\s*connects[\s\S]*?isPositionExcluded:\s*\([\s\S]*?\)\s*=>\s*!!inRoom\[y\]\?\.\[x\]/,
+    'dead-end corridor pruning must delegate interior cardinal pruning traversal to the dungeon topology engine');
+  assert.doesNotMatch(CONTENT, /let\s+adj\s*=\s*0;\s*if\s*\(connects\(map\[y-1\]\[x\]\)\)\s*adj\+\+;[\s\S]*?if\s*\(adj\s*<=\s*1\)/,
+    'dead-end corridor pruning should not keep inline cardinal adjacency counting in floor-generator');
   const collapseAdjacentEntranceTiles = extractFunctionBlock(CONTENT, 'collapseAdjacentEntranceTiles');
   assert.match(collapseAdjacentEntranceTiles, /dungeonTopology\.findCardinalConnectedPositions\(\s*x,\s*y,\s*(?:\/\*\* @type \{\(nx:number, ny:number\) => boolean\} \*\/\s*)?\(?\(nx,\s*ny\)\s*=>\s*isDoorLikeEntranceTile\(map\[ny\]\?\.\[nx\]\)\)?\s*\)/,
     'adjacent entrance collapse must delegate connected-component traversal to the dungeon topology engine');
