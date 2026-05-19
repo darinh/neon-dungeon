@@ -456,7 +456,7 @@ test('door placement invariant rejects walk-around 3x3 door bypasses', () => {
 });
 
 test('floor generator door bypass sealer checks open corners, not only floor corners', () => {
-  assert.match(FLOOR_GENERATOR, /isOpenDoorBypassTile\(map\[y \+ dy\]\?\.\[x \+ dx\]\)/);
+  assert.match(FLOOR_GENERATOR, /dungeonTopology\.visitDiagonalBypassCornerSeals\(\s*map,\s*isDoorLikeEntranceTile,\s*isOpenDoorBypassTile,/);
   assert.doesNotMatch(FLOOR_GENERATOR, /map\[y \+ dy\]\?\.\[x \+ dx\] === T\.FLOOR/);
 });
 

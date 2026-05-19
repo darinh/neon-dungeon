@@ -246,6 +246,35 @@ test('dungeon topology aligned outside passage repair rejects blocked opposite t
   );
 });
 
+test('dungeon topology visits diagonal bypass corner seals sequentially', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5;
+  const map = topology.createMap(5, 5, WALL);
+  map[2][2] = DOOR;
+  map[2][3] = FLOOR;
+  map[3][2] = FLOOR;
+  map[3][3] = FLOOR;
+  map[2][1] = FLOOR;
+  map[3][1] = FLOOR;
+  /** @type {{x:number,y:number,anchorX:number,anchorY:number}[]} */
+  const sealed = [];
+
+  const count = topology.visitDiagonalBypassCornerSeals(
+    map,
+    (tile) => tile === DOOR,
+    (tile) => tile === FLOOR,
+    (x, y, anchorX, anchorY) => {
+      sealed.push({ x, y, anchorX, anchorY });
+      map[y][x] = WALL;
+      map[3][1] = WALL;
+    }
+  );
+
+  assert.equal(count, 1);
+  assert.deepEqual(sealed, [{ x: 3, y: 3, anchorX: 2, anchorY: 2 }]);
+  assert.equal(map[3][3], WALL);
+  assert.equal(map[3][1], WALL, 'callback mutation must affect later diagonal checks in the same scan');
+});
+
 test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
   const rect = { x: 5, y: 5, w: 4, h: 4 };
   const touching = { x: 9, y: 6, w: 2, h: 2 };

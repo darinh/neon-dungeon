@@ -19,7 +19,6 @@ const _CG = new Proxy({}, {
 const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/content/floor-generator.js'));
 const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content/floor-generator.js'));
 const DUNGEON_CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.CARDINAL_DIRECTIONS);
-const DUNGEON_DIAGONAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.DIAGONAL_DIRECTIONS);
 
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 /** @returns {any} */
@@ -493,20 +492,12 @@ function generateFloor(floorNum, opts) {
   }
 
   function sealDoorBypassCorners() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x])) continue;
-        for (const [dx, dy] of DUNGEON_DIAGONAL_DIRECTIONS) {
-          if (
-            isOpenDoorBypassTile(map[y]?.[x + dx]) &&
-            isOpenDoorBypassTile(map[y + dy]?.[x]) &&
-            isOpenDoorBypassTile(map[y + dy]?.[x + dx])
-          ) {
-            map[y + dy][x + dx] = T.WALL;
-          }
-        }
-      }
-    }
+    dungeonTopology.visitDiagonalBypassCornerSeals(
+      map,
+      isDoorLikeEntranceTile,
+      isOpenDoorBypassTile,
+      (/** @type {number} */ x, /** @type {number} */ y) => { map[y][x] = T.WALL; }
+    );
   }
 
   function repairDoorBypassSealedEntranceStubs() {

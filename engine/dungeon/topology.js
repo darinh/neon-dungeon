@@ -518,6 +518,39 @@
   }
 
   /**
+   * Scans interior anchor tiles and visits diagonal bypass corners that should be
+   * sealed. Callers inject tile semantics and perform mutation in `sealCorner`;
+   * invoking the callback during the scan preserves sequential map effects.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {(tile:any) => boolean} isAnchorTile
+   * @param {(tile:any) => boolean} isOpenBypassTile
+   * @param {(x:number, y:number, anchorX:number, anchorY:number) => void} sealCorner
+   * @returns {number}
+   */
+  function visitDiagonalBypassCornerSeals(map, isAnchorTile, isOpenBypassTile, sealCorner) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    let sealed = 0;
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (!isAnchorTile(map[y]?.[x])) continue;
+        for (const [dx, dy] of DIAGONAL_DIRECTIONS) {
+          if (
+            isOpenBypassTile(map[y]?.[x + dx]) &&
+            isOpenBypassTile(map[y + dy]?.[x]) &&
+            isOpenBypassTile(map[y + dy]?.[x + dx])
+          ) {
+            sealCorner(x + dx, y + dy, x, y);
+            sealed++;
+          }
+        }
+      }
+    }
+    return sealed;
+  }
+
+  /**
    * Finds boundary tiles where both the room edge and the outside-facing tile
    * satisfy the caller's open-tile predicate, then groups cardinal-adjacent
    * boundary tiles. Scan order intentionally mirrors the legacy generator:
@@ -935,6 +968,7 @@
     findFormerEntranceSidePaddingTiles,
     findOutsideEntranceRoomSides,
     findAlignedOutsidePassageRepair,
+    visitDiagonalBypassCornerSeals,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,
     findRoomBoundaryGates,
