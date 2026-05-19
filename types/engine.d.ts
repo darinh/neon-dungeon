@@ -668,6 +668,16 @@ declare global {
       canCarveOutsidePassageTile: (x: number, y: number) => boolean,
     ): { px: number; py: number; cx: number; cy: number } | null;
     /**
+     * Visits diagonal bypass corners around caller-defined anchor tiles. The
+     * host performs mutation in `sealCorner`, preserving sequential scan effects.
+     */
+    visitDiagonalBypassCornerSeals(
+      map: ArrayLike<ArrayLike<number>>,
+      isAnchorTile: (tile: unknown) => boolean,
+      isOpenBypassTile: (tile: unknown) => boolean,
+      sealCorner: (x: number, y: number, anchorX: number, anchorY: number) => void,
+    ): number;
+    /**
      * Caller-injected boundary entrance clustering. `isOpenTile` is tested for
      * both the room boundary tile and its outside-facing neighbour.
      */
