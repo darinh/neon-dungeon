@@ -34,6 +34,27 @@ function extractArrayBlock(src, name) {
   assert.fail(name + ' array literal must be balanced');
 }
 
+/**
+ * @param {string} src
+ * @param {string} name
+ */
+function extractFunctionBlock(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  assert.ok(start >= 0, name + ' function must exist');
+  const open = src.indexOf('{', start);
+  assert.ok(open > start, name + ' function body must exist');
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  assert.fail(name + ' function body must be balanced');
+}
+
 function extractMainframeRecords() {
   const records = extractArrayBlock(GAME, 'MAINFRAME_RECORDS');
   // eslint-disable-next-line no-new-func -- structural extraction of project-owned object literals.
@@ -150,6 +171,11 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'rescue corridor carving must delegate generic interior grid BFS search to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /function\s+carveProtectedRescueCorridorTo[\s\S]*?new\s+Int16Array\(MAP_W\)\.fill\(-1\)[\s\S]*?function\s+clearOrphanEntranceTiles/,
     'rescue corridor path search should not keep its old inline predecessor grid in floor-generator');
+  const collapseAdjacentEntranceTiles = extractFunctionBlock(CONTENT, 'collapseAdjacentEntranceTiles');
+  assert.match(collapseAdjacentEntranceTiles, /dungeonTopology\.findCardinalConnectedPositions\(\s*x,\s*y,\s*(?:\/\*\* @type \{\(nx:number, ny:number\) => boolean\} \*\/\s*)?\(?\(nx,\s*ny\)\s*=>\s*isDoorLikeEntranceTile\(map\[ny\]\?\.\[nx\]\)\)?\s*\)/,
+    'adjacent entrance collapse must delegate connected-component traversal to the dungeon topology engine');
+  assert.doesNotMatch(collapseAdjacentEntranceTiles, /\[\[1,\s*0\],\s*\[-1,\s*0\],\s*\[0,\s*1\],\s*\[0,\s*-1\]\]/,
+    'adjacent entrance collapse should not keep its old inline cardinal traversal');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 

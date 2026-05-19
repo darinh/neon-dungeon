@@ -547,6 +547,15 @@ declare global {
       matchesNeighbor: (x: number, y: number) => boolean,
       isExcluded?: (x: number, y: number) => boolean,
     ): number;
+    /**
+     * Collects the cardinal-connected component containing `start` for a
+     * caller-defined position predicate. Bounds and tile semantics stay in the host.
+     */
+    findCardinalConnectedPositions(
+      startX: number,
+      startY: number,
+      matchesPosition: (x: number, y: number) => boolean,
+    ): Array<{ x: number; y: number }>;
     createMap(width: number, height: number, fillTile: number): Uint8Array[];
     carveRect(
       map: ArrayLike<ArrayLike<number>>,
