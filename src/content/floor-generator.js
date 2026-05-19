@@ -507,20 +507,22 @@ function generateFloor(floorNum, opts) {
       const tile = map[y]?.[x];
       return tile === T.WALL || tile === T.VOID;
     };
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         const roomSides = outsideEntranceRoomSides(x, y);
         const side = roomSides[0];
-        if (roomSides.length !== 1 || !side) continue;
+        if (roomSides.length !== 1 || !side) return;
         const px = x - side.dx;
         const py = y - side.dy;
-        if (!isOutsidePassageTile(px, py) || outsidePassageConnectionCount(px, py, x, y) > 0) continue;
+        if (!isOutsidePassageTile(px, py) || outsidePassageConnectionCount(px, py, x, y) > 0) return;
         const nx = px - side.dx;
         const ny = py - side.dy;
         if (canCarveOutsidePassageTile(nx, ny) || canCarveStubExtensionTile(nx, ny)) map[ny][nx] = T.FLOOR;
       }
-    }
+    );
   }
 
   /** @param {number} x @param {number} y */
@@ -618,21 +620,25 @@ function generateFloor(floorNum, opts) {
   }
 
   function repairMisalignedOutsideEntrancePassages() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         const roomSides = outsideEntranceRoomSides(x, y);
         const side = roomSides[0];
-        if (roomSides.length !== 1 || !side || hasConnectedPassageOppositeRoomSide(x, y, side)) continue;
+        if (roomSides.length !== 1 || !side || hasConnectedPassageOppositeRoomSide(x, y, side)) return;
         repairAlignedOutsideEntrancePassage(x, y, side);
       }
-    }
+    );
   }
 
   function collapseAdjacentOutsideEntranceTilesToFloor() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         const adjacentBlocker = DUNGEON_CARDINAL_DIRECTIONS
           .some(([dx, dy]) => {
             const t = map[y + dy]?.[x + dx];
@@ -640,14 +646,16 @@ function generateFloor(floorNum, opts) {
           });
         if (adjacentBlocker) map[y][x] = T.FLOOR;
       }
-    }
+    );
     /** @type {Set<string>} */
     const visitedDoorTiles = new Set();
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         const key = x + ',' + y;
-        if (visitedDoorTiles.has(key)) continue;
+        if (visitedDoorTiles.has(key)) return;
         const cluster = dungeonTopology.findCardinalConnectedPositions(
           x,
           y,
@@ -655,7 +663,7 @@ function generateFloor(floorNum, opts) {
             isDoorLikeEntranceTile(map[ny]?.[nx]) && !tileInsideAnyRoom(nx, ny))
         );
         for (const e of cluster) visitedDoorTiles.add(e.x + ',' + e.y);
-        if (cluster.length <= 1) continue;
+        if (cluster.length <= 1) return;
         const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
         const keep = sorted.find((/** @type {any} */ e) => map[e.y]?.[e.x] !== T.DOOR) || sorted[Math.floor(sorted.length / 2)];
         for (const e of cluster) {
@@ -663,13 +671,15 @@ function generateFloor(floorNum, opts) {
           map[e.y][e.x] = T.FLOOR;
         }
       }
-    }
+    );
   }
 
   function clearDeadOutsideEntranceTiles() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         const roomSides = outsideEntranceRoomSides(x, y);
         let sealedRoomSide = false;
         for (const side of roomSides) {
@@ -679,11 +689,11 @@ function generateFloor(floorNum, opts) {
             break;
           }
         }
-        if (sealedRoomSide) { map[y][x] = T.FLOOR; continue; }
+        if (sealedRoomSide) { map[y][x] = T.FLOOR; return; }
         const side = roomSides[0];
         if (roomSides.length === 1 && side && !hasConnectedPassageOppositeRoomSide(x, y, side)) map[y][x] = T.FLOOR;
       }
-    }
+    );
   }
 
   /** @param {any} room @param {any} tile */

@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const {
     ACTIVE_ISSUE_NUMBER,
     commandRunsRawGhPrMerge,
+    commandRunsUnboundedStartupDiscovery,
 } = require("../../../scripts/operator-guard-rules.js");
 const PRIMARY_CHECKOUT = "/home/darin/projects/neon-dungeon";
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,12 @@ const session = await joinSession({
                     return {
                         permissionDecision: "deny",
                         permissionDecisionReason: "NEON DUNGEON guard: raw `gh pr merge` is blocked; use `npm run merge:pr -- <pr> --method squash|rebase` so the repository merge wrapper performs its preflight.",
+                    };
+                }
+                if (commandRunsUnboundedStartupDiscovery(command)) {
+                    return {
+                        permissionDecision: "deny",
+                        permissionDecisionReason: "NEON DUNGEON guard: bound startup discovery output. Pipe `git worktree list` or `git branch --no-merged` through `wc -l`, `grep -c`, `sed -n`, or `head -n` before running it.",
                     };
                 }
                 if (

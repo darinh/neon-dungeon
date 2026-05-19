@@ -275,6 +275,31 @@ test('dungeon topology visits diagonal bypass corner seals sequentially', () => 
   assert.equal(map[3][1], WALL, 'callback mutation must affect later diagonal checks in the same scan');
 });
 
+test('dungeon topology visits outside entrance tiles in sequential y-major order', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5;
+  const map = topology.createMap(5, 5, WALL);
+  map[0][2] = DOOR;
+  map[1][1] = DOOR;
+  map[1][3] = DOOR;
+  map[2][2] = DOOR;
+  map[3][1] = DOOR;
+  /** @type {{x:number,y:number}[]} */
+  const visited = [];
+
+  const count = topology.visitOutsideEntranceTiles(
+    map,
+    (tile) => tile === DOOR,
+    (x, y) => x === 2 && y === 2,
+    (x, y) => {
+      visited.push({ x, y });
+      if (x === 1 && y === 1) map[1][3] = FLOOR;
+    }
+  );
+
+  assert.equal(count, 2);
+  assert.deepEqual(visited, [{ x: 1, y: 1 }, { x: 1, y: 3 }]);
+});
+
 test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
   const rect = { x: 5, y: 5, w: 4, h: 4 };
   const touching = { x: 9, y: 6, w: 2, h: 2 };

@@ -696,6 +696,31 @@
   }
 
   /**
+   * Visits caller-defined outside entrance tiles in interior y-major map order.
+   * The host injects tile semantics, room-occupancy semantics, and mutation.
+   * Mutations performed by `visit` affect later coordinates in the same scan.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {(tile:number) => boolean} isEntranceTile
+   * @param {(x:number, y:number) => boolean} isInsideRoomTile
+   * @param {(x:number, y:number) => void} visit
+   * @returns {number}
+   */
+  function visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    let count = 0;
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (!isEntranceTile(Number(map[y]?.[x])) || isInsideRoomTile(x, y)) continue;
+        visit(x, y);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
    * Finds outside entrance tiles adjacent to a specific room boundary and
    * reports the tile outside the entrance on the opposite side. The host injects
    * both entrance tile semantics and room-occupancy semantics; this helper owns
@@ -708,21 +733,16 @@
    * @returns {{x:number,y:number,ox:number,oy:number}[]}
    */
   function findOutsideEntranceGatesForRoom(map, room, isEntranceTile, isInsideRoomTile) {
-    const height = map.length;
-    const width = height > 0 ? (map[0]?.length || 0) : 0;
     /** @type {{x:number,y:number,ox:number,oy:number}[]} */
     const gates = [];
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        if (!isEntranceTile(Number(map[y]?.[x])) || isInsideRoomTile(x, y)) continue;
-        for (const [dx, dy] of CARDINAL_DIRECTIONS) {
-          const bx = x + dx;
-          const by = y + dy;
-          const outside = outsideFaceForBoundaryTile(room, bx, by);
-          if (outside?.x === x && outside?.y === y) gates.push({ x, y, ox: x - dx, oy: y - dy });
-        }
+    visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, (x, y) => {
+      for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+        const bx = x + dx;
+        const by = y + dy;
+        const outside = outsideFaceForBoundaryTile(room, bx, by);
+        if (outside?.x === x && outside?.y === y) gates.push({ x, y, ox: x - dx, oy: y - dy });
       }
-    }
+    });
     return gates;
   }
 
@@ -739,28 +759,23 @@
    * @returns {{room:{x:number,y:number,w:number,h:number},x:number,y:number,bx:number,by:number,dx:number,dy:number}[]}
    */
   function findOutsideEntranceRoomEdgeRepairs(map, rooms, isEntranceTile, isInsideRoomTile) {
-    const height = map.length;
-    const width = height > 0 ? (map[0]?.length || 0) : 0;
     /** @type {{room:{x:number,y:number,w:number,h:number},x:number,y:number,bx:number,by:number,dx:number,dy:number}[]} */
     const repairs = [];
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        if (!isEntranceTile(Number(map[y]?.[x])) || isInsideRoomTile(x, y)) continue;
-        for (const room of rooms) {
-          const neighbors = /** @type {{bx:number,by:number,dx:number,dy:number}[]} */ ([
-            { bx: x, by: y - 1, dx: 0, dy: 1 },
-            { bx: x, by: y + 1, dx: 0, dy: -1 },
-            { bx: x - 1, by: y, dx: 1, dy: 0 },
-            { bx: x + 1, by: y, dx: -1, dy: 0 },
-          ]);
-          for (const n of neighbors) {
-            const outside = outsideFaceForBoundaryTile(room, n.bx, n.by);
-            if (!outside || outside.x !== x || outside.y !== y) continue;
-            repairs.push({ room, x, y, bx: n.bx, by: n.by, dx: n.dx, dy: n.dy });
-          }
+    visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, (x, y) => {
+      for (const room of rooms) {
+        const neighbors = /** @type {{bx:number,by:number,dx:number,dy:number}[]} */ ([
+          { bx: x, by: y - 1, dx: 0, dy: 1 },
+          { bx: x, by: y + 1, dx: 0, dy: -1 },
+          { bx: x - 1, by: y, dx: 1, dy: 0 },
+          { bx: x + 1, by: y, dx: -1, dy: 0 },
+        ]);
+        for (const n of neighbors) {
+          const outside = outsideFaceForBoundaryTile(room, n.bx, n.by);
+          if (!outside || outside.x !== x || outside.y !== y) continue;
+          repairs.push({ room, x, y, bx: n.bx, by: n.by, dx: n.dx, dy: n.dy });
         }
       }
-    }
+    });
     return repairs;
   }
 
@@ -968,6 +983,7 @@
     findFormerEntranceSidePaddingTiles,
     findOutsideEntranceRoomSides,
     findAlignedOutsidePassageRepair,
+    visitOutsideEntranceTiles,
     visitDiagonalBypassCornerSeals,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,

@@ -668,6 +668,16 @@ declare global {
       canCarveOutsidePassageTile: (x: number, y: number) => boolean,
     ): { px: number; py: number; cx: number; cy: number } | null;
     /**
+     * Visits caller-defined outside entrance tiles in interior y-major map order.
+     * Tile semantics, room occupancy, and mutation stay in the host.
+     */
+    visitOutsideEntranceTiles(
+      map: ArrayLike<ArrayLike<number>>,
+      isEntranceTile: (tile: number) => boolean,
+      isInsideRoomTile: (x: number, y: number) => boolean,
+      visit: (x: number, y: number) => void,
+    ): number;
+    /**
      * Visits diagonal bypass corners around caller-defined anchor tiles. The
      * host performs mutation in `sealCorner`, preserving sequential scan effects.
      */

@@ -3,6 +3,14 @@
 
 const ACTIVE_ISSUE_NUMBER = '579';
 
+const BOUNDED_OUTPUT_PIPE =
+  /\|\s*(?:wc\s+-l|grep\s+-c|sed\s+-n\s+['"]?\d+\s*,\s*\d+p['"]?|head(?:\s+-n)?\s+\d+)\b/;
+const GIT_PREFIX = String.raw`(?:^|[^\w:-])(?:env\s+(?:\S+\s+)*)?(?:[A-Za-z_]\w*=\S+\s+)*git(?:\s+(?:--no-pager|-C\s+\S+|-c\s+\S+|--git-dir(?:=|\s+)\S+|--work-tree(?:=|\s+)\S+))*`;
+const RAW_GIT_WORKTREE_LIST = new RegExp(`${GIT_PREFIX}\\s+worktree\\s+list\\b`);
+const RAW_GIT_BRANCH_NO_MERGED = new RegExp(`${GIT_PREFIX}\\s+branch\\b[^\\n;&|]*--no-merged\\b`);
+const NON_EXECUTING_MENTION = /^\s*(?:echo|printf|grep|rg)\b/;
+const PIPE_TEXT_SEARCH_MENTION = /\|\s*(?:grep|rg)\b[\s\S]*\bgit\s+(?:worktree\s+list|branch\b[^;&|]*--no-merged)\b/;
+
 /**
  * @param {string} command
  * @returns {boolean}
@@ -13,7 +21,24 @@ function commandRunsRawGhPrMerge(command) {
   return /(?:^|[^\w:-])gh\s+pr\s+merge\b/.test(String(command || ''));
 }
 
+/**
+ * @param {string} command
+ * @returns {boolean}
+ */
+function commandRunsUnboundedStartupDiscovery(command) {
+  const segments = String(command || '').split(/\n|&&|\|\||;/);
+  return segments.some((segment) => {
+    if (NON_EXECUTING_MENTION.test(segment)) return false;
+    if (PIPE_TEXT_SEARCH_MENTION.test(segment)) return false;
+    const hasBroadDiscovery =
+      RAW_GIT_WORKTREE_LIST.test(segment) ||
+      RAW_GIT_BRANCH_NO_MERGED.test(segment);
+    return hasBroadDiscovery && !BOUNDED_OUTPUT_PIPE.test(segment);
+  });
+}
+
 module.exports = {
   ACTIVE_ISSUE_NUMBER,
   commandRunsRawGhPrMerge,
+  commandRunsUnboundedStartupDiscovery,
 };
