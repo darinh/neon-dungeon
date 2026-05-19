@@ -688,6 +688,44 @@
   }
 
   /**
+   * Finds room-boundary sides next to outside entrance tiles that need their
+   * former room-edge padding repaired. The helper owns map scan order, room
+   * iteration order, and the legacy neighbour order for boundary-face matching;
+   * callers inject entrance and room-occupancy semantics plus all tile mutation.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
+   * @param {(tile:number) => boolean} isEntranceTile
+   * @param {(x:number, y:number) => boolean} isInsideRoomTile
+   * @returns {{room:{x:number,y:number,w:number,h:number},x:number,y:number,bx:number,by:number,dx:number,dy:number}[]}
+   */
+  function findOutsideEntranceRoomEdgeRepairs(map, rooms, isEntranceTile, isInsideRoomTile) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    /** @type {{room:{x:number,y:number,w:number,h:number},x:number,y:number,bx:number,by:number,dx:number,dy:number}[]} */
+    const repairs = [];
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (!isEntranceTile(Number(map[y]?.[x])) || isInsideRoomTile(x, y)) continue;
+        for (const room of rooms) {
+          const neighbors = /** @type {{bx:number,by:number,dx:number,dy:number}[]} */ ([
+            { bx: x, by: y - 1, dx: 0, dy: 1 },
+            { bx: x, by: y + 1, dx: 0, dy: -1 },
+            { bx: x - 1, by: y, dx: 1, dy: 0 },
+            { bx: x + 1, by: y, dx: -1, dy: 0 },
+          ]);
+          for (const n of neighbors) {
+            const outside = outsideFaceForBoundaryTile(room, n.bx, n.by);
+            if (!outside || outside.x !== x || outside.y !== y) continue;
+            repairs.push({ room, x, y, bx: n.bx, by: n.by, dx: n.dx, dy: n.dy });
+          }
+        }
+      }
+    }
+    return repairs;
+  }
+
+  /**
    * Finds the first tile matching `isTargetTile` inside the room rectangle plus
    * a caller-selected surrounding padding. Scan order is y-major, then x-min to
    * x-max, preserving legacy room-neighbourhood searches.
@@ -894,6 +932,7 @@
     findRoomBoundaryOpenings,
     findRoomBoundaryGates,
     findOutsideEntranceGatesForRoom,
+    findOutsideEntranceRoomEdgeRepairs,
     findRoomNeighborhoodTile,
     pruneDeadEndGridTiles,
     canReachGridPosition,

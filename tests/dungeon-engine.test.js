@@ -472,6 +472,40 @@ test('dungeon topology outside entrance gate scan skips room-interior gates', ()
   );
 });
 
+test('dungeon topology finds outside entrance room-edge repair coordinates', () => {
+  const WALL = 1, FLOOR = 2, DOOR = 5, LOCKED = 7;
+  const map = topology.createMap(8, 8, WALL);
+  const room = { id: 'main', x: 2, y: 2, w: 3, h: 3 };
+  const otherRoom = { id: 'other', x: 5, y: 1, w: 2, h: 2 };
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) map[y][x] = FLOOR;
+  }
+  for (let y = otherRoom.y; y < otherRoom.y + otherRoom.h; y++) {
+    for (let x = otherRoom.x; x < otherRoom.x + otherRoom.w; x++) map[y][x] = FLOOR;
+  }
+  map[1][3] = DOOR;
+  map[3][1] = LOCKED;
+  map[3][5] = DOOR;
+  map[5][3] = DOOR;
+  map[2][3] = LOCKED;
+
+  assert.deepEqual(
+    topology.findOutsideEntranceRoomEdgeRepairs(
+      map,
+      [room, otherRoom],
+      (tile) => tile === DOOR || tile === LOCKED,
+      (x, y) => topology.roomContainsPoint(room, x, y) || topology.roomContainsPoint(otherRoom, x, y)
+    ).map(({ room, ...repair }) => ({ room: room.id, ...repair })),
+    [
+      { room: 'main', x: 3, y: 1, bx: 3, by: 2, dx: 0, dy: -1 },
+      { room: 'main', x: 1, y: 3, bx: 2, by: 3, dx: -1, dy: 0 },
+      { room: 'main', x: 5, y: 3, bx: 4, by: 3, dx: 1, dy: 0 },
+      { room: 'main', x: 3, y: 5, bx: 3, by: 4, dx: 0, dy: 1 },
+    ],
+    'scan order must stay y-major/x-major while boundary sides keep the legacy top/bottom/left/right order'
+  );
+});
+
 test('dungeon topology engine finds room-neighborhood tiles in legacy y-major order', () => {
   const WALL = 1, FLOOR = 2, TARGET = 9;
   const map = topology.createMap(7, 6, WALL);
