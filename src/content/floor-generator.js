@@ -450,13 +450,11 @@ function generateFloor(floorNum, opts) {
     /** @type {{fromX:number,fromY:number,toX:number,toY:number,tile:any}[]} */
     const moved = [];
     for (const room of rooms) {
-      for (let tx = room.x + 1; tx < room.x + room.w - 1; tx++) {
-        normalizeBoundaryEntrance(room, tx, room.y, moved);
-        normalizeBoundaryEntrance(room, tx, room.y + room.h - 1, moved);
-      }
-      for (let ty = room.y + 1; ty < room.y + room.h - 1; ty++) {
-        normalizeBoundaryEntrance(room, room.x, ty, moved);
-        normalizeBoundaryEntrance(room, room.x + room.w - 1, ty, moved);
+      const gates = dungeonTopology.findRoomBoundaryGates(map, room, isDoorLikeEntranceTile);
+      for (const gate of gates) {
+        // The engine helper includes room corners; legacy normalization only moved flat edge entrances.
+        if (dungeonTopology.roomHasCorner(room, gate.x, gate.y)) continue;
+        normalizeBoundaryEntrance(room, gate.x, gate.y, moved);
       }
     }
     return moved;
