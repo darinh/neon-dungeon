@@ -338,6 +338,12 @@ Run and record these before verification or review:
     instruction says to use raw `gh`, update that instruction or stop and record
     the conflict rather than choosing one silently. The retrospective must record
     which merge path was used and whether any instruction conflict was found.
+22. **Explicit negative path constraints.** When a user or project instruction says
+    a path, marker, artifact, or legacy location must not be read, written, or
+    migrated, inspect the relevant implementation surfaces before attributing
+    observed behavior to an inferred cause. Record the searched scripts, wrappers,
+    extensions, or workflows; after changes, verify the prohibited path/pattern is
+    absent or explicitly limited to documentation of the prohibition.
 
 ## Pre-retrospective checklist
 
@@ -619,6 +625,7 @@ Keep the retrospective short enough to be useful:
 
 - **Outcome**:
 - **Worktree/branch**:
+- **Pre-retrospective checklist**:
 - **What went wrong**:
 - **What went right**:
 - **Primary claim evidence**:

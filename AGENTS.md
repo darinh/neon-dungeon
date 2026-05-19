@@ -153,6 +153,15 @@ These are hard rules, not preferences:
   stop when there is no concrete actionable work or the task is blocked on an
   external human decision.
 
+## Operator artifacts
+
+- Operator restart markers belong under `~/.operator/restart`. Operator and
+  handoff scripts must never create, read, write, or migrate reboot/restart
+  markers under `~/.copilot/restart`.
+- When an unexpected operator restart occurs, inspect the operator/handoff
+  implementation and marker paths before attributing the restart to task
+  completion, user intent, or another inferred cause.
+
 ## Conventions
 
 ### Type checking
@@ -224,3 +233,7 @@ If you add a brand-new file under `ASSETS`, add the path to the precache list in
 - Geometry and input-hitbox tests must assert the complete rectangle: origin X,
   origin Y, width, height, and all four boundary conditions (left, right, top,
   bottom). Partial coverage of a rectangle is a review finding.
+- Behavior-preserving refactors that replace inline traversal or mutation with a
+  shared helper must include direct behavioral evidence that exercises the caller
+  mutation path. Source-shape assertions, digest stability, or callback identity
+  are supporting evidence only; they are not sufficient by themselves.
