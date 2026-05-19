@@ -671,18 +671,13 @@ function generateFloor(floorNum, opts) {
         if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
         const key = x + ',' + y;
         if (visitedDoorTiles.has(key)) continue;
-        const cluster = [{ x, y }];
-        visitedDoorTiles.add(key);
-        for (let qi = 0; qi < cluster.length; qi++) {
-          const c = /** @type {any} */ (cluster[qi]);
-          for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-            const nx = c.x + dx, ny = c.y + dy;
-            const nk = nx + ',' + ny;
-            if (visitedDoorTiles.has(nk) || !isDoorLikeEntranceTile(map[ny]?.[nx]) || tileInsideAnyRoom(nx, ny)) continue;
-            visitedDoorTiles.add(nk);
-            cluster.push({ x: nx, y: ny });
-          }
-        }
+        const cluster = dungeonTopology.findCardinalConnectedPositions(
+          x,
+          y,
+          /** @type {(nx:number, ny:number) => boolean} */ ((nx, ny) =>
+            isDoorLikeEntranceTile(map[ny]?.[nx]) && !tileInsideAnyRoom(nx, ny))
+        );
+        for (const e of cluster) visitedDoorTiles.add(e.x + ',' + e.y);
         if (cluster.length <= 1) continue;
         const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
         const keep = sorted.find((/** @type {any} */ e) => map[e.y]?.[e.x] !== T.DOOR) || sorted[Math.floor(sorted.length / 2)];
