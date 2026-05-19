@@ -960,15 +960,7 @@ function generateFloor(floorNum, opts) {
   }
 
   function thinWideCorridors() {
-    /** @type {any} */
-    const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    for (const r of rooms) {
-      for (let ty = r.y; ty < r.y + r.h; ty++) {
-        for (let tx = r.x; tx < r.x + r.w; tx++) {
-          if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
-        }
-      }
-    }
+    const inRoom = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, rooms);
     /** @param {number} x @param {number} y */
     const isCorridor = (x, y) => {
       const t = map[y]?.[x];
@@ -1227,12 +1219,7 @@ function generateFloor(floorNum, opts) {
   // never walk down a tunnel to nowhere.
   {
     // Build room membership lookup
-    /** @type {any} */ const inRoom = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    for (const r of rooms) {
-      for (let ty = r.y; ty < r.y + r.h; ty++)
-        for (let tx = r.x; tx < r.x + r.w; tx++)
-          if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) inRoom[ty][tx] = 1;
-    }
+    const inRoom = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, rooms);
     const connects = (/** @type {any} */ t) => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
     dungeonTopology.pruneDeadEndGridTiles({
       map,

@@ -559,6 +559,12 @@ declare global {
       matchesPosition: (x: number, y: number) => boolean,
     ): Array<{ x: number; y: number }>;
     createMap(width: number, height: number, fillTile: number): Uint8Array[];
+    /** Builds a clipped room-membership grid where room-covered tiles are 1. */
+    createRoomMembershipGrid(
+      width: number,
+      height: number,
+      rooms: Array<{ x: number; y: number; w: number; h: number }>,
+    ): Uint8Array[];
     carveRect(
       map: ArrayLike<ArrayLike<number>>,
       x: number,

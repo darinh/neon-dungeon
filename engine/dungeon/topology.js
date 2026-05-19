@@ -89,6 +89,32 @@
   }
 
   /**
+   * Builds a clipped room-membership grid for callers that need to distinguish
+   * room interiors from corridor/outside topology. The engine owns rectangle
+   * coordinate clipping; callers own room semantics and subsequent policy.
+   *
+   * @param {number} width
+   * @param {number} height
+   * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
+   * @returns {Uint8Array[]}
+   */
+  function createRoomMembershipGrid(width, height, rooms) {
+    const grid = Array.from({ length: height }, () => new Uint8Array(width));
+    for (const room of rooms) {
+      const yMin = Math.max(0, room.y);
+      const yMax = Math.min(height, room.y + room.h);
+      const xMin = Math.max(0, room.x);
+      const xMax = Math.min(width, room.x + room.w);
+      for (let y = yMin; y < yMax; y++) {
+        const row = grid[y];
+        if (!row) continue;
+        for (let x = xMin; x < xMax; x++) row[x] = 1;
+      }
+    }
+    return grid;
+  }
+
+  /**
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {number} x
    * @param {number} y
@@ -968,6 +994,7 @@
     countCardinalNeighbors,
     findCardinalConnectedPositions,
     createMap,
+    createRoomMembershipGrid,
     carveRect,
     carveCorridor,
     createBspDungeon,
