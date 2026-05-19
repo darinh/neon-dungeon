@@ -716,6 +716,52 @@
   }
 
   /**
+   * Reports whether `target` is reachable from `start` over caller-defined open
+   * map tiles. The start coordinate is considered reachable without probing its
+   * tile, matching legacy generation guards that already chose a legal start.
+   *
+   * @param {ArrayLike<ArrayLike<number>>} map
+   * @param {{x:number,y:number}} start
+   * @param {{x:number,y:number}} target
+   * @param {(tile:number) => boolean} isOpenTile
+   * @returns {boolean}
+   */
+  function canReachGridPosition(map, start, target, isOpenTile) {
+    const height = map.length;
+    const width = height > 0 ? (map[0]?.length || 0) : 0;
+    const sx = start.x;
+    const sy = start.y;
+    const tx = target.x;
+    const ty = target.y;
+    const inBounds = (/** @type {number} */ x, /** @type {number} */ y) =>
+      Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < width && y < height;
+    if (!inBounds(sx, sy) || !inBounds(tx, ty)) return false;
+    if (sx === tx && sy === ty) return true;
+    /** @type {Uint8Array[]} */
+    const visited = Array.from({ length: height }, () => new Uint8Array(width));
+    /** @type {{x:number,y:number}[]} */
+    const q = [{ x: sx, y: sy }];
+    const startRow = visited[sy];
+    if (!startRow) return false;
+    startRow[sx] = 1;
+    for (let qi = 0; qi < q.length; qi++) {
+      const current = q[qi];
+      if (!current) continue;
+      for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+        const nx = current.x + dx;
+        const ny = current.y + dy;
+        const row = visited[ny];
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height || !row || row[nx]) continue;
+        if (!isOpenTile(Number(map[ny]?.[nx]))) continue;
+        if (nx === tx && ny === ty) return true;
+        row[nx] = 1;
+        q.push({ x: nx, y: ny });
+      }
+    }
+    return false;
+  }
+
+  /**
    * Finds a cardinal BFS path across the interior grid only, ignoring map tile
    * contents entirely. This is topology coordinate search: callers own all
    * walkability and mutation policy.
@@ -801,6 +847,7 @@
     findRoomBoundaryGates,
     findOutsideEntranceGatesForRoom,
     findRoomNeighborhoodTile,
+    canReachGridPosition,
     findInteriorGridBfsPath,
     BSPNode,
   };

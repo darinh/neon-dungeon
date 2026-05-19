@@ -625,6 +625,34 @@ test('dungeon topology interior grid BFS path rejects boundary targets and handl
   assert.deepEqual(topology.findInteriorGridBfsPath(6, 6, { x: 2, y: 2 }, { x: 2, y: 2 }), []);
 });
 
+test('dungeon topology reports caller-defined grid reachability', () => {
+  const W = 1;
+  const F = 2;
+  const map = [
+    new Uint8Array([F, F, F, W]),
+    new Uint8Array([W, W, F, W]),
+    new Uint8Array([F, F, F, F]),
+  ];
+  const isOpenTile = (/** @type {number} */ tile) => tile === F;
+
+  assert.equal(topology.canReachGridPosition(map, { x: 0, y: 0 }, { x: 3, y: 2 }, isOpenTile), true);
+  assert.equal(topology.canReachGridPosition(map, { x: 0, y: 0 }, { x: 0, y: 2 }, isOpenTile), true);
+  assert.equal(topology.canReachGridPosition(map, { x: 0, y: 0 }, { x: 3, y: 0 }, isOpenTile), false);
+  assert.equal(topology.canReachGridPosition(map, { x: 0, y: 0 }, { x: 9, y: 9 }, isOpenTile), false);
+});
+
+test('dungeon topology treats the start grid position as already reachable', () => {
+  const W = 1;
+  const map = [new Uint8Array([W])];
+  const calls = [];
+
+  assert.equal(topology.canReachGridPosition(map, { x: 0, y: 0 }, { x: 0, y: 0 }, (tile) => {
+    calls.push(tile);
+    return false;
+  }), true);
+  assert.deepEqual(calls, []);
+});
+
 test('dungeon reachability solver reports physical key-lock progression facts', () => {
   const W = 8, H = 4;
   const map = Array.from({ length: H }, () => new Uint8Array(W).fill(1));

@@ -715,6 +715,16 @@ declare global {
       padding?: number,
     ): { x: number; y: number } | null;
     /**
+     * Reports whether a target coordinate can be reached from a start coordinate
+     * over caller-defined open map tiles. The host owns tile semantics.
+     */
+    canReachGridPosition(
+      map: ArrayLike<ArrayLike<number>>,
+      start: { x: number; y: number },
+      target: { x: number; y: number },
+      isOpenTile: (tile: number) => boolean,
+    ): boolean;
+    /**
      * Finds a cardinal BFS path through the interior coordinate grid only,
      * ignoring map tile contents. Returns target-to-start coordinates excluding
      * the start so hosts can apply their own tile mutation policy.
