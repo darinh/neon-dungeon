@@ -615,6 +615,13 @@ declare global {
       ignoredRoom?: { x: number; y: number; w: number; h: number } | null,
       padding?: number,
     ): boolean;
+    /**
+     * Selects the y/x-sorted median cluster position and returns the rest for
+     * caller-owned mutation. Tile-aware keep policy remains in the host.
+     */
+    selectMedianClusterPosition(
+      cluster: Array<{ x: number; y: number }>,
+    ): { keep: { x: number; y: number } | null; discard: Array<{ x: number; y: number }> };
     findExpandedRoomPlacement(opts: {
       room: { x: number; y: number; w: number; h: number; cx: number; cy: number };
       rooms: Array<{ x: number; y: number; w: number; h: number }>;

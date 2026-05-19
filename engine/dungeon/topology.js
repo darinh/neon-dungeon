@@ -346,6 +346,25 @@
   }
 
   /**
+   * Selects the y-major, then x-major median position from a cluster and returns
+   * the other positions for caller-owned mutation. This helper is intentionally
+   * position-only; callers needing tile-aware keep policy should not use it.
+   *
+   * @param {Array<{x:number,y:number}>} cluster
+   * @returns {{keep:{x:number,y:number}|null, discard:Array<{x:number,y:number}>}}
+   */
+  function selectMedianClusterPosition(cluster) {
+    const sorted = cluster.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const keep = sorted[Math.floor(sorted.length / 2)] || null;
+    /** @type {Array<{x:number,y:number}>} */
+    const discard = [];
+    for (const position of sorted) {
+      if (position !== keep) discard.push(position);
+    }
+    return { keep, discard };
+  }
+
+  /**
    * Finds the closest placement for a rectangle expanded around a room centre.
    * Scan order intentionally preserves legacy generation tie-breaks: x is the
    * outer loop, y is the inner loop, and equal scores keep the first candidate.
@@ -1003,6 +1022,7 @@
     roomContainsPoint,
     rectOverlapArea,
     rectOverlapsAnyRoom,
+    selectMedianClusterPosition,
     findExpandedRoomPlacement,
     resolvePreferredSpawnRoom,
     roomHasCorner,

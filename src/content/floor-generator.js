@@ -388,11 +388,8 @@ function generateFloor(floorNum, opts) {
    * @returns {any}
    */
   function keepSingleEntranceTile(cluster) {
-    const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
-    const keep = sorted[Math.floor(sorted.length / 2)];
-    for (const e of sorted) {
-      if (e !== keep) map[e.y][e.x] = T.WALL;
-    }
+    const { keep, discard } = dungeonTopology.selectMedianClusterPosition(cluster);
+    for (const e of discard) map[e.y][e.x] = T.WALL;
     return keep;
   }
 

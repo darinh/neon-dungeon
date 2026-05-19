@@ -189,6 +189,10 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'room membership masks for arc-grid placement, pruning, and thinning must delegate rectangle clipping to the dungeon topology engine');
   assert.match(CONTENT, /const\s+secretMask\s*=\s*dungeonTopology\.createRoomMembershipGrid\(MAP_W,\s*MAP_H,\s*secretRooms\)/,
     'secret room visibility masks must delegate rectangle clipping to the dungeon topology engine');
+  assert.match(CONTENT, /const\s+\{\s*keep,\s*discard\s*\}\s*=\s*dungeonTopology\.selectMedianClusterPosition\(cluster\)/,
+    'room-boundary entrance narrowing must delegate position-sorted median selection to the dungeon topology engine');
+  assert.match(CONTENT, /for\s*\(const\s+e\s+of\s+discard\)\s*map\[e\.y\]\[e\.x\]\s*=\s*T\.WALL/,
+    'floor-generator must keep NEON-specific wall mutation after median selection');
   assert.doesNotMatch(CONTENT, /let\s+adj\s*=\s*0;\s*if\s*\(connects\(map\[y-1\]\[x\]\)\)\s*adj\+\+;[\s\S]*?if\s*\(adj\s*<=\s*1\)/,
     'dead-end corridor pruning should not keep inline cardinal adjacency counting in floor-generator');
   const collapseAdjacentEntranceTiles = extractFunctionBlock(CONTENT, 'collapseAdjacentEntranceTiles');
