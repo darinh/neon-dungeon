@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.158
+# NEON DUNGEON — Game Specification v6.1.159
 
 ## Vision
 
@@ -4946,6 +4946,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.159 | Dungeon engine extraction: secret-room visibility masks now reuse `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)` for clipped room-interior marking before the game layer clears cracked entrance tiles. `src/content/floor-generator.js` keeps NEON-specific hidden-room lighting/rendering policy while the engine helper owns generic room-rectangle grid construction. |
 | v6.1.158 | Dungeon engine extraction: arc-grid corridor hazard placement now reuses `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)` instead of rebuilding a local room mask in `src/content/floor-generator.js`. The game layer still owns NEON-specific arc hazard timing, placement exclusions, and tile mutation policy while the engine helper owns clipped room-interior grid construction. |
 | v6.1.157 | Dungeon engine extraction: room-membership masks used by dead-end corridor pruning and wide-corridor thinning now delegate clipped room-rectangle marking to `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)`. `src/content/floor-generator.js` keeps NEON-specific corridor, reachability, and mutation policy while the engine helper owns generic room-interior grid construction. |
 | v6.1.156 | Dungeon engine extraction: outside-entrance normalization scans in `src/content/floor-generator.js` now delegate their interior y-major entrance traversal to `NEON.dungeonTopology.visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit)`. The floor generator keeps NEON-specific door-like tile semantics, room filtering, and mutation policy while the engine helper preserves sequential scan effects. |
