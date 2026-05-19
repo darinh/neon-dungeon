@@ -2,6 +2,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     subject: null,
     body: null,
     dryRun: false,
+    promotionAuthority: '',
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -49,6 +51,10 @@ function parseArgs(argv) {
       parsed.body = argv[++i] || null;
     } else if (arg.startsWith('--body=')) {
       parsed.body = arg.slice('--body='.length);
+    } else if (arg === '--promotion-authority') {
+      parsed.promotionAuthority = argv[++i] || '';
+    } else if (arg.startsWith('--promotion-authority=')) {
+      parsed.promotionAuthority = arg.slice('--promotion-authority='.length);
     } else if (arg.startsWith('-')) {
       fail(`unknown option: ${arg}`);
     } else if (!parsed.pr) {
@@ -111,6 +117,24 @@ function preflight(pr, requestedMethod) {
   return validateView(pr, view, requestedMethod);
 }
 
+function runPromotionAudit(pr, authority) {
+  if (!authority || authority.trim().length < 20) {
+    fail('main promotion merge requires --promotion-authority with the active instruction authorizing develop -> main promotion');
+  }
+  const script = path.join(__dirname, 'check-promotion-audit.js');
+  const result = run(process.execPath, [
+    script,
+    '--intended-pr', pr,
+    '--allow-human-authored',
+    '--authority', authority,
+  ]);
+  process.stdout.write(result.stdout);
+  process.stderr.write(result.stderr);
+  if (result.status !== 0) {
+    fail('promotion audit failed; aborting main merge');
+  }
+}
+
 function validateView(pr, view, requestedMethod) {
   if (view.state !== 'OPEN') {
     fail(`PR #${pr} is ${view.state}; aborting merge`);
@@ -143,6 +167,7 @@ function verifyMerged(pr) {
 function guardedMerge(argv) {
   const opts = parseArgs(argv);
   const { view, method } = preflight(opts.pr, opts.method);
+  if (view.baseRefName === 'main') runPromotionAudit(opts.pr, opts.promotionAuthority);
   const args = mergeArgs(opts.pr, method, opts);
   console.log(`guarded-merge: preflight state=${view.state} base=${view.baseRefName} head=${view.headRefName} method=${method}`);
   if (opts.dryRun) {
@@ -179,4 +204,5 @@ module.exports = {
   checkFailures,
   mergeArgs,
   validateView,
+  runPromotionAudit,
 };
