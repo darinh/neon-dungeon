@@ -287,11 +287,13 @@ Run and record these before verification or review:
     and test names so "behavior-preserving" is backed by reproducible output,
     not only by source-motion review.
 19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
-    that is not already used successfully in the current session, either preflight
-    the help/version output or be prepared to record the exact fallback command
-    that succeeded. A tool-version mismatch is not resolved by retrying once; the
-    retrospective must name the canonical compatible command shape used after the
-    mismatch.
+     that is not already used successfully in the current session, either preflight
+     the help/version output or be prepared to record the exact fallback command
+     that succeeded. A tool-version mismatch is not resolved by retrying once; the
+     retrospective must name the canonical compatible command shape used after the
+     mismatch. For PR status checks, `gh pr checks <pr> --required` is the
+     compatible non-watch form; use `gh pr checks <pr> --watch --fail-fast
+     --interval <seconds>` only when watch mode is intended.
 20. **Shared-branch force alignment guard.** Before force-with-lease aligning a
     shared branch after a deliberate rebase promotion, fetch the remote branch,
     record the exact old and new SHAs, prove the source and target trees match,
@@ -375,11 +377,14 @@ Before writing the retrospective:
     SHA, and the post-alignment SHAs. Do not treat "trees matched" as sufficient
     without explaining why alignment was safe for open PRs and active work.
 13. Before attaching the retrospective, verify every version number, PR number,
-    commit SHA, branch tip, and release tag cited in the text against the source
-    artifact (`gh pr view`, `gh release view`, `git rev-parse`, workflow output,
-    or deployed `version.json`). If the work has both an in-spec changelog version
-    and a production release version, label them explicitly so the retrospective
-    cannot imply one should equal the other.
+     commit SHA, branch tip, and release tag cited in the text against the source
+     artifact (`gh pr view`, `gh release view`, `git rev-parse`, workflow output,
+     or deployed `version.json`). If the work has both an in-spec changelog version
+     and a production release version, label them explicitly so the retrospective
+     cannot imply one should equal the other. For spec header bumps, use `git grep`
+     rather than path-glob search wrappers to find stale references, for example:
+     `git grep -n "Game Specification v<old-version>" -- tests docs src engine
+     types package.json`.
 
 ## Required inputs
 
