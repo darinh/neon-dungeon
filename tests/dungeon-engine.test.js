@@ -330,6 +330,27 @@ test('dungeon topology engine exposes padded rectangle overlap helpers', () => {
   assert.equal(topology.rectOverlapsAnyRoom(rect, [touching], touching, 1), false);
 });
 
+test('dungeon topology selects position-sorted median cluster tiles without mutating', () => {
+  const west = { x: 4, y: 5 };
+  const east = { x: 5, y: 5 };
+  const north = { x: 4, y: 4 };
+  const south = { x: 4, y: 6 };
+  const cluster = [south, east, north, west];
+
+  const selection = topology.selectMedianClusterPosition(cluster);
+
+  assert.equal(selection.keep, east, 'even clusters keep Math.floor(length / 2) after y/x sorting');
+  assert.deepEqual(selection.discard, [north, west, south]);
+  assert.deepEqual(cluster, [south, east, north, west], 'input cluster order stays caller-owned');
+});
+
+test('dungeon topology median cluster selection handles singleton and empty clusters', () => {
+  const only = { x: 9, y: 3 };
+
+  assert.deepEqual(topology.selectMedianClusterPosition([only]), { keep: only, discard: [] });
+  assert.deepEqual(topology.selectMedianClusterPosition([]), { keep: null, discard: [] });
+});
+
 test('dungeon topology engine places expanded room rectangles with legacy scoring', () => {
   const room = { id: 'target', x: 10, y: 6, w: 4, h: 3, cx: 12, cy: 7 };
   const placement = topology.findExpandedRoomPlacement({
