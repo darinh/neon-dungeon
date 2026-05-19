@@ -1610,11 +1610,13 @@ function generateFloor(floorNum, opts) {
 
   // Secret room mask — tiles inside unrevealed secret rooms are hidden from lighting/rendering
   // Cracked entrance tiles are excluded so they can receive light and render crack visuals
-  /** @type {any} */ const secretMask = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
-  for (const r of secretRooms) {
-    for (let ty=r.y; ty<r.y+r.h; ty++)
-      for (let tx=r.x; tx<r.x+r.w; tx++)
-        if (map[ty][tx] !== T.CRACKED) secretMask[ty][tx] = 1;
+  const secretMask = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, secretRooms);
+  for (let ty = 0; ty < MAP_H; ty++) {
+    const maskRow = secretMask[ty];
+    const mapRow = map[ty];
+    for (let tx = 0; tx < MAP_W; tx++) {
+      if (maskRow[tx] && mapRow[tx] === T.CRACKED) maskRow[tx] = 0;
+    }
   }
 
   return { map, rooms, spawnRoom, defaultSpawnRoom, preferredSpawnResolved: !!preferredSpawn, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
