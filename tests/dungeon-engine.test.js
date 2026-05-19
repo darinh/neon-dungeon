@@ -143,6 +143,31 @@ test('dungeon topology connected-position predicate owns bounds and start eligib
   assert.deepEqual(topology.findCardinalConnectedPositions(2, 2, matches), []);
 });
 
+test('dungeon topology connected-position helper keeps disjoint host scans separate', () => {
+  const width = 6;
+  const height = 4;
+  const open = new Set(['1,1', '2,1', '4,1', '4,2']);
+  const visited = new Set();
+  const clusters = [];
+  const matches = (/** @type {number} */ x, /** @type {number} */ y) =>
+    x >= 0 && y >= 0 && x < width && y < height && open.has(x + ',' + y);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const key = x + ',' + y;
+      if (visited.has(key) || !matches(x, y)) continue;
+      const cluster = topology.findCardinalConnectedPositions(x, y, matches);
+      for (const p of cluster) visited.add(p.x + ',' + p.y);
+      clusters.push(cluster);
+    }
+  }
+
+  assert.deepEqual(clusters, [
+    [{ x: 1, y: 1 }, { x: 2, y: 1 }],
+    [{ x: 4, y: 1 }, { x: 4, y: 2 }],
+  ]);
+});
+
 test('dungeon topology engine finds outside entrance room sides in cardinal order', () => {
   const outside = { x: 5, y: 5 };
   const rooms = [
