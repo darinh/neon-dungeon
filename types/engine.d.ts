@@ -622,6 +622,14 @@ declare global {
     selectMedianClusterPosition(
       cluster: Array<{ x: number; y: number }>,
     ): { keep: { x: number; y: number } | null; discard: Array<{ x: number; y: number }> };
+    /**
+     * Selects the first y/x-sorted cluster position matching caller preference,
+     * falling back to the median. Tile-aware keep policy remains in the host.
+     */
+    selectPreferredClusterPosition(
+      cluster: Array<{ x: number; y: number }>,
+      isPreferred: (position: { x: number; y: number }) => boolean,
+    ): { keep: { x: number; y: number } | null; discard: Array<{ x: number; y: number }> };
     findExpandedRoomPlacement(opts: {
       room: { x: number; y: number; w: number; h: number; cx: number; cy: number };
       rooms: Array<{ x: number; y: number; w: number; h: number }>;

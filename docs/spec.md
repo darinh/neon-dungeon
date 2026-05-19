@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.160
+# NEON DUNGEON — Game Specification v6.1.161
 
 ## Vision
 
@@ -4946,6 +4946,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.161 | Dungeon engine extraction: outside-entrance cluster collapse now delegates the y/x-sorted first-preferred-else-median keep choice to `NEON.dungeonTopology.selectPreferredClusterPosition(cluster, isPreferred)`. `src/content/floor-generator.js` keeps NEON-specific `T.DOOR` preference semantics and `T.FLOOR` discard mutation while the engine helper owns generic position ordering and selection fallback. |
 | v6.1.160 | Dungeon engine extraction: room-boundary entrance narrowing now delegates the y/x-sorted median keep choice to `NEON.dungeonTopology.selectMedianClusterPosition(cluster)`. `src/content/floor-generator.js` keeps NEON-specific wall mutation policy while the engine helper owns generic position ordering and returns discard coordinates for the caller to fill. |
 | v6.1.159 | Dungeon engine extraction: secret-room visibility masks now reuse `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)` for clipped room-interior marking before the game layer clears cracked entrance tiles. `src/content/floor-generator.js` keeps NEON-specific hidden-room lighting/rendering policy while the engine helper owns generic room-rectangle grid construction. |
 | v6.1.158 | Dungeon engine extraction: arc-grid corridor hazard placement now reuses `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)` instead of rebuilding a local room mask in `src/content/floor-generator.js`. The game layer still owns NEON-specific arc hazard timing, placement exclusions, and tile mutation policy while the engine helper owns clipped room-interior grid construction. |
