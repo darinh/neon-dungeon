@@ -1361,32 +1361,19 @@ function generateFloor(floorNum, opts) {
   {
     const sx = spawnRoom.cx, sy = spawnRoom.cy;
     const stairTile = floorNum >= _finalFloor ? T.TERMINAL : T.STAIRS;
-    /** @type {any} */ const vis = Array.from({length: MAP_H}, () => new Uint8Array(MAP_W));
-    /** @type {any} */ const prev = Array.from({length: MAP_H}, () => new Int16Array(MAP_W).fill(-1));
-    const q = [{x: sx, y: sy}];
-    vis[sy][sx] = 1;
     let stairX = -1, stairY = -1;
     // Find stairs position
     for (let y = 0; y < MAP_H; y++)
       for (let x = 0; x < MAP_W; x++)
         if (map[y][x] === stairTile) { stairX = x; stairY = y; }
 
-    while (q.length) {
-      const {x, y} = /** @type {{x:any,y:any}} */ (q.shift());
-      if (x === stairX && y === stairY) break;
-      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-        if (vis[ny][nx]) continue;
-        const t = map[ny][nx];
-        if (t === T.WALL || t === T.VOID) continue;
-        vis[ny][nx] = 1;
-        prev[ny][nx] = y * MAP_W + x;
-        q.push({x: nx, y: ny});
-      }
-    }
-
-    if (!vis[stairY][stairX]) {
+    const stairsReachable = dungeonTopology.canReachGridPosition(
+      map,
+      { x: sx, y: sy },
+      { x: stairX, y: stairY },
+      (/** @type {number} */ t) => t !== T.WALL && t !== T.VOID
+    );
+    if (!stairsReachable) {
       // Stairs unreachable — carve rescue corridor, only overwriting WALL/VOID
       let cx = sx, cy = sy;
       while (cx !== stairX) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cx += cx < stairX ? 1 : -1; }

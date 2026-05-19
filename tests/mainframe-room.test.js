@@ -171,6 +171,10 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'rescue corridor carving must delegate generic interior grid BFS search to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /function\s+carveProtectedRescueCorridorTo[\s\S]*?new\s+Int16Array\(MAP_W\)\.fill\(-1\)[\s\S]*?function\s+clearOrphanEntranceTiles/,
     'rescue corridor path search should not keep its old inline predecessor grid in floor-generator');
+  assert.match(CONTENT, /dungeonTopology\.canReachGridPosition\(\s*map,\s*{\s*x:\s*sx,\s*y:\s*sy\s*},\s*{\s*x:\s*stairX,\s*y:\s*stairY\s*},\s*\([\s\S]*?\)\s*=>\s*t\s*!==\s*T\.WALL\s*&&\s*t\s*!==\s*T\.VOID\s*\)/,
+    'spawn-to-stairs reachability guard must delegate generic grid BFS traversal to the dungeon topology engine');
+  assert.doesNotMatch(CONTENT, /const\s+q\s*=\s*\[\{\s*x:\s*sx,\s*y:\s*sy\s*\}\][\s\S]*?while\s*\(\s*q\.length\s*\)[\s\S]*?T\.VOID[\s\S]*?q\.push\(\{\s*x:\s*nx,\s*y:\s*ny\s*\}\)/,
+    'spawn-to-stairs reachability guard should not keep inline grid BFS traversal in floor-generator');
   const collapseAdjacentEntranceTiles = extractFunctionBlock(CONTENT, 'collapseAdjacentEntranceTiles');
   assert.match(collapseAdjacentEntranceTiles, /dungeonTopology\.findCardinalConnectedPositions\(\s*x,\s*y,\s*(?:\/\*\* @type \{\(nx:number, ny:number\) => boolean\} \*\/\s*)?\(?\(nx,\s*ny\)\s*=>\s*isDoorLikeEntranceTile\(map\[ny\]\?\.\[nx\]\)\)?\s*\)/,
     'adjacent entrance collapse must delegate connected-component traversal to the dungeon topology engine');
