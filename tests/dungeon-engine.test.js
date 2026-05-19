@@ -47,6 +47,7 @@ test('dungeon topology engine carves BSP rooms and corridors with injected tiles
 
 test('dungeon topology engine exposes cardinal room graph and boundary helpers', () => {
   assert.deepEqual(topology.CARDINAL_DIRECTIONS, [[1, 0], [-1, 0], [0, 1], [0, -1]]);
+  assert.deepEqual(topology.DIAGONAL_DIRECTIONS, [[1, 1], [1, -1], [-1, 1], [-1, -1]]);
 
   const a = { id: 'a', x: 2, y: 2, w: 4, h: 4 };
   const b = { id: 'b', x: 8, y: 2, w: 4, h: 4 };

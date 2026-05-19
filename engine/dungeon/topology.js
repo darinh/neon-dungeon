@@ -20,6 +20,12 @@
     [0, 1],
     [0, -1],
   ]));
+  const DIAGONAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (Object.freeze([
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ]));
 
   /**
    * Counts caller-defined cardinal neighbours around a grid position. The engine
@@ -910,6 +916,7 @@
 
   return {
     CARDINAL_DIRECTIONS,
+    DIAGONAL_DIRECTIONS,
     countCardinalNeighbors,
     findCardinalConnectedPositions,
     createMap,

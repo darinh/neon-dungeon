@@ -540,6 +540,8 @@ declare global {
   interface EngineDungeonTopologyAPI {
     /** Shared cardinal traversal order for extracted dungeon topology helpers. */
     CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number]>;
+    /** Shared diagonal traversal order for extracted dungeon topology helpers. */
+    DIAGONAL_DIRECTIONS: ReadonlyArray<readonly [number, number]>;
     /** Counts caller-defined cardinal neighbours around a coordinate. */
     countCardinalNeighbors(
       x: number,
