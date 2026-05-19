@@ -1533,12 +1533,7 @@ function generateFloor(floorNum, opts) {
   // ── Arc Grids (floor 5+): pulsing hazards in corridors ───────────────
   if (floorNum >= 5) {
     // Build room mask to identify corridor tiles
-    /** @type {any} */ const roomMask = Array.from({length:MAP_H}, ()=>new Uint8Array(MAP_W));
-    for (const r of rooms) {
-      for (let ty = r.y; ty < r.y + r.h; ty++)
-        for (let tx = r.x; tx < r.x + r.w; tx++)
-          roomMask[ty][tx] = 1;
-    }
+    const roomMask = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, rooms);
     // Collect corridor floor tiles (not adjacent to doors/stairs/terminals)
     const corridorTiles = [];
     for (let ty = 1; ty < MAP_H-1; ty++) {
