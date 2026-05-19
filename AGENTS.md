@@ -111,8 +111,9 @@ These are hard rules, not preferences:
    `origin/main` still have the same tip. If GitHub rewrote the commit SHA during
    the rebase merge, reconcile `develop` back to the released `main` tip with a
    deliberate `--force-with-lease` update from a worktree after verifying the
-   trees are patch-equivalent. Do not temporarily delete repository rules to do
-   this; the `develop` ruleset must retain the admin bypass verified by
+   trees are patch-equivalent and recording a bounded remote-ref containment
+   check for the old `develop` tip. Do not temporarily delete repository rules to
+   do this; the `develop` ruleset must retain the admin bypass verified by
    `npm run check:agent-continuity`. Do not leave `main` and `develop` divergent
    after a release.
 
@@ -190,7 +191,7 @@ tile.
 Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `src/game.js renderMenu()`. When changing menu font/gap sizes, update BOTH. See stored memory `menu touch coupling`.
 
 ### Code review policy
-**Every commit that changes code must have at least 1 adversarial code-review subagent before pushing.** No exceptions for Small tasks. 🔴 files (game.js, entities.js, content.js, platform.js, sw.js, save.js, anything auth/crypto/payments/concurrency) escalate to 3 reviewers.
+**Every commit that changes code must have at least 1 adversarial code-review subagent before pushing.** No exceptions for Small tasks. 🔴 files (game.js, entities.js, content.js, platform.js, sw.js, save.js, anything auth/crypto/payments/concurrency) escalate to 3 reviewers. The red file names are literal top-level/runtime files; `src/content/floor-generator.js` and other `src/content/*` submodules are Medium by default unless the specific change touches a red-risk domain such as data deletion, schema migration, auth/crypto/payments, or concurrency.
 
 For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect
