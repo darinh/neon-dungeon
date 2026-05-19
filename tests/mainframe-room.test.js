@@ -203,8 +203,14 @@ test('final floor generation builds a safe mainframe room with all interaction p
   const collapseAdjacentOutsideEntranceTilesToFloor = extractFunctionBlock(CONTENT, 'collapseAdjacentOutsideEntranceTilesToFloor');
   assert.match(collapseAdjacentOutsideEntranceTilesToFloor, /dungeonTopology\.findCardinalConnectedPositions\(\s*x,\s*y,\s*(?:\/\*\* @type \{\(nx:number, ny:number\) => boolean\} \*\/\s*)?\(?\(nx,\s*ny\)\s*=>[\s\S]*?isDoorLikeEntranceTile\(map\[ny\]\?\.\[nx\]\)[\s\S]*?!tileInsideAnyRoom\(nx,\s*ny\)\)?\s*\)/,
     'outside entrance collapse must delegate outside-tile connected-component traversal to the dungeon topology engine');
+  assert.match(collapseAdjacentOutsideEntranceTilesToFloor, /dungeonTopology\.selectPreferredClusterPosition\(\s*cluster,\s*\(\s*(?:\/\*\* @type \{\{x:number,y:number\}\} \*\/\s*)?e\s*\)\s*=>\s*map\[e\.y\]\?\.\[e\.x\]\s*!==\s*T\.DOOR\s*\)/,
+    'outside entrance collapse must delegate preferred non-plain-door selection to the dungeon topology engine');
+  assert.match(collapseAdjacentOutsideEntranceTilesToFloor, /for\s*\(const\s+e\s+of\s+discard\)\s*map\[e\.y\]\[e\.x\]\s*=\s*T\.FLOOR/,
+    'outside entrance collapse must keep caller-owned floor mutation for discarded outside tiles');
   assert.doesNotMatch(collapseAdjacentOutsideEntranceTilesToFloor, /for\s*\(let\s+qi\s*=\s*0;\s*qi\s*<\s*cluster\.length;/,
     'outside entrance collapse should not keep its old inline cluster BFS loop');
+  assert.doesNotMatch(collapseAdjacentOutsideEntranceTilesToFloor, /cluster\.slice\(\)\.sort/,
+    'outside entrance collapse should not keep inline y/x cluster sorting');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 

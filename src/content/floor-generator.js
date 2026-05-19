@@ -661,12 +661,11 @@ function generateFloor(floorNum, opts) {
         );
         for (const e of cluster) visitedDoorTiles.add(e.x + ',' + e.y);
         if (cluster.length <= 1) return;
-        const sorted = cluster.slice().sort((/** @type {any} */ a, /** @type {any} */ b) => (a.y - b.y) || (a.x - b.x));
-        const keep = sorted.find((/** @type {any} */ e) => map[e.y]?.[e.x] !== T.DOOR) || sorted[Math.floor(sorted.length / 2)];
-        for (const e of cluster) {
-          if (e === keep) continue;
-          map[e.y][e.x] = T.FLOOR;
-        }
+        const { discard } = dungeonTopology.selectPreferredClusterPosition(
+          cluster,
+          (/** @type {{x:number,y:number}} */ e) => map[e.y]?.[e.x] !== T.DOOR
+        );
+        for (const e of discard) map[e.y][e.x] = T.FLOOR;
       }
     );
   }
