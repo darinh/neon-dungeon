@@ -96,6 +96,14 @@ Run and record these before verification or review:
    lines must be narrowed before it runs, not after the pager opens; examples are
    `git branch --list 'pattern' --no-column`, a bounded `git worktree list
    --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
+   Startup and continuity git inspection must be bounded in the command itself:
+   use `git --no-pager` plus counts, explicit ref patterns, `--format`, or a
+   line-limited pipeline. Never display raw `git branch --no-merged ...` output
+   in startup or continuity preflight. If unmerged-branch information is needed,
+   use a count (`GIT_PAGER=cat git branch --no-merged <base> | wc -l`) or a
+   narrowed pattern/list with `--no-column` and an explicit line limit in the
+   same command. A remembered warning about broad branch listings is not
+   sufficient mitigation after a repeat pager incident.
    Use tool names that are known to exist in this environment (`python3`, not
    `python`) or preflight them with `command -v`. For startup continuity checks,
    do not run unbounded branch/worktree/history listings; use targeted commands
@@ -106,18 +114,24 @@ Run and record these before verification or review:
    same pager class recurs after this guard was already in force, record why the
    documented guard failed and add a stronger repo, extension, or shell-level
    prevention instead of only restating the rule.
-5. **CI failure classification.** Before changing code, workflows, or release
+5. **Focused-test command scope.** Before describing a verification command as
+   focused, check how package scripts forward arguments. In this repository,
+   `npm test -- tests/foo.test.js` still runs the package script
+   `node --test tests/*.test.js`; use `node --test tests/foo.test.js` for a
+   truly file-focused run, or record that the command actually executed the full
+   test glob.
+6. **CI failure classification.** Before changing code, workflows, or release
    state for a failed check, read the failed job log and classify the failure as
    checkout/runner infrastructure, dependency/bootstrap, or product code. For
    self-hosted runner checkout failures, inspect the runner workspace cache
    first; corrupt object or checkout-cache failures should be repaired and rerun
    before any repository change is considered.
-6. **New-runtime-file surface audit.** Any new browser runtime source file must
+7. **New-runtime-file surface audit.** Any new browser runtime source file must
    be checked against all registration surfaces: `index.html`,
    `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
    and docs. Default helper paths such as `readSourceFiles()` must cover the new
    file when it is part of the runtime source set.
-7. **Classic-script runtime proof.** When moving top-level globals between
+8. **Classic-script runtime proof.** When moving top-level globals between
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
@@ -128,7 +142,7 @@ Run and record these before verification or review:
    code references, cite where each dependency is defined, and verify each
    definition loads before the new file or is only called after the dependency
    is initialized. Manifest/source equality alone is not dependency proof.
-8. **Moved-symbol source audit.** Before the first full gate on any extraction
+9. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
@@ -171,7 +185,7 @@ Run and record these before verification or review:
    loading or parsing the production source; if a synthetic value is intentional,
    name and comment it as a synthetic fixture so it is not mistaken for behavior
    parity.
-9. **False-positive evidence.** Any reviewer finding rejected as a false positive
+10. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. A critique claim based
    on repository shape or file existence must cite current-repo evidence before

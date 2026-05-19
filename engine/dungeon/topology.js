@@ -42,6 +42,37 @@
   }
 
   /**
+   * Collects the cardinal-connected component containing `start` for a
+   * caller-defined position predicate. Callers own all grid bounds and tile
+   * semantics: `matchesPosition` must return false for out-of-range coordinates
+   * and should stay stable for the duration of the outer scan using the result.
+   *
+   * @param {number} startX
+   * @param {number} startY
+   * @param {(x:number, y:number) => boolean} matchesPosition
+   * @returns {{x:number,y:number}[]}
+   */
+  function findCardinalConnectedPositions(startX, startY, matchesPosition) {
+    if (!matchesPosition(startX, startY)) return [];
+    /** @type {{x:number,y:number}[]} */
+    const cluster = [{ x: startX, y: startY }];
+    const visited = new Set([startX + ',' + startY]);
+    for (let qi = 0; qi < cluster.length; qi++) {
+      const current = cluster[qi];
+      if (!current) continue;
+      for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+        const nx = current.x + dx;
+        const ny = current.y + dy;
+        const key = nx + ',' + ny;
+        if (visited.has(key) || !matchesPosition(nx, ny)) continue;
+        visited.add(key);
+        cluster.push({ x: nx, y: ny });
+      }
+    }
+    return cluster;
+  }
+
+  /**
    * @param {number} width
    * @param {number} height
    * @param {number} fillTile
@@ -748,6 +779,7 @@
   return {
     CARDINAL_DIRECTIONS,
     countCardinalNeighbors,
+    findCardinalConnectedPositions,
     createMap,
     carveRect,
     carveCorridor,
