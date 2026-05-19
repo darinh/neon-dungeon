@@ -19,12 +19,7 @@ const _CG = new Proxy({}, {
 const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/content/floor-generator.js'));
 const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content/floor-generator.js'));
 const DUNGEON_CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.CARDINAL_DIRECTIONS);
-const DUNGEON_DIAGONAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (Object.freeze([
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
-]));
+const DUNGEON_DIAGONAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.DIAGONAL_DIRECTIONS);
 
 // ─── Dungeon Generator ───────────────────────────────────────────────────────
 /** @returns {any} */
