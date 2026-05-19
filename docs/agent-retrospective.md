@@ -102,8 +102,12 @@ Run and record these before verification or review:
    in startup or continuity preflight. If unmerged-branch information is needed,
    use a count (`GIT_PAGER=cat git branch --no-merged <base> | wc -l`) or a
    narrowed pattern/list with `--no-column` and an explicit line limit in the
-   same command. A remembered warning about broad branch listings is not
-   sufficient mitigation after a repeat pager incident.
+   same command. Before executing any startup or continuity command containing
+   `git branch --no-merged`, inspect the command string itself: if it does not
+   also contain an output bound such as `wc -l`, `sed -n '1,20p'`, `head`, or
+   an explicit narrowed `--list '<pattern>' --no-column`, rewrite it before it
+   runs. A remembered warning about broad branch listings is not sufficient
+   mitigation after a repeat pager incident.
    Use tool names that are known to exist in this environment (`python3`, not
    `python`) or preflight them with `command -v`. For startup continuity checks,
    do not run unbounded branch/worktree/history listings; use targeted commands
