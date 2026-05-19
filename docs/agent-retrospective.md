@@ -122,7 +122,10 @@ Run and record these before verification or review:
    such as `git for-each-ref --format='%(refname:short)' refs/heads/<prefix>`,
    `git branch --list '<pattern>' --no-column`, or `gh pr list --limit N --json`.
    Treat a command that pages through stale branches, worktrees, or history as a
-   process miss and replace it with a narrower query before continuing. If the
+   process miss and replace it with a narrower query before continuing. On Neon
+   Dungeon, run `npm run check:agent-startup -- --issue <number>` before manual
+   startup/continuity git discovery; it emits bounded counts and a limited open
+   PR/issue summary so agents do not need raw branch/worktree listings. If the
    same pager class recurs after this guard was already in force, record why the
    documented guard failed and add a stronger repo, extension, or shell-level
    prevention instead of only restating the rule.
@@ -325,7 +328,9 @@ Before writing the retrospective:
    output with a count, format, explicit ref pattern, or line limit. If any
    command was unbounded or produced large output, record it as an incident and
    name the stronger guard adopted or the evidence-backed reason no stronger
-   guard is available.
+   guard is available. If the session used manual startup/continuity discovery,
+   record why `npm run check:agent-startup -- --issue <number>` was insufficient
+   or unavailable.
 4. Confirm code-review subagents, if any, have returned and real findings were
    addressed or explicitly rejected.
 5. Record the review-risk triage decision for every code-bearing path that
