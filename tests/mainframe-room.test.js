@@ -161,6 +161,10 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'outside entrance repair must delegate aligned passage search to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.countCardinalNeighbors\(/,
     'outside entrance repair must delegate cardinal neighbour counts to the dungeon topology engine');
+  assert.match(CONTENT, /const\s+DUNGEON_DIAGONAL_DIRECTIONS\s*=[\s\S]*dungeonTopology\.DIAGONAL_DIRECTIONS/,
+    'door-bypass corner sealing must reuse the dungeon topology diagonal coordinate table');
+  assert.doesNotMatch(CONTENT, /const\s+DUNGEON_DIAGONAL_DIRECTIONS\s*=[\s\S]*Object\.freeze\(\s*\[\s*\[\s*1,\s*1\s*\]/,
+    'floor-generator should not keep its own diagonal coordinate table');
   assert.match(CONTENT, /dungeonTopology\.findFormerEntranceSidePaddingTiles\(room,\s*x,\s*y,\s*dx,\s*dy\)/,
     'outside entrance repair must delegate former entrance side-padding coordinate search to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findOutsideEntranceRoomEdgeRepairs\(\s*map,\s*rooms,\s*isDoorLikeEntranceTile,\s*tileInsideAnyRoom\s*\)/,
