@@ -232,23 +232,32 @@ Run and record these before verification or review:
    and which copy is authoritative.
 15. **Pre-promotion authority/range audit.** Before opening or merging any PR
     targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
-   repository branch-policy workflow or status checks for allowed source
-   branches, and record the exact commit range with authorship
-   (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
-   `develop` promotion). For this audit, treat any commit whose author email is
-   not a known agent identity (`bropilot-cli[bot]`, `Copilot`, or another
-   configured agent account) as human-authored. Record PR opener, squash/rebase
-   commit author, and original PR commit authors separately; a Darin-opened PR
-   can legitimately produce a Darin-authored squash commit even when the PR
-   commits were agent-authored. If policy only allows this repository's
-   `develop -> main`, do not open isolated feature-branch-to-main PRs. If the
-   range includes human-authored commits, quote the active project or repository
-   instruction that explicitly permits `develop -> main` promotion with those
-   commits; a general autonomy, yolo, or feature-work instruction is not enough.
-   If that authority is absent or conflicts with another active rule, stop
-   instead of inferring approval. A closed PR whose source branch was changed or
-   replaced should not be treated as reopenable; open a replacement PR from a
-   fresh branch.
+    repository branch-policy workflow or status checks for allowed source
+    branches, record the exact commit range with authorship
+    (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
+    `develop` promotion), and record count-complete `gh pr list` evidence for
+    open PRs targeting `main` and `develop`. Count-complete means either a
+    count-only query that proves zero open PRs, or a bounded list with an explicit
+    limit high enough to cover the recorded count; a truncated list is not safety
+    evidence. If the count is non-zero, stop and reconcile before proceeding:
+    identify whether the open PR is the intended promotion, competing promotion
+    work, or unrelated work that would be affected by branch movement, and record
+    the safe decision. This is pre-action evidence: collecting it after opening
+    the promotion PR, after merging it, or after force-aligning branches is
+    non-compliant even if the post-hoc evidence is clean. For this
+    audit, treat any commit whose author email is not a known agent identity
+    (`bropilot-cli[bot]`, `Copilot`, or another configured agent account) as
+    human-authored. Record PR opener, squash/rebase commit author, and original PR
+    commit authors separately; a Darin-opened PR can legitimately produce a
+    Darin-authored squash commit even when the PR commits were agent-authored. If
+    policy only allows this repository's `develop -> main`, do not open isolated
+    feature-branch-to-main PRs. If the range includes human-authored commits,
+    quote the active project or repository instruction that explicitly permits
+    `develop -> main` promotion with those commits; a general autonomy, yolo, or
+    feature-work instruction is not enough. If that authority is absent or
+    conflicts with another active rule, stop instead of inferring approval. A
+    closed PR whose source branch was changed or replaced should not be treated
+    as reopenable; open a replacement PR from a fresh branch.
 16. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
@@ -283,11 +292,14 @@ Run and record these before verification or review:
 20. **Shared-branch force alignment guard.** Before force-with-lease aligning a
     shared branch after a deliberate rebase promotion, fetch the remote branch,
     record the exact old and new SHAs, prove the source and target trees match,
-    and check for open PRs or unexpected commits that would be overwritten. If
-    the target changed since the promotion PR was opened or contains work outside
-    the just-promoted range, stop and reconcile deliberately instead of force
-    pushing. The retrospective must include the command evidence that made the
-    alignment safe.
+    and record count-complete `gh pr list` evidence plus ref/commit evidence
+    proving there are no open PRs or unexpected commits that would be overwritten.
+    A truncated PR list is not safety evidence. This is pre-push evidence;
+    checking after the force push is non-compliant. If the
+    target changed since the promotion PR was opened or contains work outside the
+    just-promoted range, stop and reconcile deliberately instead of force pushing.
+    The retrospective must include the command evidence that made the alignment
+    safe.
 21. **Pre-merge instruction conflict check.** Before merging any PR, compare the
     merge instructions that apply from the repository protocol, project
     instructions, and current operator/user directive. If they disagree on tool,
@@ -344,10 +356,10 @@ Before writing the retrospective:
    path, `git check-ignore`, `git ls-files`, extension reload/list/inspect
    output, and primary-checkout stray-file check.
 10. If the work item opens or merges a PR targeting `main`, include the
-   pre-promotion authority/range audit evidence: allowed source branch, exact
-   commit range, commit/PR authors, any human-authored commits by the audit
-   definition above, and the quoted project or repository instruction that
-   permits the promotion.
+   pre-action pre-promotion authority/range audit evidence: allowed source
+   branch, exact commit range, commit/PR authors, any human-authored commits by
+   the audit definition above, open PRs targeting `main` and `develop`, and the
+   quoted project or repository instruction that permits the promotion.
 11. If resuming after a restart, a handoff gap, or a user reference to "last
     session", an issue number, or a prior finding, query session history/checkpoints
     for that reference before assuming the current shell directory is the active
