@@ -98,15 +98,23 @@ Run and record these before verification or review:
    --porcelain` pipeline, or a targeted `gh pr list --limit N --json ... --jq ...`.
    Startup and continuity git inspection must be bounded in the command itself:
    use `git --no-pager` plus counts, explicit ref patterns, `--format`, or a
-   line-limited pipeline. Never display raw `git branch --no-merged ...` output
-   in startup or continuity preflight. If unmerged-branch information is needed,
-   use a count (`GIT_PAGER=cat git branch --no-merged <base> | wc -l`) or a
-   narrowed pattern/list with `--no-column` and an explicit line limit in the
-   same command. Before executing any startup or continuity command containing
-   `git branch --no-merged`, inspect the command string itself: if it does not
-   also contain an output bound such as `wc -l`, `sed -n '1,20p'`, `head`, or
-   an explicit narrowed `--list '<pattern>' --no-column`, rewrite it before it
-   runs. A remembered warning about broad branch listings is not sufficient
+   line-limited pipeline. Before constructing any startup/continuity bash batch,
+   enumerate every proposed discovery command against this boundedness rule; do
+   not assemble or execute the batch until each command has a count-only,
+   narrowed, or line-limited form and a recorded bounded/unbounded classification.
+   Never display raw `git branch --no-merged ...` output in startup or continuity
+   preflight. If unmerged-branch information is needed, use a count
+   (`GIT_PAGER=cat git branch --no-merged <base> | wc -l`) or a narrowed
+   pattern/list with `--no-column` and an explicit line limit in the same
+   command. Never display raw `git worktree list` output in startup or
+   continuity preflight; use `git worktree list --porcelain | sed -n '1,80p'`,
+   `git worktree list --porcelain | grep -c '^worktree '`, or another explicit
+   line/count bound. Before executing any startup or continuity command
+   containing `git branch --no-merged` or `git worktree list`, inspect the
+   command string itself: if it does not also contain an output bound such as
+   `wc -l`, `grep -c`, `sed -n '1,20p'`, `head`, `--porcelain`, or an explicit
+   narrowed `--list '<pattern>' --no-column`, rewrite it before it runs. A
+   remembered warning about broad branch or worktree listings is not sufficient
    mitigation after a repeat pager incident.
    Use tool names that are known to exist in this environment (`python3`, not
    `python`) or preflight them with `command -v`. For startup continuity checks,
@@ -287,7 +295,8 @@ Before writing the retrospective:
 
 1. Verify the current directory is the implementation worktree for the work item,
    not `/home/darin/projects/neon-dungeon`.
-2. Record `git worktree list`, `git rev-parse --show-toplevel`,
+2. Record bounded worktree/location hygiene: `git worktree list --porcelain |
+   sed -n '1,80p'` or a count-only equivalent, `git rev-parse --show-toplevel`,
    `git rev-parse --git-common-dir`, `git status --porcelain`, and
    `git ls-files --others --exclude-standard`.
 3. Record every branch, worktree, or no-merged discovery command run during
