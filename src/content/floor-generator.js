@@ -926,14 +926,16 @@ function generateFloor(floorNum, opts) {
   }
 
   function clearOrphanEntranceTiles() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
+    dungeonTopology.visitOutsideEntranceTiles(
+      map,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom,
+      (/** @type {number} */ x, /** @type {number} */ y) => {
         // Before normalizeEntranceTilesOutsideRooms(), normal/locked doors still
         // occupy the room boundary. Only clear already-relocated outside tiles.
-        if (tileInsideAnyRoom(x, y)) continue;
-        if (isDoorLikeEntranceTile(map[y][x]) && (tileOnRoomCorner(x, y) || !hasAlignedOutsideEntrancePassage(x, y))) map[y][x] = T.FLOOR;
+        if (tileOnRoomCorner(x, y) || !hasAlignedOutsideEntrancePassage(x, y)) map[y][x] = T.FLOOR;
       }
-    }
+    );
   }
 
   function collapseAdjacentEntranceTiles() {
