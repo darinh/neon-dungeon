@@ -240,10 +240,20 @@ Run and record these before verification or review:
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-15. **Pre-promotion authority/range audit.** Before opening or merging any PR
-    targeting `main`, fetch `origin/main` and `origin/develop`, inspect the
-    repository branch-policy workflow or status checks for allowed source
-    branches, record the exact commit range with authorship
+15. **Pre-promotion authority/range audit.** Before opening any PR targeting
+     `main`, run `npm run check:promotion-audit -- --allow-human-authored
+     --authority "<quoted active instruction authorizing develop -> main
+     promotion>"` and paste its output into the evidence before continuing. Before
+     merging a `main` promotion PR, pass the same quoted authority to `npm run
+     merge:pr -- <pr> --method rebase --promotion-authority "<...>"`; the guarded
+     merge wrapper reruns the audit with `--intended-pr <pr>` and aborts on
+     missing or stale evidence. The audit fetches `origin/main` and `origin/develop`,
+     inspects active rulesets, exact commit range/authorship, human-authored commit
+     authority, and open PR counts. If the script is unavailable or fails, stop
+     instead of opening or merging the promotion PR. The required evidence is:
+     fetch `origin/main` and `origin/develop`, inspect the
+     repository branch-policy workflow or status checks for allowed source
+     branches, record the exact commit range with authorship
     (`git log --format='%h %an <%ae> %s' origin/main..origin/develop` for a
     `develop` promotion), and record count-complete `gh pr list` evidence for
     open PRs targeting `main` and `develop`. Count-complete means either a
