@@ -534,14 +534,17 @@ Each floor is generated fresh using Binary Space Partitioning:
    One-sided room entrances must align on a single axis: room boundary,
    entrance, then connected outside passage must form north/south or east/west
    pairs. A lateral hallway beside the entrance does not count, and a one-tile
-    dead-end stub in front of the entrance is not a valid passage. Two-room
-    bridges must connect opposite room boundaries on the same axis.
-    Door-like entrances also seal a tile in any diagonal bypass trio whenever
-     both adjacent cardinal tiles and the diagonal corner are open walk-around
-     tiles, preventing the player from walking around a closed door, locked door,
-     challenge gate, or cracked secret entrance. The bypass check treats all
-     non-wall, non-void, non-door-like tiles as open for this invariant, not just
-     bare floor, so hazards and feature tiles cannot reopen a side path.
+   dead-end stub in front of the entrance is not a valid passage. Two-room
+   bridges must connect opposite room boundaries on the same axis.
+   Door-like entrances also seal a tile in any diagonal bypass trio whenever
+   both adjacent cardinal tiles and the diagonal corner are open walk-around
+   tiles, preventing the player from walking around a closed door, locked door,
+   challenge gate, or cracked secret entrance. The diagonal scan delegates to
+   `NEON.dungeonTopology.visitDiagonalBypassCornerSeals(...)`; the generator
+   keeps NEON-specific tile semantics and performs each wall mutation immediately
+   so sequential sealing effects are preserved. The bypass check treats all
+   non-wall, non-void, non-door-like tiles as open for this invariant, not just
+   bare floor, so hazards and feature tiles cannot reopen a side path.
     Outside-room 2×2 passable hallway blocks are iteratively narrowed without
     removing door-like tiles and only when the key/lock reachability solver still
     proves every room reachable.
@@ -4939,6 +4942,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.155 | Dungeon engine extraction: door-bypass corner sealing in `src/content/floor-generator.js` now delegates its diagonal map scan to `NEON.dungeonTopology.visitDiagonalBypassCornerSeals(map, isAnchorTile, isOpenBypassTile, sealCorner)`. The floor generator keeps NEON-specific door/open-tile semantics and performs each wall mutation inside the callback so legacy sequential sealing behavior is preserved. |
 | v6.1.154 | Dungeon engine extraction: the diagonal coordinate table used by door-bypass corner sealing now lives in `engine/dungeon/topology.js` as `NEON.dungeonTopology.DIAGONAL_DIRECTIONS`. `src/content/floor-generator.js` keeps NEON-specific door and bypass tile semantics while reusing the shared engine coordinate order alongside `CARDINAL_DIRECTIONS`. |
 | v6.1.153 | Dungeon engine extraction: outside entrance room-edge repair scans in `src/content/floor-generator.js` now delegate map scanning and room-boundary face matching to `NEON.dungeonTopology.findOutsideEntranceRoomEdgeRepairs(map, rooms, isEntranceTile, isInsideRoomTile)`. The floor generator keeps NEON-specific door-like tile semantics and former edge-padding mutation while the engine helper owns y-major tile traversal, room iteration, and boundary-neighbour coordinate reporting. |
 | v6.1.152 | Dungeon engine extraction: dead-end corridor pruning in `src/content/floor-generator.js` now delegates generic interior cardinal pruning traversal to `NEON.dungeonTopology.pruneDeadEndGridTiles({ map, fillTile, isPrunableTile, connectsTile, isPositionExcluded, maxConnections? })`. The floor generator keeps NEON-specific floor/wall/void tile semantics, room-exclusion mask construction, and mutation policy while the engine helper owns scan order and iterative cardinal adjacency pruning. |
