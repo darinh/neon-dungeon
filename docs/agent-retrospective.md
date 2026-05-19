@@ -267,6 +267,15 @@ Run and record these before verification or review:
     the just-promoted range, stop and reconcile deliberately instead of force
     pushing. The retrospective must include the command evidence that made the
     alignment safe.
+19. **Pre-merge instruction conflict check.** Before merging any PR, compare the
+    merge instructions that apply from the repository protocol, project
+    instructions, and current operator/user directive. If they disagree on tool,
+    merge method, authority, or post-merge verification, resolve the conflict
+    before merging. Prefer the most mechanical repository guard (`npm run
+    merge:pr -- <pr> --method squash|rebase`) over raw `gh pr merge`; if another
+    instruction says to use raw `gh`, update that instruction or stop and record
+    the conflict rather than choosing one silently. The retrospective must record
+    which merge path was used and whether any instruction conflict was found.
 
 ## Pre-retrospective checklist
 
@@ -309,6 +318,12 @@ Before writing the retrospective:
     pre-alignment SHAs, tree IDs, patch-equivalence proof, force-with-lease target
     SHA, and the post-alignment SHAs. Do not treat "trees matched" as sufficient
     without explaining why alignment was safe for open PRs and active work.
+12. Before attaching the retrospective, verify every version number, PR number,
+    commit SHA, branch tip, and release tag cited in the text against the source
+    artifact (`gh pr view`, `gh release view`, `git rev-parse`, workflow output,
+    or deployed `version.json`). If the work has both an in-spec changelog version
+    and a production release version, label them explicitly so the retrospective
+    cannot imply one should equal the other.
 
 ## Required inputs
 
