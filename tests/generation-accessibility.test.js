@@ -521,7 +521,11 @@ function assertSpecialEntranceInvariants(dungeon, label) {
     let cracked = 0;
     for (let y = Math.max(0, secret.y - 1); y <= Math.min(MAP_H - 1, secret.y + secret.h); y++) {
       for (let x = Math.max(0, secret.x - 1); x <= Math.min(MAP_W - 1, secret.x + secret.w); x++) {
-        if (dungeon.map[y]?.[x] === T.CRACKED) cracked++;
+        if (dungeon.map[y]?.[x] === T.CRACKED) {
+          cracked++;
+          assert.equal(dungeon.secretMask[y][x], 0,
+            `${label}: cracked entrance at ${x},${y} must stay visible outside the secret mask`);
+        }
       }
     }
     assert.ok(cracked > 0, `${label}: secret room at ${secret.x},${secret.y} has no cracked entrance`);
