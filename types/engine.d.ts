@@ -715,6 +715,18 @@ declare global {
       padding?: number,
     ): { x: number; y: number } | null;
     /**
+     * Iteratively fills caller-defined interior dead-end grid tiles. The host
+     * owns tile semantics, coordinate exclusions, and the fill tile.
+     */
+    pruneDeadEndGridTiles(opts: {
+      map: ArrayLike<ArrayLike<number>>;
+      fillTile: number;
+      isPrunableTile: (tile: number, x: number, y: number) => boolean;
+      connectsTile: (tile: number, x: number, y: number) => boolean;
+      isPositionExcluded?: (x: number, y: number) => boolean;
+      maxConnections?: number;
+    }): number;
+    /**
      * Reports whether a target coordinate can be reached from a start coordinate
      * over caller-defined open map tiles. The host owns tile semantics.
      */

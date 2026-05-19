@@ -518,9 +518,12 @@ Each floor is generated fresh using Binary Space Partitioning:
    `NEON.biomes.isBiomeBossFloor(floor)` so AREAS is the single source of
    truth.
 7. **Dead-end pruning**: after secret rooms, locked doors, and challenge
-   rooms wall off entrances, corridor tiles that become dead ends
-   (≤ 1 passable neighbour, outside any room) are iteratively filled with
-   WALL so players never walk down a tunnel to nowhere.
+    rooms wall off entrances, corridor tiles that become dead ends
+    (≤ 1 passable neighbour, outside any room) are iteratively filled with
+    WALL via `NEON.dungeonTopology.pruneDeadEndGridTiles(...)`, with
+    NEON-specific tile semantics and room exclusions injected by
+    `src/content/floor-generator.js`, so players never walk down a tunnel to
+    nowhere.
 8. **Door and hallway normalization**: door-like entrances (`DOOR`, locked
    doors, challenge gates, cracked secret entrances) are single-tile,
    non-adjacent, never placed on room corners, and are relocated to a connected
@@ -4936,6 +4939,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.152 | Dungeon engine extraction: dead-end corridor pruning in `src/content/floor-generator.js` now delegates generic interior cardinal pruning traversal to `NEON.dungeonTopology.pruneDeadEndGridTiles({ map, fillTile, isPrunableTile, connectsTile, isPositionExcluded, maxConnections? })`. The floor generator keeps NEON-specific floor/wall/void tile semantics, room-exclusion mask construction, and mutation policy while the engine helper owns scan order and iterative cardinal adjacency pruning. |
 | v6.1.151 | Dungeon engine extraction: the spawn-to-stairs reachability guard in `src/content/floor-generator.js` now delegates generic cardinal grid reachability traversal to `NEON.dungeonTopology.canReachGridPosition(map, start, target, isOpenTile)`. The floor generator keeps NEON-specific wall/void tile semantics, stair/terminal selection, and rescue-corridor mutation policy. |
 | v6.1.150 | Dungeon engine extraction: the remaining outside-entrance connected-component collapse in `src/content/floor-generator.js` now delegates generic cardinal BFS traversal to `NEON.dungeonTopology.findCardinalConnectedPositions(startX, startY, matchesPosition)`. The floor generator keeps NEON-specific outside-room filtering, door/lock/challenge/cracked tile semantics, visited-state ownership, and tile mutation policy. |
 | v6.1.149 | Dungeon engine extraction: cardinal connected-component coordinate collection now lives in `engine/dungeon/topology.js` as `NEON.dungeonTopology.findCardinalConnectedPositions(startX, startY, matchesPosition)`. `src/content/floor-generator.js` keeps NEON-specific entrance tile semantics, visited-state ownership, and duplicate-entrance mutation policy while delegating the generic cardinal BFS traversal used by adjacent entrance collapse to the engine topology surface. |
