@@ -472,23 +472,14 @@ function generateFloor(floorNum, opts) {
   }
 
   function repairOutsideEntranceRoomEdges() {
-    for (let y = 1; y < MAP_H - 1; y++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!isDoorLikeEntranceTile(map[y][x]) || tileInsideAnyRoom(x, y)) continue;
-        for (const room of rooms) {
-          const neighbors = /** @type {{bx:number,by:number,dx:number,dy:number}[]} */ ([
-            { bx: x, by: y - 1, dx: 0, dy: 1 },
-            { bx: x, by: y + 1, dx: 0, dy: -1 },
-            { bx: x - 1, by: y, dx: 1, dy: 0 },
-            { bx: x + 1, by: y, dx: -1, dy: 0 },
-          ]);
-          for (const n of neighbors) {
-            const outside = outsideFaceForBoundaryTile(room, n.bx, n.by);
-            if (!outside || outside.x !== x || outside.y !== y) continue;
-            repairFormerEntranceSidePadding(room, n.bx, n.by, n.dx, n.dy);
-          }
-        }
-      }
+    const repairs = dungeonTopology.findOutsideEntranceRoomEdgeRepairs(
+      map,
+      rooms,
+      isDoorLikeEntranceTile,
+      tileInsideAnyRoom
+    );
+    for (const repair of repairs) {
+      repairFormerEntranceSidePadding(repair.room, repair.bx, repair.by, repair.dx, repair.dy);
     }
   }
 

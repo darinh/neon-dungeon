@@ -705,6 +705,24 @@ declare global {
       isInsideRoomTile: (x: number, y: number) => boolean,
     ): Array<{ x: number; y: number; ox: number; oy: number }>;
     /**
+     * Finds outside entrance tiles and adjacent room-boundary sides that need
+     * former room-edge padding repairs. Tile mutation stays in the host.
+     */
+    findOutsideEntranceRoomEdgeRepairs(
+      map: ArrayLike<ArrayLike<number>>,
+      rooms: Array<{ x: number; y: number; w: number; h: number }>,
+      isEntranceTile: (tile: number) => boolean,
+      isInsideRoomTile: (x: number, y: number) => boolean,
+    ): Array<{
+      room: { x: number; y: number; w: number; h: number };
+      x: number;
+      y: number;
+      bx: number;
+      by: number;
+      dx: number;
+      dy: number;
+    }>;
+    /**
      * Finds the first matching tile in the room rectangle plus optional padded
      * neighbourhood, scanning y-major then x-min to x-max.
      */
