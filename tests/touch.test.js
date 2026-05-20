@@ -221,6 +221,29 @@ test('result screens route taps through explicit return-to-menu buttons', () => 
     'result screens must not advertise any-tap continuation on touch devices');
 });
 
+test('archives touch routing uses explicit row and back hit-tests', () => {
+  assert.match(GAME_STATES_SRC, /TOUCH_ROUTE_AS_CLICK_STATES = new Set\(\[[\s\S]*GAME_STATES\.ARCHIVES[\s\S]*GAME_STATES\.GAME_OVER/,
+    'ARCHIVES taps must carry coordinates so only visible archive controls can activate');
+  assert.doesNotMatch(PLATFORM, /_G\.state === 'ARCHIVES'[\s\S]*META_UPGRADES[\s\S]*bestDist/,
+    'platform touch routing must not choose the closest archive row from broad invisible bands');
+  assert.doesNotMatch(PLATFORM, /META_UPGRADES/,
+    'platform touch routing must not depend on archive upgrade data or layout constants');
+  assert.match(GAME, /getArchiveRowRect\(i\) \{[\s\S]*const\s+rowH\s*=\s*narrow \? 42 : 50[\s\S]*const\s+w\s*=\s*W \* 0\.84[\s\S]*const\s+x\s*=\s*\(W - w\) \/ 2[\s\S]*const\s+centerY\s*=\s*\(narrow \? 95 : 120\) \+ i \* rowH[\s\S]*return \{ x, y: centerY - rowH \/ 2, w, h: rowH \};/,
+    'archive rows must expose one shared rectangle layout for rendering and hit-testing');
+  assert.match(GAME, /getArchiveBackRect\(\) \{[\s\S]*const\s+w\s*=\s*Math\.max\(140,\s*Math\.min\(W - 40,\s*narrow \? 200 : 240\)\)[\s\S]*const\s+h\s*=\s*narrow \? 38 : 42[\s\S]*const\s+x\s*=\s*\(W - w\) \/ 2[\s\S]*const\s+y\s*=\s*H - \(narrow \? 58 : 70\)[\s\S]*return \{ x, y, w, h \};/,
+    'archive back button must expose explicit origin X/Y, width, and height');
+  assert.match(GAME, /archiveOptionAt\(x, y\) \{[\s\S]*x >= back\.x && x <= back\.x \+ back\.w && y >= back\.y && y <= back\.y \+ back\.h[\s\S]*return -2;[\s\S]*x >= r\.x && x <= r\.x \+ r\.w && y >= r\.y && y <= r\.y \+ r\.h[\s\S]*return i;[\s\S]*return -1;/,
+    'archive hit-test must require taps inside every edge of row and back rectangles');
+  assert.match(GAME, /if \(jp\('MouseLeft'\)\) \{[\s\S]*const hit = this\.archiveOptionAt\(mouse\.x, mouse\.y\);[\s\S]*if \(hit === -2\)[\s\S]*if \(hit < 0\) return;[\s\S]*this\.archivesSel = hit;/,
+    'archive mouse/touch activation must select only a hit-tested visible row or back button');
+  assert.match(GAME, /const r = this\.getArchiveRowRect\(i\);[\s\S]*ctx\.fillRect\(r\.x, r\.y, r\.w, r\.h\)[\s\S]*ctx\.strokeRect\(r\.x, r\.y, r\.w, r\.h\)/,
+    'archive rendering must share row rectangles with activation and visibly outline row targets');
+  assert.match(GAME, /renderArchiveBackButton\(\)[\s\S]*NEON\.draw\.roundRectFillStroke\(ctx, r\.x, r\.y, r\.w, r\.h, 6\)[\s\S]*BACK TO MENU/,
+    'archive screen must draw the explicit back button it hit-tests');
+  assert.doesNotMatch(GAME, /Tap upgrade to buy\s*\|\s*← Back/,
+    'archive touch copy must not imply a broad invisible back area');
+});
+
 test('mobile minimap touch expansion hitbox scales with settings.minimapScale', () => {
   assert.match(PLATFORM, /const\s+_miniW\s*=\s*Math\.round\(\s*120\s*\*\s*settings\.minimapScale\s*\)/,
     'minimap touch hitbox width must match the rendered minimap width');
