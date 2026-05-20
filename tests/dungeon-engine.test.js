@@ -933,3 +933,33 @@ test('dungeon reachability solver does not treat locks as open without keys', ()
     { kind: 'connect-room', room: { x: 4, y: 1, w: 1, h: 1, cx: 4, cy: 1 } },
   ]);
 });
+
+test('dungeon reachability solver fixed point collects keys unlocked by earlier keys', () => {
+  const W = 9, H = 3;
+  const WALL = 1, FLOOR = 2, RED_LOCK = 7, BLUE_LOCK = 8;
+  const map = Array.from({ length: H }, () => new Uint8Array(W).fill(WALL));
+  map[1][1] = FLOOR;
+  map[1][2] = FLOOR;
+  map[1][3] = RED_LOCK;
+  map[1][4] = FLOOR;
+  map[1][5] = BLUE_LOCK;
+  map[1][6] = FLOOR;
+
+  const solved = reachability.solveKeyLockReachability({
+    map,
+    start: { x: 1, y: 1 },
+    keys: [
+      { x: 2, y: 1, color: 'red' },
+      { x: 4, y: 1, colour: 'blue' },
+    ],
+    requiredRooms: [{ x: 6, y: 1, w: 1, h: 1, cx: 6, cy: 1 }],
+    isOpenTile: (tile) => tile === FLOOR,
+    lockColourForTile: (tile) => tile === RED_LOCK ? 'red' : tile === BLUE_LOCK ? 'blue' : null,
+  });
+
+  assert.equal(solved.collectedColours.has('red'), true);
+  assert.equal(solved.collectedColours.has('blue'), true);
+  assert.equal(solved.reachable[1][6], 1);
+  assert.deepEqual(solved.unreachableRooms, []);
+  assert.deepEqual(solved.missingColours, []);
+});
