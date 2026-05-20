@@ -334,6 +334,13 @@ Run and record these before verification or review:
     record the exact old and new SHAs, prove the source and target trees match,
     and record count-complete `gh pr list` evidence plus ref/commit evidence
     proving there are no open PRs or unexpected commits that would be overwritten.
+    Use `npm run align:develop` for `develop` -> `main` SHA alignment; it is the
+    canonical mechanical guard because it fetches, checks tree equivalence,
+    captures open-PR evidence for PRs targeting `main` or `develop` and PRs whose
+    head branch is `develop`, uses `--force-with-lease`, and verifies the pushed
+    remote ref. Do not run raw
+    `git push --force-with-lease ... origin/main:develop` for this alignment when
+    the wrapper is available.
     A truncated PR list is not safety evidence. This is pre-push evidence;
     checking after the force push is non-compliant. If the
     target changed since the promotion PR was opened or contains work outside the
