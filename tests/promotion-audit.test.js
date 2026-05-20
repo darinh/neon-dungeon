@@ -8,6 +8,7 @@ const {
   parseCommitRange,
   humanAuthoredCommits,
   validateOpenPrs,
+  validateIntendedPrFreshness,
 } = require('../scripts/check-promotion-audit.js');
 
 test('promotion audit parses default develop to main options', () => {
@@ -49,4 +50,33 @@ test('promotion audit rejects unexpected open main or develop PRs', () => {
     developPrs: [],
     intendedPr: 12,
   }));
+});
+
+test('promotion audit rejects stale intended promotion PR heads', () => {
+  const opts = {
+    base: 'main',
+    head: 'develop',
+    intendedPr: 1036,
+  };
+
+  assert.doesNotThrow(() => validateIntendedPrFreshness({
+    state: 'OPEN',
+    baseRefName: 'main',
+    headRefName: 'develop',
+    headRefOid: 'new-develop',
+  }, opts, 'new-develop'));
+
+  assert.throws(() => validateIntendedPrFreshness({
+    state: 'OPEN',
+    baseRefName: 'main',
+    headRefName: 'develop',
+    headRefOid: 'old-develop',
+  }, opts, 'new-develop'), /head is stale/);
+
+  assert.throws(() => validateIntendedPrFreshness({
+    state: 'OPEN',
+    baseRefName: 'main',
+    headRefName: 'stale-develop',
+    headRefOid: 'new-develop',
+  }, opts, 'new-develop'), /is not develop -> main/);
 });
