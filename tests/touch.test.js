@@ -196,6 +196,31 @@ test('paused touch routing uses explicit button hit-tests instead of screen thir
     'pause overlay must not tell players to tap broad invisible screen regions');
 });
 
+test('result screens route taps through explicit return-to-menu buttons', () => {
+  assert.match(GAME_STATES_SRC, /TOUCH_ROUTE_AS_CLICK_STATES = new Set\(\[[\s\S]*GAME_STATES\.GAME_OVER[\s\S]*GAME_STATES\.VICTORY/,
+    'GAME_OVER and VICTORY taps must carry coordinates so only visible controls can return to menu');
+  assert.match(GAME, /getResultMenuButtonRect\(\) \{[\s\S]*const\s+w\s*=\s*Math\.max\(180,\s*Math\.min\(W - 40,\s*narrow \? 260 : 320\)\)/,
+    'result return button must pin its width from canvas width');
+  assert.match(GAME, /const\s+h\s*=\s*narrow \? 36 : 42/,
+    'result return button must pin its height');
+  assert.match(GAME, /const\s+x\s*=\s*\(W - w\) \/ 2/,
+    'result return button must pin its centered origin X');
+  assert.match(GAME, /const\s+y\s*=\s*H - \(narrow \? 62 : 74\)/,
+    'result return button must pin its bottom-safe origin Y');
+  assert.match(GAME, /resultMenuButtonHit\(x, y\) \{[\s\S]*x >= r\.x && x <= r\.x \+ r\.w && y >= r\.y && y <= r\.y \+ r\.h/,
+    'result button hit-test must require taps inside every rectangle edge');
+  assert.match(GAME, /updateGameOver\(\) \{[\s\S]*jp\('Enter'\) \|\| \(jp\('MouseLeft'\) && this\.resultMenuButtonHit\(mouse\.x, mouse\.y\)\)/,
+    'game-over mouse/touch activation must require a hit-tested return button');
+  assert.match(GAME, /updateVictory\(\) \{[\s\S]*jp\('Enter'\) \|\| \(jp\('MouseLeft'\) && this\.resultMenuButtonHit\(mouse\.x, mouse\.y\)\)/,
+    'victory mouse/touch activation must require a hit-tested return button');
+  assert.match(GAME, /renderGameOver\(\) \{[\s\S]*this\.renderResultMenuButton\('#ff00c8'\)/,
+    'game-over screen must draw the explicit return button it hit-tests');
+  assert.match(GAME, /renderVictory\(\) \{[\s\S]*this\.renderResultMenuButton\('#ffb700'\)/,
+    'victory screen must draw the explicit return button it hit-tests');
+  assert.doesNotMatch(GAME, /TAP TO CONTINUE|TAP FOR MENU/,
+    'result screens must not advertise any-tap continuation on touch devices');
+});
+
 test('mobile minimap touch expansion hitbox scales with settings.minimapScale', () => {
   assert.match(PLATFORM, /const\s+_miniW\s*=\s*Math\.round\(\s*120\s*\*\s*settings\.minimapScale\s*\)/,
     'minimap touch hitbox width must match the rendered minimap width');

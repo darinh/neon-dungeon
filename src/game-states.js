@@ -74,6 +74,8 @@
     GAME_STATES.MESSAGE_SEND,
     GAME_STATES.SYSTEM_MESSAGE,
     GAME_STATES.CHEATS,
+    GAME_STATES.GAME_OVER,
+    GAME_STATES.VICTORY,
   ]);
   /** @type {Set<string>} */
   const MENU_MUSIC_STATES = new Set([

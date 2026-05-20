@@ -5915,11 +5915,56 @@ const game = {
   },
 
   updateGameOver() {
-    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this.setState('MENU'); }
+    if (jp('Enter') || (jp('MouseLeft') && this.resultMenuButtonHit(mouse.x, mouse.y))) {
+      audio.menuSelect();
+      this.setState('MENU');
+    }
   },
 
   updateVictory() {
-    if (jp('Enter')||jp('MouseLeft')) { audio.menuSelect(); this._newlyUnlocked = null; this.setState('MENU'); }
+    if (jp('Enter') || (jp('MouseLeft') && this.resultMenuButtonHit(mouse.x, mouse.y))) {
+      audio.menuSelect();
+      this._newlyUnlocked = null;
+      this.setState('MENU');
+    }
+  },
+
+  /** @returns {{ x: number, y: number, w: number, h: number }} */
+  getResultMenuButtonRect() {
+    const narrow = layout.compact;
+    const w = Math.max(180, Math.min(W - 40, narrow ? 260 : 320));
+    const h = narrow ? 36 : 42;
+    const x = (W - w) / 2;
+    const y = H - (narrow ? 62 : 74);
+    return { x, y, w, h };
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @returns {boolean}
+   */
+  resultMenuButtonHit(x, y) {
+    const r = this.getResultMenuButtonRect();
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  },
+
+  /** @param {string} colour */
+  renderResultMenuButton(colour) {
+    const r = this.getResultMenuButtonRect();
+    const narrow = layout.compact;
+    const hover = !isTouchDevice() && this.resultMenuButtonHit(mouse.x, mouse.y);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = hover ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.07)';
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = hover ? 2 : 1;
+    NEON.draw.roundRectFillStroke(ctx, r.x, r.y, r.w, r.h, 6);
+    ctx.fillStyle = colour;
+    ctx.font = `bold ${narrow ? 13 : 16}px monospace`;
+    ctx.fillText('RETURN TO MENU', W / 2, r.y + r.h / 2);
+    ctx.restore();
   },
 
   updateArchives() {
@@ -8475,7 +8520,6 @@ const game = {
   },
 
   renderGameOver() {
-    const isTouch = isTouchDevice();
     const narrow = layout.compact;
     const r = this.lastRunRecap || {};
     const fs1 = narrow ? 14 : 16;
@@ -8587,17 +8631,10 @@ const game = {
     // Leaderboard
     const lbRows = narrow ? 4 : 5;
     this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
-    // Continue prompt
-    if (Math.floor(Date.now()/800)%2===0) {
-      ctx.save(); ctx.textAlign='center';
-      ctx.fillStyle='#ff00c8'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP TO CONTINUE' : 'PRESS ENTER TO CONTINUE', W/2, H - (narrow?20:30));
-      ctx.restore();
-    }
+    this.renderResultMenuButton('#ff00c8');
   },
 
   renderVictory() {
-    const isTouch = isTouchDevice();
     const narrow = layout.compact;
     const r = this.lastRunRecap || {};
     ctx.save();
@@ -8682,13 +8719,7 @@ const game = {
     // leaderboard
     const lbRows = narrow ? 4 : 5;
     this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
-    // continue prompt
-    if (Math.floor(t*2)%2===0) {
-      ctx.save(); ctx.textAlign='center';
-      ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 13 : 16}px monospace`;
-      ctx.fillText(isTouch ? 'TAP FOR MENU' : 'PRESS ENTER FOR MENU', W/2, H - (narrow?20:30));
-      ctx.restore();
-    }
+    this.renderResultMenuButton('#ffb700');
   }
 };
 
