@@ -5967,12 +5967,68 @@ const game = {
     ctx.restore();
   },
 
+  /** @param {number} i */
+  getArchiveRowRect(i) {
+    const narrow = layout.compact;
+    const rowH = narrow ? 42 : 50;
+    const w = W * 0.84;
+    const x = (W - w) / 2;
+    const centerY = (narrow ? 95 : 120) + i * rowH;
+    return { x, y: centerY - rowH / 2, w, h: rowH };
+  },
+
+  getArchiveBackRect() {
+    const narrow = layout.compact;
+    const w = Math.max(140, Math.min(W - 40, narrow ? 200 : 240));
+    const h = narrow ? 38 : 42;
+    const x = (W - w) / 2;
+    const y = H - (narrow ? 58 : 70);
+    return { x, y, w, h };
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  archiveOptionAt(x, y) {
+    const back = this.getArchiveBackRect();
+    if (x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) return -2;
+    for (let i = 0; i < META_UPGRADES.length; i++) {
+      const r = this.getArchiveRowRect(i);
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return i;
+    }
+    return -1;
+  },
+
+  renderArchiveBackButton() {
+    const r = this.getArchiveBackRect();
+    const narrow = layout.compact;
+    const hover = !isTouchDevice() && this.archiveOptionAt(mouse.x, mouse.y) === -2;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = hover ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.07)';
+    ctx.strokeStyle = '#ffb700';
+    ctx.lineWidth = hover ? 2 : 1;
+    NEON.draw.roundRectFillStroke(ctx, r.x, r.y, r.w, r.h, 6);
+    ctx.fillStyle = '#ffb700';
+    ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
+    ctx.fillText('BACK TO MENU', W / 2, r.y + r.h / 2);
+    ctx.restore();
+  },
+
   updateArchives() {
     const n = META_UPGRADES.length;
     if (this.archivesSel === undefined) this.archivesSel = 0;
     if (jp(ALT_KEYS.up)||jp(km('up')))   this.archivesSel = (this.archivesSel - 1 + n) % n;
     if (jp(ALT_KEYS.down)||jp(km('down'))) this.archivesSel = (this.archivesSel + 1) % n;
     if (jp('Escape')||jp('KeyQ'))    { audio.menuSelect(); this.setState('MENU'); return; }
+    if (jp('MouseLeft')) {
+      const hit = this.archiveOptionAt(mouse.x, mouse.y);
+      if (hit === -2) { audio.menuSelect(); this.setState('MENU'); return; }
+      if (hit < 0) return;
+      this.archivesSel = hit;
+    }
     if (jp('Enter')||jp('MouseLeft')) {
       const u = META_UPGRADES[this.archivesSel];
       const meta = loadMeta();
@@ -8452,9 +8508,6 @@ const game = {
     ctx.fillStyle='#aaaacc'; ctx.font=`${narrow?13:16}px monospace`;
     ctx.fillText(`◆ ${meta.shards} Data Fragments available`, W/2, narrow?65:85);
 
-    // Upgrades list
-    const startY = narrow ? 95 : 120;
-    const rowH = narrow ? 42 : 50;
     const fs = narrow ? 12 : 14;
     const iconFs = narrow ? 16 : 20;
 
@@ -8465,13 +8518,17 @@ const game = {
       const cost = maxed ? null : u.costs[curLv];
       const canAfford = !maxed && meta.shards >= cost;
       const selected = i === sel;
-      const y = startY + i * rowH;
+      const r = this.getArchiveRowRect(i);
+      const y = r.y + r.h / 2;
 
       // Selection highlight
       if (selected) {
         ctx.fillStyle='rgba(255,183,0,0.08)';
-        ctx.fillRect(W*0.08, y - rowH/2 + 4, W*0.84, rowH - 4);
+        ctx.fillRect(r.x, r.y, r.w, r.h);
       }
+      ctx.strokeStyle = selected ? '#ffb700' : 'rgba(255,183,0,0.18)';
+      ctx.lineWidth = selected ? 1.5 : 1;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
 
       // Icon
       const iconCol = maxed ? '#39ff14' : selected ? '#ffb700' : '#777799';
@@ -8510,12 +8567,13 @@ const game = {
     // Stats footer
     ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow?9:11}px monospace`;
-    const statsY = startY + META_UPGRADES.length * rowH + (narrow?15:20);
+    const lastRect = this.getArchiveRowRect(META_UPGRADES.length - 1);
+    const statsY = lastRect.y + lastRect.h + (narrow?36:45);
     ctx.fillText(`Runs: ${meta.stats.totalRuns}  |  Best Floor: ${meta.stats.bestFloor}  |  Victories: ${meta.stats.victories}  |  Total ◆: ${meta.stats.totalShards}`, W/2, statsY);
 
-    // Back hint
+    this.renderArchiveBackButton();
     ctx.fillStyle='#444466'; ctx.font=`${narrow?10:12}px monospace`;
-    ctx.fillText(isTouch ? 'Tap upgrade to buy  |  ← Back' : 'Enter: Buy  |  ESC: Back', W/2, H - (narrow?20:30));
+    ctx.fillText(isTouch ? 'Tap a visible row to buy' : 'Enter: Buy  |  ESC: Back', W/2, H - (narrow?8:16));
     ctx.restore();
   },
 

@@ -792,26 +792,6 @@ canvas.addEventListener('touchstart', e => {
           justPressed.add('Enter');
         }
       }
-      else if (_G.state === 'ARCHIVES') {
-        // Hit-test against upgrade rows or back button
-        const narrow = layout.compact;
-        const startY = narrow ? 95 : 120;
-        const rowH = narrow ? 42 : 50;
-        if (cy > H - 60) {
-          // Back button area
-          justPressed.add('Escape');
-        } else {
-          // Find closest upgrade row
-          let best = 0, bestDist = Infinity;
-          for (let i = 0; i < META_UPGRADES.length; i++) {
-            const oy = startY + i * rowH;
-            const d = Math.abs(cy - oy);
-            if (d < bestDist) { bestDist = d; best = i; }
-          }
-          _G.archivesSel = best;
-          justPressed.add('Enter');
-        }
-      }
       else if (_G.state === 'ENDGAME_CHOICE') {
         // Two-option dialog: left half = ACCEPT (selected=0), right half =
         // REFUSE (selected=1). Single tap selects + confirms — keyboard users
