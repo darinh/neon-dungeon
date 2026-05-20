@@ -221,6 +221,17 @@ test('result screens route taps through explicit return-to-menu buttons', () => 
     'result screens must not advertise any-tap continuation on touch devices');
 });
 
+test('compact result leaderboards stay above the explicit return button', () => {
+  assert.match(GAME, /getResultLeaderboardRowCount\(leaderboardY, desiredRows\) \{[\s\S]*const button = this\.getResultMenuButtonRect\(\);[\s\S]*const available = button\.y - bottomGap - leaderboardY;[\s\S]*if \(available < titleOffset\) return 0;[\s\S]*Math\.min\(desiredRows, Math\.floor\(\(available - titleOffset\) \/ lineH\) \+ 1\)/,
+    'result screens must derive leaderboard rows from the space above the fixed return-to-menu button');
+  assert.match(GAME, /renderGameOver\(\) \{[\s\S]*const lbY = y \+ \(narrow\?6:10\);[\s\S]*const desiredLbRows = narrow \? 3 : 5;[\s\S]*const lbRows = this\.getResultLeaderboardRowCount\(lbY, desiredLbRows\);[\s\S]*this\.renderLeaderboard\(lbY, lbRows, this\.lastSavedRank\);/,
+    'game-over compact leaderboard rows must be capped before rendering against the bottom button');
+  assert.match(GAME, /renderVictory\(\) \{[\s\S]*const lbY = y \+ \(narrow\?6:10\);[\s\S]*const desiredLbRows = narrow \? 3 : 5;[\s\S]*const lbRows = this\.getResultLeaderboardRowCount\(lbY, desiredLbRows\);[\s\S]*this\.renderLeaderboard\(lbY, lbRows, this\.lastSavedRank\);/,
+    'victory compact leaderboard rows must be capped before rendering against the bottom button');
+  assert.match(GAME, /const allScores = this\.getScores\(\);[\s\S]*if \(highlightRank >= maxEntries && highlightRank < allScores\.length && maxEntries > 0\)[\s\S]*scores\[Math\.max\(0, maxEntries - 1\)\] = highlighted;[\s\S]*ranks\[Math\.max\(0, maxEntries - 1\)\] = highlightRank;/,
+    'when row count is reduced, the saved player score should still replace the final visible row and remain highlightable');
+});
+
 test('archives touch routing uses explicit row and back hit-tests', () => {
   assert.match(GAME_STATES_SRC, /TOUCH_ROUTE_AS_CLICK_STATES = new Set\(\[[\s\S]*GAME_STATES\.ARCHIVES[\s\S]*GAME_STATES\.GAME_OVER/,
     'ARCHIVES taps must carry coordinates so only visible archive controls can activate');
