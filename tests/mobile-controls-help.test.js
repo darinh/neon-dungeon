@@ -7,12 +7,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
+const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 }
 
 const GAME_NC = stripComments(GAME);
+const PLATFORM_NC = stripComments(PLATFORM);
 
 test('mobile menu hints use touch captions instead of keyboard glyphs', () => {
   const renderMenuBody = GAME_NC.match(/renderMenu\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\},?\n\s*renderPaused/);
@@ -32,4 +34,14 @@ test('mobile pause screen includes a compact control reminder', () => {
   assert.match(renderPausedBody[0], /HACK is dim until a module is installed/);
   assert.match(renderPausedBody[0], /const\s+helpY\s*=\s*narrow\s*\?\s*340\s*:\s*388/,
     'pause help must sit below the three visible pause option labels on compact and landscape layouts');
+});
+
+test('mobile HACK help matches always-visible dimmed button behavior', () => {
+  assert.match(PLATFORM_NC, /BTNS\.F\.hidden\s*=\s*false/,
+    'HACK/F button must remain visible so help copy can describe it as dim, not absent');
+  assert.match(PLATFORM_NC, /key\s*===\s*'F'\s*&&\s*noHackware[\s\S]{0,80}ctx\.globalAlpha\s*=\s*0\.15/,
+    'HACK/F button must dim when no hackware is installed');
+  assert.match(GAME_NC, /HACK is dim until a module is installed/,
+    'pause help must describe dimmed availability rather than claiming HACK appears later');
+  assert.doesNotMatch(GAME_NC, /HACK appears when a module is installed/);
 });
