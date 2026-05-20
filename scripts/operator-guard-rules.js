@@ -37,8 +37,48 @@ function commandRunsUnboundedStartupDiscovery(command) {
   });
 }
 
+/**
+ * @param {string} toolName
+ * @param {any} toolArgs
+ * @returns {string[]}
+ */
+function bashCommandsFromToolCall(toolName, toolArgs) {
+  const name = String(toolName || '');
+  if (name.endsWith('bash')) return [String(toolArgs?.command || '')];
+  if (!name.endsWith('multi_tool_use.parallel') || !Array.isArray(toolArgs?.tool_uses)) return [];
+  /** @type {string[]} */
+  const commands = [];
+  for (const toolUse of toolArgs.tool_uses) {
+    if (String(toolUse?.recipient_name || '').endsWith('bash')) {
+      commands.push(String(toolUse?.parameters?.command || ''));
+    }
+  }
+  return commands;
+}
+
+/**
+ * @param {string} toolName
+ * @param {any} toolArgs
+ * @returns {boolean}
+ */
+function toolCallRunsRawGhPrMerge(toolName, toolArgs) {
+  return bashCommandsFromToolCall(toolName, toolArgs).some(commandRunsRawGhPrMerge);
+}
+
+/**
+ * @param {string} toolName
+ * @param {any} toolArgs
+ * @returns {boolean}
+ */
+function toolCallRunsUnboundedStartupDiscovery(toolName, toolArgs) {
+  return bashCommandsFromToolCall(toolName, toolArgs).some(commandRunsUnboundedStartupDiscovery);
+}
+
 module.exports = {
   ACTIVE_ISSUE_NUMBER,
+  bashCommandsFromToolCall,
   commandRunsRawGhPrMerge,
   commandRunsUnboundedStartupDiscovery,
+  toolCallRunsRawGhPrMerge,
+  toolCallRunsUnboundedStartupDiscovery,
 };

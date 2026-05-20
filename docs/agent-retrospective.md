@@ -136,7 +136,10 @@ Run and record these before verification or review:
    PR/issue summary so agents do not need raw branch/worktree listings. If the
    same pager class recurs after this guard was already in force, record why the
    documented guard failed and add a stronger repo, extension, or shell-level
-   prevention instead of only restating the rule.
+   prevention instead of only restating the rule. Extension guards must inspect
+   wrapper tool payloads such as `multi_tool_use.parallel`, not only direct
+   `bash` calls; otherwise nested bash commands can bypass startup-discovery
+   checks even when the live guard reports that it is loaded.
    Before any manual startup or continuity discovery, confirm the operator guard
    extension is actually loaded. If no NEON DUNGEON guard extension is running,
    use `npm run check:agent-startup -- --issue <number>` first and treat raw
