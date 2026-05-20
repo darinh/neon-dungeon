@@ -424,11 +424,16 @@ Before writing the retrospective:
      or deployed `version.json`). If the work has both an in-spec changelog version
      and a production release version, label them explicitly so the retrospective
      cannot imply one should equal the other. For spec header bumps and data
-     catalog count changes, use `git grep` rather than path-glob search wrappers
-     to find stale references, for example:
+     catalog count changes, use `git grep` immediately after the bump and before
+     the next test invocation rather than waiting for the retrospective, and use
+     git's grep rather than path-glob search wrappers to find stale references,
+     for example:
      `git grep -n "Game Specification v<old-version>" -- tests docs src engine
      types package.json` and `git grep -n "<old-count> secret-room whispers"
      -- tests docs src engine types package.json`.
+     The deployed Pages `version.json` schema uses bare semver in `.version`
+     (for example, `6.5.2`) and the prefixed release tag in `.tag` (for example,
+     `v6.5.2`); check both fields plus `.commit` when verifying a release.
 
 ## Required inputs
 
