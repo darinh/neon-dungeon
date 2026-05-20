@@ -105,6 +105,20 @@ function createMessageSendLayoutHarness(width, height, narrow) {
 }
 
 /**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function createWeaponSwapLayoutHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `WEAPON_SWAP fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
+  const source = extractFunctionSource(GAME, 'getWeaponSwapLayout') + '\n' +
+    'return getWeaponSwapLayout(narrow);';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
  * @param {{cellW:number,cellH:number,gap:number,cols:number,ox:number,oy:number}} layout
  * @param {number} index
  * @param {boolean} ok
@@ -134,6 +148,37 @@ function messageIntentRect(layout, index) {
     h: layout.rowCardH,
     titleY: baselineY + layout.intentTitleOffset,
     labelY: baselineY + layout.intentLabelOffset,
+  };
+}
+
+/**
+ * @param {{ rowX:number,rowTop:number,rowH:number,rowW:number,rowCardH:number,rowTextY:number,rowIndexX:number,rowNameX:number,rowNameMaxW:number,activeX:number,showActiveLabel:boolean }} layout
+ * @param {number} index
+ */
+function weaponSwapSlotRect(layout, index) {
+  const y = layout.rowTop + index * layout.rowH;
+  return {
+    x: layout.rowX,
+    y,
+    w: layout.rowW,
+    h: layout.rowCardH,
+    textY: y + layout.rowTextY,
+    indexX: layout.rowIndexX,
+    nameX: layout.rowNameX,
+    nameMaxW: layout.rowNameMaxW,
+    activeX: layout.activeX,
+    showActiveLabel: layout.showActiveLabel,
+  };
+}
+
+/** @param {{ rowX:number,rowW:number,skipY:number,skipH:number,skipTextY:number }} layout */
+function weaponSwapSkipRect(layout) {
+  return {
+    x: layout.rowX,
+    y: layout.skipY,
+    w: layout.rowW,
+    h: layout.skipH,
+    textY: layout.skipY + layout.skipTextY,
   };
 }
 
@@ -601,6 +646,104 @@ test('message-send button hit targets respect all rectangle bounds', () => {
   assert.ok(r.sendX >= 0 && r.backX + r.btnW <= 240, 'SEND/BACK buttons must stay onscreen');
   assert.match(GAME, /if \(mouse\.y >= btnY && mouse\.y <= btnY \+ btnH\) \{[\s\S]*mouse\.x >= sendX && mouse\.x <= sendX \+ btnW[\s\S]*mouse\.x >= backX && mouse\.x <= backX \+ btnW/,
     'MESSAGE_SEND activation must use the same SEND/BACK rectangle bounds returned by the layout helper');
+});
+
+test('weapon-swap compact fixture guard rejects impossible compact dimensions', () => {
+  assert.throws(
+    () => createWeaponSwapLayoutHarness(390, 320, true),
+    /must match runtime compact=false/,
+    'compact WEAPON_SWAP tests must use dimensions that can enter the runtime compact layout',
+  );
+});
+
+test('weapon-swap desktop layout preserves established row and skip geometry', () => {
+  const r = createWeaponSwapLayoutHarness(800, 600, false);
+  const first = weaponSwapSlotRect(r, 0);
+  const third = weaponSwapSlotRect(r, 2);
+  const skip = weaponSwapSkipRect(r);
+
+  assert.equal(r.panelW, 560, 'desktop weapon-swap panel width must stay stable');
+  assert.equal(r.panelH, 330, 'desktop weapon-swap panel height must stay stable');
+  assert.equal(r.panelY, 135, 'desktop weapon-swap panel origin Y must stay stable');
+  assert.equal(first.y, 265, 'desktop first slot row must keep the existing origin');
+  assert.equal(r.rowH, 40, 'desktop slot stride must stay stable');
+  assert.equal(first.h, 34, 'desktop slot card height must stay stable');
+  assert.ok(r.nameMaxW <= r.panelW - 56, 'desktop cache weapon title budget must stay within the panel');
+  assert.ok(r.statsMaxW <= r.panelW - 64, 'desktop cache weapon stats budget must stay within the panel');
+  assert.ok(r.affixMaxW <= r.panelW - 64, 'desktop cache weapon affix budget must stay within the panel');
+  assert.equal(first.showActiveLabel, true, 'desktop weapon rows must keep the active slot label');
+  assert.equal(first.nameX, r.rowX + 52, 'desktop weapon name origin must stay stable');
+  assert.ok(first.nameX + first.nameMaxW + 8 <= first.activeX - 54,
+    'desktop weapon name budget must reserve room for the ACTIVE label');
+  assert.equal(third.y + third.h, 379, 'desktop third slot bottom must stay stable');
+  assert.equal(skip.y, 403, 'desktop skip row origin must stay stable');
+  assert.ok(third.y + third.h + 6 <= skip.y, 'desktop slots must remain separated from skip');
+});
+
+test('compact weapon-swap layout keeps replacement slots, skip, and hint separated', () => {
+  for (const { width, height } of [
+    { width: 199, height: 200 },
+    { width: 229, height: 286 },
+    { width: 240, height: 280 },
+    { width: 240, height: 299 },
+    { width: 240, height: 300 },
+    { width: 240, height: 320 },
+    { width: 320, height: 390 },
+  ]) {
+    const r = createWeaponSwapLayoutHarness(width, height, true);
+    const first = weaponSwapSlotRect(r, 0);
+    const second = weaponSwapSlotRect(r, 1);
+    const third = weaponSwapSlotRect(r, 2);
+    const skip = weaponSwapSkipRect(r);
+    const topStackBottom = r.showAffixes ? r.affixY : r.statsY;
+
+    assert.ok(r.panelY >= 0 && r.panelY + r.panelH <= height, `panel must stay onscreen at ${width}x${height}`);
+    assert.ok(topStackBottom + 6 <= first.y, `first slot must clear weapon summary at ${width}x${height}`);
+    assert.ok(r.nameMaxW <= r.panelW - 32, `cache weapon title budget must stay inside compact panel at ${width}x${height}`);
+    assert.ok(r.statsMaxW <= r.panelW - 36, `cache weapon stats budget must stay inside compact panel at ${width}x${height}`);
+    assert.ok(r.affixMaxW <= r.panelW - 36, `cache weapon affix budget must stay inside compact panel at ${width}x${height}`);
+    assert.ok(first.h >= 18, `slot hit target must keep a minimum compact height at ${width}x${height}`);
+    assert.ok(first.textY > first.y && first.textY < first.y + first.h, `first slot label must stay inside card at ${width}x${height}`);
+    assert.equal(first.showActiveLabel, false, `compact rows must hide ACTIVE to reserve weapon-name space at ${width}x${height}`);
+    assert.ok(first.indexX < first.nameX, `slot index must stay left of weapon name at ${width}x${height}`);
+    assert.ok(first.nameMaxW >= 20, `weapon name must retain a positive compact text budget at ${width}x${height}`);
+    assert.ok(first.nameX + first.nameMaxW <= first.x + first.w - 12,
+      `weapon name budget must stay inside compact card at ${width}x${height}`);
+    assert.ok(first.y + first.h + 4 <= second.y, `first and second slots must not overlap at ${width}x${height}`);
+    assert.ok(second.y + second.h + 4 <= third.y, `second and third slots must not overlap at ${width}x${height}`);
+    assert.ok(third.y + third.h + 4 <= skip.y, `third slot must clear SKIP at ${width}x${height}`);
+    if (r.showHint) {
+      assert.ok(skip.y + skip.h + 9 <= r.hintY, `SKIP must clear rendered footer hint text at ${width}x${height}`);
+    } else {
+      assert.equal(height < 240, true, `footer hint may only be hidden on ultra-compact layouts at ${width}x${height}`);
+    }
+    assert.ok(skip.textY > skip.y && skip.textY < skip.y + skip.h, `SKIP label must stay inside button at ${width}x${height}`);
+    assert.ok(first.x >= 0 && first.x + first.w <= width, `slot cards must stay onscreen at ${width}x${height}`);
+    assert.ok(skip.x >= 0 && skip.x + skip.w <= width, `SKIP button must stay onscreen at ${width}x${height}`);
+  }
+});
+
+test('weapon-swap hit targets use shared slot and skip rectangle bounds', () => {
+  assert.match(GAME, /function fitCanvasText\(text, maxW\)[\s\S]*ctx\.measureText/,
+    'WEAPON_SWAP rendering must have a text fitter for ultra-narrow weapon names');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\(name,\s*box\.nameMaxW\),\s*W \/ 2,\s*box\.nameY\)/,
+    'WEAPON_SWAP cache weapon title must be constrained to the layout text budget');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\(stats,\s*box\.statsMaxW\),\s*W \/ 2,\s*box\.statsY\)/,
+    'WEAPON_SWAP cache weapon stats must be constrained to the layout text budget');
+  assert.match(GAME, /fitCanvasText\('AFFIXES: ' \+ weapon\._affixes\.join\(' \+ '\),\s*box\.affixMaxW\)/,
+    'WEAPON_SWAP cache weapon affixes must be constrained to the layout text budget');
+  assert.match(GAME, /if \(box\.showHint\) \{[\s\S]*ctx\.fillText\(hint,\s*W \/ 2,\s*box\.hintY\)/,
+    'WEAPON_SWAP footer hint must be hidden when the layout cannot reserve enough text ascent');
+  assert.match(GAME, /const\s+rowName\s*=\s*fitCanvasText\([^,]+,\s*box\.rowNameMaxW\)/,
+    'WEAPON_SWAP row names must be constrained to the layout text budget');
+  assert.match(GAME, /if \(box\.showActiveLabel && i === this\.player\.weaponIdx\)/,
+    'WEAPON_SWAP ACTIVE label rendering must be gated by layout width');
+  assert.match(GAME, /const\s+box\s*=\s*getWeaponSwapLayout\(narrow\)[\s\S]*my >= y && my <= y \+ box\.rowCardH/,
+    'WEAPON_SWAP slot hit-testing must use the shared rowCardH returned by the layout helper');
+  assert.match(GAME, /mx >= box\.rowX && mx <= box\.rowX \+ box\.rowW && my >= box\.skipY && my <= box\.skipY \+ box\.skipH/,
+    'WEAPON_SWAP skip hit-testing must use the shared skip rectangle returned by the layout helper');
+  assert.doesNotMatch(GAME, /my >= y && my <= y \+ box\.rowH - 6/,
+    'WEAPON_SWAP hit-testing must not keep a duplicated rowH-minus-gap card height');
 });
 
 test('archives touch routing uses explicit row and back hit-tests', () => {

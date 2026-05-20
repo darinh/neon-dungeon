@@ -493,16 +493,62 @@ function getReadingLayout(narrow) {
 
 /** @param {boolean} narrow */
 function getWeaponSwapLayout(narrow) {
+  const tightCompact = narrow && H <= 320;
+  const ultraCompact = narrow && H < 240;
   const panelW = Math.min(narrow ? W - 28 : 560, W - 32);
-  const panelH = Math.min(narrow ? H - 52 : 330, H - 52);
+  const panelH = Math.min(narrow ? H - (tightCompact ? 24 : 52) : 330, H - (tightCompact ? 24 : 52));
   const panelX = (W - panelW) / 2;
   const panelY = (H - panelH) / 2;
-  const rowH = narrow ? 34 : 40;
-  const rowTop = panelY + (narrow ? 120 : 130);
+  const titleY = panelY + (narrow ? (ultraCompact ? 22 : tightCompact ? 26 : 32) : 40);
+  const nameY = panelY + (narrow ? (ultraCompact ? 42 : tightCompact ? 48 : 58) : 70);
+  const nameMaxW = panelW - (narrow ? 32 : 56);
+  const statsY = panelY + (narrow ? (ultraCompact ? 58 : tightCompact ? 66 : 78) : 94);
+  const statsMaxW = panelW - (narrow ? 36 : 64);
+  const affixY = panelY + (narrow ? (ultraCompact ? 72 : tightCompact ? 82 : 96) : 112);
+  const affixMaxW = panelW - (narrow ? 36 : 64);
+  const showAffixes = !ultraCompact;
   const rowX = panelX + 24;
   const rowW = panelW - 48;
-  const skipY = panelY + panelH - (narrow ? 54 : 62);
-  return { panelW, panelH, panelX, panelY, rowH, rowTop, rowX, rowW, skipY, skipH: narrow ? 32 : 36 };
+  const skipH = narrow ? 32 : 36;
+  const showHint = !ultraCompact;
+  const hintY = panelY + panelH - (narrow ? (tightCompact ? 10 : 18) : 18);
+  const skipY = narrow
+    ? (showHint ? hintY - skipH - (tightCompact ? 10 : 12) : panelY + panelH - skipH - 4)
+    : panelY + panelH - 62;
+  const rowTop = narrow ? panelY + (ultraCompact ? 66 : tightCompact ? 92 : 116) : panelY + 130;
+  const rowGap = narrow ? (tightCompact ? 4 : 6) : 6;
+  const rowStride = narrow
+    ? Math.max(18, Math.floor((skipY - rowGap - rowTop) / 3))
+    : 40;
+  const rowCardH = narrow ? Math.max(18, Math.min(32, rowStride - rowGap)) : 34;
+  const rowTextY = narrow ? Math.min(rowCardH - 5, Math.max(15, Math.floor(rowCardH * 0.62))) : 25;
+  const rowIndexX = rowX + 12;
+  const rowNameX = rowX + (narrow && rowW < 150 ? 42 : 52);
+  const activeX = rowX + rowW - 12;
+  const showActiveLabel = !narrow;
+  const rowNameMaxW = Math.max(20, (showActiveLabel ? activeX - 54 : activeX) - rowNameX - 8);
+  const skipTextY = narrow ? 21 : 24;
+  return {
+    panelW, panelH, panelX, panelY,
+    titleY, nameY, nameMaxW, statsY, statsMaxW, affixY, affixMaxW, showAffixes,
+    rowH: rowStride, rowCardH, rowTextY, rowIndexX, rowNameX, rowNameMaxW, activeX, showActiveLabel, rowTop, rowX, rowW,
+    skipY, skipH, skipTextY, hintY, showHint
+  };
+}
+
+/**
+ * @param {string} text
+ * @param {number} maxW
+ */
+function fitCanvasText(text, maxW) {
+  if (maxW <= 0) return '';
+  if (ctx.measureText(text).width <= maxW) return text;
+  const suffix = '...';
+  let trimmed = text;
+  while (trimmed.length > 0 && ctx.measureText(trimmed + suffix).width > maxW) {
+    trimmed = trimmed.slice(0, -1);
+  }
+  return trimmed ? trimmed + suffix : '';
 }
 
 /**
@@ -4992,7 +5038,7 @@ const game = {
       const mx = mouse.x, my = mouse.y;
       for (let i = 0; i < slotCount; i++) {
         const y = box.rowTop + i * box.rowH;
-        if (mx >= box.rowX && mx <= box.rowX + box.rowW && my >= y && my <= y + box.rowH - 6) {
+        if (mx >= box.rowX && mx <= box.rowX + box.rowW && my >= y && my <= y + box.rowCardH) {
           this.applyWeaponSwapChoice(i);
           return;
         }
@@ -7689,17 +7735,17 @@ const game = {
     ctx.shadowBlur = 20; ctx.shadowColor = colour;
     ctx.fillStyle = colour;
     ctx.font = `bold ${narrow ? 18 : 24}px monospace`;
-    ctx.fillText('WEAPON CACHE', W / 2, box.panelY + (narrow ? 32 : 40));
+    ctx.fillText('WEAPON CACHE', W / 2, box.titleY);
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff';
     ctx.font = `bold ${narrow ? 13 : 16}px monospace`;
-    ctx.fillText(name, W / 2, box.panelY + (narrow ? 58 : 70));
+    ctx.fillText(fitCanvasText(name, box.nameMaxW), W / 2, box.nameY);
     ctx.fillStyle = '#aaaacc';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText(stats, W / 2, box.panelY + (narrow ? 78 : 94));
-    if (weapon._affixes && weapon._affixes.length) {
+    ctx.fillText(fitCanvasText(stats, box.statsMaxW), W / 2, box.statsY);
+    if (box.showAffixes && weapon._affixes && weapon._affixes.length) {
       ctx.fillStyle = '#ffcc44';
-      ctx.fillText('AFFIXES: ' + weapon._affixes.join(' + '), W / 2, box.panelY + (narrow ? 96 : 112));
+      ctx.fillText(fitCanvasText('AFFIXES: ' + weapon._affixes.join(' + '), box.affixMaxW), W / 2, box.affixY);
     }
 
     ctx.textAlign = 'left';
@@ -7711,15 +7757,16 @@ const game = {
       ctx.fillStyle = selected ? 'rgba(255,183,0,0.16)' : 'rgba(255,255,255,0.04)';
       ctx.strokeStyle = selected ? colour : 'rgba(255,255,255,0.16)';
       ctx.lineWidth = selected ? 2 : 1;
-      NEON.draw.roundRectFillStroke(ctx, box.rowX, y, box.rowW, box.rowH - 6, 6);
+      NEON.draw.roundRectFillStroke(ctx, box.rowX, y, box.rowW, box.rowCardH, 6);
       ctx.fillStyle = selected ? colour : '#888ab0';
-      ctx.fillText('[' + (i + 1) + ']', box.rowX + 12, y + (narrow ? 21 : 25));
+      ctx.fillText('[' + (i + 1) + ']', box.rowIndexX, y + box.rowTextY);
       ctx.fillStyle = '#e8e8ff';
-      ctx.fillText(String(old.displayName || old.name || 'Empty').toUpperCase(), box.rowX + 52, y + (narrow ? 21 : 25));
-      if (i === this.player.weaponIdx) {
+      const rowName = fitCanvasText(String(old.displayName || old.name || 'Empty').toUpperCase(), box.rowNameMaxW);
+      ctx.fillText(rowName, box.rowNameX, y + box.rowTextY);
+      if (box.showActiveLabel && i === this.player.weaponIdx) {
         ctx.textAlign = 'right';
         ctx.fillStyle = colour;
-        ctx.fillText('ACTIVE', box.rowX + box.rowW - 12, y + (narrow ? 21 : 25));
+        ctx.fillText('ACTIVE', box.activeX, y + box.rowTextY);
         ctx.textAlign = 'left';
       }
     }
@@ -7732,12 +7779,14 @@ const game = {
     ctx.fillStyle = skipSelected ? '#aaaacc' : '#666688';
     ctx.textAlign = 'center';
     ctx.font = `${narrow ? 12 : 14}px monospace`;
-    ctx.fillText('SKIP CACHE  [4]', box.rowX + box.rowW / 2, box.skipY + (narrow ? 21 : 24));
+    ctx.fillText('SKIP CACHE  [4]', box.rowX + box.rowW / 2, box.skipY + box.skipTextY);
 
-    ctx.fillStyle = '#555577';
-    ctx.font = `${narrow ? 9 : 11}px monospace`;
-    const hint = isTouch ? 'Tap a slot to replace, or Skip' : '1-3 replace · arrows + Enter · 4/Esc skip';
-    ctx.fillText(hint, W / 2, box.panelY + box.panelH - 18);
+    if (box.showHint) {
+      ctx.fillStyle = '#555577';
+      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      const hint = isTouch ? 'Tap a slot to replace, or Skip' : '1-3 replace · arrows + Enter · 4/Esc skip';
+      ctx.fillText(hint, W / 2, box.hintY);
+    }
     ctx.restore();
   },
 
