@@ -210,6 +210,13 @@ tile.
 ### Mobile coupling
 Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `src/game.js renderMenu()`. When changing menu font/gap sizes, update BOTH. See stored memory `menu touch coupling`.
 
+### Compact mobile layout tests
+When a compact/mobile UI change claims short-viewport safety, add or update
+layout tests before review for at least one threshold viewport and one
+below-threshold viewport. Assert visible geometry and hit-test bounds, not just
+source strings, so sub-threshold overlap/offscreen regressions are caught before
+review.
+
 ### Input routing
 When adding or modifying how an input event type (`MouseLeft`, touch
 coordinates, keyboard keys, joystick/aim state) is handled in any game state,
