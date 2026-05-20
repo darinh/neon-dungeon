@@ -217,10 +217,12 @@ below-threshold viewport. Derive compact/mobile fixtures from the runtime
 predicate, or assert the fixture dimensions match it (for example,
 `engine/viewport.js computeLayout(W, H, safeBottom).compact`); tests must fail if
 they force `narrow`/`compact` true for dimensions the game cannot actually enter.
-Assert visible geometry and hit-test bounds, not just source strings, so
-sub-threshold overlap/offscreen regressions are caught before review. Any new
-compact/mobile branch threshold must come from a documented layout invariant and
-have boundary-band cases around the cutoff.
+Assert visible geometry, hit-test bounds, text budgets, and glyph spacing, not
+just source strings, so sub-threshold overlap/offscreen regressions are caught
+before review. Optional labels/hints in compact canvas UI must have explicit
+fit-or-hide behavior, and tests must cover representative long generated text.
+Any new compact/mobile branch threshold must come from a documented layout
+invariant and have boundary-band cases around the cutoff.
 
 ### Input routing
 When adding or modifying how an input event type (`MouseLeft`, touch
