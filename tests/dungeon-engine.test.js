@@ -72,6 +72,28 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology room BFS computes chained distances without revisiting rooms', () => {
+  const rooms = [
+    { id: 'a' },
+    { id: 'b' },
+    { id: 'c' },
+    { id: 'd' },
+  ];
+  const edges = new Set(['a,b', 'b,a', 'b,c', 'c,b']);
+  const calls = [];
+
+  const dist = topology.bfsRooms(rooms, rooms[0], (left, right) => {
+    calls.push(left.id + '>' + right.id);
+    return edges.has(left.id + ',' + right.id);
+  });
+
+  assert.equal(dist.get(rooms[0]), 0);
+  assert.equal(dist.get(rooms[1]), 1);
+  assert.equal(dist.get(rooms[2]), 2);
+  assert.equal(dist.has(rooms[3]), false);
+  assert.equal(calls.includes('c>a'), false, 'visited rooms must not be reconsidered as candidates');
+});
+
 test('dungeon topology engine builds clipped room membership grids', () => {
   const grid = topology.createRoomMembershipGrid(6, 5, [
     { x: 1, y: 1, w: 3, h: 2 },
