@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.162
+# NEON DUNGEON — Game Specification v6.1.163
 
 ## Vision
 
@@ -531,6 +531,10 @@ Each floor is generated fresh using Binary Space Partitioning:
    two-room wall bridge. The original room-edge tile is restored to floor so
    doors sit in the surrounding wall/corridor line instead of occupying the
    inside edge of the room or adding side-wall bulges.
+   Boundary entrance normalization delegates room-perimeter gate discovery to
+   `NEON.dungeonTopology.findRoomBoundaryGates(map, room, isGateTile)`, while
+   the generator keeps the legacy non-corner filter, NEON tile semantics, and
+   moved-entrance mutation policy.
    One-sided room entrances must align on a single axis: room boundary,
    entrance, then connected outside passage must form north/south or east/west
    pairs. A lateral hallway beside the entrance does not count, and a one-tile
@@ -4946,6 +4950,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.163 | Dungeon engine extraction: outside-entrance normalization now reuses `NEON.dungeonTopology.findRoomBoundaryGates(map, room, isGateTile)` for room-perimeter gate discovery. `src/content/floor-generator.js` keeps the legacy room-corner exclusion, NEON-specific entrance tile semantics, and moved-entrance mutation policy while the engine helper owns generic perimeter order. |
 | v6.1.162 | Dungeon engine extraction: orphan outside-entrance cleanup now reuses `NEON.dungeonTopology.visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit)` for interior map traversal. `src/content/floor-generator.js` keeps NEON-specific room-corner, aligned-passage, and `T.FLOOR` cleanup policy while the engine helper owns the generic outside-entrance scan. |
 | v6.1.161 | Dungeon engine extraction: outside-entrance cluster collapse now delegates the y/x-sorted first-preferred-else-median keep choice to `NEON.dungeonTopology.selectPreferredClusterPosition(cluster, isPreferred)`. `src/content/floor-generator.js` keeps NEON-specific `T.DOOR` preference semantics and `T.FLOOR` discard mutation while the engine helper owns generic position ordering and selection fallback. |
 | v6.1.160 | Dungeon engine extraction: room-boundary entrance narrowing now delegates the y/x-sorted median keep choice to `NEON.dungeonTopology.selectMedianClusterPosition(cluster)`. `src/content/floor-generator.js` keeps NEON-specific wall mutation policy while the engine helper owns generic position ordering and returns discard coordinates for the caller to fill. |

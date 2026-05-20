@@ -171,6 +171,13 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'outside entrance room-edge repair must delegate map scan and boundary-face matching to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /const\s+neighbors\s*=\s*\/\*\* @type \{\{bx:number,by:number,dx:number,dy:number\}\[\]\} \*\/\s*\(\[/,
     'outside entrance room-edge repair should not keep the inline neighbour table in floor-generator');
+  const normalizeEntranceTilesOutsideRooms = extractFunctionBlock(CONTENT, 'normalizeEntranceTilesOutsideRooms');
+  assert.match(normalizeEntranceTilesOutsideRooms, /dungeonTopology\.findRoomBoundaryGates\(map,\s*room,\s*isDoorLikeEntranceTile\)/,
+    'outside entrance normalization must delegate room-boundary gate scans to the dungeon topology engine');
+  assert.match(normalizeEntranceTilesOutsideRooms, /dungeonTopology\.roomHasCorner\(room,\s*gate\.x,\s*gate\.y\)/,
+    'outside entrance normalization must keep legacy corner exclusion in the caller');
+  assert.doesNotMatch(normalizeEntranceTilesOutsideRooms, /room\.x\s*\+\s*1[\s\S]*room\.x\s*\+\s*room\.w\s*-\s*1/,
+    'outside entrance normalization should not keep the old inline non-corner x boundary scan');
   assert.match(CONTENT, /dungeonTopology\.findRoomBoundaryGates\(map,\s*room,\s*isRepairGateTile\)/,
     'reachability repair must delegate room-boundary gate scans to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findOutsideEntranceGatesForRoom\(\s*map,\s*room,\s*isDoorLikeEntranceTile,\s*tileInsideAnyRoom\s*\)/,
@@ -223,6 +230,106 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'roomType skip must keep mainframe rooms free of map hazards');
   assert.match(RENDER, /if\s*\(rt\s*===\s*'mainframe'\)\s*continue;/,
     'populateFloor must skip mainframe rooms so no enemies, crates, or loot spawn there');
+});
+
+test('outside entrance normalization preserves non-corner boundary order while skipping corners', () => {
+  const normalizeSource = extractFunctionSource(CONTENT, 'normalizeEntranceTilesOutsideRooms');
+  const room = { x: 2, y: 3, w: 5, h: 4 };
+  /** @type {{x:number,y:number}[]} */
+  const helperGates = [
+    { x: 2, y: 3 },
+    { x: 2, y: 6 },
+    { x: 3, y: 3 },
+    { x: 3, y: 6 },
+    { x: 4, y: 3 },
+    { x: 4, y: 6 },
+    { x: 5, y: 3 },
+    { x: 5, y: 6 },
+    { x: 6, y: 3 },
+    { x: 6, y: 6 },
+    { x: 2, y: 3 },
+    { x: 6, y: 3 },
+    { x: 2, y: 4 },
+    { x: 6, y: 4 },
+    { x: 2, y: 5 },
+    { x: 6, y: 5 },
+    { x: 2, y: 6 },
+    { x: 6, y: 6 },
+  ];
+  let helperCalls = 0;
+  /** @type {{x:number,y:number}[]} */
+  const normalized = [];
+  const dungeonTopology = {
+    /**
+     * @param {any[]} map
+     * @param {{x:number,y:number,w:number,h:number}} gateRoom
+     * @param {(tile:number) => boolean} isDoorLikeEntranceTile
+     */
+    findRoomBoundaryGates(map, gateRoom, isDoorLikeEntranceTile) {
+      helperCalls++;
+      assert.equal(Array.isArray(map), true);
+      assert.deepEqual(gateRoom, room);
+      assert.equal(isDoorLikeEntranceTile(5), true);
+      return helperGates;
+    },
+    /**
+     * @param {{x:number,y:number,w:number,h:number}} gateRoom
+     * @param {number} x
+     * @param {number} y
+     */
+    roomHasCorner(gateRoom, x, y) {
+      return (x === gateRoom.x || x === gateRoom.x + gateRoom.w - 1) &&
+        (y === gateRoom.y || y === gateRoom.y + gateRoom.h - 1);
+    },
+  };
+  /**
+   * @param {{x:number,y:number,w:number,h:number}} gateRoom
+   * @param {number} x
+   * @param {number} y
+   * @param {{fromX:number,fromY:number,toX:number,toY:number,tile:number}[]} moved
+   */
+  const normalizeBoundaryEntrance = (gateRoom, x, y, moved) => {
+    assert.deepEqual(gateRoom, room);
+    normalized.push({ x, y });
+    moved.push({ fromX: x, fromY: y, toX: x, toY: y, tile: 5 });
+  };
+  // eslint-disable-next-line no-new-func -- executes the project-owned production function with stubbed closure dependencies.
+  const runNormalize = new Function(
+    'rooms',
+    'map',
+    'dungeonTopology',
+    'isDoorLikeEntranceTile',
+    'normalizeBoundaryEntrance',
+    normalizeSource + '\nreturn normalizeEntranceTilesOutsideRooms();'
+  );
+
+  const moved = runNormalize([room], [], dungeonTopology, (/** @type {number} */ tile) => tile === 5, normalizeBoundaryEntrance);
+
+  assert.equal(helperCalls, 1);
+  assert.deepEqual(normalized, [
+    { x: 3, y: 3 },
+    { x: 3, y: 6 },
+    { x: 4, y: 3 },
+    { x: 4, y: 6 },
+    { x: 5, y: 3 },
+    { x: 5, y: 6 },
+    { x: 2, y: 4 },
+    { x: 6, y: 4 },
+    { x: 2, y: 5 },
+    { x: 6, y: 5 },
+  ]);
+  assert.deepEqual(moved, [
+    { fromX: 3, fromY: 3, toX: 3, toY: 3, tile: 5 },
+    { fromX: 3, fromY: 6, toX: 3, toY: 6, tile: 5 },
+    { fromX: 4, fromY: 3, toX: 4, toY: 3, tile: 5 },
+    { fromX: 4, fromY: 6, toX: 4, toY: 6, tile: 5 },
+    { fromX: 5, fromY: 3, toX: 5, toY: 3, tile: 5 },
+    { fromX: 5, fromY: 6, toX: 5, toY: 6, tile: 5 },
+    { fromX: 2, fromY: 4, toX: 2, toY: 4, tile: 5 },
+    { fromX: 6, fromY: 4, toX: 6, toY: 4, tile: 5 },
+    { fromX: 2, fromY: 5, toX: 2, toY: 5, tile: 5 },
+    { fromX: 6, fromY: 5, toX: 6, toY: 5, tile: 5 },
+  ]);
 });
 
 test('mainframe room is visible in world render and minimap POIs', () => {
