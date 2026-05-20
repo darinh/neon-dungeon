@@ -179,6 +179,11 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'rescue corridor carving must delegate generic interior grid BFS search to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /function\s+carveProtectedRescueCorridorTo[\s\S]*?new\s+Int16Array\(MAP_W\)\.fill\(-1\)[\s\S]*?function\s+clearOrphanEntranceTiles/,
     'rescue corridor path search should not keep its old inline predecessor grid in floor-generator');
+  const clearOrphanEntranceTiles = extractFunctionBlock(CONTENT, 'clearOrphanEntranceTiles');
+  assert.match(clearOrphanEntranceTiles, /dungeonTopology\.visitOutsideEntranceTiles\(\s*map,\s*isDoorLikeEntranceTile,\s*tileInsideAnyRoom,/,
+    'orphan outside entrance cleanup must delegate interior outside-tile traversal to the dungeon topology engine');
+  assert.doesNotMatch(clearOrphanEntranceTiles, /for\s*\(let\s+y\s*=\s*1;\s*y\s*<\s*MAP_H\s*-\s*1;\s*y\+\+\)[\s\S]*?for\s*\(let\s+x\s*=\s*1;\s*x\s*<\s*MAP_W\s*-\s*1;\s*x\+\+\)/,
+    'orphan outside entrance cleanup should not keep its old inline interior map scan');
   assert.match(CONTENT, /dungeonTopology\.canReachGridPosition\(\s*map,\s*{\s*x:\s*sx,\s*y:\s*sy\s*},\s*{\s*x:\s*stairX,\s*y:\s*stairY\s*},\s*\([\s\S]*?\)\s*=>\s*t\s*!==\s*T\.WALL\s*&&\s*t\s*!==\s*T\.VOID\s*\)/,
     'spawn-to-stairs reachability guard must delegate generic grid BFS traversal to the dungeon topology engine');
   assert.doesNotMatch(CONTENT, /const\s+q\s*=\s*\[\{\s*x:\s*sx,\s*y:\s*sy\s*\}\][\s\S]*?while\s*\(\s*q\.length\s*\)[\s\S]*?T\.VOID[\s\S]*?q\.push\(\{\s*x:\s*nx,\s*y:\s*ny\s*\}\)/,

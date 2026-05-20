@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.161
+# NEON DUNGEON — Game Specification v6.1.162
 
 ## Vision
 
@@ -545,7 +545,7 @@ Each floor is generated fresh using Binary Space Partitioning:
    so sequential sealing effects are preserved. The bypass check treats all
    non-wall, non-void, non-door-like tiles as open for this invariant, not just
    bare floor, so hazards and feature tiles cannot reopen a side path.
-    The outside-entrance normalization passes share
+    The outside-entrance normalization and orphan-cleanup passes share
     `NEON.dungeonTopology.visitOutsideEntranceTiles(...)` for interior y-major
     entrance traversal while `src/content/floor-generator.js` keeps NEON-specific
     tile semantics, room filtering, and all mutation policy.
@@ -4946,6 +4946,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.162 | Dungeon engine extraction: orphan outside-entrance cleanup now reuses `NEON.dungeonTopology.visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit)` for interior map traversal. `src/content/floor-generator.js` keeps NEON-specific room-corner, aligned-passage, and `T.FLOOR` cleanup policy while the engine helper owns the generic outside-entrance scan. |
 | v6.1.161 | Dungeon engine extraction: outside-entrance cluster collapse now delegates the y/x-sorted first-preferred-else-median keep choice to `NEON.dungeonTopology.selectPreferredClusterPosition(cluster, isPreferred)`. `src/content/floor-generator.js` keeps NEON-specific `T.DOOR` preference semantics and `T.FLOOR` discard mutation while the engine helper owns generic position ordering and selection fallback. |
 | v6.1.160 | Dungeon engine extraction: room-boundary entrance narrowing now delegates the y/x-sorted median keep choice to `NEON.dungeonTopology.selectMedianClusterPosition(cluster)`. `src/content/floor-generator.js` keeps NEON-specific wall mutation policy while the engine helper owns generic position ordering and returns discard coordinates for the caller to fill. |
 | v6.1.159 | Dungeon engine extraction: secret-room visibility masks now reuse `NEON.dungeonTopology.createRoomMembershipGrid(width, height, rooms)` for clipped room-interior marking before the game layer clears cracked entrance tiles. `src/content/floor-generator.js` keeps NEON-specific hidden-room lighting/rendering policy while the engine helper owns generic room-rectangle grid construction. |
