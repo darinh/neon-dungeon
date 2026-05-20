@@ -98,6 +98,24 @@ function validateOpenPrs({ mainPrs, developPrs, intendedPr }) {
   }
 }
 
+function validateIntendedPrFreshness(pr, { base, head, intendedPr }, headSha) {
+  if (intendedPr === null) return;
+  if (pr.state !== 'OPEN') {
+    fail(`intended promotion PR #${intendedPr} is not open`, [`state=${pr.state || '(unknown)'}`]);
+  }
+  if (pr.baseRefName !== base || pr.headRefName !== head) {
+    fail(`intended promotion PR #${intendedPr} is not ${head} -> ${base}`, [
+      `${pr.headRefName || '(unknown)'} -> ${pr.baseRefName || '(unknown)'}`,
+    ]);
+  }
+  if (pr.headRefOid !== headSha) {
+    fail(`intended promotion PR #${intendedPr} head is stale`, [
+      `PR head: ${pr.headRefOid || '(unknown)'}`,
+      `origin/${head}: ${headSha}`,
+    ]);
+  }
+}
+
 function requireSuccess(label, command, args) {
   const result = run(command, args);
   if (result.status !== 0) fail(`${label} failed`, [result.stderr.trim() || result.stdout.trim()]);
@@ -145,6 +163,14 @@ function promotionAudit(argv, runner = run) {
     '--json', 'number,title,headRefName,baseRefName,author',
   ]));
   validateOpenPrs({ mainPrs, developPrs, intendedPr: opts.intendedPr });
+  if (opts.intendedPr !== null) {
+    const intendedPr = parseJsonOutput('intended promotion PR query', runner('gh', [
+      'pr', 'view',
+      String(opts.intendedPr),
+      '--json', 'state,headRefName,baseRefName,headRefOid',
+    ]));
+    validateIntendedPrFreshness(intendedPr, opts, headSha);
+  }
 
   console.log('promotion-audit: PASS');
   console.log(`base: ${opts.base} ${baseSha}`);
@@ -175,6 +201,7 @@ if (require.main === module) {
     parseCommitRange,
     humanAuthoredCommits,
     validateOpenPrs,
+    validateIntendedPrFreshness,
     promotionAudit,
   };
 }
