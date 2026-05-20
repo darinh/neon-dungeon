@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.169
+# NEON DUNGEON — Game Specification v6.1.170
 
 ## Vision
 
@@ -3315,6 +3315,12 @@ uses `calcRunShards(floor, score, bossesCleared, victory)`.
 ### Permanent Upgrades
 
 Accessible from the **NEURAL ARCHIVES** menu screen (new game state: `ARCHIVES`).
+On touch devices, archive taps are coordinate-routed through the same hit-test
+path as mouse clicks: visible upgrade row rectangles are the only purchase
+targets, and a visible `BACK TO MENU` button is the only pointer/touch back
+target. Taps outside those rectangles do nothing. Keyboard `Enter` still buys
+the selected row and `Esc`/`Q` still returns to the menu; this slice hardens
+mobile hit affordances without adding a second purchase-confirmation step.
 
 | ID              | Name               | Effect                        | Max Lv | Costs (per lv) |
 |-----------------|--------------------|-------------------------------|--------|-----------------|
@@ -4977,6 +4983,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.170 | Mobile Neural Archives safety: `ARCHIVES` touch input now routes through coordinate-bearing mouse clicks, visible upgrade row rectangles are the only purchase targets, a visible `BACK TO MENU` button is the only pointer/touch back target, and taps outside visible controls do nothing. |
 | v6.1.169 | Mobile result-screen safety: GAME_OVER and VICTORY now route touch coordinates through explicit `RETURN TO MENU` button hit-tests instead of treating any tap as a menu return, while preserving Enter as the keyboard shortcut. |
 | v6.1.168 | Mobile pause safety: touch pauses now route tap coordinates through explicit `RESUME RUN`, `SETTINGS`, and `QUIT TO MENU` button rectangles instead of invisible top/middle/bottom screen thirds, while preserving keyboard resume/settings/quit shortcuts. |
 | v6.1.167 | Mobile story clarity: the `SYSTEM_MESSAGE` modal now labels touch acknowledgement as `TAP ACK`, explains that system prompts are run prompts to read before acknowledging, and tells players that acknowledged prompts remain recoverable in THE GAP archive during the run. |
