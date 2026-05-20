@@ -571,6 +571,50 @@ test('sampled seeded floors keep all required rooms movement-reachable after loc
   }
 });
 
+test('orphan outside entrance cleanup clears outside entrance tiles that fail alignment policy', () => {
+  const fixture = createGenerationFixture();
+  const topology = fixture.sandbox.NEON.dungeonTopology;
+  const originalVisit = topology.visitOutsideEntranceTiles;
+  let clearedInjectedOrphans = 0;
+  topology.visitOutsideEntranceTiles = (map, isEntranceTile, isInsideRoomTile, visit) => {
+    let injected = null;
+    for (let y = 1; y < MAP_H - 1 && !injected; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        const adjacentRoomTile =
+          isInsideRoomTile(x, y - 1) ||
+          isInsideRoomTile(x, y + 1) ||
+          isInsideRoomTile(x - 1, y) ||
+          isInsideRoomTile(x + 1, y);
+        if (map[y][x] === T.FLOOR && !isInsideRoomTile(x, y) && !adjacentRoomTile && !isEntranceTile(map[y][x])) {
+          injected = { x, y };
+          break;
+        }
+      }
+    }
+    if (!injected) return originalVisit(map, isEntranceTile, isInsideRoomTile, visit);
+    map[injected.y][injected.x] = T.LOCKED_G;
+    const result = originalVisit(map, isEntranceTile, isInsideRoomTile, visit);
+    if (map[injected.y][injected.x] === T.FLOOR) {
+      clearedInjectedOrphans++;
+    } else {
+      map[injected.y][injected.x] = T.FLOOR;
+    }
+    return result;
+  };
+  try {
+    for (const [seed, floor] of [
+      ['1111-1111-1111', 2],
+      ['FACE-FEED-BEEF', 3],
+      ['CAFE-BABE-0001', 8],
+    ]) {
+      fixture.generateFloor(seed, floor);
+    }
+  } finally {
+    topology.visitOutsideEntranceTiles = originalVisit;
+  }
+  assert.ok(clearedInjectedOrphans > 0, 'sampled generated floors must clear injected orphan outside entrance tiles');
+});
+
 test('sampled seeded generation digests stay stable across topology extraction', () => {
   const fixture = createGenerationFixture();
   const expected = new Map([
