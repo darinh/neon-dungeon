@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.170
+# NEON DUNGEON — Game Specification v6.1.171
 
 ## Vision
 
@@ -4349,8 +4349,14 @@ uppercased. If the score doesn't qualify, it is saved as "ANON".
 
 The leaderboard is displayed on three screens:
 - **MENU** — top 3 (compact) or 5 (landscape)
-- **GAME_OVER** — top 5 (compact) or 7 (landscape), player's entry highlighted
-- **VICTORY** — top 5 (compact) or 7 (landscape), player's entry highlighted
+- **GAME_OVER** — up to 3 rows (compact) or 5 rows (landscape), reduced further
+  when the run recap would collide with the fixed `RETURN TO MENU` button; the
+  player's saved entry replaces the last visible row when needed so it can still
+  be highlighted
+- **VICTORY** — up to 3 rows (compact) or 5 rows (landscape), reduced further
+  when the run recap would collide with the fixed `RETURN TO MENU` button; the
+  player's saved entry replaces the last visible row when needed so it can still
+  be highlighted
 
 ---
 
@@ -4983,6 +4989,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.171 | Mobile result-screen leaderboard layout now derives visible rows from the space above the fixed `RETURN TO MENU` button, caps compact result leaderboards to three rows, and keeps the saved player score visible/highlightable when reduced rows would otherwise hide it. |
 | v6.1.170 | Mobile Neural Archives safety: `ARCHIVES` touch input now routes through coordinate-bearing mouse clicks, visible upgrade row rectangles are the only purchase targets, a visible `BACK TO MENU` button is the only pointer/touch back target, and taps outside visible controls do nothing. |
 | v6.1.169 | Mobile result-screen safety: GAME_OVER and VICTORY now route touch coordinates through explicit `RETURN TO MENU` button hit-tests instead of treating any tap as a menu return, while preserving Enter as the keyboard shortcut. |
 | v6.1.168 | Mobile pause safety: touch pauses now route tap coordinates through explicit `RESUME RUN`, `SETTINGS`, and `QUIT TO MENU` button rectangles instead of invisible top/middle/bottom screen thirds, while preserving keyboard resume/settings/quit shortcuts. |

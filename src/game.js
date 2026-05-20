@@ -6699,7 +6699,19 @@ const game = {
    */
   renderLeaderboard(y, maxEntries, highlightRank) {
     const narrow=layout.compact;
-    const scores=this.getScores().slice(0,maxEntries);
+    if (maxEntries <= 0) return;
+    const allScores = this.getScores();
+    const scores = allScores.slice(0, maxEntries);
+    /** @type {number[]} */
+    const ranks = [];
+    for (let i = 0; i < scores.length; i++) ranks.push(i);
+    if (highlightRank >= maxEntries && highlightRank < allScores.length && maxEntries > 0) {
+      const highlighted = allScores[highlightRank];
+      if (highlighted) {
+        scores[Math.max(0, maxEntries - 1)] = highlighted;
+        ranks[Math.max(0, maxEntries - 1)] = highlightRank;
+      }
+    }
     ctx.save();
     ctx.textAlign='center';
     ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
@@ -6713,14 +6725,15 @@ const game = {
      * @param {any} i
      */
     scores.forEach((/** @type {any} */ s,/** @type {any} */ i)=>{
-      const isHL=i===highlightRank;
+      const rank = ranks[i] ?? i;
+      const isHL=rank===highlightRank;
       ctx.fillStyle=isHL?'#00f5ff':'#aaaacc';
       if (isHL) { ctx.shadowBlur=6; ctx.shadowColor='#00f5ff'; }
       ctx.font=`${isHL?'bold ':''}${narrow?12:12}px monospace`;
       if (narrow) {
-        ctx.fillText(`${i+1}. ${s.name}  ${s.score}  FLR ${s.floor}`,W/2,startY+i*lineH);
+        ctx.fillText(`${rank+1}. ${s.name}  ${s.score}  FLR ${s.floor}`,W/2,startY+i*lineH);
       } else {
-        ctx.fillText(`${i+1}. ${s.name.padEnd(12)} ${String(s.score).padStart(8)}  FLR ${s.floor}`,W/2,startY+i*lineH);
+        ctx.fillText(`${rank+1}. ${s.name.padEnd(12)} ${String(s.score).padStart(8)}  FLR ${s.floor}`,W/2,startY+i*lineH);
       }
       if (isHL) ctx.shadowBlur=0;
     });
@@ -6729,6 +6742,21 @@ const game = {
       ctx.fillText('No scores yet.',W/2,startY);
     }
     ctx.restore();
+  },
+
+  /**
+   * @param {number} leaderboardY
+   * @param {number} desiredRows
+   */
+  getResultLeaderboardRowCount(leaderboardY, desiredRows) {
+    const narrow = layout.compact;
+    const button = this.getResultMenuButtonRect();
+    const titleOffset = narrow ? 22 : 20;
+    const lineH = narrow ? 20 : 18;
+    const bottomGap = narrow ? 12 : 16;
+    const available = button.y - bottomGap - leaderboardY;
+    if (available < titleOffset) return 0;
+    return Math.max(1, Math.min(desiredRows, Math.floor((available - titleOffset) / lineH) + 1));
   },
 
   /**
@@ -8687,8 +8715,10 @@ const game = {
     }
     ctx.restore();
     // Leaderboard
-    const lbRows = narrow ? 4 : 5;
-    this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
+    const lbY = y + (narrow?6:10);
+    const desiredLbRows = narrow ? 3 : 5;
+    const lbRows = this.getResultLeaderboardRowCount(lbY, desiredLbRows);
+    this.renderLeaderboard(lbY, lbRows, this.lastSavedRank);
     this.renderResultMenuButton('#ff00c8');
   },
 
@@ -8775,8 +8805,10 @@ const game = {
     }
     ctx.restore();
     // leaderboard
-    const lbRows = narrow ? 4 : 5;
-    this.renderLeaderboard(y + (narrow?6:10), lbRows, this.lastSavedRank);
+    const lbY = y + (narrow?6:10);
+    const desiredLbRows = narrow ? 3 : 5;
+    const lbRows = this.getResultLeaderboardRowCount(lbY, desiredLbRows);
+    this.renderLeaderboard(lbY, lbRows, this.lastSavedRank);
     this.renderResultMenuButton('#ffb700');
   }
 };
