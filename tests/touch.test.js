@@ -184,3 +184,34 @@ test('mobile minimap touch expansion hitbox scales with settings.minimapScale', 
   assert.match(PLATFORM, /cy\s*<=\s*_my\s*\+\s*_miniH\s*\+\s*2/,
     'minimap touch hitbox must extend 2px below the scaled minimap');
 });
+
+test('touch buttons render semantic captions next to glyph labels', () => {
+  assert.match(PLATFORM, /@typedef \{\{ x:number, y:number, r:number, label:string, caption:string, colour:string, hidden\?:boolean \}\} TouchBtn/,
+    'touch button shape must carry both short glyph labels and semantic captions');
+  assert.match(PLATFORM, /E:\s*\{[^}]*caption:\s*'USE'/,
+    'interact button must disclose its action instead of relying only on the E glyph');
+  assert.match(PLATFORM, /F:\s*\{[^}]*caption:\s*'HACK'/,
+    'hackware button must disclose its action instead of relying only on the F glyph');
+  assert.match(PLATFORM, /V:\s*\{[^}]*caption:\s*'BOMB'/,
+    'void shard button must disclose its action instead of relying only on the V glyph');
+  assert.match(PLATFORM, /DASH:\s*\{[^}]*caption:\s*'DASH'/,
+    'dash button must disclose its action instead of relying only on the arrow glyph');
+  assert.match(PLATFORM, /PAUSE:\s*\{[^}]*caption:\s*'PAUSE'/,
+    'pause button must disclose its action instead of relying only on the pause glyph');
+  assert.doesNotMatch(PLATFORM, /ctx\.globalAlpha\s*=\s*Math\.max\(ctx\.globalAlpha/,
+    'captions must inherit disabled/cooldown alpha instead of becoming brighter than unavailable buttons');
+  assert.match(PLATFORM, /const\s+btnY\s*=\s*layout\.hudTop\s*-\s*BTNS\.E\.r\s*-\s*28/,
+    'button row must leave room for captions above the HUD background');
+  assert.match(PLATFORM, /const\s+TOUCH_BTN_CAPTION_GAP\s*=\s*6/,
+    'caption vertical gap must be named so stacked button geometry can account for it');
+  assert.match(PLATFORM, /const\s+TOUCH_BTN_CAPTION_FONT_SIZE\s*=\s*9/,
+    'caption font size must be named so stacked button geometry can account for it');
+  assert.match(PLATFORM, /const\s+stackedBtnGap\s*=\s*BTNS\.E\.r\s*\+\s*BTNS\.V\.r\s*\+\s*TOUCH_BTN_CAPTION_GAP\s*\+\s*TOUCH_BTN_CAPTION_FONT_SIZE\s*\+\s*1/,
+    'stacked buttons must account for caption height so BOMB caption does not overlap the USE hit target');
+  assert.match(PLATFORM, /BTNS\.V\.y\s*=\s*btnY\s*-\s*stackedBtnGap/,
+    'BOMB button vertical position must be derived from the radius-aware stacked spacing');
+  assert.match(PLATFORM, /ctx\.font\s*=\s*`bold \$\{TOUCH_BTN_CAPTION_FONT_SIZE\}px monospace`/,
+    'caption rendering must use the same font-size constant as stacked geometry');
+  assert.match(PLATFORM, /ctx\.fillText\(btn\.caption,\s*btn\.x,\s*btn\.y\s*\+\s*btn\.r\s*\+\s*TOUCH_BTN_CAPTION_GAP\)/,
+    'captions must be rendered below the button circle using the documented gap');
+});

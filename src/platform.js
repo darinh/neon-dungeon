@@ -574,6 +574,8 @@ canvas.addEventListener('wheel', e => {
 
 // ─── Touch Controls ──────────────────────────────────────────────────────────
 const JR = 55; // joystick base radius
+const TOUCH_BTN_CAPTION_GAP = 6;
+const TOUCH_BTN_CAPTION_FONT_SIZE = 9;
 /** @type {{ joystick:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number}, aim:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number,shooting:boolean}, btnE:number|null, btnV:number|null, btnF:number|null, btnDash:number|null, btnPause:number|null }} */
 const touch = {
   joystick: { active:false, id:null, baseX:0, baseY:0, dx:0, dy:0 },
@@ -583,15 +585,15 @@ const touch = {
 };
 
 // Button definitions — positions updated dynamically by updateBtns()
-/** @typedef {{ x:number, y:number, r:number, label:string, colour:string, hidden?:boolean }} TouchBtn */
+/** @typedef {{ x:number, y:number, r:number, label:string, caption:string, colour:string, hidden?:boolean }} TouchBtn */
 
 /** @type {Record<'E'|'F'|'V'|'DASH'|'PAUSE', TouchBtn>} */
 const BTNS = {
-  E:     { x:0, y:0, r:30, label:'E',  colour:'#00f5ff' },
-  F:     { x:0, y:0, r:28, label:'F',  colour:'#ff8800' },
-  V:     { x:0, y:0, r:28, label:'V',  colour:'#aa00ff' },
-  DASH:  { x:0, y:0, r:28, label:'⇧',  colour:'#ffb700' },
-  PAUSE: { x:0, y:0, r:20, label:'II', colour:'#ff00c8' },
+  E:     { x:0, y:0, r:30, label:'E',  caption:'USE',   colour:'#00f5ff' },
+  F:     { x:0, y:0, r:28, label:'F',  caption:'HACK',  colour:'#ff8800' },
+  V:     { x:0, y:0, r:28, label:'V',  caption:'BOMB',  colour:'#aa00ff' },
+  DASH:  { x:0, y:0, r:28, label:'⇧',  caption:'DASH',  colour:'#ffb700' },
+  PAUSE: { x:0, y:0, r:20, label:'II', caption:'PAUSE', colour:'#ff00c8' },
 };
 function updateBtns() {
   // Scale up buttons on small screens (min ~44 CSS px diameter)
@@ -606,7 +608,8 @@ function updateBtns() {
   // Position from edges, respecting safe-area insets
   const pr = Math.max(10, safeRight);
   const pt = Math.max(10, safeTop);
-  const btnY = layout.hudTop - BTNS.E.r - 16;
+  const btnY = layout.hudTop - BTNS.E.r - 28;
+  const stackedBtnGap = BTNS.E.r + BTNS.V.r + TOUCH_BTN_CAPTION_GAP + TOUCH_BTN_CAPTION_FONT_SIZE + 1;
   BTNS.E.x     = W - pr - 230;
   BTNS.E.y     = btnY;
   BTNS.DASH.x  = W - pr - 160;
@@ -614,7 +617,7 @@ function updateBtns() {
   BTNS.F.x     = W - pr - 90;
   BTNS.F.y     = btnY;
   BTNS.V.x     = W - pr - 20;
-  BTNS.V.y     = btnY - 55;
+  BTNS.V.y     = btnY - stackedBtnGap;
   BTNS.PAUSE.x = W - pr - 30;
   BTNS.PAUSE.y = pt + 30;
 }
@@ -980,6 +983,10 @@ function drawTouchUI() {
     ctx.fillStyle=btn.colour; ctx.font=`bold ${labelSize}px monospace`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(btn.label,btn.x,btn.y);
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${TOUCH_BTN_CAPTION_FONT_SIZE}px monospace`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(btn.caption, btn.x, btn.y + btn.r + TOUCH_BTN_CAPTION_GAP);
     ctx.restore();
   }
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
