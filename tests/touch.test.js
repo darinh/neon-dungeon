@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const touchEngine = require('../engine/touch.js');
+const { computeLayout } = require('../engine/viewport.js');
 const { toCanvas, hitBtn, resetTouch } = touchEngine;
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
@@ -94,6 +95,9 @@ function createSeedSetupLayoutHarness(width, height, narrow) {
  * @param {boolean} narrow
  */
 function createMessageSendLayoutHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `MESSAGE_SEND fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
   const source = "const ACT1_MESSAGE_INTENTS = { length: 3 };\n" +
     extractFunctionSource(GAME, 'getMessageSendLayout') + '\n' +
     'return getMessageSendLayout(narrow);';
@@ -485,26 +489,34 @@ test('compact seed setup action hit-test respects all button rectangle bounds', 
 });
 
 test('compact message-send layout keeps intent cards, actions, and footer separated', () => {
-  const r = createMessageSendLayoutHarness(390, 320, true);
+  const r = createMessageSendLayoutHarness(320, 390, true);
   const first = messageIntentRect(r, 0);
   const third = messageIntentRect(r, 2);
 
-  assert.equal(r.panelW, 358, 'message-send panel width must keep compact side gutters');
-  assert.equal(r.panelH, 270, 'message-send panel height must preserve existing 320px compact behavior');
-  assert.equal(r.py, 25, 'message-send panel origin Y must preserve existing 320px compact behavior');
+  assert.equal(r.panelW, 288, 'message-send panel width must keep compact side gutters');
+  assert.equal(r.panelH, 340, 'message-send panel height must preserve runtime-plausible compact behavior');
+  assert.equal(r.py, 25, 'message-send panel origin Y must preserve runtime-plausible compact behavior');
   assert.equal(r.titleY, 53, 'message-send title baseline must come from the shared layout');
   assert.equal(r.subtitleY, 73, 'message-send subtitle baseline must come from the shared layout');
   assert.equal(r.rowStart, 83, 'message-send first intent card must clear compact subtitle copy');
-  assert.equal(r.rowH, 51, 'message-send compact row spacing must preserve existing 320px behavior');
+  assert.equal(r.rowH, 58, 'message-send compact row spacing must preserve runtime-plausible compact behavior');
   assert.equal(first.x, 32, 'first intent card origin X must match the shared layout');
   assert.equal(first.y, 83, 'first intent card origin Y must clear the subtitle');
-  assert.equal(first.w, 326, 'intent card width must match the shared layout');
-  assert.equal(first.h, 33, 'intent card height must match the shared layout');
-  assert.equal(third.y + third.h, 218, 'third intent card bottom must stay above actions');
+  assert.equal(first.w, 256, 'intent card width must match the shared layout');
+  assert.equal(first.h, 40, 'intent card height must match the shared layout');
+  assert.equal(third.y + third.h, 239, 'third intent card bottom must stay above actions');
   assert.ok(r.subtitleY + 8 <= first.y, 'first compact intent card must clear the subtitle');
-  assert.equal(r.btnY, 237, 'action row origin Y must match the shared compact layout');
+  assert.equal(r.btnY, 307, 'action row origin Y must match the shared compact layout');
   assert.ok(third.y + third.h + 8 <= r.btnY, 'third intent card must clear the SEND/BACK row');
   assert.ok(r.btnY + r.btnH + 8 <= r.footerY, 'action row must clear the compact footer');
+});
+
+test('message-send compact fixture guard rejects impossible compact dimensions', () => {
+  assert.throws(
+    () => createMessageSendLayoutHarness(390, 320, true),
+    /must match runtime compact=false/,
+    'compact MESSAGE_SEND tests must use dimensions that can enter the runtime compact layout',
+  );
 });
 
 test('message-send compact action buttons fit narrow portrait widths above the tight threshold', () => {
