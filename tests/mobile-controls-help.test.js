@@ -32,8 +32,10 @@ test('mobile pause screen includes a compact control reminder', () => {
   assert.match(renderPausedBody[0], /LEFT DRAG move\s*\|\s*RIGHT DRAG aim \+ fire/);
   assert.match(renderPausedBody[0], /USE interact\s*\|\s*DASH dodge\s*\|\s*BOMB void shard/);
   assert.match(renderPausedBody[0], /HACK is dim until a module is installed/);
-  assert.match(renderPausedBody[0], /const\s+helpY\s*=\s*narrow\s*\?\s*340\s*:\s*388/,
-    'pause help must sit below the three visible pause option labels on compact and landscape layouts');
+  assert.match(renderPausedBody[0], /const\s+lastRect\s*=\s*rects\[2\]/,
+    'pause help must anchor below the last visible touch button');
+  assert.match(renderPausedBody[0], /const\s+helpY\s*=\s*lastRect\s*\?\s*lastRect\.y\s*\+\s*lastRect\.h\s*\+\s*\(narrow\s*\?\s*18\s*:\s*28\)/,
+    'pause help must sit below the explicit button row on compact and landscape layouts');
 });
 
 test('mobile HACK help matches always-visible dimmed button behavior', () => {

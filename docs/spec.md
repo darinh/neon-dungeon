@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.167
+# NEON DUNGEON — Game Specification v6.1.168
 
 ## Vision
 
@@ -4975,6 +4975,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.168 | Mobile pause safety: touch pauses now route tap coordinates through explicit `RESUME RUN`, `SETTINGS`, and `QUIT TO MENU` button rectangles instead of invisible top/middle/bottom screen thirds, while preserving keyboard resume/settings/quit shortcuts. |
 | v6.1.167 | Mobile story clarity: the `SYSTEM_MESSAGE` modal now labels touch acknowledgement as `TAP ACK`, explains that system prompts are run prompts to read before acknowledging, and tells players that acknowledged prompts remain recoverable in THE GAP archive during the run. |
 | v6.1.166 | Mobile controls help: touch menu hints now use semantic drag/action labels instead of keyboard glyphs, and the pause overlay includes a compact mobile control reminder for move, aim/fire, interact, dash, bomb, and hackware availability. |
 | v6.1.165 | Mobile control clarity: gameplay touch buttons now render semantic captions (`USE`, `HACK`, `BOMB`, `DASH`, `PAUSE`) below their existing glyph/key labels, and the Mobile & PWA spec records the research-backed latency, target-size, gesture, and viewport constraints for future mobile polish. |
