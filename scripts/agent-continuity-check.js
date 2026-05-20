@@ -5,8 +5,11 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const MAIN_CHECKOUT = '/home/darin/projects/neon-dungeon';
 const OPERATOR_GUARD_EXTENSION = '.github/extensions/neon-operator-guard/extension.mjs';
+const STRANDED_OPERATOR_GUARD_PATHS = [
+  '.github/extensions/neon-operator-guard',
+  '.github/extensions/neon-operator-guard-live',
+];
 const REPOSITORY = 'darinh/neon-dungeon';
 const DEVELOP_RULESET_NAME = 'develop: squash-only PRs';
 const DEVELOP_REF = 'refs/heads/develop';
@@ -32,6 +35,26 @@ function fail(message, details = []) {
   }
   process.exit(1);
 }
+
+function discoverMainCheckout() {
+  if (process.env.NEON_DUNGEON_PRIMARY_CHECKOUT) {
+    return path.resolve(process.env.NEON_DUNGEON_PRIMARY_CHECKOUT);
+  }
+
+  const commonDir = run('git', ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+  if (commonDir.status !== 0) {
+    fail('failed to resolve git common directory', [commonDir.stderr.trim()]);
+  }
+
+  const resolvedCommonDir = path.resolve(commonDir.stdout.trim());
+  if (!resolvedCommonDir.endsWith(`${path.sep}.git`)) {
+    fail('failed to derive main checkout from git common directory', [resolvedCommonDir]);
+  }
+
+  return path.dirname(resolvedCommonDir);
+}
+
+const MAIN_CHECKOUT = discoverMainCheckout();
 
 function parseJson(command, args) {
   const result = run(command, args);
@@ -94,7 +117,7 @@ function ensureOperatorGuardExtension(worktreeRoot) {
 
   const strayPrimaryExtensions = run('git', [
     '-C', MAIN_CHECKOUT,
-    'ls-files', '--others', '--ignored', '--exclude-standard', '.github/extensions',
+    'ls-files', '--others', '--ignored', '--exclude-standard', ...STRANDED_OPERATOR_GUARD_PATHS,
   ]);
   if (strayPrimaryExtensions.status === 0 && strayPrimaryExtensions.stdout.trim()) {
     fail('ignored extension files are stranded in the main checkout', [

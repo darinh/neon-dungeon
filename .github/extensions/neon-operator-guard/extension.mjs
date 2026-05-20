@@ -1,9 +1,9 @@
 // Extension: neon-operator-guard
 // Project guardrails for NEON DUNGEON autonomous operator workflow.
 
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { joinSession } from "@github/copilot-sdk/extension";
@@ -14,12 +14,26 @@ const {
     commandRunsRawGhPrMerge,
     commandRunsUnboundedStartupDiscovery,
 } = require("../../../scripts/operator-guard-rules.js");
-const PRIMARY_CHECKOUT = "/home/darin/projects/neon-dungeon";
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(EXTENSION_DIR, "../../..");
+const PRIMARY_CHECKOUT = process.env.NEON_DUNGEON_PRIMARY_CHECKOUT || discoverPrimaryCheckout(PROJECT_ROOT);
 const CONTINUITY_SCRIPT = resolve(PROJECT_ROOT, "scripts/agent-continuity-check.js");
 const DANGEROUS_MAIN_CHECKOUT_GIT =
     /\bgit\s+(?:add|am|apply|bisect|branch\s+(?:-[dD]|--delete)|checkout|cherry-pick|clean|commit|merge|mv|pull|push|rebase|reset|restore|revert|rm|stash|switch|tag\s+(?:-[dD]|--delete)|worktree\s+(?:add|move|prune|remove|repair))\b/;
+
+function discoverPrimaryCheckout(projectRoot) {
+    const commonDir = execFileSync(
+        "git",
+        ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        { cwd: projectRoot, encoding: "utf8" },
+    ).trim();
+    const resolvedCommonDir = resolve(commonDir);
+    if (basename(resolvedCommonDir) !== ".git") {
+        throw new Error(`Unable to derive primary checkout from git common dir: ${resolvedCommonDir}`);
+    }
+
+    return dirname(resolvedCommonDir);
+}
 
 function execFileText(command, args, options = {}) {
     return new Promise((resolvePromise) => {
@@ -53,6 +67,22 @@ function patchTargetsPrimaryCheckout(toolArgs) {
     return String(toolArgs || "").includes(`*** Update File: ${PRIMARY_CHECKOUT}/`) ||
         String(toolArgs || "").includes(`*** Add File: ${PRIMARY_CHECKOUT}/`) ||
         String(toolArgs || "").includes(`*** Delete File: ${PRIMARY_CHECKOUT}/`);
+}
+
+function expandedToolUses(input) {
+    const toolName = String(input.toolName || "");
+    const toolArgs = input.toolArgs;
+    const uses = [{ toolName, toolArgs, cwd: input.cwd }];
+    if (toolName.endsWith("multi_tool_use.parallel") && Array.isArray(toolArgs?.tool_uses)) {
+        for (const nested of toolArgs.tool_uses) {
+            uses.push({
+                toolName: String(nested?.recipient_name || ""),
+                toolArgs: nested?.parameters,
+                cwd: input.cwd,
+            });
+        }
+    }
+    return uses;
 }
 
 async function runContinuityCheck() {
@@ -91,60 +121,59 @@ const session = await joinSession({
             ].join("\n"),
         }),
         onPreToolUse: async (input) => {
-            const toolName = String(input.toolName || "");
-            const toolArgs = input.toolArgs;
-
-            if (
-                toolLooksLikePatch(toolName) &&
-                patchTargetsPrimaryCheckout(toolArgs)
-            ) {
-                return {
-                    permissionDecision: "deny",
-                    permissionDecisionReason: "NEON DUNGEON guard: do not patch files in the primary checkout; use an implementation worktree.",
-                };
-            }
-
-            if (toolName.endsWith("bash")) {
-                const command = String(toolArgs?.command || "");
-                if (commandRunsRawGhPrMerge(command)) {
-                    return {
-                        permissionDecision: "deny",
-                        permissionDecisionReason: "NEON DUNGEON guard: raw `gh pr merge` is blocked; use `npm run merge:pr -- <pr> --method squash|rebase` so the repository merge wrapper performs its preflight.",
-                    };
-                }
-                if (commandRunsUnboundedStartupDiscovery(command)) {
-                    return {
-                        permissionDecision: "deny",
-                        permissionDecisionReason: "NEON DUNGEON guard: bound startup discovery output. Pipe `git worktree list` or `git branch --no-merged` through `wc -l`, `grep -c`, `sed -n`, or `head -n` before running it.",
-                    };
-                }
+            for (const use of expandedToolUses(input)) {
                 if (
-                    (cwdIsPrimaryCheckout(input.cwd) || commandTargetsPrimaryCheckout(command)) &&
-                    DANGEROUS_MAIN_CHECKOUT_GIT.test(command)
+                    toolLooksLikePatch(use.toolName) &&
+                    (cwdIsPrimaryCheckout(use.cwd) || patchTargetsPrimaryCheckout(use.toolArgs))
                 ) {
                     return {
                         permissionDecision: "deny",
-                        permissionDecisionReason: "NEON DUNGEON guard: mutating git commands are blocked in the primary checkout; use an implementation worktree.",
+                        permissionDecisionReason: "NEON DUNGEON guard: do not patch files in the primary checkout; use an implementation worktree.",
                     };
                 }
-                if (/^\s*handoff\b/.test(command)) {
+
+                if (use.toolName.endsWith("bash")) {
+                    const command = String(use.toolArgs?.command || "");
+                    if (commandRunsRawGhPrMerge(command)) {
+                        return {
+                            permissionDecision: "deny",
+                            permissionDecisionReason: "NEON DUNGEON guard: raw `gh pr merge` is blocked; use `npm run merge:pr -- <pr> --method squash|rebase` so the repository merge wrapper performs its preflight.",
+                        };
+                    }
+                    if (commandRunsUnboundedStartupDiscovery(command)) {
+                        return {
+                            permissionDecision: "deny",
+                            permissionDecisionReason: "NEON DUNGEON guard: bound startup discovery output. Pipe `git worktree list` or `git branch --no-merged` through `wc -l`, `grep -c`, `sed -n`, or `head -n` before running it.",
+                        };
+                    }
+                    if (
+                        (cwdIsPrimaryCheckout(use.cwd) || commandTargetsPrimaryCheckout(command)) &&
+                        DANGEROUS_MAIN_CHECKOUT_GIT.test(command)
+                    ) {
+                        return {
+                            permissionDecision: "deny",
+                            permissionDecisionReason: "NEON DUNGEON guard: mutating git commands are blocked in the primary checkout; use an implementation worktree.",
+                        };
+                    }
+                    if (/^\s*handoff\b/.test(command)) {
+                        const continuity = await runContinuityCheck();
+                        if (!continuity.ok) {
+                            return {
+                                permissionDecision: "deny",
+                                permissionDecisionReason: `NEON DUNGEON guard: handoff is blocked until continuity passes.\n${continuity.message}`,
+                            };
+                        }
+                    }
+                }
+
+                if (toolLooksLikeCompletion(use.toolName)) {
                     const continuity = await runContinuityCheck();
                     if (!continuity.ok) {
                         return {
                             permissionDecision: "deny",
-                            permissionDecisionReason: `NEON DUNGEON guard: handoff is blocked until continuity passes.\n${continuity.message}`,
+                            permissionDecisionReason: `NEON DUNGEON guard: task_complete is blocked until continuity passes.\n${continuity.message}`,
                         };
                     }
-                }
-            }
-
-            if (toolLooksLikeCompletion(toolName)) {
-                const continuity = await runContinuityCheck();
-                if (!continuity.ok) {
-                    return {
-                        permissionDecision: "deny",
-                        permissionDecisionReason: `NEON DUNGEON guard: task_complete is blocked until continuity passes.\n${continuity.message}`,
-                    };
                 }
             }
 
