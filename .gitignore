@@ -4,6 +4,9 @@ node_modules/
 # Local agent extensions (user-specific, not part of repo)
 .github/extensions/
 
+# Local implementation worktrees
+.worktrees/
+
 # OS / editor cruft
 .DS_Store
 *.swp
