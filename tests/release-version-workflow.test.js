@@ -17,6 +17,7 @@ const LOCK = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package-l
 
 test('release-version runs on main pushes and does not create release commits', () => {
   assert.match(WORKFLOW, /branches:\s*\[main\]/);
+  assert.match(WORKFLOW, /^\s*workflow_dispatch:/m);
   assert.match(WORKFLOW, /github\.actor\s*!=\s*['"]github-actions\[bot\]['"]/);
   assert.doesNotMatch(WORKFLOW, /chore\(release\)/);
   assert.doesNotMatch(WORKFLOW, /pull-requests:\s*write/);
