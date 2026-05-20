@@ -13,6 +13,60 @@ const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
 const GAME_STATES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game-states.js'), 'utf8');
 
+/**
+ * @param {string} src
+ * @param {string} name
+ */
+function extractObjectMethodSource(src, name) {
+  const start = src.indexOf('\n  ' + name + '(');
+  assert.ok(start >= 0, name + ' object method must exist');
+  const methodStart = start + 3;
+  const braceStart = src.indexOf('{', methodStart);
+  assert.ok(braceStart > methodStart, name + ' object method must have a body');
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(methodStart, i + 1);
+    }
+  }
+  assert.fail(name + ' object method body must be balanced');
+}
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function createNameEntryKeyboardHarness(width, height, narrow) {
+  const source = 'return ({\n' +
+    "  _vkChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'.split(''),\n" +
+    '  _vkCols: 10,\n' +
+    '  ' + extractObjectMethodSource(GAME, '_vkLayout') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_vkHitTest') + '\n' +
+    '});';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
+ * @param {{cellW:number,cellH:number,gap:number,cols:number,ox:number,oy:number}} layout
+ * @param {number} index
+ * @param {boolean} ok
+ */
+function nameEntryKeyRect(layout, index, ok = false) {
+  const col = index % layout.cols;
+  const row = Math.floor(index / layout.cols);
+  const w = ok ? layout.cellW * 2 + layout.gap : layout.cellW;
+  return {
+    x: layout.ox + col * (layout.cellW + layout.gap),
+    y: layout.oy + row * (layout.cellH + layout.gap),
+    w,
+    h: layout.cellH,
+  };
+}
+
 // ---------- toCanvas ----------
 
 test('toCanvas: maps client coords to canvas-internal coords (1:1)', () => {
@@ -230,6 +284,56 @@ test('compact result leaderboards stay above the explicit return button', () => 
     'victory compact leaderboard rows must be capped before rendering against the bottom button');
   assert.match(GAME, /const allScores = this\.getScores\(\);[\s\S]*if \(highlightRank >= maxEntries && highlightRank < allScores\.length && maxEntries > 0\)[\s\S]*scores\[Math\.max\(0, maxEntries - 1\)\] = highlighted;[\s\S]*ranks\[Math\.max\(0, maxEntries - 1\)\] = highlightRank;/,
     'when row count is reduced, the saved player score should still replace the final visible row and remain highlightable');
+});
+
+test('compact name-entry virtual keyboard stays within short mobile viewports', () => {
+  const harness = createNameEntryKeyboardHarness(390, 360, true);
+  const keyboard = harness._vkLayout(true);
+
+  assert.equal(keyboard.cellW, 28, 'compact key width must stay finger-readable');
+  assert.equal(keyboard.cellH, 28, 'compact key height must stay finger-readable');
+  assert.equal(keyboard.gap, 3, 'compact key gap must be included in bounds');
+  assert.equal(keyboard.ox, 41.5, 'compact keyboard origin X must be centered in the viewport');
+  assert.equal(keyboard.oy, 218, 'compact keyboard origin Y must lift on short viewports');
+  assert.equal(keyboard.gridW, 307, 'compact keyboard width must include all columns and gaps');
+  assert.equal(keyboard.gridH, 121, 'compact keyboard height must include all rows and gaps');
+  assert.equal(keyboard.ox + keyboard.gridW, 348.5, 'compact keyboard right bound must fit the viewport');
+  assert.equal(keyboard.oy + keyboard.gridH, 339, 'compact keyboard bottom bound must fit above the hint');
+  assert.equal(keyboard.hintY, 348, 'compact keyboard hint baseline must remain visible');
+  assert.ok(keyboard.hintY <= 360 - 12, 'compact keyboard hint must keep its bottom-safe margin');
+  assert.doesNotMatch(GAME, /const\s+oy\s*=\s*narrow\s*\?\s*280\s*:\s*340/,
+    'name-entry rendering and hit-testing must not keep a duplicated hardcoded keyboard Y origin');
+});
+
+test('name-entry virtual keyboard hit-test respects all key rectangle bounds', () => {
+  const harness = createNameEntryKeyboardHarness(390, 360, true);
+  const keyboard = harness._vkLayout(true);
+  const keyA = nameEntryKeyRect(keyboard, 0);
+  const okIndex = harness._vkChars.length + 1;
+  const keyOk = nameEntryKeyRect(keyboard, okIndex, true);
+
+  assert.equal(keyA.x, 41.5, 'A key origin X must match the shared keyboard layout');
+  assert.equal(keyA.y, 218, 'A key origin Y must match the shared keyboard layout');
+  assert.equal(keyA.w, 28, 'A key width must match the shared keyboard layout');
+  assert.equal(keyA.h, 28, 'A key height must match the shared keyboard layout');
+  assert.equal(harness._vkHitTest(keyA.x, keyA.y, keyboard.oy, true), 'A');
+  assert.equal(harness._vkHitTest(keyA.x + keyA.w, keyA.y + keyA.h, keyboard.oy, true), 'A');
+  assert.equal(harness._vkHitTest(keyA.x - 0.1, keyA.y + 1, keyboard.oy, true), null, 'A key left bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyA.x + keyA.w + 0.1, keyA.y + 1, keyboard.oy, true), null, 'A key right bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyA.x + 1, keyA.y - 0.1, keyboard.oy, true), null, 'A key top bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyA.x + 1, keyA.y + keyA.h + 0.1, keyboard.oy, true), null, 'A key bottom bound must reject outside taps');
+
+  assert.equal(keyOk.x, 289.5, 'OK key origin X must start on the eighth compact column');
+  assert.equal(keyOk.y, 311, 'OK key origin Y must share the final keyboard row');
+  assert.equal(keyOk.w, 59, 'OK key width must span two compact columns plus the gap');
+  assert.equal(keyOk.h, 28, 'OK key height must match other compact keys');
+  assert.equal(keyOk.x + keyOk.w, keyboard.ox + keyboard.gridW, 'OK key right bound must align to keyboard right edge');
+  assert.equal(harness._vkHitTest(keyOk.x, keyOk.y, keyboard.oy, true), 'OK');
+  assert.equal(harness._vkHitTest(keyOk.x + keyOk.w, keyOk.y + keyOk.h, keyboard.oy, true), 'OK');
+  assert.equal(harness._vkHitTest(keyOk.x - 0.1, keyOk.y + 1, keyboard.oy, true), null, 'OK key left bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyOk.x + keyOk.w + 0.1, keyOk.y + 1, keyboard.oy, true), null, 'OK key right bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyOk.x + 1, keyOk.y - 0.1, keyboard.oy, true), null, 'OK key top bound must reject outside taps');
+  assert.equal(harness._vkHitTest(keyOk.x + 1, keyOk.y + keyOk.h + 0.1, keyboard.oy, true), null, 'OK key bottom bound must reject outside taps');
 });
 
 test('archives touch routing uses explicit row and back hit-tests', () => {
