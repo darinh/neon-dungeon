@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Local agent extensions (user-specific, not part of repo)
-.github/extensions/
+# Local agent extensions are user-specific unless explicitly shared by this repo.
+.github/extensions/*
+!.github/extensions/neon-operator-guard/
+!.github/extensions/neon-operator-guard/extension.mjs
 
 # Local implementation worktrees
 .worktrees/
