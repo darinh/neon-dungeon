@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.165
+# NEON DUNGEON — Game Specification v6.1.166
 
 ## Vision
 
@@ -1298,6 +1298,11 @@ memorising keyboard bindings.
 
 Touch events call `preventDefault()` (passive: false) to suppress browser
 scroll/zoom. The CSS rule `touch-action: none` is applied globally.
+
+The main menu and paused overlay repeat the same mobile vocabulary instead of
+showing keyboard glyphs: `LEFT DRAG` moves, `RIGHT DRAG` aims and fires, `USE`
+interacts, `DASH` dodges, `BOMB` uses a void shard, `PAUSE` opens the pause
+menu, and `HACK` is dim until a hackware module is installed.
 
 ### Weapons
 
@@ -4970,6 +4975,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.166 | Mobile controls help: touch menu hints now use semantic drag/action labels instead of keyboard glyphs, and the pause overlay includes a compact mobile control reminder for move, aim/fire, interact, dash, bomb, and hackware availability. |
 | v6.1.165 | Mobile control clarity: gameplay touch buttons now render semantic captions (`USE`, `HACK`, `BOMB`, `DASH`, `PAUSE`) below their existing glyph/key labels, and the Mobile & PWA spec records the research-backed latency, target-size, gesture, and viewport constraints for future mobile polish. |
 | v6.1.164 | Secret-room whisper expansion: bundle 15 adds five receipt/acknowledgement whispers across sandbox, cache, firewall, uplink, and opennet, raising `src/data/whispers.js` to 76 shipped whispers while preserving biome/floor eligibility and secret-room-only selection. |
 | v6.1.163 | Dungeon engine extraction: outside-entrance normalization now reuses `NEON.dungeonTopology.findRoomBoundaryGates(map, room, isGateTile)` for room-perimeter gate discovery. `src/content/floor-generator.js` keeps the legacy room-corner exclusion, NEON-specific entrance tile semantics, and moved-entrance mutation policy while the engine helper owns generic perimeter order. |

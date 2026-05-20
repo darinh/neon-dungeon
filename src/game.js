@@ -6795,12 +6795,12 @@ const game = {
     ctx.save(); ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow ? 13 : 12}px monospace`;
     if (isTouch) {
-      ctx.fillText('Left: Move  |  Right: Aim & Shoot', W/2, hintY);
+      ctx.fillText('LEFT DRAG: Move  |  RIGHT DRAG: Aim + Fire', W/2, hintY);
       if (narrow) {
-        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash', W/2, hintY + 18);
-        ctx.fillText(KEY_DISPLAY(km('voidshard'))+': Bomb  |  ‖: Pause', W/2, hintY + 34);
+        ctx.fillText('USE: Interact  |  DASH: Dodge', W/2, hintY + 18);
+        ctx.fillText('BOMB: Void shard  |  PAUSE: Menu', W/2, hintY + 34);
       } else {
-        ctx.fillText(KEY_DISPLAY(km('interact'))+': Interact  |  ⇧: Dash  |  '+KEY_DISPLAY(km('voidshard'))+': Bomb  |  ‖: Pause', W/2, hintY + 16);
+        ctx.fillText('USE: Interact  |  DASH: Dodge  |  BOMB: Void shard  |  PAUSE: Menu', W/2, hintY + 16);
       }
     } else {
       ctx.fillText(KEY_DISPLAY(km('up'))+KEY_DISPLAY(km('left'))+KEY_DISPLAY(km('down'))+KEY_DISPLAY(km('right'))+': Move  |  Mouse: Aim  |  Click/'+KEY_DISPLAY(km('shoot'))+': Shoot', W/2, hintY);
@@ -7235,6 +7235,11 @@ const game = {
       ctx.fillText('TAP TOP — Resume',W/2, optY[0] ?? 0);
       ctx.fillText('TAP MIDDLE — Settings',W/2, optY[1] ?? 0);
       ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, optY[2] ?? 0);
+      ctx.fillStyle='#557799'; ctx.font=`${narrow ? 10 : 12}px monospace`;
+      const helpY = narrow ? 340 : 388;
+      ctx.fillText('LEFT DRAG move  |  RIGHT DRAG aim + fire', W/2, helpY);
+      ctx.fillText('USE interact  |  DASH dodge  |  BOMB void shard', W/2, helpY + (narrow ? 15 : 18));
+      ctx.fillText('HACK is dim until a module is installed', W/2, helpY + (narrow ? 30 : 36));
     } else {
       const labels = ['ESC — Resume', 'S   — Settings', 'Q   — Quit to Menu'];
       const colours = ['#00f5ff', '#ffb700', '#ff4466'];

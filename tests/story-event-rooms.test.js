@@ -306,7 +306,7 @@ test('protocol trial effects execute concrete runtime state changes', () => {
 });
 
 test('spec documents protocol trials as story-driven level mechanics', () => {
-  assert.match(SPEC, /Game Specification v6\.1\.165/);
+  assert.match(SPEC, /Game Specification v6\.1\.166/);
   assert.match(SPEC, /\*\*11 Events\*\* \(selected randomly per terminal, filtered by player state, with protocol trials guaranteed on selected story floors\):/);
   assert.match(SPEC, /\| Route Proof \| Reveal non-secret floor map \+ XP \+score \| Open nearest locked door, \+credits, −10 HP \|/);
   assert.match(SPEC, /Floors 2, 5, and 8 force story-mechanical trials \(`Route Proof`, `Cooperation Protocol`, `Consent Lock`\)/);
