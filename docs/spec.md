@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.173
+# NEON DUNGEON — Game Specification v6.1.174
 
 ## Vision
 
@@ -4998,6 +4998,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.174 | Compact message-send polish for issue #993: `MESSAGE_SEND` now derives title, subtitle, intent-card, SEND/BACK action, and footer baselines from `getMessageSendLayout()`. Compact mobile viewports use the same shared layout to keep all three outbound intent cards separated from the subtitle, SEND/BACK row, and footer, shrink SEND/BACK widths to remain onscreen on narrow portrait widths, and hide secondary intent labels only when ultra-short compressed cards cannot fit them. Added `tests/touch.test.js` coverage for 390×320 compact geometry, 240×320/229×320 narrow portrait button/subtitle bounds, 289–300px compact boundary no-overlap invariants, 199×200/219×220/240×280/229×286 ultra-short no-overlap invariants, and SEND/BACK hit-test bounds. |
 | v6.1.173 | Compact seed-setup polish for issue #993: `SEED_SETUP` now derives title, difficulty, seed field, help copy, action buttons, label baseline, and footer positions from `seedSetupLayout()`. Short mobile viewports lift the seed field, keep help/actions/footer separated, and use 40px compact action targets; `seedSetupFieldHitTest()` and `seedSetupHitTest()` can be verified against the same layout rectangles used for rendering. Added `tests/touch.test.js` coverage for 390×320 compact geometry and all field/action hit-test bounds. |
 | v6.1.172 | Mobile high-score name entry now derives compact virtual-keyboard Y position and hint baseline from the shared keyboard layout, keeping the key grid and double-wide OK hit target visible on short mobile canvases. |
 | v6.1.171 | Mobile result-screen leaderboard layout now derives visible rows from the space above the fixed `RETURN TO MENU` button, caps compact result leaderboards to three rows, and keeps the saved player score visible/highlightable when reduced rows would otherwise hide it. |
