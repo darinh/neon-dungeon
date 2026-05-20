@@ -505,7 +505,7 @@ test('touch input routes seed setup taps through the seed screen hit-test path',
 test('mobile seed setup exposes a real text input for the OS keyboard', () => {
   assert.match(GAME, /sanitizeSeedSetupSeed\(value\)/);
   assert.match(GAME, /setSeedSetupSeed\(value\)[\s\S]*sanitizeSeedSetupSeed\(value\)/);
-  assert.match(GAME, /seedSetupFieldHitTest\(x, y\)[\s\S]*seedSetupLayout\(\)/);
+  assert.match(GAME, /seedSetupFieldHitTest\(x, y, view\)[\s\S]*seedSetupLayout\(view\)/);
   assert.match(GAME, /Tap seed to edit, or use RANDOMIZE\./);
 
   assert.match(PLATFORM, /document\.createElement\('input'\)/);

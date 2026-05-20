@@ -51,6 +51,23 @@ function createNameEntryKeyboardHarness(width, height, narrow) {
 }
 
 /**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function createSeedSetupLayoutHarness(width, height, narrow) {
+  const source = 'return ({\n' +
+    '  ' + extractObjectMethodSource(GAME, 'seedSetupLayout') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'seedSetupFieldHitTest') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'seedSetupHitTest') + '\n' +
+    '});';
+  return {
+    harness: new Function(source)(), // eslint-disable-line no-new-func
+    view: { W: width, H: height, narrow },
+  };
+}
+
+/**
  * @param {{cellW:number,cellH:number,gap:number,cols:number,ox:number,oy:number}} layout
  * @param {number} index
  * @param {boolean} ok
@@ -64,6 +81,19 @@ function nameEntryKeyRect(layout, index, ok = false) {
     y: layout.oy + row * (layout.cellH + layout.gap),
     w,
     h: layout.cellH,
+  };
+}
+
+/**
+ * @param {{panelX:number,btnW:number,gap:number,btnY:number,btnH:number}} layout
+ * @param {number} index
+ */
+function seedSetupButtonRect(layout, index) {
+  return {
+    x: layout.panelX + index * (layout.btnW + layout.gap),
+    y: layout.btnY,
+    w: layout.btnW,
+    h: layout.btnH,
   };
 }
 
@@ -334,6 +364,75 @@ test('name-entry virtual keyboard hit-test respects all key rectangle bounds', (
   assert.equal(harness._vkHitTest(keyOk.x + keyOk.w + 0.1, keyOk.y + 1, keyboard.oy, true), null, 'OK key right bound must reject outside taps');
   assert.equal(harness._vkHitTest(keyOk.x + 1, keyOk.y - 0.1, keyboard.oy, true), null, 'OK key top bound must reject outside taps');
   assert.equal(harness._vkHitTest(keyOk.x + 1, keyOk.y + keyOk.h + 0.1, keyboard.oy, true), null, 'OK key bottom bound must reject outside taps');
+});
+
+test('compact seed setup layout keeps field, help, actions, and footer visible on short mobile viewports', () => {
+  const { harness, view } = createSeedSetupLayoutHarness(390, 320, true);
+  const r = harness.seedSetupLayout(view);
+
+  assert.equal(r.panelX, 16, 'seed panel origin X must keep compact side gutters');
+  assert.equal(r.panelY, 35, 'seed panel origin Y must keep compact top/bottom gutters');
+  assert.equal(r.panelW, 358, 'seed panel width must fit the compact viewport');
+  assert.equal(r.panelH, 250, 'seed panel height must fit the compact viewport');
+  assert.equal(r.fieldX, 33, 'seed field origin X must align with rendered field');
+  assert.equal(r.fieldY, 113, 'seed field origin Y must lift on short compact viewports');
+  assert.equal(r.fieldW, 324, 'seed field width must preserve compact inset');
+  assert.equal(r.fieldH, 46, 'seed field height must match the rendered field');
+  assert.equal(r.btnH, 40, 'compact seed action buttons must stay finger-readable');
+  assert.equal(r.footerY, 271, 'compact seed footer baseline must remain inside the panel');
+
+  assert.ok(r.fieldY + r.fieldH + 18 <= r.helpY1, 'first help line must clear the seed field');
+  assert.ok(r.helpY1 + 14 <= r.helpY2, 'second help line must clear the first help line');
+  assert.ok(r.helpY2 + 18 <= r.btnY, 'action row must clear compact help copy');
+  assert.ok(r.btnY + r.btnH + 16 <= r.footerY, 'footer hint must clear compact action buttons');
+  assert.ok(r.footerY <= view.H - 12, 'footer hint must keep a bottom-safe margin');
+});
+
+test('ultra-short seed setup layout keeps compact action targets above the footer and onscreen', () => {
+  for (const height of [240, 280]) {
+    const { harness, view } = createSeedSetupLayoutHarness(390, height, true);
+    const r = harness.seedSetupLayout(view);
+
+    assert.equal(r.panelY, 12, 'ultra-short seed panel origin Y must keep a top gutter');
+    assert.equal(r.fieldH, 40, 'ultra-short seed field remains finger-readable');
+    assert.equal(r.btnH, 40, 'ultra-short seed action buttons remain finger-readable');
+    assert.ok(r.helpY2 + 8 <= r.btnY, 'ultra-short action row must clear compact help copy');
+    assert.ok(r.btnY + r.btnH + 10 <= r.footerY, 'ultra-short footer hint must clear action buttons');
+    assert.ok(r.footerY <= view.H - 10, 'ultra-short footer hint must keep a bottom-safe margin');
+    assert.ok(r.btnY + r.btnH <= view.H, 'ultra-short action buttons must stay onscreen');
+  }
+});
+
+test('compact seed setup field hit-test respects all field rectangle bounds', () => {
+  const { harness, view } = createSeedSetupLayoutHarness(390, 320, true);
+  const r = harness.seedSetupLayout(view);
+
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX, r.fieldY, view), true, 'field top-left bound must accept taps');
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX + r.fieldW, r.fieldY + r.fieldH, view), true, 'field bottom-right bound must accept taps');
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX - 0.1, r.fieldY + 1, view), false, 'field left bound must reject outside taps');
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX + r.fieldW + 0.1, r.fieldY + 1, view), false, 'field right bound must reject outside taps');
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX + 1, r.fieldY - 0.1, view), false, 'field top bound must reject outside taps');
+  assert.equal(harness.seedSetupFieldHitTest(r.fieldX + 1, r.fieldY + r.fieldH + 0.1, view), false, 'field bottom bound must reject outside taps');
+});
+
+test('compact seed setup action hit-test respects all button rectangle bounds', () => {
+  const { harness, view } = createSeedSetupLayoutHarness(390, 320, true);
+  const r = harness.seedSetupLayout(view);
+  const expectedX = [16, 138, 260];
+
+  for (let i = 0; i < 3; i++) {
+    const btn = seedSetupButtonRect(r, i);
+    assert.equal(btn.x, expectedX[i], 'seed action button origin X must match the shared compact layout');
+    assert.equal(btn.y, 215, 'seed action button origin Y must match the shared compact layout');
+    assert.equal(btn.w, 114, 'seed action button width must match the shared compact layout');
+    assert.equal(btn.h, 40, 'seed action button height must match the shared compact layout');
+    assert.equal(harness.seedSetupHitTest(btn.x, btn.y, view), i, 'button top-left bound must accept taps');
+    assert.equal(harness.seedSetupHitTest(btn.x + btn.w, btn.y + btn.h, view), i, 'button bottom-right bound must accept taps');
+    assert.equal(harness.seedSetupHitTest(btn.x - 0.1, btn.y + 1, view), -1, 'button left bound must reject outside taps');
+    assert.equal(harness.seedSetupHitTest(btn.x + btn.w + 0.1, btn.y + 1, view), -1, 'button right bound must reject outside taps');
+    assert.equal(harness.seedSetupHitTest(btn.x + 1, btn.y - 0.1, view), -1, 'button top bound must reject outside taps');
+    assert.equal(harness.seedSetupHitTest(btn.x + 1, btn.y + btn.h + 0.1, view), -1, 'button bottom bound must reject outside taps');
+  }
 });
 
 test('archives touch routing uses explicit row and back hit-tests', () => {

@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.172
+# NEON DUNGEON — Game Specification v6.1.173
 
 ## Vision
 
@@ -402,8 +402,11 @@ State transitions are animated (fade in/out, 400 ms).
 row. It shows the selected difficulty, an editable run-seed field, and
 `START`, `RANDOMIZE`, and `BACK` actions. Desktop users type directly into the
 seed field (Backspace edits, `R` randomizes, Enter confirms); touch users tap
-the action buttons. The chosen seed is normalized before `startGame()` and is
-preserved through the "Keep persistent unlocks?" confirmation prompt.
+the action buttons. Compact mobile layout keeps the seed field, explanatory
+copy, 40px action targets, and footer hint inside short viewports, and field
+plus action hit-tests use the same rectangles that rendering uses. The chosen
+seed is normalized before `startGame()` and is preserved through the "Keep
+persistent unlocks?" confirmation prompt.
 
 **POWERUP_CHOICE** appears when the player walks over an item. Gameplay
 freezes and two random upgrade options are presented. The player picks one
@@ -4995,6 +4998,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.173 | Compact seed-setup polish for issue #993: `SEED_SETUP` now derives title, difficulty, seed field, help copy, action buttons, label baseline, and footer positions from `seedSetupLayout()`. Short mobile viewports lift the seed field, keep help/actions/footer separated, and use 40px compact action targets; `seedSetupFieldHitTest()` and `seedSetupHitTest()` can be verified against the same layout rectangles used for rendering. Added `tests/touch.test.js` coverage for 390×320 compact geometry and all field/action hit-test bounds. |
 | v6.1.172 | Mobile high-score name entry now derives compact virtual-keyboard Y position and hint baseline from the shared keyboard layout, keeping the key grid and double-wide OK hit target visible on short mobile canvases. |
 | v6.1.171 | Mobile result-screen leaderboard layout now derives visible rows from the space above the fixed `RETURN TO MENU` button, caps compact result leaderboards to three rows, and keeps the saved player score visible/highlightable when reduced rows would otherwise hide it. |
 | v6.1.170 | Mobile Neural Archives safety: `ARCHIVES` touch input now routes through coordinate-bearing mouse clicks, visible upgrade row rectangles are the only purchase targets, a visible `BACK TO MENU` button is the only pointer/touch back target, and taps outside visible controls do nothing. |
