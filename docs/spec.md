@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.164
+# NEON DUNGEON — Game Specification v6.1.165
 
 ## Vision
 
@@ -1283,15 +1283,18 @@ On touch devices, the game uses a dual-joystick layout with virtual buttons:
 |-----------------------------------|-----------------------------|
 | Left-half touch & drag            | Move joystick (base radius 55 px) |
 | Right-half touch & drag           | Aim joystick — holding fires automatically |
-| E button (bottom-right, cyan)     | Interact (door/stairs)      |
-| F button (bottom-right, amber)    | Activate hackware (always visible; dimmed when unequipped) |
-| ⇧ button (bottom-right, amber)   | Dash (dodge)                |
-| V button (bottom-right, purple)   | Use void shard              |
-| ‖ button (top-right, magenta)     | Pause                       |
+| E button (bottom-right, cyan, caption `USE`) | Interact (door/stairs)      |
+| F button (bottom-right, amber, caption `HACK`) | Activate hackware (always visible; dimmed when unequipped) |
+| ⇧ button (bottom-right, amber, caption `DASH`) | Dash (dodge)                |
+| V button (bottom-right, purple, caption `BOMB`) | Use void shard              |
+| ‖ button (top-right, magenta, caption `PAUSE`) | Pause                       |
 
 Joystick deflection is clamped to the base radius and normalised to 0–1.
 Ghost joystick hints (12 % opacity) are drawn when inactive so the player
-knows where to touch. Active joysticks render at 35 % opacity.
+knows where to touch. Active joysticks render at 35 % opacity. Each touch
+button keeps its short glyph/key label inside the target and renders a semantic
+caption just below the button so mobile players can identify actions without
+memorising keyboard bindings.
 
 Touch events call `preventDefault()` (passive: false) to suppress browser
 scroll/zoom. The CSS rule `touch-action: none` is applied globally.
@@ -4555,6 +4558,24 @@ The handoff docs are the current architecture reference:
 
 ## Mobile & PWA
 
+### Mobile game research baseline
+
+Mobile gameplay follows four implementation constraints from current platform
+guidance:
+
+- Treat interaction latency as gameplay-critical: common taps/drags should stay
+  within the Core Web Vitals Interaction to Next Paint target of 200 ms or less
+  at the 75th percentile.
+- Use touch/pointer-sized targets and spacing: WCAG 2.2 target-size guidance
+  sets a 24×24 CSS px minimum, while NEON's virtual buttons use at least a 44 px
+  diameter effective hit target on small screens.
+- Disable browser gestures on the game surface: `index.html` applies
+  `touch-action: none`, and `src/platform.js` uses non-passive touch listeners
+  with `preventDefault()` so scrolling/zooming does not steal joystick drags.
+- Preserve safe-area and dynamic-viewport behavior: mobile layout uses
+  `viewport-fit=cover`, CSS `100dvh` with `100vh` fallback, safe-area insets,
+  `visualViewport` resize, and touch-only fullscreen prompts.
+
 ### Progressive Web App
 
 A `manifest.json` at the repository root enables Add-to-Home-Screen:
@@ -4949,6 +4970,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.165 | Mobile control clarity: gameplay touch buttons now render semantic captions (`USE`, `HACK`, `BOMB`, `DASH`, `PAUSE`) below their existing glyph/key labels, and the Mobile & PWA spec records the research-backed latency, target-size, gesture, and viewport constraints for future mobile polish. |
 | v6.1.164 | Secret-room whisper expansion: bundle 15 adds five receipt/acknowledgement whispers across sandbox, cache, firewall, uplink, and opennet, raising `src/data/whispers.js` to 76 shipped whispers while preserving biome/floor eligibility and secret-room-only selection. |
 | v6.1.163 | Dungeon engine extraction: outside-entrance normalization now reuses `NEON.dungeonTopology.findRoomBoundaryGates(map, room, isGateTile)` for room-perimeter gate discovery. `src/content/floor-generator.js` keeps the legacy room-corner exclusion, NEON-specific entrance tile semantics, and moved-entrance mutation policy while the engine helper owns generic perimeter order. |
 | v6.1.162 | Dungeon engine extraction: orphan outside-entrance cleanup now reuses `NEON.dungeonTopology.visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit)` for interior map traversal. `src/content/floor-generator.js` keeps NEON-specific room-corner, aligned-passage, and `T.FLOOR` cleanup policy while the engine helper owns the generic outside-entrance scan. |
