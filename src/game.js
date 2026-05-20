@@ -595,21 +595,38 @@ function getMainframeRecordListLayout(narrow, fy, fh, count) {
  */
 function getMessageSendLayout(narrow) {
   const panelW = Math.min(narrow ? W - 24 : 760, W - 32);
-  const panelH = Math.min(narrow ? H - 48 : 420, H - 50);
+  const tightCompact = narrow && H < 300;
+  const panelH = Math.min(narrow ? H - (tightCompact ? 16 : 48) : 420, H - (tightCompact ? 16 : 50));
   const px = (W - panelW) / 2;
   const py = (H - panelH) / 2;
-  const rowH = Math.max(narrow ? 48 : 58, Math.min(narrow ? 58 : 74, Math.floor((panelH - (narrow ? 116 : 142)) / ACT1_MESSAGE_INTENTS.length)));
-  const rowStart = py + (narrow ? 68 : 104);
+  const titleY = py + (narrow ? (tightCompact ? 24 : 28) : 38);
+  const subtitleY = py + (narrow ? (tightCompact ? 42 : 48) : 62);
+  const footerY = tightCompact ? H - 10 : py + panelH - (narrow ? 14 : 18);
+  const btnH = 36;
+  const btnGap = narrow && W < 270 ? 8 : 20;
+  const btnW = narrow
+    ? Math.max(72, Math.min(116, Math.floor((W - 24 - btnGap) / 2)))
+    : 140;
+  const buttonsW = btnW * 2 + btnGap;
+  const sendX = (W - buttonsW) / 2;
+  const backX = sendX + btnW + btnGap;
+  const btnY = tightCompact ? footerY - btnH - 8 : py + panelH - (narrow ? 58 : 64);
+  const rowTopOffset = narrow ? 0 : -30;
+  const rowTop = narrow ? subtitleY + (tightCompact ? 8 : 10) : null;
+  const rowH = tightCompact && rowTop != null
+    ? Math.max(12, Math.floor((btnY - 8 - rowTop) / ACT1_MESSAGE_INTENTS.length))
+    : Math.max(narrow ? 48 : 58, Math.min(narrow ? 58 : 74, Math.floor((panelH - (narrow ? 116 : 142)) / ACT1_MESSAGE_INTENTS.length)));
+  const rowStart = narrow && rowTop != null ? rowTop - rowTopOffset : py + 104;
   const rowX = px + (narrow ? 16 : 32);
   const rowW = panelW - (narrow ? 32 : 64);
-  const rowTopOffset = -30;
-  const rowCardH = rowH - 18;
-  const btnY = py + panelH - (narrow ? 58 : 64);
-  const btnW = narrow ? 116 : 140;
-  const btnH = 36;
+  const rowCardH = tightCompact ? Math.min(34, Math.max(8, rowH - 6)) : rowH - 18;
+  const intentTitleOffset = narrow ? Math.min(rowCardH - 4, Math.max(4, Math.floor(rowCardH * 0.42))) : -8;
+  const intentLabelOffset = narrow ? Math.min(rowCardH - 6, intentTitleOffset + 12) : 10;
+  const showIntentLabels = !tightCompact || rowCardH >= 30;
   return {
     panelW, panelH, px, py, rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH,
-    btnY, btnW, btnH, sendX: W / 2 - btnW - 10, backX: W / 2 + 10
+    intentTitleOffset, intentLabelOffset, showIntentLabels,
+    btnY, btnW, btnH, titleY, subtitleY, footerY, sendX, backX
   };
 }
 
@@ -8349,7 +8366,7 @@ const game = {
     if (!mf) return;
     const narrow = layout.compact;
     const selectedId = normalizeAct1MessageIntentId(mf.selectedIntentId);
-    const { panelW, panelH, px, py, rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH, btnY, btnW, btnH, sendX, backX } = getMessageSendLayout(narrow);
+    const { panelW, panelH, px, py, rowH, rowStart, rowX, rowW, rowTopOffset, rowCardH, intentTitleOffset, intentLabelOffset, showIntentLabels, btnY, btnW, btnH, titleY, subtitleY, footerY, sendX, backX } = getMessageSendLayout(narrow);
 
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.86)';
@@ -8367,10 +8384,10 @@ const game = {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ff66cc';
     ctx.font = `bold ${narrow ? 15 : 22}px monospace`;
-    ctx.fillText('✉ COMPOSE OUTBOUND MESSAGE', W / 2, py + (narrow ? 28 : 38));
+    ctx.fillText('✉ COMPOSE OUTBOUND MESSAGE', W / 2, titleY);
     ctx.fillStyle = '#aa7799';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText('Destination: Elena side-channel relay · Choose intent, then SEND', W / 2, py + (narrow ? 48 : 62));
+    ctx.fillText('Destination: Elena side-channel relay · Choose intent, then SEND', W / 2, subtitleY);
 
     ctx.textAlign = 'left';
     for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {
@@ -8385,10 +8402,12 @@ const game = {
       NEON.draw.roundRectStroke(ctx, rowX, y + rowTopOffset, rowW, rowCardH, 6);
       ctx.fillStyle = selected ? '#ffe0f5' : '#b688aa';
       ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
-      ctx.fillText((i + 1) + '. ' + intent.title, rowX + 12, y - 8);
-      ctx.fillStyle = selected ? '#ffb8e6' : '#8a6680';
-      ctx.font = `${narrow ? 10 : 12}px monospace`;
-      ctx.fillText(intent.label, rowX + 12, y + 10);
+      ctx.fillText((i + 1) + '. ' + intent.title, rowX + 12, y + intentTitleOffset);
+      if (showIntentLabels) {
+        ctx.fillStyle = selected ? '#ffb8e6' : '#8a6680';
+        ctx.font = `${narrow ? 10 : 12}px monospace`;
+        ctx.fillText(intent.label, rowX + 12, y + intentLabelOffset);
+      }
     }
 
     ctx.textAlign = 'center';
@@ -8410,7 +8429,7 @@ const game = {
 
     ctx.fillStyle = '#775577';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText(isTouchDevice() ? 'Tap intent · Tap SEND or BACK' : '1/2/3 or arrows choose · Enter SEND · Esc BACK', W / 2, py + panelH - (narrow ? 14 : 18));
+    ctx.fillText(isTouchDevice() ? 'Tap intent · Tap SEND or BACK' : '1/2/3 or arrows choose · Enter SEND · Esc BACK', W / 2, footerY);
     ctx.restore();
   },
 
