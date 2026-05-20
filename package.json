@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "check:agent-startup": "node scripts/agent-startup-summary.js",
     "check:promotion-audit": "node scripts/check-promotion-audit.js",
+    "align:develop": "node scripts/align-develop-to-main.js",
     "merge:pr": "node scripts/merge-pr-guarded.js",
     "check:engine": "node scripts/check-engine-purity.js",
     "check:agent-continuity": "node scripts/agent-continuity-check.js --require-operator-guard",
