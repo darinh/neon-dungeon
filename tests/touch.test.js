@@ -123,6 +123,20 @@ function createPowerupChoiceLayoutHarness(width, height, narrow) {
  * @param {number} height
  * @param {boolean} narrow
  */
+function createShoppingLayoutHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `SHOPPING fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
+  const source = extractFunctionSource(GAME, 'getShoppingLayout') + '\n' +
+    'return getShoppingLayout(narrow);';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
 function createWeaponSwapLayoutHarness(width, height, narrow) {
   const runtimeCompact = computeLayout(width, height, 0).compact;
   assert.equal(narrow, runtimeCompact,
@@ -193,6 +207,41 @@ function powerupChoiceSkipRect(layout) {
     w: layout.skipW,
     h: layout.skipH,
     textY: layout.skipY + layout.skipTextY,
+  };
+}
+
+/**
+ * @param {{ horizontal:boolean,cardX:number,cardY:number,cardW:number,cardH:number,cardGap:number,textMaxW:number,descMaxW?:number,numberX?:number,nameX?:number,priceX?:number,nameY:number,descY:number,priceY:number,showDesc:boolean,showSecondary:boolean }} layout
+ * @param {number} index
+ */
+function shoppingCardRect(layout, index) {
+  const x = layout.horizontal ? layout.cardX + index * (layout.cardW + layout.cardGap) : layout.cardX;
+  const y = layout.horizontal ? layout.cardY : layout.cardY + index * (layout.cardH + layout.cardGap);
+  return {
+    x,
+    y,
+    w: layout.cardW,
+    h: layout.cardH,
+    textMaxW: layout.textMaxW,
+    descMaxW: layout.descMaxW || layout.textMaxW,
+    nameX: layout.horizontal ? x + layout.cardW / 2 : layout.nameX || x,
+    priceX: layout.horizontal ? x + layout.cardW / 2 : layout.priceX || x + layout.cardW,
+    nameY: y + layout.nameY,
+    descY: y + layout.descY,
+    priceY: y + layout.priceY,
+    showDesc: layout.showDesc,
+    showSecondary: layout.showSecondary,
+  };
+}
+
+/** @param {{ leaveX:number,leaveY:number,leaveW:number,leaveH:number,leaveTextY:number }} layout */
+function shoppingLeaveRect(layout) {
+  return {
+    x: layout.leaveX,
+    y: layout.leaveY,
+    w: layout.leaveW,
+    h: layout.leaveH,
+    textY: layout.leaveY + layout.leaveTextY,
   };
 }
 
@@ -772,6 +821,102 @@ test('powerup-choice hit targets and text use the shared compact layout', () => 
     'POWERUP_CHOICE option names must be constrained to the compact card text budget');
   assert.match(GAME, /if \(box\.showHint\) \{[\s\S]*ctx\.fillText\(fitCanvasText\('Tap a card or Skip',\s*box\.titleMaxW\),\s*W\/2,\s*box\.hintY\)/,
     'POWERUP_CHOICE footer hint must be hidden when the layout cannot reserve enough text ascent');
+});
+
+test('shopping compact fixture guard rejects impossible compact dimensions', () => {
+  assert.throws(
+    () => createShoppingLayoutHarness(390, 320, true),
+    /must match runtime compact=false/,
+    'compact SHOPPING tests must use dimensions that can enter the runtime compact layout',
+  );
+});
+
+test('shopping desktop layout preserves established card and leave geometry', () => {
+  const r = createShoppingLayoutHarness(800, 600, false);
+  const first = shoppingCardRect(r, 0);
+  const third = shoppingCardRect(r, 2);
+  const leave = shoppingLeaveRect(r);
+
+  assert.equal(r.horizontal, true, 'desktop shopping layout must keep horizontal cards');
+  assert.equal(r.titleY, 60, 'desktop shop title baseline must stay stable');
+  assert.equal(Math.round(r.creditsY), 102, 'desktop shop credits baseline must stay stable');
+  assert.equal(first.x, 84, 'desktop first card origin X must stay stable');
+  assert.equal(first.y, 132, 'desktop card origin Y must stay stable');
+  assert.equal(first.w, 200, 'desktop card width must stay stable');
+  assert.equal(first.h, 200, 'desktop card height must stay stable');
+  assert.equal(third.x, 516, 'desktop third card origin X must stay stable');
+  assert.equal(leave.x, 320, 'desktop leave origin X must stay stable');
+  assert.equal(leave.y, 352, 'desktop leave origin Y must stay stable');
+  assert.equal(leave.w, 160, 'desktop leave width must stay stable');
+  assert.equal(leave.h, 40, 'desktop leave height must stay stable');
+  assert.ok(first.y + first.h + 20 <= leave.y, 'desktop cards must remain separated from LEAVE');
+});
+
+test('compact shopping layout stacks items, leave, and hint without overlap', () => {
+  for (const { width, height } of [
+    { width: 199, height: 200 },
+    { width: 229, height: 286 },
+    { width: 240, height: 280 },
+    { width: 240, height: 299 },
+    { width: 240, height: 300 },
+    { width: 240, height: 320 },
+    { width: 320, height: 390 },
+  ]) {
+    const r = createShoppingLayoutHarness(width, height, true);
+    const first = shoppingCardRect(r, 0);
+    const second = shoppingCardRect(r, 1);
+    const third = shoppingCardRect(r, 2);
+    const leave = shoppingLeaveRect(r);
+
+    assert.equal(r.horizontal, false, `compact shop must use stacked rows at ${width}x${height}`);
+    assert.ok(r.titleY >= 18, `title must keep a top-safe baseline at ${width}x${height}`);
+    assert.ok(r.titleY + 8 <= r.creditsY, `credits must clear title at ${width}x${height}`);
+    assert.ok(r.creditsY + 8 <= first.y, `first shop row must clear credits at ${width}x${height}`);
+    assert.ok(first.x >= 0 && first.x + first.w <= width, `first shop row must stay onscreen at ${width}x${height}`);
+    assert.ok(first.w >= 170 || width < 220, `compact shop rows must keep a readable width at ${width}x${height}`);
+    assert.ok(first.h >= 30, `compact shop rows must keep a minimum hit height at ${width}x${height}`);
+    assert.ok(first.y + first.h + 4 <= second.y, `first and second shop rows must not overlap at ${width}x${height}`);
+    assert.ok(second.y + second.h + 4 <= third.y, `second and third shop rows must not overlap at ${width}x${height}`);
+    assert.ok(third.y + third.h + 8 <= leave.y, `third shop row must clear LEAVE at ${width}x${height}`);
+    assert.ok(leave.x >= 0 && leave.x + leave.w <= width, `LEAVE button must stay onscreen at ${width}x${height}`);
+    assert.ok(leave.textY > leave.y && leave.textY < leave.y + leave.h, `LEAVE label must stay inside button at ${width}x${height}`);
+    assert.ok(first.textMaxW > 20 && first.nameX + first.textMaxW < first.priceX,
+      `item name budget must stay left of price at ${width}x${height}`);
+    assert.ok(first.priceX <= first.x + first.w - 8, `price anchor must stay inside row at ${width}x${height}`);
+    assert.ok(first.nameY > first.y && first.nameY < first.y + first.h, `item name baseline must stay inside row at ${width}x${height}`);
+    assert.ok(first.priceY > first.y && first.priceY < first.y + first.h, `price baseline must stay inside row at ${width}x${height}`);
+    if (first.showDesc) {
+      assert.ok(first.descY > first.nameY && first.descY < first.y + first.h, `description baseline must stay inside row at ${width}x${height}`);
+      assert.ok(first.descMaxW <= first.w - 44, `description text budget must stay inside row at ${width}x${height}`);
+    } else {
+      assert.equal(height < 240, true, `description may only hide on ultra-compact shop rows at ${width}x${height}`);
+    }
+    if (r.showHint) {
+      assert.ok(leave.y + leave.h + 9 <= r.hintY, `LEAVE must clear rendered footer hint text at ${width}x${height}`);
+      assert.ok(r.hintY <= height - 10, `footer hint must keep a bottom-safe margin at ${width}x${height}`);
+    } else {
+      assert.equal(height < 240, true, `footer hint may only hide on ultra-compact shop layouts at ${width}x${height}`);
+    }
+  }
+});
+
+test('shopping hit targets and text use the shared compact layout', () => {
+  assert.match(GAME, /function getShoppingLayout\(narrow\)/,
+    'SHOPPING must expose one shared layout helper for rendering and hit-testing');
+  assert.match(GAME, /const\s+box\s*=\s*getShoppingLayout\(layout\.compact\)[\s\S]*mx >= cx && mx <= cx \+ box\.cardW && my >= cy && my <= cy \+ box\.cardH/,
+    'SHOPPING card activation must use the shared card rectangle bounds');
+  assert.match(GAME, /mx >= box\.leaveX && mx <= box\.leaveX \+ box\.leaveW && my >= box\.leaveY && my <= box\.leaveY \+ box\.leaveH/,
+    'SHOPPING leave activation must use the shared leave rectangle bounds');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\('VENDOR TERMINAL',\s*box\.titleMaxW\),\s*W \/ 2,\s*box\.titleY\)/,
+    'SHOPPING title must use the shared title text budget and baseline');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\(item\.name,\s*box\.textMaxW\),\s*box\.nameX,\s*cardY \+ box\.nameY\)/,
+    'SHOPPING compact item names must be constrained to the row text budget');
+  assert.match(GAME, /const\s+descText\s*=\s*box\.horizontal\s*\?\s*item\.desc/,
+    'SHOPPING desktop cards must preserve item descriptions instead of replacing them with compact secondary text');
+  assert.doesNotMatch(GAME, /ctx\.fillText\('NO CRED'/,
+    'SHOPPING compact unaffordable text must not diverge from the NOT ENOUGH contract');
+  assert.match(GAME, /if \(box\.showHint\) \{[\s\S]*ctx\.fillText\(fitCanvasText\('Tap to buy · Tap Leave to exit',\s*box\.titleMaxW\),\s*W \/ 2,\s*box\.hintY\)/,
+    'SHOPPING footer hint must be hidden when the layout cannot reserve enough text ascent');
 });
 
 test('weapon-swap compact fixture guard rejects impossible compact dimensions', () => {
