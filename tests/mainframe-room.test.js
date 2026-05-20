@@ -226,6 +226,14 @@ test('final floor generation builds a safe mainframe room with all interaction p
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,
     'mainframe interactables must be reasserted after boss expansion and entrance discovery');
 
+  const repairPostRelocationLockReachability = extractFunctionBlock(CONTENT, 'repairPostRelocationLockReachability');
+  assert.match(repairPostRelocationLockReachability, /replaceLockTilesForColours\(solvedReach\.missingColours,\s*T\.DOOR\)/,
+    'post-relocation repair must reuse the shared missing-colour lock replacement helper');
+  assert.doesNotMatch(repairPostRelocationLockReachability, /for\s*\(let\s+y\s*=\s*0;\s*y\s*<\s*MAP_H;\s*y\+\+\)[\s\S]*map\[y\]\[x\]\s*=\s*T\.DOOR/,
+    'post-relocation repair should not keep an inline map-wide lock replacement scan');
+  assert.match(CONTENT, /replaceLockTilesForColours\(solvedReach\.missingColours,\s*T\.FLOOR\)/,
+    'all-rooms reachability repair must reuse the shared missing-colour lock replacement helper');
+
   assert.match(CONTENT, /if\s*\(r\s*===\s*spawnRoom\s*\|\|\s*r\s*===\s*bossRoom\s*\|\|\s*r\.roomType\)\s*continue;/,
     'roomType skip must keep mainframe rooms free of map hazards');
   assert.match(RENDER, /if\s*\(rt\s*===\s*'mainframe'\)\s*continue;/,
@@ -330,6 +338,33 @@ test('outside entrance normalization preserves non-corner boundary order while s
     { fromX: 2, fromY: 5, toX: 2, toY: 5, tile: 5 },
     { fromX: 6, fromY: 5, toX: 6, toY: 5, tile: 5 },
   ]);
+});
+
+test('missing-colour lock replacement helper mutates every matching lock tile only', () => {
+  const lockTileForColourSource = extractFunctionSource(CONTENT, 'lockTileForColour');
+  const replaceMapTileSource = extractFunctionSource(CONTENT, 'replaceMapTile');
+  const replaceLockTilesForColoursSource = extractFunctionSource(CONTENT, 'replaceLockTilesForColours');
+  const T = { LOCKED_R: 7, LOCKED_B: 8, LOCKED_G: 9, DOOR: 5, FLOOR: 2 };
+  const map = [
+    new Uint8Array([T.LOCKED_R, T.LOCKED_B, T.FLOOR, T.LOCKED_G]),
+    new Uint8Array([T.LOCKED_R, T.FLOOR, T.LOCKED_G, T.LOCKED_B]),
+  ];
+  // eslint-disable-next-line no-new-func -- executes project-owned helper sources with stubbed closure dependencies.
+  const runReplacement = new Function(
+    'map',
+    'T',
+    'MAP_H',
+    'MAP_W',
+    lockTileForColourSource + '\n' +
+      replaceMapTileSource + '\n' +
+      replaceLockTilesForColoursSource + '\n' +
+      'replaceLockTilesForColours(["red", "gold", "unknown"], T.DOOR); return map;'
+  );
+
+  const result = runReplacement(map, T, 2, 4);
+
+  assert.deepEqual(Array.from(result[0]), [T.DOOR, T.LOCKED_B, T.FLOOR, T.DOOR]);
+  assert.deepEqual(Array.from(result[1]), [T.DOOR, T.FLOOR, T.DOOR, T.LOCKED_B]);
 });
 
 test('mainframe room is visible in world render and minimap POIs', () => {
