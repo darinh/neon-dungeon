@@ -210,6 +210,15 @@ tile.
 ### Mobile coupling
 Touch hit-tests in `src/platform.js:345` duplicate menu layout constants from `src/game.js renderMenu()`. When changing menu font/gap sizes, update BOTH. See stored memory `menu touch coupling`.
 
+### Input routing
+When adding or modifying how an input event type (`MouseLeft`, touch
+coordinates, keyboard keys, joystick/aim state) is handled in any game state,
+audit all existing consumers of that event type before coding or requesting
+review. This is mandatory for red-risk changes touching `src/platform.js`,
+`src/game.js` input dispatch, or state-specific mouse/touch hit-tests; record the
+affected update/render/hit-test consumers and add or update a guard test for each
+shared path that could regress.
+
 ### Code review policy
 **Every commit that changes code must have at least 1 adversarial code-review subagent before pushing.** No exceptions for Small tasks. 🔴 files (game.js, entities.js, content.js, platform.js, sw.js, save.js, anything auth/crypto/payments/concurrency) escalate to 3 reviewers. The red file names are literal top-level/runtime files; `src/content/floor-generator.js` and other `src/content/*` submodules are Medium by default unless the specific change touches a red-risk domain such as data deletion, schema migration, auth/crypto/payments, or concurrency.
 

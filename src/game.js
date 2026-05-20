@@ -4771,6 +4771,29 @@ const game = {
     }
   },
 
+  getPauseOptionRects() {
+    const narrow = layout.compact;
+    const w = Math.max(160, Math.min(W - 40, narrow ? 270 : 340));
+    const h = narrow ? 34 : 40;
+    const gap = narrow ? 6 : 10;
+    const x = (W - w) / 2;
+    const y0 = narrow ? 232 : 278;
+    return [0, 1, 2].map(i => ({ x, y: y0 + i * (h + gap), w, h }));
+  },
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   */
+  pauseOptionAt(x, y) {
+    const rects = this.getPauseOptionRects();
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return i;
+    }
+    return -1;
+  },
+
   updatePaused() {
     if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
     else if (jp('KeyS')) { audio.menuSelect(); this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
@@ -4778,9 +4801,19 @@ const game = {
     // Keyboard up/down selection + Enter
     const pauseActions = _GG_PAUSE_ACTION_STATES;
     if (this._pauseSel == null) this._pauseSel = -1;
+    if (jp('MouseLeft')) {
+      const hit = this.pauseOptionAt(mouse.x, mouse.y);
+      if (hit >= 0) {
+        this._pauseSel = hit;
+        audio.menuSelect();
+        if (hit === 1) { this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
+        else this.setState(pauseActions[hit]);
+        return;
+      }
+    }
     if (jp(ALT_KEYS.up) || jp(km('up')))   { this._pauseSel = this._pauseSel <= 0 ? 2 : this._pauseSel - 1; audio.menuSelect(); }
     if (jp(ALT_KEYS.down) || jp(km('down'))) { this._pauseSel = this._pauseSel >= 2 ? 0 : this._pauseSel + 1; audio.menuSelect(); }
-    if (this._pauseSel >= 0 && (jp('Enter') || jp('MouseLeft'))) {
+    if (this._pauseSel >= 0 && jp('Enter')) {
       audio.menuSelect();
       if (this._pauseSel === 1) { this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
       else this.setState(pauseActions[this._pauseSel]);
@@ -4788,14 +4821,7 @@ const game = {
     }
     // Mouse hover detection (highlight nearest option)
     if (!isTouchDevice()) {
-      const narrow = layout.compact;
-      const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
-      let best = -1, bestD = 15;
-      for (let i = 0; i < 3; i++) {
-        const d = Math.abs(mouse.y - (optY[i] ?? 0));
-        if (d < bestD) { bestD = d; best = i; }
-      }
-      this._pauseSel = best;
+      this._pauseSel = this.pauseOptionAt(mouse.x, mouse.y);
     }
   },
 
@@ -7229,28 +7255,46 @@ const game = {
       ctx.shadowBlur = 0;
     }
     const fs = narrow ? 14 : 18;
-    const optY = [narrow ? 255 : 295, narrow ? 280 : 320, narrow ? 305 : 345];
+    const rects = this.getPauseOptionRects();
     if (isTouch) {
-      ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
-      ctx.fillText('TAP TOP — Resume',W/2, optY[0] ?? 0);
-      ctx.fillText('TAP MIDDLE — Settings',W/2, optY[1] ?? 0);
-      ctx.fillText('TAP BOTTOM — Quit to Menu',W/2, optY[2] ?? 0);
+      const labels = ['RESUME RUN', 'SETTINGS', 'QUIT TO MENU'];
+      const colours = ['#00f5ff', '#ffb700', '#ff4466'];
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        if (!r) continue;
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.strokeStyle = colours[i] || '#aaaacc';
+        ctx.lineWidth = 2;
+        NEON.draw.roundRectFillStroke(ctx, r.x, r.y, r.w, r.h, 8);
+        ctx.fillStyle = colours[i] || '#aaaacc';
+        ctx.font = `bold ${fs}px monospace`;
+        ctx.fillText(labels[i] || '', W/2, r.y + r.h / 2 + (narrow ? 5 : 6));
+      }
+      ctx.lineWidth = 1;
       ctx.fillStyle='#557799'; ctx.font=`${narrow ? 10 : 12}px monospace`;
-      const helpY = narrow ? 340 : 388;
+      const lastRect = rects[2];
+      const helpY = lastRect ? lastRect.y + lastRect.h + (narrow ? 18 : 28) : (narrow ? 340 : 388);
       ctx.fillText('LEFT DRAG move  |  RIGHT DRAG aim + fire', W/2, helpY);
       ctx.fillText('USE interact  |  DASH dodge  |  BOMB void shard', W/2, helpY + (narrow ? 15 : 18));
       ctx.fillText('HACK is dim until a module is installed', W/2, helpY + (narrow ? 30 : 36));
     } else {
       const labels = ['ESC — Resume', 'S   — Settings', 'Q   — Quit to Menu'];
       const colours = ['#00f5ff', '#ffb700', '#ff4466'];
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        if (!r) continue;
         const hovered = sel === i;
+        ctx.fillStyle = hovered ? 'rgba(0,245,255,0.08)' : 'rgba(0,0,0,0.30)';
+        ctx.strokeStyle = hovered ? (colours[i] || '#aaaacc') : 'rgba(170,170,204,0.35)';
+        ctx.lineWidth = hovered ? 2 : 1;
+        NEON.draw.roundRectFillStroke(ctx, r.x, r.y, r.w, r.h, 8);
         ctx.fillStyle = hovered ? (colours[i] || '#aaaacc') : '#aaaacc';
         ctx.shadowBlur = hovered ? 10 : 0;
         ctx.shadowColor = colours[i] || '#aaaacc';
         ctx.font = `${hovered ? 'bold ' : ''}${fs}px monospace`;
-        ctx.fillText(labels[i] || '', W/2, optY[i] ?? 0);
+        ctx.fillText(labels[i] || '', W/2, r.y + r.h / 2 + (narrow ? 5 : 6));
       }
+      ctx.lineWidth = 1;
       ctx.shadowBlur = 0;
     }
     ctx.restore();

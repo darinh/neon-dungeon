@@ -10,6 +10,7 @@ const path = require('node:path');
 const touchEngine = require('../engine/touch.js');
 const { toCanvas, hitBtn, resetTouch } = touchEngine;
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
+const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
 const GAME_STATES_SRC = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game-states.js'), 'utf8');
 
 // ---------- toCanvas ----------
@@ -164,6 +165,35 @@ test('touch routing sends hit-tested modal taps through coordinates instead of a
     'READING/CHEATS touch input must be coordinate-routed so only hit-tested controls can dismiss or toggle');
   assert.match(PLATFORM, /else\s*\{\s*justPressed\.add\('Enter'\);\s*justPressed\.add\('MouseLeft'\);\s*\}/,
     'generic fallback remains for states that intentionally treat touch as confirm');
+});
+
+test('paused touch routing uses explicit button hit-tests instead of screen thirds', () => {
+  assert.match(PLATFORM, /_G\.state === _PG_STATES\.PAUSED\) \{\s*routeTouchAsMouseClick\(cx, cy\);\s*continue;\s*\}/,
+    'pause taps must route coordinates so game.js can hit-test the visible buttons');
+  assert.doesNotMatch(PLATFORM, /cy\s*<\s*H\s*\*\s*0\.38[\s\S]*cy\s*<\s*H\s*\*\s*0\.62[\s\S]*KeyQ/,
+    'pause touch handling must not keep invisible top/middle/bottom quit zones');
+  assert.match(GAME, /getPauseOptionRects\(\) \{[\s\S]*return \[0, 1, 2\]\.map\(i => \(\{ x, y: y0 \+ i \* \(h \+ gap\), w, h \}\)\);[\s\S]*\},/,
+    'pause menu must expose one shared rectangle layout for rendering and hit-testing');
+  assert.match(GAME, /const\s+w\s*=\s*Math\.max\(160,\s*Math\.min\(W - 40,\s*narrow \? 270 : 340\)\)/,
+    'pause touch rectangles must pin their width from canvas width');
+  assert.match(GAME, /const\s+h\s*=\s*narrow \? 34 : 40/,
+    'pause touch rectangles must pin their height');
+  assert.match(GAME, /const\s+x\s*=\s*\(W - w\) \/ 2/,
+    'pause touch rectangles must pin their centered origin X');
+  assert.match(GAME, /const\s+y0\s*=\s*narrow \? 232 : 278/,
+    'pause touch rectangles must pin their first-row origin Y');
+  assert.match(GAME, /pauseOptionAt\(x, y\) \{[\s\S]*x >= r\.x && x <= r\.x \+ r\.w && y >= r\.y && y <= r\.y \+ r\.h[\s\S]*return i;/,
+    'pause menu hit-test must require taps inside every edge of an explicit button rectangle');
+  assert.match(GAME, /if \(jp\('MouseLeft'\)\) \{[\s\S]*const hit = this\.pauseOptionAt\(mouse\.x, mouse\.y\);[\s\S]*if \(hit >= 0\)/,
+    'pause mouse/touch activation must derive the selected action from hit-tested coordinates');
+  assert.match(GAME, /if \(!isTouchDevice\(\)\) \{\s*this\._pauseSel = this\.pauseOptionAt\(mouse\.x, mouse\.y\);\s*\}/,
+    'desktop hover must use the same rectangles as click activation');
+  assert.match(GAME, /const rects = this\.getPauseOptionRects\(\);[\s\S]*const labels = \['ESC — Resume', 'S   — Settings', 'Q   — Quit to Menu'\]/,
+    'desktop pause labels must render against the same button rectangles as click activation');
+  assert.match(GAME, /const labels = \['RESUME RUN', 'SETTINGS', 'QUIT TO MENU'\]/,
+    'touch pause UI must draw explicit action labels instead of positional instructions');
+  assert.doesNotMatch(GAME, /TAP TOP|TAP MIDDLE|TAP BOTTOM/,
+    'pause overlay must not tell players to tap broad invisible screen regions');
 });
 
 test('mobile minimap touch expansion hitbox scales with settings.minimapScale', () => {
