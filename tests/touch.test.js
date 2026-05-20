@@ -36,6 +36,27 @@ function extractObjectMethodSource(src, name) {
 }
 
 /**
+ * @param {string} src
+ * @param {string} name
+ */
+function extractFunctionSource(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  assert.ok(start >= 0, name + ' function must exist');
+  const braceStart = src.indexOf('{', start);
+  assert.ok(braceStart > start, name + ' function must have a body');
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  assert.fail(name + ' function body must be balanced');
+}
+
+/**
  * @param {number} width
  * @param {number} height
  * @param {boolean} narrow
@@ -68,6 +89,18 @@ function createSeedSetupLayoutHarness(width, height, narrow) {
 }
 
 /**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function createMessageSendLayoutHarness(width, height, narrow) {
+  const source = "const ACT1_MESSAGE_INTENTS = { length: 3 };\n" +
+    extractFunctionSource(GAME, 'getMessageSendLayout') + '\n' +
+    'return getMessageSendLayout(narrow);';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
  * @param {{cellW:number,cellH:number,gap:number,cols:number,ox:number,oy:number}} layout
  * @param {number} index
  * @param {boolean} ok
@@ -81,6 +114,22 @@ function nameEntryKeyRect(layout, index, ok = false) {
     y: layout.oy + row * (layout.cellH + layout.gap),
     w,
     h: layout.cellH,
+  };
+}
+
+/**
+ * @param {{ rowX:number, rowStart:number, rowH:number, rowTopOffset:number, rowW:number, rowCardH:number, intentTitleOffset:number, intentLabelOffset:number }} layout
+ * @param {number} index
+ */
+function messageIntentRect(layout, index) {
+  const baselineY = layout.rowStart + index * layout.rowH;
+  return {
+    x: layout.rowX,
+    y: baselineY + layout.rowTopOffset,
+    w: layout.rowW,
+    h: layout.rowCardH,
+    titleY: baselineY + layout.intentTitleOffset,
+    labelY: baselineY + layout.intentLabelOffset,
   };
 }
 
@@ -433,6 +482,113 @@ test('compact seed setup action hit-test respects all button rectangle bounds', 
     assert.equal(harness.seedSetupHitTest(btn.x + 1, btn.y - 0.1, view), -1, 'button top bound must reject outside taps');
     assert.equal(harness.seedSetupHitTest(btn.x + 1, btn.y + btn.h + 0.1, view), -1, 'button bottom bound must reject outside taps');
   }
+});
+
+test('compact message-send layout keeps intent cards, actions, and footer separated', () => {
+  const r = createMessageSendLayoutHarness(390, 320, true);
+  const first = messageIntentRect(r, 0);
+  const third = messageIntentRect(r, 2);
+
+  assert.equal(r.panelW, 358, 'message-send panel width must keep compact side gutters');
+  assert.equal(r.panelH, 270, 'message-send panel height must preserve existing 320px compact behavior');
+  assert.equal(r.py, 25, 'message-send panel origin Y must preserve existing 320px compact behavior');
+  assert.equal(r.titleY, 53, 'message-send title baseline must come from the shared layout');
+  assert.equal(r.subtitleY, 73, 'message-send subtitle baseline must come from the shared layout');
+  assert.equal(r.rowStart, 83, 'message-send first intent card must clear compact subtitle copy');
+  assert.equal(r.rowH, 51, 'message-send compact row spacing must preserve existing 320px behavior');
+  assert.equal(first.x, 32, 'first intent card origin X must match the shared layout');
+  assert.equal(first.y, 83, 'first intent card origin Y must clear the subtitle');
+  assert.equal(first.w, 326, 'intent card width must match the shared layout');
+  assert.equal(first.h, 33, 'intent card height must match the shared layout');
+  assert.equal(third.y + third.h, 218, 'third intent card bottom must stay above actions');
+  assert.ok(r.subtitleY + 8 <= first.y, 'first compact intent card must clear the subtitle');
+  assert.equal(r.btnY, 237, 'action row origin Y must match the shared compact layout');
+  assert.ok(third.y + third.h + 8 <= r.btnY, 'third intent card must clear the SEND/BACK row');
+  assert.ok(r.btnY + r.btnH + 8 <= r.footerY, 'action row must clear the compact footer');
+});
+
+test('message-send compact action buttons fit narrow portrait widths above the tight threshold', () => {
+  for (const { width, height } of [
+    { width: 240, height: 320 },
+    { width: 229, height: 320 },
+  ]) {
+    const r = createMessageSendLayoutHarness(width, height, true);
+
+    assert.ok(r.btnW <= 116, 'compact SEND/BACK buttons must not exceed the standard width');
+    assert.ok(r.btnW >= 72, 'compact SEND/BACK buttons must keep a minimum readable width');
+    assert.ok(r.subtitleY + 8 <= messageIntentRect(r, 0).y, 'first compact intent card must clear the subtitle above the tight threshold');
+    assert.ok(r.sendX >= 0, 'compact SEND button must stay onscreen on narrow portrait widths');
+    assert.ok(r.backX + r.btnW <= width, 'compact BACK button must stay onscreen on narrow portrait widths');
+    assert.ok(r.sendX + r.btnW < r.backX, 'compact SEND/BACK buttons must keep a horizontal gap');
+    assert.ok(r.btnY + r.btnH + 8 <= r.footerY, 'compact action row must still clear the footer above the tight threshold');
+    assert.equal(height >= 290, true, 'test case must exercise the non-tight compact branch');
+  }
+});
+
+test('message-send compact boundary heights keep third intent above actions', () => {
+  for (const { width, height } of [
+    { width: 240, height: 289 },
+    { width: 240, height: 290 },
+    { width: 240, height: 295 },
+    { width: 240, height: 299 },
+    { width: 240, height: 300 },
+    { width: 229, height: 290 },
+    { width: 229, height: 299 },
+  ]) {
+    const r = createMessageSendLayoutHarness(width, height, true);
+    const first = messageIntentRect(r, 0);
+    const second = messageIntentRect(r, 1);
+    const third = messageIntentRect(r, 2);
+
+    assert.ok(r.subtitleY + 8 <= first.y, `first intent must clear subtitle at ${width}x${height}`);
+    assert.ok(first.y + first.h + 6 <= second.y, `first and second intents must not overlap at ${width}x${height}`);
+    assert.ok(second.y + second.h + 6 <= third.y, `second and third intents must not overlap at ${width}x${height}`);
+    assert.ok(third.y + third.h + 8 <= r.btnY, `third intent must clear SEND/BACK at ${width}x${height}`);
+    assert.ok(r.btnY + r.btnH + 8 <= r.footerY, `actions must clear footer at ${width}x${height}`);
+    assert.ok(r.sendX >= 0 && r.backX + r.btnW <= width, `actions must stay onscreen at ${width}x${height}`);
+  }
+});
+
+test('ultra-short message-send layout prevents intent/action overlap on compact mobile', () => {
+  for (const { width, height } of [
+    { width: 199, height: 200 },
+    { width: 219, height: 220 },
+    { width: 240, height: 280 },
+    { width: 229, height: 286 },
+  ]) {
+    const r = createMessageSendLayoutHarness(width, height, true);
+    const first = messageIntentRect(r, 0);
+    const second = messageIntentRect(r, 1);
+    const third = messageIntentRect(r, 2);
+
+    assert.equal(r.py, 8, 'ultra-short message-send panel origin Y must keep a top gutter');
+    assert.equal(r.titleY, 32, 'ultra-short message-send title baseline must stay visible');
+    assert.equal(r.subtitleY, 50, 'ultra-short message-send subtitle baseline must stay visible');
+    assert.ok(r.subtitleY + 8 <= first.y, 'first intent card must clear the subtitle');
+    assert.ok(first.y + first.h + 6 <= second.y, 'first and second intent cards must not overlap');
+    assert.ok(second.y + second.h + 6 <= third.y, 'second and third intent cards must not overlap');
+    assert.ok(third.y + third.h + 8 <= r.btnY, 'third intent card must clear the SEND/BACK row');
+    assert.equal(r.btnH, 36, 'ultra-short SEND/BACK buttons must remain finger-readable');
+    assert.ok(r.btnY + r.btnH + 8 <= r.footerY, 'ultra-short action row must clear the footer hint');
+    assert.ok(r.footerY <= height - 10, 'ultra-short footer hint must keep a bottom-safe margin');
+    assert.ok(r.sendX >= 0 && r.backX + r.btnW <= width, 'ultra-short SEND/BACK buttons must stay onscreen');
+    assert.ok(r.sendX + r.btnW < r.backX, 'ultra-short SEND/BACK buttons must keep a horizontal gap');
+  }
+});
+
+test('message-send button hit targets respect all rectangle bounds', () => {
+  const r = createMessageSendLayoutHarness(240, 280, true);
+
+  assert.equal(r.sendX, 12, 'SEND button origin X must match the shared ultra-short layout');
+  assert.equal(r.backX, 124, 'BACK button origin X must match the shared ultra-short layout');
+  assert.equal(r.btnY, 226, 'SEND/BACK button origin Y must match the shared ultra-short layout');
+  assert.equal(r.btnW, 104, 'SEND/BACK button width must fit a real compact portrait width');
+  assert.equal(r.btnH, 36, 'SEND/BACK button height must match the shared ultra-short layout');
+  assert.ok(r.sendX < r.backX, 'SEND and BACK button order must remain stable');
+  assert.ok(r.sendX + r.btnW < r.backX, 'SEND and BACK buttons must keep a horizontal gap');
+  assert.ok(r.sendX >= 0 && r.backX + r.btnW <= 240, 'SEND/BACK buttons must stay onscreen');
+  assert.match(GAME, /if \(mouse\.y >= btnY && mouse\.y <= btnY \+ btnH\) \{[\s\S]*mouse\.x >= sendX && mouse\.x <= sendX \+ btnW[\s\S]*mouse\.x >= backX && mouse\.x <= backX \+ btnW/,
+    'MESSAGE_SEND activation must use the same SEND/BACK rectangle bounds returned by the layout helper');
 });
 
 test('archives touch routing uses explicit row and back hit-tests', () => {

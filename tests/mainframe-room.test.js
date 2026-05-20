@@ -557,8 +557,8 @@ test('message-send finale has three constrained intents, explicit controls, and 
     'BACK should return to the ready reader without ending the run');
   assert.match(GAME, /confirmMainframeMessageSend\(\)[\s\S]*this\._lastEnding\s*=\s*ACT1_MESSAGE_ENDING_ID[\s\S]*this\._lastAct1MessageIntent\s*=\s*intentId[\s\S]*this\.setState\('MAINFRAME_READER'\)/,
     'SEND should record the selected intent and route through the receipt panel');
-  assert.match(GAME, /const\s+rowTopOffset\s*=\s*-30/);
-  assert.match(GAME, /const\s+rowCardH\s*=\s*rowH\s*-\s*18/);
+  assert.match(GAME, /const\s+rowTopOffset\s*=\s*narrow\s*\?\s*0\s*:\s*-30/);
+  assert.match(GAME, /const\s+rowCardH\s*=\s*tightCompact\s*\?\s*Math\.min\(34,\s*Math\.max\(8,\s*rowH - 6\)\)\s*:\s*rowH - 18/);
   assert.match(GAME, /mouse\.y\s*>=\s*y\s*\+\s*rowTopOffset\s*&&\s*mouse\.y\s*<=\s*y\s*\+\s*rowTopOffset\s*\+\s*rowCardH/);
   assert.match(GAME, /NEON\.draw\.roundRect\(ctx,\s*rowX,\s*y\s*\+\s*rowTopOffset,\s*rowW,\s*rowCardH/,
     'message intent touch hitboxes must match the rendered card bounds');
