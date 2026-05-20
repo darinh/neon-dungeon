@@ -545,9 +545,14 @@ Collect only facts that affect future behavior:
    remains, the completion action is to start it after attaching this
    retrospective, not to stop or call `task_complete`.
 10. **Identify recurrence-prevention changes.** For every repeated incident,
-    tool/version mismatch, context-recovery failure, or command with ambiguous
-    side effects, name the new guard or explicitly reject adding one with
-    evidence. Vague "do better next time" statements are not sufficient.
+     tool/version mismatch, context-recovery failure, or command with ambiguous
+     side effects, name the new guard or explicitly reject adding one with
+     evidence. Vague "do better next time" statements are not sufficient.
+    For UI/help/spec copy that describes when a control appears, is enabled, is
+    dimmed, or performs an action, cite the implementation branch or predicate
+    that makes the claim true and add/update a test when the claim is likely to
+    regress. For `docs/spec.md` version bumps, run the pinned spec-version test
+    (or record why the full gate is the accepted guard) before review.
 11. **Ask two other LLMs for adversarial critique.** Do this only after code
     reviewers are done and their findings are resolved. Give each retrospective
     reviewer the same pasted evidence and the draft retrospective; do not require
