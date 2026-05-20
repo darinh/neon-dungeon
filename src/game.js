@@ -530,6 +530,104 @@ function getPowerupChoiceLayout(narrow) {
 }
 
 /** @param {boolean} narrow */
+function getShoppingLayout(narrow) {
+  if (!narrow) {
+    const cardW = Math.min(200, W * 0.28);
+    const cardGap = 16;
+    const totalW = cardW * 3 + cardGap * 2;
+    const cardX = (W - totalW) / 2;
+    const cardY = H * 0.22;
+    const cardH = Math.min(200, H * 0.38);
+    const leaveW = 160;
+    const leaveH = 40;
+    const leaveY = cardY + cardH + 20;
+    return {
+      horizontal: true,
+      titleY: H * 0.1,
+      titleMaxW: W - 40,
+      creditsY: H * 0.17,
+      cardX,
+      cardY,
+      cardW,
+      cardH,
+      cardGap,
+      numberX: cardX,
+      numberY: 22,
+      iconTop: 32,
+      iconSize: 20,
+      nameX: cardX,
+      nameY: 74,
+      descY: 92,
+      secondaryY: 108,
+      priceX: cardX,
+      priceY: cardH - 18,
+      notEnoughY: cardH - 6,
+      textMaxW: Math.max(20, cardW - 16),
+      descMaxW: Math.max(20, cardW - 16),
+      leaveX: (W - leaveW) / 2,
+      leaveY,
+      leaveW,
+      leaveH,
+      leaveTextY: 26,
+      hintY: leaveY + leaveH + 18,
+      showHint: true,
+      showDesc: true,
+      showSecondary: true
+    };
+  }
+  const ultraCompact = H < 240;
+  const tightCompact = H <= 300;
+  const sideGutter = tightCompact ? 12 : 16;
+  const cardGap = tightCompact ? 4 : 6;
+  const titleY = ultraCompact ? 22 : tightCompact ? 28 : 36;
+  const creditsY = ultraCompact ? 40 : tightCompact ? 48 : 60;
+  const cardY = ultraCompact ? 50 : tightCompact ? 60 : 76;
+  const leaveW = Math.max(112, Math.min(W - 32, 160));
+  const leaveH = ultraCompact ? 32 : 36;
+  const showHint = !ultraCompact;
+  const hintY = H - (tightCompact ? 10 : 16);
+  const leaveY = showHint ? hintY - leaveH - (tightCompact ? 9 : 12) : H - leaveH - 4;
+  const cardH = Math.max(30, Math.min(tightCompact ? 42 : 54, Math.floor((leaveY - cardY - cardGap * 2 - 8) / 3)));
+  const cardW = W - sideGutter * 2;
+  const cardX = sideGutter;
+  const priceX = cardX + cardW - 10;
+  const nameX = cardX + 34;
+  return {
+    horizontal: false,
+    titleY,
+    titleMaxW: W - 24,
+    creditsY,
+    cardX,
+    cardY,
+    cardW,
+    cardH,
+    cardGap,
+    numberX: cardX + 14,
+    numberY: 0,
+    iconTop: 0,
+    iconSize: 0,
+    nameX,
+    priceX,
+    nameY: cardH < 38 ? 20 : 16,
+    descY: 31,
+    secondaryY: 31,
+    priceY: Math.floor(cardH / 2) + 5,
+    notEnoughY: cardH - 6,
+    textMaxW: Math.max(24, priceX - nameX - 52),
+    descMaxW: Math.max(24, cardW - 44),
+    leaveX: (W - leaveW) / 2,
+    leaveY,
+    leaveW,
+    leaveH,
+    leaveTextY: ultraCompact ? 21 : 24,
+    hintY,
+    showHint,
+    showDesc: cardH >= 38,
+    showSecondary: cardH >= 48
+  };
+}
+
+/** @param {boolean} narrow */
 function getSystemMessageLayout(narrow) {
   const panelW = Math.min(narrow ? W - 24 : 680, W - 32);
   const panelH = Math.min(narrow ? H - 48 : 340, H - 48);
@@ -5490,6 +5588,8 @@ const game = {
     if (jp('Escape') || jp('KeyQ')) { audio.menuSelect(); this.setState('PLAYING'); return; }
     if (jp(ALT_KEYS.left) || jp(km('left')))  this.shopSelected = Math.max(0, this.shopSelected - 1);
     if (jp(ALT_KEYS.right)|| jp(km('right')))  this.shopSelected = Math.min(2, this.shopSelected + 1);
+    if (layout.compact && (jp(ALT_KEYS.up) || jp(km('up')))) this.shopSelected = Math.max(0, this.shopSelected - 1);
+    if (layout.compact && (jp(ALT_KEYS.down) || jp(km('down')))) this.shopSelected = Math.min(2, this.shopSelected + 1);
 
     // Direct buy by number
     for (let i = 0; i < 3; i++) {
@@ -5506,25 +5606,18 @@ const game = {
 
     // Mouse/touch click on cards or leave button
     if (jp('MouseLeft')) {
-      const cw = Math.min(200, W * 0.28);
-      const gap = 16;
-      const totalW = cw * 3 + gap * 2;
-      const startX = (W - totalW) / 2;
-      const cardY = H * 0.22;
-      const cardH = Math.min(200, H * 0.38);
+      const box = getShoppingLayout(layout.compact);
       const mx = mouse.x, my = mouse.y;
 
       for (let i = 0; i < 3; i++) {
-        const cx = startX + i * (cw + gap);
-        if (!items[i].sold && mx >= cx && mx <= cx + cw && my >= cardY && my <= cardY + cardH) {
+        const cx = box.horizontal ? box.cardX + i * (box.cardW + box.cardGap) : box.cardX;
+        const cy = box.horizontal ? box.cardY : box.cardY + i * (box.cardH + box.cardGap);
+        if (!items[i].sold && mx >= cx && mx <= cx + box.cardW && my >= cy && my <= cy + box.cardH) {
           this.tryShopBuy(i);
           return;
         }
       }
-      // Leave button
-      const leaveY = cardY + cardH + 20;
-      const leaveW = 160, leaveH = 40;
-      if (mx >= (W - leaveW) / 2 && mx <= (W + leaveW) / 2 && my >= leaveY && my <= leaveY + leaveH) {
+      if (mx >= box.leaveX && mx <= box.leaveX + box.leaveW && my >= box.leaveY && my <= box.leaveY + box.leaveH) {
         audio.menuSelect();
         this.setState('PLAYING');
         return;
@@ -7962,6 +8055,7 @@ const game = {
     const narrow = layout.compact;
     const isTouch = isTouchDevice();
     const p = this.player;
+    const box = getShoppingLayout(narrow);
     ctx.save();
 
     // Dark overlay
@@ -7973,25 +8067,22 @@ const game = {
     ctx.shadowBlur = 25; ctx.shadowColor = '#39ff14';
     ctx.fillStyle = '#39ff14';
     ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
-    ctx.fillText('VENDOR TERMINAL', W / 2, H * 0.1);
+    ctx.fillText(fitCanvasText('VENDOR TERMINAL', box.titleMaxW), W / 2, box.titleY);
     ctx.shadowBlur = 0;
 
     // Credits display
     ctx.fillStyle = '#ffcc00';
     ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
-    ctx.fillText('◈ ' + p.credits + ' CREDITS', W / 2, H * 0.17);
+    ctx.fillText(fitCanvasText('◈ ' + p.credits + ' CREDITS', box.titleMaxW), W / 2, box.creditsY);
 
     // Cards
-    const cw = Math.min(200, W * 0.28);
-    const gap = 16;
-    const totalW = cw * 3 + gap * 2;
-    const startX = (W - totalW) / 2;
-    const cardY = H * 0.22;
-    const cardH = Math.min(200, H * 0.38);
+    const cw = box.cardW;
+    const cardH = box.cardH;
 
     for (let i = 0; i < 3; i++) {
       const item = items[i];
-      const cx = startX + i * (cw + gap);
+      const cx = box.horizontal ? box.cardX + i * (cw + box.cardGap) : box.cardX;
+      const cardY = box.horizontal ? box.cardY : box.cardY + i * (cardH + box.cardGap);
       const sel = this.shopSelected === i;
       const affordable = p.credits >= item.price;
       const curLvl = item.persistent && p ? (p.upgrades[item.id] || 0) : 0;
@@ -8004,7 +8095,7 @@ const game = {
         NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.fillStyle = '#333344';
         ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
-        ctx.fillText('SOLD', cx + cw / 2, cardY + cardH / 2 + 6);
+        ctx.fillText('SOLD', cx + cw / 2, cardY + cardH / 2 + (narrow ? 5 : 6));
         continue;
       }
 
@@ -8025,71 +8116,110 @@ const game = {
       // Number badge
       ctx.fillStyle = item.colour;
       ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
-      ctx.fillText((i + 1) + '', cx + cw / 2, cardY + 22);
+      if (box.horizontal) {
+        ctx.textAlign = 'center';
+        ctx.fillText((i + 1) + '', cx + cw / 2, cardY + box.numberY);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.fillText((i + 1) + '', box.numberX, cardY + box.nameY);
+      }
 
       // Icon
-      ctx.save();
-      ctx.shadowBlur = 12; ctx.shadowColor = item.colour;
-      ctx.fillStyle = item.colour;
-      ctx.fillRect(cx + cw / 2 - 10, cardY + 32, 20, 20);
-      ctx.restore();
+      if (box.horizontal) {
+        ctx.save();
+        ctx.shadowBlur = 12; ctx.shadowColor = item.colour;
+        ctx.fillStyle = item.colour;
+        ctx.fillRect(cx + cw / 2 - box.iconSize / 2, cardY + box.iconTop, box.iconSize, box.iconSize);
+        ctx.restore();
+      }
 
       // Name
       ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
-      ctx.fillText(item.name, cx + cw / 2, cardY + 74);
+      if (box.horizontal) {
+        ctx.textAlign = 'center';
+        ctx.fillText(fitCanvasText(item.name, box.textMaxW), cx + cw / 2, cardY + box.nameY);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.fillText(fitCanvasText(item.name, box.textMaxW), box.nameX, cardY + box.nameY);
+      }
 
       // Description
-      ctx.fillStyle = '#aaaacc';
-      ctx.font = `${narrow ? 11 : 11}px monospace`;
-      ctx.fillText(item.desc, cx + cw / 2, cardY + 92);
+      if (box.showDesc) {
+        ctx.fillStyle = '#aaaacc';
+        ctx.font = `${narrow ? 10 : 11}px monospace`;
+        const descText = box.horizontal ? item.desc
+          : item.persistent && item.levelDesc
+            ? 'Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl)
+            : item.isHackware ? 'HACKWARE [F]' : item.desc;
+        if (box.horizontal) {
+          ctx.textAlign = 'center';
+          ctx.fillText(fitCanvasText(descText, box.textMaxW), cx + cw / 2, cardY + box.descY);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillText(fitCanvasText(descText, box.descMaxW), box.nameX, cardY + box.descY);
+        }
+      }
 
       // Level info for persistent upgrades
-      if (item.persistent && item.levelDesc) {
+      if (box.horizontal && item.persistent && item.levelDesc) {
         ctx.fillStyle = '#888899';
         ctx.font = `${narrow ? 11 : 11}px monospace`;
-        ctx.fillText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), cx + cw / 2, cardY + 108);
+        ctx.fillText(fitCanvasText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), box.textMaxW), cx + cw / 2, cardY + box.secondaryY);
       }
 
       // Hackware badge
-      if (item.isHackware) {
+      if (box.horizontal && item.isHackware) {
         ctx.fillStyle = item.colour;
         ctx.font = `bold ${narrow ? 8 : 10}px monospace`;
-        ctx.fillText('⚙ HACKWARE [F]', cx + cw / 2, cardY + 108);
+        ctx.fillText(fitCanvasText('⚙ HACKWARE [F]', box.textMaxW), cx + cw / 2, cardY + box.secondaryY);
       }
 
       // Price
       const priceCol = affordable ? '#ffcc00' : '#ff3333';
       ctx.fillStyle = priceCol;
       ctx.font = `bold ${narrow ? 12 : 15}px monospace`;
-      ctx.fillText('◈ ' + item.price, cx + cw / 2, cardY + cardH - 18);
+      if (box.horizontal) {
+        ctx.textAlign = 'center';
+        ctx.fillText('◈ ' + item.price, cx + cw / 2, cardY + box.priceY);
+      } else {
+        ctx.textAlign = 'right';
+        ctx.fillText('◈ ' + item.price, box.priceX, cardY + box.priceY);
+      }
 
-      if (!affordable) {
+      if (!affordable && (box.horizontal || box.showSecondary)) {
         ctx.fillStyle = '#ff3333';
         ctx.font = `${narrow ? 8 : 10}px monospace`;
-        ctx.fillText('NOT ENOUGH', cx + cw / 2, cardY + cardH - 6);
+        if (box.horizontal) {
+          ctx.textAlign = 'center';
+          ctx.fillText('NOT ENOUGH', cx + cw / 2, cardY + box.notEnoughY);
+        } else {
+          ctx.textAlign = 'right';
+          ctx.fillText(fitCanvasText('NOT ENOUGH', box.textMaxW), box.priceX, cardY + box.notEnoughY);
+        }
       }
     }
 
     // Leave button
-    const leaveY = cardY + cardH + 20;
-    const leaveW = 160, leaveH = 40;
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
-    NEON.draw.roundRectFillStroke(ctx, (W - leaveW) / 2, leaveY, leaveW, leaveH, 6);
+    NEON.draw.roundRectFillStroke(ctx, box.leaveX, box.leaveY, box.leaveW, box.leaveH, 6);
 
     ctx.fillStyle = '#666688';
     ctx.font = `${narrow ? 13 : 15}px monospace`;
-    ctx.fillText('LEAVE  [Esc]', W / 2, leaveY + 26);
+    ctx.textAlign = 'center';
+    ctx.fillText('LEAVE  [Esc]', W / 2, box.leaveY + box.leaveTextY);
 
     // Hint
-    ctx.fillStyle = '#444466';
-    ctx.font = `${narrow ? 11 : 11}px monospace`;
-    if (isTouch) {
-      ctx.fillText('Tap to buy · Tap Leave to exit', W / 2, leaveY + leaveH + 18);
-    } else {
-      ctx.fillText('1/2/3 buy  ·  ←/→ + Enter  ·  Esc leave', W / 2, leaveY + leaveH + 18);
+    if (box.showHint) {
+      ctx.fillStyle = '#444466';
+      ctx.font = `${narrow ? 9 : 11}px monospace`;
+      if (isTouch) {
+        ctx.fillText(fitCanvasText('Tap to buy · Tap Leave to exit', box.titleMaxW), W / 2, box.hintY);
+      } else {
+        ctx.fillText(fitCanvasText('1/2/3 buy  ·  ←/→ + Enter  ·  Esc leave', box.titleMaxW), W / 2, box.hintY);
+      }
     }
 
     ctx.restore();
