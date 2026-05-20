@@ -77,8 +77,8 @@
       const startRow = vis[sy];
       if (!startRow) return vis;
       startRow[sx] = 1;
-      while (q.length) {
-        const { x, y } = /** @type {{x:number,y:number}} */ (q.shift());
+      for (let qi = 0; qi < q.length; qi++) {
+        const { x, y } = /** @type {{x:number,y:number}} */ (q[qi]);
         for (const dir of /** @type {const} */ ([[0, -1], [0, 1], [-1, 0], [1, 0]])) {
           const nx = x + dir[0], ny = y + dir[1];
           const row = vis[ny];
