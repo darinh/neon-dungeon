@@ -7917,6 +7917,7 @@ const game = {
     ctx.fillStyle = '#6688aa';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     ctx.fillText(active.event + ' · ' + active.id, W / 2, topY + (narrow ? 18 : 24));
+    ctx.fillText(isTouchDevice() ? 'Read run prompt; tap ACK to archive.' : 'Read run prompt; press X or ACK to archive.', W / 2, topY + (narrow ? 32 : 40));
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#d8f8ff';
@@ -7955,11 +7956,11 @@ const game = {
     NEON.draw.roundRectFillStroke(ctx, ackX, ackY, ackW, ackH, 6);
     ctx.fillStyle = this.systemMessageAckTimer > 0 ? '#6688aa' : '#d8f8ff';
     ctx.font = `bold ${narrow ? 13 : 15}px monospace`;
-    ctx.fillText('ACK  [X]', W / 2, ackY + 23);
+    ctx.fillText(isTouchDevice() ? 'TAP ACK' : 'ACK  [X]', W / 2, ackY + 23);
 
     ctx.fillStyle = '#6688aa';
     ctx.font = `${narrow ? 9 : 11}px monospace`;
-    ctx.fillText('Clicks outside this button do nothing.', W / 2, py + panelH - 16);
+    ctx.fillText(isTouchDevice() ? 'ACK continues. Saved in THE GAP this run.' : 'X/ACK continues. Saved in THE GAP this run.', W / 2, py + panelH - 16);
     ctx.restore();
   },
 

@@ -84,6 +84,11 @@ Run and record these before verification or review:
    adversarial reviewers required and used. If a path resembles a red-risk file
    but is intentionally treated differently, cite the exact instruction text or
    choose the safer higher-review path; do not leave applicability implicit.
+   Before dispatching code-review subagents, serialize the review-target capture:
+   run the required `git add`/staging command first, then confirm
+   `git diff --staged` reflects the intended target in a separate dependent
+   step. Do not parallelize restaging with a staged-diff read or reviewer launch;
+   a parallel read can capture stale staged content from the prior state.
 3. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using

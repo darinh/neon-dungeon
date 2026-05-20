@@ -345,6 +345,12 @@ test('system message modal delivery opens before play and arms explicit ACK only
     'only the dedicated X key or ACK button should mark a system prompt read');
   assert.doesNotMatch(extractObjectMethodSource(GAME, 'updateSystemMessage'), /jp\('Enter'\)|jp\(km\('interact'\)\)|jp\(km\('shoot'\)\)|jp\('Escape'\)/,
     'Enter, Interact, fire, and Escape must not dismiss system prompts');
+  assert.match(extractObjectMethodSource(GAME, 'renderSystemMessage'), /isTouchDevice\(\)\s*\?\s*'TAP ACK'\s*:\s*'ACK  \[X\]'/,
+    'touch system prompts should label the same ACK button without keyboard-only X syntax');
+  assert.match(extractObjectMethodSource(GAME, 'renderSystemMessage'), /Read run prompt; tap ACK to archive\./,
+    'system prompts should explain the modal purpose before asking mobile players to acknowledge');
+  assert.match(extractObjectMethodSource(GAME, 'renderSystemMessage'), /ACK continues\. Saved in THE GAP this run\./,
+    'system prompts should tell players ACK is deliberate and recoverable in the run archive');
   assert.match(PLATFORM, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)/,
     'touch input must route coordinates to the modal instead of using global any-tap confirm');
 });
