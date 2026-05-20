@@ -72,6 +72,28 @@ test('dungeon topology engine exposes cardinal room graph and boundary helpers',
   assert.equal(topology.outsideFaceForBoundaryTile(a, 2, 2), null);
 });
 
+test('dungeon topology room BFS computes chained distances through cycles without revisiting rooms', () => {
+  const rooms = [
+    { id: 'a' },
+    { id: 'b' },
+    { id: 'c' },
+    { id: 'd' },
+  ];
+  const edges = new Set(['a,b', 'b,a', 'b,c', 'c,b', 'c,a']);
+  const calls = [];
+
+  const dist = topology.bfsRooms(rooms, rooms[0], (left, right) => {
+    calls.push(left.id + '>' + right.id);
+    return edges.has(left.id + ',' + right.id);
+  });
+
+  assert.equal(dist.get(rooms[0]), 0);
+  assert.equal(dist.get(rooms[1]), 1);
+  assert.equal(dist.get(rooms[2]), 2);
+  assert.equal(dist.has(rooms[3]), false);
+  assert.equal(calls.includes('c>a'), false, 'visited rooms must not be reconsidered as candidates');
+});
+
 test('dungeon topology engine builds clipped room membership grids', () => {
   const grid = topology.createRoomMembershipGrid(6, 5, [
     { x: 1, y: 1, w: 3, h: 2 },
@@ -835,6 +857,30 @@ test('dungeon topology preferred-spawn search handles empty inputs and bounded r
     isPassable: (tile) => tile === FLOOR,
     searchRadius: 12,
   }), null);
+});
+
+test('dungeon topology preferred-spawn search excludes rooms just beyond radius', () => {
+  const WALL = 1, FLOOR = 2;
+  const map = topology.createMap(5, 3, WALL);
+  const rooms = [{ id: 'too-far', x: 3, y: 1, w: 1, h: 1 }];
+  map[1][3] = FLOOR;
+  /** @type {number[]} */
+  const predicateInputs = [];
+
+  assert.equal(
+    topology.resolvePreferredSpawnRoom({
+      map,
+      rooms,
+      preferred: { x: 1, y: 1 },
+      isPassable(tile) {
+        predicateInputs.push(tile);
+        return tile === FLOOR;
+      },
+      searchRadius: 1,
+    }),
+    null
+  );
+  assert.equal(predicateInputs.includes(FLOOR), false, 'tile at distance 2 must be excluded by radius before passability check');
 });
 
 test('dungeon topology interior grid BFS path preserves cardinal tie-breaks', () => {
