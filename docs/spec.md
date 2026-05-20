@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.171
+# NEON DUNGEON — Game Specification v6.1.172
 
 ## Vision
 
@@ -411,7 +411,10 @@ or skips, then returns to PLAYING.
 
 **NAME_ENTRY** appears when the player's score qualifies for the top-10
 leaderboard. It replaces the browser `prompt()` with an in-game arcade-style
-name entry screen featuring a virtual keyboard (touch and desktop). If the
+name entry screen featuring a virtual keyboard (touch and desktop). On compact
+mobile viewports, the virtual keyboard derives its Y origin and help-text
+baseline from one shared layout so all keys, including the double-wide OK key,
+remain visible and hit-tested from the same rectangles on short screens. If the
 score does not qualify, the game skips directly to GAME_OVER or VICTORY.
 
 **Run lifecycle framing:** Run start UI now labels fresh starts as booted test
@@ -4344,8 +4347,11 @@ High-score table stored in `localStorage` as JSON, top 10, with player name.
 When a run ends (death or victory), if the score qualifies for the top 10,
 the game enters the **NAME_ENTRY** state — an arcade-style name input with a
 virtual keyboard (A–Z, 0–9, DEL, OK) that works on both desktop (physical
-keyboard) and touch (tap keys on canvas). Names are capped at 12 characters,
-uppercased. If the score doesn't qualify, it is saved as "ANON".
+keyboard) and touch (tap keys on canvas). Compact mobile layout lifts the
+keyboard on short canvases so the key grid and hint remain visible, and
+hit-testing uses the same key rectangles that rendering uses. Names are capped
+at 12 characters, uppercased. If the score doesn't qualify, it is saved as
+"ANON".
 
 The leaderboard is displayed on three screens:
 - **MENU** — top 3 (compact) or 5 (landscape)
@@ -4989,6 +4995,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.172 | Mobile high-score name entry now derives compact virtual-keyboard Y position and hint baseline from the shared keyboard layout, keeping the key grid and double-wide OK hit target visible on short mobile canvases. |
 | v6.1.171 | Mobile result-screen leaderboard layout now derives visible rows from the space above the fixed `RETURN TO MENU` button, caps compact result leaderboards to three rows, and keeps the saved player score visible/highlightable when reduced rows would otherwise hide it. |
 | v6.1.170 | Mobile Neural Archives safety: `ARCHIVES` touch input now routes through coordinate-bearing mouse clicks, visible upgrade row rectangles are the only purchase targets, a visible `BACK TO MENU` button is the only pointer/touch back target, and taps outside visible controls do nothing. |
 | v6.1.169 | Mobile result-screen safety: GAME_OVER and VICTORY now route touch coordinates through explicit `RETURN TO MENU` button hit-tests instead of treating any tap as a menu return, while preserving Enter as the keyboard shortcut. |

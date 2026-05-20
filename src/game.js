@@ -5762,8 +5762,15 @@ const game = {
     const cellW=narrow?28:36, cellH=narrow?28:36, gap=narrow?3:4;
     const rows=Math.ceil((this._vkChars.length+2)/cols); // +2 for DEL/OK
     const gridW=cols*(cellW+gap)-gap;
+    const gridH=rows*(cellH+gap)-gap;
     const ox=(W-gridW)/2;
-    return {cellW,cellH,gap,cols,rows,ox,gridW};
+    const preferredOy=narrow?280:340;
+    const minOy=narrow?176:260;
+    const hintOffset=gridH+(narrow?9:24);
+    const bottomMargin=narrow?12:20;
+    const oy=Math.max(minOy,Math.min(preferredOy,H-hintOffset-bottomMargin));
+    const hintY=oy+hintOffset;
+    return {cellW,cellH,gap,cols,rows,ox,oy,gridW,gridH,hintY};
   },
 
   /**
@@ -5802,7 +5809,7 @@ const game = {
     // Touch/click virtual keyboard
     if (nameEntryTap) {
       const narrow=layout.compact;
-      const oy=narrow?280:340;
+      const {oy}=this._vkLayout(narrow);
       const hit=this._vkHitTest(nameEntryTap[0],nameEntryTap[1],oy,narrow);
       if (hit==='←') ne.name=ne.name.slice(0,-1);
       else if (hit==='OK') { if (ne.name.length===0) ne.name='ANON'; jp('Enter'); justPressed.add('Enter'); }
@@ -5811,7 +5818,7 @@ const game = {
     // Mouse click on virtual keyboard (desktop)
     if (jp('MouseLeft') && !nameEntryTap) {
       const narrow=layout.compact;
-      const oy=narrow?280:340;
+      const {oy}=this._vkLayout(narrow);
       const hit=this._vkHitTest(mouse.x,mouse.y,oy,narrow);
       if (hit==='←') ne.name=ne.name.slice(0,-1);
       else if (hit==='OK') { if (ne.name.length===0) ne.name='ANON'; justPressed.add('Enter'); }
@@ -5861,8 +5868,7 @@ const game = {
     ctx.shadowBlur=0;
 
     // Virtual keyboard
-    const oy=narrow?280:340;
-    const {cellW,cellH,gap,cols,ox}=this._vkLayout(narrow);
+    const {cellW,cellH,gap,cols,ox,oy,hintY}=this._vkLayout(narrow);
     const allKeys=[...this._vkChars,'←','OK'];
     const fontSize=narrow?12:14;
 
@@ -5906,9 +5912,9 @@ const game = {
     ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
     if (isTouch) {
-      ctx.fillText('TAP KEYS TO ENTER NAME  •  TAP OK TO CONFIRM',W/2,oy+(narrow?130:155));
+      ctx.fillText('TAP KEYS TO ENTER NAME  •  TAP OK TO CONFIRM',W/2,hintY);
     } else {
-      ctx.fillText('TYPE YOUR NAME  •  PRESS ENTER TO CONFIRM',W/2,oy+(narrow?130:155));
+      ctx.fillText('TYPE YOUR NAME  •  PRESS ENTER TO CONFIRM',W/2,hintY);
     }
 
     ctx.restore();
