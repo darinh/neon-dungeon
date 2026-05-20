@@ -805,6 +805,29 @@ function generateFloor(floorNum, opts) {
     return t === T.LOCKED_R ? 'red' : t === T.LOCKED_B ? 'blue' : t === T.LOCKED_G ? 'gold' : null;
   }
 
+  /** @param {'red'|'blue'|'gold'|string} colour */
+  function lockTileForColour(colour) {
+    return colour === 'red' ? T.LOCKED_R : colour === 'blue' ? T.LOCKED_B : colour === 'gold' ? T.LOCKED_G : null;
+  }
+
+  /** @param {any} tile @param {any} replacement */
+  function replaceMapTile(tile, replacement) {
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        if (map[y][x] === tile) map[y][x] = replacement;
+      }
+    }
+  }
+
+  /** @param {string[]} colours @param {any} replacement */
+  function replaceLockTilesForColours(colours, replacement) {
+    for (const colour of colours) {
+      const lockTile = lockTileForColour(colour);
+      if (lockTile == null) continue;
+      replaceMapTile(lockTile, replacement);
+    }
+  }
+
   /** @param {any} t */
   function keyPlacementOpenTile(t) {
     // Key-placement reach keeps cracked walls blocked; crates remain open as in the legacy BFS.
@@ -838,17 +861,9 @@ function generateFloor(floorNum, opts) {
   }
 
   function repairPostRelocationLockReachability() {
-    const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
     const solvedReach = solveProgressionReachability(rooms);
     if (solvedReach.unreachableRooms.length === 0) return;
-    for (const colour of solvedReach.missingColours) {
-      const lockTile = lockTileForColour[/** @type {'red'|'blue'|'gold'} */ (colour)];
-      for (let y = 0; y < MAP_H; y++) {
-        for (let x = 0; x < MAP_W; x++) {
-          if (map[y][x] === lockTile) map[y][x] = T.DOOR;
-        }
-      }
-    }
+    replaceLockTilesForColours(solvedReach.missingColours, T.DOOR);
   }
 
   function repairReachabilityAfterDoorCornerSealing() {
@@ -1279,15 +1294,7 @@ function generateFloor(floorNum, opts) {
       // This includes colours with no key item placed at all (the
       // lockPriority/keyRoom empty-fallback edge case in the lock-placement
       // loop above).
-      const lockTileForColour = { red: T.LOCKED_R, blue: T.LOCKED_B, gold: T.LOCKED_G };
-      for (const colour of solvedReach.missingColours) {
-        const lt = lockTileForColour[/** @type {'red'|'blue'|'gold'} */ (colour)];
-        for (let y = 0; y < MAP_H; y++) {
-          for (let x = 0; x < MAP_W; x++) {
-            if (map[y][x] === lt) map[y][x] = T.FLOOR;
-          }
-        }
-      }
+      replaceLockTilesForColours(solvedReach.missingColours, T.FLOOR);
       // After downgrading, recompute reach (no longer gated by missing keys).
       reach = computeReach(new Set(['red', 'blue', 'gold']));
     }
