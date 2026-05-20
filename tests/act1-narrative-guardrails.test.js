@@ -114,8 +114,10 @@ test('system prompts keep explicit acknowledgement as the only dismissal path', 
     'system prompt dismissal must stay bound to X or ACK button only');
   assert.doesNotMatch(updateSystemMessage, /jp\('Escape'\)|jp\('Enter'\)|jp\(km\('interact'\)\)|jp\(km\('shoot'\)\)/,
     'generic escape/enter/interact/fire inputs must not dismiss system prompts');
-  assert.match(renderSystemMessage, /ACK\s+\[X\]/,
+  assert.match(renderSystemMessage, /isTouchDevice\(\)\s*\?\s*'TAP ACK'\s*:\s*'ACK\s+\[X\]'/,
     'modal must present an explicit ACK affordance');
+  assert.match(renderSystemMessage, /Saved in THE GAP this run/,
+    'system prompt modal must clarify that acknowledged prompts are recoverable during the run');
   assert.match(touchRouting, /TOUCH_ROUTE_AS_CLICK_STATES\.has\(_G\.state\)[\s\S]*justPressed\.add\('MouseLeft'\)[\s\S]*continue/,
     'touch routing must send modal taps to SYSTEM_MESSAGE instead of gameplay fire controls');
 });
