@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.176
+# NEON DUNGEON — Game Specification v6.1.177
 
 ## Vision
 
@@ -3190,7 +3190,15 @@ tiles. `audio.vendorOpen()` plays an ascending three-tone chime on entry.
   Escape/Q to leave.
 - **Touch:** tap a card to buy, tap LEAVE to exit. Touch input is routed via
   mouse coordinates (same pattern as `POWERUP_CHOICE`).
-- Items that cost more than the player's credits show "NOT ENOUGH" in red.
+- **Compact mobile:** the shop derives title, credits, item rows/cards, LEAVE,
+  footer hint, and item text budgets from one shared layout. Compact portrait
+  viewports stack the three item rows vertically so purchase targets and LEAVE
+  stay onscreen and hit-tested from the same rectangles used for rendering;
+  ultra-compact layouts hide the optional footer hint rather than allowing it to
+  overlap LEAVE.
+- Items that cost more than the player's credits show "NOT ENOUGH" in red when
+  the active layout has room for the secondary warning line; ultra-compact rows
+  still mark the price itself red when the warning line is hidden.
 - Sold items display a greyed "SOLD" card. If all three items are sold, the
   shop auto-closes after a brief 400 ms delay.
 - `audio.purchase()` plays a coin-drop bleep on successful buy.
@@ -5002,6 +5010,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.177 | Compact vendor-shop polish for issue #993: `SHOPPING` now derives title, credit balance, item card/row, LEAVE, footer-hint, and item text-budget geometry from `getShoppingLayout()`. Short compact mobile viewports stack the three purchasable rows vertically so item targets and LEAVE stay onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same item and LEAVE rectangles used for rendering, while compact item names/descriptions and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, item/LEAVE/hint separation, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.176 | Compact powerup-choice polish for issue #993: `POWERUP_CHOICE` now derives title, upgrade-card, SKIP, footer-hint, and card text-budget geometry from `getPowerupChoiceLayout()`. Short compact mobile viewports keep both upgrade cards and the SKIP target onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same card and SKIP rectangles used for rendering, while option names and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, card/skip/hint separation, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.175 | Compact weapon-swap polish for issue #993: `WEAPON_SWAP` now derives title, weapon-summary, affix, replacement-slot, SKIP, and footer-hint baselines from `getWeaponSwapLayout()`. Short compact mobile viewports use tighter panel gutters and shared `rowCardH` geometry so the three replacement slot targets cannot overlap each other or the SKIP target; ultra-compact layouts hide the footer hint when there is not enough ascent space, and compact rows hide the ACTIVE side label and fit long cache/row weapon names, stats, and affixes to layout text budgets. Hit-testing consumes the same slot and SKIP rectangles used for rendering. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, boundary heights around 299–320px, desktop geometry preservation, impossible compact fixture rejection, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.174 | Compact message-send polish for issue #993: `MESSAGE_SEND` now derives title, subtitle, intent-card, SEND/BACK action, and footer baselines from `getMessageSendLayout()`. Compact mobile viewports use the same shared layout to keep all three outbound intent cards separated from the subtitle, SEND/BACK row, and footer, shrink SEND/BACK widths to remain onscreen on narrow portrait widths, and hide secondary intent labels only when ultra-short compressed cards cannot fit them. Added `tests/touch.test.js` coverage for 320×390 runtime-plausible compact geometry, impossible compact fixture rejection, 240×320/229×320 narrow portrait button/subtitle bounds, 289–300px compact boundary no-overlap invariants, 199×200/219×220/240×280/229×286 ultra-short no-overlap invariants, and SEND/BACK hit-test bounds. |
