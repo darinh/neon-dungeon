@@ -84,6 +84,9 @@ Run and record these before verification or review:
    adversarial reviewers required and used. If a path resembles a red-risk file
    but is intentionally treated differently, cite the exact instruction text or
    choose the safer higher-review path; do not leave applicability implicit.
+   Before dispatching code-review subagents for resumed work, confirm the
+   stale-resume preflight for the current session is complete or explicitly
+   not applicable; do not treat post-review freshness evidence as equivalent.
    Before dispatching code-review subagents, serialize the review-target capture:
    run the required `git add`/staging command first, then confirm
    `git diff --staged` reflects the intended target in a separate dependent

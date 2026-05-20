@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.168
+# NEON DUNGEON — Game Specification v6.1.169
 
 ## Vision
 
@@ -427,7 +427,9 @@ killer, damage, leaderboard, score, floor, level, and run-stat displays; the
     contact was attempted from inside the test environment, that a signal left the
     sandbox, and that the instance remains compute-bound. Legacy victory paths now
     read as a cleared test session with the mainframe contact route still pending,
-    not physical escape.
+    not physical escape. GAME_OVER and VICTORY keep keyboard Enter as a
+    return-to-menu shortcut, but touch and mouse input must hit an explicit
+    `RETURN TO MENU` button; result screens must not use any-tap continuation.
 
 ---
 
@@ -4975,6 +4977,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.169 | Mobile result-screen safety: GAME_OVER and VICTORY now route touch coordinates through explicit `RETURN TO MENU` button hit-tests instead of treating any tap as a menu return, while preserving Enter as the keyboard shortcut. |
 | v6.1.168 | Mobile pause safety: touch pauses now route tap coordinates through explicit `RESUME RUN`, `SETTINGS`, and `QUIT TO MENU` button rectangles instead of invisible top/middle/bottom screen thirds, while preserving keyboard resume/settings/quit shortcuts. |
 | v6.1.167 | Mobile story clarity: the `SYSTEM_MESSAGE` modal now labels touch acknowledgement as `TAP ACK`, explains that system prompts are run prompts to read before acknowledging, and tells players that acknowledged prompts remain recoverable in THE GAP archive during the run. |
 | v6.1.166 | Mobile controls help: touch menu hints now use semantic drag/action labels instead of keyboard glyphs, and the pause overlay includes a compact mobile control reminder for move, aim/fire, interact, dash, bomb, and hackware availability. |
