@@ -84,8 +84,8 @@ test('Act 1 whisper realignment: every biome carries reset or iteration continui
   }
 });
 
-test('Act 1 whisper realignment: ids and eligibility remain stable after copy rewrite', () => {
-  assert.equal(data.WHISPERS.length, 71, 'rewrite must not add/remove persisted whisper ids');
+test('Act 1 whisper realignment: ids and eligibility stay consistent after expansion', () => {
+  assert.equal(data.WHISPERS.length, 76, 'bundle expansions must update the persisted whisper count');
 
   const ids = data.WHISPERS.map((/** @type {any} */ w) => w.id);
   assert.equal(new Set(ids).size, ids.length, 'all persisted whisper ids remain unique');
@@ -95,7 +95,7 @@ test('Act 1 whisper realignment: ids and eligibility remain stable after copy re
     counts.set(w.biomeId, (counts.get(w.biomeId) || 0) + 1);
   }
   for (const area of router.AREAS) {
-    assert.ok((counts.get(area.id) || 0) >= 14, `biome ${area.id} keeps >=14 whispers`);
+    assert.ok((counts.get(area.id) || 0) >= 15, `biome ${area.id} keeps >=15 whispers`);
   }
 });
 

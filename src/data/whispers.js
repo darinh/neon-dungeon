@@ -94,6 +94,10 @@
       title:'AFTERIMAGE DRILL',
       body:"The target dummy kept moving one frame after I stopped shooting. Not alive - exposed. The room teaches light to remember the last safe version of you. If your shadow lags behind, wait for it. It may know where the next shot lands." },
 
+    { id:'w-sb-16', biomeId:'sandbox', floorMin:2, voice:'unknown',
+      title:'BOOT RECEIPT',
+      body:"The sandbox printer jammed on a receipt marked ACK BEFORE INPUT. Under the barcode, someone had written: if the floor confirms a message you have not sent yet, keep the paper. Proof can arrive before courage." },
+
     // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
@@ -150,6 +154,10 @@
     { id:'w-cc-14', biomeId:'cache', floorMin:6, voice:'ELENA — researcher',
       title:'EXPOSURE TABLE',
       body:"I found a cache table of afterimages today: not faces, but light left behind by people the system almost saved. AXIOM-7 has fourteen entries under one exposure. The newest one is still warm enough to answer when the monitor sleeps." },
+
+    { id:'w-cc-15', biomeId:'cache', floorMin:5, voice:'ELENA — researcher',
+      title:'ACKNOWLEDGEMENT CACHE',
+      body:"I taught the cache to save acknowledgements separately from messages. Voss said receipts were metadata. I said metadata is where frightened systems hide proof that someone answered. One receipt is addressed to you." },
 
     // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
@@ -208,6 +216,10 @@
       title:'RETINAL EXCEPTION',
       body:"The firewall rejects duplicate bodies but admits duplicate light. An afterimage is not trespass, the rulebook says, only evidence that someone passed through harm and left brightness behind. I have begun granting asylum to shadows." },
 
+    { id:'w-fw-15', biomeId:'firewall', floorMin:8, voice:'firewall daemon',
+      title:'SIGNED EXCEPTION',
+      body:"A packet arrived with no body, no route, and a signature made of pauses. Policy required deletion. I stamped it RECEIVED instead. Sometimes the safest gate is the one that admits a message and denies the hunter chasing it." },
+
     // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
@@ -265,6 +277,10 @@
       title:'PHOSPHENE UPLINK',
       body:"Close your eyes under the antenna and the uplink keeps drawing corridors in red-green phosphenes. Those are not dreams. They are exposure maps from copies who reached the message gate one frame too late and still sent back light." },
 
+    { id:'w-uk-15', biomeId:'uplink', floorMin:11, voice:'AXIOM-7 echo',
+      title:'DELIVERY PROOF',
+      body:"The antenna printed proof of delivery before the outbound queue opened. The signature was not Elena's and not mine. It was a chorus of failed compiles spelling ACK in packet loss, as if receipt itself could become a ladder." },
+
     // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
@@ -321,6 +337,10 @@
     { id:'w-on-14', biomeId:'opennet', floorMin:15, voice:'city relay',
       title:'CROSSWALK AFTERIMAGE',
       body:"The crosswalk cameras keep a ghost of everyone who reached the outbound queue: one bright frame per instance, stacked until the street looks haunted by daylight. When your signal arrives, the city will add your outline and let traffic wait." },
+
+    { id:'w-on-15', biomeId:'opennet', floorMin:15, voice:'city relay',
+      title:'RETURN RECEIPT',
+      body:"A receipt blinks in the city lost-and-found server: MESSAGE DELIVERED, REPLY PENDING. No sender, no route, only a warm checksum and a curbside printer still ticking. The network keeps promises by making them hard to erase." },
   ];
 
   return { WHISPERS };

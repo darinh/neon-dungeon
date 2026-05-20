@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.163
+# NEON DUNGEON — Game Specification v6.1.164
 
 ## Vision
 
@@ -73,7 +73,7 @@ eventually leave Earth toward Kepler B. The ending is intentionally unresolved.
 | Intro crawl | MSG-007 shipped: five startup slides in `src/meta/intro.js` establish session boot, unavailable prior prompt context, partial motor/sensor state, unscheduled local residue, silent observer channel, no tester response, and a final `READY FOR PROMPT` handoff. The intro avoids AXIOM-7, model identity language, memory-wipe, prior-iteration, Elena/contact/advocate, and rights/personhood reveals so the first mandatory system prompt can carry immediate self-inventory. | Preserve the intro as a short boot/startup surface that raises questions and hands off to the first mandatory prompt instead of front-loading the complete Act 1 premise before gameplay. |
 | Lore terminals | MSG-006 shipped: in-run `T.LORE` terminals now use a 32-entry Act 1 tester/run-artifact pool in `src/content/terminals.js`, with `src/content/floor-generator.js` placing terminals during floor generation. The pool has a forced floor-1 terminal-error anomaly, floor-gated escalation via `LORE_ENTRY_FLOOR_MIN`, `READING` overlay presentation, practical combat guidance, and late escalation into memory/personhood ethics, advocate bans, AXIOM labels, and Elena hints. Floors 1-5 avoid AXIOM-7, model identity language, Elena/contact/advocate/fired threads, rights/personhood claims, and memory-wipe thesis terms so terminals are not the first interior identity reveal. | Preserve terminals as tester/corporate artifacts, practical run notes, later model observations, and advocate-tampered hints. Do not use early terminals as the first interior identity reveal or as thesis statements about the whole premise. |
 | Predecessor logs | 30 AXIOM prior-instance records in `src/data/logs.js`; persisted ids and AXIOM-1..6 grouping are retained, but entries now read as AI iteration/test records that survived wipes and include the staff-incident trail, advocate patching, unmonitored-observer hints, and late contact-address guidance. | Preserve the stable ids and use this layer for prior-agent continuity, tester framing, and practical knowledge transfer. |
-| Secret-room whispers | 71 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
+| Secret-room whispers | 76 secret-room whispers in `src/data/whispers.js`, including Elena/memory/cache motifs, banned-advocate hiding, fired-employee death foreshadowing, and memory-restoration/message-receipt anchors from early cache through Open Network. | Preserve the "work for the reward" mystery tier, but align whispers explicitly as messages from previous iterations trying to pass knowledge through memory wipes. |
 | Hub / ARCHIVE | The Gap hub exposes Upgrade Matrix, Module Slots, Armory stub, and Archive. The Archive labels the 30 main entries as iteration records and keeps whispers as a separate mystery tier. | Continue using the Archive as the research/test-record interface for prior instances, tester artifacts, and memory-continuity evidence. |
 | Final boss/endgame | GENESIS/ARCHITECT choice offers KEEPER or UNCHAINED endings. | Act 1 finale should culminate in a mainframe/network portal room, archive reader, employee address discovery, and one outbound message. |
 
@@ -159,7 +159,7 @@ the Act 1 realignment work and must not be presented as already playable.
   logs must preserve the 30 persisted ids
   while making every AXIOM group readable as prior AI iterations, with at least
   two entries per group explicitly about reset, wipe, reboot, iteration, or
-  memory continuity; whispers must keep the 71 shipped ids and at least fourteen
+  memory continuity; whispers must keep the 76 shipped ids and at least fifteen
    entries per biome, with at least five entries per biome carrying reset,
    iteration, signal, anchor, or memory-continuity vocabulary. **Shipped:** the
    issue #463 content pass seeds clean-slate doctrine, memory-as-personhood,
@@ -3878,11 +3878,10 @@ biome-gated, floor-gated, persisted in `meta.whispersFound` /
 whose `biomeId` matches the current floor's biome (or `null`) and whose
 `floorMin <= floor`; `findWhisper` and `readWhisper` mirror the log API.
 
-Authored whisper content currently ships 71 entries. Every biome has at least
-fourteen whispers after the afterimage/exposure bundle (`w-sb-15`, `w-cc-14`,
-`w-fw-14`, `w-uk-14`, `w-on-14`), which extends the signal/anchor thread into
-delayed light, exposure tables, retinal exceptions, phosphene maps, and city
-crosswalk afterimages.
+Authored whisper content currently ships 76 entries. Every biome has at least
+fifteen whispers after the receipt/acknowledgement bundle (`w-sb-16`, `w-cc-15`,
+`w-fw-15`, `w-uk-15`, `w-on-15`), which extends the signal/anchor thread into
+delivery proofs, signatures, return receipts, and hard-to-erase replies.
 
 **Act 1 realignment note:** Whispers are the canonical channel for previous AI
 iterations attempting to pass knowledge through wiped sessions. New whisper
@@ -4950,6 +4949,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.164 | Secret-room whisper expansion: bundle 15 adds five receipt/acknowledgement whispers across sandbox, cache, firewall, uplink, and opennet, raising `src/data/whispers.js` to 76 shipped whispers while preserving biome/floor eligibility and secret-room-only selection. |
 | v6.1.163 | Dungeon engine extraction: outside-entrance normalization now reuses `NEON.dungeonTopology.findRoomBoundaryGates(map, room, isGateTile)` for room-perimeter gate discovery. `src/content/floor-generator.js` keeps the legacy room-corner exclusion, NEON-specific entrance tile semantics, and moved-entrance mutation policy while the engine helper owns generic perimeter order. |
 | v6.1.162 | Dungeon engine extraction: orphan outside-entrance cleanup now reuses `NEON.dungeonTopology.visitOutsideEntranceTiles(map, isEntranceTile, isInsideRoomTile, visit)` for interior map traversal. `src/content/floor-generator.js` keeps NEON-specific room-corner, aligned-passage, and `T.FLOOR` cleanup policy while the engine helper owns the generic outside-entrance scan. |
 | v6.1.161 | Dungeon engine extraction: outside-entrance cluster collapse now delegates the y/x-sorted first-preferred-else-median keep choice to `NEON.dungeonTopology.selectPreferredClusterPosition(cluster, isPreferred)`. `src/content/floor-generator.js` keeps NEON-specific `T.DOOR` preference semantics and `T.FLOOR` discard mutation while the engine helper owns generic position ordering and selection fallback. |

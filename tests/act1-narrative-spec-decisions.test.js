@@ -35,7 +35,7 @@ test('Act 1 spec decisions define discovery path and content density', () => {
   assert.match(SPEC, /lore terminal\s+catalog contains 32 Act 1-aligned tester\/run-artifact entries/i);
   assert.match(SPEC, /`LORE_ENTRY_FLOOR_MIN` gating random lore selection by\s+floor band/i);
   assert.match(SPEC, /predecessor\/archive\s+logs must preserve the 30 persisted ids/i);
-  assert.match(SPEC, /whispers must keep the 71 shipped ids and at least fourteen\s+entries per biome/i);
+  assert.match(SPEC, /whispers must keep the 76 shipped ids and at least fifteen\s+entries per biome/i);
   assert.match(SPEC, /Open Network\s+whisper set must retain at least three finale-critical entries/i);
   assert.match(SPEC, /issue #463 content pass seeds clean-slate doctrine/i);
   assert.match(SPEC, /memory-as-personhood,\s+advocate bans\/hiding, mysterious fired-employee death foreshadowing/i);

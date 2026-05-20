@@ -411,10 +411,12 @@ Before writing the retrospective:
      artifact (`gh pr view`, `gh release view`, `git rev-parse`, workflow output,
      or deployed `version.json`). If the work has both an in-spec changelog version
      and a production release version, label them explicitly so the retrospective
-     cannot imply one should equal the other. For spec header bumps, use `git grep`
-     rather than path-glob search wrappers to find stale references, for example:
+     cannot imply one should equal the other. For spec header bumps and data
+     catalog count changes, use `git grep` rather than path-glob search wrappers
+     to find stale references, for example:
      `git grep -n "Game Specification v<old-version>" -- tests docs src engine
-     types package.json`.
+     types package.json` and `git grep -n "<old-count> secret-room whispers"
+     -- tests docs src engine types package.json`.
 
 ## Required inputs
 
