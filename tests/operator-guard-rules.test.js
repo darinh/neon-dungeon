@@ -6,8 +6,11 @@ const assert = require('node:assert/strict');
 
 const {
   ACTIVE_ISSUE_NUMBER,
+  bashCommandsFromToolCall,
   commandRunsRawGhPrMerge,
   commandRunsUnboundedStartupDiscovery,
+  toolCallRunsRawGhPrMerge,
+  toolCallRunsUnboundedStartupDiscovery,
 } = require('../scripts/operator-guard-rules.js');
 
 test('operator guard tracks the active dungeon extraction issue', () => {
@@ -45,4 +48,52 @@ test('operator guard blocks unbounded startup branch and worktree discovery', ()
   assert.equal(commandRunsUnboundedStartupDiscovery('echo \"git worktree list\"'), false);
   assert.equal(commandRunsUnboundedStartupDiscovery('grep \"git branch --no-merged\" docs/agent-retrospective.md'), false);
   assert.equal(commandRunsUnboundedStartupDiscovery('cat docs/agent-retrospective.md | grep \"git branch --no-merged\"'), false);
+});
+
+test('operator guard inspects nested multi-tool bash commands', () => {
+  const args = {
+    tool_uses: [
+      {
+        recipient_name: 'functions.report_intent',
+        parameters: { intent: 'Resuming continuity' },
+      },
+      {
+        recipient_name: 'functions.bash',
+        parameters: {
+          command: 'git worktree list --porcelain >/dev/null',
+        },
+      },
+    ],
+  };
+  assert.deepEqual(bashCommandsFromToolCall('multi_tool_use.parallel', args), ['git worktree list --porcelain >/dev/null']);
+  assert.equal(toolCallRunsUnboundedStartupDiscovery('multi_tool_use.parallel', args), true);
+  assert.equal(toolCallRunsRawGhPrMerge('multi_tool_use.parallel', args), false);
+});
+
+test('operator guard allows bounded nested startup discovery', () => {
+  const args = {
+    tool_uses: [
+      {
+        recipient_name: 'functions.bash',
+        parameters: {
+          command: 'git worktree list --porcelain | sed -n \"1,20p\"',
+        },
+      },
+    ],
+  };
+  assert.equal(toolCallRunsUnboundedStartupDiscovery('multi_tool_use.parallel', args), false);
+});
+
+test('operator guard blocks raw gh merge inside nested bash commands', () => {
+  const args = {
+    tool_uses: [
+      {
+        recipient_name: 'functions.bash',
+        parameters: {
+          command: 'gh pr merge 1009 --rebase',
+        },
+      },
+    ],
+  };
+  assert.equal(toolCallRunsRawGhPrMerge('multi_tool_use.parallel', args), true);
 });
