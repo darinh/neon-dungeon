@@ -109,6 +109,20 @@ function createMessageSendLayoutHarness(width, height, narrow) {
  * @param {number} height
  * @param {boolean} narrow
  */
+function createPowerupChoiceLayoutHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `POWERUP_CHOICE fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
+  const source = extractFunctionSource(GAME, 'getPowerupChoiceLayout') + '\n' +
+    'return getPowerupChoiceLayout(narrow);';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
 function createWeaponSwapLayoutHarness(width, height, narrow) {
   const runtimeCompact = computeLayout(width, height, 0).compact;
   assert.equal(narrow, runtimeCompact,
@@ -148,6 +162,37 @@ function messageIntentRect(layout, index) {
     h: layout.rowCardH,
     titleY: baselineY + layout.intentTitleOffset,
     labelY: baselineY + layout.intentLabelOffset,
+  };
+}
+
+/**
+ * @param {{ cardX:number,cardY:number,cardW:number,cardH:number,cardGap:number,cardTextMaxW:number,numberY:number,iconTop:number,iconSize:number,nameY:number,descY:number }} layout
+ * @param {number} index
+ */
+function powerupChoiceCardRect(layout, index) {
+  const x = layout.cardX + index * (layout.cardW + layout.cardGap);
+  return {
+    x,
+    y: layout.cardY,
+    w: layout.cardW,
+    h: layout.cardH,
+    textMaxW: layout.cardTextMaxW,
+    numberY: layout.cardY + layout.numberY,
+    iconTop: layout.cardY + layout.iconTop,
+    iconSize: layout.iconSize,
+    nameY: layout.cardY + layout.nameY,
+    descY: layout.cardY + layout.descY,
+  };
+}
+
+/** @param {{ skipX:number,skipY:number,skipW:number,skipH:number,skipTextY:number }} layout */
+function powerupChoiceSkipRect(layout) {
+  return {
+    x: layout.skipX,
+    y: layout.skipY,
+    w: layout.skipW,
+    h: layout.skipH,
+    textY: layout.skipY + layout.skipTextY,
   };
 }
 
@@ -646,6 +691,87 @@ test('message-send button hit targets respect all rectangle bounds', () => {
   assert.ok(r.sendX >= 0 && r.backX + r.btnW <= 240, 'SEND/BACK buttons must stay onscreen');
   assert.match(GAME, /if \(mouse\.y >= btnY && mouse\.y <= btnY \+ btnH\) \{[\s\S]*mouse\.x >= sendX && mouse\.x <= sendX \+ btnW[\s\S]*mouse\.x >= backX && mouse\.x <= backX \+ btnW/,
     'MESSAGE_SEND activation must use the same SEND/BACK rectangle bounds returned by the layout helper');
+});
+
+test('powerup-choice compact fixture guard rejects impossible compact dimensions', () => {
+  assert.throws(
+    () => createPowerupChoiceLayoutHarness(390, 320, true),
+    /must match runtime compact=false/,
+    'compact POWERUP_CHOICE tests must use dimensions that can enter the runtime compact layout',
+  );
+});
+
+test('powerup-choice desktop layout preserves established card and skip geometry', () => {
+  const r = createPowerupChoiceLayoutHarness(800, 600, false);
+  const first = powerupChoiceCardRect(r, 0);
+  const second = powerupChoiceCardRect(r, 1);
+  const skip = powerupChoiceSkipRect(r);
+
+  assert.equal(r.titleY, 90, 'desktop powerup title baseline must stay stable');
+  assert.equal(first.x, 105, 'desktop first card origin X must stay stable');
+  assert.ok(Math.abs(first.y - 168) < 0.001, 'desktop first card origin Y must stay stable');
+  assert.equal(first.w, 280, 'desktop card width must stay stable');
+  assert.equal(first.h, 220, 'desktop card height must stay stable');
+  assert.equal(second.x, 415, 'desktop second card origin X must stay stable');
+  assert.equal(skip.x, 320, 'desktop skip origin X must stay stable');
+  assert.equal(skip.y, 413, 'desktop skip origin Y must stay stable');
+  assert.equal(skip.w, 160, 'desktop skip width must stay stable');
+  assert.equal(skip.h, 40, 'desktop skip height must stay stable');
+  assert.ok(first.y + first.h + 25 <= skip.y, 'desktop cards must remain separated from SKIP');
+});
+
+test('compact powerup-choice layout keeps cards, skip, and hint separated', () => {
+  for (const { width, height } of [
+    { width: 199, height: 200 },
+    { width: 229, height: 286 },
+    { width: 240, height: 280 },
+    { width: 240, height: 299 },
+    { width: 240, height: 300 },
+    { width: 240, height: 320 },
+    { width: 320, height: 390 },
+  ]) {
+    const r = createPowerupChoiceLayoutHarness(width, height, true);
+    const first = powerupChoiceCardRect(r, 0);
+    const second = powerupChoiceCardRect(r, 1);
+    const skip = powerupChoiceSkipRect(r);
+
+    assert.ok(r.titleY >= 18, `title must keep a top-safe baseline at ${width}x${height}`);
+    assert.ok(r.titleY + 8 <= first.y, `first card must clear title at ${width}x${height}`);
+    assert.ok(first.x >= 0 && first.x + first.w <= width, `first card must stay onscreen at ${width}x${height}`);
+    assert.ok(second.x >= 0 && second.x + second.w <= width, `second card must stay onscreen at ${width}x${height}`);
+    assert.ok(first.x + first.w + 6 <= second.x, `compact cards must keep a horizontal gap at ${width}x${height}`);
+    assert.ok(first.w >= 70, `compact cards must keep a minimum readable width at ${width}x${height}`);
+    assert.ok(first.h >= 72, `compact cards must keep a minimum hit height at ${width}x${height}`);
+    assert.ok(first.textMaxW <= first.w - 16, `card text budget must stay inside the compact card at ${width}x${height}`);
+    assert.ok(first.numberY > first.y && first.numberY < first.y + first.h, `number badge must stay inside card at ${width}x${height}`);
+    assert.ok(first.iconTop >= first.y && first.iconTop + first.iconSize <= first.y + first.h, `icon must stay inside card at ${width}x${height}`);
+    assert.ok(first.nameY > first.iconTop + first.iconSize && first.nameY < first.y + first.h, `name baseline must stay inside card at ${width}x${height}`);
+    assert.ok(first.descY > first.nameY && first.descY < first.y + first.h, `description baseline must stay inside card at ${width}x${height}`);
+    assert.ok(first.y + first.h + 8 <= skip.y, `cards must clear SKIP at ${width}x${height}`);
+    assert.ok(skip.x >= 0 && skip.x + skip.w <= width, `SKIP button must stay onscreen at ${width}x${height}`);
+    assert.ok(skip.textY > skip.y && skip.textY < skip.y + skip.h, `SKIP label must stay inside button at ${width}x${height}`);
+    if (r.showHint) {
+      assert.ok(skip.y + skip.h + 9 <= r.hintY, `SKIP must clear rendered footer hint text at ${width}x${height}`);
+      assert.ok(r.hintY <= height - 10, `footer hint must keep a bottom-safe margin at ${width}x${height}`);
+    } else {
+      assert.equal(height < 240, true, `footer hint may only be hidden on ultra-compact layouts at ${width}x${height}`);
+    }
+  }
+});
+
+test('powerup-choice hit targets and text use the shared compact layout', () => {
+  assert.match(GAME, /function getPowerupChoiceLayout\(narrow\)/,
+    'POWERUP_CHOICE must expose one shared layout helper for rendering and hit-testing');
+  assert.match(GAME, /const\s+box\s*=\s*getPowerupChoiceLayout\(layout\.compact\)[\s\S]*mx >= cx && mx <= cx \+ box\.cardW && my >= box\.cardY && my <= box\.cardY \+ box\.cardH/,
+    'POWERUP_CHOICE card activation must use the shared card rectangle bounds');
+  assert.match(GAME, /mx >= box\.skipX && mx <= box\.skipX \+ box\.skipW && my >= box\.skipY && my <= box\.skipY \+ box\.skipH/,
+    'POWERUP_CHOICE skip activation must use the shared skip rectangle bounds');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\('CHOOSE AN UPGRADE',\s*box\.titleMaxW\),\s*W\/2,\s*box\.titleY\)/,
+    'POWERUP_CHOICE title must use the shared title text budget and baseline');
+  assert.match(GAME, /ctx\.fillText\(fitCanvasText\(opt\.name,\s*wrapMaxW\),\s*cx \+ cw\/2,\s*cardY \+ box\.nameY\)/,
+    'POWERUP_CHOICE option names must be constrained to the compact card text budget');
+  assert.match(GAME, /if \(box\.showHint\) \{[\s\S]*ctx\.fillText\(fitCanvasText\('Tap a card or Skip',\s*box\.titleMaxW\),\s*W\/2,\s*box\.hintY\)/,
+    'POWERUP_CHOICE footer hint must be hidden when the layout cannot reserve enough text ascent');
 });
 
 test('weapon-swap compact fixture guard rejects impossible compact dimensions', () => {
