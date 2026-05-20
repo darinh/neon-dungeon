@@ -456,6 +456,80 @@ function serializeSystemMessagesState(systemMessages) {
 }
 
 /** @param {boolean} narrow */
+function getPowerupChoiceLayout(narrow) {
+  if (!narrow) {
+    const cw = Math.min(280, W * 0.35);
+    const gap = 30;
+    const totalW = cw * 2 + gap;
+    const startX = (W - totalW) / 2;
+    const cardY = H * 0.28;
+    const cardH = Math.min(220, H * 0.38);
+    const skipW = 160;
+    const skipH = 40;
+    const skipY = cardY + cardH + 25;
+    return {
+      titleY: H * 0.15,
+      titleMaxW: W - 40,
+      cardX: startX,
+      cardY,
+      cardW: cw,
+      cardH,
+      cardGap: gap,
+      cardTextMaxW: cw - 16,
+      numberY: 28,
+      iconTop: 40,
+      iconSize: 24,
+      nameY: 90,
+      descY: 112,
+      skipX: (W - skipW) / 2,
+      skipY,
+      skipW,
+      skipH,
+      skipTextY: 26,
+      hintY: skipY + skipH + 22,
+      showHint: true
+    };
+  }
+  const ultraCompact = H < 240;
+  const tightCompact = H <= 300;
+  const sideGutter = tightCompact ? 12 : 16;
+  const gap = tightCompact ? 8 : 10;
+  const cardW = Math.max(50, Math.min(170, (W - sideGutter * 2 - gap) / 2));
+  const totalW = cardW * 2 + gap;
+  const cardX = (W - totalW) / 2;
+  const titleY = ultraCompact ? 24 : tightCompact ? 30 : 38;
+  const cardY = ultraCompact ? 42 : tightCompact ? 56 : 72;
+  const skipW = Math.max(96, Math.min(W - 32, 160));
+  const skipH = ultraCompact ? 32 : 36;
+  const showHint = !ultraCompact;
+  const hintY = H - (tightCompact ? 10 : 16);
+  const skipY = showHint ? hintY - skipH - (tightCompact ? 10 : 14) : H - skipH - 4;
+  const cardH = Math.max(72, Math.min(tightCompact ? 132 : 180, skipY - cardY - 12));
+  return {
+    titleY,
+    titleMaxW: W - 24,
+    cardX,
+    cardY,
+    cardW,
+    cardH,
+    cardGap: gap,
+    cardTextMaxW: Math.max(32, cardW - 16),
+    numberY: ultraCompact ? 16 : 18,
+    iconTop: ultraCompact ? 24 : 30,
+    iconSize: ultraCompact ? 16 : 20,
+    nameY: ultraCompact ? 54 : 62,
+    descY: ultraCompact ? 68 : 80,
+    skipX: (W - skipW) / 2,
+    skipY,
+    skipW,
+    skipH,
+    skipTextY: ultraCompact ? 21 : 24,
+    hintY,
+    showHint
+  };
+}
+
+/** @param {boolean} narrow */
 function getSystemMessageLayout(narrow) {
   const panelW = Math.min(narrow ? W - 24 : 680, W - 32);
   const panelH = Math.min(narrow ? H - 48 : 340, H - 48);
@@ -4911,25 +4985,15 @@ const game = {
     if (jp('Enter') || jp(km('shoot')))    { this.applyPowerupChoice(pc.selected); return; }
     // Mouse/touch: check click on cards or skip
     if (jp('MouseLeft')) {
-      const cw = Math.min(280, W * 0.35);
-      const gap = 30;
-      const totalW = cw * 2 + gap;
-      const startX = (W - totalW) / 2;
-      const cardY = H * 0.28;
-      const cardH = Math.min(220, H * 0.38);
+      const box = getPowerupChoiceLayout(layout.compact);
       const mx = mouse.x, my = mouse.y;
-      // Card 0
-      if (mx >= startX && mx <= startX + cw && my >= cardY && my <= cardY + cardH) {
-        this.applyPowerupChoice(0); return;
+      for (let i = 0; i < 2; i++) {
+        const cx = box.cardX + i * (box.cardW + box.cardGap);
+        if (mx >= cx && mx <= cx + box.cardW && my >= box.cardY && my <= box.cardY + box.cardH) {
+          this.applyPowerupChoice(i); return;
+        }
       }
-      // Card 1
-      if (mx >= startX + cw + gap && mx <= startX + totalW && my >= cardY && my <= cardY + cardH) {
-        this.applyPowerupChoice(1); return;
-      }
-      // Skip button
-      const skipY = cardY + cardH + 25;
-      const skipW = 160, skipH = 40;
-      if (mx >= (W-skipW)/2 && mx <= (W+skipW)/2 && my >= skipY && my <= skipY+skipH) {
+      if (mx >= box.skipX && mx <= box.skipX + box.skipW && my >= box.skipY && my <= box.skipY + box.skipH) {
         this.applyPowerupChoice(-1); return;
       }
     }
@@ -7518,6 +7582,7 @@ const game = {
     if (!pc) return;
     const narrow = layout.compact;
     const isTouch = isTouchDevice();
+    const box = getPowerupChoiceLayout(narrow);
     ctx.save();
 
     // Dark overlay
@@ -7529,19 +7594,16 @@ const game = {
     ctx.shadowBlur=25; ctx.shadowColor='#00f5ff';
     ctx.fillStyle='#00f5ff';
     ctx.font=`bold ${narrow?22:30}px monospace`;
-    ctx.fillText('CHOOSE AN UPGRADE', W/2, H*0.15);
+    ctx.fillText(fitCanvasText('CHOOSE AN UPGRADE', box.titleMaxW), W/2, box.titleY);
     ctx.shadowBlur=0;
 
     // Cards
-    const cw = Math.min(280, W * 0.35);
-    const gap = 30;
-    const totalW = cw * 2 + gap;
-    const startX = (W - totalW) / 2;
-    const cardY = H * 0.28;
-    const cardH = Math.min(220, H * 0.38);
+    const cw = box.cardW;
+    const cardY = box.cardY;
+    const cardH = box.cardH;
     // Word-wrap helper (centered). Returns the y of the next line below the
     // wrapped block. text padding leaves 8px on each side of the card.
-    const wrapMaxW = cw - 16;
+    const wrapMaxW = box.cardTextMaxW;
     const cardBottomY = cardY + cardH - 8;
     /**
      * @param {string} text
@@ -7591,7 +7653,7 @@ const game = {
 
     for (let i=0; i<2; i++) {
       const opt = pc.options[i];
-      const cx = startX + i * (cw + gap);
+      const cx = box.cardX + i * (cw + box.cardGap);
       const sel = pc.selected === i;
       const curLvl = opt.persistent && game.player ? (game.player.upgrades[opt.id]||0) : 0;
 
@@ -7622,26 +7684,26 @@ const game = {
       ctx.fillStyle=opt.colour;
       ctx.font=`bold ${narrow?16:20}px monospace`;
       ctx.textAlign='center';
-      ctx.fillText((i+1)+'', cx + cw/2, cardY + 28);
+      ctx.fillText((i+1)+'', cx + cw/2, cardY + box.numberY);
 
       // Icon: colored square with glow
       ctx.save();
       ctx.shadowBlur=15; ctx.shadowColor=opt.colour;
       ctx.fillStyle=opt.colour;
-      ctx.fillRect(cx + cw/2 - 12, cardY + 40, 24, 24);
+      ctx.fillRect(cx + cw / 2 - box.iconSize / 2, cardY + box.iconTop, box.iconSize, box.iconSize);
       ctx.restore();
 
       // Name
       ctx.fillStyle='#ffffff';
       ctx.font=`bold ${narrow?13:16}px monospace`;
-      ctx.fillText(opt.name, cx + cw/2, cardY + 90);
+      ctx.fillText(fitCanvasText(opt.name, wrapMaxW), cx + cw/2, cardY + box.nameY);
 
       // Description (word-wrapped). Track running y so subsequent lines
       // don't collide when the desc spans 2+ lines on narrow viewports.
       ctx.fillStyle='#aaaacc';
       const descFs = narrow ? 11 : 13;
       ctx.font=`${descFs}px monospace`;
-      let runY = drawWrapCentered(opt.desc, cx + cw/2, cardY + 112, descFs + 3);
+      let runY = drawWrapCentered(opt.desc, cx + cw/2, cardY + box.descY, descFs + 3);
       runY += 4; // small gutter
 
       // Level info for persistent upgrades
@@ -7657,7 +7719,9 @@ const game = {
       if (opt.isHackware) {
         ctx.fillStyle=opt.colour;
         ctx.font=`bold ${narrow?9:10}px monospace`;
-        ctx.fillText('⚙ HACKWARE [F]', cx + cw/2, runY);
+        if (runY + (narrow ? 9 : 10) <= cardBottomY) {
+          ctx.fillText(fitCanvasText('⚙ HACKWARE [F]', wrapMaxW), cx + cw/2, runY);
+        }
         runY += (narrow ? 12 : 13);
       }
 
@@ -7678,31 +7742,33 @@ const game = {
         if (opt._rarity > 0) {
           ctx.fillStyle=opt._rarityColour;
           ctx.font=`bold ${narrow?9:10}px monospace`;
-          ctx.fillText(RARITY_LABELS[opt._rarity] || '', cx + cw/2, runY);
+          if (runY + (narrow ? 9 : 10) <= cardBottomY) {
+            ctx.fillText(fitCanvasText(RARITY_LABELS[opt._rarity] || '', wrapMaxW), cx + cw/2, runY);
+          }
         }
       }
     }
 
     // Skip button
-    const skipY = cardY + cardH + 25;
-    const skipW = 160, skipH = 40;
     ctx.fillStyle='rgba(255,255,255,0.04)';
     ctx.strokeStyle='rgba(255,255,255,0.2)';
     ctx.lineWidth=1;
-    NEON.draw.roundRectFillStroke(ctx, (W-skipW)/2, skipY, skipW, skipH, 6);
+    NEON.draw.roundRectFillStroke(ctx, box.skipX, box.skipY, box.skipW, box.skipH, 6);
 
     ctx.fillStyle='#666688';
     ctx.font=`${narrow?13:15}px monospace`;
     ctx.textAlign='center';
-    ctx.fillText('SKIP  [3]', W/2, skipY + 26);
+    ctx.fillText('SKIP  [3]', W/2, box.skipY + box.skipTextY);
 
     // Hint
-    ctx.fillStyle='#444466';
-    ctx.font=`${narrow?9:11}px monospace`;
-    if (isTouch) {
-      ctx.fillText('Tap a card or Skip', W/2, skipY + skipH + 22);
-    } else {
-      ctx.fillText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', W/2, skipY + skipH + 22);
+    if (box.showHint) {
+      ctx.fillStyle='#444466';
+      ctx.font=`${narrow?9:11}px monospace`;
+      if (isTouch) {
+        ctx.fillText(fitCanvasText('Tap a card or Skip', box.titleMaxW), W/2, box.hintY);
+      } else {
+        ctx.fillText(fitCanvasText('1/2 pick  ·  ←/→ + Enter  ·  3/Esc skip', box.titleMaxW), W/2, box.hintY);
+      }
     }
 
     ctx.restore();
