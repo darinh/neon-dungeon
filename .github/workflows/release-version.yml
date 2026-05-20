@@ -3,6 +3,7 @@ name: release-version
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release-version-${{ github.ref }}
