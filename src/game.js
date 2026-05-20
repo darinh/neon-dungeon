@@ -6766,40 +6766,55 @@ const game = {
   },
 
   /**
-   * @returns {{panelW:number,panelH:number,panelX:number,panelY:number,fieldX:number,fieldY:number,fieldW:number,fieldH:number,btnY:number,btnH:number,gap:number,btnW:number}}
+   * @param {{W:number,H:number,narrow:boolean}=} view
+   * @returns {{panelW:number,panelH:number,panelX:number,panelY:number,titleY:number,difficultyY:number,fieldX:number,fieldY:number,fieldW:number,fieldH:number,helpY1:number,helpY2:number,btnY:number,btnH:number,btnLabelY:number,gap:number,btnW:number,footerY:number}}
    */
-  seedSetupLayout() {
-    const narrow = layout.compact;
-    const panelW = Math.min(narrow ? W - 28 : 620, W - 32);
-    const panelH = Math.min(narrow ? H - 70 : 390, H - 48);
-    const panelX = (W - panelW) / 2;
-    const panelY = (H - panelH) / 2;
+  seedSetupLayout(view) {
+    const viewW = view && Number.isFinite(view.W) ? view.W : W;
+    const viewH = view && Number.isFinite(view.H) ? view.H : H;
+    const narrow = view ? !!view.narrow : layout.compact;
+    const compactTiny = narrow && viewH < 320;
+    const compactShort = narrow && viewH <= 360;
+    const panelW = Math.min(narrow ? viewW - 28 : 620, viewW - 32);
+    const panelH = narrow ? viewH - (compactTiny ? 24 : 70) : Math.min(390, viewH - 48);
+    const panelX = (viewW - panelW) / 2;
+    const panelY = (viewH - panelH) / 2;
+    const titleY = panelY + (narrow ? (compactTiny ? 30 : 42) : 58);
+    const difficultyY = panelY + (narrow ? (compactTiny ? 50 : 66) : 86);
     const fieldW = panelW - (narrow ? 34 : 70);
-    const fieldH = narrow ? 46 : 56;
-    const fieldX = (W - fieldW) / 2;
-    const fieldY = panelY + (narrow ? 96 : 126);
-    const btnY = H * (narrow ? 0.70 : 0.68);
-    const btnH = narrow ? 34 : 40;
+    const fieldH = narrow ? (compactTiny ? 40 : 46) : 56;
+    const fieldX = (viewW - fieldW) / 2;
+    const fieldY = panelY + (narrow ? (compactTiny ? 62 : compactShort ? 78 : 96) : 126);
+    const helpY1 = fieldY + fieldH + (narrow ? (compactTiny ? 14 : 22) : 28);
+    const helpY2 = fieldY + fieldH + (narrow ? (compactTiny ? 28 : 38) : 46);
+    const footerY = panelY + panelH - (narrow ? (compactTiny ? 10 : 14) : 24);
+    const btnH = narrow ? 40 : 40;
+    const btnY = narrow
+      ? (compactTiny ? Math.max(helpY2 + 8, footerY - btnH - 10) : Math.max(helpY2 + 18, footerY - btnH - 18))
+      : viewH * 0.68;
+    const btnLabelY = btnY + btnH / 2 + (narrow ? 4 : 6);
     const gap = narrow ? 8 : 12;
     const btnW = (panelW - gap * 2) / 3;
-    return { panelW, panelH, panelX, panelY, fieldX, fieldY, fieldW, fieldH, btnY, btnH, gap, btnW };
+    return { panelW, panelH, panelX, panelY, titleY, difficultyY, fieldX, fieldY, fieldW, fieldH, helpY1, helpY2, btnY, btnH, btnLabelY, gap, btnW, footerY };
   },
 
   /**
    * @param {number} x
    * @param {number} y
+   * @param {{W:number,H:number,narrow:boolean}=} view
    */
-  seedSetupFieldHitTest(x, y) {
-    const r = this.seedSetupLayout();
+  seedSetupFieldHitTest(x, y, view) {
+    const r = this.seedSetupLayout(view);
     return x >= r.fieldX && x <= r.fieldX + r.fieldW && y >= r.fieldY && y <= r.fieldY + r.fieldH;
   },
 
   /**
    * @param {number} x
    * @param {number} y
+   * @param {{W:number,H:number,narrow:boolean}=} view
    */
-  seedSetupHitTest(x, y) {
-    const r = this.seedSetupLayout();
+  seedSetupHitTest(x, y, view) {
+    const r = this.seedSetupLayout(view);
     for (let i = 0; i < 3; i++) {
       const bx = r.panelX + i * (r.btnW + r.gap);
       if (x >= bx && x <= bx + r.btnW && y >= r.btnY && y <= r.btnY + r.btnH) return i;
@@ -6834,10 +6849,10 @@ const game = {
 
     ctx.fillStyle = '#00f5ff';
     ctx.font = `bold ${narrow ? 20 : 28}px monospace`;
-    ctx.fillText('RUN SEED', W / 2, r.panelY + (narrow ? 42 : 58));
+    ctx.fillText('RUN SEED', W / 2, r.titleY);
     ctx.fillStyle = d.colour;
     ctx.font = `bold ${narrow ? 12 : 14}px monospace`;
-    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, r.panelY + (narrow ? 66 : 86));
+    ctx.fillText('DIFFICULTY: ' + d.label, W / 2, r.difficultyY);
 
     ctx.fillStyle = 'rgba(0,245,255,0.07)';
     ctx.strokeStyle = '#224466';
@@ -6851,8 +6866,8 @@ const game = {
 
     ctx.fillStyle = '#668899';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, r.fieldY + r.fieldH + (narrow ? 22 : 28));
-    ctx.fillText(narrow ? 'Tap seed to edit, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, r.fieldY + r.fieldH + (narrow ? 38 : 46));
+    ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, r.helpY1);
+    ctx.fillText(narrow ? 'Tap seed to edit, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, r.helpY2);
 
     const labels = ['START', 'RANDOMIZE', 'BACK'];
     const colours = ['#39ff14', '#ffb700', '#888899'];
@@ -6869,12 +6884,12 @@ const game = {
       ctx.shadowBlur = 0;
       ctx.fillStyle = selected ? col : '#6f7890';
       ctx.font = `${selected ? 'bold ' : ''}${narrow ? 11 : 14}px monospace`;
-      ctx.fillText(labels[i] || '', bx + r.btnW / 2, r.btnY + (narrow ? 22 : 26));
+      ctx.fillText(labels[i] || '', bx + r.btnW / 2, r.btnLabelY);
     }
 
     ctx.fillStyle = '#445566';
     ctx.font = `${narrow ? 9 : 11}px monospace`;
-    ctx.fillText(isTouchDevice() ? 'Tap seed to type · tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, r.panelY + r.panelH - (narrow ? 18 : 24));
+    ctx.fillText(isTouchDevice() ? 'Tap seed to type · tap an action' : '←→/↑↓ choose · Enter confirm · Esc back', W / 2, r.footerY);
     ctx.restore();
   },
 
