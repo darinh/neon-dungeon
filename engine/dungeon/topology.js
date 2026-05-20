@@ -278,8 +278,8 @@
     const dist = new Map();
     const q = [startRoom];
     dist.set(startRoom, 0);
-    while (q.length) {
-      const cur = q.shift();
+    for (let qi = 0; qi < q.length; qi++) {
+      const cur = q[qi];
       for (const other of rooms) {
         if (dist.has(other)) continue;
         if (areConnected(cur, other)) {
@@ -476,8 +476,8 @@
     /** @type {{x:number,y:number,d:number}[]} */
     const q = [{ x: sx, y: sy, d: 0 }];
     visited.add(sy * w + sx);
-    while (q.length) {
-      const cur = q.shift();
+    for (let qi = 0; qi < q.length; qi++) {
+      const cur = q[qi];
       if (!cur || cur.d > opts.searchRadius) continue;
       const tile = Number(map[cur.y]?.[cur.x]);
       if (opts.isPassable(tile)) {
