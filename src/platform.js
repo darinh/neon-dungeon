@@ -702,10 +702,8 @@ canvas.addEventListener('touchstart', e => {
         continue;
       }
       if (_G.state === _PG_STATES.PAUSED) {
-        // 3 zones: top third = resume, middle third = settings, bottom third = quit
-        if (cy < H * 0.38) justPressed.add('Escape');
-        else if (cy < H * 0.62) justPressed.add('KeyS');
-        else justPressed.add('KeyQ');
+        routeTouchAsMouseClick(cx, cy);
+        continue;
       }
       else if (_G.state === _PG_STATES.HUB) {
         // The Gap. Mobile users have no SPACE key to descend and no number
