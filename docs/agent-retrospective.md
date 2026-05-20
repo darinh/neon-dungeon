@@ -364,7 +364,11 @@ Before writing the retrospective:
    record why `npm run check:agent-startup -- --issue <number>` was insufficient
    or unavailable.
 4. Confirm code-review subagents, if any, have returned and real findings were
-   addressed or explicitly rejected.
+   addressed or explicitly rejected. Record the exact review target for each
+   reviewer (commit SHA, staged diff state, or PR head SHA) and whether a later
+   staged diff superseded the review. If a reviewer is still running after the
+   required number of clean current-diff reviews has returned, record the
+   supersession rule used before ignoring or cancelling the stale reviewer.
 5. Record the review-risk triage decision for every code-bearing path that
    resembles a red-risk file or subsystem. For example, `src/content/*` changes
    must say whether they are the literal red `src/content.js` file, Medium
@@ -554,7 +558,9 @@ Collect only facts that affect future behavior:
     missing guards, and unnecessary ceremony. Reviewers must not mutate git state.
     A final retrospective must name the reviewers/models used and the adopted or
     rejected findings; do not attach or file a completed retrospective with this
-    field left as `pending`.
+   field left as `pending`. Distinguish local verification from integration
+   verification: if CI has not run yet, say so instead of implying the work is
+   remotely verified.
 12. **Reconcile the critiques.** Adopt changes that prevent real failures. Reject
     weak suggestions explicitly and briefly.
 13. **Change the system.** If the retrospective reveals a durable rule, update the
@@ -635,6 +641,7 @@ Keep the retrospective short enough to be useful:
 - **Bootstrap/surface audit/runtime proof**:
 - **Control scopes**:
 - **Post-merge verification**:
+- **Review target/supersession**:
 - **Two-LLM critique**: [reviewers/models used, adopted findings, rejected findings]
 - **Recurrence-prevention guards**: [new guards added, or rejected with evidence]
 - **System changes made**:
