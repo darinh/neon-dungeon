@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.178
+# NEON DUNGEON — Game Specification v6.1.179
 
 ## Vision
 
@@ -4558,6 +4558,22 @@ Y — derives from `layout` to prevent overlap.
 touch-specific control hints; game-over / victory / pause screens show
 tap-based prompts instead of keyboard-only text.
 
+### First-floor onboarding guidance
+
+`src/game.js:renderOnboardingGuidance()` draws a compact HUD card on floor 1
+while `PLAYING`, after the system-message indicator and before touch controls.
+It is hidden outside floor 1, while any unread system prompt exists, and during
+unsafe rooms detected by `systemMessageThreatActive()` so it does not compete
+with mandatory narrative prompts or live combat. `getOnboardingGuidanceLayout()`
+owns card geometry: its top edge clamps against `layout.hudTop` so compact
+displays keep the guidance above the bottom HUD, and ultra-compact displays hide
+the card when the available playfield cannot fit it without overlap. The card
+states the immediate objective exactly as `Objective: clear rooms, read cyan
+terminals, find stairs.` Desktop copy uses `KEY_DISPLAY(km(...))` for movement,
+shoot, interact, dash, and void shard so custom bindings are reflected; touch
+copy uses semantic touch labels for left drag movement, right drag aim/fire, USE,
+DASH, BOMB, PROMPT, and PAUSE.
+
 ---
 
 ## Screen Flow
@@ -5028,6 +5044,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |
 | v6.1.178 | Act 1 narrative-comprehension spine for issue #1045: system prompts now make normal-play story progression legible beyond the early spoiler gate. Floor 3 names the environment as an evaluation harness, floor 6 names prior AXIOM runs and continuity, floor 10 names the clean-slate/personhood conflict, floor 12 breadcrumbs Elena as the repeated anchor, and floor 14 states the contact/evidence objective before the mainframe payoff. Added system-message, narrative-guardrail, and spec/design tests so the story spine queues during ordinary floor progression without depending on optional secret rooms or hub archive browsing. |
 | v6.1.177 | Compact vendor-shop polish for issue #993: `SHOPPING` now derives title, credit balance, item card/row, LEAVE, footer-hint, and item text-budget geometry from `getShoppingLayout()`. Short compact mobile viewports stack the three purchasable rows vertically so item targets and LEAVE stay onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same item and LEAVE rectangles used for rendering, while compact item names/descriptions and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, item/LEAVE/hint separation, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.176 | Compact powerup-choice polish for issue #993: `POWERUP_CHOICE` now derives title, upgrade-card, SKIP, footer-hint, and card text-budget geometry from `getPowerupChoiceLayout()`. Short compact mobile viewports keep both upgrade cards and the SKIP target onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same card and SKIP rectangles used for rendering, while option names and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, card/skip/hint separation, compact text-budget bounds, and shared hit-test bounds. |
