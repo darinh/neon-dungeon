@@ -399,6 +399,10 @@ const SYSTEM_MESSAGES = [
   }
 ];
 
+const ONBOARDING_OBJECTIVE_LINE = 'Objective: clear rooms, read cyan terminals, find stairs.';
+const ONBOARDING_DESKTOP_HINT_LINE = 'X opens prompts · ESC pauses for controls/settings.';
+const ONBOARDING_TOUCH_HINT_LINE = 'PROMPT opens instructions · PAUSE shows controls.';
+
 /** @param {any} id */
 function systemMessageDefinition(id) {
   return SYSTEM_MESSAGES.find((/** @type {any} */ msg) => msg.id === id) || null;
@@ -703,6 +707,17 @@ function getSystemMessageIndicatorLayout(narrow) {
   const x = safeLeft + (narrow ? 8 : 14);
   const targetY = safeTop + (narrow ? 92 : 82);
   const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  return { x, y, w, h };
+}
+
+/** @param {boolean} narrow */
+function getOnboardingGuidanceLayout(narrow) {
+  const w = Math.min(narrow ? W - safeLeft - safeRight - 24 : 460, W - safeLeft - safeRight - 24);
+  const h = narrow ? 118 : 126;
+  const x = 12 + safeLeft;
+  const targetY = safeTop + (narrow ? 76 : 92);
+  const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  if (y + h > layout.hudTop - 8) return null;
   return { x, y, w, h };
 }
 
@@ -7623,6 +7638,7 @@ const game = {
     drawBossDeathOverlay();
 
     this.renderSystemMessageIndicator();
+    this.renderOnboardingGuidance();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.
@@ -7701,6 +7717,55 @@ const game = {
     drawBiomeCard();
     drawHint();
     drawTouchUI();
+  },
+
+  renderOnboardingGuidance() {
+    if (this.state !== 'PLAYING' || this.floor !== 1) return;
+    if (this.hasPendingSystemMessage() || this.systemMessageThreatActive()) return;
+
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    const card = getOnboardingGuidanceLayout(narrow);
+    if (!card) return;
+    const { x, y, w, h } = card;
+    const lineH = narrow ? 16 : 18;
+    const bodyX = x + 12;
+    let lineY = y + (narrow ? 43 : 48);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,18,0.78)';
+    ctx.strokeStyle = 'rgba(0,245,255,0.42)';
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00f5ff';
+    NEON.draw.roundRectFillStroke(ctx, x, y, w, h, 8);
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
+    ctx.fillText('FLOOR 1 // SURVIVE', bodyX, y + (narrow ? 22 : 25));
+    ctx.fillStyle = '#dcefff';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(fitCanvasText(ONBOARDING_OBJECTIVE_LINE, w - 24), bodyX, lineY);
+    lineY += lineH;
+
+    if (isTouch) {
+      ctx.fillText(fitCanvasText('Left drag move · right drag aim + fire', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillText(fitCanvasText('USE interact · DASH dodge · BOMB cracks/walls', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillStyle = '#88aacc';
+      ctx.fillText(fitCanvasText(ONBOARDING_TOUCH_HINT_LINE, w - 24), bodyX, lineY);
+    } else {
+      ctx.fillText(fitCanvasText(KEY_DISPLAY(km('up')) + KEY_DISPLAY(km('left')) + KEY_DISPLAY(km('down')) + KEY_DISPLAY(km('right')) + ' move · mouse aim · click/' + KEY_DISPLAY(km('shoot')) + ' shoot', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillText(fitCanvasText(KEY_DISPLAY(km('interact')) + ' interact · ' + KEY_DISPLAY(km('dash')) + ' dash · ' + KEY_DISPLAY(km('voidshard')) + ' bomb', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillStyle = '#88aacc';
+      ctx.fillText(fitCanvasText(ONBOARDING_DESKTOP_HINT_LINE, w - 24), bodyX, lineY);
+    }
+    ctx.restore();
   },
 
   renderPaused() {
