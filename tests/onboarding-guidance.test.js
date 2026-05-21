@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
@@ -23,6 +24,13 @@ function extractMethod(name, nextName) {
   return match[0];
 }
 
+function buildOnboardingLayoutHarness() {
+  const match = GAME_NC.match(/function\s+getOnboardingGuidanceLayout\s*\(\s*narrow\s*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(match, 'getOnboardingGuidanceLayout body must be findable');
+  const script = new vm.Script(`${match[0]}; getOnboardingGuidanceLayout(true);`);
+  return (context) => script.runInNewContext(context);
+}
+
 test('renderPlaying draws first-floor onboarding after prompt indicator', () => {
   const renderPlaying = extractMethod('renderPlaying', 'renderOnboardingGuidance');
   assert.match(renderPlaying, /this\.renderSystemMessageIndicator\(\);\s*this\.renderOnboardingGuidance\(\);/,
@@ -35,10 +43,35 @@ test('first-floor onboarding guidance is gated away from combat and prompts', ()
     'guidance must only appear while actively playing floor 1');
   assert.match(guidance, /this\.hasPendingSystemMessage\(\)\s*\|\|\s*this\.systemMessageThreatActive\(\)/,
     'guidance must yield to unread system prompts and unsafe rooms');
-  assert.match(guidance, /Math\.min\(targetY,\s*layout\.hudTop\s*-\s*h\s*-\s*8\)/,
+  assert.match(GAME_NC, /Math\.min\(targetY,\s*layout\.hudTop\s*-\s*h\s*-\s*8\)/,
     'guidance must clamp above the bottom HUD on compact displays');
-  assert.match(guidance, /if\s*\(\s*y\s*\+\s*h\s*>\s*layout\.hudTop\s*-\s*8\s*\)\s*return/,
+  assert.match(GAME_NC, /if\s*\(\s*y\s*\+\s*h\s*>\s*layout\.hudTop\s*-\s*8\s*\)\s*return\s+null/,
     'guidance must hide when ultra-compact displays cannot fit the card above the HUD');
+});
+
+test('first-floor onboarding layout fits normal compact displays and hides ultra-compact no-fit displays', () => {
+  const getLayout = buildOnboardingLayoutHarness();
+  const normalCompact = getLayout({
+    W: 320,
+    safeLeft: 0,
+    safeRight: 0,
+    safeTop: 0,
+    layout: { hudTop: 262 },
+  });
+  assert.ok(normalCompact, '320x320-style compact fixture should fit onboarding guidance');
+  assert.equal(normalCompact.x, 12);
+  assert.equal(normalCompact.y + normalCompact.h <= 262 - 8, true,
+    'normal compact card must end above the HUD guard band');
+
+  const ultraCompact = getLayout({
+    W: 200,
+    safeLeft: 0,
+    safeRight: 0,
+    safeTop: 20,
+    layout: { hudTop: 140 },
+  });
+  assert.equal(ultraCompact, null,
+    '200x200-style compact fixture must hide guidance instead of overlapping the HUD');
 });
 
 test('first-floor onboarding explains objective and desktop/touch controls', () => {

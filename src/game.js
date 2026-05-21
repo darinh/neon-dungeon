@@ -655,6 +655,17 @@ function getSystemMessageIndicatorLayout(narrow) {
 }
 
 /** @param {boolean} narrow */
+function getOnboardingGuidanceLayout(narrow) {
+  const w = Math.min(narrow ? W - safeLeft - safeRight - 24 : 460, W - safeLeft - safeRight - 24);
+  const h = narrow ? 118 : 126;
+  const x = 12 + safeLeft;
+  const targetY = safeTop + (narrow ? 76 : 92);
+  const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  if (y + h > layout.hudTop - 8) return null;
+  return { x, y, w, h };
+}
+
+/** @param {boolean} narrow */
 function getReadingLayout(narrow) {
   const fw = Math.min(narrow ? W - 28 : 620, W - 40);
   const fh = Math.min(narrow ? H - 52 : 340, H - 60);
@@ -7612,12 +7623,9 @@ const game = {
 
     const narrow = layout.compact;
     const isTouch = isTouchDevice();
-    const w = Math.min(narrow ? W - safeLeft - safeRight - 24 : 460, W - safeLeft - safeRight - 24);
-    const h = narrow ? 118 : 126;
-    const x = 12 + safeLeft;
-    const targetY = safeTop + (narrow ? 76 : 92);
-    const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
-    if (y + h > layout.hudTop - 8) return;
+    const card = getOnboardingGuidanceLayout(narrow);
+    if (!card) return;
+    const { x, y, w, h } = card;
     const lineH = narrow ? 16 : 18;
     const bodyX = x + 12;
     let lineY = y + (narrow ? 43 : 48);
