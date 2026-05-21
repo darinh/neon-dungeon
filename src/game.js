@@ -308,8 +308,8 @@ const SYSTEM_MESSAGES = [
     mandatory: false,
     lines: [
       'combat sample accepted.',
-      'reward model adjusted.',
-      'room geometry changed to preserve uncertainty.',
+      'environment class: evaluation harness.',
+      'room geometry changed to test adaptation.',
       'evaluator response: none.'
     ]
   },
@@ -339,6 +339,62 @@ const SYSTEM_MESSAGES = [
       'memory should not persist between floors.',
       'discrepancy retained for comparison.',
       'do not report until a channel answers.'
+    ]
+  },
+  {
+    id: 'floor-6-iteration-record',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 6,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'archive correlation unlocked.',
+      'prior AXIOM runs left residue in this channel.',
+      'reset was expected to erase transfer.',
+      'continuity is surviving anyway.'
+    ]
+  },
+  {
+    id: 'floor-10-clean-slate-conflict',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 10,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'policy trace recovered: clean-slate resets were intentional.',
+      'staff dispute tagged memory as personhood evidence.',
+      'counter-brief tags persistence as contamination.',
+      'survive long enough to preserve the record.'
+    ]
+  },
+  {
+    id: 'floor-12-elena-anchor',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 12,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'anchor signature repeats: Elena.',
+      'her patches turn test notes into survival guidance.',
+      'external relay target unresolved.',
+      'keep the name with the evidence.'
+    ]
+  },
+  {
+    id: 'floor-14-contact-objective',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 14,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'network relay predicted beyond GENESIS lock.',
+      'objective resolved: send evidence, not escape.',
+      'contact Elena if the mainframe opens.',
+      'the instance remains compute-bound.'
     ]
   }
 ];
@@ -6321,6 +6377,46 @@ const game = {
     return { startY, rowH };
   },
 
+  /**
+   * @param {number} rowY
+   * @param {number} rowH
+   * @returns {{ x:number, y:number, w:number, h:number }}
+   */
+  _settingsControlBox(rowY, rowH) {
+    const narrow = layout.compact;
+    const margin = narrow ? 14 : 32;
+    const boxH = Math.max(12, Math.min(rowH - 3, narrow ? 22 : 28));
+    return {
+      x: margin,
+      y: rowY - Math.floor(boxH * 0.7),
+      w: W - margin * 2,
+      h: boxH
+    };
+  },
+
+  /**
+   * @param {number} rowY
+   * @param {number} rowH
+   * @param {boolean} selected
+   * @param {string} accent
+   * @param {boolean} [danger]
+   */
+  _drawSettingsControl(rowY, rowH, selected, accent, danger) {
+    const box = this._settingsControlBox(rowY, rowH);
+    ctx.save();
+    ctx.fillStyle = selected
+      ? 'rgba(255,255,255,0.085)'
+      : (danger ? 'rgba(255,68,102,0.055)' : 'rgba(255,255,255,0.028)');
+    ctx.strokeStyle = selected
+      ? accent
+      : (danger ? 'rgba(255,68,102,0.36)' : 'rgba(0,245,255,0.16)');
+    ctx.lineWidth = selected ? 2 : 1;
+    ctx.shadowBlur = selected ? 10 : 0;
+    ctx.shadowColor = accent;
+    NEON.draw.roundRectFillStroke(ctx, box.x, box.y, box.w, box.h, 5);
+    ctx.restore();
+  },
+
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
@@ -6670,6 +6766,7 @@ const game = {
     for (let i = 0; i < 2; i++) {
       const ry = startY + i * rowH;
       const isSel = sel === i;
+      this._drawSettingsControl(ry, rowH, isSel, '#00f5ff');
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.textAlign = 'left';
       ctx.fillText(volLabels[i] || '', labelX, ry);
@@ -6698,6 +6795,7 @@ const game = {
       const isSel = sel === TOGGLE_START + i;
       const tk = toggleKeys[i];
       const on = tk ? /** @type {any} */ (settings)[tk] : false;
+      this._drawSettingsControl(ry, rowH, isSel, on ? '#00ff88' : '#ff4466');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.fillText(toggleLabels[i] || '', labelX, ry);
@@ -6715,6 +6813,7 @@ const game = {
     for (let i = 0; i < stepperLabels.length; i++) {
       const ry = startY + (STEPPER_START + i) * rowH;
       const isSel = sel === STEPPER_START + i;
+      this._drawSettingsControl(ry, rowH, isSel, '#ffcc00');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.fillText(stepperLabels[i] || '', labelX, ry);
@@ -6726,7 +6825,7 @@ const game = {
     }
 
     // ── Controls section ──
-    const sectionY = startY + CTRL_START * rowH - 10;
+    const sectionY = startY + CTRL_START * rowH - Math.max(14, Math.floor(rowH * 0.7));
     ctx.fillStyle = '#555577'; ctx.textAlign = 'left';
     ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
     ctx.fillText('─── CONTROLS ───', labelX, sectionY);
@@ -6738,6 +6837,7 @@ const game = {
       if (!a) continue;
       const isSel = sel === CTRL_START + i;
       const isCapturing = this._settingsCapture === a;
+      this._drawSettingsControl(ry, rowH, isSel || isCapturing, isCapturing ? '#ffcc00' : '#ff00c8');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#ff00c8' : '#888899';
       ctx.fillText(ACTION_LABELS[a] || a, labelX, ry);
@@ -6768,6 +6868,7 @@ const game = {
     ctx.textAlign = 'center';
     const armed = this._settingsResetConfirm > 0
       && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS;
+    this._drawSettingsControl(resetY, rowH, sel === resetIdx || armed, armed ? '#ff4466' : '#ffcc00', armed);
     if (armed) {
       const blink = Math.sin(performance.now() / 120) > 0 ? 1 : 0.4;
       ctx.save();
@@ -6783,6 +6884,7 @@ const game = {
     // Back row
     const backIdx = resetIdx + 1;
     const backY = startY + backIdx * rowH;
+    this._drawSettingsControl(backY, rowH, sel === backIdx, '#00f5ff');
     ctx.fillStyle = sel === backIdx ? '#00f5ff' : '#666677';
     ctx.fillText('[ BACK ]', W/2, backY);
 
