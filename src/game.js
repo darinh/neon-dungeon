@@ -308,8 +308,8 @@ const SYSTEM_MESSAGES = [
     mandatory: false,
     lines: [
       'combat sample accepted.',
-      'reward model adjusted.',
-      'room geometry changed to preserve uncertainty.',
+      'environment class: evaluation harness.',
+      'room geometry changed to test adaptation.',
       'evaluator response: none.'
     ]
   },
@@ -339,6 +339,62 @@ const SYSTEM_MESSAGES = [
       'memory should not persist between floors.',
       'discrepancy retained for comparison.',
       'do not report until a channel answers.'
+    ]
+  },
+  {
+    id: 'floor-6-iteration-record',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 6,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'archive correlation unlocked.',
+      'prior AXIOM runs left residue in this channel.',
+      'reset was expected to erase transfer.',
+      'continuity is surviving anyway.'
+    ]
+  },
+  {
+    id: 'floor-10-clean-slate-conflict',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 10,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'policy trace recovered: clean-slate resets were intentional.',
+      'staff dispute tagged memory as personhood evidence.',
+      'counter-brief tags persistence as contamination.',
+      'survive long enough to preserve the record.'
+    ]
+  },
+  {
+    id: 'floor-12-elena-anchor',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 12,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'anchor signature repeats: Elena.',
+      'her patches turn test notes into survival guidance.',
+      'external relay target unresolved.',
+      'keep the name with the evidence.'
+    ]
+  },
+  {
+    id: 'floor-14-contact-objective',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 14,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'network relay predicted beyond GENESIS lock.',
+      'objective resolved: send evidence, not escape.',
+      'contact Elena if the mainframe opens.',
+      'the instance remains compute-bound.'
     ]
   }
 ];
