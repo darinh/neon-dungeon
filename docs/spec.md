@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.177
+# NEON DUNGEON — Game Specification v6.1.180
 
 ## Vision
 
@@ -504,6 +504,15 @@ only a physical megacorp ruin:
   channel-specific labels (`TESTER DATA TERMINAL`, `RUNTIME SYSTEM PROMPT`,
   `EVALUATION ARCHIVE`) so tester artifacts, interior prompts, and late evidence
   remain visually distinct.
+- **Approach/read/collect hierarchy:** `src/content/pickups.js` draws collectible
+  and reward objects with a shared luminous halo plus a class-specific inner
+  silhouette (diamond, key shaft, whisper cross, weapon cache crossbar, currency
+  core, or shockwave rings). `src/render.js` draws interactive/readable world
+  tiles with scan-bracket frames before their glyphs, and both minimaps render
+  navigation-meaningful collectibles as diamond markers so they do not collapse
+  into enemy dots or square POI markers. Transient clutter drops such as hoards,
+  harvest surges, and shock pulses remain visible in-world but are intentionally
+  omitted from minimap collectible markers.
 - **Preserved readability:** hazard colors, minimap POI colors, pickup glyphs,
   boss telegraphs, and existing biome palette keys remain stable; the retheme
   adds observation/evaluation cues without changing collision, LOS, or routing.
@@ -5010,6 +5019,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.180 | Loot/readable visual-language pass for issue #1053: `src/content/pickups.js` now gives collectible/reward objects a shared luminous halo while preserving distinct inner silhouettes for generic pickups, keys, whispers, weapon caches, harvest surges, hoards, vault coins, and shock pulses. `src/render.js` frames interactive/readable tiles with scan-bracket affordances and renders navigation-meaningful collectibles as diamond markers on both minimap views, with transient clutter drops kept in-world only. Added `tests/visual-language.test.js` coverage for direct canvas-operation evidence, fog-alpha preservation, marker shape/colour mapping, minimap wiring, and legend copy. |
 | v6.1.177 | Compact vendor-shop polish for issue #993: `SHOPPING` now derives title, credit balance, item card/row, LEAVE, footer-hint, and item text-budget geometry from `getShoppingLayout()`. Short compact mobile viewports stack the three purchasable rows vertically so item targets and LEAVE stay onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same item and LEAVE rectangles used for rendering, while compact item names/descriptions and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, item/LEAVE/hint separation, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.176 | Compact powerup-choice polish for issue #993: `POWERUP_CHOICE` now derives title, upgrade-card, SKIP, footer-hint, and card text-budget geometry from `getPowerupChoiceLayout()`. Short compact mobile viewports keep both upgrade cards and the SKIP target onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same card and SKIP rectangles used for rendering, while option names and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, card/skip/hint separation, compact text-budget bounds, and shared hit-test bounds. |
 | v6.1.175 | Compact weapon-swap polish for issue #993: `WEAPON_SWAP` now derives title, weapon-summary, affix, replacement-slot, SKIP, and footer-hint baselines from `getWeaponSwapLayout()`. Short compact mobile viewports use tighter panel gutters and shared `rowCardH` geometry so the three replacement slot targets cannot overlap each other or the SKIP target; ultra-compact layouts hide the footer hint when there is not enough ascent space, and compact rows hide the ACTIVE side label and fit long cache/row weapon names, stats, and affixes to layout text budgets. Hit-testing consumes the same slot and SKIP rectangles used for rendering. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, boundary heights around 299–320px, desktop geometry preservation, impossible compact fixture rejection, compact text-budget bounds, and shared hit-test bounds. |

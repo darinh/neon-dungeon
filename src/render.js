@@ -114,6 +114,104 @@ function drawExpandedLegendItems(items, x, y, maxX, lineH) {
 }
 
 /**
+ * @param {CanvasRenderingContext2D|any} frameCtx
+ * @param {number} sx
+ * @param {number} sy
+ * @param {string} colour
+ * @param {number} brightness
+ */
+function drawReadableFrame(frameCtx, sx, sy, colour, brightness) {
+  const priorAlpha = frameCtx.globalAlpha == null ? 1 : frameCtx.globalAlpha;
+  const priorShadowBlur = frameCtx.shadowBlur;
+  const priorShadowColor = frameCtx.shadowColor;
+  const priorStrokeStyle = frameCtx.strokeStyle;
+  const priorLineWidth = frameCtx.lineWidth;
+  frameCtx.globalAlpha = Math.min(priorAlpha, brightness) * 0.85;
+  frameCtx.shadowBlur = 4;
+  frameCtx.shadowColor = colour;
+  frameCtx.strokeStyle = colour;
+  frameCtx.lineWidth = 1;
+  frameCtx.beginPath();
+  frameCtx.moveTo(sx + 4.5, sy + 8.5);
+  frameCtx.lineTo(sx + 4.5, sy + 4.5);
+  frameCtx.lineTo(sx + 8.5, sy + 4.5);
+  frameCtx.moveTo(sx + TILE - 8.5, sy + 4.5);
+  frameCtx.lineTo(sx + TILE - 4.5, sy + 4.5);
+  frameCtx.lineTo(sx + TILE - 4.5, sy + 8.5);
+  frameCtx.moveTo(sx + TILE - 4.5, sy + TILE - 8.5);
+  frameCtx.lineTo(sx + TILE - 4.5, sy + TILE - 4.5);
+  frameCtx.lineTo(sx + TILE - 8.5, sy + TILE - 4.5);
+  frameCtx.moveTo(sx + 8.5, sy + TILE - 4.5);
+  frameCtx.lineTo(sx + 4.5, sy + TILE - 4.5);
+  frameCtx.lineTo(sx + 4.5, sy + TILE - 8.5);
+  frameCtx.stroke();
+  frameCtx.globalAlpha = priorAlpha;
+  frameCtx.shadowBlur = priorShadowBlur;
+  frameCtx.shadowColor = priorShadowColor;
+  frameCtx.strokeStyle = priorStrokeStyle;
+  frameCtx.lineWidth = priorLineWidth;
+}
+
+/**
+ * @param {CanvasRenderingContext2D|any} markerCtx
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} size
+ * @param {string} colour
+ */
+function drawMinimapDiamondMarker(markerCtx, cx, cy, size, colour) {
+  const priorShadowBlur = markerCtx.shadowBlur;
+  const priorShadowColor = markerCtx.shadowColor;
+  const priorFillStyle = markerCtx.fillStyle;
+  markerCtx.shadowBlur = 4;
+  markerCtx.shadowColor = colour;
+  markerCtx.fillStyle = colour;
+  markerCtx.beginPath();
+  markerCtx.moveTo(cx, cy - size);
+  markerCtx.lineTo(cx + size, cy);
+  markerCtx.lineTo(cx, cy + size);
+  markerCtx.lineTo(cx - size, cy);
+  markerCtx.closePath();
+  markerCtx.fill();
+  markerCtx.shadowBlur = priorShadowBlur;
+  markerCtx.shadowColor = priorShadowColor;
+  markerCtx.fillStyle = priorFillStyle;
+}
+
+/**
+ * @param {any} it
+ * @returns {string|null}
+ */
+function collectibleMapMarkerColour(it) {
+  if (!it || it.dead || it.isHoard || it.isHarvest || it.isShockPulse) return null;
+  if (it.isKey) return it.tileColour || '#ffdd44';
+  if (it.isWhisper) return '#ff77ff';
+  if (it.isWeaponCache) return '#ff8833';
+  if (it.type && it.type.colour) return it.type.colour;
+  return null;
+}
+
+/**
+ * @param {CanvasRenderingContext2D|any} markerCtx
+ * @param {any} dungeon
+ * @param {number} baseX
+ * @param {number} baseY
+ * @param {number} sx
+ * @param {number} sy
+ * @param {number} size
+ */
+function drawVisibleCollectibleMinimapMarkers(markerCtx, dungeon, baseX, baseY, sx, sy, size) {
+  if (typeof items === 'undefined' || !items) return;
+  for (const it of items) {
+    const colour = collectibleMapMarkerColour(it);
+    if (!colour) continue;
+    const tx = Math.floor(it.x), ty = Math.floor(it.y);
+    if (!dungeon.visible[ty]?.[tx]) continue;
+    drawMinimapDiamondMarker(markerCtx, baseX + it.x * sx, baseY + it.y * sy, size, colour);
+  }
+}
+
+/**
  * @returns {Array<[string, string]>}
  */
 function expandedEliteAffixLegendItems() {
@@ -821,6 +919,7 @@ function drawWorld(dungeon, camX, camY) {
         case T.TERMINAL:
           ctx.fillStyle=pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
+          drawReadableFrame(ctx, sx, sy, '#00f5ff', brightness);
           ctx.shadowBlur=12; ctx.shadowColor='#00f5ff';
           ctx.fillStyle='#00f5ff';
           ctx.font='16px monospace';
@@ -829,6 +928,7 @@ function drawWorld(dungeon, camX, camY) {
         case T.MAINFRAME_READER:
           ctx.fillStyle='#081828';
           ctx.fillRect(sx,sy,TILE,TILE);
+          drawReadableFrame(ctx, sx, sy, '#66ffcc', brightness);
           ctx.shadowBlur=14; ctx.shadowColor='#66ffcc';
           ctx.fillStyle='#66ffcc';
           ctx.font='16px monospace';
@@ -839,6 +939,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const portalPulse = 0.55 + 0.45 * Math.sin(lastTime / 450 + tx * 0.6 + ty * 0.4);
+          drawReadableFrame(ctx, sx, sy, '#88ccff', brightness);
           ctx.shadowBlur=18; ctx.shadowColor='#88ccff';
           ctx.fillStyle=`rgba(136,204,255,${portalPulse})`;
           ctx.font='18px monospace';
@@ -848,6 +949,7 @@ function drawWorld(dungeon, camX, camY) {
         case T.MESSAGE_CONSOLE:
           ctx.fillStyle='#160c22';
           ctx.fillRect(sx,sy,TILE,TILE);
+          drawReadableFrame(ctx, sx, sy, '#ff66cc', brightness);
           ctx.shadowBlur=14; ctx.shadowColor='#ff66cc';
           ctx.fillStyle='#ff66cc';
           ctx.font='16px monospace';
@@ -857,6 +959,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillStyle='#142a1c';
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
+          drawReadableFrame(ctx, sx, sy, '#39ff14', brightness);
           ctx.shadowBlur=10; ctx.shadowColor='#39ff14';
           ctx.fillStyle='#39ff14';
           ctx.font='16px monospace';
@@ -867,6 +970,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const impPulse = 0.6 + 0.4 * Math.sin(lastTime / 700 + tx * 0.9 + ty * 0.6);
+          drawReadableFrame(ctx, sx, sy, '#cc44ff', brightness);
           ctx.shadowBlur=12; ctx.shadowColor='#cc44ff';
           ctx.fillStyle=`rgba(204,68,255,${impPulse})`;
           ctx.font='18px monospace';
@@ -878,6 +982,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const evPulse = 0.5 + 0.5 * Math.sin(lastTime / 500 + tx * 1.3 + ty * 0.8);
+          drawReadableFrame(ctx, sx, sy, '#44ffcc', brightness);
           ctx.shadowBlur=14; ctx.shadowColor='#44ffcc';
           ctx.fillStyle=`rgba(68,255,204,${evPulse})`;
           ctx.font='18px monospace';
@@ -889,6 +994,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const tpPulse = 0.5 + 0.5 * Math.sin(lastTime / 400 + tx * 1.5 + ty * 1.1);
+          drawReadableFrame(ctx, sx, sy, '#bb44ff', brightness);
           ctx.shadowBlur=14; ctx.shadowColor='#bb44ff';
           ctx.fillStyle=`rgba(187,68,255,${tpPulse})`;
           ctx.font='18px monospace';
@@ -900,6 +1006,7 @@ function drawWorld(dungeon, camX, camY) {
           ctx.fillRect(sx,sy,TILE,TILE);
           ctx.globalAlpha=brightness;
           const lorePulse = 0.7 + 0.3 * Math.sin(lastTime / 600 + tx * 1.1 + ty * 0.7);
+          drawReadableFrame(ctx, sx, sy, '#ffb700', brightness);
           ctx.shadowBlur=8; ctx.shadowColor='#ffb700';
           ctx.fillStyle=`rgba(255,183,0,${lorePulse})`;
           ctx.font='16px monospace';
@@ -2147,6 +2254,10 @@ function drawMinimap(dungeon, player) {
     }
   }
 
+  // Collectibles use diamond markers so pickups/readables are not confused with
+  // hostile red dots or square POI targets on the map.
+  drawVisibleCollectibleMinimapMarkers(ctx, dungeon, MX, MY, sx, sy, 3);
+
   // enemies — only in current LOS, or everywhere with THERMAL_OPTICS
   const thermalOptics = hasAugment('THERMAL_OPTICS');
   for (const e of enemies) {
@@ -2489,6 +2600,9 @@ function drawExpandedMinimap(dungeon, player) {
     }
   }
 
+  const collectibleMarkerSize = Math.max(4, Math.round(sx * 0.55));
+  drawVisibleCollectibleMinimapMarkers(ctx, dungeon, mx, my, sx, sy, collectibleMarkerSize);
+
   // Room labels (visited special rooms only)
   const fs = Math.max(8, Math.min(12, Math.round(sx * 1.8)));
   ctx.font = `bold ${fs}px monospace`;
@@ -2661,7 +2775,8 @@ function drawExpandedMinimap(dungeon, player) {
   const legend = [
     ['#00f5ff','● You'], ['#ff3333','● Enemy'], ['#ffffff','■ Exit'],
     ['#39ff14','■ Shop'], ['#ffb700','■ Lore'], ['#cc44ff','■ Implant'],
-    ['#44ffcc','■ Event'], ['#ff6633','■ Challenge']
+    ['#44ffcc','■ Event'], ['#ff6633','■ Challenge'],
+    ['#ff8833','◆ Pickup'], ['#ff77ff','◆ Whisper']
   ];
   const legendLineH = Math.max(12, lFs + 4);
   let nextLegendY = drawExpandedLegendItems(legend, legendX, legendY, mx + mw, legendLineH);
