@@ -464,7 +464,11 @@ Collect only facts that affect future behavior:
   preservation, runtime wiring, or policy compliance) to the specific tests,
   source citations, runtime-order proof, or post-final-rebase review that proves
   it. Pre-rebase reviews may be historical context, but they are not the
-  load-bearing review evidence for the shipped tree;
+  load-bearing review evidence for the shipped tree. For visual/UI claims,
+  distinguish source-contract evidence from runtime visual evidence; include a
+  screenshot, canvas/pixel test, or manual runtime observation when available, or
+  explicitly record that the risk is accepted because only source-contract
+  evidence exists;
 - stale-resume preflight status, if the work item resumed existing branch,
   worktree, staged diff, handoff, session-history work, or any branch that had
   not fetched in the current session;
@@ -574,8 +578,14 @@ Collect only facts that affect future behavior:
     For UI/help/spec copy that describes when a control appears, is enabled, is
     dimmed, or performs an action, cite the implementation branch or predicate
     that makes the claim true and add/update a test when the claim is likely to
-    regress. For `docs/spec.md` version bumps, run the pinned spec-version test
-    (or record why the full gate is the accepted guard) before review.
+    regress. For UI rendering changes, record which visual evidence type supports
+    the claim: screenshot/manual runtime observation, canvas/pixel test, source
+    contract only, or an explicit out-of-scope reason. If all code reviewers
+    return no findings on a red-risk or ambiguous UI/rendering change, record the
+    project-specific risk categories they were asked to check, such as hot-path
+    allocation, mobile touch coupling, hitbox drift, render budget, and menu
+    layout overlap. For `docs/spec.md` version bumps, run the pinned spec-version
+    test (or record why the full gate is the accepted guard) before review.
 11. **Ask two other LLMs for adversarial critique.** Do this only after code
     reviewers are done and their findings are resolved. Give each retrospective
     reviewer the same pasted evidence and the draft retrospective; do not require
