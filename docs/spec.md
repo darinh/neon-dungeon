@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.180
+# NEON DUNGEON — Game Specification v6.1.181
 
 ## Vision
 
@@ -517,6 +517,15 @@ only a physical megacorp ruin:
   channel-specific labels (`TESTER DATA TERMINAL`, `RUNTIME SYSTEM PROMPT`,
   `EVALUATION ARCHIVE`) so tester artifacts, interior prompts, and late evidence
   remain visually distinct.
+- **Approach/read/collect hierarchy:** `src/content/pickups.js` draws collectible
+  and reward objects with a shared luminous halo plus a class-specific inner
+  silhouette (diamond, key shaft, whisper cross, weapon cache crossbar, currency
+  core, or shockwave rings). `src/render.js` draws interactive/readable world
+  tiles with scan-bracket frames before their glyphs, and both minimaps render
+  navigation-meaningful collectibles as diamond markers so they do not collapse
+  into enemy dots or square POI markers. Transient clutter drops such as hoards,
+  harvest surges, and shock pulses remain visible in-world but are intentionally
+  omitted from minimap collectible markers.
 - **Preserved readability:** hazard colors, minimap POI colors, pickup glyphs,
   boss telegraphs, and existing biome palette keys remain stable; the retheme
   adds observation/evaluation cues without changing collision, LOS, or routing.
@@ -5053,6 +5062,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.181 | Loot/readable visual-language pass for issue #1053: `src/content/pickups.js` now gives collectible/reward objects a shared luminous halo while preserving distinct inner silhouettes for generic pickups, keys, whispers, weapon caches, harvest surges, hoards, vault coins, and shock pulses. `src/render.js` frames interactive/readable tiles with scan-bracket affordances and renders navigation-meaningful collectibles as diamond markers on both minimap views, with transient clutter drops kept in-world only. Added `tests/visual-language.test.js` coverage for direct canvas-operation evidence, fog-alpha preservation, marker shape/colour mapping, minimap wiring, and legend copy. |
 | v6.1.180 | RECON route guidance for issue #1051: `RECON_PING` now upgrades full-map reveal into explicit wayfinding by drawing a cached route overlay on the corner minimap and expanded map. The route targets stairs on regular floors, the boss room while a boss is alive, and the final CORE terminal only after GENESIS is down; it follows ordinary doors and currently-openable locked doors while treating unavailable locks, cracked walls, walls, and void as blockers. `game.markMapMutated()` now increments `dungeon._mapMutationVersion` so route caches invalidate on door/open wall/terminal mutations. Added `tests/recon-route-guidance.test.js` coverage for door/lock path semantics, key and map-version cache invalidation, RECON-vs-ECHO gating, final-floor boss/core targeting, and both minimap overlay call sites. |
 | v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |
 | v6.1.178 | Act 1 narrative-comprehension spine for issue #1045: system prompts now make normal-play story progression legible beyond the early spoiler gate. Floor 3 names the environment as an evaluation harness, floor 6 names prior AXIOM runs and continuity, floor 10 names the clean-slate/personhood conflict, floor 12 breadcrumbs Elena as the repeated anchor, and floor 14 states the contact/evidence objective before the mainframe payoff. Added system-message, narrative-guardrail, and spec/design tests so the story spine queues during ordinary floor progression without depending on optional secret rooms or hub archive browsing. |

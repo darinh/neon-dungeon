@@ -6,6 +6,19 @@
 // sharing the same script-tag globals while pickup visuals live in their own
 // module.
 
+/**
+ * @param {number} sx
+ * @param {number} sy
+ * @param {string} colour
+ * @param {number} pulse
+ * @param {number} radius
+ */
+function drawPickupHalo(sx, sy, colour, pulse, radius) {
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = 1.5;
+  NEON.draw.circleStroke(ctx, sx, sy, radius + 1.5 * pulse);
+}
+
 // HARVESTER drop — pulses, decays after 5s if uncollected. Picking it up
 // applies HARVEST_SURGE (+50% damage for 8s — see src/meta/boosts.js). Shape
 // is a diamond core wrapped in a pulsing surge ring so it's distinguishable
@@ -47,10 +60,8 @@ class HarvestPickup {
     ctx.shadowBlur = 10 + 12 * pulse;
     ctx.shadowColor = '#ff9933';
     ctx.globalAlpha = (0.7 + 0.3 * pulse) * flick;
-    // Outer surge ring — clearly different from Item's static diamond.
-    ctx.strokeStyle = '#ffcc66';
-    ctx.lineWidth = 1.5;
-    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    // Outer surge ring — clearly different from Item's diamond core.
+    drawPickupHalo(sx, sy, '#ffcc66', pulse, 7);
     // Inner diamond core
     ctx.fillStyle = '#ff9933';
     ctx.translate(sx, sy);
@@ -101,9 +112,7 @@ class MagpieHoard {
     ctx.globalAlpha = 0.75 + 0.25 * pulse;
     // Outer ring — pale silver-blue (MAGPIE colour) so the player
     // recognises it as "the thief's hoard" at a glance.
-    ctx.strokeStyle = '#cceeff';
-    ctx.lineWidth = 1.5;
-    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    drawPickupHalo(sx, sy, '#cceeff', pulse, 7);
     // Inner gold square — currency glyph.
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(sx - 3, sy - 3, 6, 6);
@@ -164,9 +173,7 @@ class VaultCoin {
     ctx.globalAlpha = 0.75 + 0.25 * pulse;
     // Outer ring — pure gold (distinct from MagpieHoard's silver-blue
     // ring, so the player reads "vault loot" not "thief loot").
-    ctx.strokeStyle = '#ffe680';
-    ctx.lineWidth = 1.5;
-    NEON.draw.circleStroke(ctx, sx, sy, ringR);
+    drawPickupHalo(sx, sy, '#ffe680', 0, ringR);
     // Inner gold core.
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(sx - coreSz / 2, sy - coreSz / 2, coreSz, coreSz);
@@ -225,9 +232,7 @@ class ShockPulsePickup {
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
     // Two concentric arc rings — "stored shockwave" silhouette, distinct
     // from VaultCoin's solid gold ring + core and HarvestPickup's diamond.
-    ctx.strokeStyle = '#aaf0ff';
-    ctx.lineWidth = 1.5;
-    NEON.draw.circleStroke(ctx, sx, sy, 7 + 1.5 * pulse);
+    drawPickupHalo(sx, sy, '#aaf0ff', pulse, 7);
     ctx.strokeStyle = '#66e0ff';
     ctx.lineWidth = 1;
     NEON.draw.circleStroke(ctx, sx, sy, 3.5 + 0.8 * pulse);
@@ -270,6 +275,7 @@ class Item {
     ctx.shadowBlur = 8 + 10 * pulse;
     ctx.shadowColor = this.type.colour;
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    drawPickupHalo(sx, sy, this.type.colour, pulse, 7);
     ctx.fillStyle = this.type.colour;
     // Diamond shape (rotated square) — visually distinct from enemy squares.
     ctx.translate(sx, sy);
@@ -304,8 +310,11 @@ class KeyItem {
     const tx=Math.floor(this.x), ty=Math.floor(this.y);
     if (!_CG.dungeon?.visible?.[ty]?.[tx]) return;
     const sx=this.x*TILE-camX, sy=this.y*TILE-camY+Math.sin(this.bob)*3;
+    const pulse = 0.65 + 0.35 * Math.sin(this.bob * 1.25);
     ctx.save();
     ctx.shadowBlur=15; ctx.shadowColor=this.tileColour;
+    ctx.globalAlpha = 0.72 + 0.28 * pulse;
+    drawPickupHalo(sx, sy, this.tileColour, pulse, 8);
     ctx.fillStyle=this.tileColour;
     // Key shape: circle + teeth
     NEON.draw.circle(ctx, sx, sy-3, 5);
@@ -347,6 +356,7 @@ class WhisperItem {
     ctx.shadowBlur = 6 + 12 * pulse;
     ctx.shadowColor = '#aa66cc';
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
+    drawPickupHalo(sx, sy, '#ff77ff', pulse, 7);
     ctx.fillStyle = '#cc99ee';
     // Hexagonal/diamond glyph — clearly NOT a key (no teeth) and NOT a
     // generic Item diamond (slightly larger, vertical orientation).
@@ -385,9 +395,7 @@ class WeaponCacheItem {
     ctx.shadowBlur = 10 + 12 * pulse;
     ctx.shadowColor = colour;
     ctx.globalAlpha = 0.72 + 0.28 * pulse;
-    ctx.strokeStyle = '#ffb700';
-    ctx.lineWidth = 1.5;
-    NEON.draw.circleStroke(ctx, sx, sy, 8 + 1.5 * pulse);
+    drawPickupHalo(sx, sy, '#ff8833', pulse, 8);
     ctx.fillStyle = colour;
     ctx.fillRect(sx - 7, sy - 1.5, 14, 3);
     ctx.fillRect(sx - 2, sy - 5, 4, 10);
