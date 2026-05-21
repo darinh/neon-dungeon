@@ -138,6 +138,9 @@ These are hard rules, not preferences:
 - For Markdown-heavy `gh pr create`, `gh pr edit`, and `gh pr comment` bodies,
   use `--body-file` with a temporary file or a single-quoted heredoc. Do not put
   backticks inside a double-quoted `--body` argument.
+- For Markdown-heavy issue closure comments, use `gh issue comment --body-file`
+  first, then `gh issue close --reason completed|not planned`; this installed
+  `gh` does not support `gh issue close --comment-file`.
 
 ## Type-safety status
 

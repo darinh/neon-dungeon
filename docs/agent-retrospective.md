@@ -78,7 +78,15 @@ Run and record these before verification or review:
    different path. If the work is closed, superseded, already landed, or
    equivalent upstream, stop immediately before spending reviewer cycles or
    opening a PR; abandon or close the duplicate work and record the evidence.
-2. **Review-risk triage.** Before requesting code review, list every changed
+2. **Audit-to-issue triage.** Before creating a GitHub issue from an audit,
+   request-history backlog, or generated backlog item, first check current
+   `origin/develop` for equivalent implementation and test coverage. Use the
+   cheapest focused evidence that can disprove the gap: targeted source/test
+   search, existing issue/PR search, and, when likely coverage exists, the
+   smallest relevant test command. The issue body must include negative evidence
+   when the gap is real, or the item must be marked as an audit false positive
+   with citations instead of creating a redundant issue.
+3. **Review-risk triage.** Before requesting code review, list every changed
    code-bearing path and state whether it matches a red-risk designation or is
    ambiguous enough to use the higher reviewer count. Record the number of
    adversarial reviewers required and used. If a path resembles a red-risk file
@@ -92,12 +100,12 @@ Run and record these before verification or review:
    `git diff --staged` reflects the intended target in a separate dependent
    step. Do not parallelize restaging with a staged-diff read or reviewer launch;
    a parallel read can capture stale staged content from the prior state.
-3. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
+4. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using
    test failures as evidence. Check and record this bootstrap status before the
    first npm verification command in a fresh implementation worktree.
-4. **Bounded command preflight.** Before running repository-wide discovery
+5. **Bounded command preflight.** Before running repository-wide discovery
    commands in long-lived checkouts, prefer exact queries over broad listings and
    bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
    line limit. Any startup or discovery command expected to print more than 50
@@ -147,24 +155,24 @@ Run and record these before verification or review:
    live user-scope bootstrap extension has been installed, reloaded, inspected,
    and recorded with its path and scope. A checked-in guard that exists only on a
    stale checkout is not an active control.
-5. **Focused-test command scope.** Before describing a verification command as
+6. **Focused-test command scope.** Before describing a verification command as
    focused, check how package scripts forward arguments. In this repository,
    `npm test -- tests/foo.test.js` still runs the package script
    `node --test tests/*.test.js`; use `node --test tests/foo.test.js` for a
    truly file-focused run, or record that the command actually executed the full
    test glob.
-6. **CI failure classification.** Before changing code, workflows, or release
+7. **CI failure classification.** Before changing code, workflows, or release
    state for a failed check, read the failed job log and classify the failure as
    checkout/runner infrastructure, dependency/bootstrap, or product code. For
    self-hosted runner checkout failures, inspect the runner workspace cache
    first; corrupt object or checkout-cache failures should be repaired and rerun
    before any repository change is considered.
-7. **New-runtime-file surface audit.** Any new browser runtime source file must
+8. **New-runtime-file surface audit.** Any new browser runtime source file must
    be checked against all registration surfaces: `index.html`,
    `scripts/manifest.js`, service-worker precache, source-file helpers, tests,
    and docs. Default helper paths such as `readSourceFiles()` must cover the new
    file when it is part of the runtime source set.
-8. **Classic-script runtime proof.** When moving top-level globals between
+9. **Classic-script runtime proof.** When moving top-level globals between
    classic scripts, record why the chosen script order is safe: dependencies
    loaded before the new file, callers loaded or executed after it, and no
    module-evaluation-time call path that can reference the moved global early.
@@ -175,7 +183,7 @@ Run and record these before verification or review:
    code references, cite where each dependency is defined, and verify each
    definition loads before the new file or is only called after the dependency
    is initialized. Manifest/source equality alone is not dependency proof.
-9. **Moved-symbol source audit.** Before the first full gate on any extraction
+10. **Moved-symbol source audit.** Before the first full gate on any extraction
    from `src/entities.js` or another classic-script monolith, search tests,
    source helpers, docs, runtime files, and `types/*.d.ts` declarations for the
    moved symbol and the old file path. Update direct source-text assertions,
@@ -218,7 +226,7 @@ Run and record these before verification or review:
    loading or parsing the production source; if a synthetic value is intentional,
    name and comment it as a synthetic fixture so it is not mistaken for behavior
    parity.
-10. **Engine-surface export checklist.** When a slice adds, renames, or moves an
+11. **Engine-surface export checklist.** When a slice adds, renames, or moves an
     engine public export, shared coordinate table, or engine-facing constant,
     update the runtime export, `types/engine.d.ts`, `docs/engine-boundary.md`,
     `docs/spec.md`, and at least one direct engine test in the same commit.
@@ -227,7 +235,7 @@ Run and record these before verification or review:
     record must state which semantics remain caller-owned, such as NEON tile
     vocabulary, mutation policy, sequential mutation order, or runtime side
     effects.
-11. **False-positive evidence.** Any reviewer finding rejected as a false positive
+12. **False-positive evidence.** Any reviewer finding rejected as a false positive
    must be backed by a code citation, test, or runtime-order proof so the same
    concern does not get relitigated without new evidence. A critique claim based
    on repository shape or file existence must cite current-repo evidence before
@@ -236,22 +244,22 @@ Run and record these before verification or review:
    claim that a removed invariant, comment, symbol, or behavior is "preserved
    elsewhere" must cite the destination file and line range, and the agent must
    verify that citation before accepting the claim.
-12. **Review-fix shipment proof.** Before replying that a review finding is
+13. **Review-fix shipment proof.** Before replying that a review finding is
    addressed, verify the fix commit is present in the PR head (`headRefOid` or
    `gh pr view --json commits`) and that the changed file content is present in
    the branch or merge commit that will ship. If a PR was already merged, verify
    the target branch tree, not just the local feature branch.
-13. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
+14. **Failed multi-file patch recovery.** If a multi-file patch reports failure,
    assume the worktree may be partially modified. Before retrying, record
    `git status --porcelain`, inspect every touched target or the affected diff,
    and retry with smaller patches grouped by file or tightly related surface.
-14. **Extension/trigger path proof.** Any extension or trigger scaffolding must
+15. **Extension/trigger path proof.** Any extension or trigger scaffolding must
    record the resolved file path, verify it lives under the implementation
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
    and which copy is authoritative.
-15. **Pre-promotion authority/range audit.** Before opening any PR targeting
+16. **Pre-promotion authority/range audit.** Before opening any PR targeting
      `main`, run `npm run check:promotion-audit -- --allow-human-authored
      --authority "<quoted active instruction authorizing develop -> main
      promotion>"` and paste its output into the evidence before continuing. Before
@@ -289,18 +297,18 @@ Run and record these before verification or review:
     conflicts with another active rule, stop instead of inferring approval. A
     closed PR whose source branch was changed or replaced should not be treated
     as reopenable; open a replacement PR from a fresh branch.
-16. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
+17. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
     When editing roadmap or checklist-style docs, search for duplicate entries
     before review and again after conflict resolution.
-17. **Contractual iteration-order proof.** When extracting or reimplementing
+18. **Contractual iteration-order proof.** When extracting or reimplementing
     legacy behavior where scan, traversal, RNG, tie-break, or insertion order is
     part of the contract, derive the expected order directly from the source loop
     structure before writing tests or helper JSDoc. Record the loop shape in the
     evidence (for example, "top/bottom per x, then left/right per y") and add a
     characterization test that asserts the exact output order before review.
-18. **Extraction equivalence and smoke proof.** For each extracted function or
+19. **Extraction equivalence and smoke proof.** For each extracted function or
     helper, add a focused characterization/equivalence test that covers the moved
     behavior's contract, including edge cases that made the original code
     non-trivial. If one test is sufficient, say why; if no new test is added,
@@ -321,7 +329,7 @@ Run and record these before verification or review:
     Tests for required generated structures must assert the structure exists
     before direct indexing; do not use optional chaining, `||`, or `??` fallbacks
     in assertions that are supposed to prove required data exists.
-19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
+20. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
      that is not already used successfully in the current session, either preflight
      the help/version output or be prepared to record the exact fallback command
      that succeeded. A tool-version mismatch is not resolved by retrying once; the
@@ -329,7 +337,7 @@ Run and record these before verification or review:
      mismatch. For PR status checks, `gh pr checks <pr> --required` is the
      compatible non-watch form; use `gh pr checks <pr> --watch --fail-fast
      --interval <seconds>` only when watch mode is intended.
-20. **Shared-branch force alignment guard.** Before force-with-lease aligning a
+21. **Shared-branch force alignment guard.** Before force-with-lease aligning a
     shared branch after a deliberate rebase promotion, fetch the remote branch,
     record the exact old and new SHAs, prove the source and target trees match,
     and record count-complete `gh pr list` evidence plus ref/commit evidence
@@ -347,7 +355,7 @@ Run and record these before verification or review:
     just-promoted range, stop and reconcile deliberately instead of force pushing.
     The retrospective must include the command evidence that made the alignment
     safe.
-21. **Pre-merge instruction conflict check.** Before merging any PR, compare the
+22. **Pre-merge instruction conflict check.** Before merging any PR, compare the
     merge instructions that apply from the repository protocol, project
     instructions, and current operator/user directive. If they disagree on tool,
     merge method, authority, or post-merge verification, resolve the conflict
@@ -356,7 +364,7 @@ Run and record these before verification or review:
     instruction says to use raw `gh`, update that instruction or stop and record
     the conflict rather than choosing one silently. The retrospective must record
     which merge path was used and whether any instruction conflict was found.
-22. **Explicit negative path constraints.** When a user or project instruction says
+23. **Explicit negative path constraints.** When a user or project instruction says
     a path, marker, artifact, or legacy location must not be read, written, or
     migrated, inspect the relevant implementation surfaces before attributing
     observed behavior to an inferred cause. Record the searched scripts, wrappers,
