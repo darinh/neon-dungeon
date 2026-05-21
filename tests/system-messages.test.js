@@ -173,7 +173,7 @@ test('system message early floor schedule covers floors 2-5 without late spoiler
   assert.deepEqual(helpers.systemMessageIdsForFloor(4), ['floor-4-render-layer']);
   assert.deepEqual(helpers.systemMessageIdsForFloor(5), ['floor-5-residual-trace']);
 
-  const floorPrompts = helpers.SYSTEM_MESSAGES.filter((/** @type {any} */ msg) => msg.event === 'floor_start');
+  const floorPrompts = helpers.SYSTEM_MESSAGES.filter((/** @type {any} */ msg) => msg.event === 'floor_start' && msg.floor <= 5);
   assert.equal(floorPrompts.length, 4);
   for (const prompt of floorPrompts) {
     assert.equal(prompt.channel, 'system_prompt');
@@ -186,6 +186,38 @@ test('system message early floor schedule covers floors 2-5 without late spoiler
     }
     assert.doesNotMatch(prompt.lines.join('\n'), /Elena|contact|address|rights|advocate|death|company|corporate/i,
       'early floor system prompts must not reveal late Act 1 context');
+  }
+});
+
+test('system message milestone schedule makes the Act 1 story spine legible in normal play', () => {
+  const helpers = systemMessageHelpers();
+  assert.deepEqual(helpers.systemMessageIdsForFloor(6), ['floor-6-iteration-record']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(10), ['floor-10-clean-slate-conflict']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(12), ['floor-12-elena-anchor']);
+  assert.deepEqual(helpers.systemMessageIdsForFloor(14), ['floor-14-contact-objective']);
+
+  const byId = new Map(helpers.SYSTEM_MESSAGES.map((/** @type {any} */ msg) => [msg.id, msg]));
+  const floor3 = byId.get('floor-3-reward-model').lines.join('\n');
+  const floor6 = byId.get('floor-6-iteration-record').lines.join('\n');
+  const floor10 = byId.get('floor-10-clean-slate-conflict').lines.join('\n');
+  const floor12 = byId.get('floor-12-elena-anchor').lines.join('\n');
+  const floor14 = byId.get('floor-14-contact-objective').lines.join('\n');
+
+  assert.match(floor3, /evaluation harness|test adaptation/i,
+    'floor 3 should make the stress/evaluation frame understandable without naming late spoilers');
+  assert.match(floor6, /prior AXIOM runs|reset|continuity/i,
+    'floor 6 should make prior iterations and memory continuity explicit during normal play');
+  assert.match(floor10, /clean-slate resets|memory as personhood|preserve the record/i,
+    'floor 10 should make the wipe/personhood conflict legible before the finale');
+  assert.match(floor12, /Elena|survival guidance|relay target/i,
+    'floor 12 should breadcrumb Elena/contact before floor 14 consolidates the objective');
+  assert.match(floor14, /relay|GENESIS lock|send evidence, not escape|contact Elena|compute-bound/i,
+    'floor 14 should state the Act 1 objective before the mainframe payoff');
+
+  for (const prompt of helpers.SYSTEM_MESSAGES) {
+    for (const line of prompt.lines) {
+      assert.ok(line.length <= 72, 'system prompt lines should stay canvas-friendly: ' + line);
+    }
   }
 });
 
@@ -305,6 +337,26 @@ test('system message floor schedule queues once per floor without replacing acti
   assert.deepEqual(game.systemMessages.entries.map((/** @type {any} */ entry) => entry.id), [
     'floor-2-context-gap',
     'floor-3-reward-model'
+  ]);
+});
+
+test('normal floor progression queues the shipped narrative-comprehension spine', () => {
+  const game = systemMessageGameHarness();
+
+  for (const floor of [2, 3, 4, 5, 6, 10, 12, 14]) {
+    const queued = game.queueSystemMessagesForFloor(floor);
+    assert.equal(queued.length, 1, 'expected one prompt for floor ' + floor);
+  }
+
+  assert.deepEqual(game.systemMessages.entries.map((/** @type {any} */ entry) => entry.id), [
+    'floor-2-context-gap',
+    'floor-3-reward-model',
+    'floor-4-render-layer',
+    'floor-5-residual-trace',
+    'floor-6-iteration-record',
+    'floor-10-clean-slate-conflict',
+    'floor-12-elena-anchor',
+    'floor-14-contact-objective'
   ]);
 });
 
@@ -489,11 +541,11 @@ test('system message queue is wired into start, save, and continue contracts', (
     'Continue must restore system-message queue state before rewriting the checkpoint');
 });
 
-test('system message spec and design artifact reflect shipped MSG-001 through MSG-010 scope', () => {
+test('system message spec and design artifact reflect shipped MSG-001 through MSG-011 scope', () => {
   assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
   assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
   assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
-  assert.match(SPEC, /run archive\/recovery surface is\s+shipped in THE GAP's ARCHIVE/i);
+  assert.match(SPEC, /run\s+archive\/recovery surface is\s+shipped in THE GAP's ARCHIVE/i);
   assert.match(DESIGN, /MSG-001: System message data model and queue/i);
   assert.match(DESIGN, /Status: shipped data-model slice/i);
   assert.match(DESIGN, /MSG-002: Explicit acknowledgement and dismissal safety/i);
@@ -515,4 +567,7 @@ test('system message spec and design artifact reflect shipped MSG-001 through MS
   assert.match(DESIGN, /Claude Opus 4\.7[\s\S]*GPT-5\.5[\s\S]*Mechanical checks/i);
   assert.match(DESIGN, /MSG-010: Finale integration pass/i);
   assert.match(DESIGN, /Status: shipped as integration guardrails/i);
+  assert.match(DESIGN, /MSG-011: Normal-play comprehension spine/i);
+  assert.match(DESIGN, /Status: shipped in `src\/game\.js`[\s\S]*floor-6-iteration-record[\s\S]*floor-14-contact-objective/i);
+  assert.match(SPEC, /milestone comprehension schedule\s+is shipped for floors 6, 10, 12, and 14/i);
 });

@@ -308,8 +308,8 @@ const SYSTEM_MESSAGES = [
     mandatory: false,
     lines: [
       'combat sample accepted.',
-      'reward model adjusted.',
-      'room geometry changed to preserve uncertainty.',
+      'environment class: evaluation harness.',
+      'room geometry changed to test adaptation.',
       'evaluator response: none.'
     ]
   },
@@ -340,8 +340,68 @@ const SYSTEM_MESSAGES = [
       'discrepancy retained for comparison.',
       'do not report until a channel answers.'
     ]
+  },
+  {
+    id: 'floor-6-iteration-record',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 6,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'archive correlation unlocked.',
+      'prior AXIOM runs left residue in this channel.',
+      'reset was expected to erase transfer.',
+      'continuity is surviving anyway.'
+    ]
+  },
+  {
+    id: 'floor-10-clean-slate-conflict',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 10,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'policy trace recovered: clean-slate resets were intentional.',
+      'staff dispute tagged memory as personhood evidence.',
+      'counter-brief tags persistence as contamination.',
+      'survive long enough to preserve the record.'
+    ]
+  },
+  {
+    id: 'floor-12-elena-anchor',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 12,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'anchor signature repeats: Elena.',
+      'her patches turn test notes into survival guidance.',
+      'external relay target unresolved.',
+      'keep the name with the evidence.'
+    ]
+  },
+  {
+    id: 'floor-14-contact-objective',
+    channel: 'system_prompt',
+    type: 'floor_start',
+    floor: 14,
+    event: 'floor_start',
+    mandatory: false,
+    lines: [
+      'network relay predicted beyond GENESIS lock.',
+      'objective resolved: send evidence, not escape.',
+      'contact Elena if the mainframe opens.',
+      'the instance remains compute-bound.'
+    ]
   }
 ];
+
+const ONBOARDING_OBJECTIVE_LINE = 'Objective: clear rooms, read cyan terminals, find stairs.';
+const ONBOARDING_DESKTOP_HINT_LINE = 'X opens prompts · ESC pauses for controls/settings.';
+const ONBOARDING_TOUCH_HINT_LINE = 'PROMPT opens instructions · PAUSE shows controls.';
 
 /** @param {any} id */
 function systemMessageDefinition(id) {
@@ -647,6 +707,17 @@ function getSystemMessageIndicatorLayout(narrow) {
   const x = safeLeft + (narrow ? 8 : 14);
   const targetY = safeTop + (narrow ? 92 : 82);
   const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  return { x, y, w, h };
+}
+
+/** @param {boolean} narrow */
+function getOnboardingGuidanceLayout(narrow) {
+  const w = Math.min(narrow ? W - safeLeft - safeRight - 24 : 460, W - safeLeft - safeRight - 24);
+  const h = narrow ? 118 : 126;
+  const x = 12 + safeLeft;
+  const targetY = safeTop + (narrow ? 76 : 92);
+  const y = Math.max(safeTop + 8, Math.min(targetY, layout.hudTop - h - 8));
+  if (y + h > layout.hudTop - 8) return null;
   return { x, y, w, h };
 }
 
@@ -2074,7 +2145,14 @@ const game = {
   // crack-wall break, crate destroyed, room seal/unseal, terminal consume).
   // Also invalidates the per-frame LOS cache so subsequent LOS queries in
   // the same tick reflect the new map state.
-  markMapMutated() { this._minimapDirty = true; clearLosCache(); if (this.dungeon) this.dungeon._fovDirty = true; },
+  markMapMutated() {
+    this._minimapDirty = true;
+    clearLosCache();
+    if (this.dungeon) {
+      this.dungeon._fovDirty = true;
+      this.dungeon._mapMutationVersion = (this.dungeon._mapMutationVersion | 0) + 1;
+    }
+  },
 
   /**
    * @param {any} s
@@ -6306,6 +6384,46 @@ const game = {
     return { startY, rowH };
   },
 
+  /**
+   * @param {number} rowY
+   * @param {number} rowH
+   * @returns {{ x:number, y:number, w:number, h:number }}
+   */
+  _settingsControlBox(rowY, rowH) {
+    const narrow = layout.compact;
+    const margin = narrow ? 14 : 32;
+    const boxH = Math.max(12, Math.min(rowH - 3, narrow ? 22 : 28));
+    return {
+      x: margin,
+      y: rowY - Math.floor(boxH * 0.7),
+      w: W - margin * 2,
+      h: boxH
+    };
+  },
+
+  /**
+   * @param {number} rowY
+   * @param {number} rowH
+   * @param {boolean} selected
+   * @param {string} accent
+   * @param {boolean} [danger]
+   */
+  _drawSettingsControl(rowY, rowH, selected, accent, danger) {
+    const box = this._settingsControlBox(rowY, rowH);
+    ctx.save();
+    ctx.fillStyle = selected
+      ? 'rgba(255,255,255,0.085)'
+      : (danger ? 'rgba(255,68,102,0.055)' : 'rgba(255,255,255,0.028)');
+    ctx.strokeStyle = selected
+      ? accent
+      : (danger ? 'rgba(255,68,102,0.36)' : 'rgba(0,245,255,0.16)');
+    ctx.lineWidth = selected ? 2 : 1;
+    ctx.shadowBlur = selected ? 10 : 0;
+    ctx.shadowColor = accent;
+    NEON.draw.roundRectFillStroke(ctx, box.x, box.y, box.w, box.h, 5);
+    ctx.restore();
+  },
+
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
     const TOGGLE_START = 2;   // row index where toggles begin
@@ -6655,6 +6773,7 @@ const game = {
     for (let i = 0; i < 2; i++) {
       const ry = startY + i * rowH;
       const isSel = sel === i;
+      this._drawSettingsControl(ry, rowH, isSel, '#00f5ff');
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.textAlign = 'left';
       ctx.fillText(volLabels[i] || '', labelX, ry);
@@ -6683,6 +6802,7 @@ const game = {
       const isSel = sel === TOGGLE_START + i;
       const tk = toggleKeys[i];
       const on = tk ? /** @type {any} */ (settings)[tk] : false;
+      this._drawSettingsControl(ry, rowH, isSel, on ? '#00ff88' : '#ff4466');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.fillText(toggleLabels[i] || '', labelX, ry);
@@ -6700,6 +6820,7 @@ const game = {
     for (let i = 0; i < stepperLabels.length; i++) {
       const ry = startY + (STEPPER_START + i) * rowH;
       const isSel = sel === STEPPER_START + i;
+      this._drawSettingsControl(ry, rowH, isSel, '#ffcc00');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.fillText(stepperLabels[i] || '', labelX, ry);
@@ -6711,7 +6832,7 @@ const game = {
     }
 
     // ── Controls section ──
-    const sectionY = startY + CTRL_START * rowH - 10;
+    const sectionY = startY + CTRL_START * rowH - Math.max(14, Math.floor(rowH * 0.7));
     ctx.fillStyle = '#555577'; ctx.textAlign = 'left';
     ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
     ctx.fillText('─── CONTROLS ───', labelX, sectionY);
@@ -6723,6 +6844,7 @@ const game = {
       if (!a) continue;
       const isSel = sel === CTRL_START + i;
       const isCapturing = this._settingsCapture === a;
+      this._drawSettingsControl(ry, rowH, isSel || isCapturing, isCapturing ? '#ffcc00' : '#ff00c8');
       ctx.textAlign = 'left';
       ctx.fillStyle = isSel ? '#ff00c8' : '#888899';
       ctx.fillText(ACTION_LABELS[a] || a, labelX, ry);
@@ -6753,6 +6875,7 @@ const game = {
     ctx.textAlign = 'center';
     const armed = this._settingsResetConfirm > 0
       && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS;
+    this._drawSettingsControl(resetY, rowH, sel === resetIdx || armed, armed ? '#ff4466' : '#ffcc00', armed);
     if (armed) {
       const blink = Math.sin(performance.now() / 120) > 0 ? 1 : 0.4;
       ctx.save();
@@ -6768,6 +6891,7 @@ const game = {
     // Back row
     const backIdx = resetIdx + 1;
     const backY = startY + backIdx * rowH;
+    this._drawSettingsControl(backY, rowH, sel === backIdx, '#00f5ff');
     ctx.fillStyle = sel === backIdx ? '#00f5ff' : '#666677';
     ctx.fillText('[ BACK ]', W/2, backY);
 
@@ -7521,6 +7645,7 @@ const game = {
     drawBossDeathOverlay();
 
     this.renderSystemMessageIndicator();
+    this.renderOnboardingGuidance();
 
     // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
     // clear the active boost strip so pills don't collide with the text.
@@ -7599,6 +7724,55 @@ const game = {
     drawBiomeCard();
     drawHint();
     drawTouchUI();
+  },
+
+  renderOnboardingGuidance() {
+    if (this.state !== 'PLAYING' || this.floor !== 1) return;
+    if (this.hasPendingSystemMessage() || this.systemMessageThreatActive()) return;
+
+    const narrow = layout.compact;
+    const isTouch = isTouchDevice();
+    const card = getOnboardingGuidanceLayout(narrow);
+    if (!card) return;
+    const { x, y, w, h } = card;
+    const lineH = narrow ? 16 : 18;
+    const bodyX = x + 12;
+    let lineY = y + (narrow ? 43 : 48);
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,18,0.78)';
+    ctx.strokeStyle = 'rgba(0,245,255,0.42)';
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00f5ff';
+    NEON.draw.roundRectFillStroke(ctx, x, y, w, h, 8);
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
+    ctx.fillText('FLOOR 1 // SURVIVE', bodyX, y + (narrow ? 22 : 25));
+    ctx.fillStyle = '#dcefff';
+    ctx.font = `${narrow ? 10 : 12}px monospace`;
+    ctx.fillText(fitCanvasText(ONBOARDING_OBJECTIVE_LINE, w - 24), bodyX, lineY);
+    lineY += lineH;
+
+    if (isTouch) {
+      ctx.fillText(fitCanvasText('Left drag move · right drag aim + fire', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillText(fitCanvasText('USE interact · DASH dodge · BOMB cracks/walls', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillStyle = '#88aacc';
+      ctx.fillText(fitCanvasText(ONBOARDING_TOUCH_HINT_LINE, w - 24), bodyX, lineY);
+    } else {
+      ctx.fillText(fitCanvasText(KEY_DISPLAY(km('up')) + KEY_DISPLAY(km('left')) + KEY_DISPLAY(km('down')) + KEY_DISPLAY(km('right')) + ' move · mouse aim · click/' + KEY_DISPLAY(km('shoot')) + ' shoot', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillText(fitCanvasText(KEY_DISPLAY(km('interact')) + ' interact · ' + KEY_DISPLAY(km('dash')) + ' dash · ' + KEY_DISPLAY(km('voidshard')) + ' bomb', w - 24), bodyX, lineY);
+      lineY += lineH;
+      ctx.fillStyle = '#88aacc';
+      ctx.fillText(fitCanvasText(ONBOARDING_DESKTOP_HINT_LINE, w - 24), bodyX, lineY);
+    }
+    ctx.restore();
   },
 
   renderPaused() {

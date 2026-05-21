@@ -2114,6 +2114,243 @@ function drawBiomeCard() {
 }
 
 // ─── Minimap ──────────────────────────────────────────────────────────────────
+// ─── RECON Route Guidance ─────────────────────────────────────────────────────
+/** @type {readonly [number, number, number, number]} */
+const RECON_ROUTE_DX = [1, -1, 0, 0];
+/** @type {readonly [number, number, number, number]} */
+const RECON_ROUTE_DY = [0, 0, 1, -1];
+
+/**
+ * @param {any} player
+ * @returns {string}
+ */
+function reconRouteKeyState(player) {
+  const keys = player && player.keys ? player.keys : {};
+  return (keys.red | 0) + ':' + (keys.blue | 0) + ':' + (keys.gold | 0);
+}
+
+/**
+ * @param {any} tile
+ * @returns {string | null}
+ */
+function reconRouteLockColour(tile) {
+  if (typeof doorKeyColour === 'function') return doorKeyColour(tile);
+  if (tile === T.LOCKED_R) return 'red';
+  if (tile === T.LOCKED_B) return 'blue';
+  if (tile === T.LOCKED_G) return 'gold';
+  return null;
+}
+
+/**
+ * @param {any} tile
+ * @param {any} player
+ * @returns {boolean}
+ */
+function isReconRoutePassable(tile, player) {
+  if (tile == null) return false;
+  if (typeof isPassable === 'function' && isPassable(tile)) return true;
+  if (tile === T.DOOR) return true;
+  const colour = reconRouteLockColour(tile);
+  return !!(colour && player && player.keys && (player.keys[colour] | 0) > 0);
+}
+
+/**
+ * @param {any} dungeon
+ * @param {number} startX
+ * @param {number} startY
+ * @param {any} player
+ * @returns {{x:number,y:number} | null}
+ */
+function nearestReconRoutePassableTile(dungeon, startX, startY, player) {
+  const map = dungeon && dungeon.map;
+  if (!Array.isArray(map) || !Array.isArray(map[0])) return null;
+  const h = map.length;
+  const w = map[0].length;
+  const x0 = Math.floor(startX);
+  const y0 = Math.floor(startY);
+  if (x0 < 0 || y0 < 0 || x0 >= w || y0 >= h) return null;
+  if (isReconRoutePassable(map[y0] && map[y0][x0], player)) return { x: x0, y: y0 };
+  for (let radius = 1; radius <= 8; radius++) {
+    for (let y = y0 - radius; y <= y0 + radius; y++) {
+      for (let x = x0 - radius; x <= x0 + radius; x++) {
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        if (Math.max(Math.abs(x - x0), Math.abs(y - y0)) !== radius) continue;
+        if (isReconRoutePassable(map[y] && map[y][x], player)) return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} player
+ * @param {any} gameState
+ * @returns {{x:number,y:number,kind:string} | null}
+ */
+function findReconObjectiveTile(dungeon, player, gameState) {
+  const map = dungeon && dungeon.map;
+  if (!Array.isArray(map) || !Array.isArray(map[0])) return null;
+  if (gameState && gameState.bossAlive && gameState.bossRoom) {
+    const bossRoom = gameState.bossRoom;
+    const target = nearestReconRoutePassableTile(dungeon, bossRoom.cx, bossRoom.cy, player);
+    return target ? { x: target.x, y: target.y, kind: 'boss' } : null;
+  }
+  const finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor)
+    ? NEON.biomes.finalFloor()
+    : 15;
+  const targetTile = (gameState && (gameState.floor | 0) >= finalFloor) ? T.TERMINAL : T.STAIRS;
+  for (let y = 0; y < map.length; y++) {
+    const row = map[y];
+    if (!Array.isArray(row)) continue;
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === targetTile) return { x, y, kind: targetTile === T.TERMINAL ? 'core' : 'exit' };
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {any} gameState
+ * @param {any} player
+ * @returns {boolean}
+ */
+function shouldDrawReconRoute(gameState, player) {
+  if (gameState && gameState.cheats && gameState.cheats.revealMap) return true;
+  return !!(typeof NEON !== 'undefined' && NEON.boosts &&
+    typeof NEON.boosts.hasBoost === 'function' && NEON.boosts.hasBoost(player, 'RECON_PING'));
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} player
+ * @param {any} gameState
+ * @param {any} scratch
+ * @returns {{points:Array<{x:number,y:number}>, objective:{x:number,y:number,kind:string}} | null}
+ */
+function computeReconRoute(dungeon, player, gameState, scratch) {
+  const map = dungeon && dungeon.map;
+  if (!Array.isArray(map) || !Array.isArray(map[0]) || !player) return null;
+  const h = map.length;
+  const w = map[0].length;
+  const startX = Math.floor(Number(player.x));
+  const startY = Math.floor(Number(player.y));
+  if (startX < 0 || startY < 0 || startX >= w || startY >= h) return null;
+  if (!isReconRoutePassable(map[startY] && map[startY][startX], player)) return null;
+  const objective = findReconObjectiveTile(dungeon, player, gameState);
+  if (!objective) return null;
+  if (!isReconRoutePassable(map[objective.y] && map[objective.y][objective.x], player)) return null;
+  const total = w * h;
+  const routeScratch = scratch || {};
+  if (!(routeScratch.parent instanceof Int32Array) || routeScratch.parent.length !== total) {
+    routeScratch.parent = new Int32Array(total);
+    routeScratch.queue = new Int32Array(total);
+  }
+  const parent = routeScratch.parent;
+  const queue = routeScratch.queue;
+  parent.fill(-1);
+  const start = startY * w + startX;
+  const goal = objective.y * w + objective.x;
+  parent[start] = -2;
+  let head = 0;
+  let tail = 0;
+  queue[tail++] = start;
+  while (head < tail && parent[goal] === -1) {
+    const current = queue[head++];
+    const cx = current % w;
+    const cy = (current / w) | 0;
+    for (let i = 0; i < 4; i++) {
+      const nx = cx + /** @type {number} */ (RECON_ROUTE_DX[i]);
+      const ny = cy + /** @type {number} */ (RECON_ROUTE_DY[i]);
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const next = ny * w + nx;
+      if (parent[next] !== -1) continue;
+      if (!isReconRoutePassable(map[ny] && map[ny][nx], player)) continue;
+      parent[next] = current;
+      queue[tail++] = next;
+      if (next === goal) break;
+    }
+  }
+  if (parent[goal] === -1) return null;
+  /** @type {Array<{x:number,y:number}>} */
+  const points = [];
+  for (let at = goal; at >= 0; at = parent[at]) {
+    points.push({ x: at % w, y: (at / w) | 0 });
+    if (at === start) break;
+  }
+  points.reverse();
+  return { points, objective };
+}
+
+/**
+ * @param {any} dungeon
+ * @param {any} player
+ * @param {any} gameState
+ * @returns {{points:Array<{x:number,y:number}>, objective:{x:number,y:number,kind:string}} | null}
+ */
+function getReconRoute(dungeon, player, gameState) {
+  if (!shouldDrawReconRoute(gameState, player)) return null;
+  if (!gameState) return null;
+  const objective = findReconObjectiveTile(dungeon, player, gameState);
+  if (!objective) return null;
+  const px = Math.floor(Number(player && player.x));
+  const py = Math.floor(Number(player && player.y));
+  const version = dungeon && (dungeon._mapMutationVersion | 0);
+  const key = (gameState.floor | 0) + ':' + version + ':' + px + ':' + py + ':' +
+    objective.x + ':' + objective.y + ':' + objective.kind + ':' +
+    reconRouteKeyState(player) + ':' + !!gameState.bossAlive;
+  const cache = gameState._reconRouteCache || (gameState._reconRouteCache = {});
+  if (cache.key === key) return cache.route || null;
+  cache.key = key;
+  cache.route = computeReconRoute(dungeon, player, gameState, cache.scratch || (cache.scratch = {}));
+  return cache.route || null;
+}
+
+/**
+ * @param {{points:Array<{x:number,y:number}>, objective:{x:number,y:number,kind:string}} | null} route
+ * @param {number} ox
+ * @param {number} oy
+ * @param {number} sx
+ * @param {number} sy
+ * @param {boolean} expanded
+ */
+function drawReconRouteOverlay(route, ox, oy, sx, sy, expanded) {
+  if (!route || !route.points || route.points.length < 2) return;
+  const cell = Math.max(1, Math.min(sx, sy));
+  const lineW = Math.max(expanded ? 2 : 1.5, cell * (expanded ? 0.45 : 0.7));
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < route.points.length; i++) {
+    const p = /** @type {{x:number,y:number}} */ (route.points[i]);
+    const x = ox + (p.x + 0.5) * sx;
+    const y = oy + (p.y + 0.5) * sy;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.globalAlpha = expanded ? 0.62 : 0.7;
+  ctx.strokeStyle = 'rgba(0,0,10,0.9)';
+  ctx.lineWidth = lineW + (expanded ? 3 : 2);
+  ctx.stroke();
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([Math.max(3, cell * 1.7), Math.max(2, cell)]);
+  ctx.globalAlpha = expanded ? 0.9 : 0.95;
+  ctx.shadowBlur = expanded ? 10 : 5;
+  ctx.shadowColor = route.objective.kind === 'boss' ? '#ff3333' : '#00f5ff';
+  ctx.strokeStyle = route.objective.kind === 'boss' ? '#ff6633' : '#00f5ff';
+  ctx.lineWidth = lineW;
+  ctx.stroke();
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
+  const end = /** @type {{x:number,y:number}} */ (route.points[route.points.length - 1]);
+  const ex = ox + (end.x + 0.5) * sx;
+  const ey = oy + (end.y + 0.5) * sy;
+  const beacon = Math.max(expanded ? 5 : 3, cell * (expanded ? 0.9 : 1.3));
+  ctx.globalAlpha = expanded ? 0.95 : 0.9;
+  ctx.fillStyle = route.objective.kind === 'boss' ? '#ff3333' : '#ffffff';
+  ctx.fillRect(ex - beacon / 2, ey - beacon / 2, beacon, beacon);
+  ctx.restore();
+}
+
 // Base-layer cache: a 120×80 offscreen canvas with every visited/echo tile
 // pre-baked. Rebuilt only when game._minimapDirty flips — typically on floor
 // load, newly visited tiles, door/unlock/mine events, seal toggles, and
@@ -2237,6 +2474,7 @@ function drawMinimap(dungeon, player) {
       ctx.fillRect(MX + tx * sx, MY + ty * sy, cellW, cellH);
     }
   }
+  drawReconRouteOverlay(getReconRoute(dungeon, player, _RG), MX, MY, sx, sy, false);
 
   // Collect POI tiles for marker overlay (cheap scan — could be cached too but
   // POIs are few and the scan touches only visited tiles).
@@ -2638,6 +2876,8 @@ function drawExpandedMinimap(dungeon, player) {
     ctx.fillText(icon, lx, ly);
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
+
+  drawReconRouteOverlay(getReconRoute(dungeon, player, _RG), mx, my, sx, sy, true);
 
   // Enemies
   const dotSz = Math.max(3, Math.round(sx * 0.5));
