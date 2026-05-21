@@ -321,6 +321,11 @@ Run and record these before verification or review:
     Tests for required generated structures must assert the structure exists
     before direct indexing; do not use optional chaining, `||`, or `??` fallbacks
     in assertions that are supposed to prove required data exists.
+    For UX-facing rendering or input changes, source-text pins are not sufficient
+    evidence for layout confidence. Add numeric bounds/hitbox fixtures for the
+    affected viewport or input modes, and record either a browser/manual smoke
+    note for the changed first-run flow or the concrete reason a smoke could not
+    be run.
 19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
      that is not already used successfully in the current session, either preflight
      the help/version output or be prepared to record the exact fallback command
