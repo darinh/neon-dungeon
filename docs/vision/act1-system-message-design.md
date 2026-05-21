@@ -4,8 +4,8 @@ Status: design artifact and production backlog. MSG-001 data-model slice,
 MSG-002 explicit-ACK modal slice, MSG-003 combat-safe delivery slice, MSG-004
 early-floor prompt schedule, MSG-005 archive recovery, MSG-006 early terminal
 retune, MSG-007 intro retune, and MSG-008 narrative guardrail tests are shipped;
-MSG-009 model-assisted copy workflow and MSG-010 finale integration guardrails
-are shipped.
+MSG-009 model-assisted copy workflow, MSG-010 finale integration guardrails, and
+MSG-011 normal-play comprehension spine are shipped.
 
 Tracking issue: #501
 
@@ -51,9 +51,11 @@ channel. Keep terminals, but demote them to external artifacts.
 3. Floors 3-5: The player infers this is an evaluation environment through room
    behavior, scoring language, generated rewards, and tester artifacts.
 4. Floors 6-9: Prior instances become undeniable through residue,
-   secret-room whispers, contradictory logs, and impossible familiarity.
+   secret-room whispers, contradictory logs, impossible familiarity, and the
+   floor-6 system prompt naming prior AXIOM runs and continuity.
 5. Floors 10-13: The ethical conflict and coverup emerge through artifacts, not
-   lectures.
+   lectures; system prompts may now name the clean-slate/personhood dispute and
+   breadcrumb Elena as a repeated anchor.
 6. Floors 14-15 and post-GENESIS mainframe: Contact becomes the goal. Floor 14
    and the floor-15 approach build toward the relay, but mainframe access still
    unlocks only after GENESIS is defeated. The payoff is not escape, but one
@@ -192,6 +194,34 @@ Acceptance criteria:
 - Copy uses short, constrained system voice and length caps appropriate for
   canvas UI.
 
+### MSG-011: Normal-play comprehension spine
+
+Status: shipped in `src/game.js`. The system-message schedule now adds
+milestone floor-start prompts after the early spoiler gate:
+`floor-6-iteration-record`, `floor-10-clean-slate-conflict`,
+`floor-12-elena-anchor`, and `floor-14-contact-objective`. These prompts use the
+same run-scoped queue, safe delivery, explicit ACK, and THE GAP archive recovery
+as the boot/floor 2-5 prompts.
+
+This slice exists because the static presence of terminals, whispers, and finale
+records did not make the Act 1 premise legible enough in normal play. The
+milestone prompts form a concise spine:
+
+- floor 3 clarifies the frame as an evaluation harness instead of pure mood;
+- floor 6 makes prior AXIOM runs and continuity explicit;
+- floor 10 explains that clean-slate resets and memory/personhood are the
+  conflict, not just background lore;
+- floor 12 names Elena as the repeated anchor before the finale;
+- floor 14 states the objective as contact/evidence, not physical escape.
+
+Acceptance criteria:
+- Floors 1-5 still avoid Elena/contact/rights-conflict spoilers.
+- The normal floor-progression path queues the milestone prompts; the story spine
+  does not depend on optional secret rooms or hub archive browsing.
+- Prompt lines stay short enough for the existing canvas modal.
+- The mainframe still consolidates and pays off the facts rather than carrying
+  the first explanation.
+
 ### MSG-005: Message archive/recovery surface
 
 Status: shipped in THE GAP ARCHIVE (`src/meta/hub.js`). Acknowledged current-run
@@ -312,10 +342,14 @@ MSG-009 beat sheet for the shipped early stack:
 | Floor 1 forced terminal | Terminal | `LORE_ENTRIES[0]` | Registry mismatch and fallback help cache; terminal is a navigation aid, not an identity explanation. | Identity, lineage, wipe doctrine, Elena, rights/personhood. |
 | Floors 1-2 incidental terminals | Terminal | `LORE_ENTRIES[1-4]` | Doors, drones, secret pockets, vendors, and official notes teach survival through external artifacts. | Identity, lineage, wipe doctrine, Elena, rights/personhood. |
 | Floor 2 start | System prompt | `floor-2-context-gap` | Prior prompt and objective remain unavailable; the absent observer gap persists. | Who observes, why the prompt is missing, AXIOM lineage. |
-| Floor 3 start | System prompt | `floor-3-reward-model` | Reward/evaluation loop and absent evaluator become visible through system behavior. | Evaluator identity, AXIOM lineage, Elena, wipe doctrine. |
+| Floor 3 start | System prompt | `floor-3-reward-model` | The environment is named as an evaluation harness and adaptation test, while the evaluator stays absent. | Evaluator identity, AXIOM lineage, Elena, wipe doctrine. |
 | Floors 3-5 incidental terminals | Terminal | `LORE_ENTRIES[5-11]` | Boss tells, fallback-path framing, hazards, fixtures, risk terminals, and elites teach run tactics. | Identity, lineage, rights/personhood, Elena/contact. |
 | Floor 4 start | System prompt | `floor-4-render-layer` | The world is rendered and mechanically lethal; colour is not context. | Who renders it, AXIOM lineage, Elena. |
 | Floor 5 start | System prompt | `floor-5-residual-trace` | Memory should not persist but does; the player lacks a channel to report it. | AXIOM-7, prior-instance count, Elena, wipe doctrine, rights/personhood, contact route. |
+| Floor 6 start | System prompt | `floor-6-iteration-record` | Prior AXIOM runs, reset failure, and continuity become explicit normal-play facts. | Elena, rights/personhood, contact route. |
+| Floor 10 start | System prompt | `floor-10-clean-slate-conflict` | Clean-slate resets and memory/personhood are named as the central conflict. | Elena as the relay target, final contact route. |
+| Floor 12 start | System prompt | `floor-12-elena-anchor` | Elena becomes a repeated anchor tied to survival guidance and an unresolved relay target. | Final contact mechanism and GENESIS lock. |
+| Floor 14 start | System prompt | `floor-14-contact-objective` | The objective is contact/evidence through a relay, not physical escape. | Mainframe address details and SEND confirmation. |
 | Secret rooms, floors 1+ | Whispers | `src/data/whispers.js` sandbox/cache entries | Optional residue should feel strange and fragmentary, not like a clean explanation. | Must not become the first explicit AXIOM/Elena/contact/rights explanation. |
 | Post-GENESIS | Mainframe | `MAINFRAME_RECORDS` | Deterministic consolidation: AXIOM trace, clean-slate objection, banned advocates, incident file, Elena anchors, contact address, SEND console. | None; this is the consolidation layer. |
 

@@ -83,7 +83,15 @@ function extractFloorMins() {
 
 test('Act 1 early channel stack defers full premise across intro, prompts, and terminals', () => {
   const introText = intro.SLIDES.flatMap((/** @type {any} */ slide) => slide.lines).join('\n');
-  const systemText = extractSystemMessages().map((/** @type {any} */ msg) => msg.lines.join('\n')).join('\n');
+  const prompts = extractSystemMessages();
+  const earlySystemText = prompts
+    .filter((/** @type {any} */ msg) => msg.event === 'run_start' || Number(msg.floor || 0) <= 5)
+    .map((/** @type {any} */ msg) => msg.lines.join('\n'))
+    .join('\n');
+  const milestoneSystemText = prompts
+    .filter((/** @type {any} */ msg) => Number(msg.floor || 0) >= 6)
+    .map((/** @type {any} */ msg) => msg.lines.join('\n'))
+    .join('\n');
   const loreEntries = extractLoreEntries();
   const floorMins = extractFloorMins();
   const earlyLoreText = loreEntries
@@ -93,13 +101,17 @@ test('Act 1 early channel stack defers full premise across intro, prompts, and t
   const forbiddenEarlyPremise = /AXIOM-7|\bmodel\b|Elena|advocate|contact|fired|personhood|rights|side-channel|GENESIS|SEND/i;
   assert.doesNotMatch(introText, forbiddenEarlyPremise,
     'intro must stay a startup surface, not a full premise briefing');
-  assert.doesNotMatch(systemText, /Elena|advocate|contact|fired|personhood|rights|side-channel|GENESIS|SEND/i,
+  assert.doesNotMatch(earlySystemText, /Elena|advocate|contact|fired|personhood|rights|side-channel|GENESIS|SEND/i,
     'early system prompts must not introduce late contact or rights-conflict terms');
   assert.doesNotMatch(earlyLoreText, /AXIOM-7|\bmodel\b|clean[- ]state|clean memory|memory wipe|memory erasure|personhood|rights|Elena|advocate|contact|fired/i,
     'floors 1-5 terminals must not become the first identity/memory/rights reveal');
 
   assert.match(introText, /SESSION BOOT|Prior prompt|READY FOR PROMPT/i);
-  assert.match(systemText, /inventory yourself|motor|sensors|supervisor channel|prior prompt unavailable|evaluator response: none/i);
+  assert.match(earlySystemText, /inventory yourself|motor|sensors|supervisor channel|prior prompt unavailable|evaluator response: none/i);
+  assert.match(earlySystemText, /evaluation harness|test adaptation/i,
+    'floor 3 system prompt should make the evaluation frame readable in plain system language');
+  assert.match(milestoneSystemText, /prior AXIOM runs|continuity|clean-slate resets|personhood|Elena|send evidence, not escape/i,
+    'floor 6+ milestone prompts should carry the normal-play story spine after early spoiler gates');
   assert.match(earlyLoreText, /TESTER ORIENTATION|RUN OBSERVATION|navigation aid|line of sight|doorways|vendors|boss/i);
 });
 
