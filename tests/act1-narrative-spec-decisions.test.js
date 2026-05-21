@@ -49,6 +49,8 @@ test('Act 1 spec defines planned system message channel and dismissal safety', (
   assert.match(SPEC, /dedicated `SYSTEM_MESSAGE` modal/i);
   assert.match(SPEC, /HUD prompt indicator while deferring automatic delivery/i);
   assert.match(SPEC, /floor-start prompts for floors 2-5/i);
+  assert.match(SPEC, /floors 6, 10, 12, and 14/i);
+  assert.match(SPEC, /prior iterations, continuity, clean-slate conflict, Elena, and the contact objective/i);
   assert.match(SPEC, /acknowledged current-run system prompts in THE GAP's ARCHIVE/i);
   assert.match(SPEC, /Floors 1-5 avoid AXIOM-7, model identity language/i);
   assert.match(SPEC, /early-game primary channel for the agent's own runtime\/interiority/i);
@@ -62,6 +64,7 @@ test('Act 1 spec defines planned system message channel and dismissal safety', (
   assert.match(SPEC, /System\s+prompts carry interiority; terminals carry tester\/corporate artifacts; whispers\s+carry prior-instance residue/i);
   assert.match(SPEC, /MSG-006 ships the early-band retune/i);
   assert.match(SPEC, /MSG-008 adds narrative guardrail tests that pin the\s+early channel stack/i);
+  assert.match(SPEC, /normal-play comprehension path explicit without\s+relying on optional secret content/i);
   assert.match(SPEC, /docs\/vision\/act1-system-message-design\.md/i);
 });
 
@@ -77,6 +80,7 @@ test('Act 1 system-message design artifact tracks production work items', () => 
     'MSG-008',
     'MSG-009',
     'MSG-010',
+    'MSG-011',
   ]) {
     assert.match(SYSTEM_MESSAGE_DESIGN, new RegExp(`### ${id}:`));
   }
@@ -96,6 +100,9 @@ test('Act 1 system-message design artifact tracks production work items', () => 
   assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-010: Finale integration pass/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Status: shipped as integration guardrails/i);
   assert.match(SYSTEM_MESSAGE_DESIGN, /Mainframe records confirm the truth rather than carrying the first explanation/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /MSG-011: Normal-play comprehension spine/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /floor-6-iteration-record[\s\S]*floor-10-clean-slate-conflict[\s\S]*floor-12-elena-anchor[\s\S]*floor-14-contact-objective/i);
+  assert.match(SYSTEM_MESSAGE_DESIGN, /story spine\s+does not depend on optional secret rooms or hub archive browsing/i);
 });
 
 test('Act 1 spec decisions define finale path, ending id, and migration behavior', () => {

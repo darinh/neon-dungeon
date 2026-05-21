@@ -95,8 +95,10 @@ Run and record these before verification or review:
 3. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using
-   test failures as evidence. Check and record this bootstrap status before the
-   first npm verification command in a fresh implementation worktree.
+   test failures as evidence. In fresh implementation worktrees, run and record a
+   dependency preflight before the first npm verification command:
+   `test -d node_modules || npm ci`. Any npm verification command run before this
+   preflight is invalid baseline evidence and must be labeled invalid if cited.
 4. **Bounded command preflight.** Before running repository-wide discovery
    commands in long-lived checkouts, prefer exact queries over broad listings and
    bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
@@ -330,6 +332,11 @@ Run and record these before verification or review:
     for the mutator that increments it. For any new render-loop helper, perform a
     pre-review hot-path allocation scan and add null/undefined state guards for
     diagnostic or teardown calls before relying on reviewers to catch them.
+    For UX-facing rendering or input changes, source-text pins are not sufficient
+    evidence for layout confidence. Add numeric bounds/hitbox fixtures for the
+    affected viewport or input modes, and record either a browser/manual smoke
+    note for the changed first-run flow or the concrete reason a smoke could not
+    be run.
 19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
      that is not already used successfully in the current session, either preflight
      the help/version output or be prepared to record the exact fallback command
@@ -459,6 +466,8 @@ Before writing the retrospective:
 Collect only facts that affect future behavior:
 
 - original request or issue;
+- issue disposition: whether the work fully resolves the originating issue,
+  leaves it open with residual risk, or requires a follow-up issue/comment;
 - branch and worktree path;
 - proof that the retrospective is running from the worktree;
 - files changed and PR number, if any;
@@ -473,7 +482,11 @@ Collect only facts that affect future behavior:
   preservation, runtime wiring, or policy compliance) to the specific tests,
   source citations, runtime-order proof, or post-final-rebase review that proves
   it. Pre-rebase reviews may be historical context, but they are not the
-  load-bearing review evidence for the shipped tree;
+  load-bearing review evidence for the shipped tree. For visual/UI claims,
+  distinguish source-contract evidence from runtime visual evidence; include a
+  screenshot, canvas/pixel test, or manual runtime observation when available, or
+  explicitly record that the risk is accepted because only source-contract
+  evidence exists;
 - stale-resume preflight status, if the work item resumed existing branch,
   worktree, staged diff, handoff, session-history work, or any branch that had
   not fetched in the current session;
@@ -494,6 +507,8 @@ Collect only facts that affect future behavior:
   evidence for every claim that a review finding was addressed;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
+- source-text/spec assertion fragility discovered during the work, including
+  whether sibling assertions were audited or why the issue was isolated;
 - repeated incidents and the concrete guard adopted, or the evidence-backed
   reason no guard was added;
 - tool/version incompatibilities encountered and the canonical fallback command
@@ -583,8 +598,14 @@ Collect only facts that affect future behavior:
     For UI/help/spec copy that describes when a control appears, is enabled, is
     dimmed, or performs an action, cite the implementation branch or predicate
     that makes the claim true and add/update a test when the claim is likely to
-    regress. For `docs/spec.md` version bumps, run the pinned spec-version test
-    (or record why the full gate is the accepted guard) before review.
+    regress. For UI rendering changes, record which visual evidence type supports
+    the claim: screenshot/manual runtime observation, canvas/pixel test, source
+    contract only, or an explicit out-of-scope reason. If all code reviewers
+    return no findings on a red-risk or ambiguous UI/rendering change, record the
+    project-specific risk categories they were asked to check, such as hot-path
+    allocation, mobile touch coupling, hitbox drift, render budget, and menu
+    layout overlap. For `docs/spec.md` version bumps, run the pinned spec-version
+    test (or record why the full gate is the accepted guard) before review.
 11. **Ask two other LLMs for adversarial critique.** Do this only after code
     reviewers are done and their findings are resolved. Give each retrospective
     reviewer the same pasted evidence and the draft retrospective; do not require
@@ -669,6 +690,7 @@ Keep the retrospective short enough to be useful:
 ## Retrospective: [work item]
 
 - **Outcome**:
+- **Issue disposition**:
 - **Worktree/branch**:
 - **Pre-retrospective checklist**:
 - **What went wrong**:

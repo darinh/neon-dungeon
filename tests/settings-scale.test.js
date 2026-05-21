@@ -303,6 +303,25 @@ test('renderSettings draws stepper rows with × multiplier suffix', () => {
     'renderSettings must declare stepperLabels = ["MINIMAP SIZE", "TEXT SIZE", "WORLD ZOOM"]');
 });
 
+test('renderSettings gives every settings row a rounded control affordance', () => {
+  const helper = GAME.match(/_drawSettingsControl\s*\([^)]*\)\s*\{[\s\S]{0,900}\},/);
+  assert.ok(helper, 'renderSettings must use a shared settings-control drawing helper');
+  assert.match(helper[0], /NEON\.draw\.roundRectFillStroke/,
+    'settings controls must use the same rounded-card affordance as other menus');
+  assert.match(GAME, /this\._drawSettingsControl\(ry,\s*rowH,\s*isSel,\s*'#00f5ff'\)/,
+    'volume slider rows must render as rounded controls');
+  assert.match(GAME, /this\._drawSettingsControl\(ry,\s*rowH,\s*isSel,\s*on\s*\?\s*'#00ff88'\s*:\s*'#ff4466'\)/,
+    'toggle rows must render as rounded controls with on/off accents');
+  assert.match(GAME, /this\._drawSettingsControl\(ry,\s*rowH,\s*isSel,\s*'#ffcc00'\)/,
+    'scale stepper rows must render as rounded controls');
+  assert.match(GAME, /this\._drawSettingsControl\(ry,\s*rowH,\s*isSel\s*\|\|\s*isCapturing,\s*isCapturing\s*\?\s*'#ffcc00'\s*:\s*'#ff00c8'\)/,
+    'keybind rows must render as rounded controls');
+  assert.match(GAME, /this\._drawSettingsControl\(resetY,\s*rowH,\s*sel\s*===\s*resetIdx\s*\|\|\s*armed,\s*armed\s*\?\s*'#ff4466'\s*:\s*'#ffcc00',\s*armed\)/,
+    'reset row must render as a rounded control, including danger styling when armed');
+  assert.match(GAME, /this\._drawSettingsControl\(backY,\s*rowH,\s*sel\s*===\s*backIdx,\s*'#00f5ff'\)/,
+    'back row must render as a rounded control');
+});
+
 test('settings layout: rowH shrinks dynamically so 21-row menu fits in viewport H', () => {
   // Per gpt-5.5 r1: with 6 toggles + 2 steppers + 9 rebinds + reset +
   // back, the menu has 21 rows. At the prior fixed rowH=34 the back
