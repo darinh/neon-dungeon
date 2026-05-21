@@ -4505,6 +4505,11 @@ Layout (canvas-rendered, no HTML overlays):
 6. "RESET TO DEFAULTS" button (resets volumes, toggles, and key bindings)
 7. "BACK" button (returns to previous state)
 
+Every settings row is drawn as a rounded control card using the same neon
+stroke/fill affordance language as the game's other canvas menus. Sliders,
+toggles, steppers, rebinds, reset, and back all show a visible control boundary
+and selected/accent state rather than plain text-only rows.
+
 Navigation: ↑↓ select row, ◀▶ adjust sliders or toggle options, Enter/click to rebind or toggle, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
 
 `_settingsFrom` tracks whether settings was opened from `'MENU'` or `'PAUSED'`, used by the back action to return to the correct state.
