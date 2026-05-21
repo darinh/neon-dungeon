@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const { readSourceFile } = require('./_source-files.js');
 
 const RENDER = readSourceFile(__dirname, 'render');
+const GAME = readSourceFile(__dirname, 'game');
 
 const T = Object.freeze({
   VOID: 0,
@@ -146,4 +147,28 @@ test('RECON objective targets boss room while the core terminal is locked', () =
 test('render draws RECON route overlays on both minimap surfaces', () => {
   assert.match(RENDER, /drawReconRouteOverlay\(getReconRoute\(dungeon, player, _RG\), MX, MY, sx, sy, false\)/);
   assert.match(RENDER, /drawReconRouteOverlay\(getReconRoute\(dungeon, player, _RG\), mx, my, sx, sy, true\)/);
+});
+
+test('map mutations advance route-cache version as well as minimap and FOV invalidation', () => {
+  const match = GAME.match(/markMapMutated\(\)\s*{([\s\S]*?)\n  },/);
+  assert.ok(match, 'game.markMapMutated source must be present');
+  const body = match[1] || '';
+  let clearLosCalls = 0;
+  function clearLosCache() { clearLosCalls += 1; }
+  const context = {
+    clearLosCache,
+    target: {
+      _minimapDirty: false,
+      dungeon: { _fovDirty: false, _mapMutationVersion: 2 },
+    },
+  };
+  vm.runInNewContext(`
+    function markMapMutated() {${body}
+    }
+    markMapMutated.call(target);
+  `, context);
+  assert.equal(context.target._minimapDirty, true);
+  assert.equal(clearLosCalls, 1);
+  assert.equal(context.target.dungeon._fovDirty, true);
+  assert.equal(context.target.dungeon._mapMutationVersion, 3);
 });

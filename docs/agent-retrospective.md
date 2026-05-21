@@ -321,6 +321,15 @@ Run and record these before verification or review:
     Tests for required generated structures must assert the structure exists
     before direct indexing; do not use optional chaining, `||`, or `??` fallbacks
     in assertions that are supposed to prove required data exists.
+    For new visual render features, green unit tests are not visual proof by
+    themselves. Record a browser/manual smoke result when a browser is available;
+    if the environment has no browser, mark the PR or issue evidence
+    `visual-unverified` and name the compensating geometry, call-site, or
+    behavior tests that were run. When adding a cache-invalidation counter or
+    version that render/runtime caches depend on, add a direct regression test
+    for the mutator that increments it. For any new render-loop helper, perform a
+    pre-review hot-path allocation scan and add null/undefined state guards for
+    diagnostic or teardown calls before relying on reviewers to catch them.
 19. **Tool compatibility fallback.** Before relying on a CLI flag or output mode
      that is not already used successfully in the current session, either preflight
      the help/version output or be prepared to record the exact fallback command
