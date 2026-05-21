@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.179
+# NEON DUNGEON — Game Specification v6.1.180
 
 ## Vision
 
@@ -3267,7 +3267,7 @@ a one-shot effect).
 | `CRIT_MATRIX`   | CRIT MATRIX     |    18 | floor    | +8% crit chance (works even without the CRITICAL_HIT perk) |
 | `SHIELD_DRIVER` | SHIELD DRIVER   |    20 | instant  | +1 shield charge — absorbs next incoming hit (stackable) |
 | `NANO_MEDIC`    | NANO-MEDIC      |    10 | instant  | Heals `round(maxHp × 0.4)` immediately, capped at maxHp |
-| `RECON_PING`    | RECON PING      |    15 | floor    | Reveals full minimap for this floor (flips `game.mapRevealed`) |
+| `RECON_PING`    | RECON PING      |    15 | floor    | Reveals full minimap for this floor (flips `game.mapRevealed`) and overlays a route to the current objective |
 
 Vendor shop prices add a gentle `floor × 2` scaling on top of the base price.
 
@@ -3304,6 +3304,15 @@ Vendor shop prices add a gentle `floor × 2` scaling on top of the base price.
   `game.mapRevealed = true` + `_minimapDirty = true` immediately for same-
   floor feedback. The hidden FEET `SHOW MAP` cheat is render-only: minimap
   drawing treats it like an echo-map source without mutating `mapRevealed`.
+- RECON route guidance: while `RECON_PING` is active, the corner minimap and
+  expanded map draw a cyan route from the player tile to the current objective.
+  Non-final floors target stairs; the final floor targets the CORE terminal once
+  GENESIS is down; while a boss is alive, the route targets the boss room instead
+  of a locked terminal. The route uses normal movement semantics: ordinary doors
+  are routable, locked doors are routable only when the player has the matching
+  key, and cracked/wall/void tiles block the path. The hidden FEET `SHOW MAP`
+  cheat also draws the route for diagnostics, but the persistent `ECHO_MAPPER`
+  augment only reveals terrain and POIs, not the route overlay.
 - `drawBoostStrip(player)` in `src/render.js` — HUD pill strip anchored 8 px
   below the minimap. One pill per active floor boost, plus a `SHIELD DRIVER
   ×N` pill when any charges remain. No-op when nothing is active.
@@ -5044,6 +5053,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.180 | RECON route guidance for issue #1051: `RECON_PING` now upgrades full-map reveal into explicit wayfinding by drawing a cached route overlay on the corner minimap and expanded map. The route targets stairs on regular floors, the boss room while a boss is alive, and the final CORE terminal only after GENESIS is down; it follows ordinary doors and currently-openable locked doors while treating unavailable locks, cracked walls, walls, and void as blockers. `game.markMapMutated()` now increments `dungeon._mapMutationVersion` so route caches invalidate on door/open wall/terminal mutations. Added `tests/recon-route-guidance.test.js` coverage for door/lock path semantics, key and map-version cache invalidation, RECON-vs-ECHO gating, final-floor boss/core targeting, and both minimap overlay call sites. |
 | v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |
 | v6.1.178 | Act 1 narrative-comprehension spine for issue #1045: system prompts now make normal-play story progression legible beyond the early spoiler gate. Floor 3 names the environment as an evaluation harness, floor 6 names prior AXIOM runs and continuity, floor 10 names the clean-slate/personhood conflict, floor 12 breadcrumbs Elena as the repeated anchor, and floor 14 states the contact/evidence objective before the mainframe payoff. Added system-message, narrative-guardrail, and spec/design tests so the story spine queues during ordinary floor progression without depending on optional secret rooms or hub archive browsing. |
 | v6.1.177 | Compact vendor-shop polish for issue #993: `SHOPPING` now derives title, credit balance, item card/row, LEAVE, footer-hint, and item text-budget geometry from `getShoppingLayout()`. Short compact mobile viewports stack the three purchasable rows vertically so item targets and LEAVE stay onscreen and separated; ultra-compact layouts hide the optional footer hint when there is not enough ascent space. Hit-testing consumes the same item and LEAVE rectangles used for rendering, while compact item names/descriptions and hints are fitted to layout text budgets. Added `tests/touch.test.js` coverage for runtime-plausible compact fixtures from 199×200 through 320×390, desktop geometry preservation, impossible compact fixture rejection, item/LEAVE/hint separation, compact text-budget bounds, and shared hit-test bounds. |
