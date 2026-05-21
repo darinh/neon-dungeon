@@ -318,6 +318,19 @@ Run and record these before verification or review:
     affect, especially visibility, reachability, input hitboxes, rendering,
     loot/combat outcomes, and generation entrances. Map each invariant to an
     existing or new test, or explicitly mark it out of scope with a reason.
+    For visual-language or canvas-render changes, define the player-facing
+    invariant before coding (for example, which objects must be distinguishable
+    from enemies/floor clutter in world view and minimap). Rendering tests must
+    include behavior-level evidence such as canvas-operation, screenshot, or
+    pixel-diff assertions; source-shape/regex checks are supporting evidence
+    only. Any new render helper must either use `save()`/`restore()` or
+    explicitly restore every mutable canvas state field it changes, must thread
+    the drawing context as an argument instead of relying on implicit globals,
+    and must include a test for state restoration when it avoids
+    `save()`/`restore()` for hot-path reasons. If browser smoke is unavailable,
+    mark the PR `visual-unverified`, cite compensating tests, and open or update
+    a GitHub issue tracking the missing browser/screenshot validation plus any
+    intentionally deferred visual surfaces.
     Tests for required generated structures must assert the structure exists
     before direct indexing; do not use optional chaining, `||`, or `??` fallbacks
     in assertions that are supposed to prove required data exists.
