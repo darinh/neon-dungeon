@@ -2145,7 +2145,14 @@ const game = {
   // crack-wall break, crate destroyed, room seal/unseal, terminal consume).
   // Also invalidates the per-frame LOS cache so subsequent LOS queries in
   // the same tick reflect the new map state.
-  markMapMutated() { this._minimapDirty = true; clearLosCache(); if (this.dungeon) this.dungeon._fovDirty = true; },
+  markMapMutated() {
+    this._minimapDirty = true;
+    clearLosCache();
+    if (this.dungeon) {
+      this.dungeon._fovDirty = true;
+      this.dungeon._mapMutationVersion = (this.dungeon._mapMutationVersion | 0) + 1;
+    }
+  },
 
   /**
    * @param {any} s
