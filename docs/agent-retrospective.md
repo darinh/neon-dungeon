@@ -95,8 +95,10 @@ Run and record these before verification or review:
 3. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using
-   test failures as evidence. Check and record this bootstrap status before the
-   first npm verification command in a fresh implementation worktree.
+   test failures as evidence. In fresh implementation worktrees, run and record a
+   dependency preflight before the first npm verification command:
+   `test -d node_modules || npm ci`. Any npm verification command run before this
+   preflight is invalid baseline evidence and must be labeled invalid if cited.
 4. **Bounded command preflight.** Before running repository-wide discovery
    commands in long-lived checkouts, prefer exact queries over broad listings and
    bound any expected-large output with `--no-pager`, `--format`, `--count`, or a
@@ -450,6 +452,8 @@ Before writing the retrospective:
 Collect only facts that affect future behavior:
 
 - original request or issue;
+- issue disposition: whether the work fully resolves the originating issue,
+  leaves it open with residual risk, or requires a follow-up issue/comment;
 - branch and worktree path;
 - proof that the retrospective is running from the worktree;
 - files changed and PR number, if any;
@@ -485,6 +489,8 @@ Collect only facts that affect future behavior:
   evidence for every claim that a review finding was addressed;
 - incidents, near misses, user corrections, or places where the agent wasted
   time;
+- source-text/spec assertion fragility discovered during the work, including
+  whether sibling assertions were audited or why the issue was isolated;
 - repeated incidents and the concrete guard adopted, or the evidence-backed
   reason no guard was added;
 - tool/version incompatibilities encountered and the canonical fallback command
@@ -660,6 +666,7 @@ Keep the retrospective short enough to be useful:
 ## Retrospective: [work item]
 
 - **Outcome**:
+- **Issue disposition**:
 - **Worktree/branch**:
 - **Pre-retrospective checklist**:
 - **What went wrong**:
