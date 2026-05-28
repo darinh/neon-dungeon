@@ -147,6 +147,74 @@ function createWeaponSwapLayoutHarness(width, height, narrow) {
 }
 
 /**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function createSettingsControlHarness(width, height, narrow) {
+  const source = 'return ({\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsLayout') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlBox') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + '\n' +
+    '});';
+  return new Function('W', 'H', 'layout', source)(width, height, { compact: narrow }); // eslint-disable-line no-new-func
+}
+
+/**
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ * @returns {{harness:any, mouse:{x:number,y:number,down:boolean}, settings:any, audio:{sfx:number[],music:number[],menu:number}}}
+ */
+function createSettingsUpdateHarness(width, height, narrow) {
+  const source = "const DEFAULT_KEY_MAP = {\n" +
+    "  up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', interact: 'KeyE',\n" +
+    "  hackware: 'KeyF', voidshard: 'KeyV', dash: 'ShiftLeft', shoot: 'Space'\n" +
+    "};\n" +
+    'const MINIMAP_SCALE_STEPS = [0.75, 1.0, 1.25, 1.5];\n' +
+    'const TEXT_SCALE_STEPS = [0.85, 1.0, 1.15, 1.3];\n' +
+    'const WORLD_ZOOM_STEPS = [1.0, 1.25, 1.5, 1.75, 2.0];\n' +
+    'const RESET_CONFIRM_WINDOW_MS = 2500;\n' +
+    "const ALT_KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };\n" +
+    'const RESERVED_KEYS = new Set();\n' +
+    'const justPressed = new Set([\'MouseLeft\']);\n' +
+    'const layout = { compact: narrow };\n' +
+    'const mouse = { x: 0, y: 0, down: false };\n' +
+    'const _RG = { _minimapDirty: false };\n' +
+    "const settings = {\n" +
+    "  sfxVol: 0.5, musicVol: 0.5, screenShake: true, damageNumbers: true,\n" +
+    "  lockAimToMove: false, aimAssist: true, crtMode: true, reducedMotion: false,\n" +
+    "  minimapScale: 1.0, textScale: 1.0, worldZoom: 1.0,\n" +
+    "  keyMap: Object.assign({}, DEFAULT_KEY_MAP), save() {}, resetAll() {}\n" +
+    "};\n" +
+    'const audio = {\n' +
+    '  sfx: [], music: [], menu: 0,\n' +
+    '  setSfxVolume(v) { settings.sfxVol = v; this.sfx.push(v); },\n' +
+    '  setMusicVolume(v) { settings.musicVol = v; this.music.push(v); },\n' +
+    '  menuSelect() { this.menu += 1; }\n' +
+    '};\n' +
+    'function jp(code) { return justPressed.has(code); }\n' +
+    'function km(action) { return settings.keyMap[action]; }\n' +
+    'function isTouchDevice() { return false; }\n' +
+    'function resize() {}\n' +
+    'function updateBtns() {}\n' +
+    'function snapToSteps(value, steps) {\n' +
+    '  return steps.reduce((best, step) => Math.abs(step - value) < Math.abs(best - value) ? step : best, steps[0]);\n' +
+    '}\n' +
+    'const harness = {\n' +
+    "  _settingsFrom: 'MENU', _settingsSel: 0, _settingsCapture: null,\n" +
+    '  _settingsDrag: null, _settingsResetConfirm: 0,\n' +
+    '  setState(state) { this.state = state; },\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsLayout') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlBox') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'updateSettings') + '\n' +
+    '};\n' +
+    'return { harness, mouse, settings, audio };';
+  return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
+}
+
+/**
  * @param {{cellW:number,cellH:number,gap:number,cols:number,ox:number,oy:number}} layout
  * @param {number} index
  * @param {boolean} ok
@@ -470,6 +538,80 @@ test('paused touch routing uses explicit button hit-tests instead of screen thir
     'touch pause UI must draw explicit action labels instead of positional instructions');
   assert.doesNotMatch(GAME, /TAP TOP|TAP MIDDLE|TAP BOTTOM/,
     'pause overlay must not tell players to tap broad invisible screen regions');
+});
+
+test('settings row control hit targets respect rendered card bounds', () => {
+  const cases = [
+    { width: 900, height: 600, narrow: false, rowH: 23, x: 32, y: 66, w: 836, h: 20 },
+    { width: 360, height: 640, narrow: true, rowH: 25, x: 14, y: 65, w: 332, h: 22 },
+  ];
+
+  for (const c of cases) {
+    const harness = createSettingsControlHarness(c.width, c.height, c.narrow);
+    const layoutM = harness._settingsLayout(22);
+    const first = harness._settingsControlBox(layoutM.startY, layoutM.rowH);
+    const second = harness._settingsControlBox(layoutM.startY + layoutM.rowH, layoutM.rowH);
+
+    assert.equal(layoutM.startY, 80, 'settings first-row baseline Y must remain shared by render and input');
+    assert.equal(layoutM.rowH, c.rowH, 'settings row height must fit the 22-row menu in this viewport');
+    assert.equal(first.x, c.x, 'settings card origin X must match the rendered gutter');
+    assert.equal(first.y, c.y, 'settings card origin Y must match the rendered row card');
+    assert.equal(first.w, c.w, 'settings card width must match the rendered row card');
+    assert.equal(first.h, c.h, 'settings card height must match the rendered row card');
+    assert.equal(second.y > first.y + first.h, true, 'adjacent settings cards must keep a visible gap');
+
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x, first.y), true,
+      'settings card top-left bound must accept taps');
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x + first.w, first.y + first.h), true,
+      'settings card bottom-right bound must accept taps');
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x - 0.1, first.y + 1), false,
+      'settings card left bound must reject outside taps');
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x + first.w + 0.1, first.y + 1), false,
+      'settings card right bound must reject outside taps');
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x + 1, first.y - 0.1), false,
+      'settings card top bound must reject outside taps');
+    assert.equal(harness._settingsControlHit(layoutM.startY, layoutM.rowH, first.x + 1, first.y + first.h + 0.1), false,
+      'settings card bottom bound must reject outside taps');
+  }
+});
+
+test('settings slider clicks ignore visible card label and padding outside the track', () => {
+  const cases = [
+    { width: 900, height: 600, narrow: false, sliderX: 200, sliderW: 400 },
+    { width: 360, height: 640, narrow: true, sliderX: 120, sliderW: 120 },
+  ];
+
+  for (const c of cases) {
+    const fixture = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+    const layoutM = fixture.harness._settingsLayout(22);
+    const first = fixture.harness._settingsControlBox(layoutM.startY, layoutM.rowH);
+    fixture.mouse.y = first.y + first.h / 2;
+
+    fixture.settings.sfxVol = 0.5;
+    fixture.mouse.x = first.x + 10;
+    fixture.harness.updateSettings();
+    assert.equal(fixture.settings.sfxVol, 0.5,
+      'label-side clicks inside the visible slider card must not snap to 0%');
+    assert.deepEqual(fixture.audio.sfx, [],
+      'label-side clicks inside the slider card must not call setSfxVolume');
+
+    fixture.harness._settingsDrag = null;
+    fixture.mouse.x = c.sliderX + c.sliderW * 0.25;
+    fixture.harness.updateSettings();
+    assert.equal(fixture.settings.sfxVol, 0.25,
+      'clicks on the slider track must still map to the clicked value');
+    assert.deepEqual(fixture.audio.sfx, [0.25],
+      'track clicks must call setSfxVolume exactly once');
+
+    fixture.harness._settingsDrag = null;
+    fixture.settings.sfxVol = 0.25;
+    fixture.mouse.x = c.sliderX + c.sliderW + 10;
+    fixture.harness.updateSettings();
+    assert.equal(fixture.settings.sfxVol, 0.25,
+      'right-padding clicks inside the visible slider card must not snap to 100%');
+    assert.deepEqual(fixture.audio.sfx, [0.25],
+      'right-padding clicks inside the slider card must not call setSfxVolume');
+  }
 });
 
 test('result screens route taps through explicit return-to-menu buttons', () => {

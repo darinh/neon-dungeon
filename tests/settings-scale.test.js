@@ -322,9 +322,9 @@ test('renderSettings gives every settings row a rounded control affordance', () 
     'back row must render as a rounded control');
 });
 
-test('settings layout: rowH shrinks dynamically so 21-row menu fits in viewport H', () => {
-  // Per gpt-5.5 r1: with 6 toggles + 2 steppers + 9 rebinds + reset +
-  // back, the menu has 21 rows. At the prior fixed rowH=34 the back
+test('settings layout: rowH shrinks dynamically so 22-row menu fits in viewport H', () => {
+  // Per gpt-5.5 r1: with 6 toggles + 3 steppers + 9 rebinds + reset +
+  // back, the menu has 22 rows. At the prior fixed rowH=34 the back
   // row landed at y=780 — off-screen on common 720-logical-pixel
   // landscape windows. Shared helper `_settingsLayout` shrinks rowH
   // to fit `H`. Both render + update consume it.
@@ -345,33 +345,46 @@ test('settings layout: rowH shrinks dynamically so 21-row menu fits in viewport 
     '_settingsLayout must declare desiredRowH = narrow ? 28 : 34');
 });
 
-test('settings click hit-bands shrink with rowH so adjacent rows never overlap', () => {
-  // Per gpt-5.3-codex r2: when _settingsLayout shrinks rowH below 22
-  // (the historical 8+14 band height), the fixed band would overlap
-  // adjacent rows by `22 - rowH` pixels. Pin the dynamic hit-band
-  // computation: hitH = min(22, max(2, rowH-1)) so the band can never
-  // exceed rowH - 1, guaranteeing a 1-px gap between bands.
-  // (Whole-file matches — these are unique strings introduced by the fix.)
-  assert.match(GAME,
-    /const\s+hitH\s*=\s*Math\.min\s*\(\s*22\s*,\s*Math\.max\s*\(\s*2\s*,\s*rowH\s*-\s*1\s*\)\s*\)/,
-    'updateSettings must declare hitH = min(22, max(2, rowH-1))');
-  assert.match(GAME,
-    /const\s+hitTop\s*=\s*Math\.min\s*\(\s*8\s*,/,
-    'updateSettings must declare hitTop derived from hitH');
-  assert.match(GAME,
-    /const\s+hitBot\s*=\s*hitH\s*-\s*hitTop/,
-    'updateSettings must declare hitBot = hitH - hitTop');
-  // And no leftover `ry - 8 && my <= ry + 14` (or resetY/backY variants)
-  // literal hit bands — every check inside settings must use hitTop/hitBot.
-  // Search the whole file (these literals were unique to settings).
+test('settings pointer hit-testing uses the same rounded control cards that render rows', () => {
+  const hitHelper = GAME.match(/_settingsControlHit\s*\([^)]*\)\s*\{[\s\S]{0,500}\},/);
+  assert.ok(hitHelper, 'settings input must expose a shared control-card hit helper');
+  assert.match(hitHelper[0], /const\s+box\s*=\s*this\._settingsControlBox\(rowY,\s*rowH\)/,
+    'settings hit-testing must consume the same _settingsControlBox geometry used by rendering');
+  assert.match(hitHelper[0],
+    /mx\s*>=\s*box\.x\s*&&\s*mx\s*<=\s*box\.x\s*\+\s*box\.w[\s\S]{0,80}my\s*>=\s*box\.y\s*&&\s*my\s*<=\s*box\.y\s*\+\s*box\.h/,
+    'settings hit-testing must check all four rendered card edges');
   assert.doesNotMatch(GAME,
-    /\b(?:ry|resetY|backY)\s*-\s*8\s*&&[\s\S]{0,40}\+\s*14\b/,
-    'no fixed-22-px hit bands may remain in updateSettings — use hitTop/hitBot');
-  // Sanity: at least 5 hit-test sites consume the new bounds (slider,
-  // toggle, stepper, rebind, reset, back = 6).
-  const consumers = GAME.match(/my\s*>=\s*\w+\s*-\s*hitTop\s*&&\s*my\s*<=\s*\w+\s*\+\s*hitBot/g) || [];
-  assert.ok(consumers.length >= 5,
-    `expected ≥5 hit-test sites using hitTop/hitBot; got ${consumers.length}`);
+    /const\s+hitH\s*=\s*Math\.min\s*\(\s*22\s*,\s*Math\.max\s*\(\s*2\s*,\s*rowH\s*-\s*1\s*\)\s*\)/,
+    'updateSettings must not keep the older vertical-only hit band after adopting visible card hit targets');
+  assert.doesNotMatch(GAME,
+    /const\s+hitTop\s*=\s*Math\.min\s*\(\s*8\s*,/,
+    'updateSettings must not keep vertical-only hitTop bounds');
+  assert.doesNotMatch(GAME,
+    /const\s+hitBot\s*=\s*hitH\s*-\s*hitTop/,
+    'updateSettings must not keep vertical-only hitBot bounds');
+  // Every pointer-action row family must call the shared card hit helper:
+  // sliders, toggles, steppers, rebinds, reset, and back.
+  const consumers = GAME.match(/this\._settingsControlHit\(\w+,\s*rowH,\s*mx,\s*my\)/g) || [];
+  assert.ok(consumers.length >= 6,
+    `expected ≥6 settings card hit-test consumers; got ${consumers.length}`);
+  assert.match(GAME,
+    /this\._settingsControlHit\(ry,\s*rowH,\s*mx,\s*my\)[\s\S]{0,80}mx\s*>=\s*sliderX\s*&&\s*mx\s*<=\s*sliderX\s*\+\s*sliderW/,
+    'slider rows must use card geometry for row targeting but ignore label/padding clicks outside the slider track');
+  assert.doesNotMatch(GAME,
+    /my\s*>=\s*\w+\s*-\s*hitTop\s*&&\s*my\s*<=\s*\w+\s*\+\s*hitBot/,
+    'no vertical-only settings row hit-tests may remain after card alignment');
+});
+
+test('renderSettings uses pause-menu-strength fill/stroke affordances for row controls', () => {
+  const helper = GAME.match(/_drawSettingsControl\s*\([^)]*\)\s*\{[\s\S]{0,1200}\},/);
+  assert.ok(helper, 'renderSettings must use a shared settings-control drawing helper');
+  assert.match(GAME,
+    /ctx\.fillStyle\s*=\s*selected[\s\S]{0,200}'rgba\(0,0,0,0\.36\)'/,
+    'unselected settings controls should render with a visible dark card fill instead of text-only transparency');
+  assert.match(helper[0], /'rgba\(170,170,204,0\.32\)'/,
+    'unselected settings controls should keep a visible neutral stroke like pause/menu cards');
+  assert.match(helper[0], /selected\s*\?\s*2\s*:\s*1/,
+    'selected settings controls should strengthen their stroke weight');
 });
 
 test('updateSettings minimapScale change forces a minimap cache rebuild', () => {

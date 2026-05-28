@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.181
+# NEON DUNGEON — Game Specification v6.1.182
 
 ## Vision
 
@@ -4476,7 +4476,7 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 ### Settings Payload
 
 ```json
-{ "sfxVol": 1.0, "musicVol": 1.0, "screenShake": true, "damageNumbers": true, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
+{ "sfxVol": 1.0, "musicVol": 1.0, "screenShake": true, "damageNumbers": true, "lockAimToMove": false, "aimAssist": true, "crtMode": true, "reducedMotion": false, "minimapScale": 1.0, "textScale": 1.0, "worldZoom": 1.0, "_worldZoomFromDefault": true, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
 ```
 
 ### Volume Controls
@@ -4484,11 +4484,16 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 - **SFX Volume** (0–100%): multiplied by base master gain (0.7). Applied via `audio.setSfxVolume(v)` using short linear ramp (0.02 s) to avoid zipper noise.
 - **Music Volume** (0–100%): multiplied by base music bus gain (0.20). Applied via `audio.setMusicVolume(v)`.
 - Both are applied at node creation time (lazy init) AND when the setter is called, ensuring correct volume regardless of when AudioContext initialises.
+- In the settings screen, slider rows use the visible row card for row hit-testing, but only clicks/taps on the slider track adjust the value; label and padding clicks inside the card do not snap the slider to an endpoint.
 
 ### Display Toggles
 
 - **Screen Shake** (ON/OFF, default ON): `settings.screenShake`. When OFF, `triggerShake()` is a no-op — camera offset stays at zero.
 - **Damage Numbers** (ON/OFF, default ON): `settings.damageNumbers`. When OFF, `spawnDmgText()` is a no-op — no floating text spawns.
+- **Lock Aim To Move** (ON/OFF, default OFF): `settings.lockAimToMove`.
+- **Aim Assist** (ON/OFF, default ON): `settings.aimAssist`.
+- **CRT Mode** (ON/OFF, default ON): `settings.crtMode`.
+- **Reduced Motion** (ON/OFF, default OFF): `settings.reducedMotion`.
 
 ### Key Rebinding
 
@@ -4512,21 +4517,24 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 
 `SETTINGS` game state, accessible from:
 - **Main menu**: "SETTINGS" option in menu list
-- **Pause screen**: `S` key / click "Settings" / middle-third touch zone
+- **Pause screen**: `S` key / click or tap the explicit "SETTINGS" pause button
 
 Layout (canvas-rendered, no HTML overlays):
 1. SFX Volume slider (horizontal bar, click/drag or ◀▶ keys, 5% step)
 2. Music Volume slider
-3. Screen Shake toggle (◀▶ or Enter/click to toggle ON/OFF)
-4. Damage Numbers toggle
+3. Screen Shake, Damage Numbers, Lock Aim To Move, Aim Assist, CRT Mode, and Reduced Motion toggles (◀▶ or Enter/click to toggle ON/OFF)
+4. Minimap Size, Text Size, and World Zoom steppers (◀▶ or Enter/click/tap to cycle discrete scale values)
 5. Rebind rows (one per action, showing action label + current key)
-6. "RESET TO DEFAULTS" button (resets volumes, toggles, and key bindings)
+6. "RESET TO DEFAULTS" button (two-press/two-tap confirmation; resets volumes, toggles, scale settings, and key bindings)
 7. "BACK" button (returns to previous state)
 
 Every settings row is drawn as a rounded control card using the same neon
 stroke/fill affordance language as the game's other canvas menus. Sliders,
 toggles, steppers, rebinds, reset, and back all show a visible control boundary
-and selected/accent state rather than plain text-only rows.
+and selected/accent state rather than plain text-only rows. Pointer and touch
+activation uses the same rounded-card geometry returned by
+`game._settingsControlBox()`: taps outside a visible row card do not activate
+that row, while taps on the card edges are accepted.
 
 Navigation: ↑↓ select row, ◀▶ adjust sliders or toggle options, Enter/click to rebind or toggle, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
 
@@ -5062,6 +5070,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.182 | Settings control affordance polish for issue #1043: every settings row now uses stronger pause/menu-style rounded control-card fill and stroke states, and pointer/touch hit-testing consumes the same `game._settingsControlBox()` rectangles that rendering uses. Added source and geometry tests for the shared hit helper, visible card bounds, and all four accepted/rejected tap edges. |
 | v6.1.181 | Loot/readable visual-language pass for issue #1053: `src/content/pickups.js` now gives collectible/reward objects a shared luminous halo while preserving distinct inner silhouettes for generic pickups, keys, whispers, weapon caches, harvest surges, hoards, vault coins, and shock pulses. `src/render.js` frames interactive/readable tiles with scan-bracket affordances and renders navigation-meaningful collectibles as diamond markers on both minimap views, with transient clutter drops kept in-world only. Added `tests/visual-language.test.js` coverage for direct canvas-operation evidence, fog-alpha preservation, marker shape/colour mapping, minimap wiring, and legend copy. |
 | v6.1.180 | RECON route guidance for issue #1051: `RECON_PING` now upgrades full-map reveal into explicit wayfinding by drawing a cached route overlay on the corner minimap and expanded map. The route targets stairs on regular floors, the boss room while a boss is alive, and the final CORE terminal only after GENESIS is down; it follows ordinary doors and currently-openable locked doors while treating unavailable locks, cracked walls, walls, and void as blockers. `game.markMapMutated()` now increments `dungeon._mapMutationVersion` so route caches invalidate on door/open wall/terminal mutations. Added `tests/recon-route-guidance.test.js` coverage for door/lock path semantics, key and map-version cache invalidation, RECON-vs-ECHO gating, final-floor boss/core targeting, and both minimap overlay call sites. |
 | v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |
