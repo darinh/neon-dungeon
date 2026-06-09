@@ -628,6 +628,17 @@ declare global {
       y: number,
     ): Array<{ dx: number; dy: number; bx: number; by: number }>;
     /**
+     * Counts cardinal outside-passage neighbours around a point. Tile semantics
+     * are caller-injected; an optional complete coordinate pair is ignored.
+     */
+    countOutsidePassageConnections(
+      x: number,
+      y: number,
+      isOutsidePassageTile: (x: number, y: number) => boolean,
+      exceptX?: number,
+      exceptY?: number,
+    ): number;
+    /**
      * Finds positions that align a one-sided outside entrance with an existing
      * outside passage. Tile semantics are caller-injected.
      */

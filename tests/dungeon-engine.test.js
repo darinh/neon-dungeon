@@ -98,6 +98,18 @@ test('dungeon topology outside entrance room sides skip corner boundary tiles', 
   assert.deepEqual(topology.findOutsideEntranceRoomSides([matchingRoom, cornerBlocker], 5, 5), []);
 });
 
+test('dungeon topology counts outside passage connections in cardinal neighbours', () => {
+  const passages = new Set(['6,5', '4,5', '5,6', '6,6']);
+  const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);
+
+  assert.equal(topology.countOutsidePassageConnections(5, 5, isOutsidePassageTile), 3);
+  assert.equal(topology.countOutsidePassageConnections(5, 5, isOutsidePassageTile, 6, 5), 2);
+  assert.equal(topology.countOutsidePassageConnections(5, 5, isOutsidePassageTile, 6), 3,
+    'partial excluded coordinates must not affect the count');
+  assert.equal(topology.countOutsidePassageConnections(5, 5, isOutsidePassageTile, 6, 6), 3,
+    'non-cardinal excluded coordinates must not affect the count');
+});
+
 test('dungeon topology aligned outside passage repair preserves existing opposite connections', () => {
   const passages = new Set(['5,3']);
   const isOutsidePassageTile = (x, y) => passages.has(x + ',' + y);

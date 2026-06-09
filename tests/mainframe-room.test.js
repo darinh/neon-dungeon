@@ -136,6 +136,8 @@ test('final floor generation builds a safe mainframe room with all interaction p
     'special entrance repair must delegate room-neighborhood tile scans to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findOutsideEntranceRoomSides\(rooms,\s*x,\s*y\)/,
     'outside entrance repair must delegate room-side lookup to the dungeon topology engine');
+  assert.match(CONTENT, /dungeonTopology\.countOutsidePassageConnections\(x,\s*y,\s*isOutsidePassageTile,\s*exceptX,\s*exceptY\)/,
+    'outside entrance repair must delegate outside-passage connection counting to the dungeon topology engine');
   assert.match(CONTENT, /dungeonTopology\.findAlignedOutsidePassageRepair\(\s*x,\s*y,\s*side,\s*isOutsidePassageTile,\s*canCarveOutsidePassageTile\s*\)/,
     'outside entrance repair must delegate aligned passage search to the dungeon topology engine');
   assert.match(CONTENT, /if\s*\(mainframeRoom\s*&&\s*mainframeRoom\.interactables\)\s*{[\s\S]*map\[reader\.y\]\[reader\.x\]\s*=\s*T\.MAINFRAME_READER[\s\S]*map\[core\.y\]\[core\.x\]\s*=\s*T\.TERMINAL/,

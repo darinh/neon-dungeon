@@ -406,6 +406,29 @@
   }
 
   /**
+   * Counts cardinally adjacent outside-passage tiles around a point, optionally
+   * excluding one complete coordinate pair from the count. The host owns tile semantics.
+   *
+   * @param {number} x
+   * @param {number} y
+   * @param {(x:number,y:number) => boolean} isOutsidePassageTile
+   * @param {number} [exceptX]
+   * @param {number} [exceptY]
+   * @returns {number}
+   */
+  function countOutsidePassageConnections(x, y, isOutsidePassageTile, exceptX, exceptY) {
+    let degree = 0;
+    const hasExcludedCoordinate = exceptX !== undefined && exceptY !== undefined;
+    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (hasExcludedCoordinate && nx === exceptX && ny === exceptY) continue;
+      if (isOutsidePassageTile(nx, ny)) degree++;
+    }
+    return degree;
+  }
+
+  /**
    * Finds the topology-only repair positions needed to align a one-sided
    * outside entrance with an existing outside passage. The host injects tile
    * semantics; this helper only owns coordinate search and cardinal order.
@@ -420,13 +443,7 @@
   function findAlignedOutsidePassageRepair(x, y, side, isOutsidePassageTile, canCarveOutsidePassageTile) {
     const px = x - side.dx;
     const py = y - side.dy;
-    let degree = 0;
-    for (const [dx, dy] of CARDINAL_DIRECTIONS) {
-      const nx = px + dx;
-      const ny = py + dy;
-      if (nx === x && ny === y) continue;
-      if (isOutsidePassageTile(nx, ny)) degree++;
-    }
+    const degree = countOutsidePassageConnections(px, py, isOutsidePassageTile, x, y);
     if (degree > 0) return { px, py, cx: -1, cy: -1 };
     if (!isOutsidePassageTile(px, py) && !canCarveOutsidePassageTile(px, py)) return null;
     for (const [dx, dy] of CARDINAL_DIRECTIONS) {
@@ -598,6 +615,7 @@
     roomHasCorner,
     outsideFaceForBoundaryTile,
     findOutsideEntranceRoomSides,
+    countOutsidePassageConnections,
     findAlignedOutsidePassageRepair,
     findBoundaryEntranceClusters,
     findRoomBoundaryOpenings,

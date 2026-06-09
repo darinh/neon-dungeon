@@ -580,14 +580,7 @@ function generateFloor(floorNum, opts) {
    * @param {number} exceptY
    */
   function outsidePassageConnectionCount(x, y, exceptX, exceptY) {
-    let degree = 0;
-    for (const [dx, dy] of DUNGEON_CARDINAL_DIRECTIONS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx === exceptX && ny === exceptY) continue;
-      if (isOutsidePassageTile(nx, ny)) degree++;
-    }
-    return degree;
+    return dungeonTopology.countOutsidePassageConnections(x, y, isOutsidePassageTile, exceptX, exceptY);
   }
 
   /** @param {number} x @param {number} y @param {{dx:number,dy:number}} side */
