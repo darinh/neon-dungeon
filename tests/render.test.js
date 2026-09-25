@@ -57,13 +57,13 @@ function createRecordingCtx() {
 }
 
 /**
- * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number}} opts
+ * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number}} opts
  */
 function drawHudTexts(opts) {
   const ctx = createRecordingCtx();
   const sandbox = /** @type {any} */ ({
     ctx,
-    W: opts.compact ? 360 : 960,
+    W: opts.width || (opts.compact ? 360 : 960),
     H: opts.compact ? 640 : 540,
     safeLeft: 0,
     safeRight: 0,
@@ -164,7 +164,9 @@ test('landscape HUD second row flows modifier, bomb, and hackware labels without
   const boxes = [
     calls.find(c => c.text === '⛨FORTIFIED 12/20'),
     calls.find(c => c.text === '[V] Bomb RDY'),
-    calls.find(c => c.text === '[F] ⇥PHASE BLINK RDY'),
+    calls.find(c => c.text.startsWith('[F] ⇥') && c.text.endsWith('RDY')),
+    // The right-side cores readout closes the row: nothing may run into it.
+    calls.find(c => c.text.startsWith('◆ ')),
   ];
   assert.ok(boxes.every(Boolean), `missing landscape second-row calls: ${JSON.stringify(calls)}`);
   assertNonOverlapping(/** @type {any[]} */ (boxes));
@@ -184,10 +186,25 @@ test('landscape HUD second row flows timed bomb and hackware cooldown labels wit
   const boxes = [
     calls.find(c => c.text === '⛨FORTIFIED 12/20'),
     calls.find(c => c.text === '[V] Bomb 3.2s'),
-    calls.find(c => c.text === '[F] ⇥PHASE BLINK 4.5s'),
+    calls.find(c => c.text.startsWith('[F] ⇥') && c.text.endsWith('4.5s')),
+    calls.find(c => c.text.startsWith('◆ ')),
   ];
   assert.ok(boxes.every(Boolean), `missing timed second-row calls: ${JSON.stringify(calls)}`);
   assertNonOverlapping(/** @type {any[]} */ (boxes));
+});
+
+// ─── Hackware label vs right-side readouts ────────────────────────────────
+
+test('the hackware label never runs into the cores readout; it shortens instead', () => {
+  const calls = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5 });
+  const hw = calls.find((c) => c.text.startsWith('[F]'));
+  const cores = calls.find((c) => c.text.startsWith('◆ '));
+  assert.ok(hw && cores, 'both labels drawn at 960px');
+  assert.ok(hw.x + hw.width <= cores.x, `${hw.text} (${hw.x}-${hw.x + hw.width}) overlaps ${cores.text} at ${cores.x}`);
+  assert.doesNotMatch(hw.text, /PHASE BLINK/, 'the crowded 960px row falls back to the short form');
+  const wide = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 1600 });
+  const hwWide = wide.find((c) => c.text.startsWith('[F]'));
+  assert.ok(hwWide && /PHASE BLINK/.test(hwWide.text), 'wide screens keep the full hackware name');
 });
 
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────
@@ -284,7 +301,7 @@ function runMainframeSetPieces(bossAlive) {
   });
   vm.createContext(sandbox);
   vm.runInContext([
-    'const _MF_RACK_TILES = 7;',
+    'const _MF_RACK_TILES = 7; const _MF_CABLE_DASH = [4, 6]; const _MF_NO_DASH = [];',
     extractFunctionSource(RENDER, 'drawMainframeSetPieces'),
     'this.draw = drawMainframeSetPieces;',
   ].join('\n'), sandbox);

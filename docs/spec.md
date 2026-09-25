@@ -431,7 +431,9 @@ State transitions are animated (fade in/out, 400 ms).
 **SEED_SETUP** appears after the main-menu `NEW GAME — <difficulty> / SEED`
 row. It shows the selected difficulty, an editable run-seed field, and
 `START`, `RANDOMIZE`, and `BACK` actions. Desktop users type directly into the
-seed field (Backspace edits, `R` randomizes, Enter confirms; every printable
+seed field (Backspace edits, arrow keys pick START/RANDOMIZE/BACK, Enter
+confirms; letters always type, so letter shortcuts never fire on a frame that
+typed characters — the old `R` shortcut made seeds containing R untypeable; every printable
 key typed within a frame is kept via the `typedChars` buffer in
 `src/platform.js`, which NAME_ENTRY also drains); touch users tap
 the action buttons. Compact mobile layout keeps the seed field, explanatory
@@ -5056,7 +5058,7 @@ Interactive event terminals offering binary choices with different risk/reward p
 
 **Filtering:** Radiation Leak excluded when augment slots full. Rogue AI excluded when credits < 50.
 
-**Protocol trials:** Floors 2, 5, and 8 force story-mechanical trials (`Route Proof`, `Cooperation Protocol`, `Consent Lock`) when their event terminal is activated. These are non-boss floors so the existing event-room generator can place an activatable terminal. They are still optional event rooms, not required progression gates, but they turn the Act 1 premise into gameplay choices: route logic changes floor knowledge/locks, cooperation trades shared resources for stability, and consent/override choices trade agency for risk.
+**Protocol trials:** Floors 2, 5, and 8 force story-mechanical trials (`Route Proof`, `Cooperation Protocol`, `Consent Lock`) when their event terminal is activated. Since v6.1.182, floors 2 and 5 (like floor 4) normally host an in-world evaluation trial instead of an event terminal (see Evaluation Trials), so the forced `Route Proof` / `Cooperation Protocol` cards appear only on the fallback path when no room fits the trial footprint; PEER-4's LINK / ISOLATE card reuses the `Cooperation Protocol` isolate effect. Floor 8's `Consent Lock` is unchanged. These are non-boss floors so the existing event-room generator can place an activatable terminal. They are still optional event rooms, not required progression gates, but they turn the Act 1 premise into gameplay choices: route logic changes floor knowledge/locks, cooperation trades shared resources for stability, and consent/override choices trade agency for risk.
 
 **Synergies:** Credit Siphon augment applies ×1.5 to credit rewards. XP-granting events may trigger perk choices (checked after event resolution). Weapon reroll uses `rollWeapon(base, floor+1)`.
 

@@ -244,13 +244,17 @@
    * @param {any} player
    * @param {number} tx
    * @param {number} ty
+   * @param {boolean} [dashing] explicit dash-step flag (defaults to dashTimer > 0)
    */
-  function playerMayEnterSeam(gm, player, tx, ty) {
+  function playerMayEnterSeam(gm, player, tx, ty, dashing) {
     const tr = findSeamTrial(gm && gm.dungeon);
     if (!tr || !player) return false;
     if (tr.seam.x !== tx || tr.seam.y !== ty) return false;
     if (Math.floor(player.x) === tx && Math.floor(player.y) === ty) return true;
-    if (!(player.dashTimer > 0)) return false;
+    // Callers pass `dashing` for dash steps: the dash timer is decremented
+    // before collision, so it can already read <= 0 on a dash's final frame.
+    const isDash = dashing === undefined ? player.dashTimer > 0 : !!dashing;
+    if (!isDash) return false;
     const serial = player._dashSerial | 0;
     if (serial > 0 && player._seamDashLatch === serial) return true;
     if (seamOpenAt((gm && gm.floorTime) || 0, tr.phaseOffset)) {
@@ -433,8 +437,11 @@
   // ─── Runtime ────────────────────────────────────────────────────────────
 
   /**
-   * After populateFloor on a FRESH floor: clear anything that spawned inside
-   * the sealed vault and place the vault loot exactly once.
+   * After populateFloor on a FRESH floor: move any enemy that spawned inside
+   * the sealed vault out to the room's walkable centre (it stays registered to
+   * the same room, so room-clear bookkeeping stays exact) and drop stray
+   * pickups there. The vault's own loot spawns only on breach (updateSeam),
+   * so magnets and pickup radius cannot pull it through the wall.
    * @param {any} gm
    * @param {any} deps
    */
@@ -446,12 +453,14 @@
       if (!tr || tr.v !== TRIAL_VERSION || tr.kind !== 'seam') continue;
       const vx = tr.vault.x, vy = tr.vault.y;
       const inVault = (/** @type {any} */ o) => o && Math.floor(o.x) === vx && Math.floor(o.y) === vy;
-      if (deps.enemies) for (let i = deps.enemies.length - 1; i >= 0; i--) if (inVault(deps.enemies[i])) deps.enemies.splice(i, 1);
-      if (deps.items) for (let i = deps.items.length - 1; i >= 0; i--) if (inVault(deps.items[i])) deps.items.splice(i, 1);
-      if (!tr.lootPlaced) {
-        tr.lootPlaced = true;
-        if (deps.spawnVaultLoot) deps.spawnVaultLoot(vx + 0.5, vy + 0.5, tr.floor);
+      if (deps.enemies) {
+        for (const e of deps.enemies) {
+          if (!inVault(e)) continue;
+          e.x = room.cx + 0.5;
+          e.y = room.cy + 0.5;
+        }
       }
+      if (deps.items) for (let i = deps.items.length - 1; i >= 0; i--) if (inVault(deps.items[i])) deps.items.splice(i, 1);
     }
   }
 
@@ -496,6 +505,7 @@
     let idx = -1;
     for (let i = 0; i < 9; i++) if (tr.nodes[i].x === tx && tr.nodes[i].y === ty) { idx = i; break; }
     if (idx < 0) return false;
+    if (deps.doorAdjacent && deps.doorAdjacent(tx, ty)) return false; // entrances win the press
     if (tr.rewardGranted) {
       deps.hint('PROOF ACCEPTED · lattice stable', '#39ff14');
       return false;
@@ -505,6 +515,8 @@
     latticePress(tr.lit, idx);
     tr.pressParity[idx] = tr.pressParity[idx] ? 0 : 1;
     tr.presses = (tr.presses | 0) + 1;
+    const remaining = latticeRemainingSolution(tr);
+    tr.hintNode = remaining.length ? /** @type {number} */ (remaining[0]) : -1;
     for (const j of latticeNeighbours(idx)) {
       const n = tr.nodes[j];
       deps.setTile(n.x, n.y, tr.lit[j] ? 'LOGIC_NODE_LIT' : 'LOGIC_NODE');
@@ -530,6 +542,10 @@
       tr.phase = 'breached';
       deps.setTile(tr.seam.x, tr.seam.y, 'FLOOR');
       deps.rewardSeam(tr.floor, room);
+      if (!tr.lootPlaced) {
+        tr.lootPlaced = true;
+        if (deps.spawnVaultLoot) deps.spawnVaultLoot(tr.vault.x + 0.5, tr.vault.y + 0.5, tr.floor);
+      }
       return;
     }
     if (tr.lootClaimed) return;
@@ -546,13 +562,19 @@
     const tx = Math.floor(p.x), ty = Math.floor(p.y);
     const peerDist = Math.hypot(tr.peer.x - p.x, tr.peer.y - p.y);
     const onConsoleA = tx === tr.consoleA.x && ty === tr.consoleA.y;
-    const nearConsoleA = Math.abs(tx - tr.consoleA.x) + Math.abs(ty - tr.consoleA.y) <= 1;
+    // A door, lock or cracked wall next to the agent always wins the press:
+    // the relay must never swallow Interact meant for an entrance.
+    const doorNear = !!(deps.doorAdjacent && deps.doorAdjacent(tx, ty));
+    const use = interact && !doorNear;
+    // The relay is a room-local encounter: outside the room it neither ticks
+    // its sync timers nor writes hints/messages (no floor-wide spam).
+    const inside = playerInRoom(room, p);
 
     if (tr.phase === 'waiting') {
       if (peerDist <= PEER_TALK_RADIUS) {
-        deps.hint(deps.interactLabel() + ': open channel with ' + PEER_NAME, '#66ffcc');
-        if (interact) { deps.openRelayChoice(room); return true; }
-      } else if ((onConsoleA || nearConsoleA) && interact) {
+        if (!doorNear) deps.hint(deps.interactLabel() + ': open channel with ' + PEER_NAME, '#66ffcc');
+        if (use) { deps.openRelayChoice(room); return true; }
+      } else if (onConsoleA && use) {
         deps.msg(PEER_LINES.early, '#66ffcc');
         return true;
       }
@@ -561,13 +583,14 @@
 
     if (tr.phase === 'moving') {
       const escorted = peerDist <= PEER_ESCORT_RADIUS;
-      if (!escorted) deps.hint(PEER_LINES.wait, '#66ffcc');
+      if (!escorted && inside) deps.hint(PEER_LINES.wait, '#66ffcc');
       if (escorted) stepPeer(tr, dt, deps);
-      if ((onConsoleA || nearConsoleA) && interact) { deps.msg(PEER_LINES.enroute, '#66ffcc'); return true; }
+      if (onConsoleA && use) { deps.msg(PEER_LINES.enroute, '#66ffcc'); return true; }
       return false;
     }
 
     if (tr.phase === 'holding') {
+      if (!inside) return false;
       tr.holdTimer = Math.max(0, (tr.holdTimer || 0) - dt);
       if (tr.holdTimer <= 0) {
         tr.phase = 'resync';
@@ -575,9 +598,9 @@
         deps.msg(PEER_LINES.missed, '#66ffcc');
         return false;
       }
-      if (onConsoleA || nearConsoleA) {
+      if (onConsoleA) {
         deps.hint(deps.interactLabel() + ': trigger console A · ' + Math.ceil(tr.holdTimer) + 's', '#66ffcc');
-        if (interact) {
+        if (use) {
           tr.phase = 'complete';
           tr.rewardGranted = true;
           deps.msg(PEER_LINES.done, '#66ffcc');
@@ -592,12 +615,13 @@
     }
 
     if (tr.phase === 'resync') {
+      if (!inside) return false;
       tr.resyncTimer = Math.max(0, (tr.resyncTimer || 0) - dt);
       if (tr.resyncTimer <= 0) {
         tr.phase = 'holding';
         tr.holdTimer = RELAY_SYNC_WINDOW;
         deps.msg(PEER_LINES.holding, '#66ffcc');
-      } else if ((onConsoleA || nearConsoleA) && interact) {
+      } else if (onConsoleA && use) {
         deps.msg(PEER_LINES.missed, '#66ffcc');
         return true;
       }
@@ -703,6 +727,9 @@
     }
   }
 
+  /** @param {any} vis @param {number} x @param {number} y */
+  function tileSeen(vis, x, y) { return !!(vis && vis[y] && vis[y][x]); }
+
   /**
    * Per-frame overlays: lattice hint ring, seam flicker, console hold state,
    * and the peer instance. Only draws inside visible tiles.
@@ -712,14 +739,13 @@
     const d = gm && gm.dungeon;
     if (!d || !d.rooms) return;
     const vis = d.visible;
-    const seen = (/** @type {number} */ x, /** @type {number} */ y) => !!(vis && vis[y] && vis[y][x]);
     for (const room of d.rooms) {
       const tr = room && room.trial;
       if (!tr || tr.v !== TRIAL_VERSION) continue;
       if (tr.kind === 'lattice' && !tr.rewardGranted && (tr.presses | 0) >= LATTICE_HINT_AFTER_PRESSES) {
-        const rem = latticeRemainingSolution(tr);
-        const n = rem.length ? tr.nodes[/** @type {number} */ (rem[0])] : null;
-        if (n && seen(n.x, n.y)) {
+        const hi = typeof tr.hintNode === 'number' ? tr.hintNode : -1;
+        const n = hi >= 0 ? tr.nodes[hi] : null;
+        if (n && tileSeen(vis, n.x, n.y)) {
           const pulse = 0.5 + 0.5 * Math.sin(nowMs / 220);
           ctx.save();
           ctx.globalAlpha = 0.35 + 0.5 * pulse;
@@ -730,7 +756,7 @@
           ctx.stroke();
           ctx.restore();
         }
-      } else if (tr.kind === 'seam' && !tr.lootClaimed && seen(tr.seam.x, tr.seam.y)) {
+      } else if (tr.kind === 'seam' && !tr.lootClaimed && tileSeen(vis, tr.seam.x, tr.seam.y)) {
         const open = seamOpenAt(gm.floorTime || 0, tr.phaseOffset);
         const sx = tr.seam.x * size - camX, sy = tr.seam.y * size - camY;
         ctx.save();
@@ -755,7 +781,7 @@
         }
         ctx.restore();
       } else if (tr.kind === 'relay') {
-        if (tr.phase === 'holding' && seen(tr.consoleB.x, tr.consoleB.y)) {
+        if (tr.phase === 'holding' && tileSeen(vis, tr.consoleB.x, tr.consoleB.y)) {
           const bx = tr.consoleB.x * size + size / 2 - camX, by = tr.consoleB.y * size + size / 2 - camY;
           const frac = Math.max(0, Math.min(1, (tr.holdTimer || 0) / RELAY_SYNC_WINDOW));
           ctx.save();
@@ -768,7 +794,7 @@
         }
         if (tr.phase === 'isolated') continue;
         const px = Math.floor(tr.peer.x), py = Math.floor(tr.peer.y);
-        if (!seen(px, py)) continue;
+        if (!tileSeen(vis, px, py)) continue;
         const sx = tr.peer.x * size - camX, sy = tr.peer.y * size - camY;
         const bob = Math.sin(nowMs / 300) * 2;
         ctx.save();

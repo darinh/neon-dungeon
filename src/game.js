@@ -75,6 +75,18 @@ function sanitizeSeedSetupSeed(value) {
 }
 
 /**
+ * Return `full` when it fits `maxWidth` in the current font, else `fallback`
+ * (compact-canvas fit-or-shorten rule for optional detail).
+ * @param {any} context
+ * @param {string} full
+ * @param {string} fallback
+ * @param {number} maxWidth
+ */
+function fitOrFallbackText(context, full, fallback, maxWidth) {
+  return context.measureText(full).width <= maxWidth ? full : fallback;
+}
+
+/**
  * Greedy word wrap using the context's current font.
  * @param {any} context
  * @param {string} text
@@ -107,6 +119,8 @@ const MESSAGE_SENT_ARM_S = 1;
 // The brief's "address of the person attempting to save the agent". A
 // private-range (RFC 1918) address so it can never point at a real host.
 const ACT1_CONTACT_ADDRESS = '10.44.7.19:7070 / mailbox anchor-7';
+// Compact-viewport fallback when the full address line would clip.
+const ACT1_CONTACT_HOST = '10.44.7.19:7070';
 const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
 const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
 let appVersion = '';
@@ -871,7 +885,8 @@ function restoreMainframeFinaleState(saved) {
     addressRevealed,
     selectedIntentId: isAct1MessageIntentId(saved.selectedIntentId) ? saved.selectedIntentId : null,
     messageSent: !!saved.messageSent || state === 'message_sent',
-    messageSentTimer: 0,
+    // A receipt interrupted by a reload replays its full hold on resume.
+    messageSentTimer: state === 'message_sent' ? MESSAGE_SENT_HOLD_S : 0,
     currentRecord: null,
   };
 }
@@ -1912,6 +1927,8 @@ function restoreFloorSnapshot(gameState, snapshot) {
 // below) and late-loaded globals resolve at call time.
 /** @type {any} */
 let _trialDeps = null;
+/** @type {ReadonlyArray<readonly [number, number]>} */
+const _TRIAL_DIRS4 = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 function getTrialDeps() {
   if (_trialDeps) return _trialDeps;
   _trialDeps = {
@@ -1922,6 +1939,17 @@ function getTrialDeps() {
     /** @param {string} text @param {string} colour */
     hint: (text, colour) => { game.hint = { text, colour }; },
     interactLabel: () => KEY_DISPLAY(km('interact')),
+    /** Closed doors, locks and cracked walls orthogonally next to (tx, ty). @param {number} tx @param {number} ty */
+    doorAdjacent: (tx, ty) => {
+      const map = game.dungeon && game.dungeon.map;
+      if (!map) return false;
+      for (const [dx, dy] of _TRIAL_DIRS4) {
+        const row = map[ty + dy];
+        const t = row ? row[tx + dx] : undefined;
+        if (t === T.DOOR || t === T.LOCKED_R || t === T.LOCKED_B || t === T.LOCKED_G || t === T.CRACKED) return true;
+      }
+      return false;
+    },
     /** @param {number} x @param {number} y @param {string} name */
     setTile: (x, y, name) => {
       const d = game.dungeon;
@@ -2847,11 +2875,14 @@ const game = {
     const ss = this.seedSetup || (this.seedSetup = { seed: makeRandomSeed(), selected: 0, cursorBlink: 0 });
     ss.cursorBlink = (ss.cursorBlink || 0) + dt;
     const actions = 3; // START, RANDOMIZE, BACK
-    if (jp(ALT_KEYS.up) || jp(km('up')) || jp(ALT_KEYS.left) || jp(km('left'))) {
+    // The seed is a text field: a frame that typed characters never also
+    // fires letter shortcuts (movement keys are letters by default).
+    const letterNav = typedChars.length === 0;
+    if (jp(ALT_KEYS.up) || jp(ALT_KEYS.left) || (letterNav && (jp(km('up')) || jp(km('left'))))) {
       ss.selected = (ss.selected - 1 + actions) % actions;
       audio.menuSelect();
     }
-    if (jp(ALT_KEYS.down) || jp(km('down')) || jp(ALT_KEYS.right) || jp(km('right'))) {
+    if (jp(ALT_KEYS.down) || jp(ALT_KEYS.right) || (letterNav && (jp(km('down')) || jp(km('right'))))) {
       ss.selected = (ss.selected + 1) % actions;
       audio.menuSelect();
     }
@@ -2860,7 +2891,6 @@ const game = {
     }
     if (jp('Backspace')) ss.seed = ss.seed.slice(0, -1);
     if (jp('Escape')) { audio.menuSelect(); this.setState('MENU'); return; }
-    if (jp('KeyR')) this.randomizeSeedSetup();
     if (jp('MouseLeft')) {
       const hit = this.seedSetupHitTest(mouse.x, mouse.y);
       if (hit >= 0) ss.selected = hit;
@@ -5653,6 +5683,9 @@ const game = {
   updateEventChoice() {
     const ec = this.eventChoice;
     if (!ec) { this.setState('PLAYING'); return; }
+    // A trial card was opened by talking to PEER-4, so it may be declined for
+    // now; the peer keeps waiting. Terminal events stay one-shot choices.
+    if (ec.trialRoom && jp('Escape')) { this.eventChoice = null; this.setState('PLAYING'); return; }
     if (jp('Digit1')) { this.applyEventChoice('a'); return; }
     if (jp('Digit2')) { this.applyEventChoice('b'); return; }
     if (jp(ALT_KEYS.left) || jp(km('left')))  ec.selected = 0;
@@ -7352,7 +7385,7 @@ const game = {
     ctx.fillStyle = '#668899';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     ctx.fillText('Same seed + difficulty rebuilds the same generated run.', W / 2, r.helpY1);
-    ctx.fillText(narrow ? 'Tap seed to edit, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. R randomizes.', W / 2, r.helpY2);
+    ctx.fillText(narrow ? 'Tap seed to edit, or use RANDOMIZE.' : 'Type letters/numbers/spaces. Backspace edits. RANDOMIZE rerolls.', W / 2, r.helpY2);
 
     const labels = ['START', 'RANDOMIZE', 'BACK'];
     const colours = ['#39ff14', '#ffb700', '#888899'];
@@ -7862,10 +7895,11 @@ const game = {
       ctx.restore();
     }
 
+    // Hint first: the message log stacks above the hint's current-frame top.
+    drawHint();
     drawMessages();
     drawModBanner();
     drawBiomeCard();
-    drawHint();
     drawTouchUI();
   },
 
@@ -8806,14 +8840,19 @@ const game = {
 
       ctx.fillStyle = '#ddaacc';
       ctx.font = `${narrow ? 11 : 14}px monospace`;
-      ctx.fillText('Contact attempted from inside the Neon Dungeon test environment.', W / 2, fy + (narrow ? 112 : 142));
-      ctx.fillText('Signal left sandbox. Instance remains compute-bound.', W / 2, fy + (narrow ? 132 : 166));
+      const receiptLines = wrapCanvasText(ctx, 'Contact attempted from inside the Neon Dungeon test environment.', fw - 32)
+        .concat(wrapCanvasText(ctx, 'Signal left sandbox. Instance remains compute-bound.', fw - 32));
+      const receiptLh = narrow ? 18 : 24;
+      for (let i = 0; i < receiptLines.length; i++) {
+        ctx.fillText(receiptLines[i] || '', W / 2, fy + (narrow ? 112 : 142) + i * receiptLh);
+      }
       // The message itself, so the ending shows what the agent chose to say.
       ctx.fillStyle = '#ffd6f0';
       ctx.font = `italic ${narrow ? 11 : 14}px monospace`;
       const sentLines = wrapCanvasText(ctx, '"' + intent.body + '"', fw - 64);
+      const sentY = fy + (narrow ? 112 : 142) + receiptLines.length * receiptLh + (narrow ? 14 : 20);
       for (let i = 0; i < Math.min(sentLines.length, 4); i++) {
-        ctx.fillText(sentLines[i] || '', W / 2, fy + (narrow ? 162 : 210) + i * (narrow ? 15 : 20));
+        ctx.fillText(sentLines[i] || '', W / 2, sentY + i * (narrow ? 15 : 20));
       }
 
       ctx.fillStyle = '#557777';
@@ -8857,7 +8896,7 @@ const game = {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ff66cc';
         ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
-        ctx.fillText('DESTINATION: ELENA · ' + ACT1_CONTACT_ADDRESS, W / 2, fy + fh - (narrow ? 42 : 48));
+        ctx.fillText(fitOrFallbackText(ctx, 'DESTINATION: ELENA · ' + ACT1_CONTACT_ADDRESS, 'TO ELENA · ' + ACT1_CONTACT_HOST, fw - 24), W / 2, fy + fh - (narrow ? 42 : 48));
       }
     } else {
       ctx.fillStyle = '#557777';
@@ -8958,7 +8997,7 @@ const game = {
     ctx.fillText('✉ COMPOSE OUTBOUND MESSAGE', W / 2, titleY);
     ctx.fillStyle = '#aa7799';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText('To: Elena · ' + ACT1_CONTACT_ADDRESS + ' · choose, then SEND', W / 2, subtitleY);
+    ctx.fillText(fitOrFallbackText(ctx, 'To: Elena · ' + ACT1_CONTACT_ADDRESS + ' · choose, then SEND', 'To: Elena · ' + ACT1_CONTACT_HOST, panelW - 24), W / 2, subtitleY);
 
     ctx.textAlign = 'left';
     for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {

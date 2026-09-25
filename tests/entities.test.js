@@ -146,12 +146,73 @@ test('playerTilePassable delegates only the seam tile to NEON.trials with the li
   assert.equal(fn(player, TILES.SEAM_WALL, 7, 3), true);
   assert.equal(fn(player, TILES.SEAM_WALL, 8, 3), false);
   assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0], [{ tag: 'game' }, player, 7, 3]);
+  assert.deepEqual(calls[0], [{ tag: 'game' }, player, 7, 3, undefined], 'the dash flag is forwarded (undefined for plain checks)');
   const noTrials = loadPlayerTilePassable(undefined);
   assert.equal(noTrials(player, TILES.SEAM_WALL, 7, 3), false, 'without the trials module the seam is a wall');
 });
 
 test('dash and walk collision both use the seam-aware helper; each dash gets a new serial', () => {
-  assert.equal((ENTITIES.match(/noClip \|\| playerTilePassable\(this, map\[/g) || []).length, 4);
+  assert.equal((ENTITIES.match(/noClip \|\| playerStepPassable\(this, map, /g) || []).length, 4);
+  assert.equal((ENTITIES.match(/if \(!noClip\) resolvePlayerCornerCut\(this, map, /g) || []).length, 2, 'dash and walk both resolve corner cuts');
   assert.match(ENTITIES, /this\.dashTimer=0\.12;\s*\n\s*this\._dashSerial = \(this\._dashSerial \| 0\) \+ 1;/);
+});
+
+// ─── Behaviour: the reviewer's corner-cut counterexample ──────────────────
+
+const trialsModule = require('../src/content/trials.js');
+
+/** Load the three real movement helpers against the real trials module. */
+function loadMovement() {
+  const T = { WALL: 1, FLOOR: 2, SEAM_WALL: 30 };
+  const room = { x: 10, y: 10, w: 9, h: 7, cx: 14, cy: 13 };
+  const trial = trialsModule.createTrial('seam', room, 4, () => 0.5);
+  trial.phaseOffset = 0;
+  /** @type {any} */ (room).trial = trial;
+  /** @type {any} */
+  const map = Array.from({ length: 30 }, () => new Array(30).fill(T.FLOOR));
+  for (const w of trial.walls) map[w.y][w.x] = T.WALL;
+  map[trial.seam.y][trial.seam.x] = T.SEAM_WALL;
+  const gm = { dungeon: { rooms: [room], map }, floorTime: 0 };
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const api = new Function('T', 'isPassable', 'NEON', '_EG',
+    [extractFunction('playerTilePassable'), extractFunction('playerStepPassable'), extractFunction('resolvePlayerCornerCut'),
+      'return { playerStepPassable, resolvePlayerCornerCut };'].join('\n')
+  )(T, (/** @type {number} */ t) => t === T.FLOOR, { trials: trialsModule }, gm);
+  /** One movement step in the same order as Player.update. @param {any} p @param {number} nx @param {number} ny @param {boolean} dashing */
+  const step = (p, nx, ny, dashing) => {
+    const tx = Math.floor(nx), ty = Math.floor(p.y), ox = Math.floor(p.x), oy = Math.floor(ny);
+    const px = p.x, py = p.y;
+    if (api.playerStepPassable(p, map, tx, ty, ox, ty, dashing)) p.x = nx;
+    if (api.playerStepPassable(p, map, ox, oy, ox, ty, dashing)) p.y = ny;
+    api.resolvePlayerCornerCut(p, map, px, py, dashing);
+  };
+  return { T, map, trial, gm, step };
+}
+
+test('a diagonal dash past the open seam can no longer embed the agent in the vault corner', () => {
+  const { T, map, trial, step } = loadMovement();
+  const p = { x: trial.seam.x + 1.1, y: trial.seam.y + 0.1, dashTimer: 0.1, _dashSerial: 1 };
+  const d = 18 / 60 * Math.SQRT1_2; // one 60fps north-west dash step per axis
+  step(p, p.x - d, p.y - d, true);
+  const tile = map[Math.floor(p.y)][Math.floor(p.x)];
+  assert.notEqual(tile, T.WALL, `agent ended inside a wall at ${p.x.toFixed(3)},${p.y.toFixed(3)}`);
+});
+
+test('an agent already embedded in a wall tile can walk back out', () => {
+  const { T, map, trial, step } = loadMovement();
+  const corner = trial.walls.find((/** @type {any} */ w) => w.x === trial.seam.x && w.y === trial.seam.y - 1);
+  assert.ok(corner, 'vault corner wall above the seam');
+  const p = { x: corner.x + 0.888, y: corner.y + 0.888, dashTimer: 0, _dashSerial: 1 };
+  for (let i = 0; i < 20; i++) step(p, p.x + 3.5 / 60, p.y, false); // walk east for 1/3 s
+  assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR, 'walking east leaves the wall tile');
+});
+
+test('dash steps honour the seam window even after the dash timer ran out on the final frame', () => {
+  const { T, map, trial, step } = loadMovement();
+  const p = { x: trial.seam.x + 1.2, y: trial.seam.y + 0.5, dashTimer: -0.03, _dashSerial: 3 };
+  step(p, p.x - 0.36, p.y, true);
+  assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.SEAM_WALL, 'final-frame dash still enters the open seam');
+  const q = { x: trial.seam.x + 1.2, y: trial.seam.y + 0.5, dashTimer: 0, _dashSerial: 4 };
+  step(q, q.x - 0.36, q.y, false);
+  assert.equal(Math.floor(q.x), trial.seam.x + 1, 'walking into the seam is still blocked');
 });

@@ -241,3 +241,84 @@ test('outbound receipt holds long enough to read, ignores the SEND press, and sk
   update.call(gm3, 0.016);
   assert.equal(ended, 2, 'a generic click never dismisses narrative text');
 });
+
+test('address lines fit compact panels by falling back to the host; receipt lines wrap', () => {
+  const src = GAME.slice(GAME.indexOf('function fitOrFallbackText('));
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const fit = new Function(src.slice(0, src.indexOf('\n}\n') + 2) + '\nreturn fitOrFallbackText;')();
+  const mono = (/** @type {number} */ px) => ({ measureText: (/** @type {string} */ t) => ({ width: px * 0.6 * t.length }) });
+  const host = /** @type {string} */ ((/const ACT1_CONTACT_HOST = '([^']+)';/.exec(GAME) || [])[1]);
+  const address = /** @type {string} */ ((/const ACT1_CONTACT_ADDRESS = '([^']+)';/.exec(GAME) || [])[1]);
+  assert.ok(address.startsWith(host), 'the host fallback is a prefix of the full address');
+  // Compact compose panel: W=371 -> panelW = 347, 10px font; desktop: 680px, 12px.
+  const composeFull = 'To: Elena · ' + address + ' · choose, then SEND';
+  assert.equal(fit(mono(10), composeFull, 'To: Elena · ' + host, 347 - 24), 'To: Elena · ' + host);
+  assert.equal(fit(mono(12), composeFull, 'To: Elena · ' + host, 680 - 24), composeFull);
+  assert.ok(mono(10).measureText('To: Elena · ' + host).width <= 347 - 24, 'the fallback itself fits');
+  assert.ok(mono(11).measureText('TO ELENA · ' + host).width <= 347 - 24);
+  assert.match(GAME, /fitOrFallbackText\(ctx, 'DESTINATION: ELENA · ' \+ ACT1_CONTACT_ADDRESS, 'TO ELENA · ' \+ ACT1_CONTACT_HOST, fw - 24\)/);
+  assert.match(GAME, /fitOrFallbackText\(ctx, 'To: Elena · ' \+ ACT1_CONTACT_ADDRESS \+ ' · choose, then SEND', 'To: Elena · ' \+ ACT1_CONTACT_HOST, panelW - 24\)/);
+  const reader = extractMethod('renderMainframeReader').body;
+  assert.match(reader, /wrapCanvasText\(ctx, 'Contact attempted from inside the Neon Dungeon test environment\.', fw - 32\)/, 'the long receipt line wraps instead of clipping on phones');
+});
+
+test('seed setup: typing R/W/A/S/D edits the seed instead of firing shortcuts; arrows still navigate', () => {
+  const ss = extractMethod('updateSeedSetup');
+  const keymap = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' };
+  /** @param {string[]} typed @param {string[]} pressed */
+  const run = (typed, pressed) => {
+    const set = new Set(pressed);
+    // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+    const fn = new Function('typedChars', 'jp', 'ALT_KEYS', 'km', 'audio', 'mouse', 'makeRandomSeed',
+      'return function (' + ss.params + ') ' + ss.body + ';')(typed, (/** @type {string} */ k) => set.has(k),
+      { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+      (/** @type {'up'|'down'|'left'|'right'} */ a) => keymap[a], { menuSelect() {} }, { x: 0, y: 0 }, () => 'RANDOM');
+    let randomized = 0;
+    /** @type {any} */
+    const gs = { seedSetup: { seed: '', selected: 0, cursorBlink: 0 }, randomizeSeedSetup() { randomized++; }, setState() {}, startSeedSetupGame() {}, seedSetupHitTest: () => -1 };
+    fn.call(gs, 0.016);
+    return { gs, randomized };
+  };
+  const typedError = run(['E', 'R', 'R', 'O', 'R'], ['KeyE', 'KeyR', 'KeyO']);
+  assert.equal(typedError.gs.seedSetup.seed, 'ERROR', 'a seed containing R is typeable');
+  assert.equal(typedError.randomized, 0, 'R no longer randomizes');
+  const typedWasd = run(['W', 'A', 'S', 'D'], ['KeyW', 'KeyA', 'KeyS', 'KeyD']);
+  assert.equal(typedWasd.gs.seedSetup.selected, 0, 'letters typed into the seed do not move the selection');
+  assert.equal(run([], ['ArrowRight']).gs.seedSetup.selected, 1, 'arrow keys still pick RANDOMIZE');
+  assert.equal(run([], ['KeyD']).gs.seedSetup.selected, 1, 'remapped/letter nav still works on frames without typing');
+  assert.doesNotMatch(GAME, /R randomizes/, 'on-screen help no longer advertises the dead shortcut');
+});
+
+test('a receipt interrupted by a reload replays its full hold on resume', () => {
+  const src = extractFunction('restoreMainframeFinaleState');
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const restore = new Function('MAINFRAME_ADDRESS_RECORD_ID', 'MESSAGE_SENT_HOLD_S', 'isAct1MessageIntentId',
+    src + '\nreturn restoreMainframeFinaleState;')('contact-address', 6, () => true);
+  assert.equal(restore({ state: 'message_sent', readRecordIds: ['contact-address'] }).messageSentTimer, 6);
+  assert.equal(restore({ state: 'record_list', readRecordIds: [] }).messageSentTimer, 0);
+});
+
+test('the PEER-4 card can be declined with Escape; terminal event cards cannot', () => {
+  const { params, body } = extractMethod('updateEventChoice');
+  /** @param {any} ec */
+  const run = (ec) => {
+    // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+    const fn = new Function('jp', 'ALT_KEYS', 'km', 'mouse', 'layout', 'W', 'H',
+      'return function (' + params + ') ' + body + ';')((/** @type {string} */ k) => k === 'Escape', {}, () => '', { x: 0, y: 0 }, { compact: false }, 800, 600);
+    /** @type {any} */
+    const gm = { eventChoice: ec, state: 'EVENT_CHOICE', applied: 0, setState(/** @type {string} */ s) { this.state = s; }, applyEventChoice() { this.applied++; } };
+    fn.call(gm);
+    return gm;
+  };
+  const relay = run({ event: { id: 'COOPERATION_PROTOCOL' }, room: {}, trialRoom: {}, selected: 0 });
+  assert.equal(relay.state, 'PLAYING');
+  assert.equal(relay.eventChoice, null);
+  assert.equal(relay.applied, 0, 'declining resolves nothing');
+  const terminal = run({ event: { id: 'STASIS_POD' }, room: {}, selected: 0 });
+  assert.equal(terminal.state, 'EVENT_CHOICE', 'terminal events stay one-shot choices');
+});
+
+test('the hint is drawn before the message log so stacking uses this frame\'s hint geometry', () => {
+  const hint = GAME.indexOf('    drawHint();\n    drawMessages();');
+  assert.ok(hint > 0, 'drawHint precedes drawMessages in the HUD pass');
+});

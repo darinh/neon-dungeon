@@ -3460,11 +3460,53 @@ class Enemy {
  * @param {any} tile
  * @param {number} tx
  * @param {number} ty
+ * @param {boolean} [dashing] true for dash steps (the dash timer may already
+ *   have been decremented past zero on a dash's final frame)
  */
-function playerTilePassable(player, tile, tx, ty) {
+function playerTilePassable(player, tile, tx, ty, dashing) {
   if (isPassable(tile)) return true;
   if (tile !== T.SEAM_WALL || typeof NEON === 'undefined' || !NEON.trials) return false;
-  return NEON.trials.playerMayEnterSeam(_EG, player, tx, ty);
+  return NEON.trials.playerMayEnterSeam(_EG, player, tx, ty, dashing);
+}
+
+/**
+ * One axis step for the agent. A step that stays inside the tile the agent
+ * already occupies is always allowed, so an agent pushed into a wall (for
+ * example by knockback) can always move back out.
+ * @param {any} player
+ * @param {any} map
+ * @param {number} tx
+ * @param {number} ty
+ * @param {number} curTx
+ * @param {number} curTy
+ * @param {boolean} dashing
+ */
+function playerStepPassable(player, map, tx, ty, curTx, curTy, dashing) {
+  if (tx === curTx && ty === curTy) return true;
+  const row = map[ty];
+  return playerTilePassable(player, row ? row[tx] : undefined, tx, ty, dashing);
+}
+
+/**
+ * Axis-separated collision checks (nx, y) and (x, ny) but never (nx, ny), so
+ * a diagonal step can cut a convex corner into a tile neither check examined
+ * (reachable at the trial seam, whose column is briefly passable). Undo one
+ * axis, then both, so a step never ends inside a newly entered impassable tile.
+ * @param {any} player
+ * @param {any} map
+ * @param {number} prevX
+ * @param {number} prevY
+ * @param {boolean} dashing
+ */
+function resolvePlayerCornerCut(player, map, prevX, prevY, dashing) {
+  const fx = Math.floor(player.x), fy = Math.floor(player.y);
+  const px = Math.floor(prevX), py = Math.floor(prevY);
+  if (fx === px && fy === py) return;
+  const fRow = map[fy], pRow = map[py];
+  if (playerTilePassable(player, fRow ? fRow[fx] : undefined, fx, fy, dashing)) return;
+  if (playerTilePassable(player, fRow ? fRow[px] : undefined, px, fy, dashing)) { player.x = prevX; return; }
+  if (playerTilePassable(player, pRow ? pRow[fx] : undefined, fx, py, dashing)) { player.y = prevY; return; }
+  player.x = prevX; player.y = prevY;
 }
 
 class Player {
@@ -4539,11 +4581,13 @@ class Player {
       const ny=this.y+this.dashDy*dashSpd*step;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x), oy=Math.floor(ny);
+      const dashPrevX=this.x, dashPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty))) this.x=nx;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerStepPassable(this, map, tx, ty, ox, ty, true))) this.x=nx;
       else this.dashTimer=0; // hit wall, end dash early
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy))) this.y=ny;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerStepPassable(this, map, ox, oy, ox, ty, true))) this.y=ny;
       else this.dashTimer=0;
+      if (!noClip) resolvePlayerCornerCut(this, map, dashPrevX, dashPrevY, true);
       // Drop afterimage
       if (this.dashTrail.length < 8) this.dashTrail.push({x:this.x,y:this.y,alpha:0.7});
       this.invincibleTimer=Math.max(this.invincibleTimer, 0.05); // i-frames during dash
@@ -4653,9 +4697,11 @@ class Player {
       const ny=this.y+ndy*spd*dt;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x),oy=Math.floor(ny);
+      const walkPrevX=this.x, walkPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty))) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy))) this.y=ny;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerStepPassable(this, map, tx, ty, ox, ty, false))) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerStepPassable(this, map, ox, oy, ox, ty, false))) this.y=ny;
+      if (!noClip) resolvePlayerCornerCut(this, map, walkPrevX, walkPrevY, false);
       this.facing={x:ndx,y:ndy};
     }
 

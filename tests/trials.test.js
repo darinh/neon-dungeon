@@ -184,7 +184,7 @@ test('seam passability: dash during window, latched per dash, always escapable f
   assert.equal(trials.playerMayEnterSeam(gm, p, sx + 1, sy), false, 'only the seam tile is special');
 });
 
-test('seam runtime: afterPopulate clears the vault and places loot once; entering breaches it', () => {
+test('seam runtime: afterPopulate clears the vault; entering breaches it and spawns the loot once', () => {
   const r = room(10, 10, 9, 7);
   const tr = trials.createTrial('seam', r, 4, lcg(2));
   r.trial = tr;
@@ -193,11 +193,9 @@ test('seam runtime: afterPopulate clears the vault and places loot once; enterin
   deps.items.push({ x: tr.vault.x + 0.2, y: tr.vault.y + 0.8 });
   const gm = { dungeon: { rooms: [r] }, player: { x: tr.seam.x + 2.5, y: tr.seam.y + 0.5 }, floorTime: 0 };
   trials.afterPopulate(gm, deps);
-  assert.equal(deps.enemies.length, 1, 'enemy spawned inside the sealed vault was removed');
+  assert.ok(deps.enemies.every((e) => !(Math.floor(e.x) === tr.vault.x && Math.floor(e.y) === tr.vault.y)), 'no enemy is left inside the sealed vault');
   assert.equal(deps.items.length, 0, 'stray drop inside the vault was removed');
-  assert.deepEqual(calls.loot, [[tr.vault.x + 0.5, tr.vault.y + 0.5]]);
-  trials.afterPopulate(gm, deps);
-  assert.equal(calls.loot.length, 1, 'loot is placed once');
+  assert.deepEqual(calls.loot, [], 'vault loot waits for the breach');
   trials.updateTrials(gm, 0.016, false, deps);
   assert.ok(calls.hint.some((h) => /Vault sealed|SEAM DESYNC/.test(h)), 'approach shows the seam hint');
   gm.player.x = tr.vault.x + 0.9; gm.player.y = tr.vault.y + 0.5;
@@ -205,8 +203,10 @@ test('seam runtime: afterPopulate clears the vault and places loot once; enterin
   assert.equal(tr.lootClaimed, true);
   assert.deepEqual(calls.setTile.at(-1), [tr.seam.x, tr.seam.y, 'FLOOR'], 'breach opens the seam permanently');
   assert.deepEqual(calls.rewards, [['seam', 4]]);
+  assert.deepEqual(calls.loot, [[tr.vault.x + 0.5, tr.vault.y + 0.5]]);
   trials.updateTrials(gm, 0.016, false, deps);
   assert.equal(calls.rewards.length, 1);
+  assert.equal(calls.loot.length, 1);
 });
 
 // ─── Relay ─────────────────────────────────────────────────────────────────
@@ -392,4 +392,71 @@ test('generator places the scheduled trial kind, stamps tiles, and keeps the roo
   assert.ok(placed[2] >= N - 1, 'floor 2 almost always hosts the logic trial: ' + placed[2]);
   assert.ok(placed[4] >= N - 1, 'floor 4 almost always hosts the exploit trial: ' + placed[4]);
   assert.ok(placed[5] >= Math.ceil(N * 0.75), 'floor 5 usually hosts the cooperation trial: ' + placed[5]);
+});
+
+// ─── Review fixes: input routing, room-local relay, vault bookkeeping ─────
+
+test('a door next to the agent always wins Interact over trial consoles, the peer and lattice nodes', () => {
+  const r = room(4, 4, 12, 7);
+  const { tr, gm } = relayGame(r);
+  const { deps, calls } = fakeDeps({ doorAdjacent: () => true });
+  gm.player.x = tr.peer.x + 0.5; gm.player.y = tr.peer.y;
+  assert.equal(trials.updateTrials(gm, 0.016, true, deps), false, 'talking to the peer yields to the door');
+  assert.equal(calls.relayChoice, 0);
+  gm.player.x = tr.consoleA.x + 0.5; gm.player.y = tr.consoleA.y + 0.5;
+  assert.equal(trials.updateTrials(gm, 0.016, true, deps), false, 'console A yields to the door');
+  const lat = room(20, 4, 9, 9);
+  lat.trial = trials.createTrial('lattice', lat, 2, lcg(8));
+  const before = lat.trial.lit.slice();
+  const g2 = { dungeon: { rooms: [lat] }, player: { x: lat.trial.nodes[0].x + 0.5, y: lat.trial.nodes[0].y + 0.5 }, floorTime: 0 };
+  assert.equal(trials.updateTrials(g2, 0.016, true, deps), false);
+  assert.deepEqual(lat.trial.lit, before, 'no node press when an entrance is adjacent');
+});
+
+test('console A only reacts when the agent stands on it, not beside it', () => {
+  const r = room(4, 4, 12, 7);
+  const { tr, gm } = relayGame(r);
+  const { deps, calls } = fakeDeps();
+  gm.player.x = tr.consoleA.x - 0.5; gm.player.y = tr.consoleA.y + 0.5; // the tile west of console A
+  trials.updateTrials(gm, 0.016, false, deps);
+  const n = calls.msg.length;
+  assert.equal(trials.updateTrials(gm, 0.016, true, deps), false, 'adjacent tile does not swallow the press');
+  assert.equal(calls.msg.length, n);
+});
+
+test('the relay stays quiet and frozen while the agent is outside its room', () => {
+  const r = room(4, 4, 12, 7);
+  const { tr, gm } = relayGame(r);
+  const { deps, calls } = fakeDeps();
+  tr.phase = 'holding';
+  tr.holdTimer = 5;
+  gm.player.x = 70.5; gm.player.y = 45.5;
+  for (let i = 0; i < 600; i++) trials.updateTrials(gm, 1 / 60, false, deps);
+  assert.equal(tr.phase, 'holding');
+  assert.equal(tr.holdTimer, 5, 'sync window does not drain floor-wide');
+  assert.equal(calls.hint.length, 0, 'no floor-wide hints');
+  assert.equal(calls.msg.filter((m) => m !== trials.TRIAL_INTRO.relay[0] && m !== trials.TRIAL_INTRO.relay[1]).length, 0, 'no floor-wide log spam');
+  tr.phase = 'moving';
+  for (let i = 0; i < 60; i++) trials.updateTrials(gm, 1 / 60, false, deps);
+  assert.equal(calls.hint.length, 0, 'the stay-close hint is room-local');
+});
+
+test('vault spawns are moved out (not deleted) so room-clear bookkeeping stays exact; loot appears only on breach', () => {
+  const r = room(10, 10, 9, 7);
+  const tr = trials.createTrial('seam', r, 4, lcg(2));
+  r.trial = tr;
+  const { deps, calls } = fakeDeps();
+  const trapped = { x: tr.vault.x + 0.5, y: tr.vault.y + 0.5 };
+  deps.enemies.push(trapped);
+  const gm = { dungeon: { rooms: [r] }, player: { x: r.cx + 0.5, y: r.cy + 0.5 }, floorTime: 0 };
+  trials.afterPopulate(gm, deps);
+  assert.equal(deps.enemies.length, 1, 'the enemy object is kept (it stays registered to its room)');
+  assert.equal(Math.floor(trapped.x), r.cx);
+  assert.equal(Math.floor(trapped.y), r.cy);
+  assert.deepEqual(calls.loot, [], 'no loot before the breach, so magnets and pickup radius cannot reach it');
+  gm.player.x = tr.vault.x + 0.9; gm.player.y = tr.vault.y + 0.5;
+  trials.updateTrials(gm, 0.016, false, deps);
+  assert.deepEqual(calls.loot, [[tr.vault.x + 0.5, tr.vault.y + 0.5]]);
+  trials.updateTrials(gm, 0.016, false, deps);
+  assert.equal(calls.loot.length, 1, 'loot spawns once');
 });

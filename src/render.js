@@ -1631,7 +1631,15 @@ function drawHUD(player) {
         ? `[F] ${hw.icon}${hw.name} ${player.hackwareCooldown.toFixed(1)}s`
         : `[F] ${hw.icon}${hw.name} RDY`;
       const hwX = Math.max(colBase + 380, hudRow2X);
-      ctx.fillText(hwLabel, hwX, y + 22);
+      // Fit-or-shorten: never run into the cores/credits readouts on the right.
+      const hwLimit = W - 240 - safeRight - HUD_STAT_GAP;
+      let hwText = hwLabel;
+      if (hwX + ctx.measureText(hwText).width > hwLimit) {
+        hwText = player.hackwareCooldown > 0
+          ? `[F] ${hw.icon} ${player.hackwareCooldown.toFixed(1)}s`
+          : `[F] ${hw.icon} RDY`;
+      }
+      if (hwX + ctx.measureText(hwText).width <= hwLimit) ctx.fillText(hwText, hwX, y + 22);
     }
     // Energy shield recharge indicator
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -2417,7 +2425,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
       let col = null;
       if (!visited && echoMap) {
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE || tile === T.SEAM_WALL) col = '#0d0d1a';
         else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
         if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
         continue;
@@ -2766,12 +2774,12 @@ function drawBoostStrip(player) {
 // ─── Expanded Minimap ─────────────────────────────────────────────────────────
 const ROOM_ICONS = {
   armory:'⚔', medbay:'✚', shrine:'◈', vault:'◆', vendor:'$',
-  secret:'?', challenge:'⚡', implant:'⬡', event:'◎', boss:'☠'
+  secret:'?', challenge:'⚡', implant:'⬡', event:'◎', trial:'∴', boss:'☠'
 };
 const ROOM_LABEL_COLOURS = {
   armory:'#ff8844', medbay:'#44ff88', shrine:'#cc66ff', vault:'#ffdd44',
   vendor:'#39ff14', secret:'#ffb700', challenge:'#ff6633', implant:'#cc44ff',
-  event:'#44ffcc', boss:'#ff3333'
+  event:'#44ffcc', trial:'#39ff14', boss:'#ff3333'
 };
 
 /**
@@ -2827,7 +2835,7 @@ function drawExpandedMinimap(dungeon, player) {
 
       if (!visited && echoMap) {
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE || tile === T.SEAM_WALL) col = '#0d0d1a';
         else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
         if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
         continue;
@@ -3114,6 +3122,9 @@ function drawMessages() {
 // the archive reader, and a large portal ring that is dim while GENESIS holds
 // the relay and bright once it opens. Hot path: no per-frame allocation.
 const _MF_RACK_TILES = 7;
+const _MF_CABLE_DASH = [4, 6];
+/** @type {number[]} */
+const _MF_NO_DASH = [];
 /**
  * @param {number} camX
  * @param {number} camY
@@ -3167,7 +3178,7 @@ function drawMainframeSetPieces(camX, camY) {
   ctx.strokeStyle = '#1f6f5f';
   ctx.lineWidth = 2;
   ctx.globalAlpha = 0.5;
-  ctx.setLineDash([4, 6]);
+  ctx.setLineDash(_MF_CABLE_DASH);
   ctx.lineDashOffset = -(now / 40) % 10;
   ctx.beginPath();
   ctx.moveTo(labelX - TILE, room.y * TILE - camY);
@@ -3175,7 +3186,7 @@ function drawMainframeSetPieces(camX, camY) {
   ctx.moveTo(labelX + TILE, room.y * TILE - camY);
   ctx.lineTo(rdx + TILE * 0.3, rdy - TILE * 0.4);
   ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.setLineDash(_MF_NO_DASH);
   // Portal ring connected to the company network.
   if (seenPortal) {
     const px = ia.portal.x * TILE + TILE / 2 - camX, py = ia.portal.y * TILE + TILE / 2 - camY;
@@ -3210,10 +3221,9 @@ function drawMainframeSetPieces(camX, camY) {
   ctx.restore();
 }
 
-// Top edge of the last drawn contextual hint (null until one draws). The
-// message log stacks above it so the centred hint and left-aligned messages
-// never share a baseline. Hint geometry only changes with viewport/settings,
-// so reading the previous frame's value is exact in practice.
+// Top edge of the contextual hint drawn this frame (null until one draws).
+// game.js draws the hint before the message log, which stacks above it so
+// the centred hint and left-aligned messages never share a baseline.
 /** @type {number|null} */
 let _hintTopY = null;
 
