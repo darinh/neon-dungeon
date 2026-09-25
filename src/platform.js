@@ -26,7 +26,7 @@ const MAP_W = 80, MAP_H = 50;
 const TWO_PI = Math.PI * 2;
 const SAVE_VERSION = '9.0';
 
-const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24, MAINFRAME_READER:25, NETWORK_PORTAL:26, MESSAGE_CONSOLE:27 };
+const T = { VOID:0, WALL:1, FLOOR:2, STAIRS:3, TERMINAL:4, DOOR:5, DOOR_OPEN:6, LOCKED_R:7, LOCKED_B:8, LOCKED_G:9, TRAP_SPIKE:10, TRAP_SLOW:11, PLASMA:12, ARC:13, VENDOR:14, CRACKED:15, LORE:16, CHALLENGE_GATE:17, IMPLANT_SHRINE:18, EVENT_TERMINAL:19, TELEPORT_PAD:20, CRATE:21, TOXIC:22, SHOCK_TILE:23, REPULSOR:24, MAINFRAME_READER:25, NETWORK_PORTAL:26, MESSAGE_CONSOLE:27, LOGIC_NODE:28, LOGIC_NODE_LIT:29, SEAM_WALL:30, SYNC_CONSOLE:31 };
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 /** @type {Record<string, string>} */
@@ -437,6 +437,7 @@ const _input = /** @type {any} */ (requireNEON('input', 'src/platform.js')).crea
   win: window,
   onKeyDown: (/** @type {any} */ e) => {
     lastKey = e.key;
+    recordTypedKey(typedChars, e.key);
     resumeInteractiveAudio(e.key === 'Enter' || e.code === 'Enter');
   },
 });
@@ -446,6 +447,21 @@ const justPressed = _input.justPressed;
 const justReleased = _input.justReleased;
 const mouse = { x: W/2, y: H/2, down: false };
 let lastKey = '';
+// Every printable key typed since the last clearJust(). `lastKey` keeps only
+// the final keydown of a frame, which dropped characters whenever two keys
+// landed in one frame (fast typing, key rollover, slow devices).
+/** @type {string[]} */
+const typedChars = [];
+const TYPED_CHARS_MAX = 32;
+/**
+ * @param {string[]} buffer
+ * @param {any} key KeyboardEvent.key
+ */
+function recordTypedKey(buffer, key) {
+  if (typeof key !== 'string' || key.length !== 1) return;
+  if (buffer.length >= TYPED_CHARS_MAX) return;
+  buffer.push(key);
+}
 /** @type {any} */
 let nameEntryTap = null;
 /** @type {HTMLInputElement | null} */
@@ -1000,6 +1016,7 @@ function jp(code) { return justPressed.has(code); }
 function clearJust() {
   _input.clearJust();
   lastKey='';
+  typedChars.length = 0;
   nameEntryTap=null;
   if (_G.state !== 'SEED_SETUP') blurSeedSetupInput();
 }
@@ -1082,10 +1099,10 @@ function hasLOS(x1, y1, x2, y2, map) {
 
 // Tile helpers
 /** @param {any} t */
-function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR||t===T.MAINFRAME_READER||t===T.NETWORK_PORTAL||t===T.MESSAGE_CONSOLE; }
+function isPassable(t) { return t===T.FLOOR||t===T.STAIRS||t===T.TERMINAL||t===T.DOOR_OPEN||t===T.TRAP_SPIKE||t===T.TRAP_SLOW||t===T.PLASMA||t===T.ARC||t===T.VENDOR||t===T.LORE||t===T.CHALLENGE_GATE||t===T.IMPLANT_SHRINE||t===T.EVENT_TERMINAL||t===T.TELEPORT_PAD||t===T.TOXIC||t===T.SHOCK_TILE||t===T.REPULSOR||t===T.MAINFRAME_READER||t===T.NETWORK_PORTAL||t===T.MESSAGE_CONSOLE||t===T.LOGIC_NODE||t===T.LOGIC_NODE_LIT||t===T.SYNC_CONSOLE; }
 /** @param {any} t */
 function isSeeThrough(t) {
-  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CHALLENGE_GATE && t!==T.CRATE;
+  return t!==T.WALL && t!==T.VOID && t!==T.CRACKED && t!==T.DOOR && t!==T.LOCKED_R && t!==T.LOCKED_B && t!==T.LOCKED_G && t!==T.CHALLENGE_GATE && t!==T.CRATE && t!==T.SEAM_WALL;
 }
 /** @param {any} t */
 function isDoor(t) { return t===T.DOOR||t===T.LOCKED_R||t===T.LOCKED_B||t===T.LOCKED_G; }

@@ -77,7 +77,7 @@ test('gameplay cheat hooks cover damage, movement, speed, and map reveal', () =>
   assert.doesNotMatch(ENTITIES, /function playerCheatEnabled\(id\)/);
   assert.match(ENTITIES, /playerCheatEnabled\('invulnerable'\) && !options\.ignoreCheats/);
   assert.equal(
-    (ENTITIES.match(/noClip \|\| isPassable/g) || []).length,
+    (ENTITIES.match(/noClip \|\| (?:isPassable|playerTilePassable)\(/g) || []).length,
     4,
     'dash X/Y and normal X/Y movement must all bypass passability when no-clip is active'
   );

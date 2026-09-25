@@ -108,3 +108,11 @@ test('generated version metadata is intentionally absent from precache', () => {
   assert.equal(fs.existsSync(resolveManifestPath(versionEntry.path)), false);
   assert.equal(readServiceWorkerAssets().includes(versionEntry.path), false);
 });
+
+test('evaluation trials load after event content and before the floor generator', () => {
+  const order = manifest.requiredInIndex;
+  const trials = order.indexOf('./src/content/trials.js');
+  assert.ok(trials > order.indexOf('./src/content/events.js'), 'trials.js after events.js');
+  assert.ok(trials < order.indexOf('./src/content/floor-generator.js'), 'trials.js before floor-generator.js');
+  assert.ok(trials < order.indexOf('./src/game.js'), 'trials.js before game.js');
+});

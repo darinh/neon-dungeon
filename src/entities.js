@@ -3438,6 +3438,21 @@ class Enemy {
 
 // ─── Player ───────────────────────────────────────────────────────────────────
 
+/**
+ * Player-only tile passability. Identical to isPassable() except for the
+ * exploit trial's SEAM_WALL (src/content/trials.js), which the agent may
+ * pass mid-dash during its desync window and may always walk out of.
+ * @param {any} player
+ * @param {any} tile
+ * @param {number} tx
+ * @param {number} ty
+ */
+function playerTilePassable(player, tile, tx, ty) {
+  if (isPassable(tile)) return true;
+  if (tile !== T.SEAM_WALL || typeof NEON === 'undefined' || !NEON.trials) return false;
+  return NEON.trials.playerMayEnterSeam(_EG, player, tx, ty);
+}
+
 class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
@@ -4511,9 +4526,9 @@ class Player {
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x), oy=Math.floor(ny);
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty))) this.x=nx;
       else this.dashTimer=0; // hit wall, end dash early
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy))) this.y=ny;
       else this.dashTimer=0;
       // Drop afterimage
       if (this.dashTrail.length < 8) this.dashTrail.push({x:this.x,y:this.y,alpha:0.7});
@@ -4625,8 +4640,8 @@ class Player {
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x),oy=Math.floor(ny);
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty))) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy))) this.y=ny;
       this.facing={x:ndx,y:ndy};
     }
 
@@ -4702,6 +4717,7 @@ class Player {
       }
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
+      this._dashSerial = (this._dashSerial | 0) + 1;
       // GHOSTWALK meta upgrade: extend i-frame window past dash movement.
       // Movement still ends at dashTimer === 0 (0.12s); _dashIFrameTimer
       // keeps isPlayerDamageImmune true for the bonus window so the

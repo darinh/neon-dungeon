@@ -345,7 +345,7 @@ function generateFloor(floorNum, opts) {
   // ── Room types: assign special purposes ──────────────────────────────────
   // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
-  /** @type {Record<string, any>} */ const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a',mainframe:'#081828'};
+  /** @type {Record<string, any>} */   const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a',trial:'#081a14',mainframe:'#081828'};
   /** @type {any[]} */ const specialRooms = [];
   const eligible = rooms.filter((/** @type {any} */ r) => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
@@ -1207,9 +1207,37 @@ function generateFloor(floorNum, opts) {
     }
   }
 
+  // ── Evaluation trial room (floor 2+, non-boss): logic / exploit / co-op ─
+  // Real in-world mechanics for the brief's "logic puzzles, problem solving,
+  // cooperation, and even exploitation" (src/content/trials.js). The room is
+  // reserved here so later hazard/lore/pad passes skip it; tiles are stamped
+  // after the reachability repairs. A trial replaces that floor's event
+  // terminal; if no room fits, the event terminal (and its story protocol
+  // choice) is placed as before.
+  /** @type {any} */ let trialRoom = null;
+  const _trials = (typeof NEON !== 'undefined' && NEON.trials) ? NEON.trials : null;
+  const trialKind = (_trials && !bossRoom)
+    ? _trials.trialKindForFloor(floorNum, () => rand('world'), _isBossFloor, _finalFloor)
+    : null;
+  if (trialKind) {
+    /** @type {Set<string>} */ const occupied = new Set();
+    for (const k of keyItems) occupied.add(Math.floor(k.x) + ',' + Math.floor(k.y));
+    for (const w of whisperItems) occupied.add(Math.floor(w.x) + ',' + Math.floor(w.y));
+    const trialEligible = rooms.filter((/** @type {any} */ r) =>
+      r !== spawnRoom && r !== farthest && !r.roomType &&
+      !specialRooms.includes(r) && _trials.roomFitsTrial(trialKind, r, map, T, occupied)
+    );
+    if (trialEligible.length > 0) {
+      trialRoom = trialEligible[rndInt(0, trialEligible.length - 1)];
+      trialRoom.roomType = 'trial';
+      trialRoom.trial = _trials.createTrial(trialKind, trialRoom, floorNum, () => rand('world'));
+      specialRooms.push(trialRoom);
+    }
+  }
+
   // ── Event Room (floor 2+, non-boss): risk/reward encounter terminal ───
   /** @type {any} */ let eventRoom = null;
-  if (floorNum >= 2 && !bossRoom) {
+  if (floorNum >= 2 && !bossRoom && !trialRoom) {
     const eventEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && !r.roomType &&
       !specialRooms.includes(r) && r.w * r.h >= 16
@@ -1524,7 +1552,7 @@ function generateFloor(floorNum, opts) {
     if (floorNum === 1) placeLoreTerminalInRoom(spawnRoom);
     const loreEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r.roomType !== 'vendor' &&
-      r.roomType !== 'secret' && r.roomType !== 'event' && r.w * r.h >= 12
+      r.roomType !== 'secret' && r.roomType !== 'event' && r.roomType !== 'trial' && r.w * r.h >= 12
     );
     const numLore = Math.min(loreEligible.length, floorNum >= 5 ? 2 : floorNum >= 2 ? 1 : 0);
     const loreRooms = shuffleInPlace(loreEligible.slice(), 'world').slice(0, numLore);
@@ -1601,6 +1629,21 @@ function generateFloor(floorNum, opts) {
     }
   }
 
+  // Stamp the reserved evaluation trial now that every repair pass is done.
+  // If a later pass disturbed the footprint, drop the trial rather than
+  // stamping over it (the room stays a plain room).
+  if (trialRoom && _trials) {
+    if (_trials.roomFitsTrial(trialRoom.trial.kind, trialRoom, map, T, null)) {
+      _trials.stampTrial(trialRoom, map, T);
+    } else {
+      trialRoom.roomType = null;
+      delete trialRoom.trial;
+      const si = specialRooms.indexOf(trialRoom);
+      if (si >= 0) specialRooms.splice(si, 1);
+      trialRoom = null;
+    }
+  }
+
   // Room colour map (floor tile → tint)
   /** @type {any} */ const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
   for (const r of rooms) {
@@ -1622,5 +1665,5 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  return { map, rooms, spawnRoom, defaultSpawnRoom, preferredSpawnResolved: !!preferredSpawn, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, teleportPads };
+  return { map, rooms, spawnRoom, defaultSpawnRoom, preferredSpawnResolved: !!preferredSpawn, stairRoom:farthest, bossRoom, bossEntrances, mainframeRoom, playerPos, lights, visited, light, visible, keyItems, whisperItems, roomColour, specialRooms, vendorRoom, secretRooms, secretMask, loreTerminals, challengeRoom, challengeEntrances, eventRoom, trialRoom, teleportPads };
 }

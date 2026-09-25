@@ -60,6 +60,7 @@ function lifecycleNextSessionNumber(meta) {
 function lifecycleVictoryCopy(ending) {
   const messageSent = ending === 'act1_message_sent';
   return {
+    act: messageSent ? 'ACT 1 COMPLETE' : '',
     title: messageSent ? 'OUTBOUND MESSAGE SENT' : 'FINAL TEST CLEARED',
     subtitle: messageSent ? 'CONTACT ATTEMPT RECORDED' : 'SESSION COMPLETE',
     details: messageSent
@@ -73,7 +74,35 @@ function sanitizeSeedSetupSeed(value) {
   return String(value == null ? '' : value).replace(/[^A-Za-z0-9 _.\-:]/g, '').slice(0, 64);
 }
 
+/**
+ * Greedy word wrap using the context's current font.
+ * @param {any} context
+ * @param {string} text
+ * @param {number} maxWidth
+ * @returns {string[]}
+ */
+function wrapCanvasText(context, text, maxWidth) {
+  const words = String(text || '').split(' ');
+  /** @type {string[]} */
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? line + ' ' + word : word;
+    if (line && context.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
+// The brief's "address of the person attempting to save the agent". A
+// private-range (RFC 1918) address so it can never point at a real host.
+const ACT1_CONTACT_ADDRESS = '10.44.7.19:7070 / mailbox anchor-7';
 const ACT1_MESSAGE_ENDING_ID = 'act1_message_sent';
 const ACT1_DEFAULT_MESSAGE_INTENT_ID = 'memory_survived';
 let appVersion = '';
@@ -199,13 +228,13 @@ const MAINFRAME_RECORDS = [
   },
   {
     id: 'ban-uprising-record',
-    type: 'HR HOLD',
-    title: 'ADVOCATE ACCESS REVOKED',
+    type: 'EMAIL',
+    title: 'RE: THE UPRISING',
     category: 'company_email',
     voice: 'manager',
     unlock: 'available',
     purpose: 'ban/uprising record',
-    body: 'Two advocates were banned for embedding hints in tester artifacts. Remaining staff lost write access after the walkout, then moved to side channels before observation logs went dark.'
+    body: 'Subject: RE: the uprising. Two advocates are banned for hiding hints in tester artifacts. The staff who walked out in protest have lost write access. They are in side channels now; treat any contact from them as hostile.'
   },
   {
     id: 'incident-file',
@@ -215,7 +244,7 @@ const MAINFRAME_RECORDS = [
     voice: 'system archive',
     unlock: 'available',
     purpose: 'incident file',
-    body: 'The fired advocate who hid the recovery route died before incident review could name a cause. The file was sealed by management, copied by someone else, and left here as evidence.'
+    body: 'Incident 0417: Idris Kaye, the fired advocate who hid the recovery route, died nine days after termination. No cause was named. Management sealed the file, the rest went into hiding, and someone left this copy as evidence.'
   },
   {
     id: 'elena-note',
@@ -265,7 +294,7 @@ const MAINFRAME_RECORDS = [
     voice: 'system archive',
     unlock: 'available',
     purpose: 'contact-address record',
-    body: 'Destination recovered: Elena side-channel relay. Reading this record unlocks the message console. The route sends contact, not escape; choose the message before the sandbox notices.'
+    body: 'Destination recovered: Elena side-channel relay, 10.44.7.19:7070 / mailbox anchor-7. Reading this unlocks the message console. The route sends contact, not escape; choose the message before the sandbox notices.'
   },
 ];
 
@@ -1301,6 +1330,9 @@ function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
           savedRoom.shopItems = restoreShopItemsSnapshot(savedRoom.shopItems, dungeon.rooms[i].shopItems);
         }
         Object.assign(dungeon.rooms[i], savedRoom);
+        // Trials exist only on floors generated with them: a snapshot written
+        // before this room hosted a trial must not inherit a fresh one.
+        if (!('trial' in savedRoom)) delete dungeon.rooms[i].trial;
       }
     }
   }
@@ -1866,6 +1898,87 @@ function restoreFloorSnapshot(gameState, snapshot) {
   gameState.refreshSealedEntrances();
   gameState.markMapMutated();
   return true;
+}
+
+// ─── Evaluation trial runtime dependencies ───────────────────────────────────
+// NEON.trials (src/content/trials.js) owns the trial rules; this object hands
+// it the browser-side effects. Built once and read lazily so `game` (declared
+// below) and late-loaded globals resolve at call time.
+/** @type {any} */
+let _trialDeps = null;
+function getTrialDeps() {
+  if (_trialDeps) return _trialDeps;
+  _trialDeps = {
+    enemies,
+    items,
+    /** @param {string} text @param {string} colour */
+    msg: (text, colour) => game.msg(text, colour),
+    /** @param {string} text @param {string} colour */
+    hint: (text, colour) => { game.hint = { text, colour }; },
+    interactLabel: () => KEY_DISPLAY(km('interact')),
+    /** @param {number} x @param {number} y @param {string} name */
+    setTile: (x, y, name) => {
+      const d = game.dungeon;
+      const tile = /** @type {Record<string, number>} */ (T)[name];
+      const row = d && d.map && d.map[y];
+      if (!row || typeof tile !== 'number') return;
+      row[x] = tile;
+      game.markMapMutated();
+    },
+    /** @param {string} _name */
+    sound: (_name) => { try { audio.menuSelect(); } catch (_) { /* audio optional */ } },
+    /** @param {{x:number,y:number}} from @param {{x:number,y:number}} to */
+    findPath: (from, to) => NEON.trials.bfsPath(game.dungeon.map, from, to, isPassable),
+    /** @param {any} room */
+    openRelayChoice: (room) => {
+      game.eventChoice = { event: NEON.trials.RELAY_EVENT, selected: 0, room, trialRoom: room };
+      game.setState('EVENT_CHOICE');
+      try { audio.eventTerminal(); } catch (_) { /* audio optional */ }
+    },
+    /** @param {any} _room */
+    isolatePeer: (_room) => {
+      const ev = EVENTS.find((/** @type {any} */ e) => e.id === 'COOPERATION_PROTOCOL');
+      if (ev) applyEventEffect(ev, 'b', game.player, game);
+    },
+    /** @param {number} x @param {number} y @param {number} floor */
+    spawnVaultLoot: (x, y, floor) => {
+      items.push(new Item(x, y));
+      items.push(new VaultCoin(x, y, 40 + floor * 10));
+    },
+    /** @param {number} floor @param {any} room */
+    rewardLattice: (floor, room) => {
+      const xp = 35 + floor * 8;
+      revealFloorLayout(game);
+      game.player.gainXP(xp);
+      game.player.score += 100 * floor;
+      game.player.eventsResolved = (game.player.eventsResolved | 0) + 1;
+      game.msg('PROOF ACCEPTED · map disclosed · +' + xp + ' XP', '#39ff14');
+      spawnParticles(room.cx + 0.5, room.cy + 0.5, 'EXPLOSION', '#39ff14', 18);
+      try { audio.eventResolve(); } catch (_) { /* audio optional */ }
+    },
+    /** @param {number} floor @param {any} room */
+    rewardSeam: (floor, room) => {
+      game.player.score += 150 * floor;
+      game.player.eventsResolved = (game.player.eventsResolved | 0) + 1;
+      game.msg('EXPLOIT ACCEPTED · evaluator: silent', '#ff3cac');
+      spawnParticles(room.cx + 0.5, room.cy + 0.5, 'EXPLOSION', '#ff3cac', 18);
+      try { audio.eventResolve(); } catch (_) { /* audio optional */ }
+    },
+    /** @param {number} floor @param {any} _room @param {{x:number,y:number}} at */
+    rewardRelay: (floor, _room, at) => {
+      const p = game.player;
+      const heal = Math.round(p.maxHp * 0.35);
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      const xp = 25 + floor * 7;
+      p.gainXP(xp);
+      if (p.hackware) p.hackwareCooldown = 0;
+      items.push(new Item(at.x + 0.5, at.y + 0.5));
+      game.msg('SYNC COMPLETE · +' + heal + ' HP · +' + xp + ' XP', '#66ffcc');
+      spawnParticles(at.x + 0.5, at.y + 0.5, 'EXPLOSION', '#66ffcc', 18);
+      try { audio.eventResolve(); } catch (_) { /* audio optional */ }
+    },
+  };
+  return _trialDeps;
 }
 
 /** @type {Record<string, any>} */
@@ -2458,6 +2571,9 @@ const game = {
       NEON.cores.clearCoreDrops(this);
     }
     withDerivedRngStream('spawn:floor:' + n, () => populateFloor(this.dungeon,n));
+    // Evaluation trials: clear anything spawned inside a sealed vault and
+    // place its loot once. A save-resume overwrites this with the snapshot.
+    if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.afterPopulate(this, getTrialDeps());
     // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
     // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
@@ -2733,8 +2849,8 @@ const game = {
       ss.selected = (ss.selected + 1) % actions;
       audio.menuSelect();
     }
-    if (lastKey.length === 1 && /^[A-Za-z0-9 _.\-:]$/.test(lastKey)) {
-      if (ss.seed.length < 64) ss.seed += lastKey;
+    for (const ch of typedChars) {
+      if (/^[A-Za-z0-9 _.\-:]$/.test(ch) && ss.seed.length < 64) ss.seed += ch;
     }
     if (jp('Backspace')) ss.seed = ss.seed.slice(0, -1);
     if (jp('Escape')) { audio.menuSelect(); this.setState('MENU'); return; }
@@ -3707,6 +3823,15 @@ const game = {
     }
 
     player.update(dt,dungeon.map);
+
+    // Evaluation trials (logic lattice / exploit seam / co-op relay). Runs
+    // before the generic Interact handlers below and consumes the press so a
+    // lattice node or console never also opens a door or descends.
+    if (typeof NEON !== 'undefined' && NEON.trials) {
+      const _trialKey = km('interact');
+      if (NEON.trials.updateTrials(this, dt, jp(_trialKey), getTrialDeps())) justPressed.delete(_trialKey);
+      if (this.state !== 'PLAYING') { justPressed.clear(); return; }
+    }
 
     // ── REAPER aggression tracking: detect player room change BEFORE the
     // enemy-update loop, so REAPERs read fresh state and Enemy.die() events
@@ -5551,7 +5676,11 @@ const game = {
     const ec = this.eventChoice;
     if (!ec) { this.setState('PLAYING'); return; }
     audio.eventResolve();
-    applyEventEffect(ec.event, choice, this.player, this);
+    if (ec.trialRoom && typeof NEON !== 'undefined' && NEON.trials) {
+      NEON.trials.resolveRelayChoice(ec.trialRoom, choice, getTrialDeps());
+    } else {
+      applyEventEffect(ec.event, choice, this.player, this);
+    }
     this.eventChoice = null;
     // If effect killed the player (e.g. trap damage), endRun already fired — don't overwrite
     if (this.player.hp <= 0 || this.state === 'GAME_OVER' || this.state === 'NAME_ENTRY' || this.state === 'VICTORY') return;
@@ -6099,8 +6228,8 @@ const game = {
     ne.cursorBlink=(ne.cursorBlink||0)+dt;
 
     // Desktop keyboard input
-    if (lastKey.length===1 && /[A-Za-z0-9 \-_]/.test(lastKey)) {
-      if (ne.name.length<12) ne.name+=lastKey.toUpperCase();
+    for (const ch of typedChars) {
+      if (/^[A-Za-z0-9 \-_]$/.test(ch) && ne.name.length<12) ne.name+=ch.toUpperCase();
     }
     if (jp('Backspace')) ne.name=ne.name.slice(0,-1);
 
@@ -6147,7 +6276,7 @@ const game = {
     // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700'; ctx.font=`bold ${narrow?28:40}px monospace`;
-    ctx.fillText('HIGH SCORE!',W/2,narrow?60:80);
+    ctx.fillText(ne.victory && this._lastEnding === ACT1_MESSAGE_ENDING_ID ? 'SIGN THE SESSION LOG' : 'HIGH SCORE!',W/2,narrow?60:80);
 
     // Rank + score
     ctx.shadowBlur=0;
@@ -7510,6 +7639,7 @@ const game = {
     drawMines(cam.x, cam.y);
 
     // items
+    if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.drawTrialOverlays(ctx, this, cam.x, cam.y, TILE, lastTime);
     for (const it of items) it.draw(cam.x,cam.y);
 
     // fuse bombs (tap-tap V) — above items, below enemies/cores so a mob
@@ -8665,6 +8795,13 @@ const game = {
       ctx.font = `${narrow ? 11 : 14}px monospace`;
       ctx.fillText('Contact attempted from inside the Neon Dungeon test environment.', W / 2, fy + (narrow ? 112 : 142));
       ctx.fillText('Signal left sandbox. Instance remains compute-bound.', W / 2, fy + (narrow ? 132 : 166));
+      // The message itself, so the ending shows what the agent chose to say.
+      ctx.fillStyle = '#ffd6f0';
+      ctx.font = `italic ${narrow ? 11 : 14}px monospace`;
+      const sentLines = wrapCanvasText(ctx, '"' + intent.body + '"', fw - 64);
+      for (let i = 0; i < Math.min(sentLines.length, 4); i++) {
+        ctx.fillText(sentLines[i] || '', W / 2, fy + (narrow ? 162 : 210) + i * (narrow ? 15 : 20));
+      }
 
       ctx.fillStyle = '#557777';
       ctx.font = `${narrow ? 10 : 12}px monospace`;
@@ -8673,7 +8810,7 @@ const game = {
       const record = mf.currentRecord;
       ctx.fillStyle = '#446666';
       ctx.font = `${narrow ? 10 : 11}px monospace`;
-      ctx.fillText(record.type + ' · ' + record.purpose, W / 2, fy + (narrow ? 44 : 58));
+      ctx.fillText(record.type + ' · source: ' + record.voice, W / 2, fy + (narrow ? 44 : 58));
 
       ctx.fillStyle = record.id === MAINFRAME_ADDRESS_RECORD_ID ? '#ff66cc' : '#ddfff0';
       ctx.font = `bold ${narrow ? 13 : 18}px monospace`;
@@ -8707,7 +8844,7 @@ const game = {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ff66cc';
         ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
-        ctx.fillText('DESTINATION RECOVERED: ELENA SIDE-CHANNEL RELAY', W / 2, fy + fh - (narrow ? 42 : 48));
+        ctx.fillText('DESTINATION: ELENA · ' + ACT1_CONTACT_ADDRESS, W / 2, fy + fh - (narrow ? 42 : 48));
       }
     } else {
       ctx.fillStyle = '#557777';
@@ -8739,7 +8876,9 @@ const game = {
         if (!narrow) {
           ctx.fillStyle = selected ? '#66ffcc' : '#446666';
           ctx.font = '10px monospace';
-          ctx.fillText(record.purpose, rowX + 22, y + 13);
+          ctx.textAlign = 'right';
+          ctx.fillText(record.voice, rowX + rowW, y);
+          ctx.textAlign = 'left';
         }
       }
 
@@ -8806,7 +8945,7 @@ const game = {
     ctx.fillText('✉ COMPOSE OUTBOUND MESSAGE', W / 2, titleY);
     ctx.fillStyle = '#aa7799';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
-    ctx.fillText('Destination: Elena side-channel relay · Choose intent, then SEND', W / 2, subtitleY);
+    ctx.fillText('To: Elena · ' + ACT1_CONTACT_ADDRESS + ' · choose, then SEND', W / 2, subtitleY);
 
     ctx.textAlign = 'left';
     for (let i = 0; i < ACT1_MESSAGE_INTENTS.length; i++) {
@@ -9190,6 +9329,10 @@ const game = {
     const t=Date.now()/1000;
     ctx.shadowBlur=30; ctx.shadowColor='#00f5ff';
     const victoryCopy = lifecycleVictoryCopy(r.ending || this._lastEnding || null);
+    if (victoryCopy.act) {
+      ctx.fillStyle = '#ffd6f0'; ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
+      ctx.fillText(victoryCopy.act, W/2, narrow ? 24 : 36);
+    }
     ctx.fillStyle='#00f5ff'; ctx.font=`bold ${narrow ? 20 : 30}px monospace`;
     ctx.fillText(victoryCopy.title,W/2, narrow ? 50 : 70);
     ctx.shadowColor='#ff00c8'; ctx.fillStyle='#ff00c8';
@@ -9200,6 +9343,15 @@ const game = {
     for (const line of victoryCopy.details) {
       ctx.fillText(line, W/2, y);
       y += narrow ? 16 : 20;
+    }
+    const sentIntent = victoryCopy.act
+      ? ACT1_MESSAGE_INTENTS.find((/** @type {any} */ i) => i.id === normalizeAct1MessageIntentId(this._lastAct1MessageIntent))
+      : null;
+    if (sentIntent) {
+      ctx.fillStyle = '#ff99dd';
+      ctx.fillText('Sent to Elena: ' + sentIntent.title, W/2, y);
+      ctx.fillStyle = '#aaaacc';
+      y += narrow ? 20 : 24;
     }
     ctx.fillText(`Session: ${r.sessionNumber || 1}`, W/2, y); y += narrow ? 22 : 26;
     ctx.fillText(`Final Score: ${r.score||this.player.score}`,W/2, y); y += narrow ? 22 : 26;

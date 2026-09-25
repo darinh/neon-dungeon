@@ -881,6 +881,7 @@ function drawWorld(dungeon, camX, camY) {
        * @param {any} tile
        */
       switch(tile) {
+        case T.SEAM_WALL: // renders as wall; the flicker is a trial overlay
         case T.WALL: {
           const isSealed = _RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx);
           ctx.fillStyle = isSealed ? '#3d2828' : pal.wallFill;
@@ -907,6 +908,11 @@ function drawWorld(dungeon, camX, camY) {
           drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness);
           break;
         }
+        case T.LOGIC_NODE:
+        case T.LOGIC_NODE_LIT:
+        case T.SYNC_CONSOLE:
+          if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.drawTrialTile(ctx, tile, sx, sy, TILE, brightness, lastTime, T, pal.floor);
+          break;
         case T.STAIRS:
           ctx.fillStyle=pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -2403,10 +2409,12 @@ function rebuildMinimapBase(dungeon, echoMap) {
       /**
        * @param {any} tile
        */
-      if (tile === T.WALL || tile === T.CRACKED) {
+      if (tile === T.WALL || tile === T.CRACKED || tile === T.SEAM_WALL) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.LOGIC_NODE || tile === T.LOGIC_NODE_LIT) col = tile === T.LOGIC_NODE_LIT ? '#39ff14' : '#2f6b3a';
+      else if (tile === T.SYNC_CONSOLE) col = '#66ffcc';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2812,11 +2820,13 @@ function drawExpandedMinimap(dungeon, player) {
       /**
        * @param {any} tile
        */
-      if (tile === T.WALL || tile === T.CRACKED) {
+      if (tile === T.WALL || tile === T.CRACKED || tile === T.SEAM_WALL) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.LOGIC_NODE || tile === T.LOGIC_NODE_LIT) col = tile === T.LOGIC_NODE_LIT ? '#39ff14' : '#2f6b3a';
+      else if (tile === T.SYNC_CONSOLE) col = '#66ffcc';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';

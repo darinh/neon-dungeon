@@ -618,7 +618,7 @@ test('orphan outside entrance cleanup clears outside entrance tiles that fail al
 test('sampled seeded generation digests stay stable across topology extraction', () => {
   const fixture = createGenerationFixture();
   const expected = new Map([
-    ['1111-1111-1111 floor 2', '9fe099642f78901b2ee81a6677364422f4b5f35d8cd2aaf5b766fdb2051f840b'],
+    ['1111-1111-1111 floor 2', 'a4f80152c5cbee85541ea8d6b89a74b492332a43d0f5531a3062379f8362fb74'],
     ['1111-1111-1111 floor 6', 'ade758383ac23e318b6332f490fc9c85c64455186795d8611568d9a78ac8fd1d'],
     ['FACE-FEED-BEEF floor 3', 'f6b8ab53fac76bddc5425437e39ced77c2b7183650df74b595955799f0dbc328'],
     ['CAFE-BABE-0001 floor 8', '17b6d82826e358a388789784d4394ad13450cd7c0e1fbadf9b8b5b5acfb33801'],
