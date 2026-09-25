@@ -473,7 +473,7 @@ current names are rendered test-environment layers, not literal geography:
 | 1     | cache     | 4–6     | HIVE        | VIRAL COLLECTIVE   |
 | 2     | firewall  | 7–9     | CONDUCTOR   | THE COMPILER       |
 | 3     | uplink    | 10–12   | OMEGA       | OVERSEER           |
-| 4     | opennet   | 13–15   | GENESIS     | THE ARCHITECT      |
+| 4     | opennet   | 13–15   | GENESIS     | GENESIS PROTOCOL   |
 
 Helpers: `areaForFloor(f)`, `biomeIndex(f)`, `areaForIndex(i)`,
 `firstFloorOfBiomeContaining(f)`, `isBiomeBossFloor(f)`. All clamp
@@ -2787,7 +2787,7 @@ Pulsing glow aura during discharge channel.
 
 #### GENESIS PROTOCOL — Phase Breakdown
 
-Floor 15 (OPEN NETWORK) boss — THE ARCHITECT. Geometric precision boss that fights through predictable
+Floor 15 (OPEN NETWORK) boss — GENESIS PROTOCOL. Geometric precision boss that fights through predictable
 but punishing patterns. No add spawning — direct contrast to OMEGA's chaotic
 everything-at-once approach. The Progenitor: the original AI prototype that
 survived decommissioning.
@@ -4093,7 +4093,7 @@ biome-agnostic for readability.
 | Cache (floors 4–6) | `rust` | `#4a2e1e` | `#9a5a38` | `#2a0e05` | orange/ash dust | VIRAL COLLECTIVE |
 | Firewall (floors 7–9) | `glitch` | `#3a0e3a` | `#aa00aa` | `#15002a` | magenta/lime | THE COMPILER |
 | Uplink (floors 10–12) | `sky` | `#2a4a6a` | `#88ddff` | `#0a2030` | white/sky | OVERSEER |
-| Opennet (floors 13–15) | `green` | `#0f3a24` | `#00cc66` | `#002015` | matrix green | THE ARCHITECT |
+| Opennet (floors 13–15) | `green` | `#0f3a24` | `#00cc66` | `#002015` | matrix green | GENESIS PROTOCOL |
 
 **Boss renames** — `BOSS_NAMES` in `src/entities.js:92` is patched at load
 from `AREAS[i].displayName` for any combat type in that area's `bossPool`.

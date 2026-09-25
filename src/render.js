@@ -1413,8 +1413,11 @@ function drawHUD(player) {
 
     const statsX = xpBarX + 44;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`A:${player.atk}`, statsX, r2 + 10);
-    ctx.fillText(`D:${player.def}`, statsX + 36, r2 + 10);
+    const atkTextC = `A:${player.atk}`;
+    const defTextC = `D:${player.def}`;
+    ctx.fillText(atkTextC, statsX, r2 + 10);
+    const defX = statsX + ctx.measureText(atkTextC).width + HUD_STAT_GAP;
+    ctx.fillText(defTextC, defX, r2 + 10);
 
     // Weapon — truncate if needed, use rarity colour for affixed weapons
     const wRarity = player.weapon._rarity || 0;
@@ -1435,13 +1438,14 @@ function drawHUD(player) {
     const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
     const spSufC = siphonHudSuffix(player);
     const spSufWC = spSufC ? ctx.measureText(spSufC).width : 0;
-    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC - spSufWC;
+    const weaponXC = Math.max(statsX + 74, defX + ctx.measureText(defTextC).width + HUD_STAT_GAP);
+    const weapMaxW = W - weaponXC - safeRight - 10 - phSufWC - spSufWC;
     let weapName = player.weapon.displayName || player.weapon.name;
     if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
       while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
-    ctx.fillText(weapName, statsX + 74, r2 + 10);
+    ctx.fillText(weapName, weaponXC, r2 + 10);
     // Render any active weapon-affix suffixes side-by-side using a
     // cumulative x-offset. Currently PH and SIPHON are mutually exclusive
     // on a single weapon (both suffix-slot, buildWeapon picks at most one
@@ -1449,7 +1453,7 @@ function drawHUD(player) {
     // time — but if a future code path or corrupted save shape ever
     // produces a multi-suffix weapon, the cumulative offset prevents
     // overlap. Truncation budget above already reserves combined width.
-    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width;
+    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width + (weaponXC - (statsX + 74));
     if (phSufC) {
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff4488';
@@ -1465,7 +1469,7 @@ function drawHUD(player) {
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
     if (player.weapons && player.weapons.length > 1) {
-      const pipX = statsX + 74;
+      const pipX = weaponXC;
       const safeIdx = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
       for (let wi = 0; wi < player.weapons.length; wi++) {
         const active = wi === safeIdx;
@@ -1476,10 +1480,10 @@ function drawHUD(player) {
 
     if (player.bombCooldown > 0) {
       ctx.fillStyle='#664488'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:${player.bombCooldown.toFixed(1)}s`, statsX + 74, r2 + 22);
+      ctx.fillText(`B:${player.bombCooldown.toFixed(1)}s`, weaponXC, r2 + 22);
     } else {
       ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:RDY`, statsX + 74, r2 + 22);
+      ctx.fillText(`B:RDY`, weaponXC, r2 + 22);
     }
     // Hackware indicator (compact)
     if (player.hackware) {
@@ -1531,9 +1535,15 @@ function drawHUD(player) {
     ctx.fillStyle='#ffb700'; ctx.fillRect(colBase, y + 12, 50 * xpFrac, 4);
 
     ctx.fillStyle='#e0e0ff';
-    ctx.fillText(`ATK:${player.atk}`, colBase + 60, y + 10);
-    ctx.fillText(`DEF:${player.def}`, colBase + 105, y + 10);
-    ctx.fillText(`TEST:${_RG.floor}`, colBase + 160, y + 10);
+    const atkTextL = `ATK:${player.atk}`;
+    const defTextL = `DEF:${player.def}`;
+    const testTextL = `TEST:${_RG.floor}`;
+    const atkX = colBase + 60;
+    ctx.fillText(atkTextL, atkX, y + 10);
+    const defXL = atkX + ctx.measureText(atkTextL).width + HUD_STAT_GAP;
+    ctx.fillText(defTextL, defXL, y + 10);
+    const testXL = defXL + ctx.measureText(defTextL).width + HUD_STAT_GAP;
+    ctx.fillText(testTextL, testXL, y + 10);
 
     // Floor modifier badge
     if (_RG.modifier) {
@@ -1541,7 +1551,7 @@ function drawHUD(player) {
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour;
-      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, colBase + 160, y + 22);
+      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, testXL, y + 22);
       ctx.restore();
     }
 
@@ -1563,15 +1573,16 @@ function drawHUD(player) {
     const spSufL = siphonHudSuffix(player);
     const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const wMaxL = W - (colBase + 230) - 10 - phSufWL - spSufWL;
+    const weaponXL = Math.max(colBase + 220, testXL + ctx.measureText(testTextL).width + HUD_STAT_GAP);
+    const wMaxL = W - weaponXL - safeRight - 10 - phSufWL - spSufWL;
     if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
-    ctx.fillText(wNameL, colBase + 220, y + 10);
+    ctx.fillText(wNameL, weaponXL, y + 10);
     // Cumulative x-offset for stacked affix suffixes — see compact
     // branch comment for rationale (mutex defense + future-proofing).
-    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width;
+    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width + (weaponXL - (colBase + 220));
     if (phSufL) {
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff4488';
@@ -1586,7 +1597,7 @@ function drawHUD(player) {
     }
     ctx.shadowBlur=0;
     if (player.weapons && player.weapons.length > 1) {
-      const pipXL = colBase + 220;
+      const pipXL = weaponXL;
       const safeIdxL = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
       for (let wi = 0; wi < player.weapons.length; wi++) {
         const active = wi === safeIdxL;
@@ -1596,9 +1607,9 @@ function drawHUD(player) {
     }
 
     if (player.bombCooldown > 0) {
-      ctx.fillStyle='#664488'; ctx.fillText(`[V] Bomb ${player.bombCooldown.toFixed(1)}s`, colBase + 220, y + 22);
+      ctx.fillStyle='#664488'; ctx.fillText(`[V] Bomb ${player.bombCooldown.toFixed(1)}s`, weaponXL, y + 22);
     } else {
-      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Bomb RDY`, colBase + 220, y + 22);
+      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Bomb RDY`, weaponXL, y + 22);
     }
     // Hackware indicator (landscape)
     if (player.hackware) {
@@ -3041,6 +3052,8 @@ function drawExpandedMinimap(dungeon, player) {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 /** @type {any[]} */
 const messages=[];
+const HUD_STAT_GAP = 12;
+const MESSAGE_STATUS_GAP = 2;
 function drawMessages() {
   // Base 16px font + 22px line-height multiplied by `settings.textScale`
   // (0.85 / 1.0 / 1.15 / 1.3). Floors keep things legible at 0.85×. Both
@@ -3050,13 +3063,19 @@ function drawMessages() {
   // per frame, so per-iteration template-literal alloc would churn GC.
   const msgFs = Math.max(10, Math.round(16 * settings.textScale));
   const msgLh = Math.max(14, Math.round(22 * settings.textScale));
+  const statusReserve = (typeof getStatusBadgeReservedHeight === 'function' && _RG.player)
+    ? getStatusBadgeReservedHeight(_RG.player)
+    : 0;
+  const msgBase = statusReserve > 0
+    ? Math.min(layout.msgBase, layout.hudTop - statusReserve - MESSAGE_STATUS_GAP - 5)
+    : layout.msgBase;
   const fontStr = `bold ${msgFs}px monospace`;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
     if (m.life<=0){messages.splice(i,1);continue;}
     const mx = 14+safeLeft;
-    const my = layout.msgBase-(messages.length-1-i)*msgLh;
+    const my = msgBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
     ctx.font = fontStr;

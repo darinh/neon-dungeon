@@ -1807,10 +1807,24 @@ class Enemy {
         const w = TILE * 0.48, h = TILE * 0.24;
         ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
       } else if (t === 'TURRET') {
-        // Plus/cross shape
-        const a = TILE * 0.14, b = TILE * 0.38;
-        ctx.fillRect(sx - a / 2, sy - b / 2, a, b);
-        ctx.fillRect(sx - b / 2, sy - a / 2, b, a);
+        // Hostile emplacement: base plate, barrel toward player, hot core.
+        const base = TILE * 0.42;
+        const barrelLen = TILE * 0.32;
+        const barrelW = TILE * 0.1;
+        const aimPlayer = _EG.player || this;
+        const aimDx = aimPlayer.x - this.x;
+        const aimDy = aimPlayer.y - this.y;
+        const aim = (aimDx || aimDy) ? Math.atan2(aimDy, aimDx) : 0;
+        ctx.fillRect(sx - base / 2, sy - base / 2, base, base);
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(aim);
+        ctx.fillRect(0, -barrelW / 2, barrelLen, barrelW);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = '#ff3344';
+        NEON.draw.circle(ctx, sx, sy, TILE * 0.11);
+        ctx.restore();
       } else if (t === 'DRONE' || t === 'SEEKER') {
         // Small diamond
         const sz = TILE * 0.28;
