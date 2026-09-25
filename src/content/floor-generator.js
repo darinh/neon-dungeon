@@ -245,8 +245,11 @@ function generateFloor(floorNum, opts) {
     // Enforce minimum boss room size (15×15) by expanding if needed
       const MIN_BOSS = 15;
       if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
-        const bossRect = dungeonTopology.findExpandedRoomPlacement({
-          room: bossRoom,
+        /**
+         * @param {any} room
+         */
+        const findBossRectForRoom = (room) => dungeonTopology.findExpandedRoomPlacement({
+          room,
           rooms,
           minWidth: MIN_BOSS,
           minHeight: MIN_BOSS,
@@ -255,6 +258,18 @@ function generateFloor(floorNum, opts) {
           margin: 1,
           padding: 1,
         });
+        let bossRect = findBossRectForRoom(bossRoom);
+        if (!bossRect) {
+          const bossCandidates = [...rooms]
+            .filter((/** @type {any} */ r) =>
+              r !== spawnRoom && r !== farthest && !r.roomType
+            )
+            .sort((/** @type {any} */ a, /** @type {any} */ b) => (dist.get(b) || 0) - (dist.get(a) || 0));
+          for (const r of bossCandidates) {
+            bossRect = findBossRectForRoom(r);
+            if (bossRect) { bossRoom = r; break; }
+          }
+        }
         if (bossRect) {
           const nx = bossRect.x;
           const ny = bossRect.y;

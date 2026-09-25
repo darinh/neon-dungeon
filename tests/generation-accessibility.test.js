@@ -619,10 +619,10 @@ test('sampled seeded generation digests stay stable across topology extraction',
   const fixture = createGenerationFixture();
   const expected = new Map([
     ['1111-1111-1111 floor 2', 'a4f80152c5cbee85541ea8d6b89a74b492332a43d0f5531a3062379f8362fb74'],
-    ['1111-1111-1111 floor 6', 'ade758383ac23e318b6332f490fc9c85c64455186795d8611568d9a78ac8fd1d'],
-    ['FACE-FEED-BEEF floor 3', 'f6b8ab53fac76bddc5425437e39ced77c2b7183650df74b595955799f0dbc328'],
+    ['1111-1111-1111 floor 6', '16fb7090044fb63405928dfda60b82ee3c5f4d71f702da45e5af3f23172e490d'],
+    ['FACE-FEED-BEEF floor 3', '03c6fe3686528bcdcbbf5c0f7638ea2f400877b8ebce4051de1a14a83a229c29'],
     ['CAFE-BABE-0001 floor 8', '17b6d82826e358a388789784d4394ad13450cd7c0e1fbadf9b8b5b5acfb33801'],
-    ['DEAD-BEEF-CAFE floor 15', '8faec8b11dbd86477a74876e4da61c8522a9f7936717b4c7c229be502d8a2f33'],
+    ['DEAD-BEEF-CAFE floor 15', '60a04574ee0ad7789ad772a857a6fcdd61f1e5f1522d73d7b4e806c50847bd92'],
   ]);
   for (const [label, digest] of expected) {
     const [seed, , floorText] = label.split(' ');
