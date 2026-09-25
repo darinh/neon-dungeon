@@ -1545,13 +1545,16 @@ function drawHUD(player) {
     const testXL = defXL + ctx.measureText(defTextL).width + HUD_STAT_GAP;
     ctx.fillText(testTextL, testXL, y + 10);
 
+    let hudRow2X = testXL;
     // Floor modifier badge
     if (_RG.modifier) {
       const m = /** @type {any} */ (getMod());
+      const modLabel = `${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`;
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour;
-      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, testXL, y + 22);
+      ctx.fillText(modLabel, hudRow2X, y + 22);
+      hudRow2X += ctx.measureText(modLabel).width + HUD_STAT_GAP;
       ctx.restore();
     }
 
@@ -1606,11 +1609,13 @@ function drawHUD(player) {
       }
     }
 
-    if (player.bombCooldown > 0) {
-      ctx.fillStyle='#664488'; ctx.fillText(`[V] Bomb ${player.bombCooldown.toFixed(1)}s`, weaponXL, y + 22);
-    } else {
-      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Bomb RDY`, weaponXL, y + 22);
-    }
+    const bombX = Math.max(weaponXL, hudRow2X);
+    const bombLabel = player.bombCooldown > 0
+      ? `[V] Bomb ${player.bombCooldown.toFixed(1)}s`
+      : `[V] Bomb RDY`;
+    ctx.fillStyle=player.bombCooldown > 0 ? '#664488' : '#aa00ff';
+    ctx.fillText(bombLabel, bombX, y + 22);
+    hudRow2X = bombX + ctx.measureText(bombLabel).width + HUD_STAT_GAP;
     // Hackware indicator (landscape)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
@@ -1619,7 +1624,7 @@ function drawHUD(player) {
       const hwLabel = player.hackwareCooldown > 0
         ? `[F] ${hw.icon}${hw.name} ${player.hackwareCooldown.toFixed(1)}s`
         : `[F] ${hw.icon}${hw.name} RDY`;
-      const hwX = colBase + 380;
+      const hwX = Math.max(colBase + 380, hudRow2X);
       ctx.fillText(hwLabel, hwX, y + 22);
     }
     // Energy shield recharge indicator

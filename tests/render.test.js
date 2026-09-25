@@ -57,7 +57,7 @@ function createRecordingCtx() {
 }
 
 /**
- * @param {{atk:number, def:number, floor:number, compact?:boolean}} opts
+ * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number}} opts
  */
 function drawHudTexts(opts) {
   const ctx = createRecordingCtx();
@@ -69,13 +69,13 @@ function drawHudTexts(opts) {
     safeRight: 0,
     layout: { compact: !!opts.compact, hudTop: opts.compact ? 560 : 492 },
     settings: { textScale: 1, minimapScale: 1 },
-    _RG: { floor: opts.floor, modifier: null, _cachedCores: 0, _coreHudPulse: 0 },
+    _RG: { floor: opts.floor, modifier: opts.modifier ? 'FORTIFIED' : null, _cachedCores: 0, _coreHudPulse: 0 },
     RARITY_COLOURS: ['#ff00c8', '#00f5ff', '#ffb700'],
-    HACKWARE: {},
+    HACKWARE: { BLINK: { icon: '⇥', name: 'PHASE BLINK', colour: '#44ccff' } },
     COMBO_WINDOW: 3,
     combo: { count: 0, timer: 0, flashTimer: 0 },
-    getMod() { return { icon: '', label: '', colour: '#fff' }; },
-    modifierProgressSuffix() { return ''; },
+    getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
+    modifierProgressSuffix() { return opts.modifierSuffix || ''; },
     piercingHeartHudSuffix() { return ''; },
     siphonHudSuffix() { return ''; },
     comboColour() { return '#fff'; },
@@ -102,9 +102,10 @@ function drawHudTexts(opts) {
     loreRead: new Set(),
     keys: { red: 0, blue: 0, gold: 0 },
     perks: {},
-    bombCooldown: 0,
+    bombCooldown: opts.bombCooldown || 0,
     dashCooldown: 0,
-    hackware: null,
+    hackware: opts.hackware ? 'BLINK' : null,
+    hackwareCooldown: opts.hackwareCooldown || 0,
     _nanoMedicCharges: 0,
   });
   return ctx.calls;
@@ -150,3 +151,41 @@ for (const { atk, def, floor } of HUD_CASES) {
     assertNonOverlapping(/** @type {any[]} */ (boxes));
   });
 }
+
+test('landscape HUD second row flows modifier, bomb, and hackware labels without overlap', () => {
+  const calls = drawHudTexts({
+    atk: 150,
+    def: 99,
+    floor: 15,
+    modifier: true,
+    modifierSuffix: ' 12/20',
+    hackware: true,
+  });
+  const boxes = [
+    calls.find(c => c.text === '⛨FORTIFIED 12/20'),
+    calls.find(c => c.text === '[V] Bomb RDY'),
+    calls.find(c => c.text === '[F] ⇥PHASE BLINK RDY'),
+  ];
+  assert.ok(boxes.every(Boolean), `missing landscape second-row calls: ${JSON.stringify(calls)}`);
+  assertNonOverlapping(/** @type {any[]} */ (boxes));
+});
+
+test('landscape HUD second row flows timed bomb and hackware cooldown labels without overlap', () => {
+  const calls = drawHudTexts({
+    atk: 150,
+    def: 99,
+    floor: 15,
+    modifier: true,
+    modifierSuffix: ' 12/20',
+    bombCooldown: 3.2,
+    hackware: true,
+    hackwareCooldown: 4.5,
+  });
+  const boxes = [
+    calls.find(c => c.text === '⛨FORTIFIED 12/20'),
+    calls.find(c => c.text === '[V] Bomb 3.2s'),
+    calls.find(c => c.text === '[F] ⇥PHASE BLINK 4.5s'),
+  ];
+  assert.ok(boxes.every(Boolean), `missing timed second-row calls: ${JSON.stringify(calls)}`);
+  assertNonOverlapping(/** @type {any[]} */ (boxes));
+});
