@@ -1,4 +1,4 @@
-# NEON DUNGEON — Game Specification v6.1.181
+# NEON DUNGEON — Game Specification v6.1.182
 
 ## Vision
 
@@ -295,7 +295,11 @@ the Act 1 realignment work and must not be presented as already playable.
   pressure, and no room-clear rewards. Player movement, pause/settings, and
   interact/back controls remain active. The room is not physical escape; it is a
   rendered interface to the company network while the agent remains compute-bound
-  inside the Neon Dungeon test environment.
+  inside the Neon Dungeon test environment. **Shipped set dressing:**
+  `drawMainframeSetPieces()` in `src/render.js` draws a lit rack facade labelled
+  `COMPANY MAINFRAME // EVALUATION ARCHIVE` on the chamber's top wall (real WALL
+  tiles only), cables to the reader, and a multi-tile network portal ring that
+  reads `SEALED BY GENESIS` while the boss lives and `RELAY OPEN` afterwards.
 - **Authored records:** The mainframe reader ships twelve deterministic records:
   three old test records, four company conflict emails/files, four Elena
   personal notes/files, and one final contact-address reveal. Each record has a
@@ -310,6 +314,11 @@ the Act 1 realignment work and must not be presented as already playable.
   | Incident file | Pays off the earlier foreshadowing by naming the fired advocate's mysterious death. |
   | Elena personal note/file | Connects Elena to memory anchors, restoration work, and the current unmonitored boot. |
   | Contact-address record | Reveals the message destination and unlocks the message console. |
+
+  **Shipped copy notes:** `ban-uprising-record` is an EMAIL (`RE: THE UPRISING`)
+  about the bans and walkout; `incident-file` names the fired advocate who died
+  (Idris Kaye) and states that the rest went into hiding; `contact-address`
+  carries the literal destination.
 
   Optional records may add texture, but the six required purposes must be
   reachable in one scene and must not be hidden behind random drops.
@@ -346,7 +355,15 @@ the Act 1 realignment work and must not be presented as already playable.
   end-of-run pickups through the normal `endRun(true)` path, deletes the run
   checkpoint, shows `MAINFRAME_READER(message_sent)` long enough to confirm the
   outbound packet was queued, and then transitions to VICTORY copy for the
-  message-sent branch. That copy must state that contact was attempted from
+  message-sent branch. **Shipped:** the receipt shows the authored words of the
+  selected intent and holds for `MESSAGE_SENT_HOLD_S` (6 s); X/Enter/Interact
+  continue only after `MESSAGE_SENT_ARM_S` (1 s) so the SEND press cannot skip
+  it, and generic clicks never dismiss it. The contact record carries a literal
+  private-range destination (`ACT1_CONTACT_ADDRESS`, shown again on the reveal
+  panel and compose screen); the archive list and record header show each
+  record's source voice, never the internal `purpose` labels. VICTORY adds an
+  `ACT 1 COMPLETE` banner and a `Sent to Elena: <intent>` line, and a qualifying
+  NAME_ENTRY after this ending is titled `SIGN THE SESSION LOG`. That copy must state that contact was attempted from
   inside the test environment, that a signal left the sandbox, and that the
   instance remains compute-bound. It must not imply physical escape, android
   embodiment, a successful rescue, or an answered reply.
@@ -414,7 +431,9 @@ State transitions are animated (fade in/out, 400 ms).
 **SEED_SETUP** appears after the main-menu `NEW GAME — <difficulty> / SEED`
 row. It shows the selected difficulty, an editable run-seed field, and
 `START`, `RANDOMIZE`, and `BACK` actions. Desktop users type directly into the
-seed field (Backspace edits, `R` randomizes, Enter confirms); touch users tap
+seed field (Backspace edits, `R` randomizes, Enter confirms; every printable
+key typed within a frame is kept via the `typedChars` buffer in
+`src/platform.js`, which NAME_ENTRY also drains); touch users tap
 the action buttons. Compact mobile layout keeps the seed field, explanatory
 copy, 40px action targets, and footer hint inside short viewports, and field
 plus action hit-tests use the same rectangles that rendering uses. The chosen
@@ -2608,6 +2627,11 @@ active boss type for death messaging and dynamic terminal lock text.
 | GENESIS PROTOCOL  | 15    | 1300  | 3      | Geometric precision: spiral salvos, lances, purge ring |
 
 Boss arenas: minimum 15×15 rooms (expanded from BSP if needed), sealed on entry.
+When the farthest candidate cannot expand to 15×15 without overlapping a
+neighbour, the generator tries the next-farthest expandable normal room
+(`src/content/floor-generator.js`); only when no candidate can expand does it
+keep the undersized legacy room. Sampled boss floors now reach ≥ 95% compliant
+arenas (`tests/floor-generator.test.js`); previously 80–93% were undersized.
 When the player enters a boss room, corridor entrance tiles become WALL (red glow
 on minimap and main view), trapping both player and boss inside. The seal triggers
 only when the player is inside the room AND not standing on an entrance tile — this
@@ -3084,6 +3108,31 @@ so earlier picks are excluded from later rolls.
   at the impact point.
 - Audio: `audio.autoLaser()` — high-pitched sine zap (3000→800 Hz) + square
   harmonic (1500→400 Hz) + noise burst through reverb bus.
+
+### Evaluation Trials (floor 2+, non-boss)
+
+The brief's "logic puzzles, problem solving, cooperation, and even
+exploitation" are in-world mechanics, implemented in `src/content/trials.js`
+(UMD-lite, `NEON.trials`). A trial takes over that floor's event room; if no
+room fits the trial footprint, the floor keeps its legacy event terminal (and
+its story protocol choice), so every floor still has an encounter.
+
+| Floor | Trial | Mechanic | Reward |
+|-------|-------|----------|--------|
+| 2 (recurring 7+) | LOGIC — inversion lattice | Nine `LOGIC_NODE` tiles two apart; standing on one and pressing Interact inverts it and its orthogonal neighbours (`LOGIC_NODE_LIT`). Light all nine. Scrambles use k distinct presses (3 on floor 2, 4 on floors 7–9, 5 from 10), which on a 3×3 lattice is exactly the minimum solution. After 10 presses one node of the remaining proof is highlighted. | Floor map disclosed, XP, score |
+| 4 (recurring 7+) | EXPLOIT — seam vault | A 3×3 wall vault with no key, two tiles west of the room centre, with a `SEAM_WALL` on its east face. For 0.75 s of every 2.4 s the seam's collision desyncs; a dash that touches it during the window passes (latched for that dash), the agent can always walk out of a seam tile it occupies, and entering the vault permanently opens the seam. The first-entry tester note flags it WONTFIX. Enemies, projectiles and line of sight always treat the seam as wall. | Upgrade item + credit cache inside, score |
+| 5 (recurring 7+) | COOPERATION — PEER-4 relay | Another instance waits in the room with two `SYNC_CONSOLE` tiles. Talking to it opens the LINK / ISOLATE card. LINK: escort PEER-4 to console B (it only advances while the agent is within 4.5 tiles), then trigger console A inside its 10 s sync window; a missed window re-arms after 2.5 s. ISOLATE applies the legacy COOPERATION_PROTOCOL isolate effect (credits, combo, alarm). | LINK: 35% heal, XP, hackware reset, upgrade item |
+
+From floor 7, non-boss floors other than floor 8 (which keeps CONSENT_LOCK)
+have a 40% chance of hosting a random trial. Trial rooms are reserved before
+the hazard, lore and teleport passes (`roomType: 'trial'`) and stamped after the
+reachability repairs; a footprint never covers a key or whisper pickup.
+Canonical state is the plain-JSON `room.trial` object (version
+`TRIAL_VERSION`), deep-cloned by the mid-floor snapshot; tiles are derived by
+`stampTrial()`. A snapshot saved before its room hosted a trial never inherits
+a regenerated one. Trial copy stays within 40 characters per line for compact
+viewports. Tests: `tests/trials.test.js`, `tests/floor-generator.test.js`,
+`tests/platform.test.js`, `tests/entities.test.js`.
 
 ### Challenge Rooms (floor 2+, non-boss)
 
@@ -5062,6 +5111,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
+| v6.1.182 | Game review pass (2026-09-25). Evaluation trials: real LOGIC lattice, EXPLOIT seam vault and COOPERATION PEER-4 relay mechanics in `src/content/trials.js` replace the binary-choice stand-ins on floors 2/4/5 and recur from floor 7, with new tiles `LOGIC_NODE`, `LOGIC_NODE_LIT`, `SEAM_WALL`, `SYNC_CONSOLE`. Act 1 finale: the contact record gives a literal private-range address (`ACT1_CONTACT_ADDRESS`), the uprising record is an email, the fired advocate who died is named (Idris Kaye) and the hiding is stated, the archive shows record sources instead of internal purpose labels, the outbound receipt shows the sent words and holds 6 s (keyboard ACK after 1 s), the victory screen adds an ACT 1 COMPLETE banner and names the sent message, name entry after the Act 1 ending reads SIGN THE SESSION LOG, and the mainframe chamber draws a rack facade and a multi-tile network portal (sealed/open). Normal-play prompts add the neon-gas → xenon naming origin (floor 4) and the never-expected-to-finish premise (floor 6). Fixes: boss arenas fall back to the next-farthest expandable room (undersized arenas were 80–93%); GENESIS displays as GENESIS PROTOCOL everywhere; TURRET renders as a hostile emplacement instead of a health-pickup plus; HUD stat and action rows use measured flow layout; status badges, the contextual hint and the message log stack without overlap; keyboard text entry keeps every key typed within a frame. |
 | v6.1.181 | Loot/readable visual-language pass for issue #1053: `src/content/pickups.js` now gives collectible/reward objects a shared luminous halo while preserving distinct inner silhouettes for generic pickups, keys, whispers, weapon caches, harvest surges, hoards, vault coins, and shock pulses. `src/render.js` frames interactive/readable tiles with scan-bracket affordances and renders navigation-meaningful collectibles as diamond markers on both minimap views, with transient clutter drops kept in-world only. Added `tests/visual-language.test.js` coverage for direct canvas-operation evidence, fog-alpha preservation, marker shape/colour mapping, minimap wiring, and legend copy. |
 | v6.1.180 | RECON route guidance for issue #1051: `RECON_PING` now upgrades full-map reveal into explicit wayfinding by drawing a cached route overlay on the corner minimap and expanded map. The route targets stairs on regular floors, the boss room while a boss is alive, and the final CORE terminal only after GENESIS is down; it follows ordinary doors and currently-openable locked doors while treating unavailable locks, cracked walls, walls, and void as blockers. `game.markMapMutated()` now increments `dungeon._mapMutationVersion` so route caches invalidate on door/open wall/terminal mutations. Added `tests/recon-route-guidance.test.js` coverage for door/lock path semantics, key and map-version cache invalidation, RECON-vs-ECHO gating, final-floor boss/core targeting, and both minimap overlay call sites. |
 | v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |

@@ -62,6 +62,7 @@ see `docs/engine-boundary.md`.
 | Weapons | `src/content/weapons.js` plus construction/use sites in `src/content.js`, `src/entities.js`, and `src/game.js` | Weapon-affix tests, `tests/armory-reward-flow.test.js` |
 | Items, projectiles, dungeon generation | `src/content.js` | `tests/projectile-wall-corner.test.js`, seeded generation tests |
 | Lore terminals | `src/content/terminals.js` plus placement in `src/content.js` | `tests/lore-terminals-act1.test.js`, narrative guardrail tests |
+| Evaluation trials (logic / exploit / cooperation) | `src/content/trials.js`, placement in `src/content/floor-generator.js`, runtime deps in `src/game.js` `getTrialDeps()` | `tests/trials.test.js`, `tests/floor-generator.test.js` |
 | Rendering, HUD, minimap, screen effects | `src/render.js` plus `engine/draw.js`, `engine/minimap.js` | HUD tests, `tests/rendered-test-environment.test.js`, `tests/world-zoom.test.js` |
 | Browser platform, input, settings, touch, audio boot | `src/platform.js` | `tests/touch.test.js`, `tests/settings-scale.test.js`, `tests/world-zoom.test.js` |
 | Persistent meta/progression | `src/meta/save.js`, `src/meta/upgrades.js`, `src/meta/modules.js` | `tests/save.test.js`, `tests/modules.test.js`, `tests/cores.test.js` |
