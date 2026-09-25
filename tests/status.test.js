@@ -116,6 +116,7 @@ function runMessageLayout(opts = {}) {
     [
       ...statusSources,
       'const MESSAGE_STATUS_GAP = 2;',
+      'let _hintTopY = null;',
       extractFunctionSource(RENDER, 'drawMessages'),
       'this.drawMessages = drawMessages;',
       withBadge || fadingBadge ? 'this.drawStatusBar = drawStatusBar;' : '',

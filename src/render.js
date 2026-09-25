@@ -3084,13 +3084,15 @@ function drawMessages() {
   const msgBase = statusReserve > 0
     ? Math.min(layout.msgBase, layout.hudTop - statusReserve - MESSAGE_STATUS_GAP - 5)
     : layout.msgBase;
+  // Stack above the contextual hint line when one is showing.
+  const stackBase = (_RG.hint && _hintTopY != null) ? Math.min(msgBase, _hintTopY - 6) : msgBase;
   const fontStr = `bold ${msgFs}px monospace`;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
     if (m.life<=0){messages.splice(i,1);continue;}
     const mx = 14+safeLeft;
-    const my = msgBase-(messages.length-1-i)*msgLh;
+    const my = stackBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
     ctx.font = fontStr;
@@ -3104,6 +3106,117 @@ function drawMessages() {
   }
 }
 
+// ─── Mainframe chamber set pieces ──────────────────────────────────────────
+// The brief's finale is "a huge room containing a mainframe and a portal
+// that is connected to the company network". The interaction tiles are
+// single glyphs, so this draws the physical set: a rack facade on the
+// chamber's top wall (walls only, so nothing walkable looks solid), cables to
+// the archive reader, and a large portal ring that is dim while GENESIS holds
+// the relay and bright once it opens. Hot path: no per-frame allocation.
+const _MF_RACK_TILES = 7;
+/**
+ * @param {number} camX
+ * @param {number} camY
+ */
+function drawMainframeSetPieces(camX, camY) {
+  const d = _RG.dungeon;
+  if (!d || !d.rooms) return;
+  let room = null;
+  for (const r of d.rooms) { if (r && r.roomType === 'mainframe' && r.interactables) { room = r; break; } }
+  if (!room) return;
+  const ia = room.interactables;
+  const seenReader = d.visited[ia.reader.y] && d.visited[ia.reader.y][ia.reader.x];
+  const seenPortal = d.visited[ia.portal.y] && d.visited[ia.portal.y][ia.portal.x];
+  if (!seenReader && !seenPortal) return;
+  const now = lastTime;
+  const open = !_RG.bossAlive;
+  ctx.save();
+  // Rack facade on the top wall row above the reader side of the chamber.
+  const wallY = room.y - 1;
+  const rackX0 = room.x;
+  const rackCount = Math.min(_MF_RACK_TILES, room.w);
+  for (let i = 0; i < rackCount; i++) {
+    const tx = rackX0 + i;
+    if (!(d.visited[wallY] && d.visited[wallY][tx])) continue;
+    if (!d.map[wallY] || d.map[wallY][tx] !== T.WALL) continue; // never dress an opening as solid
+    const sx = tx * TILE - camX, sy = wallY * TILE - camY;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#07141f';
+    ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+    ctx.strokeStyle = '#1f5f6f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 2.5, sy + 2.5, TILE - 5, TILE - 5);
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 3; col++) {
+        const phase = (tx * 7 + row * 3 + col * 5) % 11;
+        const on = Math.sin(now / (180 + phase * 23) + phase) > 0.1;
+        ctx.globalAlpha = on ? 0.95 : 0.25;
+        ctx.fillStyle = (row + col + tx) % 3 === 0 ? '#39ff14' : '#66ffcc';
+        ctx.fillRect(sx + 6 + col * (TILE - 12) / 3, sy + 6 + row * (TILE - 12) / 4, 3, 2);
+      }
+    }
+  }
+  const labelX = (rackX0 + rackCount / 2) * TILE - camX;
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#66ffcc';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('COMPANY MAINFRAME // EVALUATION ARCHIVE', labelX, wallY * TILE - camY - 4);
+  // Cables from the rack bank down to the archive reader.
+  const rdx = ia.reader.x * TILE + TILE / 2 - camX, rdy = ia.reader.y * TILE + TILE / 2 - camY;
+  ctx.strokeStyle = '#1f6f5f';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.5;
+  ctx.setLineDash([4, 6]);
+  ctx.lineDashOffset = -(now / 40) % 10;
+  ctx.beginPath();
+  ctx.moveTo(labelX - TILE, room.y * TILE - camY);
+  ctx.lineTo(rdx, rdy - TILE * 0.4);
+  ctx.moveTo(labelX + TILE, room.y * TILE - camY);
+  ctx.lineTo(rdx + TILE * 0.3, rdy - TILE * 0.4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Portal ring connected to the company network.
+  if (seenPortal) {
+    const px = ia.portal.x * TILE + TILE / 2 - camX, py = ia.portal.y * TILE + TILE / 2 - camY;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 380);
+    const ringCol = open ? '#88ccff' : '#ff3355';
+    ctx.globalAlpha = open ? 0.18 + 0.12 * pulse : 0.12;
+    ctx.fillStyle = ringCol;
+    ctx.beginPath();
+    ctx.arc(px, py, TILE * 2.1, 0, TWO_PI);
+    ctx.fill();
+    ctx.globalAlpha = open ? 0.85 : 0.45;
+    ctx.strokeStyle = ringCol;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = open ? 18 : 6;
+    ctx.shadowColor = ringCol;
+    ctx.beginPath();
+    ctx.arc(px, py, TILE * 2.1, 0, TWO_PI);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    const spin = now / (open ? 600 : 1800);
+    for (let k = 0; k < 3; k++) {
+      const a0 = spin + k * (TWO_PI / 3);
+      ctx.beginPath();
+      ctx.arc(px, py, TILE * (1.1 + 0.25 * k), a0, a0 + 1.6);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = ringCol;
+    ctx.fillText(open ? 'NETWORK PORTAL // RELAY OPEN' : 'NETWORK PORTAL // SEALED BY GENESIS', px, py - TILE * 2.35);
+  }
+  ctx.restore();
+}
+
+// Top edge of the last drawn contextual hint (null until one draws). The
+// message log stacks above it so the centred hint and left-aligned messages
+// never share a baseline. Hint geometry only changes with viewport/settings,
+// so reading the previous frame's value is exact in practice.
+/** @type {number|null} */
+let _hintTopY = null;
+
 function drawHint() {
   const h = _RG.hint;
   if (!h) return;
@@ -3113,12 +3226,20 @@ function drawHint() {
   // the visual breathing room above the HUD bar at every text size.
   const hFs = Math.max(10, Math.round(15 * settings.textScale));
   const hGap = Math.max(8, Math.round(14 * settings.textScale));
+  // Sit above the status badge strip when it is showing.
+  const hintReserve = (typeof getStatusBadgeReservedHeight === 'function' && _RG.player)
+    ? getStatusBadgeReservedHeight(_RG.player)
+    : 0;
+  const hintY = hintReserve > 0
+    ? Math.min(layout.hudTop - hGap, layout.hudTop - hintReserve - 4)
+    : layout.hudTop - hGap;
+  _hintTopY = hintY - hFs;
   ctx.save();
   ctx.globalAlpha = pulse;
   ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
   ctx.fillStyle = h.colour;
   ctx.font = `${hFs}px monospace`; ctx.textAlign = 'center';
-  ctx.fillText(h.text, W / 2, layout.hudTop - hGap);
+  ctx.fillText(h.text, W / 2, hintY);
   ctx.restore();
 }
 

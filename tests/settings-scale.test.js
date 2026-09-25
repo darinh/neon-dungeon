@@ -412,12 +412,29 @@ test('LEVEL UP! flash text scales with settings.textScale', () => {
     'LEVEL UP! must NOT use the hard-coded "bold 36px monospace" string — that ignores textScale');
 });
 
+/**
+ * Full brace-matched source of a top-level function in render.js (fixed
+ * character windows broke whenever a function grew).
+ * @param {string} name
+ * @returns {RegExpMatchArray}
+ */
+function renderFunctionBody(name) {
+  const start = RENDER.search(new RegExp('function\\s+' + name + '\\s*\\('));
+  assert.ok(start >= 0, 'must locate ' + name);
+  let depth = 0;
+  for (let i = RENDER.indexOf('{', start); i < RENDER.length; i++) {
+    if (RENDER[i] === '{') depth++;
+    else if (RENDER[i] === '}' && --depth === 0) return /** @type {RegExpMatchArray} */ ([RENDER.slice(start, i + 1)]);
+  }
+  assert.fail(name + ' unbalanced');
+}
+
 test('drawHint font + gap-above-HUD both scale with settings.textScale', () => {
   // Centered single-line tooltip pinned above the HUD bar. Both the
   // font size AND the y-gap above the HUD must scale; otherwise the
   // hint either overlaps the HUD (large text + small gap) or floats
   // mid-air (small text + large gap).
-  const fn = RENDER.match(/function\s+drawHint[\s\S]{0,800}/);
+  const fn = renderFunctionBody('drawHint');
   assert.ok(fn, 'must locate drawHint');
   assert.match(fn[0],
     /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*15\s*\*\s*settings\.textScale\s*\)\s*\)/,
@@ -439,8 +456,11 @@ test('drawHint font + gap-above-HUD both scale with settings.textScale', () => {
     /ctx\.font\s*=\s*`\$\{[A-Za-z_$][\w$]*\}px\s+monospace`/,
     'drawHint ctx.font must reference a computed font-px local (template literal with bare identifier)');
   assert.match(fn[0],
-    /fillText\s*\([^)]*layout\.hudTop\s*-\s*[A-Za-z_$][\w$]*\s*\)/,
-    'drawHint fillText must subtract a computed gap local from layout.hudTop (not a bare literal)');
+    /layout\.hudTop\s*-\s*hGap\b/,
+    'drawHint baseline must subtract the scaled gap local from layout.hudTop (not a bare literal)');
+  assert.match(fn[0],
+    /fillText\s*\(\s*h\.text\s*,\s*W\s*\/\s*2\s*,\s*hintY\s*\)/,
+    'drawHint fillText must draw at the computed baseline local');
 });
 
 test('drawMessages msgFs + msgLh both scale with settings.textScale', () => {
@@ -448,7 +468,7 @@ test('drawMessages msgFs + msgLh both scale with settings.textScale', () => {
   // the font would let larger text overflow into the previous message
   // row at textScale 1.3×; scaling only the line-height would leave
   // permanent gaps at 0.85×. Pin both formulas.
-  const fn = RENDER.match(/function\s+drawMessages[\s\S]{0,1200}/);
+  const fn = renderFunctionBody('drawMessages');
   assert.ok(fn, 'must locate drawMessages');
   assert.match(fn[0],
     /msgFs\s*=\s*Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*16\s*\*\s*settings\.textScale\s*\)\s*\)/,
@@ -475,7 +495,7 @@ test('drawMessages hoists the bold font string out of the loop', () => {
   // churn GC. Pin: const fontStr = `bold ${...}px monospace` lives
   // BEFORE the for-loop, and the loop body assigns ctx.font = fontStr
   // (a bare identifier) — never `ctx.font = \`...\`` inside the loop.
-  const fn = RENDER.match(/function\s+drawMessages[\s\S]{0,1500}/);
+  const fn = renderFunctionBody('drawMessages');
   assert.ok(fn, 'must locate drawMessages');
   assert.match(fn[0],
     /const\s+fontStr\s*=\s*`bold\s*\$\{msgFs\}px\s+monospace`[\s\S]{0,200}for\s*\(/,
@@ -499,7 +519,7 @@ test('drawHint font + gap-above-HUD both scale with settings.textScale', () => {
   // font size AND the y-gap above the HUD must scale; otherwise the
   // hint either overlaps the HUD (large text + small gap) or floats
   // mid-air (small text + large gap).
-  const fn = RENDER.match(/function\s+drawHint[\s\S]{0,800}/);
+  const fn = renderFunctionBody('drawHint');
   assert.ok(fn, 'must locate drawHint');
   assert.match(fn[0],
     /Math\.max\s*\(\s*\d+\s*,\s*Math\.round\s*\(\s*15\s*\*\s*settings\.textScale\s*\)\s*\)/,

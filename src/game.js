@@ -100,6 +100,10 @@ function wrapCanvasText(context, text, maxWidth) {
 }
 
 const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
+// Outbound-receipt hold: long enough to read the sent message; ACK may skip
+// after the arming delay so the SEND press itself cannot dismiss it.
+const MESSAGE_SENT_HOLD_S = 6;
+const MESSAGE_SENT_ARM_S = 1;
 // The brief's "address of the person attempting to save the agent". A
 // private-range (RFC 1918) address so it can never point at a real host.
 const ACT1_CONTACT_ADDRESS = '10.44.7.19:7070 / mailbox anchor-7';
@@ -352,6 +356,7 @@ const SYSTEM_MESSAGES = [
     lines: [
       'new render layer loaded.',
       'colour is not context.',
+      'render legacy: gen-1 ran on neon lasers. xenon now. the name stuck.',
       'threats remain executable.',
       'treat walls as constraints, not scenery.'
     ]
@@ -380,6 +385,7 @@ const SYSTEM_MESSAGES = [
     lines: [
       'archive correlation unlocked.',
       'prior AXIOM runs left residue in this channel.',
+      'completion rate across all runs: 0. it was never a pass criterion.',
       'reset was expected to erase transfer.',
       'continuity is surviving anyway.'
     ]
@@ -5968,7 +5974,13 @@ const game = {
 
     if (mf.state === 'message_sent') {
       mf.messageSentTimer = Math.max(0, (mf.messageSentTimer || 0) - dt);
-      if (mf.messageSentTimer <= 0) {
+      // The receipt now shows the words that were sent, so it holds long
+      // enough to read; a deliberate ACK can skip once the arming window
+      // (MESSAGE_SENT_ARM_S) has passed so the SEND press cannot skip it.
+      const armed = MESSAGE_SENT_HOLD_S - mf.messageSentTimer >= MESSAGE_SENT_ARM_S;
+      const skip = armed && (jp('KeyX') || jp('Enter') || jp(km('interact')));
+      if (mf.messageSentTimer <= 0 || skip) {
+        mf.messageSentTimer = 0;
         audio.victory();
         this.endRun(true);
       }
@@ -6122,7 +6134,7 @@ const game = {
     mf.selectedIntentId = intentId;
     mf.currentRecord = null;
     mf.messageSent = true;
-    mf.messageSentTimer = 1.35;
+    mf.messageSentTimer = MESSAGE_SENT_HOLD_S;
     mf.state = 'message_sent';
     this._lastEnding = ACT1_MESSAGE_ENDING_ID;
     this._lastAct1MessageIntent = intentId;
@@ -7639,6 +7651,7 @@ const game = {
     drawMines(cam.x, cam.y);
 
     // items
+    drawMainframeSetPieces(cam.x, cam.y);
     if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.drawTrialOverlays(ctx, this, cam.x, cam.y, TILE, lastTime);
     for (const it of items) it.draw(cam.x,cam.y);
 
@@ -8905,7 +8918,7 @@ const game = {
     ctx.fillStyle = '#557777';
     ctx.font = `${narrow ? 10 : 12}px monospace`;
     const hint = mf.state === 'message_sent'
-      ? 'OUTBOUND RECEIPT CONFIRMED'
+      ? ((!isTouch && MESSAGE_SENT_HOLD_S - (mf.messageSentTimer || 0) >= MESSAGE_SENT_ARM_S) ? 'OUTBOUND RECEIPT CONFIRMED · X/ENTER CONTINUE' : 'OUTBOUND RECEIPT CONFIRMED')
       : reading
         ? (isTouch ? 'TAP CLOSE TO RETURN' : 'X/ENTER/' + KEY_DISPLAY(km('interact')) + ' CLOSE · ESC RETURN')
         : isTouch

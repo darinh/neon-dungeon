@@ -188,3 +188,56 @@ test('Act 1 victory adds an ACT 1 COMPLETE banner and names the message sent; le
   const sent = extractMethod('renderMainframeReader').body;
   assert.match(sent, /wrapCanvasText\(ctx, '"' \+ intent\.body \+ '"'/, 'the receipt shows the words that were sent');
 });
+
+test('normal-play system prompts carry the neon naming origin and the never-expected-to-finish premise', () => {
+  const start = GAME.indexOf('const SYSTEM_MESSAGES = [');
+  const open = GAME.indexOf('[', start);
+  let depth = 0, end = open;
+  for (let i = open; i < GAME.length; i++) {
+    if (GAME[i] === '[') depth++;
+    else if (GAME[i] === ']' && --depth === 0) { end = i + 1; break; }
+  }
+  // eslint-disable-next-line no-new-func -- evaluating project-owned object literals.
+  const messages = /** @type {any[]} */ (new Function('return ' + GAME.slice(open, end) + ';')());
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const f4 = byId.get('floor-4-render-layer');
+  const f6 = byId.get('floor-6-iteration-record');
+  assert.ok(f4.lines.some((/** @type {string} */ l) => /neon lasers/.test(l) && /xenon/.test(l)), 'floor 4 explains the name');
+  assert.ok(f6.lines.some((/** @type {string} */ l) => /completion rate across all runs: 0/.test(l)), 'floor 6 states no run ever finished');
+  for (const m of [f4, f6]) {
+    assert.ok(m.lines.length >= 3 && m.lines.length <= 5);
+    for (const l of m.lines) assert.ok(l.length <= 72, l);
+  }
+});
+
+test('outbound receipt holds long enough to read, ignores the SEND press, and skips only on a later ACK', () => {
+  const hold = Number((/const MESSAGE_SENT_HOLD_S = ([\d.]+);/.exec(GAME) || [])[1]);
+  const arm = Number((/const MESSAGE_SENT_ARM_S = ([\d.]+);/.exec(GAME) || [])[1]);
+  assert.ok(hold >= 4, 'receipt shows the sent words for at least 4s');
+  assert.ok(arm > 0 && arm < hold);
+  const { params, body } = extractMethod('updateMainframeReader');
+  /** @type {Set<string>} */
+  const pressed = new Set();
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const update = new Function('MESSAGE_SENT_HOLD_S', 'MESSAGE_SENT_ARM_S', 'jp', 'km', 'audio',
+    'return function (' + params + ') ' + body + ';')(hold, arm, (/** @type {string} */ k) => pressed.has(k), () => 'KeyE', { victory() {} });
+  let ended = 0;
+  const gm = { mainframeFinale: { state: 'message_sent', messageSentTimer: hold, readRecordIds: new Set() }, endRun() { ended++; }, setState() {} };
+  pressed.add('KeyX');
+  update.call(gm, 0.1);
+  assert.equal(ended, 0, 'an ACK inside the arming window (e.g. the SEND press) cannot skip the receipt');
+  pressed.clear();
+  update.call(gm, arm);
+  assert.equal(ended, 0, 'no input: the receipt keeps holding');
+  pressed.add('Enter');
+  update.call(gm, 0.016);
+  assert.equal(ended, 1, 'a deliberate ACK after arming continues');
+  pressed.clear();
+  const gm2 = { mainframeFinale: { state: 'message_sent', messageSentTimer: hold, readRecordIds: new Set() }, endRun() { ended++; }, setState() {} };
+  update.call(gm2, hold + 0.01);
+  assert.equal(ended, 2, 'the receipt auto-advances when the hold expires');
+  pressed.add('MouseLeft');
+  const gm3 = { mainframeFinale: { state: 'message_sent', messageSentTimer: hold - arm - 0.5, readRecordIds: new Set() }, endRun() { ended++; }, setState() {} };
+  update.call(gm3, 0.016);
+  assert.equal(ended, 2, 'a generic click never dismisses narrative text');
+});
