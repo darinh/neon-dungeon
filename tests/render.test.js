@@ -67,14 +67,22 @@ function createRecordingCtx() {
  * @typedef {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string,
  *   bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number,
  *   comboMult?: number, score?: number, weaponName?: string, dashCooldown?: number, shield?: boolean, belt?: number,
- *   weaponIdx?: number, credits?: number, lore?: number, cores?: number, inset?: number, phSuffix?: string}} HudOpts
+ *   weaponIdx?: number, credits?: number, lore?: number, cores?: number, inset?: number, phSuffix?: string,
+ *   spSuffix?: string, nanoCharges?: number}} HudOpts
  */
 
-/** @param {HudOpts} opts */
-function drawHud(opts) {
+const HUD_SOURCE = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
+
+/**
+ * @param {HudOpts} opts
+ * @param {string} [source] drawHUD source to run (defaults to the real one)
+ * @param {(n: number) => void} [hit] call-site probe for tagged sources
+ */
+function drawHud(opts, source = HUD_SOURCE, hit = () => {}) {
   const ctx = createRecordingCtx();
   const sandbox = /** @type {any} */ ({
     ctx,
+    __hit: hit,
     W: opts.width || (opts.compact ? 360 : 960),
     H: opts.compact ? 640 : 540,
     safeLeft: opts.inset || 0,
@@ -89,13 +97,12 @@ function drawHud(opts) {
     getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
     modifierProgressSuffix() { return opts.modifierSuffix || ''; },
     piercingHeartHudSuffix() { return opts.phSuffix || ''; },
-    siphonHudSuffix() { return ''; },
+    siphonHudSuffix() { return opts.spSuffix || ''; },
     comboColour() { return '#fff'; },
     comboMultiplier() { return opts.comboMult || 1; },
     drawObservationHudFrame() {},
     Math,
   });
-  const source = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
   const weapon = { name: opts.weaponName || 'PLASMA RIFLE MK-ULTRA' };
@@ -121,7 +128,7 @@ function drawHud(opts) {
     dashCooldown: opts.dashCooldown || 0,
     hackware: opts.hackware ? 'BLINK' : null,
     hackwareCooldown: opts.hackwareCooldown || 0,
-    _nanoMedicCharges: 0,
+    _nanoMedicCharges: opts.nanoCharges || 0,
   });
   return { texts: ctx.calls, rects: ctx.rects };
 }
@@ -323,7 +330,8 @@ const FULL_STATE = { atk: 150, def: 99, floor: 15, modifier: true, modifierSuffi
   weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA' };
 /** @type {HudOpts} */
 const LOW_STATE = { atk: 10, def: 2, floor: 1, modifier: true, modifierSuffix: ' 0/20', dashCooldown: 0.4,
-  shield: true, belt: 2, score: 0, comboCount: 2, comboMult: 1.2, credits: 0, lore: 1 };
+  shield: true, belt: 2, score: 0, comboCount: 2, comboMult: 1.2, credits: 0, lore: 1,
+  spSuffix: ' ◈2/3', nanoCharges: 2 };
 /** @type {HudOpts} */
 const QUIET_STATE = { atk: 10, def: 2, floor: 1 };
 
@@ -355,6 +363,28 @@ test('landscape HUD: no label or belt pip overlaps another or leaves the safe ar
     }
   }
   assert.ok(checked >= 150, `swept ${checked} configurations`);
+});
+
+test('the swept states reach every draw call in the landscape HUD branch', () => {
+  // A fit sweep only proves what it draws. Round 4 found overlaps in labels
+  // the harness never switched on (dash, shield, belt pips, insets), so tag
+  // each fillText/fillRect call site of the landscape branch and require the
+  // sweep states to reach every one.
+  const body = extractFunctionSource(RENDER, 'drawHUD');
+  const from = body.indexOf('// ── Standard landscape HUD');
+  const to = body.indexOf('drawObservationHudFrame(y);', from);
+  assert.ok(from > 0 && to > from, 'landscape branch located');
+  let sites = 0;
+  const branch = body.slice(from, to).replace(/ctx\.(fillText|fillRect)\(/g, (_m, fn) => `(__hit(${sites++}), ctx).${fn}(`);
+  const tagged = `const HUD_STAT_GAP = 12;\n${body.slice(0, from)}${branch}${body.slice(to)}\nthis.drawHUD = drawHUD;`;
+  assert.ok(sites >= 20, `found ${sites} draw call sites (the tagging regex must still match)`);
+  const reached = new Set();
+  for (const state of [FULL_STATE, LOW_STATE, QUIET_STATE]) {
+    for (const width of [541, 960, 1920]) drawHud({ ...state, width }, tagged, (n) => reached.add(n));
+  }
+  const missed = [];
+  for (let i = 0; i < sites; i++) if (!reached.has(i)) missed.push(i);
+  assert.deepEqual(missed, [], `landscape draw call sites the sweep states never reach: ${missed.join(', ')}`);
 });
 
 test('wide landscape keeps the full labels, and a 1000+ combo still fits its slot', () => {
