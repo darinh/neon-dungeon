@@ -3490,27 +3490,34 @@ function depenetratePlayer(player, map) {
     player._safeMap = map;
     return false;
   }
-  const SNAP_RANGE = 6;
-  const sx = player._safeX, sy = player._safeY;
-  if (player._safeMap === map && typeof sx === 'number' && typeof sy === 'number' &&
-      Math.abs(sx - player.x) + Math.abs(sy - player.y) <= SNAP_RANGE) {
-    const srow = map[Math.floor(sy)];
-    if (srow && isPassable(srow[Math.floor(sx)])) { player.x = sx; player.y = sy; return true; }
-  }
+  if (playerSafeRecordUsable(player, map)) { player.x = player._safeX; player.y = player._safeY; return true; }
   const RADIUS = 4;
   const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
   const inArenaRect = !!arena && tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
-  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false;
+  // Never snap into places the agent has no way into: unrevealed secret rooms
+  // or the sealed trial vault. Prefer tiles it has already seen (gated or
+  // sealed interiors are never visible from outside).
+  const dg = _EG.dungeon;
+  const visited = dg && dg.visited;
+  const secret = dg && dg.secretMask;
+  const seam = (dg && typeof NEON !== 'undefined' && NEON.trials) ? NEON.trials.findSeamTrial(dg) : null;
+  const vault = (seam && !seam.lootClaimed) ? seam.vault : null;
+  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false, bestSeen = false;
   for (let dy = -RADIUS; dy <= RADIUS; dy++) {
     const crow = map[ty + dy];
     if (!crow) continue;
     for (let dx = -RADIUS; dx <= RADIUS; dx++) {
       const cx = tx + dx, cy = ty + dy;
       if (!isPassable(crow[cx])) continue;
+      if (secret && secret[cy] && secret[cy][cx]) continue;
+      if (vault && vault.x === cx && vault.y === cy) continue;
       const d = Math.abs(dx) + Math.abs(dy);
       const inArena = inArenaRect && cx >= arena.x + 1 && cx <= arena.x + arena.w - 2 && cy >= arena.y + 1 && cy <= arena.y + arena.h - 2;
-      if ((inArena && !bestInArena) || (inArena === bestInArena && d < bestD)) {
-        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena;
+      const seen = !!(visited && visited[cy] && visited[cy][cx]);
+      const better = bestX < 0 ||
+        (inArena !== bestInArena ? inArena : seen !== bestSeen ? seen : d < bestD);
+      if (better) {
+        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena; bestSeen = seen;
       }
     }
   }
@@ -3518,6 +3525,52 @@ function depenetratePlayer(player, map) {
   player.x = bestX + 0.5;
   player.y = bestY + 0.5;
   return true;
+}
+
+/**
+ * Whether the agent's recorded safe position can be restored now: same map,
+ * close by, still passable, and — while a boss arena is sealed around the
+ * agent — inside that arena, so an embed on the seal frame never restores it
+ * to the corridor outside.
+ * @param {any} player
+ * @param {any} map
+ * @returns {boolean}
+ */
+function playerSafeRecordUsable(player, map) {
+  const sx = player._safeX, sy = player._safeY;
+  if (player._safeMap !== map || typeof sx !== 'number' || typeof sy !== 'number') return false;
+  if (Math.abs(sx - player.x) + Math.abs(sy - player.y) > 6) return false;
+  const stx = Math.floor(sx), sty = Math.floor(sy);
+  const srow = map[sty];
+  if (!srow || !isPassable(srow[stx])) return false;
+  const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
+  if (arena) {
+    const tx = Math.floor(player.x), ty = Math.floor(player.y);
+    const agentInArena = tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
+    const recordInArena = stx >= arena.x + 1 && stx <= arena.x + arena.w - 2 && sty >= arena.y + 1 && sty <= arena.y + arena.h - 2;
+    if (agentInArena && !recordInArena) return false;
+  }
+  return true;
+}
+
+/**
+ * Where a save should put the agent. A save taken while a knockback or clamp
+ * has it inside a wall would resume embedded with no safe record, leaving the
+ * nearest-tile fallback to pick a side of the wall; persist the restorable
+ * safe position instead. noClip keeps the raw position.
+ * @param {any} player
+ * @param {any} map
+ * @returns {{x: number, y: number}}
+ */
+function playerSavePosition(player, map) {
+  if (map && !playerCheatEnabled('noClip')) {
+    const tx = Math.floor(player.x), ty = Math.floor(player.y);
+    const row = map[ty];
+    if (!playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false) && playerSafeRecordUsable(player, map)) {
+      return { x: player._safeX, y: player._safeY };
+    }
+  }
+  return { x: player.x, y: player.y };
 }
 
 /**

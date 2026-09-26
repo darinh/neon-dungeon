@@ -1290,6 +1290,19 @@ function serializeProjectileSnapshot(projectile, enemyIndex) {
   return out;
 }
 
+/**
+ * Player position for a save: the last safe position when a knockback has
+ * the agent inside a wall this frame (see playerSavePosition in entities.js).
+ * @param {any} gameState
+ * @returns {{x: number, y: number}}
+ */
+function savedPlayerPosition(gameState) {
+  const p = gameState.player;
+  const map = gameState.dungeon && gameState.dungeon.map;
+  if (typeof playerSavePosition === 'function' && map) return playerSavePosition(p, map);
+  return { x: p.x, y: p.y };
+}
+
 /** @param {any} gameState */
 function serializeFloorSnapshot(gameState) {
   if (!gameState || !gameState.player || !gameState.dungeon) return null;
@@ -1299,7 +1312,7 @@ function serializeFloorSnapshot(gameState) {
   return {
     v: FLOOR_SNAPSHOT_VERSION,
     floor: gameState.floor,
-    player: { x: gameState.player.x, y: gameState.player.y },
+    player: savedPlayerPosition(gameState),
     dungeon: serializeDungeonFloorSnapshot(gameState.dungeon),
     enemies: enemies.map((/** @type {any} */ e) => serializeEnemySnapshot(e, rooms)),
     items: items.map(serializeItemSnapshot),
@@ -3380,6 +3393,7 @@ const game = {
   saveGame() {
     if (!this.player) return;
     const p = this.player;
+    const savedPos = savedPlayerPosition(this);
     const weaponSave = { _base: p.weapon._base || 'PULSE_PISTOL', _affixes: p.weapon._affixes || [] };
     /**
      * @param {any} w
@@ -3409,7 +3423,7 @@ const game = {
       weaponSwapChoice: pendingWeaponSwap,
       floorSnapshot: serializeFloorSnapshot(this),
       player: {
-        x:p.x, y:p.y,
+        x:savedPos.x, y:savedPos.y,
         hp:p.hp, maxHp:p.maxHp, atk:p.atk, def:p.def,
         level:p.level, xp:p.xp, weapon:weaponSave, weapons:weaponsSave, weaponIdx:p.weaponIdx||0,
         upgrades:{...p.upgrades}, perks:{...p.perks},

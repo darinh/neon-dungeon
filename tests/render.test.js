@@ -51,13 +51,16 @@ function createRecordingCtx() {
     },
     /** @param {any} text @param {number} x @param {number} y */
     fillText(text, x, y) {
-      calls.push({ text: String(text), x, y, width: this.measureText(text).width, font: this.font });
+      const width = this.measureText(text).width;
+      // Record the left edge so right/centre-aligned labels compare correctly.
+      const left = this.textAlign === 'right' ? x - width : this.textAlign === 'center' ? x - width / 2 : x;
+      calls.push({ text: String(text), x: left, y, width, font: this.font });
     },
   };
 }
 
 /**
- * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number}} opts
+ * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number, comboMult?: number, score?: number, weaponName?: string}} opts
  */
 function drawHudTexts(opts) {
   const ctx = createRecordingCtx();
@@ -73,13 +76,13 @@ function drawHudTexts(opts) {
     RARITY_COLOURS: ['#ff00c8', '#00f5ff', '#ffb700'],
     HACKWARE: { BLINK: { icon: '⇥', name: 'PHASE BLINK', colour: '#44ccff' } },
     COMBO_WINDOW: 3,
-    combo: { count: 0, timer: 0, flashTimer: 0 },
+    combo: { count: opts.comboCount || 0, timer: 1, flashTimer: 0 },
     getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
     modifierProgressSuffix() { return opts.modifierSuffix || ''; },
     piercingHeartHudSuffix() { return ''; },
     siphonHudSuffix() { return ''; },
     comboColour() { return '#fff'; },
-    comboMultiplier() { return 1; },
+    comboMultiplier() { return opts.comboMult || 1; },
     drawObservationHudFrame() {},
     Math,
   });
@@ -94,10 +97,10 @@ function drawHudTexts(opts) {
     level: 9,
     xp: 0,
     xpNeeded: () => 100,
-    weapon: { name: 'PLASMA RIFLE MK-ULTRA' },
+    weapon: { name: opts.weaponName || 'PLASMA RIFLE MK-ULTRA' },
     weapons: [],
     weaponIdx: 0,
-    score: 1234,
+    score: opts.score === undefined ? 1234 : opts.score,
     credits: 12,
     loreRead: new Set(),
     keys: { red: 0, blue: 0, gold: 0 },
@@ -223,6 +226,48 @@ test('landscape row 2 fits every width: bomb state always shows, nothing reaches
   assert.ok(at800.some((c) => c.text === '[V] 3.2s'), 'the bomb label shortens instead of overlapping');
   const at780 = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 780 });
   assert.ok(at780.some((c) => c.text === '⛨ 12/20'), 'a crowded row keeps the modifier icon and its progress');
+});
+
+test('narrow landscape (phone at world zoom 1.25-1.5): row 2 drops labels rather than crossing the cores readout', () => {
+  // Logical widths 563-700 happen when a phone first launched in portrait
+  // (mobile-first world zoom 1.5) is rotated to landscape.
+  for (const width of [563, 568, 600, 640, 700, 740]) {
+    for (const bombCooldown of [0, 3.2]) {
+      const calls = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown, hackware: true, hackwareCooldown: 4.5, width });
+      const cores = calls.find((c) => c.text.startsWith('◆ '));
+      assert.ok(cores, 'cores readout drawn at ' + width);
+      const row2 = calls.filter((c) => c.y === cores.y - 4).sort((a, b) => a.x - b.x);
+      assertNonOverlapping(/** @type {any[]} */ (row2));
+      for (const c of row2) assert.ok(c.x + c.width <= cores.x, `${c.text} crosses the cores readout at ${width}: ${JSON.stringify(row2)}`);
+    }
+  }
+  // The bomb state is only dropped where even the short form cannot fit.
+  const at700 = drawHudTexts({ atk: 10, def: 2, floor: 3, bombCooldown: 3.2, width: 700 });
+  assert.ok(at700.some((c) => c.text.startsWith('[V]')), 'uncrowded 700px row keeps the bomb state');
+  const at563 = drawHudTexts({ atk: 150, def: 99, floor: 15, bombCooldown: 3.2, width: 563 });
+  assert.ok(!at563.some((c) => c.text.startsWith('[V]')), 'no room at 563px: the bomb label is dropped, not overlapped');
+});
+
+test('landscape row 1: weapon name, SCORE and the combo readout never overlap, at any width', () => {
+  for (const width of [563, 568, 640, 700, 780, 844, 960, 1280, 1920]) {
+    for (const comboCount of [0, 12, 250]) {
+      const calls = drawHudTexts({ atk: 150, def: 99, floor: 15, width, comboCount, comboMult: 4, score: 1234567, weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA OF THE VOID' });
+      const score = calls.find((c) => c.text.startsWith('SCORE:'));
+      assert.ok(score, 'SCORE drawn at ' + width);
+      const row1 = calls.filter((c) => c.y === score.y || c.y === score.y - 2).sort((a, b) => a.x - b.x);
+      assertNonOverlapping(/** @type {any[]} */ (row1));
+      const last = row1[row1.length - 1];
+      assert.ok(last.x + last.width <= width - 10 + 0.001, `row 1 runs off the right edge at ${width}: ${JSON.stringify(last)}`);
+      const comboLabel = calls.find((c) => c.text.startsWith('×'));
+      if (comboCount < 2) assert.equal(comboLabel, undefined);
+      else if (width >= 700) assert.ok(comboLabel && comboLabel.x > score.x, `combo readout shown right of SCORE at ${width}`);
+    }
+  }
+  const quiet = drawHudTexts({ atk: 150, def: 99, floor: 15, width: 960 }).find((c) => c.text.startsWith('SCORE:'));
+  const combo = drawHudTexts({ atk: 150, def: 99, floor: 15, width: 960, comboCount: 12, comboMult: 2.5 }).find((c) => c.text.startsWith('SCORE:'));
+  assert.deepEqual(combo && [combo.x, combo.y], quiet && [quiet.x, quiet.y], 'SCORE stays put when a combo starts');
+  const wide = drawHudTexts({ atk: 150, def: 99, floor: 15, width: 1280 });
+  assert.ok(wide.some((c) => c.text === 'PLASMA RIFLE MK-ULTRA'), 'wide screens show the full weapon name');
 });
 
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────

@@ -47,6 +47,29 @@ function extractMethod(name) {
   return { params: m[1], body };
 }
 
+test('saves route the player position through playerSavePosition, so a resume never starts embedded', () => {
+  const src = extractFunction('savedPlayerPosition');
+  /** @type {any[]} */
+  const seen = [];
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const withHelper = new Function('playerSavePosition', src + '\nreturn savedPlayerPosition;')(
+    (/** @type {any} */ p, /** @type {any} */ map) => { seen.push([p, map]); return { x: 3.5, y: 4.5 }; });
+  const map = [[2]];
+  const gs = { player: { x: 1.2, y: 1.7 }, dungeon: { map } };
+  assert.deepEqual(withHelper(gs), { x: 3.5, y: 4.5 });
+  assert.equal(seen[0][0], gs.player);
+  assert.equal(seen[0][1], map, 'checked against the live floor map');
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const bare = new Function('playerSavePosition', src + '\nreturn savedPlayerPosition;')(undefined);
+  assert.deepEqual(bare(gs), { x: 1.2, y: 1.7 }, 'without entities loaded the raw position is kept');
+  // Both persisted copies of the position use it: the floor snapshot and the run save.
+  assert.match(extractFunction('serializeFloorSnapshot'), /player:\s*savedPlayerPosition\(gameState\),/);
+  const save = extractMethod('saveGame').body;
+  assert.match(save, /const savedPos = savedPlayerPosition\(this\);/);
+  assert.match(save, /x:savedPos\.x, y:savedPos\.y,/);
+  assert.doesNotMatch(save, /x:p\.x, y:p\.y/);
+});
+
 test('restoreDungeonFloorSnapshot never grafts a freshly generated trial onto an older saved room', () => {
   const src = extractFunction('restoreDungeonFloorSnapshot');
   // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.

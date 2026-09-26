@@ -1593,28 +1593,46 @@ function drawHUD(player) {
     const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
     const spSufL = siphonHudSuffix(player);
     const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
+    // Row 1 ends with SCORE, placed before a fixed slot for the combo
+    // readout: the combo never draws over the score, and the score does not
+    // jump when a combo starts or ends. The weapon name must end before it.
+    // On very narrow screens SCORE keeps its place after the stats and the
+    // combo readout is drawn only if it still fits.
+    ctx.font='bold 15px monospace';
+    const comboSlotWL = ctx.measureText('×9.9 ×999').width;
+    ctx.font='14px monospace';
+    const scoreTextL = `SCORE: ${player.score}`;
+    const scoreWL = ctx.measureText(scoreTextL).width;
+    ctx.font='13px monospace';
+    const testEndL = testXL + ctx.measureText(testTextL).width;
+    const scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, W - 10 - safeRight - comboSlotWL - HUD_STAT_GAP - scoreWL);
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const weaponXL = Math.max(colBase + 220, testXL + ctx.measureText(testTextL).width + HUD_STAT_GAP);
-    const wMaxL = W - weaponXL - safeRight - 10 - phSufWL - spSufWL;
-    if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
+    const weaponXL = Math.max(colBase + 220, testEndL + HUD_STAT_GAP);
+    const wMaxL = scoreLeftL - HUD_STAT_GAP - weaponXL - phSufWL - spSufWL;
+    if (ctx.measureText(wNameL).width > wMaxL) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
-    ctx.fillText(wNameL, weaponXL, y + 10);
+    // On very narrow screens not even "ABC…" fits; drop the name and its
+    // affix suffixes rather than drawing them under SCORE.
+    const showWNameL = ctx.measureText(wNameL).width <= wMaxL;
+    if (showWNameL) ctx.fillText(wNameL, weaponXL, y + 10);
     // Cumulative x-offset for stacked affix suffixes — see compact
     // branch comment for rationale (mutex defense + future-proofing).
     let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width + (weaponXL - (colBase + 220));
-    if (phSufL) {
-      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
-      ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufL, _sufX_L, y + 10);
-      _sufX_L += ctx.measureText(phSufL).width;
-    }
-    if (spSufL) {
-      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
-      ctx.fillStyle='#88ff88';
-      ctx.fillText(spSufL, _sufX_L, y + 10);
-      _sufX_L += ctx.measureText(spSufL).width;
+    if (showWNameL) {
+      if (phSufL) {
+        ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+        ctx.fillStyle='#ff4488';
+        ctx.fillText(phSufL, _sufX_L, y + 10);
+        _sufX_L += ctx.measureText(phSufL).width;
+      }
+      if (spSufL) {
+        ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+        ctx.fillStyle='#88ff88';
+        ctx.fillText(spSufL, _sufX_L, y + 10);
+        _sufX_L += ctx.measureText(spSufL).width;
+      }
     }
     ctx.shadowBlur=0;
     if (player.weapons && player.weapons.length > 1) {
@@ -1636,9 +1654,14 @@ function drawHUD(player) {
       bombText = bombShort;
       bombX = Math.max(hudRow2X, Math.min(bombX, row2Limit - ctx.measureText(bombText).width));
     }
-    ctx.fillStyle=bombCd ? '#664488' : '#aa00ff';
-    ctx.fillText(bombText, bombX, y + 22);
-    hudRow2X = bombX + ctx.measureText(bombText).width + HUD_STAT_GAP;
+    // Below ~700 logical px (a phone at world zoom 1.25+) not even the short
+    // form fits before the cores readout: drop it rather than overlap. The
+    // touch V button dims while the bomb recharges.
+    if (bombX + ctx.measureText(bombText).width <= row2Limit) {
+      ctx.fillStyle=bombCd ? '#664488' : '#aa00ff';
+      ctx.fillText(bombText, bombX, y + 22);
+      hudRow2X = bombX + ctx.measureText(bombText).width + HUD_STAT_GAP;
+    }
     // Hackware indicator (landscape)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
@@ -1673,18 +1696,23 @@ function drawHUD(player) {
     ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700';
     ctx.font='14px monospace';
-    ctx.fillText(`SCORE: ${player.score}`, W - 160 - safeRight, y + 12);
+    ctx.fillText(scoreTextL, scoreLeftL, y + 12);
     ctx.shadowBlur=0;
-    // Combo counter (landscape)
+    // Combo counter (landscape) — same short form as the compact HUD so it
+    // fits its reserved slot right of SCORE.
     if (combo.count >= 2) {
-      const cc = comboColour();
-      const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
-      ctx.globalAlpha = a;
-      ctx.shadowBlur=6; ctx.shadowColor=cc;
-      ctx.fillStyle=cc; ctx.font='bold 15px monospace';
-      ctx.textAlign='right';
-      ctx.fillText(`×${comboMultiplier().toFixed(1)} COMBO ×${combo.count}`, W - 10 - safeRight, y + 12);
-      ctx.textAlign='left'; ctx.globalAlpha = 1;
+      ctx.font='bold 15px monospace';
+      const comboTextL = `×${comboMultiplier().toFixed(1)} ×${combo.count}`;
+      if (W - 10 - safeRight - ctx.measureText(comboTextL).width >= scoreLeftL + scoreWL + HUD_STAT_GAP) {
+        const cc = comboColour();
+        const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
+        ctx.globalAlpha = a;
+        ctx.shadowBlur=6; ctx.shadowColor=cc;
+        ctx.fillStyle=cc;
+        ctx.textAlign='right';
+        ctx.fillText(comboTextL, W - 10 - safeRight, y + 12);
+        ctx.textAlign='left'; ctx.globalAlpha = 1;
+      }
     }
     ctx.shadowBlur=0;
     ctx.fillStyle='#39ff14'; ctx.font='13px monospace';

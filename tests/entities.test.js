@@ -187,11 +187,14 @@ function loadMovement(eg) {
   for (const w of trial.walls) map[w.y][w.x] = T.WALL;
   map[trial.seam.y][trial.seam.x] = T.SEAM_WALL;
   const gm = { dungeon: { rooms: [room], map }, floorTime: 0, ...(eg || {}) };
+  /** @type {Record<string, boolean>} */
+  const cheats = { noClip: false };
   // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
-  const api = new Function('T', 'isPassable', 'NEON', '_EG',
+  const api = new Function('T', 'isPassable', 'NEON', '_EG', 'playerCheatEnabled',
     [extractFunction('playerTilePassable'), extractFunction('resolvePlayerCornerCut'), extractFunction('depenetratePlayer'),
-      'return { playerTilePassable, resolvePlayerCornerCut, depenetratePlayer };'].join('\n')
-  )(T, (/** @type {number} */ t) => t === T.FLOOR, { trials: trialsModule }, gm);
+      extractFunction('playerSafeRecordUsable'), extractFunction('playerSavePosition'),
+      'return { playerTilePassable, resolvePlayerCornerCut, depenetratePlayer, playerSavePosition };'].join('\n')
+  )(T, (/** @type {number} */ t) => t === T.FLOOR, { trials: trialsModule }, gm, (/** @type {string} */ id) => !!cheats[id]);
   /** One movement step mirroring Player.update's dash/walk blocks. @param {any} p @param {number} nx @param {number} ny @param {boolean} dashing */
   const step = (p, nx, ny, dashing) => {
     const tx = Math.floor(nx), ty = Math.floor(p.y), ox = Math.floor(p.x), oy = Math.floor(ny);
@@ -200,7 +203,7 @@ function loadMovement(eg) {
     if (api.playerTilePassable(p, map[oy][ox], ox, oy, dashing)) p.y = ny;
     api.resolvePlayerCornerCut(p, map, px, py, dashing);
   };
-  return { T, map, trial, gm, step, api };
+  return { T, map, trial, gm, step, api, cheats };
 }
 
 test('a diagonal dash past the open seam can no longer embed the agent in the vault corner', () => {
@@ -248,6 +251,65 @@ test('depenetratePlayer without a record prefers the sealed arena interior over 
   assert.equal(api.depenetratePlayer(p, map), true);
   assert.ok(p.x >= arena.x + 1 && p.x < arena.x + arena.w - 1, `snapped into the arena interior, got x=${p.x}`);
   assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR);
+});
+
+test('depenetration fallback never snaps into the sealed vault, an unseen pocket or a secret room', () => {
+  // Reviewer's vault case: embedded in the vault's south wall with no record.
+  {
+    const { T, map, trial, api } = loadMovement();
+    const wall = { x: trial.vault.x, y: trial.vault.y + 1 };
+    assert.equal(map[wall.y][wall.x], T.WALL, 'south ring wall of the vault');
+    const p = { x: wall.x + 0.5, y: wall.y + 0.5, dashTimer: 0 };
+    assert.equal(api.depenetratePlayer(p, map), true);
+    assert.notDeepEqual([Math.floor(p.x), Math.floor(p.y)], [trial.vault.x, trial.vault.y], 'not into the sealed vault');
+    assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR);
+  }
+  // Gated pocket north of a wall; only the agent's side (south) has been seen.
+  {
+    const { T, map, gm, api } = loadMovement();
+    for (let x = 0; x < 10; x++) map[20][x] = T.WALL;
+    gm.dungeon.visited = Array.from({ length: 30 }, (_, y) => new Uint8Array(30).fill(y >= 21 ? 1 : 0));
+    const p = { x: 5.5, y: 20.5, dashTimer: 0 };
+    api.depenetratePlayer(p, map);
+    assert.equal(Math.floor(p.y), 21, 'snapped to the seen side, although the pocket tile is scanned first');
+    // Unrevealed secret-room tiles are never candidates, even when seen-state ties.
+    gm.dungeon.visited = null;
+    gm.dungeon.secretMask = Array.from({ length: 30 }, (_, y) => new Uint8Array(30).fill(y === 19 ? 1 : 0));
+    const q = { x: 5.5, y: 20.5, dashTimer: 0 };
+    api.depenetratePlayer(q, map);
+    assert.notEqual(Math.floor(q.y), 19, 'never into an unrevealed secret room');
+  }
+});
+
+test('a safe record outside a sealed arena is never restored while the agent is embedded inside it', () => {
+  const arena = { x: 10, y: 12, w: 10, h: 10 };
+  const { T, map, api } = loadMovement({ bossSealed: true, bossRoom: arena });
+  map[17][10] = T.WALL; // the entrance sealed on the frame a knockback embedded the agent in it
+  /** @type {any} */
+  const p = { x: 10.5, y: 17.5, dashTimer: 0, _safeX: 9.5, _safeY: 17.5, _safeMap: map };
+  assert.equal(api.depenetratePlayer(p, map), true);
+  assert.ok(p.x >= arena.x + 1 && p.x < arena.x + arena.w - 1, `stayed inside the sealed arena, got x=${p.x}`);
+  /** @type {any} */
+  const q = { x: 10.5, y: 17.5, dashTimer: 0, _safeX: 11.4, _safeY: 17.5, _safeMap: map };
+  api.depenetratePlayer(q, map);
+  assert.deepEqual([q.x, q.y], [11.4, 17.5], 'a record inside the arena is still restored exactly');
+});
+
+test('a save taken on the frame the agent is embedded stores its last safe position, not the wall', () => {
+  const { T, map, api, cheats } = loadMovement();
+  map[17][10] = T.WALL;
+  /** @type {any} */
+  const p = { x: 11.4, y: 17.5, dashTimer: 0 };
+  api.depenetratePlayer(p, map);
+  assert.deepEqual(api.playerSavePosition(p, map), { x: 11.4, y: 17.5 }, 'unembedded: the live position');
+  p.x = 10.5; // a knockback left the centre inside the wall; the save runs before the next frame
+  assert.deepEqual(api.playerSavePosition(p, map), { x: 11.4, y: 17.5 }, 'embedded: the restorable safe position');
+  assert.equal(p.x, 10.5, 'saving never moves the live agent');
+  cheats.noClip = true;
+  assert.deepEqual(api.playerSavePosition(p, map), { x: 10.5, y: 17.5 }, 'noClip keeps the raw position');
+  cheats.noClip = false;
+  p._safeMap = null;
+  assert.deepEqual(api.playerSavePosition(p, map), { x: 10.5, y: 17.5 }, 'no usable record: raw, left to the resume fallback');
 });
 
 test('the seam tile the agent is dashing through is not treated as an embed', () => {
