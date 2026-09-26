@@ -502,6 +502,9 @@ test('compact HUD: nothing overlaps or passes the right margin at default-zoom p
   // The common case keeps every label: a 360 px phone at zoom 1.5.
   const texts = drawHudTexts({ ...LOW_STATE, compact: true, width: 343, score: 12345 });
   for (const t of ['SCORE:12345', '◈0', '◆0', '◫1', '✚2', '×1.2 ×2']) assert.ok(texts.some((c) => c.text === t), `${t} drawn at 343`);
+  // A 320 px phone at zoom 1.5 fits the score only without its label.
+  const narrow = drawHudTexts({ ...LOW_STATE, compact: true, width: 305, score: 12345 }).filter((c) => c.y === C_TOP + 14);
+  assert.ok(narrow.some((c) => c.text === '12345') && !narrow.some((c) => c.text.startsWith('SCORE:')), 'bare number at 305');
 });
 
 test('compact weapon line never runs past the right margin, even when its budget is tiny', () => {
