@@ -398,6 +398,16 @@ test('compact HUD: belt pips trail the weapon name and never sit over the B: bom
     assert.ok(p.y + p.h <= name.y, 'pip on the weapon line, above its baseline');
     assert.ok(p.y + p.h <= bomb.y - 10 * 0.8 || p.x >= bomb.x + bomb.width || p.x + p.w <= bomb.x, 'pip clear of the B: label');
   }
+  // A long name is truncated early enough to leave room for the pips.
+  const long = drawHud({ atk: 150, def: 99, floor: 15, compact: true, belt: 3, weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA OF THE VOID' });
+  const longName = long.texts.find((c) => c.text.startsWith('OVERCLOCKED'));
+  const longPips = long.rects.filter(isPip);
+  assert.ok(longName && longName.text.endsWith('…'), 'the long name is truncated');
+  assert.equal(longPips.length, 3);
+  for (const p of longPips) {
+    assert.ok(longName && p.x >= longName.x + longName.width, 'pips after the truncated name');
+    assert.ok(p.x + p.w <= 360 - 10, `pip inside the right margin: ${p.x + p.w}`);
+  }
 });
 
 test('SCORE drops its label, then hides, rather than leaving the safe area', () => {

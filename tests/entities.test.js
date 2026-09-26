@@ -305,6 +305,14 @@ test('after a full map reveal the fallback still prefers the side the agent actu
   const next = map.map((/** @type {any[]} */ r) => r.slice());
   assert.deepEqual(api.findPlayerUnembedTile({ ...p, x: 5.5, y: 20.5 }, next), { x: 5.5, y: 19.5 },
     'another floor: no stood record, so the nearest tile in scan order wins');
+  // Standing on the next floor starts that floor's own record.
+  /** @type {any} */
+  const q = { ...p, x: 5.5, y: 21.5 };
+  api.depenetratePlayer(q, next);
+  q._safeMap = null;
+  q.y = 20.5;
+  assert.equal(api.depenetratePlayer(q, next), true);
+  assert.deepEqual([q.x, q.y], [5.5, 21.5], "the next floor's stood-on record decides");
 });
 
 test('a safe record outside a sealed arena is never restored while the agent is embedded inside it', () => {
