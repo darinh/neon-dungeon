@@ -32,8 +32,11 @@ function extractFunctionSource(src, name) {
 function createRecordingCtx() {
   /** @type {any[]} */
   const calls = [];
+  /** @type {any[]} */
+  const rects = [];
   return {
     calls,
+    rects,
     font: '13px monospace',
     fillStyle: '#fff',
     shadowBlur: 0,
@@ -42,7 +45,8 @@ function createRecordingCtx() {
     globalAlpha: 1,
     save() {},
     restore() {},
-    fillRect() {},
+    /** @param {number} x @param {number} y @param {number} w @param {number} h */
+    fillRect(x, y, w, h) { rects.push({ x, y, w, h, fillStyle: this.fillStyle }); },
     /** @param {any} text */
     measureText(text) {
       const match = /(\d+(?:\.\d+)?)px/.exec(this.font);
@@ -60,26 +64,31 @@ function createRecordingCtx() {
 }
 
 /**
- * @param {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string, bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number, comboMult?: number, score?: number, weaponName?: string}} opts
+ * @typedef {{atk:number, def:number, floor:number, compact?:boolean, modifier?: boolean, modifierSuffix?: string,
+ *   bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number,
+ *   comboMult?: number, score?: number, weaponName?: string, dashCooldown?: number, shield?: boolean, belt?: number,
+ *   weaponIdx?: number, credits?: number, lore?: number, cores?: number, inset?: number, phSuffix?: string}} HudOpts
  */
-function drawHudTexts(opts) {
+
+/** @param {HudOpts} opts */
+function drawHud(opts) {
   const ctx = createRecordingCtx();
   const sandbox = /** @type {any} */ ({
     ctx,
     W: opts.width || (opts.compact ? 360 : 960),
     H: opts.compact ? 640 : 540,
-    safeLeft: 0,
-    safeRight: 0,
+    safeLeft: opts.inset || 0,
+    safeRight: opts.inset || 0,
     layout: { compact: !!opts.compact, hudTop: opts.compact ? 560 : 492 },
     settings: { textScale: 1, minimapScale: 1 },
-    _RG: { floor: opts.floor, modifier: opts.modifier ? 'FORTIFIED' : null, _cachedCores: 0, _coreHudPulse: 0 },
+    _RG: { floor: opts.floor, modifier: opts.modifier ? 'FORTIFIED' : null, _cachedCores: opts.cores || 0, _coreHudPulse: 0 },
     RARITY_COLOURS: ['#ff00c8', '#00f5ff', '#ffb700'],
     HACKWARE: { BLINK: { icon: '⇥', name: 'PHASE BLINK', colour: '#44ccff' } },
     COMBO_WINDOW: 3,
     combo: { count: opts.comboCount || 0, timer: 1, flashTimer: 0 },
     getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
     modifierProgressSuffix() { return opts.modifierSuffix || ''; },
-    piercingHeartHudSuffix() { return ''; },
+    piercingHeartHudSuffix() { return opts.phSuffix || ''; },
     siphonHudSuffix() { return ''; },
     comboColour() { return '#fff'; },
     comboMultiplier() { return opts.comboMult || 1; },
@@ -89,6 +98,7 @@ function drawHudTexts(opts) {
   const source = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
+  const weapon = { name: opts.weaponName || 'PLASMA RIFLE MK-ULTRA' };
   sandbox.drawHUD({
     hp: 100,
     maxHp: 100,
@@ -97,21 +107,28 @@ function drawHudTexts(opts) {
     level: 9,
     xp: 0,
     xpNeeded: () => 100,
-    weapon: { name: opts.weaponName || 'PLASMA RIFLE MK-ULTRA' },
-    weapons: [],
-    weaponIdx: 0,
+    weapon,
+    weapons: Array.from({ length: opts.belt || 0 }, () => weapon),
+    weaponIdx: opts.weaponIdx || 0,
     score: opts.score === undefined ? 1234 : opts.score,
-    credits: 12,
-    loreRead: new Set(),
+    credits: opts.credits === undefined ? 12 : opts.credits,
+    loreRead: new Set(Array.from({ length: opts.lore || 0 }, (_, i) => i)),
     keys: { red: 0, blue: 0, gold: 0 },
-    perks: {},
+    perks: opts.shield ? { ENERGY_SHIELD: true } : {},
+    energyShield: !opts.shield,
+    energyShieldTimer: opts.shield ? 30 : 0,
     bombCooldown: opts.bombCooldown || 0,
-    dashCooldown: 0,
+    dashCooldown: opts.dashCooldown || 0,
     hackware: opts.hackware ? 'BLINK' : null,
     hackwareCooldown: opts.hackwareCooldown || 0,
     _nanoMedicCharges: 0,
   });
-  return ctx.calls;
+  return { texts: ctx.calls, rects: ctx.rects };
+}
+
+/** @param {HudOpts} opts */
+function drawHudTexts(opts) {
+  return drawHud(opts).texts;
 }
 
 /** @param {any[]} boxes */
@@ -268,6 +285,152 @@ test('landscape row 1: weapon name, SCORE and the combo readout never overlap, a
   assert.deepEqual(combo && [combo.x, combo.y], quiet && [quiet.x, quiet.y], 'SCORE stays put when a combo starts');
   const wide = drawHudTexts({ atk: 150, def: 99, floor: 15, width: 1280 });
   assert.ok(wide.some((c) => c.text === 'PLASMA RIFLE MK-ULTRA'), 'wide screens show the full weapon name');
+});
+
+// ─── Landscape HUD: fit sweep over widths, safe insets and player states ──
+
+const HUD_TOP = 492;
+
+/** @param {any} r */
+const isPip = (r) => (r.w === 8 || r.w === 6) && (r.h === 4 || r.h === 3);
+
+/**
+ * Text boxes and belt pips of the landscape HUD, split into its two bands:
+ * row 1 (baselines y+10..y+15, plus the pips) and row 2 (y+22 action labels,
+ * y+26 readouts).
+ * @param {HudOpts} opts
+ */
+function landscapeBands(opts) {
+  const { texts, rects } = drawHud(opts);
+  const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: r.y, width: r.w, h: r.h }));
+  const row1 = [...texts.filter((c) => c.y <= HUD_TOP + 15), ...pips].sort((a, b) => a.x - b.x);
+  const row2 = texts.filter((c) => c.y >= HUD_TOP + 22).sort((a, b) => a.x - b.x);
+  return { row1, row2, pips, texts };
+}
+
+/** @param {any[]} boxes @param {string} where */
+function assertBandFits(boxes, where) {
+  for (let i = 0; i < boxes.length - 1; i++) {
+    assert.ok(boxes[i].x + boxes[i].width <= boxes[i + 1].x + 0.001,
+      `${boxes[i].text} overlaps ${boxes[i + 1].text} at ${where}: ${JSON.stringify(boxes.map((b) => [b.text, Math.round(b.x), Math.round(b.width)]))}`);
+  }
+}
+
+/** @type {HudOpts} */
+const FULL_STATE = { atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2,
+  hackware: true, hackwareCooldown: 4.5, dashCooldown: 1.2, shield: true, belt: 3, weaponIdx: 1,
+  phSuffix: ' ♥12/20', score: 1234567, comboCount: 1000, comboMult: 4, credits: 123456, lore: 12, cores: 12345,
+  weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA' };
+/** @type {HudOpts} */
+const LOW_STATE = { atk: 10, def: 2, floor: 1, modifier: true, modifierSuffix: ' 0/20', dashCooldown: 0.4,
+  shield: true, belt: 2, score: 0, comboCount: 2, comboMult: 1.2, credits: 0, lore: 1 };
+/** @type {HudOpts} */
+const QUIET_STATE = { atk: 10, def: 2, floor: 1 };
+
+test('landscape HUD: no label or belt pip overlaps another or leaves the safe area, at any realistic width and inset', () => {
+  // Logical landscape widths run from the smallest phone at the mobile-first
+  // zoom 1.5 (568x320 -> 541) to desktop. Safe insets are logical px, up to a
+  // notched phone at zoom 2 (~71). Below ~410 px between the insets even the
+  // fixed HP..TEST block cannot fit, so those combinations are out of scope.
+  let checked = 0;
+  for (const width of [541, 557, 568, 580, 600, 640, 700, 743, 773, 780, 844, 960, 1280, 1920]) {
+    for (const inset of [0, 31, 44, 63, 71]) {
+      if (width - 2 * inset < 410) continue;
+      for (const [name, state] of /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE]])) {
+        const where = `W=${width} inset=${inset} ${name}`;
+        const { row1, row2 } = landscapeBands({ ...state, width, inset });
+        assertBandFits(row1, where);
+        assertBandFits(row2, where);
+        for (const c of [...row1, ...row2]) {
+          assert.ok(c.x >= inset && c.x + c.width <= width - inset + 0.001,
+            `${c.text} leaves the safe area at ${where}: x=${c.x} w=${c.width}`);
+        }
+        // Row-2 action labels never sit under the XP bar (colBase..colBase+50).
+        const colBase = 14 + inset + 141;
+        for (const c of row2) {
+          if (c.y === HUD_TOP + 22) assert.ok(c.x >= colBase + 50, `${c.text} sits under the XP bar at ${where}`);
+        }
+        checked++;
+      }
+    }
+  }
+  assert.ok(checked >= 150, `swept ${checked} configurations`);
+});
+
+test('wide landscape keeps the full labels, and a 1000+ combo still fits its slot', () => {
+  const { texts, pips } = landscapeBands({ ...FULL_STATE, width: 1920 });
+  const has = (/** @type {string} */ t) => texts.some((c) => c.text === t);
+  for (const t of ['SCORE: 1234567', '×4.0 ×1000', '[F] ⇥PHASE BLINK 4.5s', '[V] Bomb 3.2s', '⛨FORTIFIED 12/20', '🛡 30s', 'OVERCLOCKED PLASMA RIFLE MK-ULTRA', ' ♥12/20']) {
+    assert.ok(has(t), `${t} drawn at 1920: ${JSON.stringify(texts.map((c) => c.text))}`);
+  }
+  assert.ok(texts.some((c) => /^(\[⇧\] |⇧)/.test(c.text)), 'dash cooldown drawn');
+  assert.equal(pips.length, 3, 'one pip per belt weapon');
+});
+
+test('belt pips trail the weapon name on its own line, never under the row-2 label below it', () => {
+  for (const width of [780, 960, 1280]) {
+    const { texts, pips } = landscapeBands({ ...FULL_STATE, width, modifier: false });
+    const name = texts.find((c) => c.text.startsWith('OVE'));
+    const suffix = texts.find((c) => c.text === ' ♥12/20');
+    const bomb = texts.find((c) => c.text.startsWith('[V]'));
+    assert.ok(name && suffix && bomb, `name, suffix and bomb drawn at ${width}`);
+    assert.equal(pips.length, 3);
+    for (const p of pips) {
+      assert.ok(p.y >= HUD_TOP && p.y + p.h <= HUD_TOP + 10, `pip within the weapon line at ${width}: y=${p.y}`);
+      assert.ok(p.x >= suffix.x + suffix.width, `pip after the name and its suffix at ${width}`);
+    }
+    const active = pips.filter((p) => p.width === 8);
+    assert.equal(active.length, 1);
+    assert.equal(active[0] && active[0].x, pips[0] && pips[0].x + 10, 'the second pip marks weaponIdx 1');
+  }
+});
+
+test('compact HUD: belt pips trail the weapon name and never sit over the B: bomb label', () => {
+  const { texts, rects } = drawHud({ atk: 150, def: 99, floor: 15, compact: true, belt: 3, bombCooldown: 3.2 });
+  const pips = rects.filter(isPip);
+  const name = texts.find((c) => c.text.startsWith('PLASMA'));
+  const bomb = texts.find((c) => c.text.startsWith('B:'));
+  assert.ok(name && bomb, 'weapon name and bomb label drawn');
+  assert.equal(pips.length, 3);
+  for (const p of pips) {
+    assert.ok(p.x >= name.x + name.width, 'pip right of the weapon name');
+    assert.ok(p.x + p.w <= 360 - 10, 'pip inside the right margin');
+    assert.ok(p.y + p.h <= name.y, 'pip on the weapon line, above its baseline');
+    assert.ok(p.y + p.h <= bomb.y - 10 * 0.8 || p.x >= bomb.x + bomb.width || p.x + p.w <= bomb.x, 'pip clear of the B: label');
+  }
+});
+
+test('SCORE drops its label, then hides, rather than leaving the safe area', () => {
+  const at = (/** @type {number} */ width, /** @type {number} */ inset) =>
+    drawHudTexts({ atk: 150, def: 99, floor: 15, score: 1234567, width, inset }).filter((c) => c.y === HUD_TOP + 12);
+  assert.deepEqual(at(960, 0).map((c) => c.text), ['SCORE: 1234567']);
+  assert.deepEqual(at(600, 44).map((c) => c.text), ['1234567'], 'a notched phone keeps the bare number');
+  assert.deepEqual(at(557, 71).map((c) => c.text), [], 'no room at all: hidden, never past the inset');
+});
+
+test('the dash cooldown shortens, then hides, instead of crossing the flow labels or the cores readout', () => {
+  const dashAt = (/** @type {HudOpts} */ o) => drawHudTexts(o).find((c) => /^(\[⇧\] |⇧)/.test(c.text));
+  assert.equal(dashAt({ atk: 150, def: 99, floor: 15, dashCooldown: 1.2, width: 1280 })?.text, '[⇧] DASH 1.2s');
+  const low = drawHudTexts({ atk: 10, def: 2, floor: 1, modifier: true, dashCooldown: 1.2, width: 1280 });
+  const lowDash = low.find((c) => c.text.startsWith('[⇧]'));
+  const badge = low.find((c) => c.text.startsWith('⛨'));
+  assert.equal(lowDash?.text, '[⇧] 1.2s', 'low stats narrow the ATK column: the short form ends before the modifier badge');
+  assert.ok(lowDash && badge && lowDash.x + lowDash.width + 12 <= badge.x + 0.001);
+  const withShield = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, dashCooldown: 1.2, shield: true, width: 1280 });
+  const shield = withShield.find((c) => c.text.startsWith('🛡'));
+  const dash = withShield.find((c) => /^(\[⇧\] |⇧)/.test(c.text));
+  assert.ok(shield && dash && shield.x + shield.width + 12 <= dash.x + 0.001, 'the dash label flows after the shield recharge');
+  assert.equal(shield && shield.x, 14 + 141 + 60, 'the shield recharge sits under ATK, clear of the XP bar');
+  assert.equal(dashAt({ ...FULL_STATE, width: 541 }), undefined, 'no room left of the cores readout at 541: hidden');
+});
+
+test('six-digit credits push the lore readout right instead of running into it', () => {
+  const row2 = drawHudTexts({ ...QUIET_STATE, credits: 123456, lore: 3, width: 960 });
+  const credits = row2.find((c) => c.text.startsWith('◈'));
+  const lore = row2.find((c) => c.text.startsWith('◫'));
+  assert.ok(credits && lore && credits.x + credits.width + 12 <= lore.x + 0.001);
+  const usual = drawHudTexts({ ...QUIET_STATE, credits: 120, lore: 3, width: 960 }).find((c) => c.text.startsWith('◫'));
+  assert.equal(usual && usual.x, 960 - 100, 'ordinary credit counts keep lore in its column');
 });
 
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────

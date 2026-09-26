@@ -1444,8 +1444,12 @@ function drawHUD(player) {
     const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
     const spSufC = siphonHudSuffix(player);
     const spSufWC = spSufC ? ctx.measureText(spSufC).width : 0;
+    // Weapon belt pips trail the name, as in landscape: under it they cut
+    // through the B: bomb label on the line below.
+    const beltNC = (player.weapons && player.weapons.length > 1) ? player.weapons.length : 0;
+    const pipsWC = beltNC > 0 ? 3 + (beltNC - 1) * 10 + 8 : 0;
     const weaponXC = Math.max(statsX + 74, defX + ctx.measureText(defTextC).width + HUD_STAT_GAP);
-    const weapMaxW = W - weaponXC - safeRight - 10 - phSufWC - spSufWC;
+    const weapMaxW = W - weaponXC - safeRight - 10 - phSufWC - spSufWC - pipsWC;
     let weapName = player.weapon.displayName || player.weapon.name;
     if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
       while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
@@ -1474,13 +1478,13 @@ function drawHUD(player) {
     }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
-    if (player.weapons && player.weapons.length > 1) {
-      const pipX = weaponXC;
-      const safeIdx = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
-      for (let wi = 0; wi < player.weapons.length; wi++) {
+    if (beltNC > 0) {
+      const pipX = _sufX_C + 3;
+      const safeIdx = Math.min(player.weaponIdx || 0, beltNC - 1);
+      for (let wi = 0; wi < beltNC; wi++) {
         const active = wi === safeIdx;
         ctx.fillStyle = active ? wColour : '#445';
-        ctx.fillRect(pipX + wi * 10, r2 + 16, active ? 8 : 6, active ? 4 : 3);
+        ctx.fillRect(pipX + wi * 10, active ? r2 + 5 : r2 + 6, active ? 8 : 6, active ? 4 : 3);
       }
     }
 
@@ -1552,6 +1556,9 @@ function drawHUD(player) {
     ctx.fillText(testTextL, testXL, y + 10);
 
     let hudRow2X = testXL;
+    // x of the first flow label drawn on row 2 (modifier, bomb or hackware):
+    // the shield/dash column under ATK must end before it.
+    let row2FlowXL = Infinity;
     // Row 2 must end before the cores readout at W - 240. Budget it so the
     // bomb state (an action) always fits; the modifier badge shortens first.
     const row2Limit = W - 240 - safeRight - HUD_STAT_GAP;
@@ -1571,6 +1578,7 @@ function drawHUD(player) {
         ctx.shadowBlur=4; ctx.shadowColor=m.colour;
         ctx.fillStyle=m.colour;
         ctx.fillText(modLabel, hudRow2X, y + 22);
+        row2FlowXL = hudRow2X;
         hudRow2X += ctx.measureText(modLabel).width + HUD_STAT_GAP;
         ctx.restore();
       }
@@ -1593,28 +1601,39 @@ function drawHUD(player) {
     const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
     const spSufL = siphonHudSuffix(player);
     const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
+    // Weapon belt pips trail the name on row 1. Under the name, where they
+    // used to be, they cut through the row-2 label below it.
+    const beltNL = (player.weapons && player.weapons.length > 1) ? player.weapons.length : 0;
+    const pipsWL = beltNL > 0 ? 4 + (beltNL - 1) * 10 + 8 : 0;
     // Row 1 ends with SCORE, placed before a fixed slot for the combo
     // readout: the combo never draws over the score, and the score does not
     // jump when a combo starts or ends. The weapon name must end before it.
-    // On very narrow screens SCORE keeps its place after the stats and the
-    // combo readout is drawn only if it still fits.
-    ctx.font='bold 15px monospace';
-    const comboSlotWL = ctx.measureText('×9.9 ×999').width;
-    ctx.font='14px monospace';
-    const scoreTextL = `SCORE: ${player.score}`;
-    const scoreWL = ctx.measureText(scoreTextL).width;
-    ctx.font='13px monospace';
+    // Narrow screens keep SCORE after the stats, drop its "SCORE: " label,
+    // then hide it; the combo readout is drawn only if it still fits.
+    const rightEdgeL = W - 10 - safeRight;
     const testEndL = testXL + ctx.measureText(testTextL).width;
-    const scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, W - 10 - safeRight - comboSlotWL - HUD_STAT_GAP - scoreWL);
+    ctx.font='bold 15px monospace';
+    const comboSlotWL = ctx.measureText('×9.9 ×9999').width;
+    ctx.font='14px monospace';
+    let scoreTextL = `SCORE: ${player.score}`;
+    let scoreWL = ctx.measureText(scoreTextL).width;
+    let scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, rightEdgeL - comboSlotWL - HUD_STAT_GAP - scoreWL);
+    if (scoreLeftL + scoreWL > rightEdgeL) {
+      scoreTextL = String(player.score);
+      scoreWL = ctx.measureText(scoreTextL).width;
+      scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, rightEdgeL - comboSlotWL - HUD_STAT_GAP - scoreWL);
+    }
+    const showScoreL = scoreLeftL + scoreWL <= rightEdgeL;
+    ctx.font='13px monospace';
     let wNameL = player.weapon.displayName || player.weapon.name;
     const weaponXL = Math.max(colBase + 220, testEndL + HUD_STAT_GAP);
-    const wMaxL = scoreLeftL - HUD_STAT_GAP - weaponXL - phSufWL - spSufWL;
+    const wMaxL = (showScoreL ? scoreLeftL - HUD_STAT_GAP : rightEdgeL) - weaponXL - phSufWL - spSufWL - pipsWL;
     if (ctx.measureText(wNameL).width > wMaxL) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
-    // On very narrow screens not even "ABC…" fits; drop the name and its
-    // affix suffixes rather than drawing them under SCORE.
+    // On very narrow screens not even "ABC…" fits; drop the name, its affix
+    // suffixes and the belt pips rather than drawing them under SCORE.
     const showWNameL = ctx.measureText(wNameL).width <= wMaxL;
     if (showWNameL) ctx.fillText(wNameL, weaponXL, y + 10);
     // Cumulative x-offset for stacked affix suffixes — see compact
@@ -1635,13 +1654,13 @@ function drawHUD(player) {
       }
     }
     ctx.shadowBlur=0;
-    if (player.weapons && player.weapons.length > 1) {
-      const pipXL = weaponXL;
-      const safeIdxL = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
-      for (let wi = 0; wi < player.weapons.length; wi++) {
+    if (beltNL > 0 && showWNameL) {
+      const pipXL = _sufX_L + 4;
+      const safeIdxL = Math.min(player.weaponIdx || 0, beltNL - 1);
+      for (let wi = 0; wi < beltNL; wi++) {
         const active = wi === safeIdxL;
         ctx.fillStyle = active ? wColL : '#445';
-        ctx.fillRect(pipXL + wi * 10, y + 16, active ? 8 : 6, active ? 4 : 3);
+        ctx.fillRect(pipXL + wi * 10, active ? y + 5 : y + 6, active ? 8 : 6, active ? 4 : 3);
       }
     }
 
@@ -1660,6 +1679,7 @@ function drawHUD(player) {
     if (bombX + ctx.measureText(bombText).width <= row2Limit) {
       ctx.fillStyle=bombCd ? '#664488' : '#aa00ff';
       ctx.fillText(bombText, bombX, y + 22);
+      row2FlowXL = Math.min(row2FlowXL, bombX);
       hudRow2X = bombX + ctx.measureText(bombText).width + HUD_STAT_GAP;
     }
     // Hackware indicator (landscape)
@@ -1682,22 +1702,44 @@ function drawHUD(player) {
       if (hwX + ctx.measureText(hwText).width > hwLimit) {
         hwText = player.hackwareCooldown > 0 ? `[F] ${player.hackwareCooldown.toFixed(1)}s` : '[F] RDY';
       }
-      if (hwX + ctx.measureText(hwText).width <= hwLimit) ctx.fillText(hwText, hwX, y + 22);
+      if (hwX + ctx.measureText(hwText).width <= hwLimit) {
+        ctx.fillText(hwText, hwX, y + 22);
+        row2FlowXL = Math.min(row2FlowXL, hwX);
+      }
     }
-    // Energy shield recharge indicator
+    // Energy shield recharge and dash cooldown share the column under ATK
+    // (text under LVL would run into the XP bar), flowing left to right. Both
+    // end before the first flow label and the cores readout, shortening
+    // first and then hiding.
+    let leftColXL = colBase + 60;
+    const row2LeftLimitL = Math.min(row2Limit, row2FlowXL - HUD_STAT_GAP);
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
-      ctx.fillStyle='#4488ff'; ctx.fillText(`🛡 ${Math.ceil(player.energyShieldTimer)}s`, colBase, y + 22);
+      const shieldS = Math.ceil(player.energyShieldTimer);
+      let shieldText = `🛡 ${shieldS}s`;
+      if (leftColXL + ctx.measureText(shieldText).width > row2LeftLimitL) shieldText = `🛡${shieldS}s`;
+      if (leftColXL + ctx.measureText(shieldText).width <= row2LeftLimitL) {
+        ctx.fillStyle='#4488ff'; ctx.fillText(shieldText, leftColXL, y + 22);
+        leftColXL += ctx.measureText(shieldText).width + HUD_STAT_GAP;
+      }
     }
     // Dash cooldown (landscape)
     if (player.dashCooldown > 0) {
-      ctx.fillStyle='#ffb700'; ctx.fillText(`[⇧] DASH ${player.dashCooldown.toFixed(1)}s`, colBase + 60, y + 22);
+      const dashCd = player.dashCooldown.toFixed(1);
+      let dashText = `[⇧] DASH ${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width > row2LeftLimitL) dashText = `[⇧] ${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width > row2LeftLimitL) dashText = `⇧${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width <= row2LeftLimitL) {
+        ctx.fillStyle='#ffb700'; ctx.fillText(dashText, leftColXL, y + 22);
+      }
     }
 
-    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700';
-    ctx.font='14px monospace';
-    ctx.fillText(scoreTextL, scoreLeftL, y + 12);
-    ctx.shadowBlur=0;
+    if (showScoreL) {
+      ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
+      ctx.fillStyle='#ffb700';
+      ctx.font='14px monospace';
+      ctx.fillText(scoreTextL, scoreLeftL, y + 12);
+      ctx.shadowBlur=0;
+    }
     // Combo counter (landscape) — same short form as the compact HUD so it
     // fits its reserved slot right of SCORE.
     if (combo.count >= 2) {
@@ -1716,7 +1758,10 @@ function drawHUD(player) {
     }
     ctx.shadowBlur=0;
     ctx.fillStyle='#39ff14'; ctx.font='13px monospace';
-    ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
+    const creditsTextL = `◈ ${player.credits}`;
+    const creditsXL = W - 160 - safeRight;
+    ctx.fillText(creditsTextL, creditsXL, y + 26);
+    const creditsEndL = creditsXL + ctx.measureText(creditsTextL).width;
     // UNCHAINED #39: cores readout, just left of credits (pulses on pickup).
     // Reads cached counter on game — no per-frame localStorage hit.
     {
@@ -1731,7 +1776,7 @@ function drawHUD(player) {
     }
     if (player.loreRead.size > 0) {
       ctx.fillStyle='#ffb700'; ctx.font='13px monospace';
-      ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
+      ctx.fillText(`◫ ${player.loreRead.size}`, Math.max(W - 100 - safeRight, creditsEndL + HUD_STAT_GAP), y + 26);
     }
   }
   drawObservationHudFrame(y);

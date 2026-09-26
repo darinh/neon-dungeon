@@ -65,7 +65,8 @@ and a few evaluation rooms" rather than "an AI being evaluated".
 | Boss arenas far below the generator's own 15×15 minimum | 32–37 of 40 sampled boss floors per biome were undersized (5×5 and 6×6 common); GENESIS fought in a 6×6 closet | Fall back to the next-farthest room that can expand; ≥ 95% compliant in tests |
 | Final boss named inconsistently | Boss bar said "THE ARCHITECT"; every hint, prompt and record said GENESIS; ARCHITECT is also a regular enemy | GENESIS displays as GENESIS PROTOCOL everywhere |
 | TURRETs looked like health pickups | Drawn as an amber "+", the universal medkit icon | Hostile emplacement sprite: base, barrel aimed at the player, red core |
-| HUD text collisions | `ATK:10DEF:2`; the floor-modifier badge drawn over `[V] Bomb RDY` | Measured flow layout for both HUD rows |
+| HUD text collisions | `ATK:10DEF:2`; the floor-modifier badge drawn over `[V] Bomb RDY`; the landscape combo counter drawn over `SCORE` at every width whenever a combo was active (seen at 1280×800); with 2+ weapons the belt pips drawn over the label under the weapon name (both layouts); the dash cooldown and SCORE running into the cores readout or the safe-area inset on narrow landscape phones | Measured flow layout for both HUD rows; SCORE sits before a fixed combo slot and the weapon name ends before it; pips trail the weapon name; every optional label shortens, then hides, instead of overlapping (swept over widths and safe insets in `tests/render.test.js`) |
+| Knockback could trap the agent inside a wall | Boss and CHARGER knockbacks and the arena clamp move the agent without full tile checks; once its centre was inside a wall tile every step was refused | `depenetratePlayer()` restores the last safe position, else the nearest tile the agent has stood on; never outside a sealed arena and never into secret rooms or the seam vault. Saves persist where depenetration would put the agent |
 | Bottom-band text collisions | Status badges, contextual hints, and the message log shared one baseline band | Badges → hint → messages now stack |
 | Keyboard text entry dropped characters | Typing FASTTYPE produced "PE"; a fast seed ABCDEF produced "F" | Per-frame typed-character buffer |
 | Mainframe archive showed internal design labels | Rows read "Elena personal note/file", "ban/uprising record" | Rows and headers show each record's source |
@@ -84,6 +85,15 @@ and a few evaluation rooms" rather than "an AI being evaluated".
   dilutes the brief's focus.
 - Name entry still interrupts the Act 1 ending before the victory screen (now
   framed as "SIGN THE SESSION LOG").
+- On landscape screens narrower than about 700 logical px (a small phone
+  rotated after a portrait first launch, which sets world zoom 1.5, or a
+  notched phone at zoom 2 with its safe-area insets) the HUD has room only for
+  the core stats. The weapon name, SCORE, bomb state, dash and shield timers
+  and the combo readout shorten and then drop rather than overlap. Touch
+  players keep the dimmed BOMB and DASH buttons.
+- A CHARGER's 2-tile knockback can, rarely, carry the agent straight across a
+  1-tile wall. A reviewer's fuzz found this 3 times in 1.2M frames. It predates
+  this pass and was not changed.
 
 ## Fun
 

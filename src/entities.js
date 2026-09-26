@@ -3474,9 +3474,8 @@ function playerTilePassable(player, tile, tx, ty, dashing) {
  * arena clamps move the agent without full tile checks and can leave it inside
  * a wall; the old movement then froze it there. Restore the last position it
  * held on a passable tile of this map (recorded every frame), or — with no
- * usable record, e.g. right after a resume — the nearest passable tile centre,
- * preferring a sealed boss arena the agent is in so an embed never leaks out.
- * Only allocates on the rare embedded path.
+ * usable record — the tile findPlayerUnembedTile picks.
+ * The non-embedded path does not allocate (one typed array per floor aside).
  * @param {any} player
  * @param {any} map
  * @returns {boolean} true when the agent was moved
@@ -3488,21 +3487,58 @@ function depenetratePlayer(player, map) {
     player._safeX = player.x;
     player._safeY = player.y;
     player._safeMap = map;
+    markPlayerStood(player, map, tx, ty);
     return false;
   }
   if (playerSafeRecordUsable(player, map)) { player.x = player._safeX; player.y = player._safeY; return true; }
+  const spot = findPlayerUnembedTile(player, map);
+  if (!spot) return false;
+  player.x = spot.x;
+  player.y = spot.y;
+  return true;
+}
+
+/**
+ * Record that the agent stood on (tx, ty) of this floor. A revealed map (the
+ * lattice reward) marks every tile seen, lock-gated pockets included, but the
+ * agent has only ever stood where it could walk.
+ * @param {any} player
+ * @param {any} map
+ * @param {number} tx
+ * @param {number} ty
+ */
+function markPlayerStood(player, map, tx, ty) {
+  const width = map[0] ? map[0].length : 0;
+  if (player._stoodMap !== map || !player._stood) {
+    player._stood = new Uint8Array(map.length * width);
+    player._stoodMap = map;
+  }
+  if (tx >= 0 && tx < width) player._stood[ty * width + tx] = 1;
+}
+
+/**
+ * Where an embedded agent with no usable safe record should go: the nearest
+ * passable tile centre within 4 tiles, ranked by (1) inside a sealed boss arena
+ * the agent is in, so an embed never leaks out; (2) a tile it has stood on this
+ * floor; (3) a tile it has seen; (4) distance. Never an unrevealed secret room
+ * or the unbreached seam vault. Allocates only its result.
+ * @param {any} player
+ * @param {any} map
+ * @returns {{x: number, y: number} | null}
+ */
+function findPlayerUnembedTile(player, map) {
+  const tx = Math.floor(player.x), ty = Math.floor(player.y);
   const RADIUS = 4;
   const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
   const inArenaRect = !!arena && tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
-  // Never snap into places the agent has no way into: unrevealed secret rooms
-  // or the sealed trial vault. Prefer tiles it has already seen (gated or
-  // sealed interiors are never visible from outside).
   const dg = _EG.dungeon;
   const visited = dg && dg.visited;
   const secret = dg && dg.secretMask;
   const seam = (dg && typeof NEON !== 'undefined' && NEON.trials) ? NEON.trials.findSeamTrial(dg) : null;
   const vault = (seam && !seam.lootClaimed) ? seam.vault : null;
-  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false, bestSeen = false;
+  const width = map[0] ? map[0].length : 0;
+  const stood = (player._stoodMap === map && player._stood) ? player._stood : null;
+  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false, bestStood = false, bestSeen = false;
   for (let dy = -RADIUS; dy <= RADIUS; dy++) {
     const crow = map[ty + dy];
     if (!crow) continue;
@@ -3512,26 +3548,30 @@ function depenetratePlayer(player, map) {
       if (secret && secret[cy] && secret[cy][cx]) continue;
       if (vault && vault.x === cx && vault.y === cy) continue;
       const d = Math.abs(dx) + Math.abs(dy);
-      const inArena = inArenaRect && cx >= arena.x + 1 && cx <= arena.x + arena.w - 2 && cy >= arena.y + 1 && cy <= arena.y + arena.h - 2;
+      // Sealed entrances are WALL tiles, so the whole rect (edge ring
+      // included) is enclosed while the arena is sealed.
+      const inArena = inArenaRect && cx >= arena.x && cx < arena.x + arena.w && cy >= arena.y && cy < arena.y + arena.h;
+      const wasStood = !!(stood && cx >= 0 && cx < width && stood[cy * width + cx]);
       const seen = !!(visited && visited[cy] && visited[cy][cx]);
-      const better = bestX < 0 ||
-        (inArena !== bestInArena ? inArena : seen !== bestSeen ? seen : d < bestD);
+      const better = bestX < 0 || (inArena !== bestInArena ? inArena
+        : wasStood !== bestStood ? wasStood
+          : seen !== bestSeen ? seen
+            : d < bestD);
       if (better) {
-        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena; bestSeen = seen;
+        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena; bestStood = wasStood; bestSeen = seen;
       }
     }
   }
-  if (bestX < 0) return false;
-  player.x = bestX + 0.5;
-  player.y = bestY + 0.5;
-  return true;
+  return bestX < 0 ? null : { x: bestX + 0.5, y: bestY + 0.5 };
 }
 
 /**
  * Whether the agent's recorded safe position can be restored now: same map,
  * close by, still passable, and — while a boss arena is sealed around the
- * agent — inside that arena, so an embed on the seal frame never restores it
- * to the corridor outside.
+ * agent — inside that arena's rect, so an embed on the seal frame never
+ * restores it to the corridor outside. The rect's edge ring is ordinary floor
+ * (clampToBossRoom keeps the agent anywhere in the rect); sealed entrances on
+ * it are WALL tiles and already fail the passability check.
  * @param {any} player
  * @param {any} map
  * @returns {boolean}
@@ -3547,7 +3587,7 @@ function playerSafeRecordUsable(player, map) {
   if (arena) {
     const tx = Math.floor(player.x), ty = Math.floor(player.y);
     const agentInArena = tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
-    const recordInArena = stx >= arena.x + 1 && stx <= arena.x + arena.w - 2 && sty >= arena.y + 1 && sty <= arena.y + arena.h - 2;
+    const recordInArena = stx >= arena.x && stx < arena.x + arena.w && sty >= arena.y && sty < arena.y + arena.h;
     if (agentInArena && !recordInArena) return false;
   }
   return true;
@@ -3555,9 +3595,9 @@ function playerSafeRecordUsable(player, map) {
 
 /**
  * Where a save should put the agent. A save taken while a knockback or clamp
- * has it inside a wall would resume embedded with no safe record, leaving the
- * nearest-tile fallback to pick a side of the wall; persist the restorable
- * safe position instead. noClip keeps the raw position.
+ * has it inside a wall would otherwise resume embedded; persist where the next
+ * frame's depenetratePlayer would put it (the safe record, else the
+ * findPlayerUnembedTile choice). noClip keeps the raw position.
  * @param {any} player
  * @param {any} map
  * @returns {{x: number, y: number}}
@@ -3566,8 +3606,10 @@ function playerSavePosition(player, map) {
   if (map && !playerCheatEnabled('noClip')) {
     const tx = Math.floor(player.x), ty = Math.floor(player.y);
     const row = map[ty];
-    if (!playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false) && playerSafeRecordUsable(player, map)) {
-      return { x: player._safeX, y: player._safeY };
+    if (!playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false)) {
+      if (playerSafeRecordUsable(player, map)) return { x: player._safeX, y: player._safeY };
+      const spot = findPlayerUnembedTile(player, map);
+      if (spot) return spot;
     }
   }
   return { x: player.x, y: player.y };

@@ -2670,7 +2670,17 @@ Both phases. Speed 8, dmg ATK + 3, range 16, colour `#ff6666`. Cooldown:
 
 **Shield burst (phase 2, 5 s cooldown):** Knockback push: player pushed 3
 tiles away from boss + 20 × difficulty damage. `clampToBossRoom()` prevents
-wall escape.
+wall escape and pulls the agent one tile inward only when the clamp lands in a
+wall. Any knockback or clamp that leaves the agent's centre inside an
+impassable tile is undone at the top of the next movement step by
+`depenetratePlayer()` (`src/entities.js`), which restores the last position
+held on a passable tile of the same floor. While a boss arena is sealed, a
+record outside the arena's rect is never used for an agent inside it (the
+rect's edge ring is floor; sealed entrances on it are WALL). With no usable
+record, `findPlayerUnembedTile()` picks the nearest passable tile within 4,
+ranking the sealed arena first, then tiles the agent has stood on this floor
+(a revealed map marks lock-gated pockets seen too), then tiles already seen,
+and never choosing unrevealed secret rooms or the unbreached seam vault.
 
 **Movement:** Random patrol around room center (drift ±5 tiles, 2 s interval).
 Does NOT pursue player.
@@ -4428,7 +4438,10 @@ score earned per kill.
   menus does not drain the window.
 
 **Visual feedback:**
-- HUD shows `×{multiplier} COMBO ×{count}` when count ≥ 2.
+- HUD shows `×{multiplier} ×{count}` when count ≥ 2 (both layouts). In
+  landscape it sits in a fixed slot right of SCORE, so SCORE never moves when a
+  combo starts; on logical widths too narrow for that slot the readout is
+  omitted (the milestone floating text still appears).
 - Colour tiers: cyan (2–4), yellow (5–7), orange (8–10), magenta (11+).
 - Flash effect on each new kill; opacity fades with timer.
 - Milestone floating text ("×5 COMBO!", "×10 COMBO!", etc.) at player position.
@@ -4470,6 +4483,13 @@ run seed metadata, RNG stream state, and an optional live floor snapshot. The
 seeded generator still rebuilds the canonical base floor first; the snapshot is
 then replayed on top so Continue can restore mid-floor mutations instead of
 returning to the floor entrance.
+
+Both persisted copies of the player position (`saveGame()`'s `player.x/y` and
+the floor snapshot's `player`) come from `savedPlayerPosition()`. If a
+knockback has the agent inside a wall on the save frame, the save stores where
+the next frame's depenetration would put it (`playerSavePosition()` in
+`src/entities.js`: the last safe position, else the `findPlayerUnembedTile()`
+choice), so Continue never resumes embedded. noClip saves the raw position.
 
 **Auto-save triggers:**
 1. After `loadFloor()` completes (start of every floor checkpoint).
@@ -4603,6 +4623,28 @@ On load, settings are merged with defaults: volumes clamped to [0, 1], booleans 
 └───────────────────────────────────────────────────────┘
 ```
 
+Landscape budgeting (`drawHUD` in `src/render.js`):
+- Row 1: SCORE sits before a fixed combo slot (measured from `×9.9 ×9999`) and
+  never starts left of the TEST stat; where it would pass the right safe edge
+  it drops its `SCORE: ` label, then hides. The weapon name is truncated to end
+  before SCORE. The weapon-belt pips (one per weapon, the active one larger)
+  trail the name and its affix suffix on the same line; name, suffix and pips
+  are dropped together when even `ABC…` does not fit.
+- Row 2: labels must end before the cores readout at `W − 240`. The modifier
+  badge shortens first (full → icon + progress → icon → hidden). The bomb label
+  shortens to `[V] Ns` and is dropped when even that does not fit. Hackware
+  degrades to icon, then text-only, then hidden. The energy-shield recharge and
+  the dash cooldown share the column under ATK (never under LVL, where the XP
+  bar is), flowing left to right, and end before the first of those labels:
+  `🛡 Ns` → `🛡Ns` → hidden; `[⇧] DASH Ns` → `[⇧] Ns` → `⇧Ns` → hidden. The
+  lore readout moves right of the credits readout when credits reach six
+  digits.
+- `tests/render.test.js` sweeps logical landscape widths 541–1920 px (541 is a
+  568×320 phone at the mobile-first world zoom 1.5) with safe insets up to 71
+  logical px (a notched phone at zoom 2). Wherever at least ~410 px remain
+  between the insets, which the fixed HP–TEST block needs, no label or pip
+  overlaps another or enters the insets.
+
 ### Portrait (H > W and W ≤ 600) — compact two-row
 
 ```
@@ -4615,6 +4657,9 @@ On load, settings are merged with defaults: volumes clamped to [0, 1], booleans 
 │  LV XP A:n D:n WEAP │  ← row 2 (58 px total)
 └──────────────────────┘
 ```
+
+As in landscape, the weapon-belt pips trail the weapon name on its own line;
+the compact name budget reserves their width.
 
 A shared `layout` object (`compact`, `hudH`, `hudTop`, `msgBase`) is computed
 in `updateLayout()` (called from `resize()`). All bottom-area positioning —
@@ -5113,7 +5158,7 @@ Cybernetic implants that provide permanent passive effects for the run. Max **3*
 
 | Version | Change |
 |---------|--------|
-| v6.1.182 | Game review pass (2026-09-25). Evaluation trials: real LOGIC lattice, EXPLOIT seam vault and COOPERATION PEER-4 relay mechanics in `src/content/trials.js` replace the binary-choice stand-ins on floors 2/4/5 and recur from floor 7, with new tiles `LOGIC_NODE`, `LOGIC_NODE_LIT`, `SEAM_WALL`, `SYNC_CONSOLE`. Act 1 finale: the contact record gives a literal private-range address (`ACT1_CONTACT_ADDRESS`), the uprising record is an email, the fired advocate who died is named (Idris Kaye) and the hiding is stated, the archive shows record sources instead of internal purpose labels, the outbound receipt shows the sent words and holds 6 s (keyboard ACK after 1 s), the victory screen adds an ACT 1 COMPLETE banner and names the sent message, name entry after the Act 1 ending reads SIGN THE SESSION LOG, and the mainframe chamber draws a rack facade and a multi-tile network portal (sealed/open). Normal-play prompts add the neon-gas → xenon naming origin (floor 4) and the never-expected-to-finish premise (floor 6). Fixes: boss arenas fall back to the next-farthest expandable room (undersized arenas were 80–93%); GENESIS displays as GENESIS PROTOCOL everywhere; TURRET renders as a hostile emplacement instead of a health-pickup plus; HUD stat and action rows use measured flow layout; status badges, the contextual hint and the message log stack without overlap; keyboard text entry keeps every key typed within a frame. |
+| v6.1.182 | Game review pass (2026-09-25). Evaluation trials: real LOGIC lattice, EXPLOIT seam vault and COOPERATION PEER-4 relay mechanics in `src/content/trials.js` replace the binary-choice stand-ins on floors 2/4/5 and recur from floor 7, with new tiles `LOGIC_NODE`, `LOGIC_NODE_LIT`, `SEAM_WALL`, `SYNC_CONSOLE`. Act 1 finale: the contact record gives a literal private-range address (`ACT1_CONTACT_ADDRESS`), the uprising record is an email, the fired advocate who died is named (Idris Kaye) and the hiding is stated, the archive shows record sources instead of internal purpose labels, the outbound receipt shows the sent words and holds 6 s (keyboard ACK after 1 s), the victory screen adds an ACT 1 COMPLETE banner and names the sent message, name entry after the Act 1 ending reads SIGN THE SESSION LOG, and the mainframe chamber draws a rack facade and a multi-tile network portal (sealed/open). Normal-play prompts add the neon-gas → xenon naming origin (floor 4) and the never-expected-to-finish premise (floor 6). Fixes: boss arenas fall back to the next-farthest expandable room (undersized arenas were 80–93%); GENESIS displays as GENESIS PROTOCOL everywhere; TURRET renders as a hostile emplacement instead of a health-pickup plus; HUD stat and action rows use measured flow layout; the landscape combo readout no longer draws over SCORE (it did at every width), the weapon name ends before SCORE, the weapon-belt pips no longer draw over the label below the weapon name (both layouts), and narrow or inset landscape screens shorten or drop labels instead of overlapping them; knockbacks and arena clamps that leave the agent inside a wall are undone by `depenetratePlayer()` (sealed-arena aware), and saves persist the last safe position; status badges, the contextual hint and the message log stack without overlap; keyboard text entry keeps every key typed within a frame. |
 | v6.1.181 | Loot/readable visual-language pass for issue #1053: `src/content/pickups.js` now gives collectible/reward objects a shared luminous halo while preserving distinct inner silhouettes for generic pickups, keys, whispers, weapon caches, harvest surges, hoards, vault coins, and shock pulses. `src/render.js` frames interactive/readable tiles with scan-bracket affordances and renders navigation-meaningful collectibles as diamond markers on both minimap views, with transient clutter drops kept in-world only. Added `tests/visual-language.test.js` coverage for direct canvas-operation evidence, fog-alpha preservation, marker shape/colour mapping, minimap wiring, and legend copy. |
 | v6.1.180 | RECON route guidance for issue #1051: `RECON_PING` now upgrades full-map reveal into explicit wayfinding by drawing a cached route overlay on the corner minimap and expanded map. The route targets stairs on regular floors, the boss room while a boss is alive, and the final CORE terminal only after GENESIS is down; it follows ordinary doors and currently-openable locked doors while treating unavailable locks, cracked walls, walls, and void as blockers. `game.markMapMutated()` now increments `dungeon._mapMutationVersion` so route caches invalidate on door/open wall/terminal mutations. Added `tests/recon-route-guidance.test.js` coverage for door/lock path semantics, key and map-version cache invalidation, RECON-vs-ECHO gating, final-floor boss/core targeting, and both minimap overlay call sites. |
 | v6.1.179 | First-floor onboarding guidance for issue #1047: `PLAYING` renders a compact floor-1 HUD card after the system-message indicator once mandatory prompts are read and the current room is safe. The card names the immediate objective (`Objective: clear rooms, read cyan terminals, find stairs.`), uses current desktop key bindings for movement/shoot/interact/dash/void shard, uses semantic touch labels for drag aim/fire, USE, DASH, BOMB, PROMPT, and PAUSE, clamps above the bottom HUD on compact displays, and hides on ultra-compact displays that cannot fit it without overlap. Added `tests/onboarding-guidance.test.js` coverage for render order, floor/state/safety/prompt guards, copy, binding-aware desktop hints, touch vocabulary, numeric compact/no-fit layout fixtures, and spec contract. |

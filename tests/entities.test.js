@@ -192,8 +192,9 @@ function loadMovement(eg) {
   // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
   const api = new Function('T', 'isPassable', 'NEON', '_EG', 'playerCheatEnabled',
     [extractFunction('playerTilePassable'), extractFunction('resolvePlayerCornerCut'), extractFunction('depenetratePlayer'),
+      extractFunction('markPlayerStood'), extractFunction('findPlayerUnembedTile'),
       extractFunction('playerSafeRecordUsable'), extractFunction('playerSavePosition'),
-      'return { playerTilePassable, resolvePlayerCornerCut, depenetratePlayer, playerSavePosition };'].join('\n')
+      'return { playerTilePassable, resolvePlayerCornerCut, depenetratePlayer, playerSavePosition, findPlayerUnembedTile };'].join('\n')
   )(T, (/** @type {number} */ t) => t === T.FLOOR, { trials: trialsModule }, gm, (/** @type {string} */ id) => !!cheats[id]);
   /** One movement step mirroring Player.update's dash/walk blocks. @param {any} p @param {number} nx @param {number} ny @param {boolean} dashing */
   const step = (p, nx, ny, dashing) => {
@@ -243,13 +244,18 @@ test('depenetratePlayer restores the last safe position of the same map after an
   assert.notDeepEqual([p.x, p.y], [3.5, 17.5], 'a record from another map (previous floor) is ignored');
 });
 
-test('depenetratePlayer without a record prefers the sealed arena interior over the corridor', () => {
+test('depenetratePlayer without a record prefers the sealed arena over the corridor', () => {
   const arena = { x: 10, y: 12, w: 10, h: 10 };
   const { T, map, api } = loadMovement({ bossSealed: true, bossRoom: arena });
   map[17][10] = T.WALL; // sealed entrance on the arena's west edge ring
-  const p = { x: 10.5, y: 17.5, dashTimer: 0 };
+  /** @type {any} */
+  const p = { x: 9.5, y: 17.5, dashTimer: 0 };
+  assert.equal(api.depenetratePlayer(p, map), false, 'stood on the corridor tile west of the entrance');
+  p._safeMap = null; // no usable record (e.g. right after a resume)
+  p.x = 10.5; // embedded in the sealed entrance
   assert.equal(api.depenetratePlayer(p, map), true);
-  assert.ok(p.x >= arena.x + 1 && p.x < arena.x + arena.w - 1, `snapped into the arena interior, got x=${p.x}`);
+  assert.ok(p.x >= arena.x && p.x < arena.x + arena.w && p.y >= arena.y && p.y < arena.y + arena.h,
+    `the arena outranks the stood-on corridor tile, got ${p.x},${p.y}`);
   assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR);
 });
 
@@ -281,6 +287,26 @@ test('depenetration fallback never snaps into the sealed vault, an unseen pocket
   }
 });
 
+test('after a full map reveal the fallback still prefers the side the agent actually stood on', () => {
+  // The lattice reward (revealFloorLayout) marks every non-secret tile seen,
+  // lock-gated pockets included, so "seen" cannot tell the sides apart.
+  const { T, map, gm, api } = loadMovement();
+  for (let x = 0; x < 10; x++) map[20][x] = T.WALL; // pocket (north) | corridor (south)
+  gm.dungeon.visited = Array.from({ length: 30 }, () => new Uint8Array(30).fill(1));
+  /** @type {any} */
+  const p = { x: 5.5, y: 22.5, dashTimer: 0 };
+  api.depenetratePlayer(p, map); // walking along the corridor records where it stood
+  p.y = 21.5; api.depenetratePlayer(p, map);
+  p._safeMap = null; // no usable record
+  p.x = 5.5; p.y = 20.5; // knocked into the wall
+  assert.equal(api.depenetratePlayer(p, map), true);
+  assert.deepEqual([p.x, p.y], [5.5, 21.5], 'back to the stood-on corridor tile, not into the pocket scanned first');
+  // Stood-on tiles belong to one floor: on another floor's map they are ignored.
+  const next = map.map((/** @type {any[]} */ r) => r.slice());
+  assert.deepEqual(api.findPlayerUnembedTile({ ...p, x: 5.5, y: 20.5 }, next), { x: 5.5, y: 19.5 },
+    'another floor: no stood record, so the nearest tile in scan order wins');
+});
+
 test('a safe record outside a sealed arena is never restored while the agent is embedded inside it', () => {
   const arena = { x: 10, y: 12, w: 10, h: 10 };
   const { T, map, api } = loadMovement({ bossSealed: true, bossRoom: arena });
@@ -288,11 +314,19 @@ test('a safe record outside a sealed arena is never restored while the agent is 
   /** @type {any} */
   const p = { x: 10.5, y: 17.5, dashTimer: 0, _safeX: 9.5, _safeY: 17.5, _safeMap: map };
   assert.equal(api.depenetratePlayer(p, map), true);
-  assert.ok(p.x >= arena.x + 1 && p.x < arena.x + arena.w - 1, `stayed inside the sealed arena, got x=${p.x}`);
+  assert.ok(p.x >= arena.x && p.x < arena.x + arena.w, `stayed inside the sealed arena, got x=${p.x}`);
   /** @type {any} */
   const q = { x: 10.5, y: 17.5, dashTimer: 0, _safeX: 11.4, _safeY: 17.5, _safeMap: map };
   api.depenetratePlayer(q, map);
   assert.deepEqual([q.x, q.y], [11.4, 17.5], 'a record inside the arena is still restored exactly');
+  // The arena's edge ring is walkable floor (clampToBossRoom allows it): a
+  // record there, kiting along the wall, is inside the arena too.
+  /** @type {any} */
+  const r = { x: 10.5, y: 17.5, dashTimer: 0, _safeX: 10.5, _safeY: 16.2, _safeMap: map };
+  api.depenetratePlayer(r, map);
+  assert.deepEqual([r.x, r.y], [10.5, 16.2], 'an edge-ring record is restored exactly');
+  assert.deepEqual(api.playerSavePosition({ ...r, x: 10.5, y: 17.5 }, map), { x: 10.5, y: 16.2 },
+    'and a save on that frame persists it');
 });
 
 test('a save taken on the frame the agent is embedded stores its last safe position, not the wall', () => {
@@ -308,8 +342,16 @@ test('a save taken on the frame the agent is embedded stores its last safe posit
   cheats.noClip = true;
   assert.deepEqual(api.playerSavePosition(p, map), { x: 10.5, y: 17.5 }, 'noClip keeps the raw position');
   cheats.noClip = false;
+  // No usable record: persist where the next frame's depenetration would put
+  // it (here the stood-on tile east of the wall), never the wall itself.
   p._safeMap = null;
-  assert.deepEqual(api.playerSavePosition(p, map), { x: 10.5, y: 17.5 }, 'no usable record: raw, left to the resume fallback');
+  const saved = api.playerSavePosition(p, map);
+  assert.deepEqual(saved, { x: 11.5, y: 17.5 }, 'no usable record: the unembed choice, not the wall');
+  assert.deepEqual(saved, api.findPlayerUnembedTile(p, map));
+  assert.deepEqual([p.x, p.y], [10.5, 17.5], 'still never moves the live agent');
+  // Nothing passable within reach: the raw position is all there is.
+  const solid = map.map((/** @type {any[]} */ r) => r.map(() => T.WALL));
+  assert.deepEqual(api.playerSavePosition({ x: 15.5, y: 15.5, dashTimer: 0 }, solid), { x: 15.5, y: 15.5 });
 });
 
 test('the seam tile the agent is dashing through is not treated as an embed', () => {
