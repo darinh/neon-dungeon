@@ -221,6 +221,8 @@ test('landscape row 2 fits every width: bomb state always shows, nothing reaches
   assert.ok(at910.some((c) => c.text === '[F] 4.5s'), 'hackware degrades to text-only before disappearing');
   const at800 = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 800 });
   assert.ok(at800.some((c) => c.text === '[V] 3.2s'), 'the bomb label shortens instead of overlapping');
+  const at780 = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 780 });
+  assert.ok(at780.some((c) => c.text === '⛨ 12/20'), 'a crowded row keeps the modifier icon and its progress');
 });
 
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────
