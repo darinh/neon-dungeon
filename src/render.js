@@ -1340,7 +1340,9 @@ function drawHUD(player) {
     ctx.fillStyle=hpCol; ctx.fillRect(lx, r1, hpW * hpFrac, 12);
     ctx.shadowBlur=0;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 2, r1 + 10);
+    const hpTextC = `HP ${Math.ceil(player.hp)}/${player.maxHp}`;
+    ctx.fillText(hpTextC, lx + 2, r1 + 10);
+    const hpTextEndC = lx + 2 + ctx.measureText(hpTextC).width;
 
     // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
     // it groups visually with the HP it protects. Gated on charges>0 — when
@@ -1353,7 +1355,11 @@ function drawHUD(player) {
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff88aa'; ctx.font=`${fs}px monospace`;
       ctx.textAlign='right';
-      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
+      // The HP bar is W/4 wide: on the narrowest phones the counter only
+      // shows when it clears the HP text.
+      if (lx + hpW - 3 - ctx.measureText(`✚${_nmcCompact}`).width >= hpTextEndC + 2) {
+        ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
+      }
       ctx.textAlign='left';
       ctx.restore();
     }
@@ -1363,51 +1369,74 @@ function drawHUD(player) {
     ctx.fillText(`TEST:${_RG.floor}`, mid, r1 + 10);
 
     // Floor modifier badge
+    let modifierLabelC = '';
     if (_RG.modifier) {
       const m = /** @type {any} */ (getMod());
+      modifierLabelC = `${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`;
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour; ctx.font=`${fs-1}px monospace`;
-      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, mid, r1 + 22);
+      ctx.fillText(modifierLabelC, mid, r1 + 22);
       ctx.restore();
     }
 
-    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700'; ctx.font=`${fs + 1}px monospace`;
-    ctx.textAlign='right';
-    ctx.fillText(`SCORE:${player.score}`, W - 10 - safeRight, r1 + 10);
-    // Combo counter (compact)
-    if (combo.count >= 2) {
-      const cc = comboColour();
-      const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
-      ctx.globalAlpha = a;
-      ctx.shadowBlur=6; ctx.shadowColor=cc;
-      ctx.fillStyle=cc; ctx.font=`bold ${fs + 1}px monospace`;
-      ctx.fillText(`×${comboMultiplier().toFixed(1)} ×${combo.count}`, W - 10 - safeRight, r1 + 22);
-      ctx.globalAlpha = 1;
-    }
-    ctx.textAlign='left'; ctx.shadowBlur=0;
-
-    // Credits + Lore
+    // Credits, cores and lore sit in columns after TEST; each moves right
+    // only when the readout before it is too wide.
     ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`◈${player.credits}`, mid + 50, r1 + 10);
+    const creditsTextC = `◈${player.credits}`;
+    ctx.fillText(creditsTextC, mid + 50, r1 + 10);
     // UNCHAINED #39: cores readout (pulses briefly on pickup). Reads
     // `game._cachedCores` (updated on every pickup/vacuum) to avoid a
     // per-frame localStorage hit.
+    const coresTextC = `◆${_RG._cachedCores | 0}`;
+    const coresXC = Math.max(mid + 90, mid + 50 + ctx.measureText(creditsTextC).width + HUD_STAT_GAP / 2);
     {
-      const _cores = _RG._cachedCores | 0;
       const pulse = (_RG._coreHudPulse || 0);
       const pulseCol = pulse > 0 ? '#44e5ff' : '#a866ff';
       ctx.save();
       if (pulse > 0) { ctx.shadowBlur = 8; ctx.shadowColor = '#44e5ff'; }
       ctx.fillStyle = pulseCol;
-      ctx.fillText(`◆${_cores}`, mid + 90, r1 + 10);
+      ctx.fillText(coresTextC, coresXC, r1 + 10);
       ctx.restore();
     }
+    let readoutsEndC = coresXC + ctx.measureText(coresTextC).width;
     if (player.loreRead.size > 0) {
+      const loreTextC = `◫${player.loreRead.size}`;
+      const loreXC = Math.max(mid + 130, readoutsEndC + HUD_STAT_GAP / 2);
       ctx.fillStyle='#ffb700';
-      ctx.fillText(`◫${player.loreRead.size}`, mid + 130, r1 + 10);
+      ctx.fillText(loreTextC, loreXC, r1 + 10);
+      readoutsEndC = loreXC + ctx.measureText(loreTextC).width;
     }
+
+    // SCORE, right-aligned after those readouts: on narrow phones it drops
+    // its label, then hides.
+    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
+    ctx.fillStyle='#ffb700'; ctx.font=`${fs + 1}px monospace`;
+    ctx.textAlign='right';
+    const scoreRightC = W - 10 - safeRight;
+    let scoreTextC = `SCORE:${player.score}`;
+    if (scoreRightC - ctx.measureText(scoreTextC).width < readoutsEndC + HUD_STAT_GAP / 2) scoreTextC = String(player.score);
+    if (scoreRightC - ctx.measureText(scoreTextC).width >= readoutsEndC + HUD_STAT_GAP / 2) {
+      ctx.fillText(scoreTextC, scoreRightC, r1 + 10);
+    }
+    // Combo counter (compact) — right-aligned under SCORE, after the
+    // modifier badge on the same line.
+    if (combo.count >= 2) {
+      ctx.font=`${fs-1}px monospace`;
+      const modEndC = _RG.modifier ? mid + ctx.measureText(modifierLabelC).width : 0;
+      ctx.font=`bold ${fs + 1}px monospace`;
+      const comboTextC = `×${comboMultiplier().toFixed(1)} ×${combo.count}`;
+      if (scoreRightC - ctx.measureText(comboTextC).width >= modEndC + HUD_STAT_GAP / 2) {
+        const cc = comboColour();
+        const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
+        ctx.globalAlpha = a;
+        ctx.shadowBlur=6; ctx.shadowColor=cc;
+        ctx.fillStyle=cc;
+        ctx.fillText(comboTextC, scoreRightC, r1 + 22);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.textAlign='left'; ctx.shadowBlur=0;
 
     // Row 2: LVL + XP bar + ATK + DEF + weapon
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
@@ -1450,12 +1479,17 @@ function drawHUD(player) {
     const pipsWC = beltNC > 0 ? 3 + (beltNC - 1) * 10 + 8 : 0;
     const weaponXC = Math.max(statsX + 74, defX + ctx.measureText(defTextC).width + HUD_STAT_GAP);
     const weapMaxW = W - weaponXC - safeRight - 10 - phSufWC - spSufWC - pipsWC;
+    // Narrow screens drop the belt pips before the name, then the name and
+    // its suffixes together when not even "ABC…" fits (never overflow).
+    const pipsFitC = beltNC > 0 && weapMaxW >= ctx.measureText('ABC…').width;
+    const nameMaxWC = pipsFitC ? weapMaxW : weapMaxW + pipsWC;
     let weapName = player.weapon.displayName || player.weapon.name;
-    if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
-      while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
+    if (ctx.measureText(weapName).width > nameMaxWC) {
+      while (weapName.length > 3 && ctx.measureText(weapName + '…').width > nameMaxWC) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
-    ctx.fillText(weapName, weaponXC, r2 + 10);
+    const showWNameC = ctx.measureText(weapName).width <= nameMaxWC;
+    if (showWNameC) ctx.fillText(weapName, weaponXC, r2 + 10);
     // Render any active weapon-affix suffixes side-by-side using a
     // cumulative x-offset. Currently PH and SIPHON are mutually exclusive
     // on a single weapon (both suffix-slot, buildWeapon picks at most one
@@ -1464,21 +1498,23 @@ function drawHUD(player) {
     // produces a multi-suffix weapon, the cumulative offset prevents
     // overlap. Truncation budget above already reserves combined width.
     let _sufX_C = statsX + 74 + ctx.measureText(weapName).width + (weaponXC - (statsX + 74));
-    if (phSufC) {
-      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
-      ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufC, _sufX_C, r2 + 10);
-      _sufX_C += ctx.measureText(phSufC).width;
-    }
-    if (spSufC) {
-      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
-      ctx.fillStyle='#88ff88';
-      ctx.fillText(spSufC, _sufX_C, r2 + 10);
-      _sufX_C += ctx.measureText(spSufC).width;
+    if (showWNameC) {
+      if (phSufC) {
+        ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+        ctx.fillStyle='#ff4488';
+        ctx.fillText(phSufC, _sufX_C, r2 + 10);
+        _sufX_C += ctx.measureText(phSufC).width;
+      }
+      if (spSufC) {
+        ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+        ctx.fillStyle='#88ff88';
+        ctx.fillText(spSufC, _sufX_C, r2 + 10);
+        _sufX_C += ctx.measureText(spSufC).width;
+      }
     }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
-    if (beltNC > 0) {
+    if (pipsFitC && showWNameC) {
       const pipX = _sufX_C + 3;
       const safeIdx = Math.min(player.weaponIdx || 0, beltNC - 1);
       for (let wi = 0; wi < beltNC; wi++) {

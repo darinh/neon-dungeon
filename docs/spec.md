@@ -2680,7 +2680,9 @@ rect's edge ring is floor; sealed entrances on it are WALL). With no usable
 record, `findPlayerUnembedTile()` picks the nearest passable tile within 4,
 ranking the sealed arena first, then tiles the agent has stood on this floor
 (a revealed map marks lock-gated pockets seen too), then tiles already seen,
-and never choosing unrevealed secret rooms or the unbreached seam vault.
+and never choosing unrevealed secret rooms or the unbreached seam vault. The
+stood-on record lives only for the session; it is not saved, and after
+Continue it starts again from the resume tile.
 
 **Movement:** Random patrol around room center (drift ±5 tiles, 2 s interval).
 Does NOT pursue player.
@@ -4489,7 +4491,9 @@ the floor snapshot's `player`) come from `savedPlayerPosition()`. If a
 knockback has the agent inside a wall on the save frame, the save stores where
 the next frame's depenetration would put it (`playerSavePosition()` in
 `src/entities.js`: the last safe position, else the `findPlayerUnembedTile()`
-choice), so Continue never resumes embedded. noClip saves the raw position.
+choice). Continue therefore resumes embedded only when no eligible tile is
+within 4 (unrevealed secret-room and unbreached seam-vault tiles are never
+eligible). noClip saves the raw position.
 
 **Auto-save triggers:**
 1. After `loadFloor()` completes (start of every floor checkpoint).
@@ -4659,7 +4663,14 @@ Landscape budgeting (`drawHUD` in `src/render.js`):
 ```
 
 As in landscape, the weapon-belt pips trail the weapon name on its own line;
-the compact name budget reserves their width.
+the compact name budget reserves their width, and narrow screens drop the pips
+first, then the name and its suffix together. Row 1's credits, cores and lore
+readouts sit in columns after TEST and move right only when the readout before
+them is too wide. SCORE is right-aligned after them, dropping its `SCORE:`
+label and then hiding when it does not fit. The combo readout hides rather than
+overlap the modifier badge on its line, and the ✚N trauma-kit counter shows
+only when it clears the HP text. `tests/render.test.js` sweeps compact widths
+305–600 (320–600 px phones at world zoom 1–1.5).
 
 A shared `layout` object (`compact`, `hudH`, `hudTop`, `msgBase`) is computed
 in `updateLayout()` (called from `resize()`). All bottom-area positioning —

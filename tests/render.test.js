@@ -473,6 +473,77 @@ test('six-digit credits push the lore readout right instead of running into it',
   assert.equal(usual && usual.x, 960 - 100, 'ordinary credit counts keep lore in its column');
 });
 
+// ─── Compact (portrait) HUD: fit sweep ─────────────────────────────────────
+
+const C_TOP = 560;
+// Compact baselines: row 1 (r1 = hudTop + 4) at r1+10 / r1+22, row 2
+// (r2 = hudTop + 28) at r2+10 (weapon line, with the pips) / r2+22.
+const C_BANDS = [C_TOP + 14, C_TOP + 26, C_TOP + 38, C_TOP + 50];
+
+/** @param {HudOpts} opts */
+function compactBands(opts) {
+  const { texts, rects } = drawHud({ ...opts, compact: true });
+  const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: C_TOP + 38, width: r.w }));
+  return C_BANDS.map((b) => [...texts.filter((c) => c.y === b), ...pips.filter((p) => p.y === b)].sort((a, c) => a.x - c.x));
+}
+
+test('compact HUD: nothing overlaps or passes the right margin at default-zoom portrait widths', () => {
+  // 305 is a 320 px phone at the mobile-first zoom 1.5; 600 is the compact
+  // gate. Portrait phones have no side insets.
+  for (const width of [305, 320, 343, 371, 394, 410, 457, 514, 557, 600]) {
+    for (const [name, state] of /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE]])) {
+      const where = `compact W=${width} ${name}`;
+      for (const band of compactBands({ ...state, width })) {
+        assertBandFits(band, where);
+        for (const c of band) assert.ok(c.x >= 0 && c.x + c.width <= width - 10 + 0.001, `${c.text} passes the right margin at ${where}`);
+      }
+    }
+  }
+  // The common case keeps every label: a 360 px phone at zoom 1.5.
+  const texts = drawHudTexts({ ...LOW_STATE, compact: true, width: 343, score: 12345 });
+  for (const t of ['SCORE:12345', '◈0', '◆0', '◫1', '✚2', '×1.2 ×2']) assert.ok(texts.some((c) => c.text === t), `${t} drawn at 343`);
+});
+
+test('compact weapon line never runs past the right margin, even when its budget is tiny', () => {
+  // Reviewer repro: reserving the pips pushed the budget under 20 px, where
+  // the old guard skipped truncation and drew the full name off-screen.
+  for (const width of [240, 260, 280, 305]) {
+    for (const belt of [0, 2, 3]) {
+      const { texts, rects } = drawHud({ atk: 150, def: 99, floor: 15, compact: true, belt, phSuffix: ' ♥12/20', width, weaponName: 'OVERCLOCKED PLASMA RIFLE' });
+      const line = [...texts.filter((c) => c.y === C_TOP + 38), ...rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, width: r.w }))];
+      for (const c of line) assert.ok(c.x + c.width <= width - 10 + 0.001, `${c.text} runs past the margin at W=${width} belt=${belt}`);
+    }
+  }
+  const at260 = drawHud({ atk: 150, def: 99, floor: 15, compact: true, belt: 3, phSuffix: ' ♥12/20', width: 260, weaponName: 'OVERCLOCKED PLASMA RIFLE' });
+  assert.ok(at260.texts.some((c) => c.text.startsWith('OVER') && c.text.endsWith('…')), 'the truncated name stays');
+  assert.equal(at260.rects.filter(isPip).length, 0, 'the pips drop first');
+  const at240 = drawHud({ atk: 150, def: 99, floor: 15, compact: true, belt: 3, phSuffix: ' ♥12/20', width: 240, weaponName: 'OVERCLOCKED PLASMA RIFLE' });
+  assert.ok(!at240.texts.some((c) => c.text.startsWith('OV') || c.text === ' ♥12/20'), 'no room for "ABC…": name and suffix drop together');
+  // The combo readout shares its line with the modifier badge: at 240 px a
+  // long badge leaves no room, so the combo hides instead of overlapping it.
+  const busy = drawHudTexts({ atk: 10, def: 2, floor: 1, compact: true, modifier: true, modifierSuffix: ' 12/20', comboCount: 1000, comboMult: 4, width: 240 });
+  assert.ok(busy.some((c) => c.text === '⛨FORTIFIED 12/20'), 'badge drawn');
+  assert.ok(!busy.some((c) => c.text.startsWith('×')), 'combo hidden rather than drawn over the badge');
+});
+
+test('the swept states reach every draw call in the compact HUD branch', () => {
+  const body = extractFunctionSource(RENDER, 'drawHUD');
+  const from = body.indexOf('// ── Compact portrait: two rows ──');
+  const to = body.indexOf('// ── Standard landscape HUD', from);
+  assert.ok(from > 0 && to > from, 'compact branch located');
+  let sites = 0;
+  const branch = body.slice(from, to).replace(/ctx\.(fillText|fillRect)\(/g, (_m, fn) => `(__hit(${sites++}), ctx).${fn}(`);
+  const tagged = `const HUD_STAT_GAP = 12;\n${body.slice(0, from)}${branch}${body.slice(to)}\nthis.drawHUD = drawHUD;`;
+  assert.ok(sites >= 20, `found ${sites} draw call sites (the tagging regex must still match)`);
+  const reached = new Set();
+  for (const state of [FULL_STATE, LOW_STATE, QUIET_STATE]) {
+    for (const width of [343, 600]) drawHud({ ...state, width, compact: true }, tagged, (n) => reached.add(n));
+  }
+  const missed = [];
+  for (let i = 0; i < sites; i++) if (!reached.has(i)) missed.push(i);
+  assert.deepEqual(missed, [], `compact draw call sites the sweep states never reach: ${missed.join(', ')}`);
+});
+
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────
 
 function createFullRecordingCtx() {
