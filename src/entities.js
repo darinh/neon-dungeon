@@ -3470,21 +3470,54 @@ function playerTilePassable(player, tile, tx, ty, dashing) {
 }
 
 /**
- * One axis step for the agent. A step that stays inside the tile the agent
- * already occupies is always allowed, so an agent pushed into a wall (for
- * example by knockback) can always move back out.
+ * Keep the agent's centre out of impassable tiles. Boss/charger knockbacks and
+ * arena clamps move the agent without full tile checks and can leave it inside
+ * a wall; the old movement then froze it there. Restore the last position it
+ * held on a passable tile of this map (recorded every frame), or — with no
+ * usable record, e.g. right after a resume — the nearest passable tile centre,
+ * preferring a sealed boss arena the agent is in so an embed never leaks out.
+ * Only allocates on the rare embedded path.
  * @param {any} player
  * @param {any} map
- * @param {number} tx
- * @param {number} ty
- * @param {number} curTx
- * @param {number} curTy
- * @param {boolean} dashing
+ * @returns {boolean} true when the agent was moved
  */
-function playerStepPassable(player, map, tx, ty, curTx, curTy, dashing) {
-  if (tx === curTx && ty === curTy) return true;
+function depenetratePlayer(player, map) {
+  const tx = Math.floor(player.x), ty = Math.floor(player.y);
   const row = map[ty];
-  return playerTilePassable(player, row ? row[tx] : undefined, tx, ty, dashing);
+  if (playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false)) {
+    player._safeX = player.x;
+    player._safeY = player.y;
+    player._safeMap = map;
+    return false;
+  }
+  const SNAP_RANGE = 6;
+  const sx = player._safeX, sy = player._safeY;
+  if (player._safeMap === map && typeof sx === 'number' && typeof sy === 'number' &&
+      Math.abs(sx - player.x) + Math.abs(sy - player.y) <= SNAP_RANGE) {
+    const srow = map[Math.floor(sy)];
+    if (srow && isPassable(srow[Math.floor(sx)])) { player.x = sx; player.y = sy; return true; }
+  }
+  const RADIUS = 4;
+  const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
+  const inArenaRect = !!arena && tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
+  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false;
+  for (let dy = -RADIUS; dy <= RADIUS; dy++) {
+    const crow = map[ty + dy];
+    if (!crow) continue;
+    for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+      const cx = tx + dx, cy = ty + dy;
+      if (!isPassable(crow[cx])) continue;
+      const d = Math.abs(dx) + Math.abs(dy);
+      const inArena = inArenaRect && cx >= arena.x + 1 && cx <= arena.x + arena.w - 2 && cy >= arena.y + 1 && cy <= arena.y + arena.h - 2;
+      if ((inArena && !bestInArena) || (inArena === bestInArena && d < bestD)) {
+        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena;
+      }
+    }
+  }
+  if (bestX < 0) return false;
+  player.x = bestX + 0.5;
+  player.y = bestY + 0.5;
+  return true;
 }
 
 /**
@@ -4572,6 +4605,10 @@ class Player {
       if (this.dashTrail[i].alpha<=0) this.dashTrail.splice(i,1);
     }
 
+    // Depenetrate before moving: knockbacks run after player.update and may
+    // have left the agent's centre inside a wall last frame.
+    if (!playerCheatEnabled('noClip')) depenetratePlayer(this, map);
+
     // Active dash movement
     if (this.dashTimer>0) {
       const step=Math.min(dt,this.dashTimer); // clamp to remaining dash time
@@ -4583,9 +4620,9 @@ class Player {
       const ox=Math.floor(this.x), oy=Math.floor(ny);
       const dashPrevX=this.x, dashPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerStepPassable(this, map, tx, ty, ox, ty, true))) this.x=nx;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty, true))) this.x=nx;
       else this.dashTimer=0; // hit wall, end dash early
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerStepPassable(this, map, ox, oy, ox, ty, true))) this.y=ny;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy, true))) this.y=ny;
       else this.dashTimer=0;
       if (!noClip) resolvePlayerCornerCut(this, map, dashPrevX, dashPrevY, true);
       // Drop afterimage
@@ -4699,8 +4736,8 @@ class Player {
       const ox=Math.floor(this.x),oy=Math.floor(ny);
       const walkPrevX=this.x, walkPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerStepPassable(this, map, tx, ty, ox, ty, false))) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerStepPassable(this, map, ox, oy, ox, ty, false))) this.y=ny;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty, false))) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy, false))) this.y=ny;
       if (!noClip) resolvePlayerCornerCut(this, map, walkPrevX, walkPrevY, false);
       this.facing={x:ndx,y:ndy};
     }
@@ -4733,8 +4770,10 @@ class Player {
         const pny = this.y + pullY * dt;
         const ptx = Math.floor(pnx), pty = Math.floor(this.y);
         const pox = Math.floor(this.x), poy = Math.floor(pny);
+        const pullPrevX = this.x, pullPrevY = this.y;
         if (ptx >= 0 && pty >= 0 && ptx < MAP_W && pty < MAP_H && isPassable(map[pty][ptx])) this.x = pnx;
         if (pox >= 0 && poy >= 0 && pox < MAP_W && poy < MAP_H && isPassable(map[poy][pox])) this.y = pny;
+        if (!playerCheatEnabled('noClip')) resolvePlayerCornerCut(this, map, pullPrevX, pullPrevY, false);
       } else {
         this.gravityPullActive = false;
       }

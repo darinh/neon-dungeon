@@ -207,6 +207,22 @@ test('the hackware label never runs into the cores readout; it shortens instead'
   assert.ok(hwWide && /PHASE BLINK/.test(hwWide.text), 'wide screens keep the full hackware name');
 });
 
+test('landscape row 2 fits every width: bomb state always shows, nothing reaches the cores readout', () => {
+  for (const width of [780, 800, 820, 860, 910, 960, 1100, 1400]) {
+    const calls = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width });
+    const cores = calls.find((c) => c.text.startsWith('◆ '));
+    assert.ok(cores, 'cores readout drawn at ' + width);
+    const row2 = calls.filter((c) => c.y === cores.y - 4).sort((a, b) => a.x - b.x);
+    assert.ok(row2.some((c) => c.text.startsWith('[V]')), `bomb state visible at ${width}: ${JSON.stringify(row2)}`);
+    assertNonOverlapping(/** @type {any[]} */ (row2));
+    for (const c of row2) assert.ok(c.x + c.width <= cores.x, `${c.text} crosses the cores readout at ${width}`);
+  }
+  const at910 = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 910 });
+  assert.ok(at910.some((c) => c.text === '[F] 4.5s'), 'hackware degrades to text-only before disappearing');
+  const at800 = drawHudTexts({ atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2, hackware: true, hackwareCooldown: 4.5, width: 800 });
+  assert.ok(at800.some((c) => c.text === '[V] 3.2s'), 'the bomb label shortens instead of overlapping');
+});
+
 // ─── Bottom-band stacking: status badges → hint → message log ─────────────
 
 function createFullRecordingCtx() {

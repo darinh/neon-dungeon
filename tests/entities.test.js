@@ -151,18 +151,32 @@ test('playerTilePassable delegates only the seam tile to NEON.trials with the li
   assert.equal(noTrials(player, TILES.SEAM_WALL, 7, 3), false, 'without the trials module the seam is a wall');
 });
 
-test('dash and walk collision both use the seam-aware helper; each dash gets a new serial', () => {
-  assert.equal((ENTITIES.match(/noClip \|\| playerStepPassable\(this, map, /g) || []).length, 4);
-  assert.equal((ENTITIES.match(/if \(!noClip\) resolvePlayerCornerCut\(this, map, /g) || []).length, 2, 'dash and walk both resolve corner cuts');
+test('movement call sites pass the right tile, coordinates and dash flag', () => {
+  // Exact argument order at every call site (a swapped tx/ox or dash flag fails).
+  assert.match(ENTITIES, /noClip \|\| playerTilePassable\(this, map\[ty\]\[tx\], tx, ty, true\)\)\) this\.x=nx;\s*\n\s*else this\.dashTimer=0;/, 'dash x step');
+  assert.match(ENTITIES, /noClip \|\| playerTilePassable\(this, map\[oy\]\[ox\], ox, oy, true\)\)\) this\.y=ny;\s*\n\s*else this\.dashTimer=0;/, 'dash y step');
+  assert.match(ENTITIES, /noClip \|\| playerTilePassable\(this, map\[ty\]\[tx\], tx, ty, false\)\)\) this\.x=nx;\s*\n\s*if \(ox>=0/, 'walk x step');
+  assert.match(ENTITIES, /noClip \|\| playerTilePassable\(this, map\[oy\]\[ox\], ox, oy, false\)\)\) this\.y=ny;/, 'walk y step');
+  assert.match(ENTITIES, /if \(!noClip\) resolvePlayerCornerCut\(this, map, dashPrevX, dashPrevY, true\);/);
+  assert.match(ENTITIES, /if \(!noClip\) resolvePlayerCornerCut\(this, map, walkPrevX, walkPrevY, false\);/);
+  assert.match(ENTITIES, /if \(!playerCheatEnabled\('noClip'\)\) resolvePlayerCornerCut\(this, map, pullPrevX, pullPrevY, false\);/, 'gravity pull resolves corner cuts too');
+  const depen = ENTITIES.indexOf("if (!playerCheatEnabled('noClip')) depenetratePlayer(this, map);");
+  const dash = ENTITIES.indexOf('    // Active dash movement');
+  assert.ok(depen > 0 && depen < dash, 'depenetration runs before the dash/walk movement');
+  assert.doesNotMatch(ENTITIES, /function playerStepPassable\(/, 'no same-tile shortcut helper remains');
   assert.match(ENTITIES, /this\.dashTimer=0\.12;\s*\n\s*this\._dashSerial = \(this\._dashSerial \| 0\) \+ 1;/);
 });
 
-// ─── Behaviour: the reviewer's corner-cut counterexample ──────────────────
+// ─── Behaviour: movement helpers run against real maps ────────────────────
 
 const trialsModule = require('../src/content/trials.js');
 
-/** Load the three real movement helpers against the real trials module. */
-function loadMovement() {
+/**
+ * Load the real movement helpers (playerTilePassable, resolvePlayerCornerCut,
+ * depenetratePlayer) against the real trials module.
+ * @param {any} [eg] extra game fields (e.g. bossSealed/bossRoom)
+ */
+function loadMovement(eg) {
   const T = { WALL: 1, FLOOR: 2, SEAM_WALL: 30 };
   const room = { x: 10, y: 10, w: 9, h: 7, cx: 14, cy: 13 };
   const trial = trialsModule.createTrial('seam', room, 4, () => 0.5);
@@ -172,21 +186,21 @@ function loadMovement() {
   const map = Array.from({ length: 30 }, () => new Array(30).fill(T.FLOOR));
   for (const w of trial.walls) map[w.y][w.x] = T.WALL;
   map[trial.seam.y][trial.seam.x] = T.SEAM_WALL;
-  const gm = { dungeon: { rooms: [room], map }, floorTime: 0 };
+  const gm = { dungeon: { rooms: [room], map }, floorTime: 0, ...(eg || {}) };
   // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
   const api = new Function('T', 'isPassable', 'NEON', '_EG',
-    [extractFunction('playerTilePassable'), extractFunction('playerStepPassable'), extractFunction('resolvePlayerCornerCut'),
-      'return { playerStepPassable, resolvePlayerCornerCut };'].join('\n')
+    [extractFunction('playerTilePassable'), extractFunction('resolvePlayerCornerCut'), extractFunction('depenetratePlayer'),
+      'return { playerTilePassable, resolvePlayerCornerCut, depenetratePlayer };'].join('\n')
   )(T, (/** @type {number} */ t) => t === T.FLOOR, { trials: trialsModule }, gm);
-  /** One movement step in the same order as Player.update. @param {any} p @param {number} nx @param {number} ny @param {boolean} dashing */
+  /** One movement step mirroring Player.update's dash/walk blocks. @param {any} p @param {number} nx @param {number} ny @param {boolean} dashing */
   const step = (p, nx, ny, dashing) => {
     const tx = Math.floor(nx), ty = Math.floor(p.y), ox = Math.floor(p.x), oy = Math.floor(ny);
     const px = p.x, py = p.y;
-    if (api.playerStepPassable(p, map, tx, ty, ox, ty, dashing)) p.x = nx;
-    if (api.playerStepPassable(p, map, ox, oy, ox, ty, dashing)) p.y = ny;
+    if (api.playerTilePassable(p, map[ty][tx], tx, ty, dashing)) p.x = nx;
+    if (api.playerTilePassable(p, map[oy][ox], ox, oy, dashing)) p.y = ny;
     api.resolvePlayerCornerCut(p, map, px, py, dashing);
   };
-  return { T, map, trial, gm, step };
+  return { T, map, trial, gm, step, api };
 }
 
 test('a diagonal dash past the open seam can no longer embed the agent in the vault corner', () => {
@@ -198,13 +212,49 @@ test('a diagonal dash past the open seam can no longer embed the agent in the va
   assert.notEqual(tile, T.WALL, `agent ended inside a wall at ${p.x.toFixed(3)},${p.y.toFixed(3)}`);
 });
 
-test('an agent already embedded in a wall tile can walk back out', () => {
-  const { T, map, trial, step } = loadMovement();
-  const corner = trial.walls.find((/** @type {any} */ w) => w.x === trial.seam.x && w.y === trial.seam.y - 1);
-  assert.ok(corner, 'vault corner wall above the seam');
-  const p = { x: corner.x + 0.888, y: corner.y + 0.888, dashTimer: 0, _dashSerial: 1 };
-  for (let i = 0; i < 20; i++) step(p, p.x + 3.5 / 60, p.y, false); // walk east for 1/3 s
-  assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR, 'walking east leaves the wall tile');
+test('an agent inside a wall cannot walk through it to the far side (reviewers\' sealed-entrance repro)', () => {
+  const { T, map, step } = loadMovement();
+  // A sealed west entrance: arena floor to the east, corridor floor to the west.
+  map[17][10] = T.WALL;
+  const p = { x: 10.5, y: 17.5, dashTimer: 0, _dashSerial: 1 };
+  for (let i = 0; i < 60; i++) step(p, p.x - 3.5 / 60, p.y, false); // hold west for 1 s
+  assert.ok(p.x >= 10, `agent walked out of the wall into the corridor (x=${p.x.toFixed(2)})`);
+  for (let i = 0; i < 60; i++) step(p, p.x, p.y - 3.5 / 60, false); // hold north for 1 s
+  assert.equal(Math.floor(p.y), 17, 'no axis lets an embedded agent pass through the wall');
+});
+
+test('depenetratePlayer restores the last safe position of the same map after an embed', () => {
+  const { T, map, api } = loadMovement();
+  map[17][10] = T.WALL;
+  /** @type {any} */
+  const p = { x: 11.4, y: 17.5, dashTimer: 0 };
+  assert.equal(api.depenetratePlayer(p, map), false, 'a passable tile only records the safe position');
+  assert.equal(p._safeX, 11.4);
+  p.x = 10.5; // knockback + clamp left the centre inside the sealed entrance
+  assert.equal(api.depenetratePlayer(p, map), true);
+  assert.deepEqual([p.x, p.y], [11.4, 17.5], 'restored to the recorded safe position inside the arena');
+  const other = map.map((/** @type {any[]} */ r) => r.slice());
+  p.x = 10.5;
+  p._safeX = 3.5; p._safeY = 17.5; p._safeMap = other;
+  api.depenetratePlayer(p, map);
+  assert.notDeepEqual([p.x, p.y], [3.5, 17.5], 'a record from another map (previous floor) is ignored');
+});
+
+test('depenetratePlayer without a record prefers the sealed arena interior over the corridor', () => {
+  const arena = { x: 10, y: 12, w: 10, h: 10 };
+  const { T, map, api } = loadMovement({ bossSealed: true, bossRoom: arena });
+  map[17][10] = T.WALL; // sealed entrance on the arena's west edge ring
+  const p = { x: 10.5, y: 17.5, dashTimer: 0 };
+  assert.equal(api.depenetratePlayer(p, map), true);
+  assert.ok(p.x >= arena.x + 1 && p.x < arena.x + arena.w - 1, `snapped into the arena interior, got x=${p.x}`);
+  assert.equal(map[Math.floor(p.y)][Math.floor(p.x)], T.FLOOR);
+});
+
+test('the seam tile the agent is dashing through is not treated as an embed', () => {
+  const { trial, api, map } = loadMovement();
+  const p = { x: trial.seam.x + 0.5, y: trial.seam.y + 0.5, dashTimer: 0.05, _dashSerial: 2 };
+  assert.equal(api.depenetratePlayer(p, map), false);
+  assert.deepEqual([p.x, p.y], [trial.seam.x + 0.5, trial.seam.y + 0.5]);
 });
 
 test('dash steps honour the seam window even after the dash timer ran out on the final frame', () => {

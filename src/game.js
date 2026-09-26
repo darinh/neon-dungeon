@@ -87,6 +87,22 @@ function fitOrFallbackText(context, full, fallback, maxWidth) {
 }
 
 /**
+ * NOT NOW button under the two event cards, shown only for trial cards
+ * (PEER-4). Derived from the same card geometry that updateEventChoice
+ * hit-tests and renderEventChoice draws, so both use one rectangle.
+ * @param {number} w canvas width
+ * @param {number} h canvas height
+ * @param {boolean} narrow layout.compact
+ */
+function getTrialCardDeclineRect(w, h, narrow) {
+  const cardY = h * 0.34;
+  const cardH = narrow ? Math.min(180, h * 0.40) : Math.min(220, h * 0.38);
+  const bw = Math.min(220, w - 40);
+  const bh = narrow ? 36 : 40;
+  return { x: Math.round((w - bw) / 2), y: Math.round(cardY + cardH + (narrow ? 14 : 20)), w: bw, h: bh };
+}
+
+/**
  * Greedy word wrap using the context's current font.
  * @param {any} context
  * @param {string} text
@@ -5693,6 +5709,12 @@ const game = {
     if (jp('Enter') || jp(km('shoot')))     { this.applyEventChoice(ec.selected === 0 ? 'a' : 'b'); return; }
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
+      if (ec.trialRoom) {
+        const nb = getTrialCardDeclineRect(W, H, narrow);
+        if (mouse.x >= nb.x && mouse.x <= nb.x + nb.w && mouse.y >= nb.y && mouse.y <= nb.y + nb.h) {
+          this.eventChoice = null; this.setState('PLAYING'); return;
+        }
+      }
       const cw = narrow ? Math.min(200, (W - 20) / 2 - 8) : Math.min(260, (W - 40) / 2 - 12);
       const gap = narrow ? 10 : 16;
       const totalW = cw * 2 + gap;
@@ -5815,6 +5837,18 @@ const game = {
       ctx.font = (narrow ? 9 : 10) + 'px monospace';
       ctx.fillStyle = sel ? '#ffffff' : '#446655';
       ctx.fillText('[' + (i + 1) + ']', cx + cw / 2, cardY + cardH - (narrow ? 8 : 12));
+    }
+    if (ec.trialRoom) {
+      const nb = getTrialCardDeclineRect(W, H, narrow);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.strokeStyle = '#447766';
+      ctx.lineWidth = 1;
+      ctx.fillRect(nb.x, nb.y, nb.w, nb.h);
+      ctx.strokeRect(nb.x, nb.y, nb.w, nb.h);
+      ctx.fillStyle = '#aaccbb';
+      ctx.font = (narrow ? 11 : 13) + 'px monospace';
+      ctx.fillText(isTouchDevice() ? 'NOT NOW' : 'NOT NOW [ESC]', W / 2, nb.y + nb.h / 2 + (narrow ? 4 : 5));
     }
     ctx.restore();
   },

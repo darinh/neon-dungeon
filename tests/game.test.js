@@ -322,3 +322,52 @@ test('the hint is drawn before the message log so stacking uses this frame\'s hi
   const hint = GAME.indexOf('    drawHint();\n    drawMessages();');
   assert.ok(hint > 0, 'drawHint precedes drawMessages in the HUD pass');
 });
+
+test('the PEER-4 NOT NOW button is one on-screen rectangle shared by drawing and hit-testing', () => {
+  const viewport = require('../engine/viewport.js');
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const rectFn = new Function(extractFunction('getTrialCardDeclineRect') + '\nreturn getTrialCardDeclineRect;')();
+  // Compact fixtures come from the runtime predicate (portrait, W <= 600).
+  for (const [w, h] of /** @type {[number, number][]} */ ([[371, 804], [600, 900], [601, 900], [960, 540], [1280, 800], [640, 360]])) {
+    const narrow = viewport.computeLayout(w, h, 0).compact;
+    const r = rectFn(w, h, narrow);
+    assert.ok(Number.isFinite(r.x) && Number.isFinite(r.y) && r.w > 0 && r.h > 0, `finite rect at ${w}x${h}`);
+    assert.ok(r.x >= 0 && r.x + r.w <= w, `left/right on screen at ${w}x${h}`);
+    assert.ok(r.y >= 0 && r.y + r.h <= h, `top/bottom on screen at ${w}x${h}`);
+    const cardBottom = h * 0.34 + (narrow ? Math.min(180, h * 0.40) : Math.min(220, h * 0.38));
+    assert.ok(r.y > cardBottom, `below the card hit areas at ${w}x${h}`);
+    assert.ok(r.h >= 36, 'touch-sized');
+  }
+  assert.equal(viewport.computeLayout(600, 900, 0).compact, true, 'threshold viewport is compact');
+  assert.equal(viewport.computeLayout(601, 900, 0).compact, false, 'just past the threshold is not');
+
+  const { params, body } = extractMethod('updateEventChoice');
+  const W = 371, H = 804;
+  const narrow = viewport.computeLayout(W, H, 0).compact;
+  const r = rectFn(W, H, narrow);
+  /** @param {number} mx @param {number} my @param {boolean} trial */
+  const click = (mx, my, trial) => {
+    // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+    const fn = new Function('jp', 'ALT_KEYS', 'km', 'mouse', 'layout', 'W', 'H', 'getTrialCardDeclineRect',
+      'return function (' + params + ') ' + body + ';')((/** @type {string} */ k) => k === 'MouseLeft', {}, () => '', { x: mx, y: my }, { compact: narrow }, W, H, rectFn);
+    /** @type {any} */
+    const gm = { eventChoice: { event: {}, room: {}, trialRoom: trial ? {} : undefined, selected: 0 }, state: 'EVENT_CHOICE', applied: 0,
+      setState(/** @type {string} */ s) { this.state = s; }, applyEventChoice() { this.applied++; } };
+    fn.call(gm);
+    return gm;
+  };
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  assert.equal(click(cx, cy, true).state, 'PLAYING', 'centre declines');
+  assert.equal(click(r.x, cy, true).state, 'PLAYING', 'left edge inclusive');
+  assert.equal(click(r.x + r.w, cy, true).state, 'PLAYING', 'right edge inclusive');
+  assert.equal(click(cx, r.y, true).state, 'PLAYING', 'top edge inclusive');
+  assert.equal(click(cx, r.y + r.h, true).state, 'PLAYING', 'bottom edge inclusive');
+  for (const [mx, my, label] of /** @type {[number, number, string][]} */ ([[r.x - 1, cy, 'left'], [r.x + r.w + 1, cy, 'right'], [cx, r.y - 1, 'top'], [cx, r.y + r.h + 1, 'bottom']])) {
+    const gm = click(mx, my, true);
+    assert.equal(gm.state, 'EVENT_CHOICE', `outside ${label} does not decline`);
+    assert.equal(gm.applied, 0, `outside ${label} is not a card click either`);
+  }
+  assert.equal(click(cx, cy, false).state, 'EVENT_CHOICE', 'terminal event cards have no NOT NOW button');
+  const render = extractMethod('renderEventChoice').body;
+  assert.match(render, /const nb = getTrialCardDeclineRect\(W, H, narrow\);[\s\S]*ctx\.fillRect\(nb\.x, nb\.y, nb\.w, nb\.h\);/, 'render draws the same rectangle');
+});

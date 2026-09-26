@@ -1552,16 +1552,28 @@ function drawHUD(player) {
     ctx.fillText(testTextL, testXL, y + 10);
 
     let hudRow2X = testXL;
+    // Row 2 must end before the cores readout at W - 240. Budget it so the
+    // bomb state (an action) always fits; the modifier badge shortens first.
+    const row2Limit = W - 240 - safeRight - HUD_STAT_GAP;
+    const bombCd = player.bombCooldown > 0;
+    const bombLabel = bombCd ? `[V] Bomb ${player.bombCooldown.toFixed(1)}s` : `[V] Bomb RDY`;
+    const bombShort = bombCd ? `[V] ${player.bombCooldown.toFixed(1)}s` : `[V] RDY`;
     // Floor modifier badge
     if (_RG.modifier) {
       const m = /** @type {any} */ (getMod());
-      const modLabel = `${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`;
-      ctx.save();
-      ctx.shadowBlur=4; ctx.shadowColor=m.colour;
-      ctx.fillStyle=m.colour;
-      ctx.fillText(modLabel, hudRow2X, y + 22);
-      hudRow2X += ctx.measureText(modLabel).width + HUD_STAT_GAP;
-      ctx.restore();
+      const modSuffix = modifierProgressSuffix(_RG.modifier, player);
+      const modMax = row2Limit - hudRow2X - HUD_STAT_GAP - ctx.measureText(bombShort).width;
+      let modLabel = `${m.icon}${m.label}${modSuffix}`;
+      if (ctx.measureText(modLabel).width > modMax) modLabel = `${m.icon}${modSuffix}`;
+      if (ctx.measureText(modLabel).width > modMax) modLabel = `${m.icon}`;
+      if (ctx.measureText(modLabel).width <= modMax) {
+        ctx.save();
+        ctx.shadowBlur=4; ctx.shadowColor=m.colour;
+        ctx.fillStyle=m.colour;
+        ctx.fillText(modLabel, hudRow2X, y + 22);
+        hudRow2X += ctx.measureText(modLabel).width + HUD_STAT_GAP;
+        ctx.restore();
+      }
     }
 
     const wRarL = player.weapon._rarity || 0;
@@ -1615,13 +1627,18 @@ function drawHUD(player) {
       }
     }
 
-    const bombX = Math.max(weaponXL, hudRow2X);
-    const bombLabel = player.bombCooldown > 0
-      ? `[V] Bomb ${player.bombCooldown.toFixed(1)}s`
-      : `[V] Bomb RDY`;
-    ctx.fillStyle=player.bombCooldown > 0 ? '#664488' : '#aa00ff';
-    ctx.fillText(bombLabel, bombX, y + 22);
-    hudRow2X = bombX + ctx.measureText(bombLabel).width + HUD_STAT_GAP;
+    let bombText = bombLabel;
+    let bombX = Math.max(weaponXL, hudRow2X);
+    if (bombX + ctx.measureText(bombText).width > row2Limit) {
+      bombX = Math.max(hudRow2X, row2Limit - ctx.measureText(bombText).width);
+    }
+    if (bombX + ctx.measureText(bombText).width > row2Limit) {
+      bombText = bombShort;
+      bombX = Math.max(hudRow2X, Math.min(bombX, row2Limit - ctx.measureText(bombText).width));
+    }
+    ctx.fillStyle=bombCd ? '#664488' : '#aa00ff';
+    ctx.fillText(bombText, bombX, y + 22);
+    hudRow2X = bombX + ctx.measureText(bombText).width + HUD_STAT_GAP;
     // Hackware indicator (landscape)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
@@ -1632,12 +1649,15 @@ function drawHUD(player) {
         : `[F] ${hw.icon}${hw.name} RDY`;
       const hwX = Math.max(colBase + 380, hudRow2X);
       // Fit-or-shorten: never run into the cores/credits readouts on the right.
-      const hwLimit = W - 240 - safeRight - HUD_STAT_GAP;
+      const hwLimit = row2Limit;
       let hwText = hwLabel;
       if (hwX + ctx.measureText(hwText).width > hwLimit) {
         hwText = player.hackwareCooldown > 0
           ? `[F] ${hw.icon} ${player.hackwareCooldown.toFixed(1)}s`
           : `[F] ${hw.icon} RDY`;
+      }
+      if (hwX + ctx.measureText(hwText).width > hwLimit) {
+        hwText = player.hackwareCooldown > 0 ? `[F] ${player.hackwareCooldown.toFixed(1)}s` : '[F] RDY';
       }
       if (hwX + ctx.measureText(hwText).width <= hwLimit) ctx.fillText(hwText, hwX, y + 22);
     }

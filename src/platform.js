@@ -1033,6 +1033,15 @@ function clampToBossRoom(entity) {
   const r = _G.bossRoom;
   entity.x = Math.max(r.x + 0.5, Math.min(r.x + r.w - 0.5, entity.x));
   entity.y = Math.max(r.y + 0.5, Math.min(r.y + r.h - 0.5, entity.y));
+  // Sealed entrances are WALL tiles on the room's own edge ring
+  // (findRoomBoundaryOpenings). Only when the clamp lands inside one, pull the
+  // entity one tile in, so ordinary edge-ring floor stays usable.
+  const map = _G.dungeon && _G.dungeon.map;
+  const row = map && map[Math.floor(entity.y)];
+  if (row && !isPassable(row[Math.floor(entity.x)])) {
+    entity.x = Math.max(r.x + 1.5, Math.min(r.x + r.w - 1.5, entity.x));
+    entity.y = Math.max(r.y + 1.5, Math.min(r.y + r.h - 1.5, entity.y));
+  }
 }
 // UNCHAINED #37 KINETIC_BUFFER: scale boss knockback by module multiplier.
 function playerKnockMul() {

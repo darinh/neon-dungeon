@@ -81,3 +81,25 @@ test('clearJust drains the typed-character buffer every frame', () => {
   assert.equal(out.lastKey, '');
   assert.equal(out.nameEntryTap, null);
 });
+
+test('clampToBossRoom never leaves an entity inside a sealed entrance, and keeps edge-ring floor usable', () => {
+  const { T, isPassable } = loadRuntimeTiles();
+  const r = { x: 10, y: 10, w: 15, h: 15 };
+  /** @type {any} */
+  const map = Array.from({ length: 40 }, () => new Array(40).fill(T.FLOOR));
+  map[17][10] = T.WALL; // sealed west entrance on the room's own edge ring
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const load = (/** @type {any} */ g) => new Function('_G', 'isPassable', extractFunction('clampToBossRoom') + '\nreturn clampToBossRoom;')(g, isPassable);
+  const sealed = load({ bossSealed: true, bossRoom: r, dungeon: { map } });
+  const knocked = { x: 7.2, y: 17.5 }; // knocked west past the entrance
+  sealed(knocked);
+  assert.ok(map[Math.floor(knocked.y)][Math.floor(knocked.x)] !== T.WALL, `clamped into the sealed entrance at ${knocked.x}`);
+  assert.equal(Math.floor(knocked.x), r.x + 1, 'pulled one tile inside the entrance');
+  const edge = { x: 7.2, y: 14.5 }; // same push on a row with no entrance
+  sealed(edge);
+  assert.equal(edge.x, r.x + 0.5, 'ordinary edge-ring floor is still a valid clamp target');
+  const open = load({ bossSealed: false, bossRoom: r, dungeon: { map } });
+  const free = { x: 7.2, y: 17.5 };
+  open(free);
+  assert.equal(free.x, 7.2, 'no clamp before the arena seals');
+});
