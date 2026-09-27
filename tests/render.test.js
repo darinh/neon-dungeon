@@ -74,6 +74,7 @@ function createRecordingCtx() {
 const HUD_SOURCE = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
 /** One compiled vm context per drawHUD source; per-call state is assigned onto it. */
 const HUD_CONTEXTS = new Map();
+const VIEWPORT = require('../engine/viewport.js');
 
 /**
  * @param {HudOpts} opts
@@ -97,12 +98,17 @@ function drawHud(opts, source = HUD_SOURCE, hit = () => {}) {
     vm.runInContext(source, sandbox);
     HUD_CONTEXTS.set(source, sandbox);
   }
+  const hudW = opts.width || (opts.compact ? 360 : 960);
+  const hudH = opts.compact ? 640 : 540;
+  // Fixtures must be layouts the game can really enter: the runtime
+  // predicate decides compact vs landscape, not the test.
+  assert.equal(VIEWPORT.computeLayout(hudW, hudH, 0).compact, !!opts.compact, `${hudW}x${hudH} compact=${!!opts.compact} is not a real layout`);
   const ctx = createRecordingCtx();
   Object.assign(sandbox, {
     ctx,
     __hit: hit,
-    W: opts.width || (opts.compact ? 360 : 960),
-    H: opts.compact ? 640 : 540,
+    W: hudW,
+    H: hudH,
     safeLeft: opts.inset || 0,
     safeRight: opts.inset || 0,
     layout: { compact: !!opts.compact, hudTop: opts.compact ? 560 : 492 },
