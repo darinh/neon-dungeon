@@ -6404,6 +6404,53 @@ const game = {
   /**
    * @param {number} rowY
    * @param {number} rowH
+   * @param {number} mx
+   * @param {number} my
+   * @returns {boolean}
+   */
+  _settingsControlHit(rowY, rowH, mx, my) {
+    const box = this._settingsControlBox(rowY, rowH);
+    return mx >= box.x && mx <= box.x + box.w
+      && my >= box.y && my <= box.y + box.h;
+  },
+
+  /**
+   * Slider track geometry shared by render, click and drag. On non-compact
+   * screens the track shortens below ~700 px so it and its percentage readout
+   * stay inside the row card: a fixed 400 px track ran past the card (and off
+   * the canvas under 600 px), so 100% could not be tapped or dragged there.
+   * Compact screens under 280 px (world zoom 2+ on phones) keep a track of up
+   * to 40 px instead of the W-240 formula collapsing to nothing.
+   * @returns {{ x:number, w:number }}
+   */
+  _settingsSliderTrack() {
+    const narrow = layout.compact;
+    return {
+      x: narrow ? 120 : 200,
+      w: Math.max(0, narrow ? Math.max(W - 240, Math.min(40, W - 180)) : Math.min(400, W - 296)),
+    };
+  },
+
+  /**
+   * A slider value tap: on the track's X span (plus the knob's 3 px overhang
+   * at each end; the value clamps), and either inside the row card or on the
+   * drawn track strip (ry-4..ry+6), which pokes below the card when rows are
+   * short (rowH < 20). Taps elsewhere on the card only select.
+   * @param {number} rowY
+   * @param {number} rowH
+   * @param {number} mx
+   * @param {number} my
+   * @returns {boolean}
+   */
+  _settingsSliderHit(rowY, rowH, mx, my) {
+    const track = this._settingsSliderTrack();
+    if (track.w <= 0 || mx < track.x - 3 || mx > track.x + track.w + 3) return false;
+    return this._settingsControlHit(rowY, rowH, mx, my) || (my >= rowY - 4 && my <= rowY + 6);
+  },
+
+  /**
+   * @param {number} rowY
+   * @param {number} rowH
    * @param {boolean} selected
    * @param {string} accent
    * @param {boolean} [danger]
@@ -6412,11 +6459,11 @@ const game = {
     const box = this._settingsControlBox(rowY, rowH);
     ctx.save();
     ctx.fillStyle = selected
-      ? 'rgba(255,255,255,0.085)'
-      : (danger ? 'rgba(255,68,102,0.055)' : 'rgba(255,255,255,0.028)');
+      ? (danger ? 'rgba(255,68,102,0.16)' : 'rgba(0,245,255,0.10)')
+      : (danger ? 'rgba(255,68,102,0.075)' : 'rgba(0,0,0,0.36)');
     ctx.strokeStyle = selected
       ? accent
-      : (danger ? 'rgba(255,68,102,0.36)' : 'rgba(0,245,255,0.16)');
+      : (danger ? 'rgba(255,68,102,0.46)' : 'rgba(170,170,204,0.32)');
     ctx.lineWidth = selected ? 2 : 1;
     ctx.shadowBlur = selected ? 10 : 0;
     ctx.shadowColor = accent;
@@ -6430,7 +6477,7 @@ const game = {
     const STEPPER_START = 8;  // row index where scale steppers begin (after 6 toggles)
     const STEPPER_COUNT = 3;  // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
     const CTRL_START = STEPPER_START + STEPPER_COUNT;  // row index where key rebind rows begin
-    // Total items: 2 sliders + 6 toggles + 2 steppers + N rebind rows + 1 reset row + 1 back row
+    // Total items: 2 sliders + 6 toggles + 3 steppers + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
     // Compute the row metrics once. The dynamic rowH shrinks the menu
     // to fit the current viewport H (capped at the desired default), so
@@ -6477,10 +6524,8 @@ const game = {
 
     // Slider dragging
     if (this._settingsDrag && mouse.down) {
-      const narrow = layout.compact;
-      const sliderX = narrow ? 120 : 200;
-      const sliderW = narrow ? (W - 240) : 400;
-      let val = (mouse.x - sliderX) / sliderW;
+      const track = this._settingsSliderTrack();
+      let val = track.w > 0 ? (mouse.x - track.x) / track.w : 0;
       val = Math.max(0, Math.min(1, val));
       if (this._settingsDrag === 'sfx') audio.setSfxVolume(val);
       else audio.setMusicVolume(val);
@@ -6576,29 +6621,19 @@ const game = {
 
     // Mouse click hit-testing
     if (jp('MouseLeft')) {
-      const narrow = layout.compact;
       // Use the SAME dynamic row metrics as renderSettings — declared
       // at the top of updateSettings (startY/rowH locals). Re-computing
       // here would risk silent drift if one path is updated and the
       // other isn't.
-      const sliderX = narrow ? 120 : 200;
-      const sliderW = narrow ? (W - 240) : 400;
+      const track = this._settingsSliderTrack();
       const mx = mouse.x, my = mouse.y;
-      // Hit-test band, capped at rowH-1 so adjacent rows can never
-      // produce overlapping click regions on shrunk-rowH viewports
-      // (per gpt-5.3-codex r2 review). Default band is `[ry-8, ry+14]`
-      // (22 px tall, asymmetric to favour the text below the baseline);
-      // when rowH < 22 the band shrinks proportionally so row N+1
-      // can't poach a strip of row N.
-      const hitH = Math.min(22, Math.max(2, rowH - 1));
-      const hitTop = Math.min(8, Math.floor(hitH * 8 / 22));
-      const hitBot = hitH - hitTop;
 
-      // Slider click
+      // Slider rows: a tap on the track sets the value and starts a drag;
+      // a tap elsewhere on the row card (label, padding) only selects it.
       for (let i = 0; i < 2; i++) {
         const ry = startY + i * rowH;
-        if (my >= ry - hitTop && my <= ry + hitBot && mx >= sliderX && mx <= sliderX + sliderW) {
-          let val = (mx - sliderX) / sliderW;
+        if (this._settingsSliderHit(ry, rowH, mx, my)) {
+          let val = (mx - track.x) / track.w;
           val = Math.max(0, Math.min(1, val));
           if (i === 0) audio.setSfxVolume(val);
           else audio.setMusicVolume(val);
@@ -6609,11 +6644,17 @@ const game = {
           audio.menuSelect();
           return;
         }
+        if (this._settingsControlHit(ry, rowH, mx, my)) {
+          this._settingsSel = i;
+          this._settingsResetConfirm = 0;
+          audio.menuSelect();
+          return;
+        }
       }
       // Toggle rows click
       for (let i = 0; i < toggleKeys.length; i++) {
         const ry = startY + (TOGGLE_START + i) * rowH;
-        if (my >= ry - hitTop && my <= ry + hitBot) {
+        if (this._settingsControlHit(ry, rowH, mx, my)) {
           this._settingsSel = TOGGLE_START + i;
           this._settingsResetConfirm = 0;
           const tk = toggleKeys[i];
@@ -6631,7 +6672,7 @@ const game = {
       // forward. Mirrors the keyboard ◀/▶ semantics (with Enter = forward).
       for (let i = 0; i < stepperRows.length; i++) {
         const ry = startY + (STEPPER_START + i) * rowH;
-        if (my >= ry - hitTop && my <= ry + hitBot) {
+        if (this._settingsControlHit(ry, rowH, mx, my)) {
           this._settingsSel = STEPPER_START + i;
           this._settingsResetConfirm = 0;
           const row = stepperRows[i];
@@ -6660,7 +6701,7 @@ const game = {
       // Rebind rows click
       for (let i = 0; i < actions.length; i++) {
         const ry = startY + (CTRL_START + i) * rowH;
-        if (my >= ry - hitTop && my <= ry + hitBot) {
+        if (this._settingsControlHit(ry, rowH, mx, my)) {
           this._settingsSel = CTRL_START + i;
           this._settingsResetConfirm = 0;
           this._settingsCapture = actions[i];
@@ -6672,7 +6713,7 @@ const game = {
       // the window arms; second click commits. Click anywhere else or
       // wait the window out → cancelled.
       const resetY = startY + (CTRL_START + actions.length) * rowH;
-      if (my >= resetY - hitTop && my <= resetY + hitBot) {
+      if (this._settingsControlHit(resetY, rowH, mx, my)) {
         this._settingsSel = CTRL_START + actions.length;
         if (this._settingsResetConfirm > 0
             && (performance.now() - this._settingsResetConfirm) <= RESET_CONFIRM_WINDOW_MS) {
@@ -6692,7 +6733,7 @@ const game = {
       }
       // Back row
       const backY = startY + (CTRL_START + actions.length + 1) * rowH;
-      if (my >= backY - hitTop && my <= backY + hitBot) {
+      if (this._settingsControlHit(backY, rowH, mx, my)) {
         this._settingsResetConfirm = 0;
         audio.menuSelect();
         this.setState(this._settingsFrom || 'MENU');
@@ -6752,8 +6793,9 @@ const game = {
     const rowH = layoutM.rowH;
     const fs = narrow ? 13 : 16;
     const labelX = narrow ? 20 : 40;
-    const sliderX = narrow ? 120 : 200;
-    const sliderW = narrow ? (W - 240) : 400;
+    const sliderTrack = this._settingsSliderTrack();
+    const sliderX = sliderTrack.x;
+    const sliderW = sliderTrack.w;
     const sel = this._settingsSel;
 
     // Title
@@ -6785,9 +6827,10 @@ const game = {
       const fillW = sliderW * (volVals[i] ?? 0);
       ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
       ctx.fillRect(sliderX, trackY, fillW, 10);
-      // Slider knob
+      // Slider knob: 12 px tall so it ends with the track (ry+6), inside the
+      // tappable strip and clear of the next row's card when rows are short.
       ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
-      ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 14);
+      ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 12);
       // Percentage
       ctx.textAlign = 'right';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
