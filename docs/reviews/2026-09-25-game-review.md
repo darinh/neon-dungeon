@@ -1,7 +1,7 @@
 # NEON DUNGEON — Game Review (2026-09-25)
 
 Scope: a playability, fun, and brief-fit review of the build on `develop`
-(`39cc1da`) plus the fixes and gap-fills made in this pass (spec v6.1.182).
+(`39cc1da`) plus the fixes and gap-fills made in this pass (spec v6.1.183).
 Evidence came from headless Playwright play sessions (an autoplay bot and
 scripted walkthroughs), direct measurement of generated floors, the test
 suite, and a read of the design docs against the verbatim brief

@@ -100,6 +100,11 @@ Run and record these before verification or review:
    `git diff --staged` reflects the intended target in a separate dependent
    step. Do not parallelize restaging with a staged-diff read or reviewer launch;
    a parallel read can capture stale staged content from the prior state.
+   For UI, input, hitbox, touch, pointer, or layout changes, do not dispatch code
+   review until the evidence includes at least one passing behavioral
+   positive/negative test for the changed interaction or numeric bounds. Source
+   pins and regex shape tests may support the claim, but they are not sufficient
+   pre-review evidence for these changes.
 4. **Fresh-worktree bootstrap.** If `node_modules` or another expected local
    dependency directory is absent, run the repository's existing install command
    (`npm ci` for this project) before recording baseline verification or using

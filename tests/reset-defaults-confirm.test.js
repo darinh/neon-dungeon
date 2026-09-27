@@ -124,11 +124,11 @@ test('reset-confirm: keyboard Enter only calls settings.resetAll() on the SECOND
 test('reset-confirm: mouse click only calls settings.resetAll() on the SECOND click within the window', () => {
   const updateBody = GAME_NC.match(/updateSettings\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\}/);
   assert.ok(updateBody);
-  // The mouse handler scopes by checking the resetY hit-box.
+  // The mouse handler scopes by checking the reset row's rendered control card.
   const mouseReset = updateBody[0].match(
-    /if\s*\(\s*my\s*>=\s*resetY[\s\S]{0,800}?\n\s{6}\}/
+    /if\s*\(\s*this\._settingsControlHit\(resetY,\s*rowH,\s*mx,\s*my\)[\s\S]{0,800}?\n\s{6}\}/
   );
-  assert.ok(mouseReset, 'mouse-click→reset hit-box block must be findable');
+  assert.ok(mouseReset, 'mouse-click→reset control-card block must be findable');
   assert.match(
     mouseReset[0],
     /this\._settingsResetConfirm\s*>\s*0[\s\S]{0,200}settings\.resetAll\(\)/,
