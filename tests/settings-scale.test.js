@@ -368,8 +368,8 @@ test('settings pointer hit-testing uses the same rounded control cards that rend
   assert.ok(consumers.length >= 6,
     `expected ≥6 settings card hit-test consumers; got ${consumers.length}`);
   assert.match(GAME,
-    /this\._settingsControlHit\(ry,\s*rowH,\s*mx,\s*my\)[\s\S]{0,80}mx\s*>=\s*sliderX\s*&&\s*mx\s*<=\s*sliderX\s*\+\s*sliderW/,
-    'slider rows must use card geometry for row targeting but ignore label/padding clicks outside the slider track');
+    /if \(this\._settingsSliderHit\(ry, rowH, mx, my\)\) \{[\s\S]{0,400}\}\s*if \(this\._settingsControlHit\(ry, rowH, mx, my\)\) \{/,
+    'slider rows set values only on the track (_settingsSliderHit) and otherwise just select the row by its card');
   assert.doesNotMatch(GAME,
     /my\s*>=\s*\w+\s*-\s*hitTop\s*&&\s*my\s*<=\s*\w+\s*\+\s*hitBot/,
     'no vertical-only settings row hit-tests may remain after card alignment');

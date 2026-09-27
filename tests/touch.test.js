@@ -152,10 +152,15 @@ function createWeaponSwapLayoutHarness(width, height, narrow) {
  * @param {boolean} narrow
  */
 function createSettingsControlHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `SETTINGS fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
   const source = 'return ({\n' +
     '  ' + extractObjectMethodSource(GAME, '_settingsLayout') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, '_settingsControlBox') + ',\n' +
-    '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + '\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsSliderTrack') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsSliderHit') + '\n' +
     '});';
   return new Function('W', 'H', 'layout', source)(width, height, { compact: narrow }); // eslint-disable-line no-new-func
 }
@@ -164,9 +169,12 @@ function createSettingsControlHarness(width, height, narrow) {
  * @param {number} width
  * @param {number} height
  * @param {boolean} narrow
- * @returns {{harness:any, mouse:{x:number,y:number,down:boolean}, settings:any, audio:{sfx:number[],music:number[],menu:number}}}
+ * @returns {{harness:any, mouse:{x:number,y:number,down:boolean}, settings:any, audio:{sfx:number[],music:number[],menu:number}, justPressed:Set<string>}}
  */
 function createSettingsUpdateHarness(width, height, narrow) {
+  const runtimeCompact = computeLayout(width, height, 0).compact;
+  assert.equal(narrow, runtimeCompact,
+    `SETTINGS fixture ${width}x${height} narrow=${narrow} must match runtime compact=${runtimeCompact}`);
   const source = "const DEFAULT_KEY_MAP = {\n" +
     "  up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', interact: 'KeyE',\n" +
     "  hackware: 'KeyF', voidshard: 'KeyV', dash: 'ShiftLeft', shoot: 'Space'\n" +
@@ -185,7 +193,7 @@ function createSettingsUpdateHarness(width, height, narrow) {
     "  sfxVol: 0.5, musicVol: 0.5, screenShake: true, damageNumbers: true,\n" +
     "  lockAimToMove: false, aimAssist: true, crtMode: true, reducedMotion: false,\n" +
     "  minimapScale: 1.0, textScale: 1.0, worldZoom: 1.0,\n" +
-    "  keyMap: Object.assign({}, DEFAULT_KEY_MAP), save() {}, resetAll() {}\n" +
+    "  keyMap: Object.assign({}, DEFAULT_KEY_MAP), save() {}, resetCalls: 0, resetAll() { this.resetCalls += 1; }\n" +
     "};\n" +
     'const audio = {\n' +
     '  sfx: [], music: [], menu: 0,\n' +
@@ -208,9 +216,11 @@ function createSettingsUpdateHarness(width, height, narrow) {
     '  ' + extractObjectMethodSource(GAME, '_settingsLayout') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, '_settingsControlBox') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsSliderTrack') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsSliderHit') + ',\n' +
     '  ' + extractObjectMethodSource(GAME, 'updateSettings') + '\n' +
     '};\n' +
-    'return { harness, mouse, settings, audio };';
+    'return { harness, mouse, settings, audio, justPressed };';
   return new Function('W', 'H', 'narrow', source)(width, height, narrow); // eslint-disable-line no-new-func
 }
 
@@ -611,6 +621,145 @@ test('settings slider clicks ignore visible card label and padding outside the t
       'right-padding clicks inside the visible slider card must not snap to 100%');
     assert.deepEqual(fixture.audio.sfx, [0.25],
       'right-padding clicks inside the slider card must not call setSfxVolume');
+  }
+});
+
+/**
+ * Real settings layouts for the slider/row tests: desktop, narrow desktop,
+ * rotated phones (844x390 at zoom 2 -> 603x279; 812x375 at zoom 2.5 ->
+ * 464x214), 1024x768 at zoom 1.5 (533x400) and portrait phones. `narrow`
+ * always comes from the runtime predicate.
+ */
+const SETTINGS_LAYOUT_CASES = /** @type {[number, number][]} */ ([
+  [900, 600], [700, 400], [660, 360], [603, 279], [533, 400], [464, 214], [360, 640], [371, 804],
+]).map(([width, height]) => ({ width, height, narrow: computeLayout(width, height, 0).compact }));
+
+test('settings slider tracks stay inside their row card and every drawn track pixel sets the value', () => {
+  for (const c of SETTINGS_LAYOUT_CASES) {
+    const where = `${c.width}x${c.height}`;
+    const probe = createSettingsUpdateHarness(c.width, c.height, c.narrow).harness;
+    const layoutM = probe._settingsLayout(22);
+    const ry = layoutM.startY;
+    const card = probe._settingsControlBox(ry, layoutM.rowH);
+    const next = probe._settingsControlBox(ry + layoutM.rowH, layoutM.rowH);
+    const track = probe._settingsSliderTrack();
+    assert.ok(track.w > 0, `track has width at ${where}`);
+    // The track and its right-aligned percentage stay inside the card.
+    assert.ok(track.x >= card.x, `track starts inside the card at ${where}`);
+    assert.ok(track.x + track.w + (c.narrow ? 40 : 60) <= card.x + card.w, `track and percentage end inside the card at ${where}`);
+    assert.ok(track.x + track.w <= c.width, `track on screen at ${where}`);
+    // Hit region: the track's X span over the card and the drawn strip.
+    const top = Math.min(card.y, ry - 4), bottom = Math.max(card.y + card.h, ry + 6);
+    assert.ok(bottom < next.y, `slider hits never reach the next row's card at ${where}`);
+    /** @param {number} mx @param {number} my */
+    const tap = (mx, my) => {
+      const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+      f.settings.sfxVol = 0.5;
+      f.mouse.x = mx; f.mouse.y = my;
+      f.harness.updateSettings();
+      return f;
+    };
+    assert.equal(tap(track.x, ry).settings.sfxVol, 0, `left edge -> 0% at ${where}`);
+    assert.equal(tap(track.x + track.w, ry).settings.sfxVol, 1, `right edge -> 100% at ${where}`);
+    assert.deepEqual(tap(track.x + track.w * 0.25, top).audio.sfx, [0.25], `top edge sets the value at ${where}`);
+    assert.deepEqual(tap(track.x + track.w * 0.25, bottom).audio.sfx, [0.25], `bottom edge (drawn strip) sets the value at ${where}`);
+    for (const [mx, my, side] of /** @type {[number, number, string][]} */ ([
+      [track.x - 0.1, ry, 'left'], [track.x + track.w + 0.1, ry, 'right'],
+      [track.x + track.w / 2, top - 0.1, 'top'], [track.x + track.w / 2, bottom + 0.1, 'bottom'],
+    ])) {
+      assert.deepEqual(tap(mx, my).audio.sfx, [], `outside the ${side} edge never sets the value at ${where}`);
+    }
+    // The drawn track's corners (ry-4..ry+6) are all live.
+    for (const my of [ry - 4, ry + 6]) {
+      for (const mx of [track.x, track.x + track.w]) {
+        assert.equal(tap(mx, my).audio.sfx.length, 1, `drawn track corner (${mx},${my}) is tappable at ${where}`);
+      }
+    }
+    // A tap on the MUSIC row's card top goes to MUSIC, never SFX.
+    const music = tap(track.x + track.w / 2, next.y);
+    assert.deepEqual(music.audio.sfx, [], `next row's card top does not change SFX at ${where}`);
+    assert.deepEqual(music.audio.music.length, 1, `next row's card top sets MUSIC at ${where}`);
+  }
+});
+
+test('a slider card tap off the track selects the row, disarms reset and keeps the value', () => {
+  for (const c of SETTINGS_LAYOUT_CASES) {
+    const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+    const layoutM = f.harness._settingsLayout(22);
+    const card = f.harness._settingsControlBox(layoutM.startY + layoutM.rowH, layoutM.rowH);
+    f.harness._settingsSel = 7;
+    f.harness._settingsResetConfirm = 12345;
+    f.settings.musicVol = 0.4;
+    f.mouse.x = card.x + 4; f.mouse.y = card.y + card.h / 2;
+    f.harness.updateSettings();
+    assert.equal(f.harness._settingsSel, 1, `MUSIC row selected at ${c.width}x${c.height}`);
+    assert.equal(f.harness._settingsResetConfirm, 0, 'pending reset disarmed');
+    assert.equal(f.settings.musicVol, 0.4, 'value unchanged');
+    assert.deepEqual(f.audio.music, [], 'no volume call');
+    assert.equal(f.harness._settingsDrag, null, 'no drag starts');
+    assert.equal(f.audio.menu, 1, 'selection feedback plays');
+  }
+});
+
+test('every settings row family acts on a tap inside its own card, and gaps between cards do nothing', () => {
+  const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
+  const actions = ['up', 'down', 'left', 'right', 'interact', 'hackware', 'voidshard', 'dash', 'shoot'];
+  // Layouts where all 22 rows are on screen (short landscape screens push
+  // RESET/BACK below the fold: a pre-existing layout limit).
+  for (const c of SETTINGS_LAYOUT_CASES.filter((k) => k.height >= 600)) {
+    const where = `${c.width}x${c.height}`;
+    const probe = createSettingsUpdateHarness(c.width, c.height, c.narrow).harness;
+    const layoutM = probe._settingsLayout(22);
+    const cardAt = (/** @type {number} */ row) => probe._settingsControlBox(layoutM.startY + row * layoutM.rowH, layoutM.rowH);
+    /** @param {number} row @param {number} [fx] fraction of W for x @param {(f:any)=>void} [prep] */
+    const tapRow = (row, fx, prep) => {
+      const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+      if (prep) prep(f);
+      const b = cardAt(row);
+      f.mouse.x = fx === undefined ? b.x + b.w / 2 : c.width * fx;
+      f.mouse.y = b.y + b.h / 2;
+      f.harness.updateSettings();
+      return f;
+    };
+    toggleKeys.forEach((key, i) => {
+      const f = tapRow(2 + i);
+      for (const other of toggleKeys) {
+        const before = createSettingsUpdateHarness(c.width, c.height, c.narrow).settings[other];
+        assert.equal(f.settings[other], other === key ? !before : before, `row ${2 + i} flips only ${key} at ${where}`);
+      }
+      assert.equal(f.harness._settingsSel, 2 + i);
+    });
+    assert.equal(tapRow(8, 0.75).settings.minimapScale, 1.25, `MINIMAP stepper right half steps forward at ${where}`);
+    assert.equal(tapRow(8, 0.25).settings.minimapScale, 0.75, `MINIMAP stepper left half steps back at ${where}`);
+    assert.equal(tapRow(9, 0.75).settings.textScale, 1.15, `TEXT stepper at ${where}`);
+    assert.equal(tapRow(10, 0.75).settings.worldZoom, 1.25, `WORLD ZOOM stepper at ${where}`);
+    actions.forEach((action, i) => {
+      assert.equal(tapRow(11 + i).harness._settingsCapture, action, `rebind row ${11 + i} captures ${action} at ${where}`);
+    });
+    // RESET: first tap arms, a second tap on the same card commits once.
+    const reset = tapRow(20);
+    assert.ok(reset.harness._settingsResetConfirm > 0, `RESET arms at ${where}`);
+    assert.equal(reset.settings.resetCalls, 0);
+    const rb = cardAt(20);
+    reset.mouse.x = rb.x + rb.w / 2; reset.mouse.y = rb.y + rb.h / 2;
+    reset.harness.updateSettings();
+    assert.equal(reset.settings.resetCalls, 1, `second RESET tap commits once at ${where}`);
+    // BACK leaves the screen; the RESET card does not.
+    assert.equal(tapRow(21).harness.state, 'MENU', `BACK returns to the menu at ${where}`);
+    assert.equal(tapRow(20).harness.state, undefined, `RESET does not leave the screen at ${where}`);
+    // Gaps between cards: nothing changes and a pending reset disarms.
+    for (const row of [2, 8, 11, 19, 20]) {
+      const a = cardAt(row), b = cardAt(row + 1);
+      const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+      const snapshot = JSON.stringify(f.settings);
+      f.harness._settingsResetConfirm = 12345;
+      f.mouse.x = c.width / 2; f.mouse.y = (a.y + a.h + b.y) / 2;
+      f.harness.updateSettings();
+      assert.equal(JSON.stringify(f.settings), snapshot, `gap after row ${row} changes nothing at ${where}`);
+      assert.equal(f.harness._settingsCapture, null, `gap after row ${row} starts no rebind at ${where}`);
+      assert.equal(f.harness.state, undefined, `gap after row ${row} does not leave at ${where}`);
+      assert.equal(f.harness._settingsResetConfirm, 0, `gap after row ${row} disarms reset at ${where}`);
+    }
   }
 });
 

@@ -4476,7 +4476,7 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 ### Settings Payload
 
 ```json
-{ "sfxVol": 1.0, "musicVol": 1.0, "screenShake": true, "damageNumbers": true, "lockAimToMove": false, "aimAssist": true, "crtMode": true, "reducedMotion": false, "minimapScale": 1.0, "textScale": 1.0, "worldZoom": 1.0, "_worldZoomFromDefault": true, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
+{ "sfxVol": 1.0, "musicVol": 1.0, "screenShake": true, "damageNumbers": true, "lockAimToMove": false, "aimAssist": false, "crtMode": false, "reducedMotion": false, "minimapScale": 1.0, "textScale": 1.0, "worldZoom": 1.0, "_worldZoomFromDefault": true, "keyMap": { "up":"KeyW", "down":"KeyS", "left":"KeyA", "right":"KeyD", "interact":"KeyE", "hackware":"KeyF", "voidshard":"KeyV", "dash":"ShiftLeft", "shoot":"Space" } }
 ```
 
 ### Volume Controls
@@ -4484,15 +4484,15 @@ Player preferences are persisted in `localStorage` key `neonDungeonSettings`, se
 - **SFX Volume** (0–100%): multiplied by base master gain (0.7). Applied via `audio.setSfxVolume(v)` using short linear ramp (0.02 s) to avoid zipper noise.
 - **Music Volume** (0–100%): multiplied by base music bus gain (0.20). Applied via `audio.setMusicVolume(v)`.
 - Both are applied at node creation time (lazy init) AND when the setter is called, ensuring correct volume regardless of when AudioContext initialises.
-- In the settings screen, slider rows use the visible row card for row hit-testing, but only clicks/taps on the slider track adjust the value; label and padding clicks inside the card do not snap the slider to an endpoint.
+- In the settings screen, a click/tap on a slider's track (its X span, over the row card or over the drawn track strip, which pokes below the card when rows are short) sets the value and starts a drag; a tap elsewhere on the row card (label, padding) only selects the row, without snapping the value. Render, click and drag share one track geometry (`game._settingsSliderTrack()`): on non-compact screens under ~700 px the track shortens so it and its percentage readout stay inside the row card (a fixed 400 px track used to run past the card, and off the canvas under 600 px, so 100% was unreachable there).
 
 ### Display Toggles
 
 - **Screen Shake** (ON/OFF, default ON): `settings.screenShake`. When OFF, `triggerShake()` is a no-op — camera offset stays at zero.
 - **Damage Numbers** (ON/OFF, default ON): `settings.damageNumbers`. When OFF, `spawnDmgText()` is a no-op — no floating text spawns.
 - **Lock Aim To Move** (ON/OFF, default OFF): `settings.lockAimToMove`.
-- **Aim Assist** (ON/OFF, default ON): `settings.aimAssist`.
-- **CRT Mode** (ON/OFF, default ON): `settings.crtMode`.
+- **Aim Assist** (ON/OFF, default OFF): `settings.aimAssist`.
+- **CRT Mode** (ON/OFF, default OFF): `settings.crtMode`.
 - **Reduced Motion** (ON/OFF, default OFF): `settings.reducedMotion`.
 
 ### Key Rebinding
@@ -4534,7 +4534,8 @@ toggles, steppers, rebinds, reset, and back all show a visible control boundary
 and selected/accent state rather than plain text-only rows. Pointer and touch
 activation uses the same rounded-card geometry returned by
 `game._settingsControlBox()`: taps outside a visible row card do not activate
-that row, while taps on the card edges are accepted.
+that row, while taps on the card edges are accepted. Slider value taps follow
+the track rule above (`game._settingsSliderHit()`).
 
 Navigation: ↑↓ select row, ◀▶ adjust sliders or toggle options, Enter/click to rebind or toggle, Escape to go back. Mouse click/drag on sliders supported. Touch: tap to interact.
 

@@ -6415,6 +6415,37 @@ const game = {
   },
 
   /**
+   * Slider track geometry shared by render, click and drag. On non-compact
+   * screens the track shortens below ~700 px so it and its percentage readout
+   * stay inside the row card: a fixed 400 px track ran past the card (and off
+   * the canvas under 600 px), so 100% could not be tapped or dragged there.
+   * @returns {{ x:number, w:number }}
+   */
+  _settingsSliderTrack() {
+    const narrow = layout.compact;
+    return {
+      x: narrow ? 120 : 200,
+      w: Math.max(0, narrow ? (W - 240) : Math.min(400, W - 296)),
+    };
+  },
+
+  /**
+   * A slider value tap: on the track's X span, and either inside the row card
+   * or on the drawn track strip itself (ry-4..ry+6), which pokes below the card
+   * when rows are short (rowH < 20). Taps elsewhere on the card only select.
+   * @param {number} rowY
+   * @param {number} rowH
+   * @param {number} mx
+   * @param {number} my
+   * @returns {boolean}
+   */
+  _settingsSliderHit(rowY, rowH, mx, my) {
+    const track = this._settingsSliderTrack();
+    if (track.w <= 0 || mx < track.x || mx > track.x + track.w) return false;
+    return this._settingsControlHit(rowY, rowH, mx, my) || (my >= rowY - 4 && my <= rowY + 6);
+  },
+
+  /**
    * @param {number} rowY
    * @param {number} rowH
    * @param {boolean} selected
@@ -6490,10 +6521,8 @@ const game = {
 
     // Slider dragging
     if (this._settingsDrag && mouse.down) {
-      const narrow = layout.compact;
-      const sliderX = narrow ? 120 : 200;
-      const sliderW = narrow ? (W - 240) : 400;
-      let val = (mouse.x - sliderX) / sliderW;
+      const track = this._settingsSliderTrack();
+      let val = track.w > 0 ? (mouse.x - track.x) / track.w : 0;
       val = Math.max(0, Math.min(1, val));
       if (this._settingsDrag === 'sfx') audio.setSfxVolume(val);
       else audio.setMusicVolume(val);
@@ -6589,21 +6618,19 @@ const game = {
 
     // Mouse click hit-testing
     if (jp('MouseLeft')) {
-      const narrow = layout.compact;
       // Use the SAME dynamic row metrics as renderSettings — declared
       // at the top of updateSettings (startY/rowH locals). Re-computing
       // here would risk silent drift if one path is updated and the
       // other isn't.
-      const sliderX = narrow ? 120 : 200;
-      const sliderW = narrow ? (W - 240) : 400;
+      const track = this._settingsSliderTrack();
       const mx = mouse.x, my = mouse.y;
 
-      // Slider click
+      // Slider rows: a tap on the track sets the value and starts a drag;
+      // a tap elsewhere on the row card (label, padding) only selects it.
       for (let i = 0; i < 2; i++) {
         const ry = startY + i * rowH;
-        if (this._settingsControlHit(ry, rowH, mx, my)
-            && mx >= sliderX && mx <= sliderX + sliderW) {
-          let val = (mx - sliderX) / sliderW;
+        if (this._settingsSliderHit(ry, rowH, mx, my)) {
+          let val = (mx - track.x) / track.w;
           val = Math.max(0, Math.min(1, val));
           if (i === 0) audio.setSfxVolume(val);
           else audio.setMusicVolume(val);
@@ -6611,6 +6638,12 @@ const game = {
           this._settingsSel = i;
           this._settingsResetConfirm = 0;
           settings.save();
+          audio.menuSelect();
+          return;
+        }
+        if (this._settingsControlHit(ry, rowH, mx, my)) {
+          this._settingsSel = i;
+          this._settingsResetConfirm = 0;
           audio.menuSelect();
           return;
         }
@@ -6757,8 +6790,9 @@ const game = {
     const rowH = layoutM.rowH;
     const fs = narrow ? 13 : 16;
     const labelX = narrow ? 20 : 40;
-    const sliderX = narrow ? 120 : 200;
-    const sliderW = narrow ? (W - 240) : 400;
+    const sliderTrack = this._settingsSliderTrack();
+    const sliderX = sliderTrack.x;
+    const sliderW = sliderTrack.w;
     const sel = this._settingsSel;
 
     // Title
