@@ -68,7 +68,7 @@ function createRecordingCtx() {
  *   bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number,
  *   comboMult?: number, score?: number, weaponName?: string, dashCooldown?: number, shield?: boolean, belt?: number,
  *   weaponIdx?: number, credits?: number, lore?: number, cores?: number, inset?: number, phSuffix?: string,
- *   spSuffix?: string, nanoCharges?: number, hp?: number}} HudOpts
+ *   spSuffix?: string, nanoCharges?: number, hp?: number, height?: number}} HudOpts
  */
 
 const HUD_SOURCE = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
@@ -99,7 +99,8 @@ function drawHud(opts, source = HUD_SOURCE, hit = () => {}) {
     HUD_CONTEXTS.set(source, sandbox);
   }
   const hudW = opts.width || (opts.compact ? 360 : 960);
-  const hudH = opts.compact ? 640 : 540;
+  // Landscape needs H < W: keep 540 for desktop widths, stay just under W below that.
+  const hudH = opts.height || (opts.compact ? 640 : Math.min(540, hudW - 1));
   // Fixtures must be layouts the game can really enter: the runtime
   // predicate decides compact vs landscape, not the test.
   assert.equal(VIEWPORT.computeLayout(hudW, hudH, 0).compact, !!opts.compact, `${hudW}x${hudH} compact=${!!opts.compact} is not a real layout`);

@@ -110,10 +110,13 @@ and a few evaluation rooms" rather than "an AI being evaluated".
   `bossEntrances` (`src/content/floor-generator.js:336`) before its repair
   passes, and those passes can open more boundary tiles. The seal walls only
   the recorded openings, and `clampToBossRoom` runs only on knockbacks, so the
-  agent can walk out through an unrecorded opening. A 400-floor measurement
-  found this on 3.5% of boss floors on `develop` and 4.3% on this branch: same
-  mechanism, not introduced here. The fix is to rescan the arena boundary
-  after the repair passes, which changes generation outputs.
+  agent can walk out through an unrecorded opening. 400-floor measurements
+  put it at 3.5–4.8% of boss floors on both `develop` and this branch (the
+  differences are within sampling noise): same mechanism, not introduced
+  here. The fix is to rescan the arena boundary with a passability predicate
+  after the repair and arc-grid passes. Some leaks go through corridor tiles
+  that later become ARC, which the FLOOR-only entrance predicate misses.
+  The rescan changes generation outputs.
 
 ## Fun
 
