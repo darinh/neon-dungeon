@@ -8,7 +8,8 @@ on:
 jobs:
   branch-policy:
     name: enforce branch policy
-    runs-on: [self-hosted, linux, x64]
+    # GitHub-hosted (see test.yml): the job reads only event metadata via env.
+    runs-on: ubuntu-latest
     steps:
       - name: Validate PR branch flow
         env:
