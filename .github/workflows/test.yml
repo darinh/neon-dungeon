@@ -14,10 +14,13 @@ jobs:
     # slip through whenever a contributor skipped the pre-commit gate.
     # Aligning CI with the documented gate closes that hole.
     name: npm run check
-    # Self-hosted runner — see .runner/setup.sh for provisioning.
-    # Migrated from ubuntu-latest in PR #383 to keep CI under the
-    # repository owner's control and avoid GitHub-hosted minutes.
-    runs-on: [self-hosted, linux, x64]
+    # GitHub-hosted runner. PR #383 moved CI to a self-hosted runner to avoid
+    # GitHub-hosted minutes on the private repo; that runner went offline and
+    # was deregistered (no CI after 2026-05-28), and the repository is now
+    # public, where hosted minutes are free and GitHub advises against
+    # self-hosted runners (fork PRs can supply their own workflow files).
+    # .runner/setup.sh is kept for reference only.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
