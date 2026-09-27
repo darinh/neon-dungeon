@@ -321,6 +321,9 @@ function landscapeBands(opts) {
   const stray = texts.filter((c) => ![10, 12, 15, 22, 26].includes(c.y - HUD_TOP));
   assert.deepEqual(stray.map((c) => [c.text, c.y - HUD_TOP]), [], 'landscape texts off every checked baseline');
   const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: r.y, width: r.w, h: r.h }));
+  // Pips belong on the weapon line, above its baseline (y+10).
+  const offLine = pips.filter((p) => p.y < HUD_TOP || p.y + p.h > HUD_TOP + 10);
+  assert.deepEqual(offLine.map((p) => p.y - HUD_TOP), [], 'landscape belt pips off the weapon line');
   const row1 = [...texts.filter((c) => c.y <= HUD_TOP + 15), ...pips].sort((a, b) => a.x - b.x);
   const row2 = texts.filter((c) => c.y >= HUD_TOP + 22).sort((a, b) => a.x - b.x);
   return { row1, row2, pips, texts, rects };
@@ -540,6 +543,9 @@ function compactBands(opts) {
   const { texts, rects } = drawHud({ ...opts, compact: true });
   const stray = texts.filter((c) => !C_BANDS.includes(c.y));
   assert.deepEqual(stray.map((c) => [c.text, c.y - C_TOP]), [], 'compact texts off every checked baseline');
+  // Pips belong on the weapon line (r2 = hudTop + 28), above its r2+10 baseline.
+  const offLine = rects.filter(isPip).filter((r) => r.y < C_TOP + 30 || r.y + r.h > C_TOP + 38);
+  assert.deepEqual(offLine.map((r) => r.y - C_TOP), [], 'compact belt pips off the weapon line');
   const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: C_TOP + 38, width: r.w }));
   const bands = C_BANDS.map((b) => [...texts.filter((c) => c.y === b), ...pips.filter((p) => p.y === b)].sort((a, c) => a.x - c.x));
   const hpBar = rects.find((r) => r.h === 12 && r.y === C_TOP + 4);
@@ -580,7 +586,8 @@ test('compact HUD: nothing overlaps or passes the right margin at every portrait
     ['HP full', /^HP \d+\/\d+$/], ['HP no prefix', /^\d+\/\d+$/], ['HP bare', /^hp:\d+$/],
     ['trauma kit on bar', /^✚\d$/], ['trauma kit under bar', /^under:✚\d$/],
     ['SCORE label', /^SCORE:\d/], ['SCORE bare', /^score:\d+$/],
-    ['weapon truncated', /^OVE.*…$/], ['bomb', /^B:/], ['hackware', /^F:/], ['combo', /^×/],
+    ['weapon full', /^OVERCLOCKED PLASMA RIFLE MK-ULTRA$/], ['weapon truncated', /^OVE.*…$/],
+    ['bomb ready', /^B:RDY$/], ['bomb cooldown', /^B:\d/], ['hackware', /^F:/], ['combo', /^×/],
   ], 'compact');
   // The common case keeps every label: a 360 px phone at zoom 1.5.
   const texts = drawHudTexts({ ...LOW_STATE, compact: true, width: 343, score: 12345 });

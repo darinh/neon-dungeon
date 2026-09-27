@@ -91,9 +91,19 @@ and a few evaluation rooms" rather than "an AI being evaluated".
   the core stats. The weapon name, SCORE, bomb state, dash and shield timers
   and the combo readout shorten and then drop rather than overlap. Touch
   players keep the dimmed BOMB and DASH buttons.
-- A CHARGER's 2-tile knockback can, rarely, carry the agent straight across a
-  1-tile wall. A reviewer's fuzz found this 3 times in 1.2M frames. It predates
-  this pass and was not changed.
+- Knockbacks move the agent without a path check, so they can carry it across
+  a 1-tile wall. A reviewer's fuzz hit the CHARGER case 3 times in 1.2M
+  frames; the other paths come from reading the code. All of them predate this
+  pass and were not changed:
+  - Boss knockbacks (for example the WARDEN charge, `src/entities/boss-ai.js:115`)
+    rely on `clampToBossRoom`, which does nothing while the arena is unsealed.
+  - The CHARGER's 2-tile push checks only the landing tile on each axis
+    (`src/entities/enemy-charger.js:37-41`).
+  - The CONDUCTOR pull checks only its destination tile (`boss-ai.js:343`), so
+    it can slip between two touching wall corners.
+  - A swept push helper shared by every knockback would fix the whole class.
+  This pass only guarantees that a push never leaves the agent stuck inside a
+  wall.
 
 ## Fun
 
