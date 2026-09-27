@@ -347,7 +347,10 @@ const LOW_STATE = { atk: 10, def: 2, floor: 1, modifier: true, modifierSuffix: '
 const QUIET_STATE = { atk: 10, def: 2, floor: 1 };
 /** @type {HudOpts} */
 const DASH_STATE = { atk: 150, def: 99, floor: 9, dashCooldown: 2.5, score: 98765 };
-const SWEEP_STATES = /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE], ['dash', DASH_STATE]]);
+/** @type {HudOpts} */
+const BIG_STATE = { atk: 999, def: 999, floor: 15, bombCooldown: 12.5, hackware: true, hackwareCooldown: 9.9,
+  belt: 2, score: 4567890, credits: 45678, cores: 999, lore: 60, hp: 9999, shield: true, dashCooldown: 1.5 };
+const SWEEP_STATES = /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE], ['dash', DASH_STATE], ['big', BIG_STATE]]);
 
 /**
  * Every fallback form a budgeted label can take must actually be drawn by
@@ -544,13 +547,13 @@ function compactBands(opts) {
   return { bands, texts, hpBar, xpBar };
 }
 
-test('compact HUD: nothing overlaps or passes the right margin at portrait widths up to world zoom 2', () => {
-  // W = CSS width / 0.7 / world zoom: 228 is a 320 px phone at zoom 2, 305
-  // the same phone at the mobile-first zoom 1.5, 600 the compact gate.
-  // Portrait phones have no side insets.
+test('compact HUD: nothing overlaps or passes the right margin at every portrait width and world zoom', () => {
+  // W = CSS width / 0.7 / world zoom: 183 is a 320 px phone at the largest
+  // zoom (2.5), 305 the same phone at the mobile-first zoom 1.5, 600 the
+  // compact gate. Portrait phones have no side insets.
   /** @type {Set<string>} */
   const drawn = new Set();
-  for (let width = 228; width <= 600; width += 2) {
+  for (let width = 183; width <= 600; width += 2) {
     for (const [name, state] of SWEEP_STATES) {
       const where = `compact W=${width} ${name}`;
       const { bands, texts, hpBar, xpBar } = compactBands({ ...state, width });
