@@ -4647,7 +4647,10 @@ Landscape budgeting (`drawHUD` in `src/render.js`):
   568×320 phone at the mobile-first world zoom 1.5) with safe insets up to 71
   logical px (a notched phone at zoom 2). Wherever at least ~410 px remain
   between the insets, which the fixed HP–TEST block needs, no label or pip
-  overlaps another or enters the insets.
+  overlaps another or enters the insets. The sweep also fails if any text is
+  drawn off the checked baselines, if the swept states miss any draw call of
+  the branch, or if any fallback form of a budgeted label is never drawn (so
+  every form's own width is checked).
 
 ### Portrait (H > W and W ≤ 600) — compact two-row
 
@@ -4665,12 +4668,15 @@ Landscape budgeting (`drawHUD` in `src/render.js`):
 As in landscape, the weapon-belt pips trail the weapon name on its own line;
 the compact name budget reserves their width, and narrow screens drop the pips
 first, then the name and its suffix together. Row 1's credits, cores and lore
-readouts sit in columns after TEST and move right only when the readout before
-them is too wide. SCORE is right-aligned after them, dropping its `SCORE:`
-label and then hiding when it does not fit. The combo readout hides rather than
-overlap the modifier badge on its line, and the ✚N trauma-kit counter shows
-only when it clears the HP text. `tests/render.test.js` sweeps compact widths
-305–600 (320–600 px phones at world zoom 1–1.5).
+readouts sit in columns after TEST, move right only when the readout before
+them is too wide, and hide rather than pass the right margin. SCORE is
+right-aligned after them, dropping its `SCORE:` label and then hiding when it
+does not fit. The combo readout hides rather than overlap the modifier badge on
+its line. The HP text stays inside its bar (dropping `HP ` and then the
+maximum), and the ✚N trauma-kit counter moves just under the bar when it would
+touch the HP text. The bomb and hackware states on row 2 hide rather than pass
+the margin. `tests/render.test.js` sweeps compact widths 228–600 (W is the CSS
+width / 0.7 / world zoom: a 320 px phone at zoom 2 up to the compact gate).
 
 A shared `layout` object (`compact`, `hudH`, `hudTop`, `msgBase`) is computed
 in `updateLayout()` (called from `resize()`). All bottom-area positioning —

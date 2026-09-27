@@ -1340,7 +1340,12 @@ function drawHUD(player) {
     ctx.fillStyle=hpCol; ctx.fillRect(lx, r1, hpW * hpFrac, 12);
     ctx.shadowBlur=0;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    const hpTextC = `HP ${Math.ceil(player.hp)}/${player.maxHp}`;
+    // The HP text stays inside its bar (W/4 wide): narrow phones drop the
+    // "HP " prefix, then the maximum.
+    const hpNowC = Math.ceil(player.hp);
+    let hpTextC = `HP ${hpNowC}/${player.maxHp}`;
+    if (ctx.measureText(hpTextC).width > hpW - 4) hpTextC = `${hpNowC}/${player.maxHp}`;
+    if (ctx.measureText(hpTextC).width > hpW - 4) hpTextC = String(hpNowC);
     ctx.fillText(hpTextC, lx + 2, r1 + 10);
     const hpTextEndC = lx + 2 + ctx.measureText(hpTextC).width;
 
@@ -1355,11 +1360,10 @@ function drawHUD(player) {
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff88aa'; ctx.font=`${fs}px monospace`;
       ctx.textAlign='right';
-      // The HP bar is W/4 wide: on the narrowest phones the counter only
-      // shows when it clears the HP text.
-      if (lx + hpW - 3 - ctx.measureText(`✚${_nmcCompact}`).width >= hpTextEndC + 2) {
-        ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
-      }
+      // Where it would touch the HP text (narrow phones), it moves just
+      // under the bar's right end instead, left of the modifier badge.
+      const nmcOnBarC = lx + hpW - 3 - ctx.measureText(`✚${_nmcCompact}`).width >= hpTextEndC + 2;
+      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, nmcOnBarC ? r1 + 10 : r1 + 22);
       ctx.textAlign='left';
       ctx.restore();
     }
@@ -1381,16 +1385,22 @@ function drawHUD(player) {
     }
 
     // Credits, cores and lore sit in columns after TEST; each moves right
-    // only when the readout before it is too wide.
+    // only when the readout before it is too wide, and hides rather than
+    // pass the right margin (world zoom 2+ on small phones).
+    const rightMarginC = W - 10 - safeRight;
     ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
     const creditsTextC = `◈${player.credits}`;
-    ctx.fillText(creditsTextC, mid + 50, r1 + 10);
+    let readoutsEndC = mid + 50 - HUD_STAT_GAP / 2;
+    if (mid + 50 + ctx.measureText(creditsTextC).width <= rightMarginC) {
+      ctx.fillText(creditsTextC, mid + 50, r1 + 10);
+      readoutsEndC = mid + 50 + ctx.measureText(creditsTextC).width;
+    }
     // UNCHAINED #39: cores readout (pulses briefly on pickup). Reads
     // `game._cachedCores` (updated on every pickup/vacuum) to avoid a
     // per-frame localStorage hit.
     const coresTextC = `◆${_RG._cachedCores | 0}`;
-    const coresXC = Math.max(mid + 90, mid + 50 + ctx.measureText(creditsTextC).width + HUD_STAT_GAP / 2);
-    {
+    const coresXC = Math.max(mid + 90, readoutsEndC + HUD_STAT_GAP / 2);
+    if (coresXC + ctx.measureText(coresTextC).width <= rightMarginC) {
       const pulse = (_RG._coreHudPulse || 0);
       const pulseCol = pulse > 0 ? '#44e5ff' : '#a866ff';
       ctx.save();
@@ -1398,14 +1408,16 @@ function drawHUD(player) {
       ctx.fillStyle = pulseCol;
       ctx.fillText(coresTextC, coresXC, r1 + 10);
       ctx.restore();
+      readoutsEndC = coresXC + ctx.measureText(coresTextC).width;
     }
-    let readoutsEndC = coresXC + ctx.measureText(coresTextC).width;
     if (player.loreRead.size > 0) {
       const loreTextC = `◫${player.loreRead.size}`;
       const loreXC = Math.max(mid + 130, readoutsEndC + HUD_STAT_GAP / 2);
-      ctx.fillStyle='#ffb700';
-      ctx.fillText(loreTextC, loreXC, r1 + 10);
-      readoutsEndC = loreXC + ctx.measureText(loreTextC).width;
+      if (loreXC + ctx.measureText(loreTextC).width <= rightMarginC) {
+        ctx.fillStyle='#ffb700';
+        ctx.fillText(loreTextC, loreXC, r1 + 10);
+        readoutsEndC = loreXC + ctx.measureText(loreTextC).width;
+      }
     }
 
     // SCORE, right-aligned after those readouts: on narrow phones it drops
@@ -1413,7 +1425,7 @@ function drawHUD(player) {
     ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700'; ctx.font=`${fs + 1}px monospace`;
     ctx.textAlign='right';
-    const scoreRightC = W - 10 - safeRight;
+    const scoreRightC = rightMarginC;
     let scoreTextC = `SCORE:${player.score}`;
     if (scoreRightC - ctx.measureText(scoreTextC).width < readoutsEndC + HUD_STAT_GAP / 2) scoreTextC = String(player.score);
     if (scoreRightC - ctx.measureText(scoreTextC).width >= readoutsEndC + HUD_STAT_GAP / 2) {
@@ -1524,19 +1536,22 @@ function drawHUD(player) {
       }
     }
 
-    if (player.bombCooldown > 0) {
-      ctx.fillStyle='#664488'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:${player.bombCooldown.toFixed(1)}s`, weaponXC, r2 + 22);
-    } else {
-      ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:RDY`, weaponXC, r2 + 22);
+    // Bomb and hackware states hide rather than pass the right margin.
+    ctx.font=`${fs}px monospace`;
+    const bombTextC = player.bombCooldown > 0 ? `B:${player.bombCooldown.toFixed(1)}s` : 'B:RDY';
+    let bombEndC = weaponXC - HUD_STAT_GAP / 2;
+    if (weaponXC + ctx.measureText(bombTextC).width <= rightMarginC) {
+      ctx.fillStyle = player.bombCooldown > 0 ? '#664488' : '#aa00ff';
+      ctx.fillText(bombTextC, weaponXC, r2 + 22);
+      bombEndC = weaponXC + ctx.measureText(bombTextC).width;
     }
     // Hackware indicator (compact)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
       ctx.fillStyle=player.hackwareCooldown>0?'#665533':hw.colour; ctx.font=`${fs}px monospace`;
-      const hwX = statsX + 130;
-      ctx.fillText(`F:${hw.icon}`, hwX, r2 + 22);
+      const hwTextC = `F:${hw.icon}`;
+      const hwX = Math.max(statsX + 130, bombEndC + HUD_STAT_GAP / 2);
+      if (hwX + ctx.measureText(hwTextC).width <= rightMarginC) ctx.fillText(hwTextC, hwX, r2 + 22);
     }
     // Energy shield recharge indicator
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {

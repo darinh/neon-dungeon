@@ -68,10 +68,12 @@ function createRecordingCtx() {
  *   bombCooldown?: number, hackware?: boolean, hackwareCooldown?: number, width?: number, comboCount?: number,
  *   comboMult?: number, score?: number, weaponName?: string, dashCooldown?: number, shield?: boolean, belt?: number,
  *   weaponIdx?: number, credits?: number, lore?: number, cores?: number, inset?: number, phSuffix?: string,
- *   spSuffix?: string, nanoCharges?: number}} HudOpts
+ *   spSuffix?: string, nanoCharges?: number, hp?: number}} HudOpts
  */
 
 const HUD_SOURCE = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'drawHUD')}\nthis.drawHUD = drawHUD;`;
+/** One compiled vm context per drawHUD source; per-call state is assigned onto it. */
+const HUD_CONTEXTS = new Map();
 
 /**
  * @param {HudOpts} opts
@@ -79,8 +81,24 @@ const HUD_SOURCE = `const HUD_STAT_GAP = 12;\n${extractFunctionSource(RENDER, 'd
  * @param {(n: number) => void} [hit] call-site probe for tagged sources
  */
 function drawHud(opts, source = HUD_SOURCE, hit = () => {}) {
+  let sandbox = HUD_CONTEXTS.get(source);
+  if (!sandbox) {
+    sandbox = /** @type {any} */ ({
+      settings: { textScale: 1, minimapScale: 1 },
+      RARITY_COLOURS: ['#ff00c8', '#00f5ff', '#ffb700'],
+      HACKWARE: { BLINK: { icon: '⇥', name: 'PHASE BLINK', colour: '#44ccff' } },
+      COMBO_WINDOW: 3,
+      getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
+      comboColour() { return '#fff'; },
+      drawObservationHudFrame() {},
+      Math,
+    });
+    vm.createContext(sandbox);
+    vm.runInContext(source, sandbox);
+    HUD_CONTEXTS.set(source, sandbox);
+  }
   const ctx = createRecordingCtx();
-  const sandbox = /** @type {any} */ ({
+  Object.assign(sandbox, {
     ctx,
     __hit: hit,
     W: opts.width || (opts.compact ? 360 : 960),
@@ -88,27 +106,17 @@ function drawHud(opts, source = HUD_SOURCE, hit = () => {}) {
     safeLeft: opts.inset || 0,
     safeRight: opts.inset || 0,
     layout: { compact: !!opts.compact, hudTop: opts.compact ? 560 : 492 },
-    settings: { textScale: 1, minimapScale: 1 },
     _RG: { floor: opts.floor, modifier: opts.modifier ? 'FORTIFIED' : null, _cachedCores: opts.cores || 0, _coreHudPulse: 0 },
-    RARITY_COLOURS: ['#ff00c8', '#00f5ff', '#ffb700'],
-    HACKWARE: { BLINK: { icon: '⇥', name: 'PHASE BLINK', colour: '#44ccff' } },
-    COMBO_WINDOW: 3,
     combo: { count: opts.comboCount || 0, timer: 1, flashTimer: 0 },
-    getMod() { return { icon: '⛨', label: 'FORTIFIED', colour: '#fff' }; },
     modifierProgressSuffix() { return opts.modifierSuffix || ''; },
     piercingHeartHudSuffix() { return opts.phSuffix || ''; },
     siphonHudSuffix() { return opts.spSuffix || ''; },
-    comboColour() { return '#fff'; },
     comboMultiplier() { return opts.comboMult || 1; },
-    drawObservationHudFrame() {},
-    Math,
   });
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox);
   const weapon = { name: opts.weaponName || 'PLASMA RIFLE MK-ULTRA' };
   sandbox.drawHUD({
-    hp: 100,
-    maxHp: 100,
+    hp: opts.hp || 100,
+    maxHp: opts.hp || 100,
     atk: opts.atk,
     def: opts.def,
     level: 9,
@@ -304,15 +312,18 @@ const isPip = (r) => (r.w === 8 || r.w === 6) && (r.h === 4 || r.h === 3);
 /**
  * Text boxes and belt pips of the landscape HUD, split into its two bands:
  * row 1 (baselines y+10..y+15, plus the pips) and row 2 (y+22 action labels,
- * y+26 readouts).
+ * y+26 readouts). Every text must sit on one of those baselines, so a label
+ * drawn anywhere else cannot escape the checks.
  * @param {HudOpts} opts
  */
 function landscapeBands(opts) {
   const { texts, rects } = drawHud(opts);
+  const stray = texts.filter((c) => ![10, 12, 15, 22, 26].includes(c.y - HUD_TOP));
+  assert.deepEqual(stray.map((c) => [c.text, c.y - HUD_TOP]), [], 'landscape texts off every checked baseline');
   const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: r.y, width: r.w, h: r.h }));
   const row1 = [...texts.filter((c) => c.y <= HUD_TOP + 15), ...pips].sort((a, b) => a.x - b.x);
   const row2 = texts.filter((c) => c.y >= HUD_TOP + 22).sort((a, b) => a.x - b.x);
-  return { row1, row2, pips, texts };
+  return { row1, row2, pips, texts, rects };
 }
 
 /** @param {any[]} boxes @param {string} where */
@@ -327,42 +338,79 @@ function assertBandFits(boxes, where) {
 const FULL_STATE = { atk: 150, def: 99, floor: 15, modifier: true, modifierSuffix: ' 12/20', bombCooldown: 3.2,
   hackware: true, hackwareCooldown: 4.5, dashCooldown: 1.2, shield: true, belt: 3, weaponIdx: 1,
   phSuffix: ' ♥12/20', score: 1234567, comboCount: 1000, comboMult: 4, credits: 123456, lore: 12, cores: 12345,
-  weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA' };
+  weaponName: 'OVERCLOCKED PLASMA RIFLE MK-ULTRA', hp: 1250 };
 /** @type {HudOpts} */
 const LOW_STATE = { atk: 10, def: 2, floor: 1, modifier: true, modifierSuffix: ' 0/20', dashCooldown: 0.4,
   shield: true, belt: 2, score: 0, comboCount: 2, comboMult: 1.2, credits: 0, lore: 1,
-  spSuffix: ' ◈2/3', nanoCharges: 2 };
+  spSuffix: ' ◈2/3', nanoCharges: 2, bombCooldown: 0, hackware: true };
 /** @type {HudOpts} */
 const QUIET_STATE = { atk: 10, def: 2, floor: 1 };
+/** @type {HudOpts} */
+const DASH_STATE = { atk: 150, def: 99, floor: 9, dashCooldown: 2.5, score: 98765 };
+const SWEEP_STATES = /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE], ['dash', DASH_STATE]]);
+
+/**
+ * Every fallback form a budgeted label can take must actually be drawn by
+ * some swept configuration, so each form's own width is overlap-checked.
+ * @param {string[]} drawn
+ * @param {[string, RegExp][]} tiers
+ * @param {string} layout
+ */
+function assertTiersReached(drawn, tiers, layout) {
+  const missing = tiers.filter(([, re]) => !drawn.some((t) => re.test(t))).map(([name]) => name);
+  assert.deepEqual(missing, [], `${layout} fallback forms no swept configuration draws`);
+}
 
 test('landscape HUD: no label or belt pip overlaps another or leaves the safe area, at any realistic width and inset', () => {
   // Logical landscape widths run from the smallest phone at the mobile-first
   // zoom 1.5 (568x320 -> 541) to desktop. Safe insets are logical px, up to a
   // notched phone at zoom 2 (~71). Below ~410 px between the insets even the
   // fixed HP..TEST block cannot fit, so those combinations are out of scope.
+  const widths = [];
+  for (let w = 541; w <= 1000; w += 3) widths.push(w);
+  widths.push(1100, 1280, 1400, 1600, 1920);
+  /** @type {Set<string>} */
+  const drawn = new Set();
   let checked = 0;
-  for (const width of [541, 557, 568, 580, 600, 640, 700, 743, 773, 780, 844, 960, 1280, 1920]) {
+  for (const width of widths) {
     for (const inset of [0, 31, 44, 63, 71]) {
       if (width - 2 * inset < 410) continue;
-      for (const [name, state] of /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE]])) {
+      for (const [name, state] of SWEEP_STATES) {
         const where = `W=${width} inset=${inset} ${name}`;
-        const { row1, row2 } = landscapeBands({ ...state, width, inset });
+        const { row1, row2, texts, rects } = landscapeBands({ ...state, width, inset });
         assertBandFits(row1, where);
         assertBandFits(row2, where);
         for (const c of [...row1, ...row2]) {
           assert.ok(c.x >= inset && c.x + c.width <= width - inset + 0.001,
             `${c.text} leaves the safe area at ${where}: x=${c.x} w=${c.width}`);
         }
-        // Row-2 action labels never sit under the XP bar (colBase..colBase+50).
+        // Row-2 action labels never sit under the XP bar (colBase..colBase+50);
+        // the HP text and the trauma-kit counter stay inside the HP bar.
         const colBase = 14 + inset + 141;
         for (const c of row2) {
           if (c.y === HUD_TOP + 22) assert.ok(c.x >= colBase + 50, `${c.text} sits under the XP bar at ${where}`);
         }
+        const hpBar = rects.find((r) => r.w === 130 && r.h === 14);
+        assert.ok(hpBar, 'HP bar drawn');
+        for (const c of texts.filter((t) => t.y === HUD_TOP + 15)) {
+          assert.ok(hpBar && c.x >= hpBar.x && c.x + c.width <= hpBar.x + hpBar.w + 0.001, `${c.text} outside the HP bar at ${where}`);
+        }
+        for (const c of texts) drawn.add(c.y === HUD_TOP + 12 && /^\d+$/.test(c.text) ? `score:${c.text}` : c.text);
         checked++;
       }
     }
   }
-  assert.ok(checked >= 150, `swept ${checked} configurations`);
+  assert.ok(checked >= 1500, `swept ${checked} configurations`);
+  assertTiersReached([...drawn], [
+    ['modifier full', /^⛨FORTIFIED /], ['modifier icon+progress', /^⛨ \d/], ['modifier icon', /^⛨$/],
+    ['bomb full', /^\[V\] Bomb /], ['bomb short', /^\[V\] (\d|RDY)/],
+    ['hackware full', /^\[F\] ⇥PHASE BLINK /], ['hackware icon', /^\[F\] ⇥ /], ['hackware text', /^\[F\] (\d|RDY)/],
+    ['shield full', /^🛡 \d/], ['shield tight', /^🛡\d/],
+    ['dash full', /^\[⇧\] DASH /], ['dash short', /^\[⇧\] \d/], ['dash minimal', /^⇧\d/],
+    ['SCORE label', /^SCORE: /], ['SCORE bare', /^score:\d+$/],
+    ['weapon full', /^OVERCLOCKED PLASMA RIFLE MK-ULTRA$/], ['weapon truncated', /^OVE.*…$/],
+    ['combo', /^×4\.0 ×1000$/],
+  ], 'landscape');
 });
 
 test('the swept states reach every draw call in the landscape HUD branch', () => {
@@ -480,28 +528,60 @@ const C_TOP = 560;
 // (r2 = hudTop + 28) at r2+10 (weapon line, with the pips) / r2+22.
 const C_BANDS = [C_TOP + 14, C_TOP + 26, C_TOP + 38, C_TOP + 50];
 
-/** @param {HudOpts} opts */
+/**
+ * The four compact baselines, each with its texts (and the pips on the weapon
+ * line). Every text must sit on one of them. Also returns the HP and XP bars.
+ * @param {HudOpts} opts
+ */
 function compactBands(opts) {
   const { texts, rects } = drawHud({ ...opts, compact: true });
+  const stray = texts.filter((c) => !C_BANDS.includes(c.y));
+  assert.deepEqual(stray.map((c) => [c.text, c.y - C_TOP]), [], 'compact texts off every checked baseline');
   const pips = rects.filter(isPip).map((r) => ({ text: 'pip', x: r.x, y: C_TOP + 38, width: r.w }));
-  return C_BANDS.map((b) => [...texts.filter((c) => c.y === b), ...pips.filter((p) => p.y === b)].sort((a, c) => a.x - c.x));
+  const bands = C_BANDS.map((b) => [...texts.filter((c) => c.y === b), ...pips.filter((p) => p.y === b)].sort((a, c) => a.x - c.x));
+  const hpBar = rects.find((r) => r.h === 12 && r.y === C_TOP + 4);
+  const xpBar = rects.find((r) => r.w === 36 && r.h === 4);
+  return { bands, texts, hpBar, xpBar };
 }
 
-test('compact HUD: nothing overlaps or passes the right margin at default-zoom portrait widths', () => {
-  // 305 is a 320 px phone at the mobile-first zoom 1.5; 600 is the compact
-  // gate. Portrait phones have no side insets.
-  for (const width of [305, 320, 343, 371, 394, 410, 457, 514, 557, 600]) {
-    for (const [name, state] of /** @type {[string, HudOpts][]} */ ([['full', FULL_STATE], ['low', LOW_STATE], ['quiet', QUIET_STATE]])) {
+test('compact HUD: nothing overlaps or passes the right margin at portrait widths up to world zoom 2', () => {
+  // W = CSS width / 0.7 / world zoom: 228 is a 320 px phone at zoom 2, 305
+  // the same phone at the mobile-first zoom 1.5, 600 the compact gate.
+  // Portrait phones have no side insets.
+  /** @type {Set<string>} */
+  const drawn = new Set();
+  for (let width = 228; width <= 600; width += 2) {
+    for (const [name, state] of SWEEP_STATES) {
       const where = `compact W=${width} ${name}`;
-      for (const band of compactBands({ ...state, width })) {
+      const { bands, texts, hpBar, xpBar } = compactBands({ ...state, width });
+      for (const band of bands) {
         assertBandFits(band, where);
         for (const c of band) assert.ok(c.x >= 0 && c.x + c.width <= width - 10 + 0.001, `${c.text} passes the right margin at ${where}`);
       }
+      // The HP text (and the trauma-kit counter when it sits on the bar)
+      // stay inside the HP bar; weapon-line texts stay clear of the XP bar.
+      assert.ok(hpBar && xpBar, 'bars drawn');
+      for (const c of texts.filter((t) => t.y === C_TOP + 14 && t.x < (hpBar ? hpBar.x + hpBar.w : 0))) {
+        assert.ok(hpBar && c.x >= hpBar.x && c.x + c.width <= hpBar.x + hpBar.w + 0.001, `${c.text} leaves the HP bar at ${where}`);
+      }
+      for (const c of texts.filter((t) => t.y === C_TOP + 38)) {
+        assert.ok(xpBar && (c.x + c.width <= xpBar.x || c.x >= xpBar.x + xpBar.w), `${c.text} runs into the XP bar at ${where}`);
+      }
+      for (const c of texts) {
+        const tag = c.y === C_TOP + 14 && /^\d+$/.test(c.text) ? (c.x < 60 ? 'hp:' : 'score:') : c.y === C_TOP + 26 && c.text.startsWith('✚') ? 'under:' : '';
+        drawn.add(tag + c.text);
+      }
     }
   }
+  assertTiersReached([...drawn], [
+    ['HP full', /^HP \d+\/\d+$/], ['HP no prefix', /^\d+\/\d+$/], ['HP bare', /^hp:\d+$/],
+    ['trauma kit on bar', /^✚\d$/], ['trauma kit under bar', /^under:✚\d$/],
+    ['SCORE label', /^SCORE:\d/], ['SCORE bare', /^score:\d+$/],
+    ['weapon truncated', /^OVE.*…$/], ['bomb', /^B:/], ['hackware', /^F:/], ['combo', /^×/],
+  ], 'compact');
   // The common case keeps every label: a 360 px phone at zoom 1.5.
   const texts = drawHudTexts({ ...LOW_STATE, compact: true, width: 343, score: 12345 });
-  for (const t of ['SCORE:12345', '◈0', '◆0', '◫1', '✚2', '×1.2 ×2']) assert.ok(texts.some((c) => c.text === t), `${t} drawn at 343`);
+  for (const t of ['SCORE:12345', '◈0', '◆0', '◫1', '✚2', '×1.2 ×2', 'HP 100/100', 'B:RDY', 'F:⇥']) assert.ok(texts.some((c) => c.text === t), `${t} drawn at 343`);
   // A 320 px phone at zoom 1.5 fits the score only without its label.
   const narrow = drawHudTexts({ ...LOW_STATE, compact: true, width: 305, score: 12345 }).filter((c) => c.y === C_TOP + 14);
   assert.ok(narrow.some((c) => c.text === '12345') && !narrow.some((c) => c.text.startsWith('SCORE:')), 'bare number at 305');
