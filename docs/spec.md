@@ -4675,8 +4675,9 @@ does not fit. The combo readout hides rather than overlap the modifier badge on
 its line. The HP text stays inside its bar (dropping `HP ` and then the
 maximum), and the ✚N trauma-kit counter moves just under the bar when it would
 touch the HP text. The bomb and hackware states on row 2 hide rather than pass
-the margin. `tests/render.test.js` sweeps compact widths 228–600 (W is the CSS
-width / 0.7 / world zoom: a 320 px phone at zoom 2 up to the compact gate).
+the margin. `tests/render.test.js` sweeps compact widths 183–600 (W is the CSS
+width / 0.7 / world zoom: a 320 px phone at the largest zoom, 2.5, up to the
+compact gate).
 
 A shared `layout` object (`compact`, `hudH`, `hudTop`, `msgBase`) is computed
 in `updateLayout()` (called from `resize()`). All bottom-area positioning —
