@@ -682,6 +682,84 @@ test('settings slider tracks stay inside their row card and every drawn track pi
   }
 });
 
+/**
+ * Runs the real renderSettings with a recording canvas and returns its
+ * fillRect calls, plus the settings harness used for geometry.
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} narrow
+ */
+function renderSettingsRects(width, height, narrow) {
+  assert.equal(narrow, computeLayout(width, height, 0).compact, `render fixture ${width}x${height} must match the runtime predicate`);
+  /** @type {{x:number,y:number,w:number,h:number,fill:any}[]} */
+  const rects = [];
+  /** @type {Record<string, any>} */
+  const state = {};
+  const ctx = new Proxy(state, {
+    get(target, key) {
+      if (key === 'fillRect') return (/** @type {number} */ x, /** @type {number} */ y, /** @type {number} */ w, /** @type {number} */ h) => rects.push({ x, y, w, h, fill: target.fillStyle });
+      if (typeof key === 'string' && key in target) return target[key];
+      return () => {};
+    },
+    set(target, key, value) { if (typeof key === 'string') target[key] = value; return true; },
+  });
+  const source = "const DEFAULT_KEY_MAP = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', interact: 'KeyE', hackware: 'KeyF', voidshard: 'KeyV', dash: 'ShiftLeft', shoot: 'Space' };\n" +
+    'const layout = { compact: narrow };\n' +
+    "const settings = { sfxVol: 0.5, musicVol: 0.25, screenShake: true, damageNumbers: true, lockAimToMove: false, aimAssist: false, crtMode: false, reducedMotion: false, minimapScale: 1, textScale: 1, worldZoom: 1, keyMap: Object.assign({}, DEFAULT_KEY_MAP) };\n" +
+    'function KEY_DISPLAY(code) { return String(code); }\n' +
+    'function isTouchDevice() { return false; }\n' +
+    'const RESET_CONFIRM_WINDOW_MS = 2500;\n' +
+    'const NEON = { draw: { roundRectFillStroke() {} } };\n' +
+    'const ACTION_LABELS = new Proxy({}, { get: (_t, k) => String(k).toUpperCase() });\n' +
+    'const harness = {\n' +
+    "  _settingsSel: 0, _settingsCapture: null, _settingsResetConfirm: 0,\n" +
+    '  ' + extractObjectMethodSource(GAME, '_settingsLayout') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlBox') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsControlHit') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_settingsSliderTrack') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, '_drawSettingsControl') + ',\n' +
+    '  ' + extractObjectMethodSource(GAME, 'renderSettings') + '\n' +
+    '};\n' +
+    'harness.renderSettings();\n' +
+    'return harness;';
+  const harness = new Function('W', 'H', 'narrow', 'ctx', source)(width, height, narrow, ctx); // eslint-disable-line no-new-func
+  return { rects, harness };
+}
+
+test('the settings screen draws each slider track exactly where taps and drags use it', () => {
+  for (const c of SETTINGS_LAYOUT_CASES) {
+    const { rects, harness } = renderSettingsRects(c.width, c.height, c.narrow);
+    const layoutM = harness._settingsLayout(22);
+    const track = harness._settingsSliderTrack();
+    const tracks = rects.filter((r) => r.h === 10 && r.fill === 'rgba(255,255,255,0.08)');
+    assert.equal(tracks.length, 2, `two slider tracks drawn at ${c.width}x${c.height}`);
+    tracks.forEach((r, i) => {
+      assert.deepEqual([r.x, r.y, r.w, r.h], [track.x, layoutM.startY + i * layoutM.rowH - 4, track.w, 10],
+        `slider ${i} drawn on the shared track rectangle at ${c.width}x${c.height}`);
+    });
+  }
+});
+
+test('dragging a slider maps the pointer across the same track the tap uses', () => {
+  const f = createSettingsUpdateHarness(660, 360, false);
+  const layoutM = f.harness._settingsLayout(22);
+  const track = f.harness._settingsSliderTrack();
+  assert.equal(track.w, 364, 'narrow desktop track shortened to stay inside its card');
+  f.mouse.x = track.x + track.w * 0.5; f.mouse.y = layoutM.startY;
+  f.harness.updateSettings();
+  assert.equal(f.harness._settingsDrag, 'sfx', 'a track tap starts a drag');
+  f.justPressed.clear();
+  f.mouse.down = true;
+  for (const [mx, want] of /** @type {[number, number][]} */ ([[track.x + track.w * 0.75, 0.75], [track.x + track.w + 50, 1], [track.x - 50, 0], [track.x + track.w * 0.25, 0.25]])) {
+    f.mouse.x = mx;
+    f.harness.updateSettings();
+    assert.equal(f.settings.sfxVol, want, `drag at x=${mx}`);
+  }
+  f.mouse.down = false;
+  f.harness.updateSettings();
+  assert.equal(f.harness._settingsDrag, null, 'release ends the drag');
+});
+
 test('a slider card tap off the track selects the row, disarms reset and keeps the value', () => {
   for (const c of SETTINGS_LAYOUT_CASES) {
     const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
