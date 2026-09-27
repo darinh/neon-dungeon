@@ -754,9 +754,16 @@ test('the settings screen draws each slider track exactly where taps and drags u
     // At 0% and 100% the knob overhangs the track by 3 px; those pixels grab too.
     const ends = renderSettingsRects(c.width, c.height, c.narrow, 0, 1).rects.filter((r) => r.w === 6 && r.h === 12);
     assert.deepEqual(ends.map((k) => k.x), [track.x - 3, track.x + track.w - 3], `knobs at 0% and 100% at ${c.width}x${c.height}`);
-    for (const k of ends) {
-      assert.ok(k.x >= track.x - 3 && k.x + k.w <= track.x + track.w + 3, `knob within the grab span at ${c.width}x${c.height}`);
-    }
+    // Every corner of both end knobs grabs its own slider.
+    ends.forEach((k, i) => {
+      for (const [mx, my] of /** @type {[number, number][]} */ ([[k.x, k.y], [k.x + k.w, k.y], [k.x, k.y + k.h], [k.x + k.w, k.y + k.h]])) {
+        const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
+        f.mouse.x = mx; f.mouse.y = my;
+        f.harness.updateSettings();
+        assert.deepEqual([f.audio.sfx.length, f.audio.music.length], i === 0 ? [1, 0] : [0, 1],
+          `knob ${i} corner (${mx},${my}) grabs its slider at ${c.width}x${c.height}`);
+      }
+    });
     knobs.forEach((k, i) => {
       const ry = layoutM.startY + i * layoutM.rowH;
       const card = harness._settingsControlBox(ry, layoutM.rowH);
