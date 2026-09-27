@@ -90,7 +90,9 @@ and a few evaluation rooms" rather than "an AI being evaluated".
   notched phone at zoom 2 with its safe-area insets) the HUD has room only for
   the core stats. The weapon name, SCORE, bomb state, dash and shield timers
   and the combo readout shorten and then drop rather than overlap. Touch
-  players keep the dimmed BOMB and DASH buttons.
+  players keep the dimmed BOMB and DASH buttons. At the maximum world zoom
+  (2.5) on a notched phone in landscape (about 340 logical px between the
+  insets), even the fixed HP–TEST stats run into the right inset.
 - Knockbacks move the agent without a path check, so they can carry it across
   a 1-tile wall. A reviewer's fuzz hit the CHARGER case 3 times in 1.2M
   frames; the other paths come from reading the code. All of them predate this
