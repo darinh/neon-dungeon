@@ -40,6 +40,10 @@ const T = Object.freeze({
   MAINFRAME_READER: 25,
   NETWORK_PORTAL: 26,
   MESSAGE_CONSOLE: 27,
+  LOGIC_NODE: 28,
+  LOGIC_NODE_LIT: 29,
+  SEAM_WALL: 30,
+  SYNC_CONSOLE: 31,
 });
 
 const MAP_W = 80;
@@ -58,7 +62,8 @@ function isPassable(t) {
     t === T.CHALLENGE_GATE || t === T.IMPLANT_SHRINE ||
     t === T.EVENT_TERMINAL || t === T.TELEPORT_PAD || t === T.TOXIC ||
     t === T.SHOCK_TILE || t === T.REPULSOR || t === T.MAINFRAME_READER ||
-    t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE;
+    t === T.NETWORK_PORTAL || t === T.MESSAGE_CONSOLE ||
+    t === T.LOGIC_NODE || t === T.LOGIC_NODE_LIT || t === T.SYNC_CONSOLE;
 }
 
 /**
@@ -68,7 +73,7 @@ function isPassable(t) {
 function isSeeThrough(t) {
   return t !== T.WALL && t !== T.VOID && t !== T.CRACKED && t !== T.DOOR &&
     t !== T.LOCKED_R && t !== T.LOCKED_B && t !== T.LOCKED_G &&
-    t !== T.CHALLENGE_GATE && t !== T.CRATE;
+    t !== T.CHALLENGE_GATE && t !== T.CRATE && t !== T.SEAM_WALL;
 }
 
 /**
@@ -218,6 +223,10 @@ function createGenerationSandbox() {
   );
   vm.runInContext(
     fs.readFileSync(path.join(ROOT, 'src/content/modifiers.js'), 'utf8'),
+    sandbox
+  );
+  vm.runInContext(
+    fs.readFileSync(path.join(ROOT, 'src/content/trials.js'), 'utf8'),
     sandbox
   );
   vm.runInContext(

@@ -1,9 +1,12 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const biomes = require(path.resolve(__dirname, '..', 'src', 'data', 'biomes.js'));
+const sourceMetadata = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities', 'source-metadata.js'), 'utf8');
 
 test('AREAS cover floors 1-15 contiguously without gaps or overlaps', () => {
   const floors = biomes.AREAS.flatMap(a => a.floors);
@@ -165,4 +168,15 @@ test('bossDisplayNames override takes precedence over biome displayName', () => 
   // Sandbox specifically keeps WARDEN as 'WARDEN' rather than SENTINEL-PRIME.
   const sandbox = biomes.AREAS.find(a => a.id === 'sandbox');
   assert.equal(sandbox.bossDisplayNames && sandbox.bossDisplayNames.WARDEN, 'WARDEN');
+});
+
+test('GENESIS bossDisplayNames override resolves boss HUD name to GENESIS PROTOCOL', () => {
+  const opennet = biomes.AREAS.find(a => a.id === 'opennet');
+  assert.equal(opennet.bossDisplayNames && opennet.bossDisplayNames.GENESIS, 'GENESIS PROTOCOL');
+  assert.equal(opennet.displayName, 'THE ARCHITECT', 'biome place name remains distinct from boss display name');
+
+  const sandbox = { NEON: { biomes }, console };
+  vm.createContext(sandbox);
+  vm.runInContext(`${sourceMetadata}\nthis.BOSS_NAMES = BOSS_NAMES;`, sandbox);
+  assert.equal(sandbox.BOSS_NAMES.GENESIS, 'GENESIS PROTOCOL');
 });

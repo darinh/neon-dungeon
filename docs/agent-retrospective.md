@@ -162,6 +162,15 @@ Run and record these before verification or review:
    live user-scope bootstrap extension has been installed, reloaded, inspected,
    and recorded with its path and scope. A checked-in guard that exists only on a
    stale checkout is not an active control.
+   If a project git wrapper, pre-tool hook, or local commit hook falsely
+   classifies a linked implementation worktree as the primary checkout or
+   reports unrelated paths from another worktree, record the exact failure,
+   verify the current worktree path, branch, and status with read-only system-git
+   commands, and prefer the least-bypassing fix. System git or plumbing may be
+   used only after that evidence proves the guard is wrong for the active
+   worktree. Do not use `git reset` as an index/ref synchronization cleanup step
+   in this recovery path; choose a non-destructive index operation or a fresh
+   worktree, then record the resulting commit SHA and clean status.
 6. **Focused-test command scope.** Before describing a verification command as
    focused, check how package scripts forward arguments. In this repository,
    `npm test -- tests/foo.test.js` still runs the package script

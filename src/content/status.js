@@ -124,6 +124,7 @@ function drawModBanner() {
 // Status effect badges — compact indicators above HUD bar
 /** @type {Record<string, any>} */
 const statusFx = {};
+let statusBadgeReservedHeight = 0;
 /**
  * @param {any} player
  */
@@ -658,7 +659,7 @@ function drawStatusBar(player) {
   }
 
   const ids = Object.keys(statusFx);
-  if (ids.length === 0) return;
+  if (ids.length === 0) { statusBadgeReservedHeight = 0; return; }
 
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
   // Vertical anchor for the badge row, sitting ABOVE the HUD bar.
@@ -680,6 +681,8 @@ function drawStatusBar(player) {
   // both derive from `fs` (height = fs+6, width = measureText+8) so
   // scaling the font naturally rescales the whole badge box.
   const fs = Math.max(6, Math.round((layout.compact ? 8 : 9) * settings.textScale));
+  const badgeH = fs + 6;
+  statusBadgeReservedHeight = badgeYOffset + badgeH - 2;
   // Reserve room for the corner minimap. The minimap is also
   // settings-scaled (`settings.minimapScale`); `Math.round(120 * scale)`
   // matches the MW formula in render.js drawMinimap so the badge strip
@@ -697,7 +700,6 @@ function drawStatusBar(player) {
     const text = s.icon + (s.label ? ' ' + s.label : '');
     const tw = ctx.measureText(text).width;
     const badgeW = tw + 8;
-    const badgeH = fs + 6;
 
     if (x + badgeW > maxX) break; // prevent overflow into minimap
 
@@ -715,4 +717,13 @@ function drawStatusBar(player) {
   }
 
   ctx.restore();
+}
+
+/**
+ * @param {any} player
+ * @returns {number}
+ */
+function getStatusBadgeReservedHeight(player) {
+  void player;
+  return statusBadgeReservedHeight;
 }

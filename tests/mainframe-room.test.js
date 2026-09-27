@@ -576,6 +576,7 @@ test('message-send finale has three constrained intents, explicit controls, and 
 
 test('mainframe reader unlock state survives save/resume serialization', () => {
   const helperSrc = "const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';\n" +
+    'const MESSAGE_SENT_HOLD_S = 6;\n' +
     extractArrayBlock(GAME, 'ACT1_MESSAGE_INTENTS').replace('[', 'const ACT1_MESSAGE_INTENTS = [') + ';\n' +
     extractFunctionSource(GAME, 'isAct1MessageIntentId') + '\n' +
     extractFunctionSource(GAME, 'serializeMainframeFinaleState') + '\n' +
