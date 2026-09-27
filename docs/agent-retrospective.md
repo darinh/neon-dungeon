@@ -274,7 +274,13 @@ Run and record these before verification or review:
    worktree, verify whether the path is ignored, and prove the committed project
    extension is tracked. If a live user-scope extension is installed to protect
    the current session, record which extension path/scope is active after reload
-   and which copy is authoritative.
+   and which copy is authoritative. If a guard extension or hook that normally
+   enforces a rule stops loading mid-session (for example `extensions_reload`
+   reporting a startup failure), record which protections were lost and the
+   manual equivalent used for each until it is restored (for example
+   same-basename test changes for a test enforcer, `npm run lint` in every gate
+   for lint-on-edit). A green gate is not evidence for protections it does not
+   check.
 16. **Pre-promotion authority/range audit.** Before opening any PR targeting
      `main`, run `npm run check:promotion-audit -- --allow-human-authored
      --authority "<quoted active instruction authorizing develop -> main
@@ -313,6 +319,13 @@ Run and record these before verification or review:
     conflicts with another active rule, stop instead of inferring approval. A
     closed PR whose source branch was changed or replaced should not be treated
     as reopenable; open a replacement PR from a fresh branch.
+    Before merging a promotion, compare the bump `release-version.yml` will
+    compute from the final promoted head commit's subject (it reads only that
+    commit) with the bump the whole promoted range requires (any `feat:` in the
+    range means minor; `!` or `BREAKING CHANGE` means major). If they differ,
+    reorder the remaining `develop` landings or record the accepted version
+    before merging, and repeat the check after any change to the head. The
+    durable fix is for the workflow to compute the bump from the whole range.
 17. **Upstream overlap and docs-dedupe proof.** Before extracting a symbol or
     subsystem, check whether equivalent work has already landed upstream or in an
     open PR so the slice can shift to reinforcement instead of duplicating work.
@@ -397,7 +410,13 @@ Run and record these before verification or review:
     target changed since the promotion PR was opened or contains work outside the
     just-promoted range, stop and reconcile deliberately instead of force pushing.
     The retrospective must include the command evidence that made the alignment
-    safe.
+    safe. If a machine-local git wrapper blocks the script's push from a linked
+    worktree, that is a control-5 incident, not a routine step: record the
+    linked-worktree evidence (`git rev-parse --git-dir` showing
+    `.git/worktrees/<name>`, clean status, and the intended ref update) and re-run
+    the same `npm run align:develop` with system git resolved first on `PATH`, so
+    the script's tree, open-PR and lease checks still run. Never replace the
+    script with a raw push.
 22. **Pre-merge instruction conflict check.** Before merging any PR, compare the
     merge instructions that apply from the repository protocol, project
     instructions, and current operator/user directive. If they disagree on tool,
@@ -413,6 +432,30 @@ Run and record these before verification or review:
     observed behavior to an inferred cause. Record the searched scripts, wrappers,
     extensions, or workflows; after changes, verify the prohibited path/pattern is
     absent or explicitly limited to documentation of the prohibition.
+24. **Universal-claim oracle.** Before asserting that something never or always
+    holds (for example "no HUD label overlaps" or "a save never stores an embedded
+    position"), write down the claim's domain (every state, layout and input
+    dimension it covers) and its observable failure condition. Encode that
+    domain as a fixture-matrix test that asserts the outcome itself, not mere
+    execution. Fixtures must be accepted by the runtime predicate that selects
+    the code path (for example `engine/viewport.js computeLayout`), and the test
+    must fail if a named state or fallback form is never exercised; tagging draw
+    or branch sites, as `tests/render.test.js` does for `drawHUD`, is one way.
+    Reuse or cite an existing definition of any region or rule that another
+    module already defines instead of writing a second copy. Word the claim with
+    its real exceptions and label sampled evidence as sampled. **Same-claim
+    cap:** if two consecutive review rounds falsify the same claim, including
+    regressions introduced by the previous fix, stop the fix-and-review loop.
+    Extend the oracle to cover every falsified state, fix against it, and run one
+    confirmation round whose brief covers the whole claim, not only the latest
+    delta.
+25. **Worktree instruction freshness.** Before the first edit in a worktree,
+    compare its `AGENTS.md` and `docs/agent-retrospective.md` with the copies
+    injected into the session (diff or hash). If they differ, the worktree copies
+    are binding from that point: re-read them, apply the differing rules to work
+    already done, and record the revision used. A stale primary checkout means
+    injected instructions can lag `develop` by months; the durable fix is a
+    human fast-forward of the primary checkout, because agents may not mutate it.
 
 ## Pre-retrospective checklist
 
@@ -501,6 +544,10 @@ Before writing the retrospective:
 Collect only facts that affect future behavior:
 
 - original request or issue;
+- request-outcome map: each part of a multi-part request mapped to its artifact
+  or evidence, with remaining limitations; shipping evidence (merges, releases,
+  green CI) does not substitute for evaluation evidence such as a requested
+  review or assessment;
 - issue disposition: whether the work fully resolves the originating issue,
   leaves it open with residual risk, or requires a follow-up issue/comment;
 - branch and worktree path;
