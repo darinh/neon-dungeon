@@ -633,7 +633,7 @@ test('settings slider clicks ignore visible card label and padding outside the t
  */
 const SETTINGS_LAYOUT_CASES = /** @type {[number, number][]} */ ([
   [900, 600], [700, 400], [660, 360], [603, 279], [533, 400], [464, 214], [360, 640], [371, 804],
-  [229, 406], [223, 482], // 320x568 at zoom 2; 390x844 at zoom 2.5
+  [229, 406], [223, 482], [206, 366], // 320x568 at zoom 2; 390x844 and 360x640 at zoom 2.5
 ]).map(([width, height]) => ({ width, height, narrow: computeLayout(width, height, 0).compact }));
 
 test('settings slider tracks stay inside their row card and every drawn track pixel sets the value', () => {
@@ -646,6 +646,11 @@ test('settings slider tracks stay inside their row card and every drawn track pi
     const next = probe._settingsControlBox(ry + layoutM.rowH, layoutM.rowH);
     const track = probe._settingsSliderTrack();
     assert.ok(track.w > 0, `track has width at ${where}`);
+    // Compact tracks under 280 px keep min(40, W-180): exact widths pin the floor.
+    const wantW = c.narrow ? Math.max(c.width - 240, Math.min(40, c.width - 180)) : Math.min(400, c.width - 296);
+    assert.equal(track.w, wantW, `track width at ${where}`);
+    if (c.width === 223 || c.width === 229) assert.equal(track.w, 40, `40 px floor at ${where}`);
+    if (c.width === 206) assert.equal(track.w, 26, `26 px track for a 360 px phone at zoom 2.5`);
     // The track and its right-aligned percentage stay inside the card.
     assert.ok(track.x >= card.x, `track starts inside the card at ${where}`);
     assert.ok(track.x + track.w + (c.narrow ? 40 : 60) <= card.x + card.w, `track and percentage end inside the card at ${where}`);
@@ -663,10 +668,13 @@ test('settings slider tracks stay inside their row card and every drawn track pi
     };
     assert.equal(tap(track.x, ry).settings.sfxVol, 0, `left edge -> 0% at ${where}`);
     assert.equal(tap(track.x + track.w, ry).settings.sfxVol, 1, `right edge -> 100% at ${where}`);
+    // The knob overhangs each end by 3 px; its pixels grab too (value clamps).
+    assert.equal(tap(track.x - 3, ry).settings.sfxVol, 0, `knob overhang left -> 0% at ${where}`);
+    assert.equal(tap(track.x + track.w + 3, ry).settings.sfxVol, 1, `knob overhang right -> 100% at ${where}`);
     assert.deepEqual(tap(track.x + track.w * 0.25, top).audio.sfx, [0.25], `top edge sets the value at ${where}`);
     assert.deepEqual(tap(track.x + track.w * 0.25, bottom).audio.sfx, [0.25], `bottom edge (drawn strip) sets the value at ${where}`);
     for (const [mx, my, side] of /** @type {[number, number, string][]} */ ([
-      [track.x - 0.1, ry, 'left'], [track.x + track.w + 0.1, ry, 'right'],
+      [track.x - 3.1, ry, 'left'], [track.x + track.w + 3.1, ry, 'right'],
       [track.x + track.w / 2, top - 0.1, 'top'], [track.x + track.w / 2, bottom + 0.1, 'bottom'],
     ])) {
       assert.deepEqual(tap(mx, my).audio.sfx, [], `outside the ${side} edge never sets the value at ${where}`);
@@ -691,7 +699,7 @@ test('settings slider tracks stay inside their row card and every drawn track pi
  * @param {number} height
  * @param {boolean} narrow
  */
-function renderSettingsRects(width, height, narrow) {
+function renderSettingsRects(width, height, narrow, sfxVol = 0.5, musicVol = 0.25) {
   assert.equal(narrow, computeLayout(width, height, 0).compact, `render fixture ${width}x${height} must match the runtime predicate`);
   /** @type {{x:number,y:number,w:number,h:number,fill:any}[]} */
   const rects = [];
@@ -707,7 +715,7 @@ function renderSettingsRects(width, height, narrow) {
   });
   const source = "const DEFAULT_KEY_MAP = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', interact: 'KeyE', hackware: 'KeyF', voidshard: 'KeyV', dash: 'ShiftLeft', shoot: 'Space' };\n" +
     'const layout = { compact: narrow };\n' +
-    "const settings = { sfxVol: 0.5, musicVol: 0.25, screenShake: true, damageNumbers: true, lockAimToMove: false, aimAssist: false, crtMode: false, reducedMotion: false, minimapScale: 1, textScale: 1, worldZoom: 1, keyMap: Object.assign({}, DEFAULT_KEY_MAP) };\n" +
+    "const settings = { sfxVol: " + sfxVol + ", musicVol: " + musicVol + ", screenShake: true, damageNumbers: true, lockAimToMove: false, aimAssist: false, crtMode: false, reducedMotion: false, minimapScale: 1, textScale: 1, worldZoom: 1, keyMap: Object.assign({}, DEFAULT_KEY_MAP) };\n" +
     'function KEY_DISPLAY(code) { return String(code); }\n' +
     'function isTouchDevice() { return false; }\n' +
     'const RESET_CONFIRM_WINDOW_MS = 2500;\n' +
@@ -743,6 +751,12 @@ test('the settings screen draws each slider track exactly where taps and drags u
     // strip (ry+6), never reaching into the next row's card.
     const knobs = rects.filter((r) => r.w === 6 && r.h === 12);
     assert.equal(knobs.length, 2, `two knobs at ${c.width}x${c.height}`);
+    // At 0% and 100% the knob overhangs the track by 3 px; those pixels grab too.
+    const ends = renderSettingsRects(c.width, c.height, c.narrow, 0, 1).rects.filter((r) => r.w === 6 && r.h === 12);
+    assert.deepEqual(ends.map((k) => k.x), [track.x - 3, track.x + track.w - 3], `knobs at 0% and 100% at ${c.width}x${c.height}`);
+    for (const k of ends) {
+      assert.ok(k.x >= track.x - 3 && k.x + k.w <= track.x + track.w + 3, `knob within the grab span at ${c.width}x${c.height}`);
+    }
     knobs.forEach((k, i) => {
       const ry = layoutM.startY + i * layoutM.rowH;
       const card = harness._settingsControlBox(ry, layoutM.rowH);
@@ -794,7 +808,7 @@ test('a slider card tap off the track selects the row, disarms reset and keeps t
     const layoutM = f.harness._settingsLayout(22);
     const card = f.harness._settingsControlBox(layoutM.startY + layoutM.rowH, layoutM.rowH);
     f.harness._settingsSel = 7;
-    f.harness._settingsResetConfirm = 12345;
+    f.harness._settingsResetConfirm = performance.now();
     f.settings.musicVol = 0.4;
     f.mouse.x = card.x + 4; f.mouse.y = card.y + card.h / 2;
     f.harness.updateSettings();
@@ -821,7 +835,7 @@ test('every settings row family acts on a tap inside its own card, and gaps betw
     const tapRow = (row, fx, prep) => {
       const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
       // Every row tap except RESET itself must disarm a pending reset.
-      if (row !== 20) f.harness._settingsResetConfirm = 12345;
+      if (row !== 20) f.harness._settingsResetConfirm = performance.now();
       if (prep) prep(f);
       const b = cardAt(row);
       f.mouse.x = fx === undefined ? b.x + b.w / 2 : c.width * fx;
@@ -834,22 +848,24 @@ test('every settings row family acts on a tap inside its own card, and gaps betw
     {
       const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
       const track = f.harness._settingsSliderTrack();
-      f.harness._settingsResetConfirm = 12345;
+      f.harness._settingsResetConfirm = performance.now();
       f.mouse.x = track.x + track.w / 2; f.mouse.y = layoutM.startY;
       f.harness.updateSettings();
       assert.equal(f.audio.sfx.length, 1, `track tap sets SFX at ${where}`);
       assert.equal(f.harness._settingsResetConfirm, 0, `track tap disarms reset at ${where}`);
     }
-    // Taps just outside each card's left and right edges do nothing.
+    // Taps just outside each card's left and right edges do nothing, at the
+    // card's top, text baseline, middle and bottom.
+    const startRow = (/** @type {number} */ row) => layoutM.startY + row * layoutM.rowH;
     for (let row = 0; row < 22; row++) {
       const b = cardAt(row);
-      for (const mx of [b.x - 1, b.x + b.w + 1]) {
+      for (const [mx, my] of [b.x - 1, b.x + b.w + 1].flatMap((x) => [b.y, startRow(row), b.y + b.h / 2, b.y + b.h].map((yy) => [x, yy]))) {
         const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
         const snapshot = JSON.stringify(f.settings);
         f.harness._settingsSel = 5;
-        f.mouse.x = mx; f.mouse.y = b.y + b.h / 2;
+        f.mouse.x = mx; f.mouse.y = my;
         f.harness.updateSettings();
-        assert.equal(JSON.stringify(f.settings), snapshot, `margin tap beside row ${row} (x=${mx}) changes nothing at ${where}`);
+        assert.equal(JSON.stringify(f.settings), snapshot, `margin tap beside row ${row} (${mx},${my}) changes nothing at ${where}`);
         assert.equal(f.harness._settingsSel, 5, `margin tap beside row ${row} selects nothing at ${where}`);
         assert.equal(f.harness._settingsCapture, null, `margin tap beside row ${row} starts no rebind at ${where}`);
         assert.equal(f.harness.state, undefined, `margin tap beside row ${row} does not leave at ${where}`);
@@ -886,7 +902,7 @@ test('every settings row family acts on a tap inside its own card, and gaps betw
       const a = cardAt(row), b = cardAt(row + 1);
       const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
       const snapshot = JSON.stringify(f.settings);
-      f.harness._settingsResetConfirm = 12345;
+      f.harness._settingsResetConfirm = performance.now();
       f.mouse.x = c.width / 2; f.mouse.y = (a.y + a.h + b.y) / 2;
       f.harness.updateSettings();
       assert.equal(JSON.stringify(f.settings), snapshot, `gap after row ${row} changes nothing at ${where}`);

@@ -6432,9 +6432,10 @@ const game = {
   },
 
   /**
-   * A slider value tap: on the track's X span, and either inside the row card
-   * or on the drawn track strip itself (ry-4..ry+6), which pokes below the card
-   * when rows are short (rowH < 20). Taps elsewhere on the card only select.
+   * A slider value tap: on the track's X span (plus the knob's 3 px overhang
+   * at each end; the value clamps), and either inside the row card or on the
+   * drawn track strip (ry-4..ry+6), which pokes below the card when rows are
+   * short (rowH < 20). Taps elsewhere on the card only select.
    * @param {number} rowY
    * @param {number} rowH
    * @param {number} mx
@@ -6443,7 +6444,7 @@ const game = {
    */
   _settingsSliderHit(rowY, rowH, mx, my) {
     const track = this._settingsSliderTrack();
-    if (track.w <= 0 || mx < track.x || mx > track.x + track.w) return false;
+    if (track.w <= 0 || mx < track.x - 3 || mx > track.x + track.w + 3) return false;
     return this._settingsControlHit(rowY, rowH, mx, my) || (my >= rowY - 4 && my <= rowY + 6);
   },
 
