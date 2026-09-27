@@ -6419,13 +6419,15 @@ const game = {
    * screens the track shortens below ~700 px so it and its percentage readout
    * stay inside the row card: a fixed 400 px track ran past the card (and off
    * the canvas under 600 px), so 100% could not be tapped or dragged there.
+   * Compact screens under 280 px (world zoom 2+ on phones) keep a track of up
+   * to 40 px instead of the W-240 formula collapsing to nothing.
    * @returns {{ x:number, w:number }}
    */
   _settingsSliderTrack() {
     const narrow = layout.compact;
     return {
       x: narrow ? 120 : 200,
-      w: Math.max(0, narrow ? (W - 240) : Math.min(400, W - 296)),
+      w: Math.max(0, narrow ? Math.max(W - 240, Math.min(40, W - 180)) : Math.min(400, W - 296)),
     };
   },
 
@@ -6824,9 +6826,10 @@ const game = {
       const fillW = sliderW * (volVals[i] ?? 0);
       ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
       ctx.fillRect(sliderX, trackY, fillW, 10);
-      // Slider knob
+      // Slider knob: 12 px tall so it ends with the track (ry+6), inside the
+      // tappable strip and clear of the next row's card when rows are short.
       ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
-      ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 14);
+      ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 12);
       // Percentage
       ctx.textAlign = 'right';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
