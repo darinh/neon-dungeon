@@ -1807,10 +1807,24 @@ class Enemy {
         const w = TILE * 0.48, h = TILE * 0.24;
         ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
       } else if (t === 'TURRET') {
-        // Plus/cross shape
-        const a = TILE * 0.14, b = TILE * 0.38;
-        ctx.fillRect(sx - a / 2, sy - b / 2, a, b);
-        ctx.fillRect(sx - b / 2, sy - a / 2, b, a);
+        // Hostile emplacement: base plate, barrel toward player, hot core.
+        const base = TILE * 0.42;
+        const barrelLen = TILE * 0.32;
+        const barrelW = TILE * 0.1;
+        const aimPlayer = _EG.player || this;
+        const aimDx = aimPlayer.x - this.x;
+        const aimDy = aimPlayer.y - this.y;
+        const aim = (aimDx || aimDy) ? Math.atan2(aimDy, aimDx) : 0;
+        ctx.fillRect(sx - base / 2, sy - base / 2, base, base);
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(aim);
+        ctx.fillRect(0, -barrelW / 2, barrelLen, barrelW);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = '#ff3344';
+        NEON.draw.circle(ctx, sx, sy, TILE * 0.11);
+        ctx.restore();
       } else if (t === 'DRONE' || t === 'SEEKER') {
         // Small diamond
         const sz = TILE * 0.28;
@@ -3438,6 +3452,191 @@ class Enemy {
 
 // ─── Player ───────────────────────────────────────────────────────────────────
 
+/**
+ * Player-only tile passability. Identical to isPassable() except for the
+ * exploit trial's SEAM_WALL (src/content/trials.js), which the agent may
+ * pass mid-dash during its desync window and may always walk out of.
+ * @param {any} player
+ * @param {any} tile
+ * @param {number} tx
+ * @param {number} ty
+ * @param {boolean} [dashing] true for dash steps (the dash timer may already
+ *   have been decremented past zero on a dash's final frame)
+ */
+function playerTilePassable(player, tile, tx, ty, dashing) {
+  if (isPassable(tile)) return true;
+  if (tile !== T.SEAM_WALL || typeof NEON === 'undefined' || !NEON.trials) return false;
+  return NEON.trials.playerMayEnterSeam(_EG, player, tx, ty, dashing);
+}
+
+/**
+ * Keep the agent's centre out of impassable tiles. Boss/charger knockbacks and
+ * arena clamps move the agent without full tile checks and can leave it inside
+ * a wall; the old movement then froze it there. Restore the last position it
+ * held on a passable tile of this map (recorded every frame), or — with no
+ * usable record — the tile findPlayerUnembedTile picks.
+ * The non-embedded path does not allocate (one typed array per floor aside).
+ * @param {any} player
+ * @param {any} map
+ * @returns {boolean} true when the agent was moved
+ */
+function depenetratePlayer(player, map) {
+  const tx = Math.floor(player.x), ty = Math.floor(player.y);
+  const row = map[ty];
+  if (playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false)) {
+    player._safeX = player.x;
+    player._safeY = player.y;
+    player._safeMap = map;
+    markPlayerStood(player, map, tx, ty);
+    return false;
+  }
+  if (playerSafeRecordUsable(player, map)) { player.x = player._safeX; player.y = player._safeY; return true; }
+  const spot = findPlayerUnembedTile(player, map);
+  if (!spot) return false;
+  player.x = spot.x;
+  player.y = spot.y;
+  return true;
+}
+
+/**
+ * Record that the agent stood on (tx, ty) of this floor. A revealed map (the
+ * lattice reward) marks every tile seen, lock-gated pockets included, but the
+ * agent has only ever stood where it could walk.
+ * @param {any} player
+ * @param {any} map
+ * @param {number} tx
+ * @param {number} ty
+ */
+function markPlayerStood(player, map, tx, ty) {
+  const width = map[0] ? map[0].length : 0;
+  if (player._stoodMap !== map || !player._stood) {
+    player._stood = new Uint8Array(map.length * width);
+    player._stoodMap = map;
+  }
+  if (tx >= 0 && tx < width) player._stood[ty * width + tx] = 1;
+}
+
+/**
+ * Where an embedded agent with no usable safe record should go: the nearest
+ * passable tile centre within 4 tiles, ranked by (1) inside a sealed boss arena
+ * the agent is in, so an embed never leaks out; (2) a tile it has stood on this
+ * floor; (3) a tile it has seen; (4) distance. Never an unrevealed secret room
+ * or the unbreached seam vault. Allocates only its result.
+ * @param {any} player
+ * @param {any} map
+ * @returns {{x: number, y: number} | null}
+ */
+function findPlayerUnembedTile(player, map) {
+  const tx = Math.floor(player.x), ty = Math.floor(player.y);
+  const RADIUS = 4;
+  const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
+  const inArenaRect = !!arena && tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
+  const dg = _EG.dungeon;
+  const visited = dg && dg.visited;
+  const secret = dg && dg.secretMask;
+  const seam = (dg && typeof NEON !== 'undefined' && NEON.trials) ? NEON.trials.findSeamTrial(dg) : null;
+  const vault = (seam && !seam.lootClaimed) ? seam.vault : null;
+  const width = map[0] ? map[0].length : 0;
+  const stood = (player._stoodMap === map && player._stood) ? player._stood : null;
+  let bestX = -1, bestY = -1, bestD = Infinity, bestInArena = false, bestStood = false, bestSeen = false;
+  for (let dy = -RADIUS; dy <= RADIUS; dy++) {
+    const crow = map[ty + dy];
+    if (!crow) continue;
+    for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+      const cx = tx + dx, cy = ty + dy;
+      if (!isPassable(crow[cx])) continue;
+      if (secret && secret[cy] && secret[cy][cx]) continue;
+      if (vault && vault.x === cx && vault.y === cy) continue;
+      const d = Math.abs(dx) + Math.abs(dy);
+      // Sealed entrances are WALL tiles, so the whole rect (edge ring
+      // included) is enclosed while the arena is sealed.
+      const inArena = inArenaRect && cx >= arena.x && cx < arena.x + arena.w && cy >= arena.y && cy < arena.y + arena.h;
+      const wasStood = !!(stood && cx >= 0 && cx < width && stood[cy * width + cx]);
+      const seen = !!(visited && visited[cy] && visited[cy][cx]);
+      const better = bestX < 0 || (inArena !== bestInArena ? inArena
+        : wasStood !== bestStood ? wasStood
+          : seen !== bestSeen ? seen
+            : d < bestD);
+      if (better) {
+        bestX = cx; bestY = cy; bestD = d; bestInArena = inArena; bestStood = wasStood; bestSeen = seen;
+      }
+    }
+  }
+  return bestX < 0 ? null : { x: bestX + 0.5, y: bestY + 0.5 };
+}
+
+/**
+ * Whether the agent's recorded safe position can be restored now: same map,
+ * close by, still passable, and — while a boss arena is sealed around the
+ * agent — inside that arena's rect, so an embed on the seal frame never
+ * restores it to the corridor outside. The rect's edge ring is ordinary floor
+ * (clampToBossRoom keeps the agent anywhere in the rect); sealed entrances on
+ * it are WALL tiles and already fail the passability check.
+ * @param {any} player
+ * @param {any} map
+ * @returns {boolean}
+ */
+function playerSafeRecordUsable(player, map) {
+  const sx = player._safeX, sy = player._safeY;
+  if (player._safeMap !== map || typeof sx !== 'number' || typeof sy !== 'number') return false;
+  if (Math.abs(sx - player.x) + Math.abs(sy - player.y) > 6) return false;
+  const stx = Math.floor(sx), sty = Math.floor(sy);
+  const srow = map[sty];
+  if (!srow || !isPassable(srow[stx])) return false;
+  const arena = (_EG.bossSealed && _EG.bossRoom) ? _EG.bossRoom : null;
+  if (arena) {
+    const tx = Math.floor(player.x), ty = Math.floor(player.y);
+    const agentInArena = tx >= arena.x && tx < arena.x + arena.w && ty >= arena.y && ty < arena.y + arena.h;
+    const recordInArena = stx >= arena.x && stx < arena.x + arena.w && sty >= arena.y && sty < arena.y + arena.h;
+    if (agentInArena && !recordInArena) return false;
+  }
+  return true;
+}
+
+/**
+ * Where a save should put the agent. A save taken while a knockback or clamp
+ * has it inside a wall would otherwise resume embedded; persist where the next
+ * frame's depenetratePlayer would put it (the safe record, else the
+ * findPlayerUnembedTile choice). noClip keeps the raw position.
+ * @param {any} player
+ * @param {any} map
+ * @returns {{x: number, y: number}}
+ */
+function playerSavePosition(player, map) {
+  if (map && !playerCheatEnabled('noClip')) {
+    const tx = Math.floor(player.x), ty = Math.floor(player.y);
+    const row = map[ty];
+    if (!playerTilePassable(player, row ? row[tx] : undefined, tx, ty, false)) {
+      if (playerSafeRecordUsable(player, map)) return { x: player._safeX, y: player._safeY };
+      const spot = findPlayerUnembedTile(player, map);
+      if (spot) return spot;
+    }
+  }
+  return { x: player.x, y: player.y };
+}
+
+/**
+ * Axis-separated collision checks (nx, y) and (x, ny) but never (nx, ny), so
+ * a diagonal step can cut a convex corner into a tile neither check examined
+ * (reachable at the trial seam, whose column is briefly passable). Undo one
+ * axis, then both, so a step never ends inside a newly entered impassable tile.
+ * @param {any} player
+ * @param {any} map
+ * @param {number} prevX
+ * @param {number} prevY
+ * @param {boolean} dashing
+ */
+function resolvePlayerCornerCut(player, map, prevX, prevY, dashing) {
+  const fx = Math.floor(player.x), fy = Math.floor(player.y);
+  const px = Math.floor(prevX), py = Math.floor(prevY);
+  if (fx === px && fy === py) return;
+  const fRow = map[fy], pRow = map[py];
+  if (playerTilePassable(player, fRow ? fRow[fx] : undefined, fx, fy, dashing)) return;
+  if (playerTilePassable(player, fRow ? fRow[px] : undefined, px, fy, dashing)) { player.x = prevX; return; }
+  if (playerTilePassable(player, pRow ? pRow[fx] : undefined, fx, py, dashing)) { player.y = prevY; return; }
+  player.x = prevX; player.y = prevY;
+}
+
 class Player {
   /** @type {any} */ _metaSecondWindUsed;
   /** @type {any} */ _momentumTimer;
@@ -4501,6 +4700,10 @@ class Player {
       if (this.dashTrail[i].alpha<=0) this.dashTrail.splice(i,1);
     }
 
+    // Depenetrate before moving: knockbacks run after player.update and may
+    // have left the agent's centre inside a wall last frame.
+    if (!playerCheatEnabled('noClip')) depenetratePlayer(this, map);
+
     // Active dash movement
     if (this.dashTimer>0) {
       const step=Math.min(dt,this.dashTimer); // clamp to remaining dash time
@@ -4510,11 +4713,13 @@ class Player {
       const ny=this.y+this.dashDy*dashSpd*step;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x), oy=Math.floor(ny);
+      const dashPrevX=this.x, dashPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty, true))) this.x=nx;
       else this.dashTimer=0; // hit wall, end dash early
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy, true))) this.y=ny;
       else this.dashTimer=0;
+      if (!noClip) resolvePlayerCornerCut(this, map, dashPrevX, dashPrevY, true);
       // Drop afterimage
       if (this.dashTrail.length < 8) this.dashTrail.push({x:this.x,y:this.y,alpha:0.7});
       this.invincibleTimer=Math.max(this.invincibleTimer, 0.05); // i-frames during dash
@@ -4624,9 +4829,11 @@ class Player {
       const ny=this.y+ndy*spd*dt;
       const tx=Math.floor(nx), ty=Math.floor(this.y);
       const ox=Math.floor(this.x),oy=Math.floor(ny);
+      const walkPrevX=this.x, walkPrevY=this.y;
       const noClip = playerCheatEnabled('noClip');
-      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || isPassable(map[ty][tx]))) this.x=nx;
-      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || isPassable(map[oy][ox]))) this.y=ny;
+      if (tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H && (noClip || playerTilePassable(this, map[ty][tx], tx, ty, false))) this.x=nx;
+      if (ox>=0&&oy>=0&&ox<MAP_W&&oy<MAP_H && (noClip || playerTilePassable(this, map[oy][ox], ox, oy, false))) this.y=ny;
+      if (!noClip) resolvePlayerCornerCut(this, map, walkPrevX, walkPrevY, false);
       this.facing={x:ndx,y:ndy};
     }
 
@@ -4658,8 +4865,10 @@ class Player {
         const pny = this.y + pullY * dt;
         const ptx = Math.floor(pnx), pty = Math.floor(this.y);
         const pox = Math.floor(this.x), poy = Math.floor(pny);
+        const pullPrevX = this.x, pullPrevY = this.y;
         if (ptx >= 0 && pty >= 0 && ptx < MAP_W && pty < MAP_H && isPassable(map[pty][ptx])) this.x = pnx;
         if (pox >= 0 && poy >= 0 && pox < MAP_W && poy < MAP_H && isPassable(map[poy][pox])) this.y = pny;
+        if (!playerCheatEnabled('noClip')) resolvePlayerCornerCut(this, map, pullPrevX, pullPrevY, false);
       } else {
         this.gravityPullActive = false;
       }
@@ -4702,6 +4911,7 @@ class Player {
       }
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
+      this._dashSerial = (this._dashSerial | 0) + 1;
       // GHOSTWALK meta upgrade: extend i-frame window past dash movement.
       // Movement still ends at dashTimer === 0 (0.12s); _dashIFrameTimer
       // keeps isPlayerDamageImmune true for the bonus window so the

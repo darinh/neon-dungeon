@@ -72,6 +72,7 @@
       palette: 'green',
       bossPool: ['GENESIS'],
       displayName: 'THE ARCHITECT',
+      bossDisplayNames: { GENESIS: 'GENESIS PROTOCOL' },
       intro: 'Neon rain and storefront chatter simulate an open network. Somewhere beyond the sandbox, Elena is real; this city is still a render.',
     },
   ];

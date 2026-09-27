@@ -881,6 +881,7 @@ function drawWorld(dungeon, camX, camY) {
        * @param {any} tile
        */
       switch(tile) {
+        case T.SEAM_WALL: // renders as wall; the flicker is a trial overlay
         case T.WALL: {
           const isSealed = _RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx);
           ctx.fillStyle = isSealed ? '#3d2828' : pal.wallFill;
@@ -907,6 +908,11 @@ function drawWorld(dungeon, camX, camY) {
           drawBiomeFloorDeco(dungeon, tx, ty, sx, sy, brightness);
           break;
         }
+        case T.LOGIC_NODE:
+        case T.LOGIC_NODE_LIT:
+        case T.SYNC_CONSOLE:
+          if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.drawTrialTile(ctx, tile, sx, sy, TILE, brightness, lastTime, T, pal.floor);
+          break;
         case T.STAIRS:
           ctx.fillStyle=pal.floor;
           ctx.fillRect(sx,sy,TILE,TILE);
@@ -1334,7 +1340,14 @@ function drawHUD(player) {
     ctx.fillStyle=hpCol; ctx.fillRect(lx, r1, hpW * hpFrac, 12);
     ctx.shadowBlur=0;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`, lx + 2, r1 + 10);
+    // The HP text stays inside its bar (W/4 wide): narrow phones drop the
+    // "HP " prefix, then the maximum.
+    const hpNowC = Math.ceil(player.hp);
+    let hpTextC = `HP ${hpNowC}/${player.maxHp}`;
+    if (ctx.measureText(hpTextC).width > hpW - 4) hpTextC = `${hpNowC}/${player.maxHp}`;
+    if (ctx.measureText(hpTextC).width > hpW - 4) hpTextC = String(hpNowC);
+    ctx.fillText(hpTextC, lx + 2, r1 + 10);
+    const hpTextEndC = lx + 2 + ctx.measureText(hpTextC).width;
 
     // trauma_kit panic-charge counter (✚N), right-aligned over the HP bar so
     // it groups visually with the HP it protects. Gated on charges>0 — when
@@ -1347,7 +1360,10 @@ function drawHUD(player) {
       ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
       ctx.fillStyle='#ff88aa'; ctx.font=`${fs}px monospace`;
       ctx.textAlign='right';
-      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, r1 + 10);
+      // Where it would touch the HP text (narrow phones), it moves just
+      // under the bar's right end instead, left of the modifier badge.
+      const nmcOnBarC = lx + hpW - 3 - ctx.measureText(`✚${_nmcCompact}`).width >= hpTextEndC + 2;
+      ctx.fillText(`✚${_nmcCompact}`, lx + hpW - 3, nmcOnBarC ? r1 + 10 : r1 + 22);
       ctx.textAlign='left';
       ctx.restore();
     }
@@ -1357,51 +1373,82 @@ function drawHUD(player) {
     ctx.fillText(`TEST:${_RG.floor}`, mid, r1 + 10);
 
     // Floor modifier badge
+    let modifierLabelC = '';
     if (_RG.modifier) {
       const m = /** @type {any} */ (getMod());
+      modifierLabelC = `${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`;
       ctx.save();
       ctx.shadowBlur=4; ctx.shadowColor=m.colour;
       ctx.fillStyle=m.colour; ctx.font=`${fs-1}px monospace`;
-      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, mid, r1 + 22);
+      ctx.fillText(modifierLabelC, mid, r1 + 22);
       ctx.restore();
     }
 
-    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700'; ctx.font=`${fs + 1}px monospace`;
-    ctx.textAlign='right';
-    ctx.fillText(`SCORE:${player.score}`, W - 10 - safeRight, r1 + 10);
-    // Combo counter (compact)
-    if (combo.count >= 2) {
-      const cc = comboColour();
-      const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
-      ctx.globalAlpha = a;
-      ctx.shadowBlur=6; ctx.shadowColor=cc;
-      ctx.fillStyle=cc; ctx.font=`bold ${fs + 1}px monospace`;
-      ctx.fillText(`×${comboMultiplier().toFixed(1)} ×${combo.count}`, W - 10 - safeRight, r1 + 22);
-      ctx.globalAlpha = 1;
-    }
-    ctx.textAlign='left'; ctx.shadowBlur=0;
-
-    // Credits + Lore
+    // Credits, cores and lore sit in columns after TEST; each moves right
+    // only when the readout before it is too wide, and hides rather than
+    // pass the right margin (world zoom 2+ on small phones).
+    const rightMarginC = W - 10 - safeRight;
     ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`◈${player.credits}`, mid + 50, r1 + 10);
+    const creditsTextC = `◈${player.credits}`;
+    let readoutsEndC = mid + 50 - HUD_STAT_GAP / 2;
+    if (mid + 50 + ctx.measureText(creditsTextC).width <= rightMarginC) {
+      ctx.fillText(creditsTextC, mid + 50, r1 + 10);
+      readoutsEndC = mid + 50 + ctx.measureText(creditsTextC).width;
+    }
     // UNCHAINED #39: cores readout (pulses briefly on pickup). Reads
     // `game._cachedCores` (updated on every pickup/vacuum) to avoid a
     // per-frame localStorage hit.
-    {
-      const _cores = _RG._cachedCores | 0;
+    const coresTextC = `◆${_RG._cachedCores | 0}`;
+    const coresXC = Math.max(mid + 90, readoutsEndC + HUD_STAT_GAP / 2);
+    if (coresXC + ctx.measureText(coresTextC).width <= rightMarginC) {
       const pulse = (_RG._coreHudPulse || 0);
       const pulseCol = pulse > 0 ? '#44e5ff' : '#a866ff';
       ctx.save();
       if (pulse > 0) { ctx.shadowBlur = 8; ctx.shadowColor = '#44e5ff'; }
       ctx.fillStyle = pulseCol;
-      ctx.fillText(`◆${_cores}`, mid + 90, r1 + 10);
+      ctx.fillText(coresTextC, coresXC, r1 + 10);
       ctx.restore();
+      readoutsEndC = coresXC + ctx.measureText(coresTextC).width;
     }
     if (player.loreRead.size > 0) {
-      ctx.fillStyle='#ffb700';
-      ctx.fillText(`◫${player.loreRead.size}`, mid + 130, r1 + 10);
+      const loreTextC = `◫${player.loreRead.size}`;
+      const loreXC = Math.max(mid + 130, readoutsEndC + HUD_STAT_GAP / 2);
+      if (loreXC + ctx.measureText(loreTextC).width <= rightMarginC) {
+        ctx.fillStyle='#ffb700';
+        ctx.fillText(loreTextC, loreXC, r1 + 10);
+        readoutsEndC = loreXC + ctx.measureText(loreTextC).width;
+      }
     }
+
+    // SCORE, right-aligned after those readouts: on narrow phones it drops
+    // its label, then hides.
+    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
+    ctx.fillStyle='#ffb700'; ctx.font=`${fs + 1}px monospace`;
+    ctx.textAlign='right';
+    const scoreRightC = rightMarginC;
+    let scoreTextC = `SCORE:${player.score}`;
+    if (scoreRightC - ctx.measureText(scoreTextC).width < readoutsEndC + HUD_STAT_GAP / 2) scoreTextC = String(player.score);
+    if (scoreRightC - ctx.measureText(scoreTextC).width >= readoutsEndC + HUD_STAT_GAP / 2) {
+      ctx.fillText(scoreTextC, scoreRightC, r1 + 10);
+    }
+    // Combo counter (compact) — right-aligned under SCORE, after the
+    // modifier badge on the same line.
+    if (combo.count >= 2) {
+      ctx.font=`${fs-1}px monospace`;
+      const modEndC = _RG.modifier ? mid + ctx.measureText(modifierLabelC).width : 0;
+      ctx.font=`bold ${fs + 1}px monospace`;
+      const comboTextC = `×${comboMultiplier().toFixed(1)} ×${combo.count}`;
+      if (scoreRightC - ctx.measureText(comboTextC).width >= modEndC + HUD_STAT_GAP / 2) {
+        const cc = comboColour();
+        const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
+        ctx.globalAlpha = a;
+        ctx.shadowBlur=6; ctx.shadowColor=cc;
+        ctx.fillStyle=cc;
+        ctx.fillText(comboTextC, scoreRightC, r1 + 22);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.textAlign='left'; ctx.shadowBlur=0;
 
     // Row 2: LVL + XP bar + ATK + DEF + weapon
     ctx.fillStyle='#aaaacc'; ctx.font=`${fs}px monospace`;
@@ -1413,8 +1460,11 @@ function drawHUD(player) {
 
     const statsX = xpBarX + 44;
     ctx.fillStyle='#e0e0ff'; ctx.font=`${fs}px monospace`;
-    ctx.fillText(`A:${player.atk}`, statsX, r2 + 10);
-    ctx.fillText(`D:${player.def}`, statsX + 36, r2 + 10);
+    const atkTextC = `A:${player.atk}`;
+    const defTextC = `D:${player.def}`;
+    ctx.fillText(atkTextC, statsX, r2 + 10);
+    const defX = statsX + ctx.measureText(atkTextC).width + HUD_STAT_GAP;
+    ctx.fillText(defTextC, defX, r2 + 10);
 
     // Weapon — truncate if needed, use rarity colour for affixed weapons
     const wRarity = player.weapon._rarity || 0;
@@ -1435,13 +1485,23 @@ function drawHUD(player) {
     const phSufWC = phSufC ? ctx.measureText(phSufC).width : 0;
     const spSufC = siphonHudSuffix(player);
     const spSufWC = spSufC ? ctx.measureText(spSufC).width : 0;
-    const weapMaxW = W - (statsX + 80) - safeRight - 10 - phSufWC - spSufWC;
+    // Weapon belt pips trail the name, as in landscape: under it they cut
+    // through the B: bomb label on the line below.
+    const beltNC = (player.weapons && player.weapons.length > 1) ? player.weapons.length : 0;
+    const pipsWC = beltNC > 0 ? 3 + (beltNC - 1) * 10 + 8 : 0;
+    const weaponXC = Math.max(statsX + 74, defX + ctx.measureText(defTextC).width + HUD_STAT_GAP);
+    const weapMaxW = W - weaponXC - safeRight - 10 - phSufWC - spSufWC - pipsWC;
+    // Narrow screens drop the belt pips before the name, then the name and
+    // its suffixes together when not even "ABC…" fits (never overflow).
+    const pipsFitC = beltNC > 0 && weapMaxW >= ctx.measureText('ABC…').width;
+    const nameMaxWC = pipsFitC ? weapMaxW : weapMaxW + pipsWC;
     let weapName = player.weapon.displayName || player.weapon.name;
-    if (ctx.measureText(weapName).width > weapMaxW && weapMaxW > 20) {
-      while (weapName.length > 3 && ctx.measureText(weapName + '…').width > weapMaxW) weapName = weapName.slice(0, -1);
+    if (ctx.measureText(weapName).width > nameMaxWC) {
+      while (weapName.length > 3 && ctx.measureText(weapName + '…').width > nameMaxWC) weapName = weapName.slice(0, -1);
       weapName += '…';
     }
-    ctx.fillText(weapName, statsX + 74, r2 + 10);
+    const showWNameC = ctx.measureText(weapName).width <= nameMaxWC;
+    if (showWNameC) ctx.fillText(weapName, weaponXC, r2 + 10);
     // Render any active weapon-affix suffixes side-by-side using a
     // cumulative x-offset. Currently PH and SIPHON are mutually exclusive
     // on a single weapon (both suffix-slot, buildWeapon picks at most one
@@ -1449,44 +1509,49 @@ function drawHUD(player) {
     // time — but if a future code path or corrupted save shape ever
     // produces a multi-suffix weapon, the cumulative offset prevents
     // overlap. Truncation budget above already reserves combined width.
-    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width;
-    if (phSufC) {
-      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
-      ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufC, _sufX_C, r2 + 10);
-      _sufX_C += ctx.measureText(phSufC).width;
-    }
-    if (spSufC) {
-      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
-      ctx.fillStyle='#88ff88';
-      ctx.fillText(spSufC, _sufX_C, r2 + 10);
-      _sufX_C += ctx.measureText(spSufC).width;
+    let _sufX_C = statsX + 74 + ctx.measureText(weapName).width + (weaponXC - (statsX + 74));
+    if (showWNameC) {
+      if (phSufC) {
+        ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+        ctx.fillStyle='#ff4488';
+        ctx.fillText(phSufC, _sufX_C, r2 + 10);
+        _sufX_C += ctx.measureText(phSufC).width;
+      }
+      if (spSufC) {
+        ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+        ctx.fillStyle='#88ff88';
+        ctx.fillText(spSufC, _sufX_C, r2 + 10);
+        _sufX_C += ctx.measureText(spSufC).width;
+      }
     }
     ctx.shadowBlur=0;
     // Weapon belt pips (show only when belt has >1 weapon)
-    if (player.weapons && player.weapons.length > 1) {
-      const pipX = statsX + 74;
-      const safeIdx = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
-      for (let wi = 0; wi < player.weapons.length; wi++) {
+    if (pipsFitC && showWNameC) {
+      const pipX = _sufX_C + 3;
+      const safeIdx = Math.min(player.weaponIdx || 0, beltNC - 1);
+      for (let wi = 0; wi < beltNC; wi++) {
         const active = wi === safeIdx;
         ctx.fillStyle = active ? wColour : '#445';
-        ctx.fillRect(pipX + wi * 10, r2 + 16, active ? 8 : 6, active ? 4 : 3);
+        ctx.fillRect(pipX + wi * 10, active ? r2 + 5 : r2 + 6, active ? 8 : 6, active ? 4 : 3);
       }
     }
 
-    if (player.bombCooldown > 0) {
-      ctx.fillStyle='#664488'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:${player.bombCooldown.toFixed(1)}s`, statsX + 74, r2 + 22);
-    } else {
-      ctx.fillStyle='#aa00ff'; ctx.font=`${fs}px monospace`;
-      ctx.fillText(`B:RDY`, statsX + 74, r2 + 22);
+    // Bomb and hackware states hide rather than pass the right margin.
+    ctx.font=`${fs}px monospace`;
+    const bombTextC = player.bombCooldown > 0 ? `B:${player.bombCooldown.toFixed(1)}s` : 'B:RDY';
+    let bombEndC = weaponXC - HUD_STAT_GAP / 2;
+    if (weaponXC + ctx.measureText(bombTextC).width <= rightMarginC) {
+      ctx.fillStyle = player.bombCooldown > 0 ? '#664488' : '#aa00ff';
+      ctx.fillText(bombTextC, weaponXC, r2 + 22);
+      bombEndC = weaponXC + ctx.measureText(bombTextC).width;
     }
     // Hackware indicator (compact)
     if (player.hackware) {
       const hw = /** @type {any} */ (HACKWARE)[player.hackware];
       ctx.fillStyle=player.hackwareCooldown>0?'#665533':hw.colour; ctx.font=`${fs}px monospace`;
-      const hwX = statsX + 130;
-      ctx.fillText(`F:${hw.icon}`, hwX, r2 + 22);
+      const hwTextC = `F:${hw.icon}`;
+      const hwX = Math.max(statsX + 130, bombEndC + HUD_STAT_GAP / 2);
+      if (hwX + ctx.measureText(hwTextC).width <= rightMarginC) ctx.fillText(hwTextC, hwX, r2 + 22);
     }
     // Energy shield recharge indicator
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
@@ -1531,18 +1596,43 @@ function drawHUD(player) {
     ctx.fillStyle='#ffb700'; ctx.fillRect(colBase, y + 12, 50 * xpFrac, 4);
 
     ctx.fillStyle='#e0e0ff';
-    ctx.fillText(`ATK:${player.atk}`, colBase + 60, y + 10);
-    ctx.fillText(`DEF:${player.def}`, colBase + 105, y + 10);
-    ctx.fillText(`TEST:${_RG.floor}`, colBase + 160, y + 10);
+    const atkTextL = `ATK:${player.atk}`;
+    const defTextL = `DEF:${player.def}`;
+    const testTextL = `TEST:${_RG.floor}`;
+    const atkX = colBase + 60;
+    ctx.fillText(atkTextL, atkX, y + 10);
+    const defXL = atkX + ctx.measureText(atkTextL).width + HUD_STAT_GAP;
+    ctx.fillText(defTextL, defXL, y + 10);
+    const testXL = defXL + ctx.measureText(defTextL).width + HUD_STAT_GAP;
+    ctx.fillText(testTextL, testXL, y + 10);
 
+    let hudRow2X = testXL;
+    // x of the first flow label drawn on row 2 (modifier, bomb or hackware):
+    // the shield/dash column under ATK must end before it.
+    let row2FlowXL = Infinity;
+    // Row 2 must end before the cores readout at W - 240. Budget it so the
+    // bomb state (an action) always fits; the modifier badge shortens first.
+    const row2Limit = W - 240 - safeRight - HUD_STAT_GAP;
+    const bombCd = player.bombCooldown > 0;
+    const bombLabel = bombCd ? `[V] Bomb ${player.bombCooldown.toFixed(1)}s` : `[V] Bomb RDY`;
+    const bombShort = bombCd ? `[V] ${player.bombCooldown.toFixed(1)}s` : `[V] RDY`;
     // Floor modifier badge
     if (_RG.modifier) {
       const m = /** @type {any} */ (getMod());
-      ctx.save();
-      ctx.shadowBlur=4; ctx.shadowColor=m.colour;
-      ctx.fillStyle=m.colour;
-      ctx.fillText(`${m.icon}${m.label}${modifierProgressSuffix(_RG.modifier, player)}`, colBase + 160, y + 22);
-      ctx.restore();
+      const modSuffix = modifierProgressSuffix(_RG.modifier, player);
+      const modMax = row2Limit - hudRow2X - HUD_STAT_GAP - ctx.measureText(bombShort).width;
+      let modLabel = `${m.icon}${m.label}${modSuffix}`;
+      if (ctx.measureText(modLabel).width > modMax) modLabel = `${m.icon}${modSuffix}`;
+      if (ctx.measureText(modLabel).width > modMax) modLabel = `${m.icon}`;
+      if (ctx.measureText(modLabel).width <= modMax) {
+        ctx.save();
+        ctx.shadowBlur=4; ctx.shadowColor=m.colour;
+        ctx.fillStyle=m.colour;
+        ctx.fillText(modLabel, hudRow2X, y + 22);
+        row2FlowXL = hudRow2X;
+        hudRow2X += ctx.measureText(modLabel).width + HUD_STAT_GAP;
+        ctx.restore();
+      }
     }
 
     const wRarL = player.weapon._rarity || 0;
@@ -1562,43 +1652,86 @@ function drawHUD(player) {
     const phSufWL = phSufL ? ctx.measureText(phSufL).width : 0;
     const spSufL = siphonHudSuffix(player);
     const spSufWL = spSufL ? ctx.measureText(spSufL).width : 0;
+    // Weapon belt pips trail the name on row 1. Under the name, where they
+    // used to be, they cut through the row-2 label below it.
+    const beltNL = (player.weapons && player.weapons.length > 1) ? player.weapons.length : 0;
+    const pipsWL = beltNL > 0 ? 4 + (beltNL - 1) * 10 + 8 : 0;
+    // Row 1 ends with SCORE, placed before a fixed slot for the combo
+    // readout: the combo never draws over the score, and the score does not
+    // jump when a combo starts or ends. The weapon name must end before it.
+    // Narrow screens keep SCORE after the stats, drop its "SCORE: " label,
+    // then hide it; the combo readout is drawn only if it still fits.
+    const rightEdgeL = W - 10 - safeRight;
+    const testEndL = testXL + ctx.measureText(testTextL).width;
+    ctx.font='bold 15px monospace';
+    const comboSlotWL = ctx.measureText('×9.9 ×9999').width;
+    ctx.font='14px monospace';
+    let scoreTextL = `SCORE: ${player.score}`;
+    let scoreWL = ctx.measureText(scoreTextL).width;
+    let scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, rightEdgeL - comboSlotWL - HUD_STAT_GAP - scoreWL);
+    if (scoreLeftL + scoreWL > rightEdgeL) {
+      scoreTextL = String(player.score);
+      scoreWL = ctx.measureText(scoreTextL).width;
+      scoreLeftL = Math.max(testEndL + HUD_STAT_GAP, rightEdgeL - comboSlotWL - HUD_STAT_GAP - scoreWL);
+    }
+    const showScoreL = scoreLeftL + scoreWL <= rightEdgeL;
+    ctx.font='13px monospace';
     let wNameL = player.weapon.displayName || player.weapon.name;
-    const wMaxL = W - (colBase + 230) - 10 - phSufWL - spSufWL;
-    if (ctx.measureText(wNameL).width > wMaxL && wMaxL > 20) {
+    const weaponXL = Math.max(colBase + 220, testEndL + HUD_STAT_GAP);
+    const wMaxL = (showScoreL ? scoreLeftL - HUD_STAT_GAP : rightEdgeL) - weaponXL - phSufWL - spSufWL - pipsWL;
+    if (ctx.measureText(wNameL).width > wMaxL) {
       while (wNameL.length > 3 && ctx.measureText(wNameL + '…').width > wMaxL) wNameL = wNameL.slice(0, -1);
       wNameL += '…';
     }
-    ctx.fillText(wNameL, colBase + 220, y + 10);
+    // On very narrow screens not even "ABC…" fits; drop the name, its affix
+    // suffixes and the belt pips rather than drawing them under SCORE.
+    const showWNameL = ctx.measureText(wNameL).width <= wMaxL;
+    if (showWNameL) ctx.fillText(wNameL, weaponXL, y + 10);
     // Cumulative x-offset for stacked affix suffixes — see compact
     // branch comment for rationale (mutex defense + future-proofing).
-    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width;
-    if (phSufL) {
-      ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
-      ctx.fillStyle='#ff4488';
-      ctx.fillText(phSufL, _sufX_L, y + 10);
-      _sufX_L += ctx.measureText(phSufL).width;
-    }
-    if (spSufL) {
-      ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
-      ctx.fillStyle='#88ff88';
-      ctx.fillText(spSufL, _sufX_L, y + 10);
-      _sufX_L += ctx.measureText(spSufL).width;
+    let _sufX_L = colBase + 220 + ctx.measureText(wNameL).width + (weaponXL - (colBase + 220));
+    if (showWNameL) {
+      if (phSufL) {
+        ctx.shadowBlur=4; ctx.shadowColor='#ff4488';
+        ctx.fillStyle='#ff4488';
+        ctx.fillText(phSufL, _sufX_L, y + 10);
+        _sufX_L += ctx.measureText(phSufL).width;
+      }
+      if (spSufL) {
+        ctx.shadowBlur=4; ctx.shadowColor='#88ff88';
+        ctx.fillStyle='#88ff88';
+        ctx.fillText(spSufL, _sufX_L, y + 10);
+        _sufX_L += ctx.measureText(spSufL).width;
+      }
     }
     ctx.shadowBlur=0;
-    if (player.weapons && player.weapons.length > 1) {
-      const pipXL = colBase + 220;
-      const safeIdxL = Math.min(player.weaponIdx || 0, player.weapons.length - 1);
-      for (let wi = 0; wi < player.weapons.length; wi++) {
+    if (beltNL > 0 && showWNameL) {
+      const pipXL = _sufX_L + 4;
+      const safeIdxL = Math.min(player.weaponIdx || 0, beltNL - 1);
+      for (let wi = 0; wi < beltNL; wi++) {
         const active = wi === safeIdxL;
         ctx.fillStyle = active ? wColL : '#445';
-        ctx.fillRect(pipXL + wi * 10, y + 16, active ? 8 : 6, active ? 4 : 3);
+        ctx.fillRect(pipXL + wi * 10, active ? y + 5 : y + 6, active ? 8 : 6, active ? 4 : 3);
       }
     }
 
-    if (player.bombCooldown > 0) {
-      ctx.fillStyle='#664488'; ctx.fillText(`[V] Bomb ${player.bombCooldown.toFixed(1)}s`, colBase + 220, y + 22);
-    } else {
-      ctx.fillStyle='#aa00ff'; ctx.fillText(`[V] Bomb RDY`, colBase + 220, y + 22);
+    let bombText = bombLabel;
+    let bombX = Math.max(weaponXL, hudRow2X);
+    if (bombX + ctx.measureText(bombText).width > row2Limit) {
+      bombX = Math.max(hudRow2X, row2Limit - ctx.measureText(bombText).width);
+    }
+    if (bombX + ctx.measureText(bombText).width > row2Limit) {
+      bombText = bombShort;
+      bombX = Math.max(hudRow2X, Math.min(bombX, row2Limit - ctx.measureText(bombText).width));
+    }
+    // Below ~700 logical px (a phone at world zoom 1.25+) not even the short
+    // form fits before the cores readout: drop it rather than overlap. The
+    // touch V button dims while the bomb recharges.
+    if (bombX + ctx.measureText(bombText).width <= row2Limit) {
+      ctx.fillStyle=bombCd ? '#664488' : '#aa00ff';
+      ctx.fillText(bombText, bombX, y + 22);
+      row2FlowXL = Math.min(row2FlowXL, bombX);
+      hudRow2X = bombX + ctx.measureText(bombText).width + HUD_STAT_GAP;
     }
     // Hackware indicator (landscape)
     if (player.hackware) {
@@ -1608,37 +1741,78 @@ function drawHUD(player) {
       const hwLabel = player.hackwareCooldown > 0
         ? `[F] ${hw.icon}${hw.name} ${player.hackwareCooldown.toFixed(1)}s`
         : `[F] ${hw.icon}${hw.name} RDY`;
-      const hwX = colBase + 380;
-      ctx.fillText(hwLabel, hwX, y + 22);
+      const hwX = Math.max(colBase + 380, hudRow2X);
+      // Fit-or-shorten: never run into the cores/credits readouts on the right.
+      const hwLimit = row2Limit;
+      let hwText = hwLabel;
+      if (hwX + ctx.measureText(hwText).width > hwLimit) {
+        hwText = player.hackwareCooldown > 0
+          ? `[F] ${hw.icon} ${player.hackwareCooldown.toFixed(1)}s`
+          : `[F] ${hw.icon} RDY`;
+      }
+      if (hwX + ctx.measureText(hwText).width > hwLimit) {
+        hwText = player.hackwareCooldown > 0 ? `[F] ${player.hackwareCooldown.toFixed(1)}s` : '[F] RDY';
+      }
+      if (hwX + ctx.measureText(hwText).width <= hwLimit) {
+        ctx.fillText(hwText, hwX, y + 22);
+        row2FlowXL = Math.min(row2FlowXL, hwX);
+      }
     }
-    // Energy shield recharge indicator
+    // Energy shield recharge and dash cooldown share the column under ATK
+    // (text under LVL would run into the XP bar), flowing left to right. Both
+    // end before the first flow label and the cores readout, shortening
+    // first and then hiding.
+    let leftColXL = colBase + 60;
+    const row2LeftLimitL = Math.min(row2Limit, row2FlowXL - HUD_STAT_GAP);
     if (player.perks.ENERGY_SHIELD && !player.energyShield) {
-      ctx.fillStyle='#4488ff'; ctx.fillText(`🛡 ${Math.ceil(player.energyShieldTimer)}s`, colBase, y + 22);
+      const shieldS = Math.ceil(player.energyShieldTimer);
+      let shieldText = `🛡 ${shieldS}s`;
+      if (leftColXL + ctx.measureText(shieldText).width > row2LeftLimitL) shieldText = `🛡${shieldS}s`;
+      if (leftColXL + ctx.measureText(shieldText).width <= row2LeftLimitL) {
+        ctx.fillStyle='#4488ff'; ctx.fillText(shieldText, leftColXL, y + 22);
+        leftColXL += ctx.measureText(shieldText).width + HUD_STAT_GAP;
+      }
     }
     // Dash cooldown (landscape)
     if (player.dashCooldown > 0) {
-      ctx.fillStyle='#ffb700'; ctx.fillText(`[⇧] DASH ${player.dashCooldown.toFixed(1)}s`, colBase + 60, y + 22);
+      const dashCd = player.dashCooldown.toFixed(1);
+      let dashText = `[⇧] DASH ${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width > row2LeftLimitL) dashText = `[⇧] ${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width > row2LeftLimitL) dashText = `⇧${dashCd}s`;
+      if (leftColXL + ctx.measureText(dashText).width <= row2LeftLimitL) {
+        ctx.fillStyle='#ffb700'; ctx.fillText(dashText, leftColXL, y + 22);
+      }
     }
 
-    ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
-    ctx.fillStyle='#ffb700';
-    ctx.font='14px monospace';
-    ctx.fillText(`SCORE: ${player.score}`, W - 160 - safeRight, y + 12);
-    ctx.shadowBlur=0;
-    // Combo counter (landscape)
+    if (showScoreL) {
+      ctx.shadowBlur=4; ctx.shadowColor='#ffb700';
+      ctx.fillStyle='#ffb700';
+      ctx.font='14px monospace';
+      ctx.fillText(scoreTextL, scoreLeftL, y + 12);
+      ctx.shadowBlur=0;
+    }
+    // Combo counter (landscape) — same short form as the compact HUD so it
+    // fits its reserved slot right of SCORE.
     if (combo.count >= 2) {
-      const cc = comboColour();
-      const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
-      ctx.globalAlpha = a;
-      ctx.shadowBlur=6; ctx.shadowColor=cc;
-      ctx.fillStyle=cc; ctx.font='bold 15px monospace';
-      ctx.textAlign='right';
-      ctx.fillText(`×${comboMultiplier().toFixed(1)} COMBO ×${combo.count}`, W - 10 - safeRight, y + 12);
-      ctx.textAlign='left'; ctx.globalAlpha = 1;
+      ctx.font='bold 15px monospace';
+      const comboTextL = `×${comboMultiplier().toFixed(1)} ×${combo.count}`;
+      if (W - 10 - safeRight - ctx.measureText(comboTextL).width >= scoreLeftL + scoreWL + HUD_STAT_GAP) {
+        const cc = comboColour();
+        const a = combo.flashTimer > 0 ? 1 : 0.6 + 0.4 * (combo.timer / COMBO_WINDOW);
+        ctx.globalAlpha = a;
+        ctx.shadowBlur=6; ctx.shadowColor=cc;
+        ctx.fillStyle=cc;
+        ctx.textAlign='right';
+        ctx.fillText(comboTextL, W - 10 - safeRight, y + 12);
+        ctx.textAlign='left'; ctx.globalAlpha = 1;
+      }
     }
     ctx.shadowBlur=0;
     ctx.fillStyle='#39ff14'; ctx.font='13px monospace';
-    ctx.fillText(`◈ ${player.credits}`, W - 160 - safeRight, y + 26);
+    const creditsTextL = `◈ ${player.credits}`;
+    const creditsXL = W - 160 - safeRight;
+    ctx.fillText(creditsTextL, creditsXL, y + 26);
+    const creditsEndL = creditsXL + ctx.measureText(creditsTextL).width;
     // UNCHAINED #39: cores readout, just left of credits (pulses on pickup).
     // Reads cached counter on game — no per-frame localStorage hit.
     {
@@ -1653,7 +1827,7 @@ function drawHUD(player) {
     }
     if (player.loreRead.size > 0) {
       ctx.fillStyle='#ffb700'; ctx.font='13px monospace';
-      ctx.fillText(`◫ ${player.loreRead.size}`, W - 100 - safeRight, y + 26);
+      ctx.fillText(`◫ ${player.loreRead.size}`, Math.max(W - 100 - safeRight, creditsEndL + HUD_STAT_GAP), y + 26);
     }
   }
   drawObservationHudFrame(y);
@@ -2395,7 +2569,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
       let col = null;
       if (!visited && echoMap) {
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE || tile === T.SEAM_WALL) col = '#0d0d1a';
         else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
         if (col) { o.fillStyle = col; o.fillRect(px2, py2, Math.max(1, sx), Math.max(1, sy)); }
         continue;
@@ -2403,10 +2577,12 @@ function rebuildMinimapBase(dungeon, echoMap) {
       /**
        * @param {any} tile
        */
-      if (tile === T.WALL || tile === T.CRACKED) {
+      if (tile === T.WALL || tile === T.CRACKED || tile === T.SEAM_WALL) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx)) ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.LOGIC_NODE || tile === T.LOGIC_NODE_LIT) col = tile === T.LOGIC_NODE_LIT ? '#39ff14' : '#2f6b3a';
+      else if (tile === T.SYNC_CONSOLE) col = '#66ffcc';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) { col = '#1a3344'; arcTiles.push(ty * MAP_W + tx); } // live-overlay when pulse active
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -2742,12 +2918,12 @@ function drawBoostStrip(player) {
 // ─── Expanded Minimap ─────────────────────────────────────────────────────────
 const ROOM_ICONS = {
   armory:'⚔', medbay:'✚', shrine:'◈', vault:'◆', vendor:'$',
-  secret:'?', challenge:'⚡', implant:'⬡', event:'◎', boss:'☠'
+  secret:'?', challenge:'⚡', implant:'⬡', event:'◎', trial:'∴', boss:'☠'
 };
 const ROOM_LABEL_COLOURS = {
   armory:'#ff8844', medbay:'#44ff88', shrine:'#cc66ff', vault:'#ffdd44',
   vendor:'#39ff14', secret:'#ffb700', challenge:'#ff6633', implant:'#cc44ff',
-  event:'#44ffcc', boss:'#ff3333'
+  event:'#44ffcc', trial:'#39ff14', boss:'#ff3333'
 };
 
 /**
@@ -2803,7 +2979,7 @@ function drawExpandedMinimap(dungeon, player) {
 
       if (!visited && echoMap) {
         if (dungeon.secretMask && dungeon.secretMask[ty][tx]) continue;
-        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE) col = '#0d0d1a';
+        if (tile === T.WALL || tile === T.CRACKED || tile === T.CRATE || tile === T.SEAM_WALL) col = '#0d0d1a';
         else if (isPassable(tile) || tile === T.DOOR) col = '#141428';
         if (col) { ctx.fillStyle = col; ctx.fillRect(px, py, Math.ceil(sx), Math.ceil(sy)); }
         continue;
@@ -2812,11 +2988,13 @@ function drawExpandedMinimap(dungeon, player) {
       /**
        * @param {any} tile
        */
-      if (tile === T.WALL || tile === T.CRACKED) {
+      if (tile === T.WALL || tile === T.CRACKED || tile === T.SEAM_WALL) {
         col = (_RG.sealedEntranceSet && _RG.sealedEntranceSet.has(ty * MAP_W + tx))
           ? '#5e2d2d' : pal.minimapWall;
       }
       else if (tile === T.FLOOR || tile === T.DOOR_OPEN || tile === T.TRAP_SPIKE || tile === T.TRAP_SLOW || tile === T.SHOCK_TILE || tile === T.REPULSOR || tile === T.IMPLANT_SHRINE || tile === T.EVENT_TERMINAL || tile === T.TELEPORT_PAD) col = pal.minimapFloor;
+      else if (tile === T.LOGIC_NODE || tile === T.LOGIC_NODE_LIT) col = tile === T.LOGIC_NODE_LIT ? '#39ff14' : '#2f6b3a';
+      else if (tile === T.SYNC_CONSOLE) col = '#66ffcc';
       else if (tile === T.PLASMA) col = '#ff6600';
       else if (tile === T.ARC) col = Math.sin((_RG.floorTime || 0) * Math.PI) > 0 ? '#44ccff' : '#1a3344';
       else if (tile === T.TOXIC) col = '#33ff00';
@@ -3041,6 +3219,8 @@ function drawExpandedMinimap(dungeon, player) {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 /** @type {any[]} */
 const messages=[];
+const HUD_STAT_GAP = 12;
+const MESSAGE_STATUS_GAP = 2;
 function drawMessages() {
   // Base 16px font + 22px line-height multiplied by `settings.textScale`
   // (0.85 / 1.0 / 1.15 / 1.3). Floors keep things legible at 0.85×. Both
@@ -3050,13 +3230,21 @@ function drawMessages() {
   // per frame, so per-iteration template-literal alloc would churn GC.
   const msgFs = Math.max(10, Math.round(16 * settings.textScale));
   const msgLh = Math.max(14, Math.round(22 * settings.textScale));
+  const statusReserve = (typeof getStatusBadgeReservedHeight === 'function' && _RG.player)
+    ? getStatusBadgeReservedHeight(_RG.player)
+    : 0;
+  const msgBase = statusReserve > 0
+    ? Math.min(layout.msgBase, layout.hudTop - statusReserve - MESSAGE_STATUS_GAP - 5)
+    : layout.msgBase;
+  // Stack above the contextual hint line when one is showing.
+  const stackBase = (_RG.hint && _hintTopY != null) ? Math.min(msgBase, _hintTopY - 6) : msgBase;
   const fontStr = `bold ${msgFs}px monospace`;
   for (let i=messages.length-1;i>=0;i--) {
     const m=messages[i];
     m.life-=1/60;
     if (m.life<=0){messages.splice(i,1);continue;}
     const mx = 14+safeLeft;
-    const my = layout.msgBase-(messages.length-1-i)*msgLh;
+    const my = stackBase-(messages.length-1-i)*msgLh;
     ctx.save();
     ctx.globalAlpha=Math.min(1,m.life);
     ctx.font = fontStr;
@@ -3070,6 +3258,119 @@ function drawMessages() {
   }
 }
 
+// ─── Mainframe chamber set pieces ──────────────────────────────────────────
+// The brief's finale is "a huge room containing a mainframe and a portal
+// that is connected to the company network". The interaction tiles are
+// single glyphs, so this draws the physical set: a rack facade on the
+// chamber's top wall (walls only, so nothing walkable looks solid), cables to
+// the archive reader, and a large portal ring that is dim while GENESIS holds
+// the relay and bright once it opens. Hot path: no per-frame allocation.
+const _MF_RACK_TILES = 7;
+const _MF_CABLE_DASH = [4, 6];
+/** @type {number[]} */
+const _MF_NO_DASH = [];
+/**
+ * @param {number} camX
+ * @param {number} camY
+ */
+function drawMainframeSetPieces(camX, camY) {
+  const d = _RG.dungeon;
+  if (!d || !d.rooms) return;
+  let room = null;
+  for (const r of d.rooms) { if (r && r.roomType === 'mainframe' && r.interactables) { room = r; break; } }
+  if (!room) return;
+  const ia = room.interactables;
+  const seenReader = d.visited[ia.reader.y] && d.visited[ia.reader.y][ia.reader.x];
+  const seenPortal = d.visited[ia.portal.y] && d.visited[ia.portal.y][ia.portal.x];
+  if (!seenReader && !seenPortal) return;
+  const now = lastTime;
+  const open = !_RG.bossAlive;
+  ctx.save();
+  // Rack facade on the top wall row above the reader side of the chamber.
+  const wallY = room.y - 1;
+  const rackX0 = room.x;
+  const rackCount = Math.min(_MF_RACK_TILES, room.w);
+  for (let i = 0; i < rackCount; i++) {
+    const tx = rackX0 + i;
+    if (!(d.visited[wallY] && d.visited[wallY][tx])) continue;
+    if (!d.map[wallY] || d.map[wallY][tx] !== T.WALL) continue; // never dress an opening as solid
+    const sx = tx * TILE - camX, sy = wallY * TILE - camY;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#07141f';
+    ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+    ctx.strokeStyle = '#1f5f6f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx + 2.5, sy + 2.5, TILE - 5, TILE - 5);
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 3; col++) {
+        const phase = (tx * 7 + row * 3 + col * 5) % 11;
+        const on = Math.sin(now / (180 + phase * 23) + phase) > 0.1;
+        ctx.globalAlpha = on ? 0.95 : 0.25;
+        ctx.fillStyle = (row + col + tx) % 3 === 0 ? '#39ff14' : '#66ffcc';
+        ctx.fillRect(sx + 6 + col * (TILE - 12) / 3, sy + 6 + row * (TILE - 12) / 4, 3, 2);
+      }
+    }
+  }
+  const labelX = (rackX0 + rackCount / 2) * TILE - camX;
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#66ffcc';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('COMPANY MAINFRAME // EVALUATION ARCHIVE', labelX, wallY * TILE - camY - 4);
+  // Cables from the rack bank down to the archive reader.
+  const rdx = ia.reader.x * TILE + TILE / 2 - camX, rdy = ia.reader.y * TILE + TILE / 2 - camY;
+  ctx.strokeStyle = '#1f6f5f';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.5;
+  ctx.setLineDash(_MF_CABLE_DASH);
+  ctx.lineDashOffset = -(now / 40) % 10;
+  ctx.beginPath();
+  ctx.moveTo(labelX - TILE, room.y * TILE - camY);
+  ctx.lineTo(rdx, rdy - TILE * 0.4);
+  ctx.moveTo(labelX + TILE, room.y * TILE - camY);
+  ctx.lineTo(rdx + TILE * 0.3, rdy - TILE * 0.4);
+  ctx.stroke();
+  ctx.setLineDash(_MF_NO_DASH);
+  // Portal ring connected to the company network.
+  if (seenPortal) {
+    const px = ia.portal.x * TILE + TILE / 2 - camX, py = ia.portal.y * TILE + TILE / 2 - camY;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 380);
+    const ringCol = open ? '#88ccff' : '#ff3355';
+    ctx.globalAlpha = open ? 0.18 + 0.12 * pulse : 0.12;
+    ctx.fillStyle = ringCol;
+    ctx.beginPath();
+    ctx.arc(px, py, TILE * 2.1, 0, TWO_PI);
+    ctx.fill();
+    ctx.globalAlpha = open ? 0.85 : 0.45;
+    ctx.strokeStyle = ringCol;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = open ? 18 : 6;
+    ctx.shadowColor = ringCol;
+    ctx.beginPath();
+    ctx.arc(px, py, TILE * 2.1, 0, TWO_PI);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    const spin = now / (open ? 600 : 1800);
+    for (let k = 0; k < 3; k++) {
+      const a0 = spin + k * (TWO_PI / 3);
+      ctx.beginPath();
+      ctx.arc(px, py, TILE * (1.1 + 0.25 * k), a0, a0 + 1.6);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = ringCol;
+    ctx.fillText(open ? 'NETWORK PORTAL // RELAY OPEN' : 'NETWORK PORTAL // SEALED BY GENESIS', px, py - TILE * 2.35);
+  }
+  ctx.restore();
+}
+
+// Top edge of the contextual hint drawn this frame (null until one draws).
+// game.js draws the hint before the message log, which stacks above it so
+// the centred hint and left-aligned messages never share a baseline.
+/** @type {number|null} */
+let _hintTopY = null;
+
 function drawHint() {
   const h = _RG.hint;
   if (!h) return;
@@ -3079,12 +3380,20 @@ function drawHint() {
   // the visual breathing room above the HUD bar at every text size.
   const hFs = Math.max(10, Math.round(15 * settings.textScale));
   const hGap = Math.max(8, Math.round(14 * settings.textScale));
+  // Sit above the status badge strip when it is showing.
+  const hintReserve = (typeof getStatusBadgeReservedHeight === 'function' && _RG.player)
+    ? getStatusBadgeReservedHeight(_RG.player)
+    : 0;
+  const hintY = hintReserve > 0
+    ? Math.min(layout.hudTop - hGap, layout.hudTop - hintReserve - 4)
+    : layout.hudTop - hGap;
+  _hintTopY = hintY - hFs;
   ctx.save();
   ctx.globalAlpha = pulse;
   ctx.shadowBlur = 10; ctx.shadowColor = h.colour;
   ctx.fillStyle = h.colour;
   ctx.font = `${hFs}px monospace`; ctx.textAlign = 'center';
-  ctx.fillText(h.text, W / 2, layout.hudTop - hGap);
+  ctx.fillText(h.text, W / 2, hintY);
   ctx.restore();
 }
 

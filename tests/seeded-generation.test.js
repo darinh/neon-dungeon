@@ -82,7 +82,7 @@ test('save and continue persist seed and RNG stream state', () => {
 test('save and continue persist exact mid-floor snapshot state', () => {
   assert.match(GAME, /const FLOOR_SNAPSHOT_VERSION = 1/);
   assert.match(GAME, /floorSnapshot:\s*serializeFloorSnapshot\(this\)/);
-  assert.match(GAME, /player:\s*\{\s*x:p\.x,\s*y:p\.y,/);
+  assert.match(GAME, /player:\s*\{\s*x:savedPos\.x,\s*y:savedPos\.y,/);
   assert.match(GAME, /const floorSnapshotRestored = restoreFloorSnapshot\(this,\s*save\.floorSnapshot\)/);
   assert.ok(
     GAME.indexOf('this.loadFloor(save.floor||1, savedMod, true);') <
