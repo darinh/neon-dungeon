@@ -760,6 +760,19 @@ test('dragging a slider maps the pointer across the same track the tap uses', ()
   assert.equal(f.harness._settingsDrag, null, 'release ends the drag');
 });
 
+test('a zero-width slider track (320 px phone at zoom 2) never yields a NaN volume; taps just select the row', () => {
+  const width = 229, height = 406; // 320x568 CSS / 0.7 / zoom 2
+  const f = createSettingsUpdateHarness(width, height, computeLayout(width, height, 0).compact);
+  assert.equal(f.harness._settingsSliderTrack().w, 0, 'no room for a track');
+  const layoutM = f.harness._settingsLayout(22);
+  f.mouse.x = f.harness._settingsSliderTrack().x; f.mouse.y = layoutM.startY;
+  f.harness._settingsSel = 5;
+  f.harness.updateSettings();
+  assert.deepEqual(f.audio.sfx, [], 'no volume call');
+  assert.equal(f.settings.sfxVol, 0.5, 'value unchanged (never NaN)');
+  assert.equal(f.harness._settingsSel, 0, 'the tap selects the SFX row');
+});
+
 test('a slider card tap off the track selects the row, disarms reset and keeps the value', () => {
   for (const c of SETTINGS_LAYOUT_CASES) {
     const f = createSettingsUpdateHarness(c.width, c.height, c.narrow);
