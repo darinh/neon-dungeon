@@ -1,41 +1,5 @@
 // @ts-check
 'use strict';
-// engine/math.js — pure math + RNG primitives, zero game state.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns, no DOM, no globals beyond UMD mount.
-// Most functions are referentially transparent. RNG helpers can run either from
-// Math.random() (legacy/default) or from a seeded run state initialised by the
-// host. The module is still engine-generic: seeds and stream names are opaque.
-//
-// Surface:
-//   rand(stream?)            → uniform float in [0, 1)
-//   rnd(min, max)            → uniform float in [min, max)
-//   rndInt(min, max)         → uniform int in [min, max] inclusive
-//   chance(p, stream?)       → true with probability p
-//   pick(arr, stream?)       → random array element or undefined
-//   shuffleInPlace(arr, stream?) → Fisher-Yates shuffle
-//   normalizeSeed(input)     → stable non-empty seed string
-//   makeRandomSeed()         → human-friendly random seed
-//   createRng(seed, stream, state?) → standalone seeded PRNG
-//   setSeed(seed, states?)   → initialise active run RNG streams
-//   clearSeed()              → restore unseeded legacy mode
-//   getSeed()                → current normalized seed or null
-//   getSeedHash()            → numeric hash of current seed or 0
-//   snapshotStates()         → serializable active persistent stream states
-//   restoreStates(states)    → restore active persistent stream states
-//   withRngStream(name, fn)  → run fn using persistent stream name
-//   withDerivedRngStream(name, fn) → run fn using temporary derived stream
-//   clamp(v, lo, hi)         → v constrained to [lo, hi]
-//   dist(ax, ay, bx, by)     → euclidean distance
-//   dist2(ax, ay, bx, by)    → squared distance (cheap; preferred for compares)
-//   norm(dx, dy)             → [nx, ny] unit vector; (0,0) → (0,0)
-//   lerp(a, b, t)            → linear interp; no clamping of t
-//
-// Browser: attaches as `window.NEON.math` AND mounts each function as a bare
-// global (rand/rnd/rndInt/etc.) for back-compat with the
-// existing UMD script-tag callers in src/*.js. Must load BEFORE src/platform.js.
-//
-// Node: module.exports = the same surface.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {
@@ -45,7 +9,7 @@
   const r = /** @type {any} */ (root);
   const ns = /** @type {any} */ (r.NEON = r.NEON || {});
   ns.math = v;
-  // Bare globals for back-compat with existing call sites.
+  // Bare globals for existing script-tag callers. Must load before src/platform.js.
   r.rand = v.rand;
   r.rnd = v.rnd;
   r.rndInt = v.rndInt;

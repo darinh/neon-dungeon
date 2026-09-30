@@ -1,21 +1,5 @@
 // @ts-check
-// engine/spawn.js — spawn-position utilities.
-//
-// findNearestPassable: BFS from a target tile to the closest passable tile
-// within `maxRadius` rings. Used by game.loadFloor() to drop the player near
-// the previous floor's exit position rather than always at dungeon.playerPos.
-//
-// Pure function — no globals, no canvas, no audio. Node-test friendly.
-//
-// API:
-//   findNearestPassable(map, fx, fy, isPassable, opts?) → {x, y} | null
-//     map       2D grid of tile codes, map[y][x]
-//     fx, fy    starting world coords (any number; floored internally)
-//     isPassable function(tileCode) → boolean
-//     opts      { maxRadius?: number = 12 }
-//   Return: tile-center coords {x: tx + 0.5, y: ty + 0.5} or null.
-//
-// Caller is responsible for clamping fx/fy to map bounds before calling.
+// Used by game.loadFloor() to place the player near the previous floor's exit instead of dungeon.playerPos.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).spawn = factory();
@@ -40,15 +24,12 @@
     const sx = Math.max(0, Math.min(W - 1, Math.floor(fx)));
     const sy = Math.max(0, Math.min(H - 1, Math.floor(fy)));
 
-    // Check the start tile first.
     const startRow = map[sy];
     if (startRow && isPassable(/** @type {number} */ (startRow[sx]))) {
       return { x: sx + 0.5, y: sy + 0.5 };
     }
 
-    // BFS (4-neighbour). Marking visited via a Set of "y*W+x" keys keeps the
-    // hot path simple. Caps at maxRadius rings to avoid pathological search
-    // on huge open maps when the start is in a void/locked region.
+    // Cap at maxRadius rings so a start in a void does not search the whole map.
     const visited = new Set();
     visited.add(sy * W + sx);
     /** @type {Array<[number, number, number]>} */

@@ -1,9 +1,8 @@
 // @ts-check
 'use strict';
 
-// Shared entity/runtime collections. These arrays keep their identities for the
-// full page session; floor transitions clear contents in render.js populateFloor()
-// for most arrays and game.js loadFloor() for placedWalls.
+// These arrays keep their identities for the page session. Floor transitions
+// clear contents in render.js populateFloor(), and placedWalls in game.js loadFloor().
 /** @type {any[]} */ const enemies = [];
 /** @type {any[]} */ const items   = [];
 /** @type {any[]} */ const hazardZones = [];
@@ -15,11 +14,6 @@
 /** @type {any[]} */ const cameras = [];
 /** @type {any[]} */ const lasers  = [];
 /** @type {any[]} */ const wallTurrets = [];
-// ARCHITECT-placed walls (PR ARCHITECT). Each entry tracks a tile that the
-// ARCHITECT mob has converted from FLOOR/etc. to T.WALL — preserves the
-// origTile so the wall can decay back to its original state, and the
-// owner reference so each ARCHITECT can replace its own wall without
-// stacking. Each entry: { tx, ty, origTile, decayTimer, owner }.
-// Cleared on floor transition (game.js loadFloor — same place
-// placedWalls.length=0 alongside other transient arrays).
+// ARCHITECT walls: { tx, ty, origTile, decayTimer, owner }. origTile is restored
+// on decay; owner lets each ARCHITECT replace its own wall without stacking.
 /** @type {any[]} */ const placedWalls = [];

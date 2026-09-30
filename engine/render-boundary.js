@@ -1,19 +1,6 @@
 // @ts-check
-// engine/render-boundary.js — render error boundary (post-v116 hardening)
-//
-// The main loop in src/game.js wraps update() and render() in try/finally
-// (no catch), so any uncaught exception in those phases aborts the frame
-// mid-draw but the loop reschedules. Symptom: input keeps working (player
-// moves, audio sustains) while the world vanishes and the user has no idea
-// the game has crashed. v116 fixed one such bug (undefined TS in
-// renderPlaying); this module ensures the next one surfaces visibly instead
-// of silently bricking the frame.
-//
-// Two pure helpers:
-//   trackRenderError(prev, phase, err)     -> new error-state record
-//   drawErrorOverlay(ctx, W, H, errorState) -> draws a fallback overlay
-//
-// UMD-lite so Node tests can exercise trackRenderError without a canvas.
+// The main loop in src/game.js catches update() and render() errors separately and hands them here.
+// Without this overlay, a throwing frame leaves input and audio running while the world vanishes.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).renderBoundary = factory();
@@ -34,7 +21,7 @@
     const stack = (err && err.stack) ? String(err.stack) : '';
     if (prev && prev.message === message) {
       return {
-        phase: phase, // surface the most recent phase
+        phase: phase,
         message: prev.message,
         stack: prev.stack,
         count: prev.count + 1,

@@ -13,7 +13,6 @@ Enemy.prototype.aiCharger = function aiCharger(dt, player, map, d, los) {
   this._chgCooldown = Math.max(0, (this._chgCooldown || 0) - dt);
   const bm = this.berserkerMul();
 
-  // -- Charging state: rush in locked direction --
   if (this._chgState === 'charging') {
     this._chgDur -= dt;
     const cspd = 5.5 * bm;
@@ -27,13 +26,11 @@ Enemy.prototype.aiCharger = function aiCharger(dt, player, map, d, los) {
     if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; }
     else hitWall = true;
 
-    // Hit check: damage player within 1.2 tiles during charge
     if (dist(this.x, this.y, player.x, player.y) < 1.2 && this._canTarget()) {
       const dealt = player.takeDamage(Math.round(this.atk * 1.5), this.type);
       if (dealt > 0) {
         const [kx, ky] = norm(player.x - this.x, player.y - this.y);
-        // Wall-aware knockback: check each axis independently
-        // Wall-aware knockback: check each axis independently
+        // Wall-aware knockback: each axis is tested independently so a wall on one axis does not cancel the other.
         const nx = player.x + kx * 2, ny = player.y + ky * 2;
         const fxK = Math.floor(nx), fyK = Math.floor(player.y);
         const xfK = Math.floor(player.x), yfK = Math.floor(ny);
@@ -48,13 +45,11 @@ Enemy.prototype.aiCharger = function aiCharger(dt, player, map, d, los) {
       return;
     }
 
-    // Wall collision or duration expired -> stunned
     if (hitWall || this._chgDur <= 0) {
       if (hitWall) {
         spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 6);
         triggerShake(3, 0.1);
         audio.chargerImpact();
-        // Smash crates on impact
         if (fx >= 0 && fx < MAP_W && fy >= 0 && fy < MAP_H && map[fy]?.[fx] === T.CRATE) damageCrateAtTile(fx, fy, Math.round(this.atk * 1.5));
         if (xf >= 0 && xf < MAP_W && yf >= 0 && yf < MAP_H && map[yf]?.[xf] === T.CRATE) damageCrateAtTile(xf, yf, Math.round(this.atk * 1.5));
       }
@@ -64,12 +59,10 @@ Enemy.prototype.aiCharger = function aiCharger(dt, player, map, d, los) {
       return;
     }
 
-    // Charge trail particles
     if (rand('cosmetic') < dt * 20) spawnParticles(this.x, this.y, 'SPARK', '#ff6600', 1);
     return;
   }
 
-  // -- Windup state: telegraph before charging --
   if (this._chgState === 'windup') {
     if (!los || !this._canTarget()) {
       this._chgState = 'idle';
@@ -86,22 +79,19 @@ Enemy.prototype.aiCharger = function aiCharger(dt, player, map, d, los) {
     return;
   }
 
-  // -- Idle state: patrol, approach, or initiate charge --
   if (los && d < 2) {
-    // Point-blank: melee attack, don't charge
+    // Point-blank: melee, don't charge.
     this.moveToward(this._tx, this._ty, this.spd, dt, map);
     if (d < 1.2) {
       this.meleeAttack(player);
       this._chgCooldown = Math.max(this._chgCooldown, 1.5);
     }
   } else if (los && d >= 3 && d <= 10 && this._chgCooldown <= 0) {
-    // In charge range - begin windup
     const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
     this._chgDx = dx; this._chgDy = dy;
     this._chgState = 'windup';
     this._chgWindup = 0.6;
   } else if (los && d < 8) {
-    // Too close for charge or on cooldown - approach
     this.moveToward(this._tx, this._ty, this.spd, dt, map);
     if (d < 1.2) this.meleeAttack(player);
   } else {

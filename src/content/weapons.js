@@ -1,11 +1,7 @@
 // @ts-check
 'use strict';
 
-// Weapon and elite-affix catalogs plus deterministic weapon construction.
-// Loaded before src/content.js so runtime item/shop generation can keep using
-// the same globals while this subsystem has a smaller ownership surface.
-
-// ─── Weapons ─────────────────────────────────────────────────────────────────
+// Loaded before src/content.js so item and shop generation keep these globals.
 /** @type {Record<string, any>} */
 const WEAPONS = {
   PULSE_PISTOL: { name:'Pulse Pistol', dmg:15, rate:3,   range:10, spread:0,   count:1, colour:'#00f5ff' },
@@ -16,10 +12,9 @@ const WEAPONS = {
 };
 const WEAPON_KEYS = Object.keys(WEAPONS);
 
-// ─── Weapon Affixes ──────────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
 const WEAPON_AFFIXES = {
-  // Prefixes (stat modifiers) — max 1 per weapon
+  // Prefixes: max 1 per weapon (rollWeapon enforces the slot).
   RAPID:    { slot:'prefix', label:'Rapid',    colour:'#44ff88', desc:'+30% fire rate',    mods:{rate:1.3} },
   HEAVY:    { slot:'prefix', label:'Heavy',    colour:'#ff6644', desc:'+35% dmg, −20% rate', mods:{dmg:1.35,rate:0.8} },
   EXTENDED: { slot:'prefix', label:'Extended', colour:'#44ccff', desc:'+40% range',        mods:{range:1.4} },
@@ -29,7 +24,7 @@ const WEAPON_AFFIXES = {
   VOLATILE: { slot:'prefix', label:'Volatile', colour:'#ff44dd', desc:'+50% dmg, −20% rate, wider spread', mods:{dmg:1.5,rate:0.8,spreadAdd:0.25} },
   KEEN:     { slot:'prefix', label:'Keen',     colour:'#ffdd00', desc:'+12% crit chance',  mods:{critAdd:0.12} },
   DEADLY:   { slot:'prefix', label:'Deadly',   colour:'#ff2244', desc:'+50% crit damage',  mods:{critMulAdd:0.5} },
-  // Suffixes (on-hit / on-kill effects) — max 1 per weapon
+  // Suffixes: max 1 per weapon.
   FLAME:    { slot:'suffix', label:'of Flame',     colour:'#ff6600', desc:'Ignites enemies',       effect:'burn' },
   FROST:    { slot:'suffix', label:'of Frost',     colour:'#66ccff', desc:'Slows enemies',         effect:'slow' },
   VAMPIRIC: { slot:'suffix', label:'of Vampirism', colour:'#ff0066', desc:'Steals life on hit',    effect:'leech' },
@@ -51,7 +46,6 @@ const AFFIX_KEYS = Object.keys(WEAPON_AFFIXES);
 const AFFIX_PREFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'prefix');
 const AFFIX_SUFFIXES = AFFIX_KEYS.filter(k => WEAPON_AFFIXES[k].slot === 'suffix');
 
-// ─── Elite Enemy Affixes ──────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
 const ELITE_AFFIXES = {
   SHIELDED:     { label:'Shielded',     colour:'#4488ff', desc:'Energy shield absorbs damage', icon:'◈' },
@@ -68,15 +62,10 @@ const ELITE_AFFIX_KEYS = Object.keys(ELITE_AFFIXES);
  * @param {any} enemyType
  */
 function rollEliteAffix(enemyType) {
-  // Filter out redundant combos
   const eligible = ELITE_AFFIX_KEYS.filter(k => {
     if (k === 'PHASING' && enemyType === 'PHANTOM') return false; // already phases
     if (k === 'VOLATILE' && enemyType === 'SEEKER') return false; // seeker already explodes
-    // SHIELDER's directional shield uses the shared shieldHp pool (entities.js
-    // takeDamage / aiShielder). The SHIELDED affix's regen at entities.js:306
-    // would beat the 5s broken-recovery contract by restoring shieldHp at
-    // 2s of no-hits. Disallow the combo to keep the directional shield's
-    // state machine deterministic.
+    // SHIELDER shares shieldHp. SHIELDED regen would restore it inside the 5s broken window and skip shieldBrokenTimer.
     if (k === 'SHIELDED' && enemyType === 'SHIELDER') return false;
     return true;
   });
@@ -95,7 +84,6 @@ function affixEligible(affixId, baseWeapon) {
   return true;
 }
 
-// Deterministic weapon construction from base key + affix list
 /**
  * @param {any} baseKey
  * @param {any} affixIds
@@ -118,19 +106,16 @@ function buildWeapon(baseKey, affixIds) {
     if (af.mods.critAdd)  w.critAdd = +((w.critAdd || 0) + af.mods.critAdd).toFixed(3);
     if (af.mods.critMulAdd) w.critMulAdd = +((w.critMulAdd || 0) + af.mods.critMulAdd).toFixed(3);
   }
-  // Build display name: "Rapid Pulse Pistol of Flame"
   const prefix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'prefix');
   const suffix = affixIds.find((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.slot === 'suffix');
   let dn = base.name;
   if (prefix) dn = WEAPON_AFFIXES[prefix].label + ' ' + dn;
   if (suffix) dn = dn + ' ' + WEAPON_AFFIXES[suffix].label;
   w.displayName = dn;
-  // Collect on-hit/on-kill effects
   w._effects = affixIds.map((/** @type {any} */ id) => WEAPON_AFFIXES[id]?.effect).filter(Boolean);
   return w;
 }
 
-// Roll random affixes based on floor depth
 /**
  * @param {any} baseKey
  * @param {any} floor
@@ -139,7 +124,6 @@ function rollWeapon(baseKey, floor) {
   if (floor <= 1) return buildWeapon(baseKey, []);
   const base = WEAPONS[baseKey];
   if (!base) return buildWeapon(baseKey, []);
-  // Affix chance tiers
   let pTwo, pOne;
   if (floor <= 3)      { pTwo = 0;    pOne = 0.50; }
   else if (floor <= 5) { pTwo = 0.25; pOne = 0.45; }
@@ -151,21 +135,17 @@ function rollWeapon(baseKey, floor) {
   else                       wantCount = 0;
   if (wantCount === 0) return buildWeapon(baseKey, []);
   const affixes = [];
-  // Pick eligible prefix
   const eligPre = AFFIX_PREFIXES.filter(id => affixEligible(id, base));
-  // Pick eligible suffix
   const eligSuf = AFFIX_SUFFIXES.filter(id => affixEligible(id, base));
   if (wantCount >= 2 && eligPre.length && eligSuf.length) {
     affixes.push(eligPre[rndInt(0, eligPre.length - 1, 'loot')]);
     affixes.push(eligSuf[rndInt(0, eligSuf.length - 1, 'loot')]);
   } else if (wantCount >= 1) {
-    // Pick from either pool
     const combined = [...eligPre, ...eligSuf];
     if (combined.length) affixes.push(combined[rndInt(0, combined.length - 1, 'loot')]);
   }
   return buildWeapon(baseKey, affixes);
 }
 
-// Rarity border colours for UI
 const RARITY_COLOURS = ['#aaaaaa', '#39ff14', '#cc44ff']; // common, uncommon, rare
 const RARITY_LABELS  = ['COMMON', 'UNCOMMON', 'RARE'];

@@ -2,9 +2,6 @@
 'use strict';
 
 /**
- * Reposition a cloaked PHANTOM inside its current room, preferring tiles away
- * from the current target.
- *
  * @this {Enemy}
  * @param {any} [map]
  * @param {any} [player]
@@ -36,7 +33,6 @@ Enemy.prototype.aiPhantom = function aiPhantom(dt, player, map, d, los) {
   const bm = this.berserkerMul();
   const ocMul = _EG.modifier==='OVERCLOCK' ? 1.2 : 1;
 
-  // ── Cloaked: stalk toward player, transition to telegraph ──
   if (this._phState === 'cloaked') {
     this._phTimer -= dt * ocMul;
     if (los && this._canTarget() && d < 10) {
@@ -45,13 +41,11 @@ Enemy.prototype.aiPhantom = function aiPhantom(dt, player, map, d, los) {
     } else {
       this.patrol(dt, map);
     }
-    // Close-range escape: reposition if player walks into us
     if (d < 2.5 && this._canTarget()) {
       this._phReposition(map, player);
       this._phTimer = 1.5 + rand('combat');
       return;
     }
-    // Ready to attack: need LOS, target, and be in sweet range
     if (this._phTimer <= 0 && los && this._canTarget() && d >= 2.5 && d <= 8) {
       this._phState = 'telegraph';
       this._phTimer = 0.4;
@@ -60,12 +54,10 @@ Enemy.prototype.aiPhantom = function aiPhantom(dt, player, map, d, los) {
       this._phAimDx = dx; this._phAimDy = dy;
       return;
     }
-    // Timer expired but can't attack — reset
     if (this._phTimer <= 0) this._phTimer = 1.0 + rand('combat') * 1.5;
     return;
   }
 
-  // ── Telegraph: warning shimmer before attack ──
   if (this._phState === 'telegraph') {
     if (!los || !this._canTarget()) {
       this._phState = 'cloaked';
@@ -83,7 +75,6 @@ Enemy.prototype.aiPhantom = function aiPhantom(dt, player, map, d, los) {
     return;
   }
 
-  // ── Attacking: fire burst of 2 shots ──
   if (this._phState === 'attacking') {
     this._phBurstDelay -= dt;
     if (this._phBurstLeft > 0 && this._phBurstDelay <= 0) {
@@ -103,7 +94,6 @@ Enemy.prototype.aiPhantom = function aiPhantom(dt, player, map, d, los) {
     return;
   }
 
-  // ── Cooldown: visible and retreating, then re-cloak ──
   if (this._phState === 'cooldown') {
     this._phTimer -= dt;
     if (d < 5 && this._canTarget()) {

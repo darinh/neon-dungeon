@@ -5,7 +5,6 @@
 // collections and enemy spawn helpers while publishing the legacy globals used
 // by generation, projectiles, explosions, game updates, and rendering.
 
-// ─── Alarm Beacons ────────────────────────────────────────────────────────────
 const BEACON_COUNTDOWN = 4; // seconds before reinforcements spawn
 
 /**
@@ -39,14 +38,13 @@ function destroyBeacon(b) {
   spawnParticles(b.x, b.y, 'EXPLOSION', '#ff3333', 14);
   spawnParticles(b.x, b.y, 'SPARK', '#ff8844', 8);
   audio.beaconDestroy();
-  // Credit reward with economy multipliers
   const d = getDiff();
   const amt = Math.round(_EG.floor * 3 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
   _EG.player.credits += amt;
   spawnDmgText(b.x, b.y - 0.3, '+' + amt + '◈', '#ff6644');
   const idx = beacons.indexOf(b);
   if (idx >= 0) beacons.splice(idx, 1);
-  // Trigger room-clear re-evaluation (beacon was blocking clear)
+  // Beacon was blocking room-clear.
   _EG.enemyDiedThisFrame = true;
 }
 
@@ -76,7 +74,6 @@ function updateBeacons(dt) {
     const b = beacons[i];
     if (b.dead) continue;
     b.bob += dt * 2;
-    // Activate when player enters the room
     if (!b.active) {
       const r = b.room;
       if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) {
@@ -90,7 +87,6 @@ function updateBeacons(dt) {
       b.timer -= dt;
       b.ringTimer += dt;
       if (b.timer <= 0) {
-        // Trigger reinforcements
         b.dead = true;
         audio.beaconTrigger();
         _EG.msg('⚠ REINFORCEMENTS INCOMING', '#ff4444');
@@ -130,9 +126,7 @@ function drawBeacons(camX, camY) {
     const pulse = 0.5 + 0.3 * Math.sin(b.bob * 2);
 
     if (b.active) {
-      // Rapid flash
       const flash = Math.sin(b.ringTimer * 10) > 0 ? 1.0 : 0.3;
-      // Expanding ring
       const ringR = (b.ringTimer % 0.8) / 0.8 * 18;
       const ringA = 1 - ringR / 18;
       ctx.save();
@@ -140,7 +134,6 @@ function drawBeacons(camX, camY) {
       ctx.strokeStyle = '#ff2222'; ctx.lineWidth = 1.5;
       NEON.draw.circleStroke(ctx, sx, sy, ringR);
       ctx.restore();
-      // Core diamond
       ctx.save();
       ctx.globalAlpha = flash;
       ctx.shadowBlur = 14; ctx.shadowColor = '#ff0000';
@@ -149,7 +142,6 @@ function drawBeacons(camX, camY) {
       ctx.fillRect(-5, -5, 10, 10);
       ctx.setTransform(1,0,0,1,0,0);
       ctx.restore();
-      // Countdown text
       ctx.save();
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#ff4444'; ctx.font = 'bold 12px monospace';
@@ -158,7 +150,6 @@ function drawBeacons(camX, camY) {
       ctx.fillText(String(Math.ceil(b.timer)), sx, sy - 10);
       ctx.restore();
     } else {
-      // Idle: subtle red glow diamond
       ctx.save();
       ctx.globalAlpha = pulse;
       ctx.shadowBlur = 8; ctx.shadowColor = '#ff2222';
@@ -167,7 +158,6 @@ function drawBeacons(camX, camY) {
       ctx.fillRect(-4, -4, 8, 8);
       ctx.setTransform(1,0,0,1,0,0);
       ctx.restore();
-      // Antenna line
       ctx.save();
       ctx.globalAlpha = 0.5;
       ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1;
@@ -175,7 +165,6 @@ function drawBeacons(camX, camY) {
       ctx.fillStyle = '#ff6666';
       NEON.draw.circle(ctx, sx, sy - 12, 1.5);
       ctx.restore();
-      // Warning symbol
       ctx.save();
       ctx.globalAlpha = 0.4 + 0.2 * Math.sin(b.bob);
       ctx.fillStyle = '#ff6644'; ctx.font = 'bold 9px monospace';

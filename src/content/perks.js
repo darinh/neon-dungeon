@@ -1,10 +1,8 @@
 // @ts-check
 'use strict';
 
-// Level-up perk and augment-choice helpers. Loaded before src/content.js so
-// runtime callers keep using the same globals while progression choices have a
-// smaller ownership surface. Functions intentionally resolve _CG/game globals
-// only when invoked after all runtime scripts have loaded.
+// Loaded before src/content.js so runtime callers keep the same globals.
+// Resolve _CG/game globals only when invoked, after all runtime scripts have loaded.
 
 // Choose-one-of-three at levels 2, 4, 6, 8. Auto-Laser capstone at level 10.
 /** @type {Record<string, any>} */
@@ -37,7 +35,7 @@ const PERK_POOL = {
   HOT_HAND:        { name:'Hot Hand',           icon:'♨', desc:'Consecutive hits on same target: +5% per stack (max +30%)', colour:'#ff5522' },
 };
 const PERK_CAPSTONE = { id:'AUTO_LASER', name:'Auto-Laser', icon:'⚡', desc:'Fires beam at nearest foe', colour:'#ff2222' };
-const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
+const PERK_LEVELS = [2, 4, 6, 8];
 
 /**
  * @param {any} player
@@ -45,7 +43,6 @@ const PERK_LEVELS = [2, 4, 6, 8]; // levels that trigger a perk choice
  */
 function rollPerkChoices(player, count) {
   const available = Object.keys(PERK_POOL).filter(id => !player.perks[id]);
-  // Fisher-Yates shuffle, take first `count`
   shuffleInPlace(available, 'loot');
   return available.slice(0, Math.min(count, available.length));
 }
@@ -84,7 +81,6 @@ function hasAugment(id) { return !!(_CG.player && _CG.player.augments[id]); }
 function rollAugmentChoices(player, count) {
   const owned = player.augments || {};
   const available = AUGMENT_KEYS.filter(id => !owned[id]);
-  // Fisher-Yates shuffle
   for (let i = available.length - 1; i > 0; i--) {
     const j = rndInt(0, i);
     [available[i], available[j]] = [/** @type {string} */ (available[j]), /** @type {string} */ (available[i])];

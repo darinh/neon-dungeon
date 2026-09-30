@@ -1,10 +1,8 @@
 // @ts-check
 'use strict';
 
-// Room-scoped enemy index. Support structure for broadphase users such as wall
-// turret acquisition, NEXUS link candidates, room-clear detection, and
-// vengeance/frenzy notifications. Loaded before src/entities.js so the entity
-// core can reference these helpers from function/method bodies.
+// Loaded before src/entities.js so entity methods can call these helpers.
+// Callers include wall turrets, NEXUS links, room-clear, and vengeance/frenzy.
 
 const enemiesByRoom = new Map();
 
@@ -31,8 +29,7 @@ function clearEnemiesByRoom() { enemiesByRoom.clear(); }
 
 function getEnemiesInRoom(/** @type {any} */ room) { return enemiesByRoom.get(room) || null; }
 
-// Convenience iterator. Safe when `room` is null/undefined or empty. Callers
-// still must guard for e.dead / e._disguised / e._wrPhased etc.
+// Does not filter dead, disguised, or phased enemies; callers must.
 const _EMPTY_ENEMY_SET = new Set();
 
 /**

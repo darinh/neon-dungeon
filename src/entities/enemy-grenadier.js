@@ -2,15 +2,12 @@
 'use strict';
 
 /**
- * Launch a grenade projectile toward a target tile.
- *
  * @this {Enemy}
  * @param {any} [tx]
  * @param {any} [ty]
  * @param {any} [map]
  */
 Enemy.prototype.lobGrenade = function lobGrenade(tx, ty, map) {
-  // Create a grenade projectile targeting (tx,ty)
   const [dx, dy] = norm(tx - this.x, ty - this.y);
   const g = new Projectile(this.x, this.y, dx, dy, 6, 0, 20, '#ff6622', false, false);
   g.isGrenade = true;
@@ -32,7 +29,6 @@ Enemy.prototype.aiGrenadier = function aiGrenadier(dt, player, map, d, los) {
   this.grenadeTimer = Math.max(0, this.grenadeTimer - dt);
   const bm = this.berserkerMul();
   if (los && d < 5) {
-    // Too close — retreat
     const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
     const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     const nx = this.x + dx * retreatSpd * dt;

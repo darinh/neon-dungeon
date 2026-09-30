@@ -17,7 +17,6 @@ Enemy.prototype.aiTeleporter = function aiTeleporter(dt, player, map, d, los) {
   // Emergency blink if player gets close (skip if just teleported or player cloaked)
   if (d < 2 && this._canTarget() && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
 
-  // Teleport cycle
   if (this.teleportTimer <= 0 && this.room) {
     this._warpFromX = this.x;
     this._warpFromY = this.y;
@@ -41,10 +40,8 @@ Enemy.prototype.aiTeleporter = function aiTeleporter(dt, player, map, d, los) {
     this._burstLeft = 2;
   }
 
-  // Can't attack while materializing
   if (this._materialize > 0) return;
 
-  // Fire burst at player
   if (this._burstLeft > 0 && los && this.shootTimer <= 0) {
     this.fireAt(this._tx, this._ty, 8, this.atk, 14, this.colour);
     this._burstLeft--;

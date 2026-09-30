@@ -1,37 +1,14 @@
 // @ts-check
 'use strict';
 
-// Two-tap window for the destructive [RESET TO DEFAULTS] button in the
-// SETTINGS menu — first press arms a timestamp, second press within
-// this window commits, anything else (nav, click elsewhere, Escape,
-// timeout) cancels. Centralized here so both updateSettings and
-// renderSettings share the same source of truth (the prior split
-// constant is what the PR #184 known-limitation note flagged).
+// Two-tap window for [RESET TO DEFAULTS]: first press arms a timestamp, a second press inside the window commits, anything else cancels.
+// Shared by updateSettings and renderSettings.
 const RESET_CONFIRM_WINDOW_MS = 3000;
 
-// Boss intro telegraph duration (seconds). Triggered when the player crosses
-// the threshold of a boss room and the room seals. During this window an
-// atmospheric overlay (radial vignette in the boss colour + boss-name
-// titlecard) is rendered on top of the world, and audio.bossIntro() plays
-// as a low-frequency hum sting. Gameplay is NOT paused — the intro is a
-// pure cosmetic flourish that runs in parallel with normal play.
-//
-// 2.4s chosen to be: long enough that the titlecard registers (~1.5s of
-// "hold" in the middle after fade-in), short enough that it doesn't
-// overstay the moment or eclipse the AI's first telegraphed attack.
+// Boss intro telegraph length in seconds. Gameplay is not paused; 2.4s is long enough for the titlecard to register and short enough not to cover the boss's first telegraph.
 const BOSS_INTRO_DURATION = 2.4;
 
-// Boss death telegraph duration (seconds). Triggered when the last boss
-// enemy is removed from the active arena (i.e. when bossAlive flips
-// true→false). During this window an atmospheric overlay (radial flash
-// in the boss colour + "DESTROYED" titlecard with the boss name + a
-// celebratory audio sting) is rendered on top of the world. Like the
-// boss intro telegraph, gameplay is NOT paused — the player can still
-// move, descend, etc. The overlay is purely cosmetic.
-//
-// 2.6s chosen to feel slightly weightier than the intro (2.4s) — death
-// deserves a beat to land. Long enough that the "DESTROYED" beat
-// registers without overstaying past the natural impulse to descend.
+// Boss death telegraph length in seconds. Gameplay is not paused; 2.6s is slightly longer than the intro so the kill can land before the player descends.
 const BOSS_DEATH_DURATION = 2.6;
 const _GG_STATE_DEFS = /** @type {any} */ (requireNEON('gameStates', 'src/game.js'));
 const _GG_STATES = _GG_STATE_DEFS.GAME_STATES;
@@ -103,7 +80,6 @@ function getTrialCardDeclineRect(w, h, narrow) {
 }
 
 /**
- * Greedy word wrap using the context's current font.
  * @param {any} context
  * @param {string} text
  * @param {number} maxWidth
@@ -132,8 +108,7 @@ const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
 // after the arming delay so the SEND press itself cannot dismiss it.
 const MESSAGE_SENT_HOLD_S = 6;
 const MESSAGE_SENT_ARM_S = 1;
-// The brief's "address of the person attempting to save the agent". A
-// private-range (RFC 1918) address so it can never point at a real host.
+// RFC 1918 private-range address so it can never point at a real host.
 const ACT1_CONTACT_ADDRESS = '10.44.7.19:7070 / mailbox anchor-7';
 // Compact-viewport fallback when the full address line would clip.
 const ACT1_CONTACT_HOST = '10.44.7.19:7070';
@@ -1950,10 +1925,7 @@ function restoreFloorSnapshot(gameState, snapshot) {
   return true;
 }
 
-// ─── Evaluation trial runtime dependencies ───────────────────────────────────
-// NEON.trials (src/content/trials.js) owns the trial rules; this object hands
-// it the browser-side effects. Built once and read lazily so `game` (declared
-// below) and late-loaded globals resolve at call time.
+// NEON.trials (src/content/trials.js) owns the rules; this object is the browser side effects. Built once and read lazily so game and late-loaded globals resolve at call time.
 /** @type {any} */
 let _trialDeps = null;
 /** @type {ReadonlyArray<readonly [number, number]>} */
@@ -2051,12 +2023,7 @@ const game = {
   floor: 1,
   player: null,
   dungeon: null,
-  // Sticky indicator set by platform.js's visibilitychange handler
-  // when the game auto-pauses (tab switch, iOS lock, phone call) and
-  // cleared in setState() on any transition out of PAUSED. Read by
-  // renderPaused() to show a subtitle distinguishing automatic from
-  // manual pauses, so a returning player isn't confused by an
-  // unexplained PAUSED screen.
+  // Set by platform.js visibilitychange on auto-pause (tab switch, iOS lock, phone call) and cleared on any transition out of PAUSED, so renderPaused can tell an automatic pause from a manual one.
   wasAutoPaused: false,
   cheats: defaultCheats(),
   cheatSequenceProgress: 0,
@@ -2084,52 +2051,38 @@ const game = {
   bossAlive: false,
   bossBarAnim: 0,
   bossHpGhost: 0,
-  // Boss intro telegraph — atmospheric overlay (radial vignette + titlecard +
-  // audio sting) that plays for BOSS_INTRO_DURATION seconds when the player
-  // first enters the boss room (i.e. when bossSealed flips false→true).
-  // Gameplay continues during the intro — this is purely cosmetic. Timer
-  // counts DOWN to 0; duration field is kept for fade-envelope math in the
-  // renderer (so the renderer can compute progress = 1 - timer/duration
-  // without re-deriving the constant).
+  // Counts down; duration is kept so the renderer can fade with 1 - timer/duration without re-reading the constant. Gameplay is not paused.
   bossIntroTimer: 0,
   bossIntroDuration: 0,
-  // Boss death telegraph — atmospheric overlay (radial flash + "DESTROYED"
-  // titlecard + audio sting) that plays for BOSS_DEATH_DURATION seconds
-  // when the last boss is killed (bossAlive flips true→false). Gameplay
-  // continues during the overlay — purely cosmetic. Snapshot fields hold
-  // the boss's identity at the moment of death because the boss instance
-  // is removed from `enemies` on the same frame (line ~1804) and the
-  // renderer needs the colour/name to outlive the kill.
+  // Snapshots the boss colour and name because the instance is removed from enemies on the kill frame, and the renderer still needs them. Gameplay is not paused.
   bossDeathTimer: 0,
   bossDeathDuration: 0,
   bossDeathColor: '#39ff14',
   bossDeathName: '',
   modifier: null,
   modBannerTimer: 0,
-  // UNCHAINED #40: biome intro card — shown 3s on first floor of a biome
-  // (floors 4/7/10/13). Floor 1 skipped — handled by #42 intro crawl.
+  // Shown 3s on the first floor of a biome (4/7/10/13). Floor 1 is the intro crawl, not this card.
   biomeCardTimer: 0,
   biomeCardArea: null,
   bossesCleared: 0,
   msgList: [],
   nameEntry: null,
   lastSavedRank: -1,
-  quest: null, // current floor objective
-  hint: null,  // proximity hint {text, colour} — set per-frame, rendered with pulse
-  shopRoom: null,     // room currently being shopped in
-  shopSelected: 0,    // keyboard selection index in shop
-  shopClosing: false,  // true during auto-close delay after last purchase
-  currentLore: null,   // lore text being displayed in READING state
+  quest: null,
+  hint: null,
+  shopRoom: null,
+  shopSelected: 0,
+  shopClosing: false,
+  currentLore: null,
   _whisperMeta: null,  // {title, voice} when READING is showing a whisper (vs lore)
   readingInteractArmed: false, // gate interact-to-close until interact is released after opening
-  mainframeFinale: null, // ephemeral Act 1 finale reader state
+  mainframeFinale: null,
   systemMessages: restoreSystemMessagesState(null), // run-scoped system prompt queue
   systemMessageReturnState: 'PLAYING',
   systemMessageAckTimer: 0,
   _lastAct1MessageIntent: null,
-  clearedRooms: null,  // Set of rooms where all enemies were killed this floor
+  clearedRooms: null,
   enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
-  // Challenge room state
   challengeRoom: null,
   challengeSealed: false,
   challengeWave: 0,
@@ -2137,15 +2090,12 @@ const game = {
   challengeEntrances: [],
   challengeWaveDelay: 0,
   challengeComplete: false,
-  // Augment state
-  augmentChoice: null,        // {options: [id, id], selected: 0}
+  augmentChoice: null,
   mapRevealed: false,         // ECHO_MAPPER: show floor layout on minimap
   mapExpanded: false,         // Tab toggle: full-screen map overlay
-  // Perk choice state
-  pendingPerkChoices: [], // queued level milestones awaiting perk selection
-  perkChoice: null,       // {options: [id, id, id], selected: 0}
+  pendingPerkChoices: [],
+  perkChoice: null,
   weaponSwapChoice: null, // {weapon, selected, _arm} for full-belt weapon cache replacement
-  // Teleport pad state
   teleportCooldown: 0, // seconds remaining before pads can be used again
 
   /**
@@ -2298,9 +2248,7 @@ const game = {
     return true;
   },
 
-  // Rebuild the packed-index Set of sealed entrance tiles. Called whenever
-  // bossSealed/challengeSealed flips so tile-loop hot paths can use O(1)
-  // Set.has() instead of bossEntrances.some() per tile.
+  // Rebuilt whenever a seal flips so tile loops can Set.has in O(1) instead of scanning entrances per tile.
   refreshSealedEntrances() {
     const s = this.sealedEntranceSet || (this.sealedEntranceSet = new Set());
     s.clear();
@@ -2314,13 +2262,9 @@ const game = {
     clearLosCache();
     if (this.dungeon) this.dungeon._fovDirty = true;
   },
-  // Flag the cached minimap base layer as stale (visited tile flips, etc.).
   markMinimapDirty() { this._minimapDirty = true; },
 
-  // Call from any code that mutates dungeon.map tiles (door open/unlock,
-  // crack-wall break, crate destroyed, room seal/unseal, terminal consume).
-  // Also invalidates the per-frame LOS cache so subsequent LOS queries in
-  // the same tick reflect the new map state.
+  // Any dungeon.map mutation must come through here: it also drops the per-frame LOS cache so later queries in the same tick see the new tiles.
   markMapMutated() {
     this._minimapDirty = true;
     clearLosCache();
@@ -2339,11 +2283,7 @@ const game = {
       throw new Error('Unknown game state "' + String(s) + '"');
     }
     const prevState = this.state;
-    // Clear the auto-paused sticky indicator on any transition OUT of
-    // PAUSED — PLAYING (manual resume), MENU (quit), SETTINGS (open
-    // submenu), etc. The next auto-pause will set it again. Without
-    // this, a player who auto-pauses then manually unpauses then
-    // pauses again later by hand would still see "(auto-paused)".
+    // Clear on every transition out of PAUSED. Otherwise a later manual pause would still read as auto-paused.
     if (this.state === _GG_STATES.PAUSED && s !== _GG_STATES.PAUSED) this.wasAutoPaused = false;
     this.state=s;
     this.mapExpanded = false;
@@ -2356,7 +2296,6 @@ const game = {
       else music.resume();
     }
     else if (s === _GG_STATES.GAME_OVER || s === _GG_STATES.VICTORY) music.stop();
-    // Show privacy link only on menu screen
     try { const pl = document.getElementById('privLink'); if (pl) pl.style.display = s === _GG_STATES.MENU ? '' : 'none'; } catch(_){}
     if (callback) callback();
   },
@@ -2484,17 +2423,11 @@ const game = {
    */
   loadFloor(n, savedModifier, skipAutoSave) {
     this.floor=n;
-    // Per-biome damage flash colour: cached once per floor so the entities.js
-    // hot-path draw code (Enemy.draw + Player.draw at the `flashTimer>0?...`
-    // ternaries) can read a property instead of routing through NEON.biomes
-    // + BIOME_PALETTES on every flash. Falls back to '#ffffff' if palettes.js
-    // hasn't loaded — preserves legacy white-flash behaviour. See
-    // src/data/palettes.js currentDamageFlash() for the resolver.
+    // Cached once per floor so entities.js flash draws read a property instead of resolving palettes on the hot path. Falls back to white if palettes.js has not loaded.
     this._damageFlash = (typeof NEON !== 'undefined' && NEON.palettes && NEON.palettes.currentDamageFlash)
       ? NEON.palettes.currentDamageFlash(n)
       : '#ffffff';
-    // UNCHAINED #34: track current biome index and bump meta.deepestBiome on
-    // floor entry so death respawn returns to the deepest biome start.
+    // Bump meta.deepestBiome on floor entry so death respawn returns to that biome's start, not floor 1.
     if (typeof NEON !== 'undefined' && NEON.biomes) {
       this.currentBiomeIndex = NEON.biomes.biomeIndex(n);
       try {
@@ -2507,10 +2440,7 @@ const game = {
     }
     music.setFloor(n);
     this.floorTime=0; // arc grid phase timer
-    // Roll or restore floor modifier. Biome boss floors (and floor 1, the
-    // settle-in floor) are modifier-free. Uses NEON.biomes so the list is
-    // derived from AREAS (3/6/9/12/15 for the 5-biome UNCHAINED arc); falls
-    // back to the legacy 3/6/10 list if biomes data is unavailable.
+    // Biome boss floors and floor 1 are modifier-free. The boss-floor list comes from AREAS via NEON.biomes, with a 3/6/10 fallback if that data is missing.
     const _isBossFloor_mod = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10);
     if (savedModifier !== undefined) {
       this.modifier = savedModifier;
@@ -2519,26 +2449,21 @@ const game = {
     } else {
       this.modifier = withDerivedRngStream('event:floor:' + n + ':modifier', () => MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)]);
     }
-    // Strip floor-only shield bonus from previous floor
+    // shieldBonus is floor-only; strip it before this floor grants its own.
     this.player.def-=this.player.shieldBonus;
     this.player.shieldBonus=0;
     // Keys are floor-scoped: keep them for this floor, clear on fresh floor transitions
     if (savedModifier === undefined) this.player.keys = { red:0, blue:0, gold:0 };
-    // UNCHAINED #38: clear temp boosts on fresh transitions only (save-resume
-    // preserves purchased power until the floor ends).
+    // Clear temp boosts on a fresh floor only; save-resume keeps purchased power until the floor ends.
     if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.boosts) {
       NEON.boosts.clearFloorBoosts(this.player);
     }
-    this.player.autoLaserBeam=null; // clear stale beam from previous floor
+    this.player.autoLaserBeam=null;
     const descentExitPos = savedModifier === undefined ? this._exitPos : null;
     this.dungeon = withDerivedRngStream('world:floor:' + n, () =>
       generateFloor(n, descentExitPos ? { previousExitPos: descentExitPos } : undefined)
     );
-    // Floor exit-position carryover: if the player descended from a previous
-    // floor, drop them near the same world coordinates on the new floor
-    // (procedural layout means we may need the nearest passable tile). This
-    // must run before populateFloor(), because the inherited room becomes the
-    // real starting room for enemy/item placement.
+    // A descent drops the player near the previous floor's exit (nearest passable tile). Must run before populateFloor so that room is the real start for enemy and item placement.
     let spawn = this.dungeon.playerPos;
     if (savedModifier === undefined && this._exitPos) {
       try {
@@ -2573,7 +2498,6 @@ const game = {
     this._minimapCanvas=null; // offscreen base-layer cache (rebuilt on dirty)
     this._minimapArcTiles=null; // list of ARC tile positions for live overlay
     this._minimapDirty=true;
-    // Reset challenge room state
     this.challengeRoom=this.dungeon.challengeRoom||null;
     this.challengeEntrances=this.dungeon.challengeEntrances||[];
     this.challengeSealed=false;
@@ -2582,54 +2506,26 @@ const game = {
     this.challengeWaveDelay=0;
     this.challengeComplete=false;
     this.mainframeFinale = this.dungeon.mainframeRoom ? restoreMainframeFinaleState(null) : null;
-    // Reset SECOND_WIND perk for this floor
     if (this.player) this.player.secondWindUsed = false;
-    // SPAWN GRACE: 1.5s of invulnerability on FRESH floor entry (not save-
-    // resume — they paused, they're not under threat). Covers chaos-on-spawn
-    // cases: arriving next to an arc grid, descending into an active mob
-    // pack, dropping into a boss room mid-fight after `descend()`. Gate is
-    // savedModifier === undefined (matches the existing pattern used for
-    // keys, boosts, telemetry, biome card, modifier banner). Damage path
-    // honours this via isPlayerDamageImmune() in src/content.js. The visual
-    // halo lives in Player.draw() in src/entities.js (cyan pulsing ring).
-    // Keep the literal in sync with the src/entities.js comment header.
+    // 1.5s of invulnerability on a fresh floor entry only, not save-resume. Damage uses isPlayerDamageImmune in src/content.js; the halo is Player.draw in src/entities.js. Keep the literal in sync with that comment.
     if (this.player) {
       this.player._spawnGraceTimer = (savedModifier === undefined) ? 1.5 : 0;
     }
-    // Clear player debuffs on floor transition
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
-    // STRIDE perk: drop movement-built ATK stacks on floor transition. The
-    // player teleports to the new spawn between frames; without this reset
-    // the next-frame moved/dt rate would be enormous (huge displacement /
-    // tiny dt) and STRIDE would treat the warp as "continuous movement",
-    // letting full-RUSH stacks survive into the new floor for free.
+    // Drop STRIDE stacks on floor change. The descend warp would otherwise look like a huge moved/dt and keep full RUSH stacks for free.
     if (this.player) {
       this.player._strideStacks = 0;
       this.player._strideMovingTime = 0;
       this.player._strideStillTime = 0;
-      // DEADEYE perk: drop stillness charge + readiness latch on floor
-      // transition. Same rationale as the STRIDE reset above — the
-      // descend warp teleports player.x/y between frames, and without
-      // an explicit clear the stale _steadyReady=true would let the
-      // first shot on the new floor consume a free buffed hit. Also
-      // zero _steadyChargeTime so partial progress doesn't carry over.
+      // Drop DEADEYE charge and the readiness latch on floor change. A stale latch would give the first shot on the new floor a free buffed hit.
       this.player._steadyChargeTime = 0;
       this.player._steadyReady = false;
-      // HOT_HAND perk: drop the per-target consecutive-hit streak on
-      // floor transition. The descend warp teleports the player and
-      // wipes all enemies from the previous floor — keeping a stale
-      // _hotHandLastTarget reference would (a) hold a dead enemy in
-      // memory until the next streak overwrite, and (b) be moot
-      // anyway since the new floor's enemies are all fresh refs that
-      // would trip the target-switch reset on first hit. Resetting
-      // here is correct AND tidies up the GC-able reference.
+      // Drop the HOT_HAND streak on floor change so a dead enemy from the previous floor is not retained.
       this.player._hotHandStreak = 0;
       this.player._hotHandLastTarget = null;
       this.player._hotHandTimer = 0;
     }
-    // Reset teleport pad cooldown
     this.teleportCooldown = 0;
-    // UNCHAINED #39: clear leftover core drops from previous floor.
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.clearCoreDrops) {
       NEON.cores.clearCoreDrops(this);
     }
@@ -2637,22 +2533,11 @@ const game = {
     // Evaluation trials: clear anything spawned inside a sealed vault and
     // place its loot once. A save-resume overwrites this with the snapshot.
     if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.afterPopulate(this, getTrialDeps());
-    // UNCHAINED #37 SHIELD_CAPACITOR module: grant shield charges on fresh floor transitions only.
-    // Skip on save-resume (savedModifier !== undefined) to avoid stacking charges on reload.
+    // Grant shield charges on a fresh floor only. Save-resume would stack another charge on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
       this.player._shieldCharges = (this.player._shieldCharges | 0) + this.player.metaFlags.floorStartShieldCharges;
     }
-    // EMERGENCY_CACHE augment: anti-snowball lifeline. On a FRESH floor entry
-    // (savedModifier === undefined — same gate as spawn grace, keys, boosts),
-    // if the player arrives below 30% HP, top them up to 50% HP. Once-per-
-    // floor by construction (only triggers at fresh entry). No effect when
-    // the player is already healthy. Save-resume is intentionally skipped so
-    // reloading a save mid-floor does not heal. Player.hp > 0 guard prevents
-    // a corner case where loadFloor is invoked on a dead player. The toast
-    // is deferred via setTimeout so it survives the `messages.length=0`
-    // floor-transition wipe further down in loadFloor (line ~305) — same
-    // deferral pattern used by applyPerk / makeAugmentShopOption install
-    // messages and by the BOSS DETECTED announcement.
+    // On a fresh floor only, if HP is below 30% and the player is alive, top up to 50%. Save-resume must not heal. The toast is deferred so the floor-transition message wipe does not eat it.
     if (savedModifier === undefined && hasAugment('EMERGENCY_CACHE') && this.player && this.player.hp > 0) {
       const max = this.player.maxHp | 0;
       if (max > 0 && (this.player.hp / max) < 0.30) {
@@ -2664,8 +2549,7 @@ const game = {
         }
       }
     }
-    // ECHO_MAPPER augment: reveal floor layout (minimap only, not quest progress)
-    // UNCHAINED #38: RECON PING boost also reveals layout for the floor.
+    // Reveals the minimap layout only, not quest progress. RECON PING does the same for this floor.
     if (hasAugment('ECHO_MAPPER') || (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.hasBoost(this.player, 'RECON_PING'))) {
       this.mapRevealed = true;
     } else {
@@ -2674,49 +2558,32 @@ const game = {
     this.mapExpanded = false;
     this.player.x = spawn.x;
     this.player.y = spawn.y;
-    // Clear position history on floor transition so an ECHOER on the new
-    // floor cannot fire at a position the player held on the previous
-    // floor (locks need ECHOER_LOOKBACK seconds of fresh samples).
+    // Clear position history so an ECHOER on the new floor cannot fire at a previous-floor position. Locks need a fresh ECHOER_LOOKBACK of samples.
     if (this.player._posHistory) this.player._posHistory.length = 0;
-    // Same rationale for shot kinematics history — a MIRROR on the new
-    // floor must not be able to mimic a shot the player fired on the
-    // previous floor before they have fired anything on the current floor.
+    // Clear shot history so a MIRROR cannot copy a shot fired on the previous floor.
     if (this.player._shotHistory) this.player._shotHistory.length = 0;
-    // Clear frost patches on floor transition — patches from a CRYOPHAGE
-    // on the previous floor would otherwise persist as invisible damage
-    // tiles on the new floor's coordinates (same rationale as the
-    // history rings above: cross-floor leak of room-local state).
+    // Frost patches are room-local. Left behind, a previous-floor CRYOPHAGE patch damages the new floor's coordinates.
     frostPatches.length = 0;
-    // Reset per-room kill counter on floor transition: the new floor's room
-    // layout has nothing to do with the previous floor's kills, and the
-    // player's _currentRoom reference is stale (rooms array is new). The
-    // first frame of updatePlaying will re-detect the spawn room and
-    // re-arm any REAPERs there via the room-change path.
+    // The new floor's rooms are new objects, so the old room ref and kill count must not carry. updatePlaying re-arms REAPERs on the first room-change.
     this.player.killsInCurrentRoom = 0;
     this.player._currentRoom = null;
-    // Clear ARCHITECT-placed walls on floor transition — the dungeon.map
-    // is regenerated, so the placed-wall list referencing old tile
-    // coordinates is invalid. Walls were applied to the old map; not
-    // restored here because the old map is being thrown away anyway.
+    // The map is regenerated, so placed-wall coordinates from the old map are invalid and must not be restored onto the new one.
     placedWalls.length = 0;
     messages.length=0;
     this.msg('FLOOR '+n,'#ff00c8');
-    // Telemetry: floor start
     if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.telemetry) {
       NEON.telemetry.track('floor_start', { floor: n, modifier: this.modifier || null });
     }
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10)) {
       setTimeout(()=>{ audio.bossEnter(); this.msg('⚠ BOSS DETECTED','#ff3333'); },500);
     }
-    // Announce modifier (banner replaces msg — banner timer set only on fresh transitions)
+    // Modifier banner only on a fresh transition, not save-resume.
     if (this.modifier && savedModifier === undefined) {
       this.modBannerTimer = 3.0;
     } else {
       this.modBannerTimer = 0;
     }
-    // UNCHAINED #40: biome intro card on first floor of each biome
-    // (floors 4/7/10/13). Skip floor 1 — #42 owns the run-start crawl.
-    // Skip on savedModifier resume (continuing a run shouldn't replay the card).
+    // Biome intro card on the first floor of each biome (4/7/10/13), not floor 1, and not on save-resume.
     if (savedModifier === undefined && typeof NEON !== 'undefined' && NEON.biomes) {
       try {
         const area = NEON.biomes.areaForFloor(n);
@@ -2791,9 +2658,7 @@ const game = {
     opts = opts || {};
     if (opts.seed != null) this._pendingStartSeed = normalizeSeed(opts.seed);
     const chosenSeed = normalizeSeed(this._pendingStartSeed || opts.seed || makeRandomSeed());
-    // UNCHAINED: prompt before wiping nothing but *also* before carrying
-    // forward saved meta. The prompt is skipped on fresh installs (no meta
-    // progress to speak of) and when called recursively after the user answers.
+    // Confirm before carrying saved meta forward. Skipped on a fresh install and when restarting after the player already answered.
     if (!opts.skipConfirm && this._hasMetaProgress()) {
       this._newGameConfirm = { selected: 0 }; // 0 = KEEP, 1 = RESET
       this._pendingStartSeed = chosenSeed;
@@ -2807,10 +2672,10 @@ const game = {
     this.runSeed = getSeed();
     this.runSeedHash = getSeedHash();
     this._pendingStartSeed = null;
-    this._lastEnding = null;  // UNCHAINED #42 — clear stale ending from prior run
+    this._lastEnding = null;
     this._lastAct1MessageIntent = null;
-    this._runEnded = false;   // UNCHAINED #42 — allow endRun for this new run
-    this._exitPos = null;     // clear any stale exit-position from a prior run
+    this._runEnded = false; // new run may still call endRun
+    this._exitPos = null;
     this.cheats = defaultCheats();
     this.cheatSequenceProgress = 0;
     this.cheatSelected = 0;
@@ -2827,30 +2692,17 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
-    // hacktool meta upgrade — pre-equip a random hackware module at run
-    // start (reinterpreted from "extra hackware slot" since the game has
-    // only one slot; see src/meta/save.js hacktool case for full history).
-    // Done HERE (not in save.applyMetaToPlayer) so the meta layer stays
-    // decoupled from entity data: HACKWARE is browser-side content, and
-    // applyMetaToPlayer is also exercised by node-runnable behavioural
-    // tests that don't load content.js. The !p.hackware guard makes the
-    // seed idempotent — re-entering startGame after a meta-only path
-    // (e.g. the new-game-confirm prompt loop) won't reroll the module.
+    // Pre-equip a random hackware module here, not in save.applyMetaToPlayer: that helper is also run by node tests that do not load content.js. The !hackware guard keeps a confirm-loop re-entry from rerolling it.
     if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
       const _hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')];
       this.player.hackware = _hwKey;
       this.player.hackwareCooldown = 0;
     }
-    // UNCHAINED #37: transient pickup array. Modules dropped this run live
-    // here until commit on floor clear / victory; discarded on death.
+    // Modules dropped this run live here until commit on floor clear or victory, and are discarded on death.
     this.runModules = [];
-    // UNCHAINED #39: seed cached cores from persistent wallet so HUD renders
-    // without re-reading localStorage every frame. Updated in-place by
-    // NEON.cores pickup/vacuum paths.
+    // Seed the core cache from the wallet so the HUD does not read localStorage every frame. Pickup and vacuum update it in place.
     this._cachedCores = (meta && typeof meta.cores === 'number') ? (meta.cores|0) : 0;
-    // UNCHAINED #34: respawn at the start of the deepest biome reached,
-    // not floor 1. Current-run resources (credits, weapons, hackware) still
-    // reset via new Player(); meta is untouched by this read.
+    // Respawn at the deepest biome reached, not floor 1. new Player() still resets run resources; this read does not touch meta.
     let startFloor = 1;
     if (typeof NEON !== 'undefined' && NEON.biomes) {
       const deepest = (meta.deepestBiome|0);
@@ -2859,15 +2711,10 @@ const game = {
     this.systemMessages = restoreSystemMessagesState(null);
     this.loadFloor(startFloor, undefined, true);
     this.queueFreshRunSystemMessages(startFloor);
-    // Telemetry: run start
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
       NEON.telemetry.track('run_start', { floor: startFloor, difficulty: this.difficulty, seedHash: this.runSeedHash });
     }
-    // UNCHAINED #42 — intro crawl gate. Plays once per fresh save on the
-    // first-ever run start. ResetMeta (via "No, wipe unlocks") flips
-    // introSeen back to false, so it replays on a true new start.
-    // opts.skipIntro is used by tests and legacy callers that need to bypass
-    // the crawl while still passing through the system-prompt handoff.
+    // Plays once per fresh save. Resetting meta clears introSeen so a true wipe replays it. skipIntro is for tests and callers that still need the system-prompt handoff.
     if (!opts.skipIntro && !meta.introSeen &&
         typeof NEON !== 'undefined' && NEON.intro) {
       this._intro = NEON.intro.createIntroController(this);
@@ -2939,9 +2786,7 @@ const game = {
     return ss.seed;
   },
 
-  // UNCHAINED #42 — called by updateIntro when the crawl finishes or is
-  // skipped. Intro has already flipped meta.introSeen=true; we just need
-  // to complete the startGame transition into PLAYING.
+  // Intro has already set introSeen. This only finishes the startGame handoff into PLAYING.
   _finishIntro() {
     this._intro = null;
     if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
@@ -2961,11 +2806,7 @@ const game = {
     this._intro.draw(ctx, W, H);
   },
 
-  // ─── Legacy endgame choice (UNCHAINED #42) ────────────────────────────────
-  // Current Act 1 canonical route: GENESIS defeat unlocks the mainframe route.
-  // The old ACCEPT/REFUSE handlers remain only so existing alternate markers and
-  // older code references do not break; openEndgameChoice no longer presents the
-  // dialog or calls endRun directly.
+  // GENESIS defeat unlocks the mainframe route. ACCEPT/REFUSE stay so existing alternate markers and callers do not break; openEndgameChoice no longer shows the dialog or calls endRun.
   /**
    * @param {any} genesisEntity
    */
@@ -3003,15 +2844,14 @@ const game = {
 
   _applyEndgameAccept() {
     const ec = this._endgameChoice; if (!ec) return;
-    // Grant KEEPER ending; NG+ marker shows on title next run.
+    // Unlocks the keeper ending; the title reads endingsUnlocked for the NG+ marker.
     const meta = loadMeta();
     if (!Array.isArray(meta.endingsUnlocked)) meta.endingsUnlocked = [];
     if (!meta.endingsUnlocked.includes('keeper')) meta.endingsUnlocked.push('keeper');
     saveMeta(meta);
     this._lastEnding = 'keeper';
     this._endgameChoice = null;
-    // Kill GENESIS via its normal death path — runs applyOnKill, particles,
-    // bossesCleared++, XP, credits. Then let endRun(true) finish the run.
+    // Kill through die() so on-kill rewards still run, then endRun(true) finishes the run.
     const g = ec.genesis;
     if (g && !g.dead) { g.hp = 0; g.die(); }
     audio.victory && audio.victory();
@@ -3022,16 +2862,13 @@ const game = {
     const ec = this._endgameChoice; if (!ec) return;
     const g = ec.genesis;
     if (g && !g.dead) {
-      // Flip into _unchainedPhase form. aiBossGenesis forces phase=3
-      // patterns when this flag is set. Palette inversion is drawn from
-      // the flag check in the enemy renderer.
+      // aiBossGenesis forces phase-3 patterns when this flag is set. The enemy renderer reads the same flag for the palette inversion.
       g._unchainedPhase = true;
       g._endgameOffered = true;  // still set so choice can't re-open
       g.maxHp = Math.round(g.maxHp * 1.5);
       g.hp    = g.maxHp;
       g.colour = '#88ccff';       // inverted gold → cool blue
       g.phase = 3;
-      // Re-seed the phase-shift flash.
       try { audio.phaseShift && audio.phaseShift(); } catch (_) {}
       this.msg && this.msg('⚠ THE ARCHITECT :: UNBOUND', '#88ccff');
     }
@@ -3043,7 +2880,6 @@ const game = {
     const ec = this._endgameChoice; if (!ec) return;
     const narrow = layout.compact;
 
-    // Translucent ghost "avatar" above GENESIS — purely visual.
     if (ec.genesis && !ec.genesis.dead && this.player) {
       const g = ec.genesis;
       const cam = getCamera(this.player);
@@ -3059,12 +2895,10 @@ const game = {
       ctx.restore();
     }
 
-    // Dim overlay.
     ctx.save();
     ctx.fillStyle = 'rgba(5,5,15,' + (0.7 * ec.anim) + ')';
     ctx.fillRect(0, 0, W, H);
 
-    // Dialog box.
     const boxW = Math.min(640, W - 40);
     const boxH = narrow ? 300 : 280;
     const bx = (W - boxW) / 2;
@@ -3078,7 +2912,6 @@ const game = {
     ctx.strokeRect(bx, by, boxW, boxH);
     ctx.shadowBlur = 0;
 
-    // Title.
     ctx.textAlign = 'center';
     ctx.fillStyle = '#e0e0ff';
     ctx.font = 'bold ' + (narrow ? 14 : 18) + 'px monospace';
@@ -3100,7 +2933,6 @@ const game = {
     const textStart = by + (narrow ? 52 : 62);
     lines.forEach((L, i) => ctx.fillText(L, W / 2, textStart + i * lineH));
 
-    // Options.
     const optY = by + boxH - (narrow ? 56 : 60);
     const labels = ['[ ACCEPT ]', '[ REFUSE ]'];
     const colours = ['#ffcc00', '#88ccff'];
@@ -3116,7 +2948,6 @@ const game = {
     }
     ctx.shadowBlur = 0;
 
-    // Hint.
     ctx.fillStyle = '#555577';
     ctx.font = (narrow ? 10 : 11) + 'px monospace';
     const _hintTxt = isTouchDevice()
@@ -3147,13 +2978,9 @@ const game = {
   },
 
   descend() {
-    // Capture exit position for the next floor's spawn carryover. Only set
-    // when we actually transition to a new floor (not on victory — endRun
-    // handles that path). loadFloor() consumes and clears this exactly once.
+    // loadFloor places the player near this spot on the next floor, then clears it.
     this._exitPos = { x: this.player.x, y: this.player.y };
-    // UNCHAINED #39: vacuum any leftover core drops into the wallet before
-    // the floor transitions. Player can't pick them up after the fade, so
-    // forceCollectAll is safer than relying on magnet-pull during the fade.
+    // Vacuum leftover cores before the fade. The player cannot pick them up after the transition, so magnet-pull during the fade is not enough.
     const _coresDeps = (typeof NEON !== 'undefined' && NEON.cores) ? {
       save: (typeof NEON !== 'undefined' && NEON.save) ? NEON.save : null
     } : null;
@@ -3162,20 +2989,16 @@ const game = {
     }
     const _finalFloor = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.finalFloor) ? NEON.biomes.finalFloor() : 15;
     if (this.floor >= _finalFloor) {
-      // victory
       audio.victory();
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
       this.endRun(true);
     } else {
       this.player.score+=500*this.floor+Math.floor(this.player.hp)*10;
-      // UNCHAINED #37: commit this floor's picked-up modules to meta
-      // before the run-transition (hub OR direct next-floor load).
+      // Commit this floor's picked-up modules before the hub or the next floor load.
       if (typeof NEON !== 'undefined' && NEON.modules && NEON.modules.commitRunModules) {
         NEON.modules.commitRunModules(this);
       }
-      // UNCHAINED #35: interpose THE GAP hub between floors. First-floor rule
-      // is satisfied naturally — a fresh run starts inside floor 1 (not hub),
-      // so hub only ever appears AFTER floor 1+ has been cleared.
+      // The hub only appears between floors: a fresh run loads its start floor directly, so the hub is never the first screen.
       if (typeof NEON !== 'undefined' && NEON.hub && NEON.hub.enterHub) {
         NEON.hub.enterHub(this);
       } else {
@@ -3199,12 +3022,11 @@ const game = {
     for (let ty=sr.y; ty<sr.y+sr.h; ty++)
       for (let tx=sr.x; tx<sr.x+sr.w; tx++)
         dungeon.secretMask[ty][tx] = 0;
-    // Convert any remaining cracked tiles around the room to floor
     for (let ty=Math.max(0,sr.y-1); ty<Math.min(MAP_H,sr.y+sr.h+1); ty++)
       for (let tx=Math.max(0,sr.x-1); tx<Math.min(MAP_W,sr.x+sr.w+1); tx++)
         if (dungeon.map[ty][tx]===T.CRACKED) dungeon.map[ty][tx]=T.FLOOR;
     this.markMapMutated();
-    // Spawn enemies (reduced count — it's a bonus room)
+    // Fewer enemies than a normal room; this is a bonus room.
     const floorNum = this.floor;
     const minE = 1 + Math.floor(floorNum / 4);
     const maxE = Math.min(4, 2 + Math.floor(floorNum / 3));
@@ -3218,7 +3040,6 @@ const game = {
       enemies.push(e);
     }
     if (count > 0) sr._hadEnemies = true;
-    // Spawn loot: scaled by floor — early floors get less, later floors get premium
     const baseItems = floorNum <= 3 ? 1 : floorNum <= 6 ? 2 : 2 + (sr.w * sr.h >= 40 ? 1 : 0);
     for (let j=0; j<baseItems; j++) {
       const ix = sr.x + rnd(1, sr.w - 1), iy = sr.y + rnd(1, sr.h - 1);
@@ -3230,12 +3051,11 @@ const game = {
         items.push(new WeaponCacheItem(sr.cx + 0.5, sr.cy + 0.5, cacheWeapon));
       }
     }
-    // Bonus credit pickup worth floor-scaled amount
     const secretCr = Math.round(20 * (1 + floorNum * 0.15) * getMetaCreditMultiplier() * getDiff().creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
     this.player.credits += secretCr;
     this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
-    // UNCHAINED #39: guaranteed core from the room-end chest.
+    // The room-end chest always drops a core.
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
       NEON.cores.spawnCoreDrop(this, sr.cx, sr.cy, 1);
     }
@@ -3267,21 +3087,18 @@ const game = {
   endRun(victory) {
     if (this._runEnded) return;
     this._runEnded = true;
-    // UNCHAINED #39: credit any outstanding core drops before the run ends.
-    // Every victory/defeat path funnels through here, so this covers ACCEPT
-    // (KEEPER ending bypasses descend), REFUSE (UNCHAINED ending), normal
-    // floor-10 victory, and death. Safe no-op if coreDrops is empty.
+    // Every victory and defeat path ends here, so leftover cores are credited even when the player never descends. Empty coreDrops is a no-op.
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.forceCollectAll) {
       NEON.cores.forceCollectAll(this, { save: NEON.save || null });
     }
     music.stop();
-    // UNCHAINED #37: commit run-picked modules on victory; drop them on death.
+    // Commit picked-up modules on victory; drop them on death.
     if (victory && typeof NEON !== 'undefined' && NEON.modules) {
       NEON.modules.commitRunModules(this);
     } else if (typeof NEON !== 'undefined' && NEON.modules) {
       NEON.modules.clearRunModules(this);
     }
-    this.deleteSave(); // run is over — clear save file
+    this.deleteSave();
     const meta = loadMeta();
     const sessionNumber = lifecycleNextSessionNumber(meta);
     // Snapshot recap data before anything else
@@ -3304,7 +3121,6 @@ const game = {
       ending: this._lastEnding || null,
       hackware: p.hackware,
     };
-    // Telemetry: run end — the single most valuable event
     if (typeof NEON !== 'undefined' && NEON.telemetry) {
       NEON.telemetry.track('run_end', {
         victory: !!victory,
@@ -3322,7 +3138,6 @@ const game = {
       });
       NEON.telemetry.flush();
     }
-    // Award data fragments
     const earned = calcRunShards(this.floor, this.player.score, this.bossesCleared, victory);
     meta.shards += earned;
     meta.runsCompleted = Math.max(meta.runsCompleted | 0, sessionNumber);
@@ -3331,10 +3146,7 @@ const game = {
     meta.stats.bestFloor = Math.max(meta.stats.bestFloor, this.floor);
     if (victory) {
       meta.stats.victories++;
-      // UNCHAINED #42 — persist ending unlock. ACCEPT sets _lastEnding='keeper'
-      // synchronously before calling endRun; REFUSE path sets _lastEnding='unchained'
-      // inside Enemy.die() the moment the unchained-phase GENESIS dies, before
-      // the per-tick dead-enemy splice can erase the entity.
+      // ACCEPT sets the keeper ending before endRun. REFUSE sets the unchained ending inside Enemy.die before the dead-enemy splice drops the entity.
       const ending = this._lastEnding || null;
       if (ending) {
         if (!Array.isArray(meta.endingsUnlocked)) meta.endingsUnlocked = [];
@@ -3346,7 +3158,6 @@ const game = {
       }
       if (!meta.clearedDifficulties.includes(this.difficulty)) {
         meta.clearedDifficulties.push(this.difficulty);
-        // Check if this clear unlocks a new difficulty
         for (const d of DIFF_ORDER) {
           const reqs = DIFF_UNLOCK_REQS[d];
           /**
@@ -3385,7 +3196,6 @@ const game = {
     try { return JSON.parse(localStorage.getItem('neonDungeonScores') || 'null')||[]; } catch(e){return[];}
   },
 
-  // ── Save / Load ────────────────────────────────────────────────────────
   hasSave() {
     try { return !!localStorage.getItem('neonDungeonSave'); } catch(e){return false;}
   },
@@ -3444,10 +3254,7 @@ const game = {
         lastStandTimer:p.lastStandTimer || 0,
         lastStandCD:p.lastStandCD || 0,
         augments:p.augments||{},
-        // UNCHAINED #36: persist meta-node runtime state so Continue doesn't
-        // drop behavioural hooks and stat carriers. Additive-to-base values
-        // like maxHp/atk/def/critChance stay in their respective fields as
-        // they were already mutated by applyMetaToPlayer at startGame.
+        // Persist meta-node runtime hooks. Additive stats already live in maxHp/atk/def/critChance from applyMetaToPlayer.
         metaFlags: p.metaFlags ? {...p.metaFlags} : null,
         damageMult: p.damageMult || 1,
         regenPerSec: p.regenPerSec || 0,
@@ -3457,66 +3264,24 @@ const game = {
         dashIFrameBonus: p.dashIFrameBonus || 0,
         hackwareSlots: p.hackwareSlots || 3,
         metaSecondWindUsed: !!p._metaSecondWindUsed,
-        // UNCHAINED #38: persist current-floor temp-boost state so a Continue
-        // preserves purchases (save-resume is not a fresh floor transition).
+        // Persist this floor's temp boosts. Save-resume is not a fresh floor, so purchases must survive Continue.
         activeBoosts: p.activeBoosts ? {...p.activeBoosts} : {},
-        // HARVESTER timed-boost remaining seconds. Persisted alongside
-        // activeBoosts so `HARVEST_SURGE` (and any future timed boost) does
-        // NOT become an unrevokeable floor-buff after save/resume — the timer
-        // would otherwise be lost while the activeBoosts flag survived,
-        // leaving tickBoosts with no way to expire it (3 reviewers caught
-        // this on PR #143 review).
+        // Persist the remaining seconds with the boost flag. Otherwise Continue keeps the flag and loses the timer, and the boost never expires.
         _boostTimers: p._boostTimers ? {...p._boostTimers} : {},
         _shieldCharges: p._shieldCharges | 0,
-        // PIERCING_HEART 'of Piercing Heart' suffix — per-run cap counter.
-        // Persisted so save/resume preserves the +20 cap (otherwise a
-        // quit-and-resume mid-run would let the player re-earn the cap
-        // from scratch, since maxHp survives but the counter wouldn't).
-        // Mirrors the explicit-enum pattern (no Object.keys) per
-        // stored memory 'on-hit weapon affixes'.
+        // Persist the per-run cap counter. maxHp survives Continue; without the counter the player could re-earn the +20 cap.
         _piercingHearts: p._piercingHearts || 0,
-        // OVERCHARGE floor modifier — per-run shot counter, every 5th shot
-        // is a guaranteed crit. Persisted so save/resume on an OVERCHARGE
-        // floor preserves the rhythm (otherwise the counter would reset to
-        // 0 mid-floor and the next 4 shots would lose their guaranteed
-        // crit slot). Mirrors the PIERCING_HEART explicit-enum pattern.
+        // Persist the shot counter so Continue does not reset the every-5th-shot crit rhythm mid-floor.
         _overchargeShots: p._overchargeShots || 0,
-        // WINDFALL floor modifier — per-run kill counter, every 5th defeat
-        // drops a bonus core. Persisted so save/resume on a WINDFALL floor
-        // preserves the rhythm (otherwise the counter would reset to 0
-        // mid-floor and the next 4 kills would lose their bonus slot).
-        // Mirrors the OVERCHARGE explicit-enum pattern.
+        // Persist the kill counter so Continue does not reset the every-5th-kill bonus mid-floor.
         _windfallKills: p._windfallKills || 0,
-        // SIGNAL_BOOST floor modifier — per-run kill counter, every 5th
-        // defeat instantly clears the player's hackware cooldown (effect
-        // gated on player.hackware; counter ticks unconditionally so the
-        // HUD progress suffix stays consistent). Persisted so save/resume
-        // on a SIGNAL_BOOST floor preserves the rhythm. Mirrors the
-        // WINDFALL explicit-enum pattern.
+        // Persist the kill counter so Continue does not reset the every-5th-kill cooldown clear. The counter ticks even without hackware so the HUD suffix stays in step.
         _signalBoostKills: p._signalBoostKills || 0,
-        // REVERB floor modifier — per-run shot counter, every 5th shot
-        // fires a free echo of the same shot intent. Persisted so
-        // save/resume on a REVERB floor preserves the rhythm (otherwise
-        // the counter would reset to 0 mid-floor and the next 4 shots
-        // would lose their free-echo slot). Mirrors the OVERCHARGE
-        // explicit-enum pattern.
+        // Persist the shot counter so Continue does not reset the every-5th-shot echo mid-floor.
         _reverbShots: p._reverbShots || 0,
-        // CHAINREACT floor modifier — per-run countdown timer for the
-        // chain-window. Persisted so save/resume on a CHAINREACT floor
-        // mid-chain doesn't drop the rhythm. A timer (not a counter)
-        // because the modifier's gameplay is "is the chain still alive
-        // right now", not "how many defeats are stacked". Saves under
-        // a number 0-1.5; legacy saves predating this PR get 0 via the
-        // `|| 0` nucleation pattern.
+        // Persist the chain-window timer, not a counter: the rule is whether the chain is alive now. Legacy saves nucleate at 0.
         _chainBuffTimer: p._chainBuffTimer || 0,
-        // trauma_kit panic-button charges — per-run counter seeded by
-        // applyMetaToPlayer(trauma_kit) at startGame. Persisted so a
-        // Continue mid-run preserves remaining charges (otherwise a
-        // quit-and-resume after a panic-heal would refund consumed
-        // charges since startingNanoMedics is stat-only and the live
-        // counter would default back to the upgrade level). Mirrors the
-        // explicit-enum pattern (no Object.keys) per stored memory
-        // 'on-hit weapon affixes'.
+        // Persist remaining charges. startingNanoMedics is the upgrade level, not the live count, so Continue would otherwise refund spent charges.
         _nanoMedicCharges: p._nanoMedicCharges | 0
       }
     };
@@ -3541,7 +3306,7 @@ const game = {
     this.perkChoice=null;
     this.augmentChoice=null;
     this.weaponSwapChoice=null;
-    // UNCHAINED #39: seed cached cores from persistent wallet on resume.
+    // Seed the core cache from the wallet so resume does not re-read localStorage every frame.
     if (typeof NEON !== 'undefined' && NEON.save) {
       const _m = NEON.save.loadMeta();
       this._cachedCores = (_m && typeof _m.cores === 'number') ? (_m.cores|0) : 0;
@@ -3555,7 +3320,6 @@ const game = {
       return;
     }
     audio.resume();
-    // Restore difficulty from save (old saves default to NORMAL)
     this.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'NORMAL';
     setSeed(save.runSeed || ('LEGACY-' + String(save.floor || 1)), save.rngStates || null);
     this.runSeed = getSeed();
@@ -3566,7 +3330,6 @@ const game = {
     if (Number.isFinite(s.y)) p.y=s.y;
     p.hp=s.hp; p.maxHp=s.maxHp; p.atk=s.atk; p.def=s.def;
     p.level=s.level; p.xp=s.xp;
-    // Restore affixed weapon
     if (s.weapon && typeof s.weapon === 'object' && s.weapon._base) {
       const aff = Array.isArray(s.weapon._affixes) ? s.weapon._affixes : [];
       p.weapon = buildWeapon(s.weapon._base, aff);
@@ -3610,8 +3373,7 @@ const game = {
     p.lastStandTimer=s.lastStandTimer||0;
     p.lastStandCD=s.lastStandCD||0;
     p.augments=s.augments||{};
-    // UNCHAINED #36: restore meta runtime state (persisted since SAVE_VERSION 9.x).
-    // Old saves predating this have these fields undefined → defaults kick in.
+    // Old saves lack these fields; the defaults stand in.
     if (s.metaFlags) p.metaFlags = {...s.metaFlags};
     if (s.damageMult !== undefined) p.damageMult = s.damageMult;
     if (s.regenPerSec !== undefined) p.regenPerSec = s.regenPerSec;
@@ -3621,14 +3383,8 @@ const game = {
     if (s.dashIFrameBonus !== undefined) p.dashIFrameBonus = s.dashIFrameBonus;
     if (s.hackwareSlots !== undefined) p.hackwareSlots = s.hackwareSlots;
     p._metaSecondWindUsed = !!s.metaSecondWindUsed;
-    // UNCHAINED #38: restore in-run temp boosts (defaults empty for old saves).
     p.activeBoosts = s.activeBoosts ? {...s.activeBoosts} : {};
-    // HARVESTER timed-boost remaining seconds (defaults empty for old saves
-    // without the field). Defensive sweep: any activeBoosts flag for a timed
-    // boost without a backing timer is dropped — without this, a save
-    // produced by a pre-fix build that lost _boostTimers would resume with
-    // a permanently-stuck HARVEST_SURGE flag (the bug the persistence fix
-    // resolves going forward).
+    // Drop a timed-boost flag that has no timer. A save from before timers were stored would otherwise resume with a boost that never expires.
     p._boostTimers = s._boostTimers ? {...s._boostTimers} : {};
     if (typeof NEON !== 'undefined' && NEON.boosts && NEON.boosts.BOOSTS) {
       const timers = /** @type {Record<string, number>} */ (p._boostTimers);
@@ -3640,37 +3396,13 @@ const game = {
       }
     }
     p._shieldCharges = s._shieldCharges | 0;
-    // PIERCING_HEART per-run cap counter — restore from save (defaults to
-    // 0 for older saves that predate the field; same `||0` nucleation
-    // pattern used elsewhere in continueGame).
     p._piercingHearts = s._piercingHearts || 0;
-    // OVERCHARGE per-run shot counter — restore from save (defaults to 0
-    // for older saves that predate the field; mirrors PIERCING_HEART
-    // restore pattern).
     p._overchargeShots = s._overchargeShots || 0;
-    // WINDFALL per-run kill counter — restore from save (defaults to 0
-    // for older saves that predate the field; mirrors OVERCHARGE).
     p._windfallKills = s._windfallKills || 0;
-    // SIGNAL_BOOST per-run kill counter — restore from save (defaults to 0
-    // for older saves that predate the field; mirrors WINDFALL).
     p._signalBoostKills = s._signalBoostKills || 0;
-    // REVERB per-run shot counter — restore from save (defaults to 0 for
-    // older saves that predate the field; mirrors OVERCHARGE restore).
     p._reverbShots = s._reverbShots || 0;
-    // CHAINREACT chain-window timer — restore from save (defaults to 0
-    // for legacy saves that predate the field; mirrors REVERB restore).
     p._chainBuffTimer = s._chainBuffTimer || 0;
-    // trauma_kit panic-button charges — restore from save when present.
-    // For saves produced BEFORE this PR shipped, the explicit field is
-    // absent (`s._nanoMedicCharges == null`); we fall back to the
-    // metaFlags-recorded upgrade level (which IS persisted in legacy
-    // saves via `metaFlags: ...` at saveGame:983) so that a player who
-    // owns trauma_kit and Continues from a pre-PR save gets the
-    // advertised charges instead of being silently zeroed. This refunds
-    // any charges they MIGHT have used pre-PR — but since trauma_kit
-    // produced no runtime charges before this PR, that's a vacuous case.
-    // Saves produced AFTER this PR always carry the explicit field and
-    // hit the first branch.
+    // If the field is missing, fall back to the persisted upgrade level. Saves written after charges existed always carry the field, so spent charges are not refunded.
     if (s._nanoMedicCharges != null) {
       p._nanoMedicCharges = s._nanoMedicCharges | 0;
     } else if (s.metaFlags && s.metaFlags.trauma_kit) {
@@ -3769,7 +3501,6 @@ const game = {
    * @param {any} dt
    */
   updateMenu(dt) {
-    // animate bg particles
     this.menuParticles=this.menuParticles||[];
     if (rand('cosmetic')<0.3) {
       this.menuParticles.push({
@@ -3782,8 +3513,7 @@ const game = {
       p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*0.4;
       if (p.life<=0||p.y<-10) this.menuParticles.splice(i,1);
     }
-    // UNCHAINED: "Keep persistent unlocks?" confirm modal intercepts input
-    // whenever it's active. Blocks main-menu navigation until the user answers.
+    // While the confirm modal is up it owns input, so menu navigation cannot run underneath it.
     if (this._newGameConfirm) {
       const c = this._newGameConfirm;
       if (jp(ALT_KEYS.left)||jp(km('left'))||jp(ALT_KEYS.up)||jp(km('up')))    { c.selected = 0; audio.menuSelect(); }
@@ -3802,7 +3532,6 @@ const game = {
     if (this.menuSel === undefined || this.menuSel >= n) this.menuSel = 0;
     if (jp(ALT_KEYS.up)||jp(km('up')))   this.menuSel = (this.menuSel - 1 + n) % n;
     if (jp(ALT_KEYS.down)||jp(km('down'))) this.menuSel = (this.menuSel + 1) % n;
-    // Left/Right cycles difficulty on the NEW GAME row
     if (opts[this.menuSel]?.isDiffRow && (jp(ALT_KEYS.left)||jp(km('left'))||jp(ALT_KEYS.right)||jp(km('right')))) {
       const idx = DIFF_ORDER.indexOf(this.difficulty);
       const dir = (jp(ALT_KEYS.right)||jp(km('right'))) ? 1 : -1;
@@ -3829,7 +3558,6 @@ const game = {
   updatePlaying(dt) {
     const player=this.player;
     const dungeon=this.dungeon;
-    // Telemetry: perf sample every ~10s
     this._perfSampleTimer = (this._perfSampleTimer || 0) + dt;
     if (this._perfSampleTimer >= 10 && typeof NEON !== 'undefined' && NEON.telemetry) {
       this._perfSampleTimer = 0;
@@ -3843,20 +3571,8 @@ const game = {
     }
     this.hint = null;
 
-    // Level-start text (modifier banner / biome intro card) — freeze gameplay
-    // while text is shown so the player can read it without taking damage.
-    // Mirrors the mapExpanded pause pattern below: tick text timers, accept
-    // any-key dismiss, return early.
-    //
-    // Both timers can be dismissed together with any NEW key press
-    // (justPressed, not held) — carry-over movement keys from prior floor /
-    // fade transitions don't insta-dismiss.
-    //
-    // CRITICAL: runs BEFORE floorTime/runTime accumulation so the Arc Grid
-    // hazard phase (Math.sin(floorTime * PI) at L1738) does NOT advance
-    // during the pause — otherwise the player could resume into a freshly-
-    // active arc tile that wasn't active when the text appeared. Same
-    // reasoning for runTime: pause time should not count against the run.
+    // Freeze gameplay while the level-start text is up, and tick those timers here before the early return. Dismiss only on a new keypress so held movement from the previous floor does not skip it.
+    // This must run before floorTime and runTime advance: the arc-grid phase is Math.sin(floorTime), and pause time must not count against the run.
     if (this.modBannerTimer > 0 || this.biomeCardTimer > 0) {
       if (this.modBannerTimer > 0) this.modBannerTimer -= dt;
       if (this.biomeCardTimer > 0) this.biomeCardTimer -= dt;
@@ -3890,19 +3606,14 @@ const game = {
 
     player.update(dt,dungeon.map);
 
-    // Evaluation trials (logic lattice / exploit seam / co-op relay). Runs
-    // before the generic Interact handlers below and consumes the press so a
-    // lattice node or console never also opens a door or descends.
+    // Runs before the generic interact handlers and consumes the press, so a lattice node or console does not also open a door or descend.
     if (typeof NEON !== 'undefined' && NEON.trials) {
       const _trialKey = km('interact');
       if (NEON.trials.updateTrials(this, dt, jp(_trialKey), getTrialDeps())) justPressed.delete(_trialKey);
       if (this.state !== 'PLAYING') { justPressed.clear(); return; }
     }
 
-    // ── REAPER aggression tracking: detect player room change BEFORE the
-    // enemy-update loop, so REAPERs read fresh state and Enemy.die() events
-    // this frame attribute kills to the correct room. Scope: per-frame
-    // single rooms.find scan (cheap — dungeon.rooms is small).
+    // Detect the room change before the enemy update so REAPERs and this frame's kills see the room the player is actually in.
     {
       const px = player.x, py = player.y;
       let nextRoom = null;
@@ -3912,10 +3623,7 @@ const game = {
       if (nextRoom !== player._currentRoom) {
         player.killsInCurrentRoom = 0;
         player._currentRoom = nextRoom;
-        // Re-arm any REAPERs in the room the player just entered (if any).
-        // Reapers in the room they just LEFT keep _reHasFrenzied — re-entry
-        // will clear it via this same code path because that room then
-        // becomes the next nextRoom.
+        // Re-arm REAPERs in the room just entered. Reapers in the room just left keep their frenzy until that room is entered again.
         if (nextRoom) {
           for (const e of enemies) {
             if (!e.dead && e.type === 'REAPER' && e.room === nextRoom) {
@@ -3927,42 +3635,20 @@ const game = {
     }
 
     const cam=getCamera(player);
-    // Under the global UI-zoom architecture, mouse.x/mouse.y arrive
-    // pre-normalized to logical (post-zoom) coordinates by the host
-    // boundary in src/platform.js — so every screen→world conversion
-    // in this update tick is a plain `(mouse + cam) / TILE` with no
-    // per-zoom correction. Touch-aim synthesis below writes mouse.x/y
-    // in the same logical-units space.
-
-    // sync touch aim: synthesise a mouse position far in the joystick direction
+    // mouse.x/y are already logical pixels (platform.js normalizes before this tick). Screen-to-world is (mouse + cam) / TILE with no extra zoom divide. Touch-aim writes the same space.
     if (touch.aim.active) {
       mouse.down = touch.aim.shooting;
       if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
-        // Player's on-canvas pixel position (logical). The world block
-        // draws at (player.x*TILE - cam.x) directly — the global
-        // ctx.scale(worldZoom) wrap in render() handles the upscale to
-        // the canvas backing for us. The 300-px deflection radius is
-        // also in logical px, which means the visible joystick "reach"
-        // arc on screen scales with worldZoom (bigger physical reach
-        // at higher zoom — matches the "everything bigger" intent).
+        // Player screen position is in logical px; render()'s ctx.scale(worldZoom) upscales it. The 300px aim radius is logical px, so the on-screen reach grows with zoom.
         mouse.x = (player.x * TILE - cam.x) + touch.aim.dx * 300;
         mouse.y = (player.y * TILE - cam.y) + touch.aim.dy * 300;
       }
     }
 
-    // aim with mouse (or lock to walking direction / aim assist if enabled).
-    // Priority order:
-    //   1. aimAssist (accessibility) — auto-target nearest visible enemy in
-    //      LOS within visibility range. Falls through if no enemy found.
-    //   2. lockAimToMove — project a point in front of player's last walk
-    //      direction.
-    //   3. Mouse — direct aim at cursor world position.
+    // Aim priority: aim-assist (falls through if nothing is in LOS), then lock-aim-to-move, then the cursor. Assist uses visibility range, not the auto-laser's 8 tiles.
     let worldAimX, worldAimY;
     let aimAssistTarget = null;
     if (settings.aimAssist) {
-      // Find nearest enemy with LOS. Mirrors auto-laser target search at
-      // L1581-1590; kept inline to avoid coupling to that ability's range
-      // (auto-laser uses 8 tiles; aim assist uses visibility range).
       let bestD = 16; // squared-tile range cap so distant off-screen enemies don't pull aim
       for (const e of enemies) {
         if (!e || e.dead) continue;
@@ -3983,32 +3669,26 @@ const game = {
       const [afx, afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     } else if (settings.lockAimToMove) {
-      // Use last walked direction (player.facing is updated only when moving,
-      // so it stays sticky when stationary). Project a point in front of player.
+      // facing updates only while moving, so a stationary lock-aim still uses the last walk direction.
       worldAimX = player.x + player.facing.x * 8;
       worldAimY = player.y + player.facing.y * 8;
     } else {
-      // Mouse → world tile: mouse.x/y are already in logical (post-zoom)
-      // coordinates (normalised at the host boundary in platform.js),
-      // so we add the cam (in world-px) and convert to tiles directly.
+      // mouse.x/y are already logical px, so add cam (world px) and divide by TILE. No second zoom correction.
       worldAimX = (mouse.x + cam.x) / TILE;
       worldAimY = (mouse.y + cam.y) / TILE;
       const [afx,afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     }
 
-    // shoot (suppressed during dash)
     if ((mouse.down||keys.has(km('shoot'))) && player.shootCooldown<=0 && player.dashTimer<=0) {
       player.shoot(worldAimX,worldAimY,dungeon.map);
     }
 
-    // update enemies
     const _ptEnemies = perfEnabled() ? performance.now() : 0;
     for (const e of enemies) {
       tickEnemyStatusEffects(e, dt);
       tickEliteAffix(e, dt);
       e.update(dt,player,dungeon.map);
-      // Bounty reveal: play sound the first time the bounty becomes visible
       if (e._isBounty && !e.dead && !e._bountyRevealed) {
         const etx = Math.floor(e.x), ety = Math.floor(e.y);
         if (dungeon.visible?.[ety]?.[etx]) {
@@ -4019,10 +3699,9 @@ const game = {
       }
     }
 
-    // ── Toxic Pool enemy damage ──
     if (_ptEnemies) perfRecord('enemies', performance.now() - _ptEnemies);
     for (const e of enemies) {
-      if (e.dead || e._disguised) continue; // skip dead and disguised mimics
+      if (e.dead || e._disguised) continue;
       if (e._wrPhased) continue; // phased WRAITHs are intangible
       const etx = Math.floor(e.x), ety = Math.floor(e.y);
       if (dungeon.map[ety]?.[etx] === T.TOXIC) {
@@ -4040,7 +3719,6 @@ const game = {
       }
     }
 
-    // decay chain lightning bolts
     if (this._chainBolts) {
       for (let i=this._chainBolts.length-1;i>=0;i--) {
         this._chainBolts[i].timer-=dt;
@@ -4067,65 +3745,43 @@ const game = {
     }
     if (_ptProj) perfRecord('projectiles', performance.now() - _ptProj);
 
-    // update hazard zones (grenade AoE)
     const _ptEnv = perfEnabled() ? performance.now() : 0;
     updateHazardZones(dt, player);
 
-    // update volatile cores
     updateVCores(dt);
 
-    // update alarm beacons
     updateBeacons(dt);
 
-    // update proximity mines
     updateMines(dt);
 
-    // update shield generators
     updateShieldGens(dt);
 
-    // update security cameras
     updateCameras(dt);
 
-    // update laser tripwires
     updateLasers(dt);
 
-    // update wall turrets
     updateWallTurrets(dt);
 
     // update disruption fields (must run before player.update next frame for flag)
     updateDisruptionFields(dt, player);
-    // update NULLIFIER jam aura (must run before player.update next frame
-    // for player.hackwareJammed flag — same call-ordering rationale as
-    // updateDisruptionFields above). Iterates live NULLIFIERs and sets
-    // the flag based on player proximity.
+    // Must run before the next player.update so hackwareJammed is set for that frame. Same ordering as disruption fields.
     updateNullifierJam(dt, player);
     updateFrostPatches(dt, player);
-    // Tick ARCHITECT-placed walls — auto-decay back to origTile after
-    // ARCHITECT_DECAY_TIME. Pass dungeon.map so the helper can mutate it.
+    // Placed walls decay back to their original tile. The helper writes dungeon.map, so pass it in.
     updatePlacedWalls(dt, dungeon.map);
 
-    // update gravity wells
     updateGravityWells(dt);
 
-    // update items
     for (const it of items) it.update(dt);
-    // Prune items that ticked themselves dead (HarvestPickup TTL expiry).
-    // Plain Items / KeyItems / WhisperItems are always spliced at pickup
-    // time, so their `dead` flag never goes true here — but TTL-based
-    // pickups would otherwise stay in the items array, drawing forever
-    // and consuming hit-test loop work. (3 reviewers caught this on the
-    // HARVESTER PR — drawing-but-uncollectable ghost pickup.)
+    // TTL pickups set dead and are not spliced at pickup. Leaving them in items keeps a dead pickup drawing and hit-testing.
     for (let i = items.length - 1; i >= 0; i--) {
       if (items[i].dead) items.splice(i, 1);
     }
-    // update fuse bombs (tap-tap V) — drawn between items and enemies in
-    // render loop so a planted bomb is visible above ground but obscured by
-    // mobs standing on it. Dead-bomb prune handled inside.
+    // Drawn between items and enemies so a mob standing on a planted bomb hides it.
     updateFuseShards(dt);
     if (_ptEnv) perfRecord('env', performance.now() - _ptEnv);
 
-    // UNCHAINED #39: CORE drops (elite/boss/secret/challenge/rare-terminal).
-    // Timed separately so the F3 perf HUD shows the cost.
+    // Timed separately so the perf HUD can show core-drop cost.
     if (typeof NEON !== 'undefined' && NEON.cores) {
       const _ptCores = perfEnabled() ? performance.now() : 0;
       NEON.cores.updateCoreDrops(this, dt, {
@@ -4141,16 +3797,7 @@ const game = {
     // item pickup → keys go to inventory, upgrades trigger choice UI
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
-      // Pickup-radius composition. Stacks multiplicatively with the
-      // MAGNETIC_FIELD augment ("Double item pickup radius") AND the
-      // MAGNETISM floor modifier (ninth positive modifier, "Item pickup
-      // radius increased 50% on this floor"). Both are passive
-      // multiplicative reductions, so an MAGNETISM floor with
-      // MAGNETIC_FIELD yields radius × 2 × 1.5 = ×3 (0.7 → 2.1 tiles).
-      // Mirrors the AUTONOMY×OVERCLOCKER pattern at content.js
-      // activateHackware (PR #266). Uses this.modifier (the canonical
-      // game.js floor-modifier ref) so a typo would silently disable
-      // the bonus on every pickup tick.
+      // MAGNETIC_FIELD and the MAGNETISM floor modifier stack multiplicatively (x2 and x1.5). Uses this.modifier, the floor-modifier field; a different name would silently drop the bonus.
       let pickupRadius = hasAugment('MAGNETIC_FIELD') ? 1.4 : 0.7;
       if (this.modifier === 'MAGNETISM') pickupRadius *= 1.5;
       if (!it.dead && dist(player.x,player.y,it.x,it.y)<pickupRadius) {
@@ -4161,11 +3808,7 @@ const game = {
           this.msg('Found '+it.colour.toUpperCase()+' KEY!', it.tileColour);
           continue;
         }
-        // HARVESTER drop — applies HARVEST_SURGE (+50% damage for 8s, see
-        // src/meta/boosts.js). Strict temp-only per design rule (no permanent
-        // power-ups from mob drops). Auto-collected on contact like other
-        // pickups; perk choice gating is irrelevant here (it's a buff, not
-        // an upgrade choice). Toast colour matches the pickup's surge-orange.
+        // Temp damage buff only. Mob drops must not grant permanent power.
         if (it.isHarvest) {
           audio.pickup();
           items.splice(i, 1);
@@ -4175,22 +3818,11 @@ const game = {
           this.msg('HARVEST SURGE — +50% DMG (8s)', '#ff9933');
           continue;
         }
-        // MAGPIE hoard — thief returns banked credits on death pickup.
-        // The MagpieHoard.amt was set to the exact value the thief
-        // banked (sum of MAGPIE_STOLEN_BASE + floor * MAGPIE_STOLEN_PERFL
-        // per consumed Item) so this is always a clean refund of the
-        // stolen value. Floating "+N CR" + gold flash mirrors the
-        // CREDIT_CACHE pickup feedback so the player reads the recovery
-        // unambiguously.
+        // amt is the exact sum the thief banked, so this is a refund, not a bonus.
         if (it.isHoard) {
           audio.pickup();
           items.splice(i, 1);
-          // SCAVENGER meta upgrade: same flat per-pickup bonus as
-          // CREDIT_CACHE.fn (src/content/upgrades.js). MagpieHoard +
-          // VaultCoin both flow through this branch (both flag .isHoard
-          // = true), so this single wire covers all credit-item pickup
-          // paths. Sanitize identically — see the CREDIT_CACHE.fn
-          // comment for the corrupted-localStorage rationale.
+          // Same flat bonus as CREDIT_CACHE. Both credit pickups set isHoard, so this one branch covers them. Sanitize the same way as that upgrade: meta can come from corrupted localStorage.
           let bonus = (player && player.bonusCreditPerPickup) || 0;
           if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
           if (bonus > 32) bonus = 32;
@@ -4202,12 +3834,7 @@ const game = {
           this.msg('HOARD RECOVERED  +' + amt + ' CR', '#ffd700');
           continue;
         }
-        // SHOCK_PULSE pickup — defensive panic-button consumable. Auto-
-        // triggers on contact (mirrors HARVEST_SURGE / HOARD recovery
-        // feedback shape). Discharges an AoE knockback + brief stun
-        // centred on the player. NON-DAMAGING — payoff is positional
-        // (panic-eject a swarm), not DPS. Detonation math + LOS gate
-        // + boss carve-out live in triggerShockPulse() in entities/shock-pulse.js.
+        // Contact detonation is a knockback and stun, not damage. The math, LOS gate, and boss carve-out live in triggerShockPulse.
         if (it.isShockPulse) {
           items.splice(i, 1);
           const hit = (typeof triggerShockPulse === 'function') ? triggerShockPulse() : 0;
@@ -4216,12 +3843,7 @@ const game = {
           continue;
         }
         if (it.isWhisper) {
-          // Whispers subplot — picking up shows the body in a READING overlay
-          // so the discovery + reading moment feels earned (per stored
-          // 'game design' memory). The whisper is also marked found+read in
-          // save state so the ARCHIVE WHISPERS counter increments and the
-          // player can re-visit later via ARCHIVE > WHISPERS section
-          // (UI list ships in a follow-up). audio.logRead reused.
+          // Opens a READING overlay instead of a toast so the find and the read are the same moment. Marked found and read so the archive counter moves.
           items.splice(i, 1);
           let title = 'WHISPER';
           let body = '';
@@ -4243,9 +3865,7 @@ const game = {
           if (typeof NEON !== 'undefined' && NEON.telemetry) {
             NEON.telemetry.track('whisper_found', { id: it.whisperId, floor: this.floor });
           }
-          // Show the reading overlay. _whisperMeta drives renderReading's
-          // violet styling branch; clearing currentLore is safe because the
-          // amber DATA TERMINAL path won't trigger when _whisperMeta is set.
+          // _whisperMeta selects the violet READING style. Clear currentLore so a data terminal cannot also paint.
           if (body) {
             this.currentLore = body;
             this._whisperMeta = { title, voice };
@@ -4261,11 +3881,9 @@ const game = {
           this.collectWeaponCache(it.weapon);
           return;
         }
-        // Defer upgrade pickup if a perk/augment choice is pending
         if (this.pendingPerkChoices.length || this.perkChoice || this.augmentChoice) continue;
         audio.pickup();
         items.splice(i,1);
-        // Generate 2 upgrade options
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
         // Auto-collect simple consumables (health/XP/shard) to reduce popup fatigue.
@@ -4273,7 +3891,6 @@ const game = {
          * @param {any} o
          */
         const _isSimple = o => !o.persistent && !o.id.startsWith('WEAPON_') && !o.id.startsWith('HACKWARE_');
-        // Auto-collect weapons into belt if space available.
         /**
          * @param {any} o
          */
@@ -4282,10 +3899,7 @@ const game = {
           const needsHp = player.hp < player.maxHp;
           const aIsHeal = optA.id === 'MED_PACK' || optA.id === 'NANO_REPAIR';
           const bIsHeal = optB.id === 'MED_PACK' || optB.id === 'NANO_REPAIR';
-          // Heal-priority when wounded: prefer the heal option.
-          // Waste-avoidance when full HP: prefer the non-heal option (a heal
-          // at max HP heals nothing, so the boost/currency/XP is strictly
-          // better). Default: keep optA.
+          // Wounded: prefer the heal. Full HP: a heal does nothing, so prefer the other option. Otherwise keep the first option.
           let pick = optA;
           if (needsHp && bIsHeal && !aIsHeal) pick = optB;
           else if (!needsHp && aIsHeal && !bIsHeal) pick = optB;
@@ -4311,21 +3925,15 @@ const game = {
       }
     }
 
-    // remove dead enemies
     for (let i=enemies.length-1;i>=0;i--) {
       if (enemies[i].dead) enemies.splice(i,1);
     }
 
-    // flush deferred enemy spawns (e.g. SPLITTER → SHARDs, SUMMONER → DRONEs,
-    // GHOST_PROJECTOR → ghosts)
+    // Deferred spawns (SPLITTER shards, SUMMONER drones, projector ghosts) flush after the enemy loop so they are not updated twice this frame.
     if (pendingEnemySpawns.length) {
       for (const s of pendingEnemySpawns) {
-        // Skip orphan summons whose summoner died this frame
         if (s._summoned && (!s._summonerRef || s._summonerRef.dead)) continue;
-        // Skip orphan ghosts whose projector died this frame — the haunt
-        // dies with its source. Avoids spectral ghosts wandering after
-        // their projector is gone (would also be unfair: the player
-        // pre-empted the projector but still got a ghost).
+        // A ghost whose projector died this frame is skipped. Killing the projector should not still spawn its haunt.
         if (s._ghIsGhost && (!s._ghOwnerProjector || s._ghOwnerProjector.dead)) continue;
         const e = spawnEnemy(s.type, s.x, s.y, s.floor, s.room, false);
         if (s._challengeWave) e._challengeWave = true;
@@ -4336,18 +3944,14 @@ const game = {
           s._summonerRef._summons.push(e);
         }
         if (s._ghIsGhost) {
-          // Apply ghost mutations after a real spawnEnemy build so AI/
-          // collision/draw paths all work with normal enemy state.
+          // Mutate after a normal spawn so AI, collision, and draw all see a complete enemy.
           e._ghIsGhost = true;
           e._ghLife = GHOST_PROJECTOR_GHOST_LIFE;
           e.hp = Math.max(1, Math.round(e.hp * GHOST_PROJECTOR_HP_MUL));
           e.maxHp = e.hp;
           e.atk = Math.max(1, Math.round(e.atk * GHOST_PROJECTOR_ATK_MUL));
           e.xpValue = 0; // no XP from ghost kills
-          // Atomically clear the projector's pending state AND back-assign
-          // the live ghost ref. Done together (and only here) so the
-          // notifyGhostProjectors busy-skip stays valid across the
-          // queue→flush window via the _gpAwaitingFlush sentinel.
+          // Clear the pending flag and store the live ghost together, and only here, so the busy-skip stays valid across the queue-to-flush window.
           const proj = s._ghOwnerProjector;
           proj._gpActiveGhost = e;
           proj._gpPendingType = null;
@@ -4359,7 +3963,6 @@ const game = {
       pendingEnemySpawns.length = 0;
     }
 
-    // room-clear rewards — only scan when an enemy died this frame
     if (this.enemyDiedThisFrame && this.clearedRooms) {
       this.enemyDiedThisFrame = false;
       let clears = 0;
@@ -4372,17 +3975,13 @@ const game = {
           if (!e.dead && !e._disguised) { hasLiveEnemy = true; break; }
         }
         if (hasLiveEnemy) continue;
-        // Block room-clear until alarm beacons are resolved
         if (beacons.some(b => !b.dead && b.room === room)) continue;
-        // Block room-clear while a camera is actively alerted
         if (cameras.some(c => !c.dead && c.state === 'alerted' && c.room === room)) continue;
-        // Block room-clear until hostile wall turrets are destroyed or hacked
         if (wallTurrets.some(wt => !wt.dead && !wt.hacked && wt.room === room)) continue;
         this.clearedRooms.add(room);
         clears++;
         const d = getDiff();
         let cr = Math.round((10 + this.floor * 5) * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
-        // UNCHAINED #37 AMMO_RECLAIMER module: chance to double credits.
         if (player.metaFlags && player.metaFlags.doubleCreditChance > 0 && rand('loot') < player.metaFlags.doubleCreditChance) {
           cr *= 2;
         }
@@ -4402,7 +4001,6 @@ const game = {
 
     if (this.openPendingSystemMessage(false)) { justPressed.clear(); return; }
 
-    // update lighting
     const _ptLight = perfEnabled() ? performance.now() : 0;
     updateLighting(dungeon,player.x,player.y);
     if (_ptLight) perfRecord('lighting', performance.now() - _ptLight);
@@ -4416,24 +4014,17 @@ const game = {
     updateShake(dt);
     updateCombo(dt);
     updateHackwareEffects(dt);
-    // NOTE: modBannerTimer / biomeCardTimer are ticked in the level-text
-    // pause block at the top of updatePlaying (early-return). When this
-    // line runs, both timers are guaranteed to be 0 — leaving the
-    // bookkeeping nulls in place defensively.
+    // Both timers are ticked in the level-text pause at the top of updatePlaying, which returns early. By here they are already 0.
     if (this.modBannerTimer < 0) this.modBannerTimer = 0;
     if (this.biomeCardTimer <= 0) { this.biomeCardTimer = 0; this.biomeCardArea = null; }
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
-    // ── Upgrade effects ──────────────────────────────────────────────────
-    // Nano Regen
     const regenLvl = player.upgrades.NANO_REGEN||0;
     if (regenLvl > 0) player.hp = Math.min(player.maxHp, player.hp + regenLvl * dt);
 
-    // Saw Blade orbitals
     const sawLvl = player.upgrades.SAW_BLADE||0;
     if (sawLvl > 0) {
       player.orbitalAngle += 3 * dt;
-      // Tick down hit cooldowns
       for (const [e, cd] of player.orbitalHits) {
         player.orbitalHits.set(e, cd - dt);
         if (cd - dt <= 0) player.orbitalHits.delete(e);
@@ -4454,14 +4045,12 @@ const game = {
       }
     }
 
-    // Plasma Orb auto-spell
     const orbLvl = player.upgrades.PLASMA_ORB||0;
     if (orbLvl > 0) {
       const cd = 3 - (orbLvl - 1) * 0.7;
       player.spellTimers.plasmaOrb -= dt;
       if (player.spellTimers.plasmaOrb <= 0) {
         player.spellTimers.plasmaOrb = cd;
-        // Find nearest enemy
         let nearest = null, nearD = 64;
         for (const e of enemies) {
           if (e.dead) continue;
@@ -4481,7 +4070,6 @@ const game = {
       }
     }
 
-    // Sentry Drone — orbiting auto-fire drones
     const droneLvl = player.upgrades.SENTRY_DRONE||0;
     if (droneLvl > 0) {
       player.droneAngle += 1.8 * dt;
@@ -4489,7 +4077,6 @@ const game = {
       player.spellTimers.sentryDrone -= dt;
       if (player.spellTimers.sentryDrone <= 0) {
         player.spellTimers.sentryDrone = droneCd;
-        // Each drone picks the nearest visible enemy and fires
         for (let i = 0; i < droneLvl; i++) {
           const a = player.droneAngle + (TWO_PI / droneLvl) * i;
           const droneX = player.x + Math.cos(a) * 2.0;
@@ -4517,7 +4104,6 @@ const game = {
       }
     }
 
-    // Auto-Laser perk — hitscan beam at nearest visible enemy
     if (player.perks.AUTO_LASER && player.hp > 0) {
       if (player.autoLaserBeam) {
         player.autoLaserBeam.timer -= dt;
@@ -4547,7 +4133,6 @@ const game = {
     }
 
 
-    // stairs / lore terminal interaction
     const tx=Math.floor(player.x), ty=Math.floor(player.y);
     const tile=dungeon.map[ty]?.[tx];
 
@@ -4558,7 +4143,6 @@ const game = {
         this.currentLore = LORE_ENTRIES[idx] ?? null;
         player.score += 50;
         this.msg('+50 DATA RECOVERED', '#ffb700');
-        // Consume the terminal — single use
         dungeon.map[ty][tx] = T.FLOOR;
         this.markMapMutated();
         audio.loreAccess();
@@ -4605,7 +4189,6 @@ const game = {
       }
     }
 
-    // teleport pad interaction
     if (tile===T.TELEPORT_PAD) {
       const pads = dungeon.teleportPads || [];
       let paired = null;
@@ -4614,7 +4197,6 @@ const game = {
         if (p.x2===tx && p.y2===ty) { paired = { x:p.x1, y:p.y1 }; break; }
       }
       if (paired) {
-        // Check if destination is in a sealed boss/challenge room
         const destSealed = (this.bossSealed && this.bossRoom &&
           paired.x >= this.bossRoom.x && paired.x < this.bossRoom.x + this.bossRoom.w &&
           paired.y >= this.bossRoom.y && paired.y < this.bossRoom.y + this.bossRoom.h) ||
@@ -4665,7 +4247,6 @@ const game = {
       this.hint={text: finalCoreTerminal ? 'Press '+KEY_DISPLAY(km('interact'))+' to open MAINFRAME route' : 'Press '+KEY_DISPLAY(km('interact'))+' to interface with CORE terminal',colour:'#00f5ff'};
     }
 
-    // door interaction (check adjacent tiles when pressing E)
     if (jp(km('interact'))) {
       const dirs = /** @type {[number,number][]} */ ([[0,-1],[0,1],[-1,0],[1,0]]);
       for (const [ddx,ddy] of dirs) {
@@ -4678,7 +4259,6 @@ const game = {
           audio.wallBreak();
           spawnParticles(dx+0.5, dy+0.5, 'EXPLOSION', '#ffb700', 12);
           this.msg('SECRET AREA DISCOVERED','#ffb700');
-          // Reveal the secret room — cracked tile is on room boundary
           for (const sr of dungeon.secretRooms) {
             if (sr.secretRevealed) continue;
             // Cracked tile is on room edge or 1 tile outside it
@@ -4710,7 +4290,6 @@ const game = {
         }
       }
     }
-    // door / cracked wall prompt
     const dirs = /** @type {[number,number][]} */ ([[0,-1],[0,1],[-1,0],[1,0]]);
     for (const [ddx,ddy] of dirs) {
       const dx=tx+ddx, dy=ty+ddy;
@@ -4731,7 +4310,6 @@ const game = {
       if (dt===T.CHALLENGE_GATE && !game.challengeComplete) { this.hint={text:'⚔ CHALLENGE ROOM — enter at your own risk',colour:'#ff6633'}; break; }
     }
 
-    // trap triggering
     player.trapCooldown = Math.max(0, player.trapCooldown - dt);
     if (player.trapCooldown <= 0) {
       if (tile===T.TRAP_SPIKE) {
@@ -4747,62 +4325,10 @@ const game = {
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
       } else if (tile===T.REPULSOR && !isPlayerDamageImmune()) {
-        // REPULSOR_TILE: positional hazard — boots the player back in the
-        // direction they ENTERED FROM. NO HP damage; the cost is positional
-        // commitment + the routing detour.
-        //
-        // Direction source: OPPOSITE of the player's movement delta this
-        // frame. player._prevX / _prevY are captured at the start of
-        // Player.update (entities.js:12845) BEFORE any movement, so by the
-        // time this trap-trigger runs, (player.x - player._prevX,
-        // player.y - player._prevY) is the actual movement vector for the
-        // frame. Negating it gives the way they CAME — the natural "push
-        // back" direction.
-        //
-        // Why not player.facing? Codex r1 caught it: player.facing is
-        // overwritten EVERY frame by the aim-assist + mouse-aim handlers
-        // (game.js:1531/1544). It's an aim vector, not a movement vector.
-        // Knockback derived from facing pushes opposite to AIM — a player
-        // shooting at an enemy across the room would get launched INTO
-        // the enemy on stepping on a repulsor.
-        //
-        // Why not (player.x - tileCentre)? Codex r2 caught it: on a frame
-        // hitch (large dt), the player can move past the tile centre in a
-        // single step, flipping the centre-relative offset and pushing
-        // them DEEPER instead of back. Movement-delta is hitch-stable.
-        //
-        // Fallback chain handles the degenerate "no movement this frame"
-        // case (gravity-well-cancellation, collision-zeroed entries, etc.):
-        // tile-centre delta first (still useful when player nudged onto
-        // tile by a non-movement source), then opposite-of-facing as a
-        // last-resort best guess.
-        //
-        // PUSH = 0.95 (≤ 1.0): displacement strictly less than one tile.
-        // This bounds the per-axis isPassable check to ADJACENT cells only,
-        // making tunnel-through-wall impossible — codex r2 caught that
-        // PUSH > 1.0 with endpoint-only checks lets the player skip a
-        // 1-tile-wide wall when destination cell happens to be passable.
-        // 0.95 still reads as a kick (player visibly leaves the tile) but
-        // keeps the swept check trivial and correct.
-        //
-        // Wall-aware swept knockback: per-axis isPassable check (mirrors
-        // CHARGER mob convention at entities.js:6062) PLUS a combined
-        // diagonal-cell check (codex r1: per-axis individually passable +
-        // diagonal cell wall = corner-wedge clip). When the diagonal cell
-        // is blocked but one axis is passable, slide along the wall on
-        // that axis only — never commit a write that lands in a wall.
-        // Damage-immune frames bypass — matches PLASMA/ARC/TOXIC/SHOCK.
-        // trapCooldown 1.2s prevents adjacent-repulsor ping-pong.
-        //
-        // BRANCH ORDERING: this branch must precede the T.SHOCK_TILE branch
-        // because tests/shock-tile.test.js extracts the SHOCK_TILE body via
-        // a non-greedy regex (`[\s\S]*?\}\s*\n`) that requires SHOCK_TILE
-        // to be the LAST branch in the chain (`} else if` doesn't match
-        // `\}\s*\n`, so the regex would walk PAST any subsequent branch).
-        // Behaviour is identical regardless of order — trapCooldown gates
-        // single-fire per re-entry. Pinned by the structural test
-        // 'REPULSOR branch precedes SHOCK_TILE branch' so a future reorder
-        // can't silently break shock-tile.test.js.
+        // Push back along the way they entered (previous position minus current), not facing. Aim overwrites facing every frame, so a facing push launches the player toward the thing they are shooting.
+        // Not tile-centre either: a large dt can step past the centre and reverse the push. If there was no movement, fall back to tile-centre, then opposite facing.
+        // PUSH is 0.95 so the knockback stays under one tile and cannot tunnel a wall. If the diagonal cell is blocked, slide on the open axis instead of writing into a wall.
+        // This branch must stay before T.SHOCK_TILE. tests/shock-tile.test.js extracts the SHOCK_TILE body with a regex that requires it to be the last branch.
         let kxr = (player._prevX !== undefined ? player._prevX : player.x) - player.x;
         let kyr = (player._prevY !== undefined ? player._prevY : player.y) - player.y;
         if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
@@ -4834,15 +4360,7 @@ const game = {
         spawnParticles(player.x, player.y, 'SPARK', '#44ddff', 6);
         audio.repulsor();
       } else if (tile===T.SHOCK_TILE && !isPlayerDamageImmune()) {
-        // SHOCK_TILE: brief movement-suppress hazard. Reuses the existing
-        // player.shockTimer primitive (already wired in entities.js to zero
-        // movement input but leave aim+shoot intact, mirroring the SHOCKER
-        // mob). 0.5s lockdown is short enough to be fair on mobile yet long
-        // enough to commit the player to defending in place. trapCooldown
-        // 1.5s prevents standing-on-it from looping the freeze. Damage-
-        // immune frames (dash i-frames, cloak, etc.) bypass — matches
-        // PLASMA/ARC/TOXIC convention so dash-through-hazard reads
-        // consistently.
+        // Reuses player.shockTimer, which zeroes movement but leaves aim and shoot. 0.5s is the lockdown; trapCooldown 1.5s stops a player standing on the tile from refreezing. Damage-immune frames bypass it, same as the other env tiles.
         player.shockTimer = Math.max(player.shockTimer || 0, 0.5);
         player.trapCooldown = 1.5;
         this.msg('Shock tile!','#ffee44');
@@ -4875,7 +4393,6 @@ const game = {
     }
     player.arcCooldown = Math.max(0, player.arcCooldown - dt);
     if (tile === T.ARC && !isPlayerDamageImmune() && Math.sin((this.floorTime||0) * Math.PI) > 0 && player.arcCooldown <= 0) {
-      // Periodic zap during active phase
       const zapDmg = Math.round((10 + this.floor * 2) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1));
       player.takeDamage(zapDmg, 'Arc Grid', {
         ignoreInvincible: true,
@@ -4891,7 +4408,6 @@ const game = {
       audio.arcZap();
     }
 
-    // ── Toxic Pool (damages player + slows) ──
     if (tile === T.TOXIC && !isPlayerDamageImmune()) {
       const toxDps = (2 + this.floor * 0.5) * getDiff().envDmg * (hasAugment('BIOFILTER') ? 0.5 : 1);
       player.takeDamage(toxDps * dt, 'Toxic Pool', {
@@ -4915,7 +4431,6 @@ const game = {
       player.toxicSlowActive = false;
     }
 
-    // special room effects
     for (const r of dungeon.rooms) {
       if (r.healFont && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (player.hp < player.maxHp) {
@@ -4933,7 +4448,6 @@ const game = {
         }
         if (!r.shrineUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at shrine',colour:'#aa00ff'};
       }
-      // Implant shrine interaction
       if (r.roomType === 'implant' && !r.implantUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.implantUsed = true;
@@ -4958,7 +4472,6 @@ const game = {
         }
         if (!r.implantUsed && dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<2.5) this.hint={text:'Press '+KEY_DISPLAY(km('interact'))+' at implant shrine',colour:'#cc44ff'};
       }
-      // Event terminal interaction
       if (r.roomType === 'event' && !r.eventUsed && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
           r.eventUsed = true;
@@ -4974,18 +4487,15 @@ const game = {
        */
       if (r.shopItems && r.shopItems.some((/** @type {any} */ i) => !i.sold) && player.x>=r.x && player.x<r.x+r.w && player.y>=r.y && player.y<r.y+r.h) {
         if (dist(player.x,player.y,r.cx+0.5,r.cy+0.5)<1.5 && jp(km('interact'))) {
-          // Revalidate shop items (maxed upgrades, stale prices, unneeded keys, owned/capped augments)
           for (const si of r.shopItems) {
             if (si.sold) continue;
             if (si.persistent && player.upgrades[si.id] >= si.maxLevel) { si.sold = true; continue; }
             // Recalculate price for persistent upgrades (level may have changed)
             if (si.persistent && SHOP_PRICES[si.id]) si.price = shopPrice(si.id, this.floor, player.upgrades);
-            // Mark key items as sold if player already has that colour
             if (si.id && si.id.startsWith('SHOP_KEY_')) {
               const kc = si.id.replace('SHOP_KEY_','').toLowerCase();
               if (player.keys[kc] > 0) si.sold = true;
             }
-            // Mark augment items as sold if already owned or at cap
             if (si.isAugment && si.id && si.id.startsWith('SHOP_AUG_')) {
               const augId = si.id.replace('SHOP_AUG_','');
               if (player.augments[augId] || Object.keys(player.augments).length >= MAX_AUGMENTS) si.sold = true;
@@ -4994,7 +4504,7 @@ const game = {
           /**
            * @param {any} i
            */
-          if (!r.shopItems.some((/** @type {any} */ i) => !i.sold)) continue; // all invalidated
+          if (!r.shopItems.some((/** @type {any} */ i) => !i.sold)) continue;
           this.shopRoom = r;
           this.shopSelected = 0;
           this.shopClosing = false;
@@ -5006,7 +4516,6 @@ const game = {
       }
     }
 
-    // quest tracking
     if (this.quest && !this.quest.done && !this.quest.failed) {
       if (this.quest.timer !== undefined) {
         this.quest.timer -= dt;
@@ -5019,10 +4528,9 @@ const game = {
       }
     }
 
-    // pause
     if (jp('Escape')) this.setState('PAUSED');
 
-    // boss seal check — seal when player is clearly inside the boss room
+    // Seal only once the player is off the entrance tile and inside the room.
     if (this.bossRoom && !this.bossSealed && this.bossAlive) {
       const r = this.bossRoom;
       /**
@@ -5047,34 +4555,20 @@ const game = {
         }
         audio.roomSeal();
         this.msg('⚠ ROOM SEALED','#ff3333');
-        // Boss intro telegraph — fires ONCE per boss encounter, on the
-        // false→true bossSealed flip. Atmospheric overlay (radial vignette
-        // in boss colour + boss-name titlecard + low-frequency audio sting).
-        // Gameplay continues during the BOSS_INTRO_DURATION-second window;
-        // the player can still move/shoot. Bosses themselves are AI-driven
-        // and typically telegraph their first attack, so the intro doesn't
-        // create unfair pressure. Save/load resumes mid-fight do NOT
-        // re-trigger this — descend() resets bossSealed to false and the
-        // dungeon is regenerated on Continue, so the seal-flip path is
-        // re-entered cleanly only on first physical entry to the room.
+        // Fires once, on the false-to-true bossSealed flip. Save/load mid-fight does not re-trigger it: descend resets the seal and Continue regenerates the dungeon, so the flip only happens on first entry.
         this.bossIntroDuration = BOSS_INTRO_DURATION;
         this.bossIntroTimer = BOSS_INTRO_DURATION;
         if (audio.bossIntro) audio.bossIntro();
       }
     }
 
-    // Boss intro telegraph — count DOWN every frame regardless of camera or
-    // pause state (pause already short-circuits the entire update loop).
-    // Clamp to 0 to keep the renderer's `timer > 0` gate clean and to ensure
-    // the timer can never be re-played by an integer-overflow / underflow path.
+    // Count down every frame and clamp at 0. A huge dt (alt-tab, phone call) must not leave a negative timer that the renderer treats as still playing.
     if (this.bossIntroTimer > 0) {
       this.bossIntroTimer = Math.max(0, this.bossIntroTimer - dt);
     }
 
-    // boss death — unseal room and update state
     if (this.bossAlive && !enemies.some(e=>e.isBoss && !e.dead)) {
       this.bossAlive=false;
-      // Restore entrance tiles
       if (this.bossSealed) {
         for (const ent of this.bossEntrances) {
           if (ent.origTile !== undefined) { dungeon.map[ent.y][ent.x] = ent.origTile; delete ent.origTile; }
@@ -5083,48 +4577,26 @@ const game = {
       }
       this.bossSealed=false;
       this.refreshSealedEntrances();
-      // Edge case — if the boss dies DURING the intro telegraph (player one-
-      // shots a low-HP boss the instant they cross the threshold), kill the
-      // intro overlay so the "boss is dead" state isn't visually contradicted
-      // by a still-fading titlecard with the boss's name.
+      // If the boss dies during the intro, kill the intro overlay so a fading titlecard does not contradict the death.
       this.bossIntroTimer = 0;
       this.bossIntroDuration = 0;
-      // Boss death telegraph — fires ONCE per boss kill, on the
-      // bossAlive true→false flip. Atmospheric overlay (radial flash in
-      // the boss colour + "DESTROYED" titlecard with the boss name +
-      // celebratory audio sting). Gameplay continues unaffected — the
-      // overlay is purely cosmetic. The boss instance was removed from
-      // `enemies` by the dead-enemy splice pass earlier in updatePlaying
-      // (line ~1804), so the colour/name shown by the renderer come from
-      // the per-frame snapshot that the boss-HUD block writes to
-      // bossDeathColor/bossDeathName while the boss is alive.
+      // Fires once, on the bossAlive true-to-false flip. The boss is already spliced out of enemies, so colour and name come from the snapshot taken while it was alive.
       this.bossDeathDuration = BOSS_DEATH_DURATION;
       this.bossDeathTimer = BOSS_DEATH_DURATION;
       if (audio.bossDefeat) audio.bossDefeat();
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
-    // Boss death telegraph — count DOWN every frame, clamped to 0. Same
-    // shape and rationale as the boss-intro decrement above (defends
-    // against negative-timer states from huge dt spikes — alt-tab,
-    // phone-call interrupt — that would otherwise make the overlay
-    // permanent).
+    // Count down and clamp at 0. A huge dt must not leave a negative timer that keeps the overlay up forever.
     if (this.bossDeathTimer > 0) {
       this.bossDeathTimer = Math.max(0, this.bossDeathTimer - dt);
     }
 
-    // Boss HUD bar animation
     if (this.bossAlive) {
       if (this.bossBarAnim < 1) this.bossBarAnim = Math.min(1, this.bossBarAnim + dt * 2.5);
       const boss = enemies.find(e => e.isBoss && !e.dead);
       if (boss) {
-        // Per-frame snapshot of the boss's display identity so the death
-        // telegraph can render the colour-graded titlecard AFTER the boss
-        // has been spliced from `enemies` (the dead-enemy sweep at
-        // line ~1804 runs BEFORE the death-detection block above, so by
-        // the time the telegraph fires the boss instance is gone). Reads
-        // are gated by bossDeathTimer > 0, so the fields are otherwise
-        // unobserved while the boss is alive.
+        // Snapshot colour and name while the boss is alive. The dead-enemy splice runs before death detection, so the instance is gone by the time the telegraph fires.
         this.bossDeathColor = boss.colour;
         this.bossDeathName = BOSS_NAMES[this.bossType] || 'BOSS';
         if (this.bossHpGhost === 0) this.bossHpGhost = boss.hp;
@@ -5135,14 +4607,12 @@ const game = {
         }
       }
     } else if (this.bossBarAnim > 0) {
-      // Fade out after boss death
       this.bossBarAnim = Math.max(0, this.bossBarAnim - dt * 2);
     }
 
-    // ── Challenge room: seal, wave spawn, unseal ─────────────────────────
     if (this.challengeRoom && !this.challengeComplete) {
       const cr = this.challengeRoom;
-      // Seal when player is clearly inside the challenge room (same pattern as boss)
+      // Seal only once the player is off the entrance tile, same as the boss room.
       if (!this.challengeSealed) {
         /**
          * @param {any} e
@@ -5155,13 +4625,12 @@ const game = {
           this.challengeSealed = true;
           this.challengeMaxWaves = Math.min(3, 1 + Math.floor(this.floor / 3));
           this.challengeWave = 0;
-          this.challengeWaveDelay = 0.5; // brief delay before first wave
+          this.challengeWaveDelay = 0.5;
           for (const e of this.challengeEntrances) {
             e.origTile = dungeon.map[e.y][e.x];
             dungeon.map[e.y][e.x] = T.WALL;
           }
           this.refreshSealedEntrances();
-          // Nudge player off sealed tiles
           const ptx = Math.floor(player.x), pty = Math.floor(player.y);
           if (!isPassable(dungeon.map[pty]?.[ptx])) {
             player.x = cr.cx + 0.5; player.y = cr.cy + 0.5;
@@ -5170,13 +4639,11 @@ const game = {
           this.msg('⚠ CHALLENGE ROOM SEALED','#ff6633');
         }
       }
-      // Wave delay countdown + spawn
       if (this.challengeSealed && this.challengeWaveDelay > 0) {
         this.challengeWaveDelay -= dt;
         if (this.challengeWaveDelay <= 0) {
           this.challengeWaveDelay = 0;
           this.challengeWave++;
-          // Spawn wave enemies inside the challenge room
           const d = getDiff();
           const areaCap = Math.floor(cr.w * cr.h / 6);
           let count = Math.min(areaCap, Math.round((3 + this.floor) * d.enemyHp));
@@ -5196,7 +4663,6 @@ const game = {
               type = open.length ? (open[rndInt(0, open.length-1)] || 'GUARD') : 'GUARD';
             }
             typeCounts[type] = (typeCounts[type]||0) + 1;
-            // Spawn away from player
             let ex, ey, attempts = 0;
             do {
               ex = cr.x + rnd(1, cr.w-1);
@@ -5212,7 +4678,6 @@ const game = {
           this.msg('WAVE ' + this.challengeWave + '/' + this.challengeMaxWaves, '#ff9933');
         }
       }
-      // Wave cleared — next wave or victory
       if (this.challengeSealed && this.challengeWaveDelay <= 0 && this.challengeWave > 0) {
         let aliveCount = 0;
         for (const e of enemiesInRoomIter(this.challengeRoom)) {
@@ -5220,7 +4685,6 @@ const game = {
         }
         if (aliveCount === 0) {
           if (this.challengeWave >= this.challengeMaxWaves) {
-            // Challenge complete — unseal and reward
             this.challengeComplete = true;
             this.challengeSealed = false;
             cr.challengeComplete = true;
@@ -5230,37 +4694,33 @@ const game = {
             this.refreshSealedEntrances();
             audio.roomUnseal();
             audio.roomClear();
-            // Rewards
             const d = getDiff();
             const cr2 = Math.round(this.floor * 20 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
             player.credits += cr2;
             player.score += 500 * this.floor;
             player.gainXP(this.floor * 15);
-            // Drop guaranteed items
             for (let j = 0; j < 2; j++) {
               const ix = cr.x + rnd(1, cr.w-1), iy = cr.y + rnd(1, cr.h-1);
               items.push(new Item(ix, iy));
             }
             spawnParticles(cr.cx, cr.cy, 'EXPLOSION', '#ff9933', 25);
             spawnDmgText(cr.cx, cr.cy, '+' + cr2 + '◈', '#ff9933');
-            // UNCHAINED #39: guaranteed 2 cores on challenge survival.
+            // Surviving the challenge always drops 2 cores.
             if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
               NEON.cores.spawnCoreDrop(this, cr.cx, cr.cy, 2);
             }
             this.msg('⚡ CHALLENGE COMPLETE!', '#ff9933');
           } else {
-            // Inter-wave pause
             this.challengeWaveDelay = 2.0;
           }
         }
       }
     }
 
-    // ── Music state resolution (after all seal/unseal logic) ──
+    // Resolve music after seal and unseal so a seal this frame is what plays.
     if (this.bossSealed) music.setState('boss');
     else if (this.challengeSealed) music.setState('tension');
     else {
-      // Check if enemies are alive in the player's current room
       const px = Math.floor(player.x), py = Math.floor(player.y);
       /**
        * @param {any} r
@@ -5302,7 +4762,6 @@ const game = {
     if (jp('Escape')) { audio.menuSelect(); this.setState('PLAYING'); }
     else if (jp('KeyS')) { audio.menuSelect(); this._settingsFrom = 'PAUSED'; this.setState('SETTINGS'); }
     else if (jp('KeyQ')) { audio.menuSelect(); this.setState('MENU'); }
-    // Keyboard up/down selection + Enter
     const pauseActions = _GG_PAUSE_ACTION_STATES;
     if (this._pauseSel == null) this._pauseSel = -1;
     if (jp('MouseLeft')) {
@@ -5323,7 +4782,6 @@ const game = {
       else this.setState(pauseActions[this._pauseSel]);
       return;
     }
-    // Mouse hover detection (highlight nearest option)
     if (!isTouchDevice()) {
       this._pauseSel = this.pauseOptionAt(mouse.x, mouse.y);
     }
@@ -5343,14 +4801,12 @@ const game = {
       if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
       return;
     }
-    // Keyboard: left/right to select, 1/2 for direct pick, 3/Escape to skip
     if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = 0;
     if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = 1;
     if (jp('Digit1')) { pc.selected=0; this.applyPowerupChoice(0); return; }
     if (jp('Digit2')) { pc.selected=1; this.applyPowerupChoice(1); return; }
     if (jp('Digit3') || jp('Escape') || jp('KeyQ')) { this.applyPowerupChoice(-1); return; }
     if (jp('Enter') || jp(km('shoot')))    { this.applyPowerupChoice(pc.selected); return; }
-    // Mouse/touch: check click on cards or skip
     if (jp('MouseLeft')) {
       const box = getPowerupChoiceLayout(layout.compact);
       const mx = mouse.x, my = mouse.y;
@@ -5376,7 +4832,6 @@ const game = {
       opt.fn(this.player);
       audio.menuSelect();
       this.msg('Chose ' + opt.name, opt.colour);
-      // Telemetry: upgrade pick
       if (typeof NEON !== 'undefined' && NEON.telemetry) {
         /**
          * @param {any} _
@@ -5396,7 +4851,6 @@ const game = {
       }
     }
     this.powerupChoice = null;
-    // Check for queued perk choices before returning to PLAYING
     if (this.pendingPerkChoices.length) { this.openNextPerkChoice(); return; }
     this.setState('PLAYING');
   },
@@ -5506,10 +4960,9 @@ const game = {
     this.setState('PLAYING');
   },
 
-  // ─── Perk Choice (choose-one-of-three on level up) ─────────────────────
   openNextPerkChoice() {
     if (!this.pendingPerkChoices.length) { this.setState('PLAYING'); return; }
-    this.pendingPerkChoices.shift(); // consume the milestone
+    this.pendingPerkChoices.shift();
     const opts = rollPerkChoices(this.player, 3);
     if (!opts.length) { this.setState('PLAYING'); return; } // all perks owned
     this.perkChoice = { options: opts, selected: 0, _arm: 0.4 };
@@ -5535,7 +4988,6 @@ const game = {
     if (jp(ALT_KEYS.left) || jp(km('left')))  pc.selected = Math.max(0, pc.selected - 1);
     if (jp(ALT_KEYS.right)|| jp(km('right')))  pc.selected = Math.min(pc.options.length - 1, pc.selected + 1);
     if (jp('Enter') || jp(km('shoot')))     { this.applyPerkChoice(pc.selected); return; }
-    // Mouse/touch
     if (jp('MouseLeft')) {
       const narrow = layout.compact;
       const count = pc.options.length;
@@ -5569,7 +5021,6 @@ const game = {
     this.setState('PLAYING');
   },
 
-  // ─── Augment Choice ──────────────────────────────────────────────────────
   /**
    * @param {any} options
    */
@@ -5635,10 +5086,8 @@ const game = {
     if (!ac) return;
     const narrow = layout.compact;
     ctx.save();
-    // Dimmed overlay
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(0, 0, W, H);
-    // Title
     const titleFs = narrow ? 18 : 24;
     ctx.font = 'bold ' + titleFs + 'px monospace';
     ctx.textAlign = 'center';
@@ -5647,11 +5096,9 @@ const game = {
     const slots = Object.keys(this.player.augments).length;
     ctx.fillText('CHOOSE AUGMENT (' + slots + '/' + MAX_AUGMENTS + ')', W / 2, H * 0.14);
     ctx.shadowBlur = 0;
-    // Subtitle
     ctx.font = (narrow ? 10 : 12) + 'px monospace';
     ctx.fillStyle = '#8866aa';
     ctx.fillText('Cybernetic implant — permanent passive effect', W / 2, H * 0.14 + titleFs + 4);
-    // Cards
     const count = ac.options.length;
     const cw = narrow ? Math.min(180, (W - 20) / count - 8) : Math.min(240, (W - 40) / count - 12);
     const gap = narrow ? 10 : 16;
@@ -5664,7 +5111,6 @@ const game = {
       const aug = AUGMENTS[id];
       const cx = startX + i * (cw + gap);
       const sel = i === ac.selected;
-      // Card background
       ctx.fillStyle = sel ? '#1a0a2a' : '#0d0615';
       ctx.strokeStyle = sel ? aug.colour : '#442266';
       ctx.lineWidth = sel ? 2 : 1;
@@ -5675,18 +5121,15 @@ const game = {
         ctx.strokeRect(cx, cardY, cw, cardH);
         ctx.shadowBlur = 0;
       }
-      // Icon
       const iconFs = narrow ? 28 : 36;
       ctx.font = iconFs + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = aug.colour;
       ctx.fillText(aug.icon, cx + cw / 2, cardY + (narrow ? 35 : 45));
-      // Name
       const nameFs = narrow ? 11 : 13;
       ctx.font = 'bold ' + nameFs + 'px monospace';
       ctx.fillStyle = aug.colour;
       ctx.fillText(aug.name, cx + cw / 2, cardY + (narrow ? 58 : 72));
-      // Description — word wrap
       ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#ccbbdd';
       const words = aug.desc.split(' ');
@@ -5701,7 +5144,6 @@ const game = {
         } else { line = test; }
       }
       if (line) ctx.fillText(line, cx + cw / 2, lineY);
-      // Key hint
       ctx.font = (narrow ? 9 : 10) + 'px monospace';
       ctx.fillStyle = sel ? '#ffffff' : '#665588';
       ctx.fillText('[' + (i + 1) + ']', cx + cw / 2, cardY + cardH - (narrow ? 8 : 12));
@@ -5709,7 +5151,6 @@ const game = {
     ctx.restore();
   },
 
-  // ─── Event Choice ────────────────────────────────────────────────────────
   updateEventChoice() {
     const ec = this.eventChoice;
     if (!ec) { this.setState('PLAYING'); return; }
@@ -5773,10 +5214,8 @@ const game = {
     const ev = ec.event;
     const narrow = layout.compact;
     ctx.save();
-    // Dimmed overlay
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, W, H);
-    // Event icon + name
     const titleFs = narrow ? 16 : 22;
     ctx.font = 'bold ' + titleFs + 'px monospace';
     ctx.textAlign = 'center';
@@ -5784,7 +5223,6 @@ const game = {
     ctx.fillStyle = ev.colour;
     ctx.fillText(ev.icon + ' ' + ev.name.toUpperCase(), W / 2, H * 0.10);
     ctx.shadowBlur = 0;
-    // Event description — word wrap
     ctx.font = (narrow ? 10 : 12) + 'px monospace';
     ctx.fillStyle = '#aaccbb';
     const descWords = ev.desc.split(' ');
@@ -5799,7 +5237,6 @@ const game = {
       } else { dLine = test; }
     }
     if (dLine) ctx.fillText(dLine, W / 2, dY);
-    // Choice cards
     const cw = narrow ? Math.min(200, (W - 20) / 2 - 8) : Math.min(260, (W - 40) / 2 - 12);
     const gap = narrow ? 10 : 16;
     const totalW = cw * 2 + gap;
@@ -5811,7 +5248,6 @@ const game = {
       const ch = choices[i];
       const cx = startX + i * (cw + gap);
       const sel = i === ec.selected;
-      // Card background
       ctx.fillStyle = sel ? '#0a1a1a' : '#060f0f';
       ctx.strokeStyle = sel ? ev.colour : '#224444';
       ctx.lineWidth = sel ? 2 : 1;
@@ -5822,13 +5258,11 @@ const game = {
         ctx.strokeRect(cx, cardY, cw, cardH);
         ctx.shadowBlur = 0;
       }
-      // Choice label
       const labelFs = narrow ? 13 : 16;
       ctx.font = 'bold ' + labelFs + 'px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = sel ? ev.colour : '#88bbaa';
       ctx.fillText(ch.label, cx + cw / 2, cardY + (narrow ? 22 : 28));
-      // Choice description — word wrap
       ctx.font = (narrow ? 11 : 11) + 'px monospace';
       ctx.fillStyle = '#99bbaa';
       const cWords = ch.desc.split(' ');
@@ -5843,11 +5277,9 @@ const game = {
         } else { cLine = test; }
       }
       if (cLine) ctx.fillText(cLine, cx + cw / 2, cY);
-      // Summary tag
       ctx.font = 'bold ' + (narrow ? 9 : 10) + 'px monospace';
       ctx.fillStyle = sel ? '#ffffff' : '#557766';
       ctx.fillText(ch.summary, cx + cw / 2, cardY + cardH - (narrow ? 24 : 30));
-      // Key hint
       ctx.font = (narrow ? 9 : 10) + 'px monospace';
       ctx.fillStyle = sel ? '#ffffff' : '#446655';
       ctx.fillText('[' + (i + 1) + ']', cx + cw / 2, cardY + cardH - (narrow ? 8 : 12));
@@ -5867,7 +5299,6 @@ const game = {
     ctx.restore();
   },
 
-  // ─── Vendor Shop ─────────────────────────────────────────────────────────
   updateShopping() {
     const room = this.shopRoom;
     if (!room || !room.shopItems) { this.setState('PLAYING'); return; }
@@ -5878,27 +5309,23 @@ const game = {
      */
     if (this.shopClosing || items.every((/** @type {any} */ i) => i.sold)) return;
 
-    // Keyboard navigation
     if (jp('Escape') || jp('KeyQ')) { audio.menuSelect(); this.setState('PLAYING'); return; }
     if (jp(ALT_KEYS.left) || jp(km('left')))  this.shopSelected = Math.max(0, this.shopSelected - 1);
     if (jp(ALT_KEYS.right)|| jp(km('right')))  this.shopSelected = Math.min(2, this.shopSelected + 1);
     if (layout.compact && (jp(ALT_KEYS.up) || jp(km('up')))) this.shopSelected = Math.max(0, this.shopSelected - 1);
     if (layout.compact && (jp(ALT_KEYS.down) || jp(km('down')))) this.shopSelected = Math.min(2, this.shopSelected + 1);
 
-    // Direct buy by number
     for (let i = 0; i < 3; i++) {
       if (jp('Digit' + (i + 1)) && !items[i].sold) {
         this.tryShopBuy(i);
         return;
       }
     }
-    // Enter on selected
     if (jp('Enter') || jp(km('shoot'))) {
       if (!items[this.shopSelected].sold) this.tryShopBuy(this.shopSelected);
       return;
     }
 
-    // Mouse/touch click on cards or leave button
     if (jp('MouseLeft')) {
       const box = getShoppingLayout(layout.compact);
       const mx = mouse.x, my = mouse.y;
@@ -5941,7 +5368,6 @@ const game = {
     audio.purchase();
     this.msg('Bought ' + item.name, item.colour);
     spawnParticles(this.player.x, this.player.y, 'SPARK', item.colour, 8);
-    // Advance cursor to next unsold slot
     const items = this.shopRoom.shopItems;
     /**
      * @param {any} it
@@ -5953,7 +5379,6 @@ const game = {
      */
     const prevUnsold = items.findIndex((/** @type {any} */ it) => !it.sold);
     this.shopSelected = nextUnsold >= 0 ? nextUnsold : (prevUnsold >= 0 ? prevUnsold : idx);
-    // If all sold, auto-leave after brief delay
     /**
      * @param {any} i
      */
@@ -6229,7 +5654,6 @@ const game = {
    */
   updateFade(dt) {
     this.fadeTime+=dt;
-    // Refresh glitch bars every ~100ms
     this.fadeGlitchTimer-=dt;
     if (this.fadeGlitchTimer<=0) {
       this.fadeGlitchTimer=0.1;
@@ -6258,7 +5682,6 @@ const game = {
         }
       }
     } else if (this.fadeDir===2) {
-      // Hold at peak for 150ms
       this.fadeHold+=dt;
       if (this.fadeHold>=0.15) this.fadeDir=-1;
     } else if (this.fadeDir===-1) {
@@ -6270,7 +5693,6 @@ const game = {
     }
   },
 
-  // ─── Virtual Keyboard Layout ──────────────────────────────────────────────
   _vkChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'.split(''),
   _vkCols: 10,
 
@@ -6305,7 +5727,6 @@ const game = {
     for (let i=0;i<allKeys.length;i++) {
       const col=i%cols, row=Math.floor(i/cols);
       const kx=ox+col*(cellW+gap), ky=oy+row*(cellH+gap);
-      // OK key is double-wide
       const kw=allKeys[i]==='OK'?(cellW*2+gap):cellW;
       if (cx>=kx&&cx<=kx+kw&&cy>=ky&&cy<=ky+cellH) return allKeys[i];
     }
@@ -6320,13 +5741,11 @@ const game = {
     if (!ne) return;
     ne.cursorBlink=(ne.cursorBlink||0)+dt;
 
-    // Desktop keyboard input
     for (const ch of typedChars) {
       if (/^[A-Za-z0-9 \-_]$/.test(ch) && ne.name.length<12) ne.name+=ch.toUpperCase();
     }
     if (jp('Backspace')) ne.name=ne.name.slice(0,-1);
 
-    // Touch/click virtual keyboard
     if (nameEntryTap) {
       const narrow=layout.compact;
       const {oy}=this._vkLayout(narrow);
@@ -6335,7 +5754,6 @@ const game = {
       else if (hit==='OK') { if (ne.name.length===0) ne.name='ANON'; jp('Enter'); justPressed.add('Enter'); }
       else if (hit && ne.name.length<12) ne.name+=hit;
     }
-    // Mouse click on virtual keyboard (desktop)
     if (jp('MouseLeft') && !nameEntryTap) {
       const narrow=layout.compact;
       const {oy}=this._vkLayout(narrow);
@@ -6345,7 +5763,6 @@ const game = {
       else if (hit && ne.name.length<12) ne.name+=hit;
     }
 
-    // Confirm (Enter on keyboard or OK on virtual keyboard)
     if (jp('Enter')) {
       if (ne.name.length===0) ne.name='ANON';
       audio.menuSelect();
@@ -6366,17 +5783,14 @@ const game = {
     ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
 
-    // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700'; ctx.font=`bold ${narrow?28:40}px monospace`;
     ctx.fillText(ne.victory && this._lastEnding === ACT1_MESSAGE_ENDING_ID ? 'SIGN THE SESSION LOG' : 'HIGH SCORE!',W/2,narrow?60:80);
 
-    // Rank + score
     ctx.shadowBlur=0;
     ctx.fillStyle='#aaaacc'; ctx.font=`${narrow?14:18}px monospace`;
     ctx.fillText(`Rank #${ne.rank+1}  •  Score: ${this.player.score}  •  Floor: ${this.floor}`,W/2,narrow?95:125);
 
-    // Name input field
     const fieldY=narrow?130:170;
     ctx.fillStyle='#555577'; ctx.font=`${narrow?12:14}px monospace`;
     ctx.fillText('ENTER YOUR NAME',W/2,fieldY);
@@ -6387,7 +5801,6 @@ const game = {
     ctx.fillText(nameDisplay,W/2,fieldY+(narrow?30:40));
     ctx.shadowBlur=0;
 
-    // Virtual keyboard
     const {cellW,cellH,gap,cols,ox,oy,hintY}=this._vkLayout(narrow);
     const allKeys=[...this._vkChars,'←','OK'];
     const fontSize=narrow?12:14;
@@ -6400,7 +5813,6 @@ const game = {
       const isDel=key==='←';
       const kw=isOK?(cellW*2+gap):cellW;
 
-      // Hover highlight
       let hover=false;
       if (nameEntryTap) {
         const [tx,ty]=nameEntryTap;
@@ -6409,18 +5821,15 @@ const game = {
         hover=true;
       }
 
-      // Key background
       ctx.fillStyle=hover?(isOK?'#39ff14':isDel?'#ff3333':'#00f5ff'):'rgba(255,255,255,0.08)';
       ctx.globalAlpha=hover?0.3:1;
       ctx.fillRect(kx,ky,kw,cellH);
       ctx.globalAlpha=1;
 
-      // Key border
       ctx.strokeStyle=isOK?'#39ff14':isDel?'#ff3333':'#555577';
       ctx.lineWidth=1;
       ctx.strokeRect(kx,ky,kw,cellH);
 
-      // Key label
       ctx.fillStyle=isOK?'#39ff14':isDel?'#ff3333':'#aaaacc';
       ctx.font=`${isOK?'bold ':''}${fontSize}px monospace`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -6428,7 +5837,6 @@ const game = {
     }
     ctx.textBaseline='alphabetic';
 
-    // Hint
     ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow?10:12}px monospace`;
     if (isTouch) {
@@ -6569,18 +5977,11 @@ const game = {
     }
   },
 
-  // ─── Settings ────────────────────────────────────────────────────────────────
   _settingsFrom: 'MENU',
   _settingsSel: 0,
   _settingsCapture: null,  // action name being rebound, or null
   _settingsDrag: null,     // 'sfx' or 'music' while dragging a slider
-  // Two-tap confirmation for [RESET TO DEFAULTS]. First Enter/click on
-  // the row arms the timestamp (performance.now()); a second
-  // Enter/click within RESET_CONFIRM_WINDOW_MS commits the reset. Any
-  // other action — navigating to a different row, clicking elsewhere,
-  // pressing Escape, or just letting the window expire — clears it.
-  // Prevents a single fat-finger from wiping all keybinds + toggles
-  // (which `settings.resetAll()` does irreversibly).
+  // First Enter or click arms a timestamp; a second one inside the window commits. Any other action or expiry cancels. resetAll is irreversible.
   _settingsResetConfirm: 0,
 
   /**
@@ -6588,19 +5989,17 @@ const game = {
    * updateSettings (hit-testing) and renderSettings (drawing). The
    * row height SHRINKS dynamically to fit `totalRows` inside the
    * current viewport `H` so the back / reset rows don't fall off-
-   * screen on common 720-logical-pixel landscape windows. Capped at
-   * the historical defaults (28 narrow / 34 wide) so taller windows
-   * keep the legacy spacing.
+   * screen on common 720-logical-pixel landscape windows. Capped at 28 (narrow) / 34 (wide) so taller windows do not stretch the rows.
    *
    * @param {number} totalRows
    * @returns {{ startY:number, rowH:number }}
    */
   _settingsLayout(totalRows) {
     const narrow = layout.compact;
-    const startY = narrow ? 80 : 80;        // narrow: unchanged; wide: was 100, reduced for row count
+    const startY = narrow ? 80 : 80; // Wide uses 80 too, so the extra rows fit.
     const desiredRowH = narrow ? 28 : 34;
     const navHintMargin = 30;               // bottom hint sits at H - 20 + 10 padding
-    const span = Math.max(1, totalRows - 1); // last row index = totalRows - 1
+    const span = Math.max(1, totalRows - 1);
     const fitRowH = Math.floor((H - startY - navHintMargin) / span);
     const rowH = Math.max(16, Math.min(desiredRowH, fitRowH));
     return { startY, rowH };
@@ -6695,17 +6094,13 @@ const game = {
 
   updateSettings() {
     const actions = Object.keys(DEFAULT_KEY_MAP);
-    const TOGGLE_START = 2;   // row index where toggles begin
-    const STEPPER_START = 8;  // row index where scale steppers begin (after 6 toggles)
+    const TOGGLE_START = 2;
+    const STEPPER_START = 8; // after 6 toggles
     const STEPPER_COUNT = 3;  // MINIMAP SIZE + TEXT SIZE + WORLD ZOOM
-    const CTRL_START = STEPPER_START + STEPPER_COUNT;  // row index where key rebind rows begin
+    const CTRL_START = STEPPER_START + STEPPER_COUNT; // key rebind rows
     // Total items: 2 sliders + 6 toggles + 3 steppers + N rebind rows + 1 reset row + 1 back row
     const totalRows = CTRL_START + actions.length + 2;
-    // Compute the row metrics once. The dynamic rowH shrinks the menu
-    // to fit the current viewport H (capped at the desired default), so
-    // the back/reset rows don't fall off-screen on common 720-logical-px
-    // landscape windows after the layout grew past 21 rows. See
-    // game._settingsLayout for the formula.
+    // rowH shrinks to fit the viewport (between 16 and the default), so back and reset stay on screen unless even 16px rows do not fit. Formula is _settingsLayout.
     const layoutM = this._settingsLayout(totalRows);
     const startY = layoutM.startY;
     const rowH = layoutM.rowH;
@@ -6717,14 +6112,13 @@ const game = {
       this._settingsResetConfirm = 0;
     }
 
-    // Key capture mode — wait for next keydown
     if (this._settingsCapture) {
       // On touch devices, tap (MouseLeft) cancels capture since there's no keyboard
       if (isTouchDevice() && justPressed.has('MouseLeft')) { this._settingsCapture = null; return; }
       for (const code of justPressed) {
         if (code === 'Escape') { this._settingsCapture = null; return; }
-        if (code === 'MouseLeft') continue;   // ignore mouse click during capture
-        if (RESERVED_KEYS.has(code)) continue; // reserved keys can't be bound
+        if (code === 'MouseLeft') continue;
+        if (RESERVED_KEYS.has(code)) continue;
         // Swap: if another action already uses this code, swap them
         const curAction = this._settingsCapture;
         if (!curAction) return;
@@ -6744,7 +6138,6 @@ const game = {
       return;
     }
 
-    // Slider dragging
     if (this._settingsDrag && mouse.down) {
       const track = this._settingsSliderTrack();
       let val = track.w > 0 ? (mouse.x - track.x) / track.w : 0;
@@ -6765,7 +6158,6 @@ const game = {
 
     const sel = this._settingsSel;
 
-    // Left/right on volume sliders
     if (sel < TOGGLE_START) {
       const step = 0.05;
       if (jp(ALT_KEYS.left) || jp(km('left'))) {
@@ -6780,7 +6172,6 @@ const game = {
       }
     }
 
-    // Left/right or Enter toggles display options
     const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
     if (sel >= TOGGLE_START && sel < STEPPER_START) {
       if (jp(ALT_KEYS.left) || jp(km('left')) || jp(ALT_KEYS.right) || jp(km('right')) || jp('Enter') || jp(km('shoot'))) {
@@ -6795,11 +6186,7 @@ const game = {
       }
     }
 
-    // Left/right or Enter cycles scale steppers (MINIMAP SIZE / TEXT SIZE / WORLD ZOOM).
-    // Steppers walk through a discrete value list in `MINIMAP_SCALE_STEPS`,
-    // `TEXT_SCALE_STEPS`, and `WORLD_ZOOM_STEPS` (defined in platform.js);
-    // right wraps to start, left wraps to end, Enter advances forward
-    // (matches toggles UX).
+    // Steppers walk MINIMAP_SCALE_STEPS, TEXT_SCALE_STEPS, and WORLD_ZOOM_STEPS in platform.js. Right and Enter wrap forward, left wraps back.
     /** @type {Array<{ key:'minimapScale'|'textScale'|'worldZoom', steps:number[] }>} */
     const stepperRows = [
       { key: 'minimapScale', steps: MINIMAP_SCALE_STEPS },
@@ -6817,14 +6204,7 @@ const game = {
           s[row.key] = row.steps[(safe - 1 + row.steps.length) % row.steps.length];
           if (row.key === 'minimapScale') _RG._minimapDirty = true;
           settings.save();
-          // worldZoom is the global UI scale — changing it must re-fire
-          // resize() so the logical W/H = rawW/H / worldZoom invariant
-          // holds for the next frame (without it the menu/HUD layout
-          // would lag a frame behind the new pointer normalization,
-          // producing a visible jump). updateBtns refreshes the touch
-          // button positions for the new W. minimapDirty mirrors the
-          // existing dirty flag so the cached minimap re-renders at
-          // the new scale.
+          // worldZoom is the global UI scale. resize() must run now so logical W/H match the new zoom before the next frame; otherwise pointer and layout jump. updateBtns repositions touch controls. Mark the minimap dirty so it redraws at the new scale.
           if (row.key === 'worldZoom') {
             resize(); updateBtns(); _RG._minimapDirty = true;
           }
@@ -6841,12 +6221,8 @@ const game = {
       }
     }
 
-    // Mouse click hit-testing
     if (jp('MouseLeft')) {
-      // Use the SAME dynamic row metrics as renderSettings — declared
-      // at the top of updateSettings (startY/rowH locals). Re-computing
-      // here would risk silent drift if one path is updated and the
-      // other isn't.
+      // Hit-testing must use the startY/rowH computed at the top of updateSettings. A second call can drift from what renderSettings drew.
       const track = this._settingsSliderTrack();
       const mx = mouse.x, my = mouse.y;
 
@@ -6873,7 +6249,6 @@ const game = {
           return;
         }
       }
-      // Toggle rows click
       for (let i = 0; i < toggleKeys.length; i++) {
         const ry = startY + (TOGGLE_START + i) * rowH;
         if (this._settingsControlHit(ry, rowH, mx, my)) {
@@ -6890,8 +6265,7 @@ const game = {
           return;
         }
       }
-      // Stepper rows click — left half steps backward, right half steps
-      // forward. Mirrors the keyboard ◀/▶ semantics (with Enter = forward).
+      // Left half steps backward, right half forward, matching the keyboard arrows.
       for (let i = 0; i < stepperRows.length; i++) {
         const ry = startY + (STEPPER_START + i) * rowH;
         if (this._settingsControlHit(ry, rowH, mx, my)) {
@@ -6908,10 +6282,7 @@ const game = {
             s[row.key] = row.steps[next];
             if (row.key === 'minimapScale') _RG._minimapDirty = true;
             settings.save();
-            // Same resize/updateBtns refresh as the keyboard path —
-            // worldZoom is the global UI scale and must re-fire
-            // resize() so logical W/H tracks the new value before the
-            // next frame.
+            // Same as the keyboard path: worldZoom changes logical W/H, so resize() has to run before the next frame.
             if (row.key === 'worldZoom') {
               resize(); updateBtns(); _RG._minimapDirty = true;
             }
@@ -6920,7 +6291,6 @@ const game = {
           return;
         }
       }
-      // Rebind rows click
       for (let i = 0; i < actions.length; i++) {
         const ry = startY + (CTRL_START + i) * rowH;
         if (this._settingsControlHit(ry, rowH, mx, my)) {
@@ -6931,9 +6301,7 @@ const game = {
           return;
         }
       }
-      // Reset defaults row — two-tap confirmation. First click within
-      // the window arms; second click commits. Click anywhere else or
-      // wait the window out → cancelled.
+      // First click arms, second click inside the window commits. A click elsewhere or a timeout cancels.
       const resetY = startY + (CTRL_START + actions.length) * rowH;
       if (this._settingsControlHit(resetY, rowH, mx, my)) {
         this._settingsSel = CTRL_START + actions.length;
@@ -6942,10 +6310,7 @@ const game = {
           settings.resetAll();
           audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
           this._settingsResetConfirm = 0;
-          // resetAll may have flipped worldZoom (mobile-aware default
-          // is 1.5× in compact viewports) — re-fire resize() so the
-          // logical W/H invariant tracks the new value before the
-          // next frame.
+          // resetAll can change worldZoom (compact default is 1.5x). resize() must run so logical W/H match before the next frame.
           resize(); updateBtns(); _RG._minimapDirty = true;
         } else {
           this._settingsResetConfirm = performance.now();
@@ -6953,7 +6318,6 @@ const game = {
         audio.menuSelect();
         return;
       }
-      // Back row
       const backY = startY + (CTRL_START + actions.length + 1) * rowH;
       if (this._settingsControlHit(backY, rowH, mx, my)) {
         this._settingsResetConfirm = 0;
@@ -6966,7 +6330,6 @@ const game = {
       this._settingsResetConfirm = 0;
     }
 
-    // Enter on selected row (toggles handled above)
     if (jp('Enter') || jp(km('shoot'))) {
       if (sel >= CTRL_START && sel < CTRL_START + actions.length) {
         this._settingsResetConfirm = 0;
@@ -6979,8 +6342,7 @@ const game = {
           settings.resetAll();
           audio.setSfxVolume(1.0); audio.setMusicVolume(1.0);
           this._settingsResetConfirm = 0;
-          // resetAll may have flipped worldZoom (mobile-aware default)
-          // — re-fire resize() so logical W/H tracks the new value.
+          // resetAll can change worldZoom (compact default is 1.5x). resize() must run so logical W/H match before the next frame.
           resize(); updateBtns(); _RG._minimapDirty = true;
         } else {
           this._settingsResetConfirm = performance.now();
@@ -6993,7 +6355,6 @@ const game = {
       }
     }
 
-    // Escape goes back
     if (jp('Escape') || jp('KeyQ')) {
       this._settingsResetConfirm = 0;
       audio.menuSelect();
@@ -7020,7 +6381,6 @@ const game = {
     const sliderW = sliderTrack.w;
     const sel = this._settingsSel;
 
-    // Title
     ctx.save();
     ctx.textAlign = 'center';
     ctx.shadowBlur = 20; ctx.shadowColor = '#00f5ff';
@@ -7031,7 +6391,6 @@ const game = {
     ctx.save();
     ctx.font = `${fs}px monospace`;
 
-    // ── Audio section ──
     const volLabels = ['SFX VOLUME', 'MUSIC VOLUME'];
     const volVals = [settings.sfxVol, settings.musicVol];
     for (let i = 0; i < 2; i++) {
@@ -7041,11 +6400,9 @@ const game = {
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.textAlign = 'left';
       ctx.fillText(volLabels[i] || '', labelX, ry);
-      // Slider track
       const trackY = ry - 4;
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
       ctx.fillRect(sliderX, trackY, sliderW, 10);
-      // Slider fill
       const fillW = sliderW * (volVals[i] ?? 0);
       ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
       ctx.fillRect(sliderX, trackY, fillW, 10);
@@ -7053,13 +6410,11 @@ const game = {
       // tappable strip and clear of the next row's card when rows are short.
       ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
       ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 12);
-      // Percentage
       ctx.textAlign = 'right';
       ctx.fillStyle = isSel ? '#00f5ff' : '#888899';
       ctx.fillText(`${Math.round((volVals[i] ?? 0) * 100)}%`, sliderX + sliderW + (narrow ? 40 : 60), ry);
     }
 
-    // ── Display section ──
     const toggleLabels = ['SCREEN SHAKE', 'DAMAGE NUMBERS', 'LOCK AIM TO MOVE', 'AIM ASSIST', 'CRT MODE', 'REDUCED MOTION'];
     const toggleKeys = ['screenShake', 'damageNumbers', 'lockAimToMove', 'aimAssist', 'crtMode', 'reducedMotion'];
     for (let i = 0; i < toggleLabels.length; i++) {
@@ -7076,10 +6431,7 @@ const game = {
       ctx.fillText(on ? '◀ ON ▶' : '◀ OFF ▶', W/2, ry);
     }
 
-    // ── Scale steppers (MINIMAP SIZE + TEXT SIZE + WORLD ZOOM) ──
-    // Discrete-value rows rendered identically to toggles, but the centre
-    // shows the numeric multiplier (e.g. "◀ 1.00× ▶") instead of ON/OFF.
-    // The keyboard ◀/▶ + Enter handling lives in updateSettings.
+    // Discrete steppers, drawn like toggles, but the centre is the multiplier rather than ON/OFF. Keyboard handling is in updateSettings.
     const stepperLabels = ['MINIMAP SIZE', 'TEXT SIZE', 'WORLD ZOOM'];
     const stepperKeys = ['minimapScale', 'textScale', 'worldZoom'];
     for (let i = 0; i < stepperLabels.length; i++) {
@@ -7096,7 +6448,6 @@ const game = {
       ctx.fillText(`◀ ${Number(v).toFixed(2)}× ▶`, W/2, ry);
     }
 
-    // ── Controls section ──
     const sectionY = startY + CTRL_START * rowH - Math.max(14, Math.floor(rowH * 0.7));
     ctx.fillStyle = '#555577'; ctx.textAlign = 'left';
     ctx.font = `bold ${narrow ? 11 : 13}px monospace`;
@@ -7123,7 +6474,6 @@ const game = {
       } else {
         ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
         ctx.fillText(KEY_DISPLAY(settings.keyMap[a]), W/2, ry);
-        // Show default if different
         if (settings.keyMap[a] !== DEFAULT_KEY_MAP[a]) {
           ctx.fillStyle = '#555577'; ctx.font = `${narrow ? 11 : 11}px monospace`;
           ctx.fillText(`(default: ${KEY_DISPLAY(DEFAULT_KEY_MAP[a])})`, W/2 + (narrow ? 60 : 80), ry);
@@ -7132,9 +6482,7 @@ const game = {
       }
     }
 
-    // Reset defaults row — when armed, switches to a red blinking
-    // "PRESS AGAIN TO CONFIRM" label so the player has unmistakable
-    // feedback that another tap will wipe their config.
+    // While armed, the label switches to a red blinking confirm so a second tap is obviously destructive.
     const resetIdx = CTRL_START + actions.length;
     const resetY = startY + resetIdx * rowH;
     ctx.textAlign = 'center';
@@ -7153,7 +6501,6 @@ const game = {
       ctx.fillText('[ RESET TO DEFAULTS ]', W/2, resetY);
     }
 
-    // Back row
     const backIdx = resetIdx + 1;
     const backY = startY + backIdx * rowH;
     this._drawSettingsControl(backY, rowH, sel === backIdx, '#00f5ff');
@@ -7162,7 +6509,6 @@ const game = {
 
     ctx.restore();
 
-    // Navigation hint
     ctx.save(); ctx.textAlign = 'center';
     ctx.fillStyle = '#444466'; ctx.font = `${narrow ? 11 : 11}px monospace`;
     if (isTouchDevice()) {
@@ -7243,30 +6589,13 @@ const game = {
   },
 
   render() {
-    // Global UI scale wrap (browser-CTRL-+ analog). Every renderable
-    // state — MENU, PLAYING, HUB, SETTINGS, all overlays — runs
-    // INSIDE this single ctx.scale(zoom, zoom) block. The smaller
-    // logical W×H (set by resize() as `rawW / worldZoom`) draws into
-    // the full canvas backing because of this wrap. textScale stacks
-    // multiplicatively (it already multiplies the base font px before
-    // we draw, so on screen the user sees baseSize*textScale*zoom).
-    // Gated on `_uiZoom !== 1` because ctx.save+scale+restore at 1.0
-    // is wasteful in the hot path AND `1.0` is the default for desktop
-    // users who never touch the setting. Strict `!==` (not `!=`) so a
-    // string-coerced regression (settings.worldZoom = "1" via
-    // corrupted localStorage) takes the no-op branch consistently
-    // with the input-normalization sites — never a half-on/half-off
-    // state where rendering and aim disagree.
+    // Every state draws inside this one ctx.scale(zoom). Logical W/H is raw/worldZoom, so the scale fills the backing canvas. textScale is already in the font px, so it stacks with zoom.
+    // Skip the save/scale/restore when zoom is 1: it is the hot path, and a strict !== also treats a string "1" from bad storage as the no-op so render and aim cannot disagree.
     const _uiZoom = (settings && settings.worldZoom) || 1;
     const _uiScaled = _uiZoom !== 1;
     if (_uiScaled) { ctx.save(); ctx.scale(_uiZoom, _uiZoom); }
 
-    // try/finally so the global ctx.scale wrap can NEVER leak — the
-    // main loop catches render exceptions and continues (see
-    // engine/render-boundary.js), so without finally a thrown
-    // renderer would leave the canvas state stack scaled and the
-    // next frame's wrap would compound atop the leaked transform
-    // (drawErrorOverlay also draws under the leaked transform).
+    // finally is required. The render boundary catches and continues, so a throw without finally would leave the canvas scaled and the next frame would compound it.
     try {
       ctx.fillStyle='#0a0a12';
       ctx.fillRect(0,0,W,H);
@@ -7503,7 +6832,6 @@ const game = {
   },
 
   renderMenu() {
-    // bg particles
     for (const p of (this.menuParticles||[])) {
       ctx.save(); ctx.globalAlpha=p.life*0.6;
       ctx.fillStyle=p.col; ctx.fillRect(p.x,p.y,2,2);
@@ -7514,13 +6842,11 @@ const game = {
     const isTouch = isTouchDevice();
     const narrow = layout.compact;
     const titleFs = narrow ? 56 : 72;
-    // grid lines
     ctx.save(); ctx.globalAlpha=0.05; ctx.strokeStyle='#00f5ff';
     for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
     for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.restore();
 
-    // title — scale for portrait
     const ty1 = narrow ? 120 : 160;
     const ty2 = ty1 + titleFs * 0.95;
     ctx.save();
@@ -7541,7 +6867,6 @@ const game = {
     ctx.fillText('OBSERVER CHANNEL: SILENT  //  MEMORY WIPE: RESIDUAL', W/2, ty2 + (narrow ? 51 : 54));
     ctx.restore();
 
-    // Menu options — array-driven
     const startY = ty2 + 80;
     const gap = isTouch ? (narrow ? 48 : 36) : (narrow ? 24 : 28);
     const fs = isTouch ? (narrow ? 22 : 22) : (narrow ? 15 : 18);
@@ -7556,7 +6881,6 @@ const game = {
       ctx.fillText(`▶  ${opts[i].label}`, W/2, startY + i * gap);
     }
     ctx.shadowBlur=0;
-    // Navigation hint (context-sensitive for difficulty row)
     ctx.fillStyle='#444466'; ctx.font=`${narrow?9:11}px monospace`;
     const diffHint = opts[sel]?.isDiffRow;
     if (isTouch) {
@@ -7564,7 +6888,6 @@ const game = {
     } else {
       ctx.fillText(diffHint ? '◀▶ change difficulty · Enter to start' : '↑↓ to select, Enter to confirm', W/2, startY + opts.length * gap + 8);
     }
-    // Locked difficulty message (shown when trying to start a locked difficulty)
     if (this._menuMsg && this._menuMsg.life > 0) {
       const mm = this._menuMsg;
       ctx.globalAlpha = Math.min(1, mm.life);
@@ -7575,7 +6898,6 @@ const game = {
     }
     ctx.restore();
 
-    // controls hint
     const hintY = startY + opts.length * gap + (narrow?24:32);
     ctx.save(); ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow ? 13 : 12}px monospace`;
@@ -7593,13 +6915,10 @@ const game = {
     }
     ctx.restore();
 
-    // high scores
     const scoresY = hintY + 50;
     this.renderLeaderboard(scoresY, narrow ? 3 : 5, -1);
 
-    // UNCHAINED #42 — ending-unlock markers. Drawn after leaderboard so they
-    // don't fight the title layout. "FREED" is a persistent watermark; NG+
-    // is a discrete badge under the subtitle.
+    // Drawn after the leaderboard so they do not fight the title. FREED is a watermark; NG+ is a badge under the subtitle.
     {
       const m = loadMeta();
       const freed  = Array.isArray(m.endingsUnlocked) && m.endingsUnlocked.includes('unchained');
@@ -7650,8 +6969,7 @@ const game = {
     if (appVersion) ctx.fillText('v' + appVersion, W - (narrow ? 10 : 16), H - (narrow ? 10 : 14));
     ctx.restore();
 
-    // UNCHAINED: "Keep persistent unlocks?" confirm overlay.
-    // Drawn last so it sits on top of every other menu layer.
+    // Drawn last so it sits above every other menu layer.
     if (this._newGameConfirm) {
       const c = this._newGameConfirm;
       ctx.save();
@@ -7694,19 +7012,12 @@ const game = {
     const player=this.player;
     const dungeon=this.dungeon;
     const cam=getCamera(player);
-    // Shake offsets — produced by triggerShake() in canvas-px magnitudes
-    // (2-5). Under the global UI-zoom architecture every render path
-    // already runs inside `ctx.scale(worldZoom)` (see render() above)
-    // AND the shake values are added to cam.x/cam.y which are
-    // consumed in the same logical-units space, so no per-zoom
-    // correction is needed here — the shake intensity in CSS-px
-    // automatically tracks the global scale.
+    // Shake magnitudes are canvas px, added to cam in the same logical space as the ctx.scale(worldZoom) wrap, so CSS-px intensity tracks zoom with no extra multiply here.
     cam.x += shake.ox;
     cam.y += shake.oy;
     drawWorld(dungeon,cam.x,cam.y);
     drawAmbient(cam.x,cam.y);
 
-    // Special room markers
     for (const r of dungeon.rooms) {
       if (!dungeon.visible[r.cy]?.[r.cx]) continue;
       if (r.healFont) {
@@ -7746,57 +7057,43 @@ const game = {
       }
     }
 
-    // hazard zones (ground effects — below items/enemies)
     drawHazardZones(cam.x, cam.y);
     drawDisruptionFields(cam.x, cam.y);
     drawFrostPatches(cam.x, cam.y);
     drawGravityWells(cam.x, cam.y);
     drawHackwareEffects(cam.x, cam.y);
 
-    // volatile cores (below items, above ground effects)
     drawVCores(cam.x, cam.y);
 
-    // alarm beacons
     drawBeacons(cam.x, cam.y);
 
-    // shield generators (below items/enemies, above ground effects)
     drawShieldGens(cam.x, cam.y);
 
-    // security cameras (draw cone before enemies for layering)
     drawCameras(cam.x, cam.y);
 
-    // laser tripwires (draw beam before enemies for layering)
     drawLasers(cam.x, cam.y);
 
-    // wall turrets
     drawWallTurrets(cam.x, cam.y);
 
-    // proximity mines (below items/enemies, above ground effects)
     drawMines(cam.x, cam.y);
 
-    // items
     drawMainframeSetPieces(cam.x, cam.y);
     if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.drawTrialOverlays(ctx, this, cam.x, cam.y, TILE, lastTime);
     for (const it of items) it.draw(cam.x,cam.y);
 
-    // fuse bombs (tap-tap V) — above items, below enemies/cores so a mob
-    // standing on a planted bomb hides it visually (in-world feel).
+    // Above items and below enemies so a mob standing on a planted bomb hides it.
     drawFuseShards(cam.x, cam.y);
 
-    // UNCHAINED #39: core drops — draw above items, below enemies.
     if (typeof NEON !== 'undefined' && NEON.cores && this.coreDrops && this.coreDrops.length) {
       const _ptCoresDraw = perfEnabled() ? performance.now() : 0;
       NEON.cores.drawCoreDrops(ctx, this.coreDrops, cam, TILE);
       if (_ptCoresDraw) perfRecord('cores-draw', performance.now() - _ptCoresDraw);
     }
 
-    // enemies
     for (const e of enemies) e.draw(cam.x,cam.y);
 
-    // projectiles
     for (const p of projectiles) p.draw(cam.x,cam.y);
 
-    // chain lightning bolts
     if (game._chainBolts) {
       for (const bolt of game._chainBolts) {
         const sx=bolt.x1*TILE-cam.x, sy=bolt.y1*TILE-cam.y;
@@ -7808,7 +7105,6 @@ const game = {
         ctx.shadowColor=bolt.colour;
         ctx.shadowBlur=8;
         ctx.beginPath();
-        // Jagged lightning: 3 segments with random offset
         const mx1=lerp(sx,ex,0.33)+(rand('cosmetic')-0.5)*8;
         const my1=lerp(sy,ey,0.33)+(rand('cosmetic')-0.5)*8;
         const mx2=lerp(sx,ex,0.66)+(rand('cosmetic')-0.5)*8;
@@ -7819,21 +7115,15 @@ const game = {
       }
     }
 
-    // particles
     drawParticles(cam.x,cam.y);
     drawFloatingTexts(cam.x,cam.y);
 
-    // REAPER on-player telegraph rings — drawn AFTER particles/floating
-    // text but BEFORE the player sprite so the ring sits beneath the
-    // player and is never suppressed by the per-enemy FOV/cull in
-    // Enemy.draw (an off-screen reaper must still warn the marked player).
+    // Drawn after particles and before the player so the ring sits under the sprite. Enemy.draw culls off-screen reapers, so this ring is the warning the player still gets.
     drawReaperPlayerRings(cam.x, cam.y);
     drawTetherLeashes(cam.x, cam.y);
 
-    // player
     player.draw(cam.x,cam.y);
 
-    // Saw blade orbitals
     const sawLvl = player.upgrades.SAW_BLADE||0;
     if (sawLvl > 0) {
       ctx.save();
@@ -7854,7 +7144,6 @@ const game = {
       ctx.restore();
     }
 
-    // Sentry Drone orbitals
     const droneLvl = player.upgrades.SENTRY_DRONE||0;
     if (droneLvl > 0) {
       ctx.save();
@@ -7864,14 +7153,11 @@ const game = {
         const dy = player.y * TILE - cam.y + Math.sin(a) * 2.0 * TILE;
         ctx.save();
         ctx.translate(dx, dy);
-        // Outer glow
         ctx.shadowBlur = 12; ctx.shadowColor = '#00e5ff';
-        // Diamond shape
         ctx.fillStyle = '#00e5ff';
         ctx.beginPath();
         ctx.moveTo(0, -5); ctx.lineTo(4, 0); ctx.lineTo(0, 5); ctx.lineTo(-4, 0);
         ctx.closePath(); ctx.fill();
-        // Inner bright core
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#aaffff';
         ctx.beginPath();
@@ -7882,12 +7168,6 @@ const game = {
       ctx.restore();
     }
 
-    // (Previously this was a `if (_zoomed) ctx.restore();` paired with
-    // an inner playfield ctx.scale wrap. The wrap moved up to render()
-    // — global UI scale — so this site no longer needs to balance a
-    // save/restore pair. The `cam.x/y -= shake` reset that follows is
-    // a no-op visually but kept for symmetry with content.js sites
-    // that read cam after the world block.)
 
     drawDangerVignette(player);
     drawHUD(player);
@@ -7896,31 +7176,19 @@ const game = {
     drawMinimap(dungeon,player);
     drawBoostStrip(player);
     drawBossBar();
-    // Boss intro telegraph overlay — radial vignette in the boss colour +
-    // titlecard with the boss name. Rendered LAST so it sits on top of the
-    // world and HUD chrome (it's a transient cinematic moment; HUD remains
-    // visible THROUGH the partially-transparent vignette). Gates internally
-    // on `bossIntroTimer > 0` so this is a no-op outside the intro window.
+    // Drawn after the HUD so the vignette covers chrome but stays transparent enough to read through. No-op unless bossIntroTimer > 0.
     drawBossIntroOverlay();
-    // Boss death telegraph overlay — radial flash in the boss colour +
-    // "DESTROYED" titlecard. Same compositing rationale as the intro
-    // overlay above (rendered AFTER drawBossBar so the chromatic flash
-    // sits on top of the HUD). Gates internally on `bossDeathTimer > 0`
-    // so this is a no-op outside the death window. Painted AFTER the
-    // intro so that on the rare frame where intro and death both have
-    // nonzero timers (boss one-shot mid-intro), the death overlay wins.
+    // Drawn after the intro overlay so a one-shot during the intro shows death, not the intro title. No-op unless bossDeathTimer > 0.
     drawBossDeathOverlay();
 
     this.renderSystemMessageIndicator();
     this.renderOnboardingGuidance();
 
-    // UNCHAINED #38: right-edge HUD (difficulty badge / quest / bounty) must
-    // clear the active boost strip so pills don't collide with the text.
+    // The right-edge HUD has to clear the boost strip or the pills collide with the text.
     const _boostPills = (typeof NEON !== 'undefined' && NEON.boosts)
       ? NEON.boosts.getActiveBoostList(player).length : 0;
     const _boostOffset = _boostPills > 0 ? _boostPills * 21 + 4 : 0; // 18px pill + 3px gap + 4px bottom margin
 
-    // Difficulty badge below minimap (non-NORMAL only)
     if (game.difficulty !== 'NORMAL') {
       const d = getDiff();
       const by = 92 + safeTop + _boostOffset;
@@ -7932,7 +7200,6 @@ const game = {
       ctx.restore();
     }
 
-    // Quest HUD (below minimap)
     if (game.quest) {
       const q = game.quest;
       const qy = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0);
@@ -7953,7 +7220,6 @@ const game = {
       ctx.restore();
     }
 
-    // Bounty target HUD indicator (below quest)
     const bountyAlive = enemies.some(e => e._isBounty && !e.dead);
     if (bountyAlive) {
       const by2 = 96 + safeTop + _boostOffset + (game.difficulty !== 'NORMAL' ? 10 : 0) + (game.quest ? 16 : 0);
@@ -7967,7 +7233,6 @@ const game = {
       ctx.restore();
     }
 
-    // Challenge wave HUD
     if (game.challengeSealed && !game.challengeComplete) {
       const wy = 96 + safeTop + (game.quest ? 18 : 0);
       ctx.save();
@@ -8120,11 +7385,9 @@ const game = {
     const box = getPowerupChoiceLayout(narrow);
     ctx.save();
 
-    // Dark overlay
     ctx.fillStyle='rgba(0,0,0,0.7)';
     ctx.fillRect(0,0,W,H);
 
-    // Title
     ctx.textAlign='center';
     ctx.shadowBlur=25; ctx.shadowColor='#00f5ff';
     ctx.fillStyle='#00f5ff';
@@ -8132,12 +7395,10 @@ const game = {
     ctx.fillText(fitCanvasText('CHOOSE AN UPGRADE', box.titleMaxW), W/2, box.titleY);
     ctx.shadowBlur=0;
 
-    // Cards
     const cw = box.cardW;
     const cardY = box.cardY;
     const cardH = box.cardH;
-    // Word-wrap helper (centered). Returns the y of the next line below the
-    // wrapped block. text padding leaves 8px on each side of the card.
+    // Returns the y below the wrapped block. 8px of text padding on each side of the card.
     const wrapMaxW = box.cardTextMaxW;
     const cardBottomY = cardY + cardH - 8;
     /**
@@ -8192,13 +7453,11 @@ const game = {
       const sel = pc.selected === i;
       const curLvl = opt.persistent && game.player ? (game.player.upgrades[opt.id]||0) : 0;
 
-      // Card background
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? opt.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
       NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
-      // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur=20; ctx.shadowColor=opt.colour;
@@ -8206,7 +7465,6 @@ const game = {
         NEON.draw.roundRectStroke(ctx, cx, cardY, cw, cardH, 8);
         ctx.restore();
       }
-      // Rarity border glow for affixed weapons
       if (opt._rarity > 0 && !sel) {
         ctx.save();
         ctx.shadowBlur=12; ctx.shadowColor=opt._rarityColour;
@@ -8215,33 +7473,28 @@ const game = {
         ctx.restore();
       }
 
-      // Number badge
       ctx.fillStyle=opt.colour;
       ctx.font=`bold ${narrow?16:20}px monospace`;
       ctx.textAlign='center';
       ctx.fillText((i+1)+'', cx + cw/2, cardY + box.numberY);
 
-      // Icon: colored square with glow
       ctx.save();
       ctx.shadowBlur=15; ctx.shadowColor=opt.colour;
       ctx.fillStyle=opt.colour;
       ctx.fillRect(cx + cw / 2 - box.iconSize / 2, cardY + box.iconTop, box.iconSize, box.iconSize);
       ctx.restore();
 
-      // Name
       ctx.fillStyle='#ffffff';
       ctx.font=`bold ${narrow?13:16}px monospace`;
       ctx.fillText(fitCanvasText(opt.name, wrapMaxW), cx + cw/2, cardY + box.nameY);
 
-      // Description (word-wrapped). Track running y so subsequent lines
-      // don't collide when the desc spans 2+ lines on narrow viewports.
+      // Track y through the wrap. On a narrow viewport the description can be two lines and the next row would otherwise overlap it.
       ctx.fillStyle='#aaaacc';
       const descFs = narrow ? 11 : 13;
       ctx.font=`${descFs}px monospace`;
       let runY = drawWrapCentered(opt.desc, cx + cw/2, cardY + box.descY, descFs + 3);
-      runY += 4; // small gutter
+      runY += 4;
 
-      // Level info for persistent upgrades
       if (opt.persistent && opt.levelDesc) {
         ctx.fillStyle='#888899';
         const lvFs = narrow ? 10 : 12;
@@ -8250,7 +7503,6 @@ const game = {
         runY += 4;
       }
 
-      // Hackware badge
       if (opt.isHackware) {
         ctx.fillStyle=opt.colour;
         ctx.font=`bold ${narrow?9:10}px monospace`;
@@ -8260,20 +7512,17 @@ const game = {
         runY += (narrow ? 12 : 13);
       }
 
-      // Weapon stats line for weapon options
       if (opt.id && opt.id.startsWith('WEAPON_')) {
         ctx.fillStyle='#ffcc44';
         const wFs = narrow ? 10 : 12;
         ctx.font=`${wFs}px monospace`;
         runY = drawWrapCentered(opt.desc, cx + cw/2, runY, wFs + 3);
-        // Affix description line
         if (opt.affixDesc) {
           ctx.fillStyle=opt._rarityColour || '#39ff14';
           const aFs = narrow ? 9 : 11;
           ctx.font=`${aFs}px monospace`;
           runY = drawWrapCentered(opt.affixDesc, cx + cw/2, runY, aFs + 3);
         }
-        // Rarity label
         if (opt._rarity > 0) {
           ctx.fillStyle=opt._rarityColour;
           ctx.font=`bold ${narrow?9:10}px monospace`;
@@ -8284,7 +7533,6 @@ const game = {
       }
     }
 
-    // Skip button
     ctx.fillStyle='rgba(255,255,255,0.04)';
     ctx.strokeStyle='rgba(255,255,255,0.2)';
     ctx.lineWidth=1;
@@ -8295,7 +7543,6 @@ const game = {
     ctx.textAlign='center';
     ctx.fillText('SKIP  [3]', W/2, box.skipY + box.skipTextY);
 
-    // Hint
     if (box.showHint) {
       ctx.fillStyle='#444466';
       ctx.font=`${narrow?9:11}px monospace`;
@@ -8398,11 +7645,9 @@ const game = {
     const count = pc.options.length;
     ctx.save();
 
-    // Dark overlay
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, W, H);
 
-    // Title
     ctx.textAlign = 'center';
     ctx.shadowBlur = 25; ctx.shadowColor = '#00f5ff';
     ctx.fillStyle = '#00f5ff';
@@ -8410,12 +7655,10 @@ const game = {
     ctx.fillText('CHOOSE A PERK', W / 2, H * 0.1);
     ctx.shadowBlur = 0;
 
-    // Subtitle
     ctx.fillStyle = '#668899';
     ctx.font = `${narrow ? 11 : 14}px monospace`;
     ctx.fillText(`Level ${this.player.level} — pick one ability`, W / 2, H * 0.1 + (narrow ? 22 : 30));
 
-    // Cards
     const cw = narrow ? Math.min(160, (W - 20) / count - 8) : Math.min(220, (W - 40) / count - 12);
     const gap = narrow ? 8 : 14;
     const totalW = cw * count + gap * (count - 1);
@@ -8429,13 +7672,11 @@ const game = {
       const cx = startX + i * (cw + gap);
       const sel = pc.selected === i;
 
-      // Card bg
       ctx.fillStyle = sel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? perk.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
       NEON.draw.roundRectFillStroke(ctx, cx, cardY, cw, cardH, 8);
 
-      // Glow on selected
       if (sel) {
         ctx.save();
         ctx.shadowBlur = 20; ctx.shadowColor = perk.colour;
@@ -8444,23 +7685,19 @@ const game = {
         ctx.restore();
       }
 
-      // Number badge
       ctx.fillStyle = sel ? perk.colour : '#555566';
       ctx.font = `bold ${narrow ? 12 : 16}px monospace`;
       ctx.textAlign = 'center';
       ctx.fillText(String(i + 1), cx + cw / 2, cardY + (narrow ? 18 : 24));
 
-      // Icon
       ctx.fillStyle = perk.colour;
       ctx.font = `${narrow ? 28 : 40}px monospace`;
       ctx.fillText(perk.icon, cx + cw / 2, cardY + cardH * 0.32);
 
-      // Name
       ctx.fillStyle = sel ? '#ffffff' : '#cccccc';
       ctx.font = `bold ${narrow ? 12 : 15}px monospace`;
       ctx.fillText(perk.name, cx + cw / 2, cardY + cardH * 0.52);
 
-      // Description — word-wrap
       ctx.fillStyle = sel ? '#aabbcc' : '#667788';
       ctx.font = `${narrow ? 10 : 12}px monospace`;
       const words = perk.desc.split(' ');
@@ -8477,7 +7714,6 @@ const game = {
       if (line) ctx.fillText(line, cx + cw / 2, ly);
     }
 
-    // Instructions
     ctx.fillStyle = '#445566';
     ctx.font = `${narrow ? 10 : 13}px monospace`;
     ctx.textAlign = 'center';
@@ -8500,11 +7736,9 @@ const game = {
     const box = getShoppingLayout(narrow);
     ctx.save();
 
-    // Dark overlay
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, W, H);
 
-    // Title
     ctx.textAlign = 'center';
     ctx.shadowBlur = 25; ctx.shadowColor = '#39ff14';
     ctx.fillStyle = '#39ff14';
@@ -8512,12 +7746,10 @@ const game = {
     ctx.fillText(fitCanvasText('VENDOR TERMINAL', box.titleMaxW), W / 2, box.titleY);
     ctx.shadowBlur = 0;
 
-    // Credits display
     ctx.fillStyle = '#ffcc00';
     ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
     ctx.fillText(fitCanvasText('◈ ' + p.credits + ' CREDITS', box.titleMaxW), W / 2, box.creditsY);
 
-    // Cards
     const cw = box.cardW;
     const cardH = box.cardH;
 
@@ -8530,7 +7762,6 @@ const game = {
       const curLvl = item.persistent && p ? (p.upgrades[item.id] || 0) : 0;
 
       if (item.sold) {
-        // Sold-out card
         ctx.fillStyle = 'rgba(255,255,255,0.02)';
         ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
@@ -8541,7 +7772,6 @@ const game = {
         continue;
       }
 
-      // Card background
       ctx.fillStyle = sel ? 'rgba(57,255,20,0.06)' : 'rgba(255,255,255,0.03)';
       ctx.strokeStyle = sel ? item.colour : 'rgba(255,255,255,0.15)';
       ctx.lineWidth = sel ? 2 : 1;
@@ -8555,7 +7785,6 @@ const game = {
         ctx.restore();
       }
 
-      // Number badge
       ctx.fillStyle = item.colour;
       ctx.font = `bold ${narrow ? 14 : 18}px monospace`;
       if (box.horizontal) {
@@ -8566,7 +7795,6 @@ const game = {
         ctx.fillText((i + 1) + '', box.numberX, cardY + box.nameY);
       }
 
-      // Icon
       if (box.horizontal) {
         ctx.save();
         ctx.shadowBlur = 12; ctx.shadowColor = item.colour;
@@ -8575,7 +7803,6 @@ const game = {
         ctx.restore();
       }
 
-      // Name
       ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${narrow ? 11 : 14}px monospace`;
       if (box.horizontal) {
@@ -8586,7 +7813,6 @@ const game = {
         ctx.fillText(fitCanvasText(item.name, box.textMaxW), box.nameX, cardY + box.nameY);
       }
 
-      // Description
       if (box.showDesc) {
         ctx.fillStyle = '#aaaacc';
         ctx.font = `${narrow ? 10 : 11}px monospace`;
@@ -8603,21 +7829,18 @@ const game = {
         }
       }
 
-      // Level info for persistent upgrades
       if (box.horizontal && item.persistent && item.levelDesc) {
         ctx.fillStyle = '#888899';
         ctx.font = `${narrow ? 11 : 11}px monospace`;
         ctx.fillText(fitCanvasText('Lv ' + curLvl + '→' + (curLvl + 1) + ': ' + item.levelDesc(curLvl), box.textMaxW), cx + cw / 2, cardY + box.secondaryY);
       }
 
-      // Hackware badge
       if (box.horizontal && item.isHackware) {
         ctx.fillStyle = item.colour;
         ctx.font = `bold ${narrow ? 8 : 10}px monospace`;
         ctx.fillText(fitCanvasText('⚙ HACKWARE [F]', box.textMaxW), cx + cw / 2, cardY + box.secondaryY);
       }
 
-      // Price
       const priceCol = affordable ? '#ffcc00' : '#ff3333';
       ctx.fillStyle = priceCol;
       ctx.font = `bold ${narrow ? 12 : 15}px monospace`;
@@ -8642,7 +7865,6 @@ const game = {
       }
     }
 
-    // Leave button
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
@@ -8653,7 +7875,6 @@ const game = {
     ctx.textAlign = 'center';
     ctx.fillText('LEAVE  [Esc]', W / 2, box.leaveY + box.leaveTextY);
 
-    // Hint
     if (box.showHint) {
       ctx.fillStyle = '#444466';
       ctx.font = `${narrow ? 9 : 11}px monospace`;
@@ -8682,14 +7903,11 @@ const game = {
     const isTouch = isTouchDevice();
     ctx.save();
 
-    // Dark overlay
     ctx.fillStyle = 'rgba(0,0,0,0.82)';
     ctx.fillRect(0, 0, W, H);
 
-    // Terminal frame
     const { fw, fh, fx, fy, closeX, closeY, closeW, closeH } = getReadingLayout(narrow);
 
-    // Outer glow border
     ctx.save();
     ctx.shadowBlur = 20; ctx.shadowColor = accent;
     ctx.strokeStyle = accent;
@@ -8697,17 +7915,14 @@ const game = {
     NEON.draw.roundRectStroke(ctx, fx, fy, fw, fh, 8);
     ctx.restore();
 
-    // Inner background
     ctx.fillStyle = bgFill;
     NEON.draw.roundRect(ctx, fx, fy, fw, fh, 8);
 
-    // Scanline effect
     ctx.fillStyle = scanFill;
     for (let sy = fy; sy < fy + fh; sy += 3) {
       ctx.fillRect(fx, sy, fw, 1);
     }
 
-    // Title
     ctx.textAlign = 'center';
     ctx.shadowBlur = 12; ctx.shadowColor = accent;
     ctx.fillStyle = accent;
@@ -8728,7 +7943,6 @@ const game = {
       ctx.fillText('ENTRIES RECOVERED: ' + count, W / 2, fy + (narrow ? 44 : 56));
     }
 
-    // Word-wrapped body text
     ctx.fillStyle = bodyColour;
     const fontSize = narrow ? 11 : 14;
     ctx.font = `${fontSize}px monospace`;
@@ -9139,12 +8353,10 @@ const game = {
     const a=this.fadeAlpha;
     ctx.save();
 
-    // ── Base dark overlay ────────────────────────────────────────────────
     ctx.globalAlpha=a;
     ctx.fillStyle='#0a0a12';
     ctx.fillRect(0,0,W,H);
 
-    // ── Scrolling scanlines ──────────────────────────────────────────────
     const scanAlpha=Math.min(a*1.5, 0.3);
     if (scanAlpha>0.01) {
       ctx.globalAlpha=scanAlpha;
@@ -9156,7 +8368,6 @@ const game = {
       }
     }
 
-    // ── Glitch bars ─────────────────────────────────────────────────────
     if (a>0.25) {
       for (const bar of this.fadeGlitchBars) {
         ctx.globalAlpha=bar.alpha*Math.min(1,(a-0.25)*3);
@@ -9165,7 +8376,6 @@ const game = {
       }
     }
 
-    // ── Coarse noise band (sweeps vertically) ────────────────────────────
     if (a>0.3) {
       const bandH=30+Math.sin(t*4)*15;
       const bandY=((t*200)%( H+bandH*2))-bandH;
@@ -9181,7 +8391,6 @@ const game = {
       }
     }
 
-    // ── Horizontal sweep line ────────────────────────────────────────────
     if (a>0.2) {
       const sweepY=((t*350)%(H+4))-2;
       ctx.globalAlpha=0.6*Math.min(1,(a-0.2)*3);
@@ -9193,11 +8402,9 @@ const game = {
       ctx.fillRect(0,sweepY-2,W,4);
     }
 
-    // ── Transition text with chromatic aberration ────────────────────────
     if (a>0.5 && this.transitionText) {
       const textAlpha=Math.min(1,(a-0.5)*4);
       const txt=this.transitionText;
-      // Chunk reveal: show characters based on time at peak
       const peakTime=this.fadeDir===2?this.fadeHold:(this.fadeDir===-1?0.15:0);
       const revealTime=Math.max(0,t-0.2); // time since text became visible (fadeAlpha crosses 0.5)
       const charsToShow=Math.min(txt.length, Math.floor(revealTime*80));
@@ -9206,7 +8413,6 @@ const game = {
       ctx.textAlign='center';
       ctx.font='bold 28px monospace';
 
-      // Red offset (chromatic aberration)
       const abOffset=Math.max(0, 2-peakTime*15);
       if (abOffset>0.3) {
         ctx.globalAlpha=textAlpha*0.4;
@@ -9215,21 +8421,18 @@ const game = {
         ctx.fillText(shown,W/2-abOffset,H/2);
       }
 
-      // Blue offset
       if (abOffset>0.3) {
         ctx.globalAlpha=textAlpha*0.4;
         ctx.fillStyle='#0080ff';
         ctx.fillText(shown,W/2+abOffset,H/2);
       }
 
-      // Main text with glow
       ctx.globalAlpha=textAlpha;
       ctx.shadowBlur=20; ctx.shadowColor='#00f5ff';
       ctx.fillStyle='#00f5ff';
       ctx.fillText(shown,W/2,H/2);
       ctx.shadowBlur=0;
 
-      // Blinking cursor during reveal
       if (charsToShow<txt.length && Math.sin(t*12)>0) {
         const metrics=ctx.measureText(shown);
         ctx.fillStyle='#00f5ff';
@@ -9237,7 +8440,6 @@ const game = {
       }
     }
 
-    // ── Edge vignette (neon border flash) ────────────────────────────────
     if (a>0.6) {
       const edgeAlpha=0.3*Math.min(1,(a-0.6)*4)*(0.7+0.3*Math.sin(t*8));
       ctx.globalAlpha=edgeAlpha;
@@ -9260,20 +8462,17 @@ const game = {
     ctx.save();
     ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(0,0,W,H);
 
-    // grid lines
     ctx.globalAlpha=0.03; ctx.strokeStyle='#ffb700';
     for (let x=0;x<W;x+=40){NEON.draw.line(ctx,x,0,x,H);}
     for (let y=0;y<H;y+=40){NEON.draw.line(ctx,0,y,W,y);}
     ctx.globalAlpha=1;
 
-    // Title
     ctx.textAlign='center';
     ctx.shadowBlur=20; ctx.shadowColor='#ffb700';
     ctx.fillStyle='#ffb700'; ctx.font=`bold ${narrow?24:32}px monospace`;
     ctx.fillText('NEURAL ARCHIVES',W/2, narrow?40:55);
     ctx.shadowBlur=0;
 
-    // Shard balance
     ctx.fillStyle='#aaaacc'; ctx.font=`${narrow?13:16}px monospace`;
     ctx.fillText(`◆ ${meta.shards} Data Fragments available`, W/2, narrow?65:85);
 
@@ -9290,7 +8489,6 @@ const game = {
       const r = this.getArchiveRowRect(i);
       const y = r.y + r.h / 2;
 
-      // Selection highlight
       if (selected) {
         ctx.fillStyle='rgba(255,183,0,0.08)';
         ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -9299,22 +8497,18 @@ const game = {
       ctx.lineWidth = selected ? 1.5 : 1;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
 
-      // Icon
       const iconCol = maxed ? '#39ff14' : selected ? '#ffb700' : '#777799';
       ctx.textAlign='left';
       ctx.fillStyle=iconCol; ctx.font=`${iconFs}px monospace`;
       ctx.fillText(u.icon, W*0.1, y + 2);
 
-      // Name
       ctx.fillStyle = selected ? '#ffffff' : '#aaaacc';
       ctx.font=`${selected?'bold ':''}${fs}px monospace`;
       ctx.fillText(u.name, W*0.18, y - 4);
 
-      // Description
       ctx.fillStyle='#777799'; ctx.font=`${narrow?10:12}px monospace`;
       ctx.fillText(u.desc, W*0.18, y + (narrow?12:14));
 
-      // Level pips
       ctx.textAlign='right';
       let lvText = '';
       for (let l = 0; l < u.maxLv; l++) lvText += l < curLv ? '●' : '○';
@@ -9322,7 +8516,6 @@ const game = {
       ctx.font=`${fs}px monospace`;
       ctx.fillText(lvText, W*0.72, y);
 
-      // Cost / Status
       if (maxed) {
         ctx.fillStyle='#39ff14'; ctx.font=`${fs}px monospace`;
         ctx.fillText('MAXED', W*0.9, y);
@@ -9333,7 +8526,6 @@ const game = {
       }
     }
 
-    // Stats footer
     ctx.textAlign='center';
     ctx.fillStyle='#555577'; ctx.font=`${narrow?9:11}px monospace`;
     const lastRect = this.getArchiveRowRect(META_UPGRADES.length - 1);
@@ -9354,14 +8546,12 @@ const game = {
     ctx.save();
     ctx.fillStyle='rgba(0,0,0,0.92)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
-    // Title
     ctx.shadowBlur=30; ctx.shadowColor='#ff3333';
     ctx.fillStyle='#ff3333'; ctx.font=`bold ${narrow ? 30 : 46}px monospace`;
     ctx.fillText('INSTANCE TERMINATED',W/2, narrow ? 46 : 62);
     ctx.fillStyle='#ff88aa'; ctx.font=`bold ${narrow ? 15 : 20}px monospace`;
     ctx.fillText('MEMORY WIPE QUEUED', W/2, narrow ? 72 : 90);
     ctx.shadowBlur=0;
-    // Killed by
     const killer = r.killedBy || 'Unknown';
     const killerLabel = sourceLabel(killer);
     const killerCol = sourceColour(killer);
@@ -9369,7 +8559,6 @@ const game = {
     ctx.shadowBlur=12; ctx.shadowColor=killerCol;
     ctx.fillText(`TERMINATION SOURCE: ${killerLabel.toUpperCase()}`, W/2, narrow ? 96 : 116);
     ctx.shadowBlur=0;
-    // Stats line
     let y = narrow ? 118 : 144;
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
@@ -9389,7 +8578,6 @@ const game = {
       ctx.fillText(`Difficulty: ${d.label}`, W/2, y);
       ctx.fillStyle='#aaaacc'; y += lh;
     }
-    // Damage breakdown
     const log = r.damageLog || {};
     const entries = Object.entries(log).sort((a,b)=>b[1]-a[1]);
     const totalDmg = entries.reduce((s,e)=>s+e[1], 0);
@@ -9410,16 +8598,12 @@ const game = {
         const pct = dmg / totalDmg;
         const col = sourceColour(src);
         const bx = W/2 - barW/2 - (narrow ? 10 : 20);
-        // Bar background
         ctx.fillStyle='#1a1a2e'; ctx.fillRect(bx, y - barH + 2, barW, barH);
-        // Bar fill
         ctx.fillStyle=col; ctx.globalAlpha=0.7;
         ctx.fillRect(bx, y - barH + 2, barW * pct, barH);
         ctx.globalAlpha=1;
-        // Label
         ctx.fillStyle='#ffffff'; ctx.font=`${narrow ? 10 : 12}px monospace`;
         ctx.fillText(sourceLabel(src), bx + 4, y);
-        // Value
         ctx.textAlign='right';
         ctx.fillText(`${Math.round(dmg)} (${Math.round(pct*100)}%)`, bx + barW - 2, y);
         ctx.textAlign='left';
@@ -9434,7 +8618,6 @@ const game = {
       }
       ctx.textAlign='center';
     }
-    // Run stats line
     y += narrow ? 4 : 6;
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
@@ -9449,13 +8632,11 @@ const game = {
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += lh;
-    // Data fragments
     if (this.lastRunShards) {
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 16}px monospace`;
       ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, y); y += lh;
     }
     ctx.restore();
-    // Leaderboard
     const lbY = y + (narrow?6:10);
     const desiredLbRows = narrow ? 3 : 5;
     const lbRows = this.getResultLeaderboardRowCount(lbY, desiredLbRows);
@@ -9511,7 +8692,6 @@ const game = {
       ctx.fillText(`Difficulty: ${d.label}`,W/2, y);
       ctx.fillStyle='#aaaacc'; y += narrow ? 22 : 26;
     }
-    // Perks chosen this run
     const ownedPerks = Object.keys(this.player.perks).filter(id => PERK_POOL[id]);
     if (ownedPerks.length) {
       ctx.font = `${narrow ? 10 : 12}px monospace`;
@@ -9519,7 +8699,6 @@ const game = {
       const perkNames = ownedPerks.map(id => PERK_POOL[id].icon + ' ' + PERK_POOL[id].name).join('  ');
       ctx.fillText(perkNames, W/2, y); y += narrow ? 16 : 20;
     }
-    // Augments installed this run
     const ownedAugs = Object.keys(this.player.augments || {}).filter(id => AUGMENTS[id]);
     if (ownedAugs.length) {
       ctx.font = `${narrow ? 10 : 12}px monospace`;
@@ -9527,7 +8706,6 @@ const game = {
       const augNames = ownedAugs.map(id => AUGMENTS[id].icon + ' ' + AUGMENTS[id].name).join('  ');
       ctx.fillText(augNames, W/2, y); y += narrow ? 16 : 20;
     }
-    // Run stats
     y += narrow ? 2 : 4;
     ctx.fillStyle='#666688'; ctx.font=`${narrow ? 10 : 12}px monospace`;
     ctx.fillText('─'.repeat(narrow ? 30 : 40), W/2, y); y += narrow ? 14 : 18;
@@ -9542,12 +8720,10 @@ const game = {
     if (r.hitsBlocked) runLine += `  •  ${r.hitsBlocked} blocked`;
     runLine += `  •  ${timeStr} survived`;
     ctx.fillText(runLine, W/2, y); y += narrow ? 20 : 24;
-    // Data fragments
     if (this.lastRunShards) {
       ctx.fillStyle='#ffb700'; ctx.font=`${narrow ? 14 : 16}px monospace`;
       ctx.fillText(`◆ +${this.lastRunShards} Data Fragments`, W/2, y); y += narrow ? 22 : 26;
     }
-    // Newly unlocked difficulty celebration
     if (this._newlyUnlocked) {
       const unlockCol = DIFFICULTIES[this._newlyUnlocked]?.colour || '#ff00c8';
       const pulse = 0.7 + 0.3 * Math.sin(t * 4);
@@ -9558,7 +8734,6 @@ const game = {
       ctx.shadowBlur = 0; ctx.globalAlpha = 1; y += narrow ? 22 : 26;
     }
     ctx.restore();
-    // leaderboard
     const lbY = y + (narrow?6:10);
     const desiredLbRows = narrow ? 3 : 5;
     const lbRows = this.getResultLeaderboardRowCount(lbY, desiredLbRows);
@@ -9567,9 +8742,7 @@ const game = {
   }
 };
 
-// ─── Performance HUD ──────────────────────────────────────────────────────────
-// Toggle with F3. Measures frame/update/render time + runtime counters.
-// Ring buffer of last PERF_SAMPLES frames. Zero cost when hidden.
+// F3 toggles it. Ring buffer of the last PERF_SAMPLES frames. Zero cost when hidden.
 const PERF_SAMPLES = 60;
 const perf = {
   visible: false,
@@ -9658,9 +8831,7 @@ const perf = {
   },
 };
 
-// ─── CRT mode overlay ─────────────────────────────────────────────────────
-// Cosmetic post-effect: scanlines + vignette. Toggleable in settings (default off).
-// Pattern + radial gradient cached and rebuilt on canvas resize.
+// Scanlines and vignette, off by default. The pattern and radial gradient are cached and rebuilt on resize.
 /** @type {{ w:number, h:number, pattern: CanvasPattern|null, vignette: CanvasGradient|null }} */
 const _crtCache = { w: 0, h: 0, pattern: null, vignette: null };
 function _rebuildCrtCache() {
@@ -9673,7 +8844,6 @@ function _rebuildCrtCache() {
     pctx.fillRect(0, 1, 1, 1);
     _crtCache.pattern = ctx.createPattern(pc, 'repeat');
   }
-  // Vignette: radial darkening from center → corners.
   const cx = W / 2, cy = H / 2;
   const r0 = Math.min(W, H) * 0.45;
   const r1 = Math.hypot(cx, cy);
@@ -9712,10 +8882,7 @@ function renderPerfHUD() {
     `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}  fp ${frostPatches.length}`,
     `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
   ];
-  // Subsystem timing — show each tracked label with avg/max ms over the last
-  // PERF_SAMPLES frames. Sorted descending so the hottest shows first, making
-  // the next optimisation target obvious. Labels with zero time this frame
-  // are hidden (keeps the HUD short when a subsystem is idle).
+  // Hottest subsystem first. A label with zero time this frame is hidden so an idle system does not stretch the HUD.
   const subs = perfSubsystemStats();
   if (subs.length) {
     lines.push('─ subsystems (avg/max ms) ─');
@@ -9747,7 +8914,6 @@ function renderPerfHUD() {
   ctx.restore();
 }
 
-// ─── Main Loop ────────────────────────────────────────────────────────────────
 let lastTime=0;
 /**
  * @param {any} ts
@@ -9787,23 +8953,13 @@ function loop(ts) {
     }
   } finally {
     clearJust();
-    // Telemetry periodic flush
     if (typeof NEON !== 'undefined' && NEON.telemetry) { try { NEON.telemetry.update(dt); } catch(_){} }
     requestAnimationFrame(loop);
   }
 }
 
-// Render error boundary (post-v116). The loop above used to wrap update+render
-// in try/finally with no catch — a thrown exception aborted the frame mid-draw
-// but rAF kept rescheduling, so input still worked while the world silently
-// vanished. Now each phase has its own catch; failures populate
-// game._renderError and a visible overlay is drawn over whatever managed to
-// render before the throw. See engine/render-boundary.js.
-//
-// Auto-recovery: a transient error (one bad frame during a particle burst,
-// say) shouldn't pin the overlay forever. After RECOVERY_FRAMES consecutive
-// healthy frames the overlay clears itself. A persistent error keeps resetting
-// the counter, so it stays visible.
+// A thrown render used to abort the frame while rAF kept scheduling, so input worked and the world vanished. Each phase now catches into game._renderError and draws an overlay. See engine/render-boundary.js.
+// A transient error clears after RECOVERY_FRAMES healthy frames. A persistent error keeps resetting that counter.
 const _RENDER_BOUNDARY_RECOVERY_FRAMES = 180; // ~3 s at 60fps
 game._renderError = null;
 game._renderHealthyFrames = 0;
@@ -9846,8 +9002,7 @@ function _onFrameError(phase, err) {
   }
 }
 
-// Expose capture helper for manual profiling in devtools.
-// Usage: game.capturePerf('boss-fight')  or  game.capturePerf('label', 10000) for 10s.
+// Devtools helper: game.capturePerf(label) or game.capturePerf(label, ms).
 /**
  * @param {any} label
  * @param {any} durationMs
@@ -9855,15 +9010,8 @@ function _onFrameError(phase, err) {
 game.capturePerf = function(label, durationMs) { perf.startCapture(label, durationMs); };
 game.perf = perf;
 
-// ─── Per-subsystem timing ─────────────────────────────────────────────────────
-// Lightweight block timers used to attribute update-time cost to each hot loop
-// (enemy update, projectile update, particle update, env entities, etc.).
-// Enabled only when the HUD is visible or a capture is running, so zero cost
-// in normal play. Surface pattern at callsites:
-//   const _pt = perfEnabled() ? performance.now() : 0;
-//   ...work...
-//   if (_pt) perfRecord('label', performance.now() - _pt);
-// Labels are free-form; the HUD renders all of them sorted by average time.
+// Block timers for the hot loops. Enabled only while the HUD is visible or a capture is running, so normal play pays nothing.
+// Call sites must stay allocation-free when off: const t = perfEnabled() ? performance.now() : 0; then if (t) perfRecord(label, performance.now() - t).
 const PERF_SUB_SAMPLES = 60;
 const perfSubsystems = new Map();
 function perfEnabled() { return perf.visible || perf.capturing; }
@@ -9899,12 +9047,10 @@ function perfSubsystemStats() {
 game.perfRecord = perfRecord;
 game.perfSubsystemStats = perfSubsystemStats;
 
-// ─── Boot ─────────────────────────────────────────────────────────────────────
 resize();
 updateBtns();
 mouse.x = W/2; mouse.y = H/2;
 window.addEventListener('resize', () => { resize(); updateBtns(); resetTouch(); mouse.x = W/2; mouse.y = H/2; });
-// Initialize telemetry — connects PostHog as transport if API key is configured
 if (typeof NEON !== 'undefined' && NEON.telemetry) {
   const _phTransport = (typeof posthog !== 'undefined' && posthog.__SV)
     /**

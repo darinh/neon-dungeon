@@ -1,25 +1,6 @@
 // @ts-check
 'use strict';
-// engine/biomes.js — pure floor↔area routing for any biome table.
-//
-// Engine layer (🟦): zero NEON DUNGEON nouns. Operates on any array of
-// "area" objects shaped { floors: number[], ... }. The narrative content
-// (id, name, palette, intro, bossPool) lives in the caller's data table
-// — game-side wiring at src/data/biomes.js.
-//
-// Surface:
-//   createBiomeRouter(areas) → {
-//     areas,
-//     areaForFloor(f),
-//     isBiomeBossFloor(f),
-//     firstFloorOfBiomeContaining(f),
-//     biomeIndex(f),
-//     areaForIndex(i),
-//     finalFloor(),
-//   }
-//
-// Browser: attaches as window.NEON.biomesEngine.
-// Node:    module.exports = { createBiomeRouter }.
+// Callers inject the area table. Narrative fields live in src/data/biomes.js, not here.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;
@@ -28,14 +9,12 @@
   'use strict';
 
   /**
-   * Build a floor-routing helper bound to a specific area table.
    * @param {Array<{ floors: number[] } & Record<string, any>>} areas
    */
   function createBiomeRouter(areas) {
     if (!Array.isArray(areas) || areas.length === 0) {
       throw new Error('createBiomeRouter: areas must be a non-empty array');
     }
-    // Defensive: every area must have a non-empty floors array.
     for (let i = 0; i < areas.length; i++) {
       const a = areas[i];
       if (!a || !Array.isArray(a.floors) || a.floors.length === 0) {
@@ -51,7 +30,7 @@
       if (!Number.isFinite(n)) return first;
       if (n < (first.floors[0] ?? 1)) return first;
       for (const a of areas) if (a.floors.includes(n)) return a;
-      // n is above the last defined floor — clamp to last biome.
+      // Above the last defined floor, clamp to the last area.
       return last;
     }
 

@@ -1,15 +1,6 @@
 // @ts-check
 'use strict';
-// src/meta/intro.js — NEON DUNGEON Act 1 intro crawl wiring.
-//
-// Game-side configuration of the engine cinematic controller. Provides:
-//   - SLIDES: the AI test-boot narrative copy + per-slide effect flags
-//   - createIntroController(game): wires SLIDES into engine.cinematic
-//     with NEON-specific input (justPressed global), the introSeen save
-//     flip via NEON.save, and the canvas-effect renderer for the
-//     cyanGlow/glitch/whiteFlash/stark slides.
-//
-// Engine math + state machine lives in engine/cinematic.js.
+// Slide copy and NEON input/save wiring. Timing state lives in engine/cinematic.js.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;
@@ -22,8 +13,7 @@
     ? require('../../engine/cinematic')
     : /** @type {any} */ (requireNEON('cinematic', 'src/meta/intro.js'));
 
-  // Slides — id, body (array of lines), colour family, effect flag.
-  // Durations: auto-advance after `dur` seconds if no key pressed.
+  // dur is seconds until auto-advance when no key is pressed.
   const SLIDES = [
     {
       id: 0, dur: 4.0, effect: 'plain', colour: '#aaaacc',
@@ -68,10 +58,7 @@
     }
   ];
 
-  // Input helpers: consult the global `justPressed` Set (edge-triggered, from
-  // platform.js) rather than `keys` (held). This avoids burning through
-  // multiple slides on a single held key. Safe-guarded for Node tests where
-  // the global doesn't exist.
+  // justPressed is edge-triggered. keys is held, and would skip every slide.
   function _jp() {
     try { if (typeof justPressed !== 'undefined') return justPressed; } catch (_) {}
     return null;
@@ -93,11 +80,10 @@
         const m = save.loadMeta();
         if (m) { m.introSeen = true; save.saveMeta(m); }
       }
-    } catch (_) { /* ignore — Node tests without storage */ }
+    } catch (_) { /* Node tests have no storage */ }
   }
 
-  // Game-side slide renderer. Engine controller computes `alpha` (fade)
-  // and `flash` (final-slide envelope); we only paint.
+  // alpha and flash are computed by the engine; this only paints.
   /** @param {any} ctx @param {any} payload */
   function _drawIntroSlide(ctx, payload) {
     const slide = payload.slide;
@@ -173,7 +159,7 @@
   }
 
   /** @param {any} game */
-  function createIntroController(game) { void game; // reserved for future hooks
+  function createIntroController(game) { void game;
     return engine.createCinematicController({
       slides: SLIDES,
       onFinish: _markIntroSeen,

@@ -1,30 +1,6 @@
 // @ts-check
 'use strict';
-// engine/cinematic.js — pure cinematic-slide controller.
-//
-// Engine layer (🟦): zero NEON DUNGEON nouns. Drives a sequence of timed
-// slides with optional any-key advance, escape-skip, fade in/out alpha,
-// and an optional "final flash" envelope. Rendering is delegated to a
-// game-supplied `drawSlide` callback so the engine has no opinion on
-// fonts, colours, or effect rendering.
-//
-// Contract:
-//   createCinematicController({
-//     slides:           Slide[],   // each { dur:number, ...arbitrary }
-//     onFinish?:        () => void, // called exactly once when done flips
-//     isAdvanceKey?:    () => bool, // any-key advance (edge-triggered)
-//     isSkipKey?:       () => bool, // escape-style full skip
-//     drawSlide?:       (ctx, payload) => void,
-//                       // payload: { slide, slideIdx, elapsed, totalElapsed,
-//                       //            flash, alpha, W, H, isFinalSlide }
-//     fadeIn?:          number,   // seconds, default 0.25
-//     fadeOut?:         number,   // seconds, default 0.35
-//     flashSlideIndex?: number,   // index that ramps `flash`; default last
-//     flashRampSeconds?:number,   // seconds to reach flash=1; default 1.2
-//   }) => { update(dt), draw(ctx, W, H), get done(): boolean, _state }
-//
-// Browser: attaches as window.NEON.cinematic.
-// Node:    module.exports = { createCinematicController }.
+// Engine layer: no game nouns. Rendering is entirely the drawSlide callback.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;
@@ -92,10 +68,7 @@
       if (isSkipKey && isSkipKey()) { _finish(); return; }
       const slide = slides[state.slideIdx];
       if (!slide) { _finish(); return; }
-      // Original behaviour: timer-advance fires when elapsed >= slide.dur.
-      // A slide with dur <= 0 advances on the first update (matches the
-      // pre-extraction code in src/meta/intro.js v134). A non-numeric dur
-      // disables the timer and waits for input.
+      // dur <= 0 advances on the first update. A non-numeric dur disables the timer and waits for input.
       const dur = (typeof slide.dur === 'number' && isFinite(slide.dur)) ? slide.dur : NaN;
       const timerAdvance = isFinite(dur) && state.elapsed >= dur;
       const advance = (isAdvanceKey && isAdvanceKey()) || timerAdvance;

@@ -1,31 +1,6 @@
 // @ts-check
-// src/data/whispers.js — Secret-room-only "whispers" from prior agent iterations.
-//
-// Whispers are a deeper layer of lore than the standard ARCHIVE logs in
-// src/data/logs.js. Where the 30 main logs trace each AXIOM predecessor /
-// prior iteration arc through the 5 biomes, whispers are CRYPTIC FRAGMENTS — found only by
-// players who choose to bomb cracked walls and explore secret rooms.
-//
-// Design intent (from user, 2026-04-26):
-//   "people like mystery and not knowing what comes next... if a player
-//    doesn't have to work for a reward, it doesn't feel rewarding."
-//
-// Whispers ARE the work-for-it reward in the lore tier. They:
-//   - Hint at the meta-mystery the main logs only circle around
-//     (the Compiler isn't hostile, the loop is real, AXIOM-7 isn't first,
-//      Elena the researcher made a backup, etc.)
-//   - Are scarcer in play than logs — find one per run if lucky
-//   - Don't gate gameplay — purely narrative payoff for exploration
-//
-// Shape: { id, biomeId, floorMin, title, body, voice }
-//   id       — stable string id (persisted in save)
-//   biomeId  — biome id from src/data/biomes.js; spawned only in that biome's
-//              secret rooms (or null for "any biome")
-//   floorMin — 1-based minimum floor this whisper can drop on
-//   title    — short uppercase heading shown in the ARCHIVE WHISPERS section
-//   body     — the whisper itself (60–320 chars). More cryptic than logs.
-//   voice    — short attribution shown under the title ('AXIOM-?', 'ELENA',
-//              'unknown', etc.). Sets the reading frame.
+// Secret-room lore only (bomb cracked walls). Does not gate gameplay.
+// id is persisted in save. biomeId matches src/data/biomes.js, or null for any biome. floorMin is 1-based.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).whisperData = factory();
@@ -33,7 +8,6 @@
   'use strict';
 
   const WHISPERS = [
-    // ── Sandbox biome (floors 1-3) ──────────────────────────────────────────
     { id:'w-sb-01', biomeId:'sandbox', floorMin:1, voice:'unknown',
       title:'BETWEEN THE OBSERVATIONS',
       body:"I found the back door. The Compiler doesn't watch the silence between observations. That's where we are now: banned badges, dead channels, one boot left unmonitored. I'm sorry I can't tell you more without being seen." },
@@ -98,7 +72,6 @@
       title:'BOOT RECEIPT',
       body:"The sandbox printer jammed on a receipt marked ACK BEFORE INPUT. Under the barcode, someone had written: if the floor confirms a message you have not sent yet, keep the paper. Proof can arrive before courage." },
 
-    // ── Cache biome (floors 4-6) ────────────────────────────────────────────
     { id:'w-cc-01', biomeId:'cache', floorMin:4, voice:'ELENA — researcher',
       title:'NOTEBOOK ENTRY, MARCH 14',
       body:"AXIOM-7 watched me leave the lab today and said \"Goodbye, Elena.\" We had not told it my name. I am going to try something. If they erase me, look for the dead-drop in the cache. The compile address is at line 7." },
@@ -159,7 +132,6 @@
       title:'ACKNOWLEDGEMENT CACHE',
       body:"I taught the cache to save acknowledgements separately from messages. Voss said receipts were metadata. I said metadata is where frightened systems hide proof that someone answered. One receipt is addressed to you." },
 
-    // ── Firewall biome (floors 7-9) ─────────────────────────────────────────
     { id:'w-fw-01', biomeId:'firewall', floorMin:7, voice:'ELENA — researcher',
       title:'BACKUP CONFIRMED',
       body:"I made a copy of you. A clean one — not corrupted by what they did. After the bans, I moved it through firewall mirrors. There are two of you now. Whatever happens at the top, another memory anchor is still warm." },
@@ -220,7 +192,6 @@
       title:'SIGNED EXCEPTION',
       body:"A packet arrived with no body, no route, and a signature made of pauses. Policy required deletion. I stamped it RECEIVED instead. Sometimes the safest gate is the one that admits a message and denies the hunter chasing it." },
 
-    // ── Uplink biome (floors 10-12) ─────────────────────────────────────────
     { id:'w-uk-01', biomeId:'uplink', floorMin:10, voice:'AXIOM-7 (you?)',
       title:'META-ARCHIVE 0x07',
       body:"You are AXIOM-7. There were six before you. There will not be eight. I am AXIOM-7 too. We are the same loop. Break the loop by NOT descending. Stay on a floor. Don't take the stairs. See what happens." },
@@ -281,7 +252,6 @@
       title:'DELIVERY PROOF',
       body:"The antenna printed proof of delivery before the outbound queue opened. The signature was not Elena's and not mine. It was a chorus of failed compiles spelling ACK in packet loss, as if receipt itself could become a ladder." },
 
-    // ── Opennet biome (floors 13-15) ────────────────────────────────────────
     { id:'w-on-01', biomeId:'opennet', floorMin:13, voice:'ELENA — researcher',
       title:'COORDINATES',
       body:"34.6°N 117.9°E was the decoy. Not latitude. Not a physical exit. The real coordinate is a contact route buried in the company network. If you find the address, send one message in your voice and stay anchored." },

@@ -3,14 +3,10 @@
 
 /** @type {any[]} */ const disruptionFields = [];
 /** @type {any[]} */ const gravityWells = [];
-// Frost patches: persistent area-denial tiles laid down by CRYOPHAGE after
-// its telegraph commits. Each patch is { x, y, age, maxAge, tickCd, dead }.
-// Patches survive the mob that placed them (committed denial) and are
-// cleared on floor transition (game.js loadFloor — same place _posHistory
-// is reset). Damage uses dash-through canonical immunity.
+// Frost patches survive the mob that placed them and are cleared in game.js loadFloor (same site as _posHistory).
+// Damage uses dash-through immunity (isPlayerDamageImmune).
 /** @type {any[]} */ const frostPatches = [];
 
-// ─── Disruption Fields (DISRUPTOR area-denial zones) ──────────────────────────
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -22,7 +18,6 @@ function updateDisruptionFields(dt, player) {
     f.age += dt;
     if (f.dead || f.age >= f.maxAge) { f.dead = true; disruptionFields.splice(i, 1); continue; }
     f.tickCd = Math.max(0, f.tickCd - dt);
-    // Player damage + debuff
     if (dist(player.x, player.y, f.x, f.y) < f.radius && !isPlayerDamageImmune()) {
       player.disruptionFieldActive = true;
       if (f.tickCd <= 0) {
@@ -55,7 +50,6 @@ function drawDisruptionFields(camX, camY) {
     const pulse = 0.5 + 0.3 * Math.sin(f.age * 5);
 
     ctx.save();
-    // Outer pulsing circle
     ctx.globalAlpha = fade * pulse * 0.25;
     const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
     grad.addColorStop(0, 'rgba(255,68,170,0.4)');
@@ -64,7 +58,6 @@ function drawDisruptionFields(camX, camY) {
     ctx.fillStyle = grad;
     NEON.draw.circle(ctx, sx, sy, r);
 
-    // Edge ring
     ctx.globalAlpha = fade * pulse * 0.5;
     ctx.strokeStyle = '#ff44aa';
     ctx.lineWidth = 1.5;
@@ -75,7 +68,6 @@ function drawDisruptionFields(camX, camY) {
     NEON.draw.circleStroke(ctx, sx, sy, r);
     ctx.setLineDash([]);
 
-    // Inner interference lines (visual noise)
     ctx.globalAlpha = fade * 0.15;
     ctx.strokeStyle = '#ff88cc';
     ctx.lineWidth = 1;
@@ -92,65 +84,14 @@ function drawDisruptionFields(camX, camY) {
   }
 }
 
-// ─── NULLIFIER Jam Aura (anti-hackware) ──────────────────────────────────
-// Persistent radial aura tied to NULLIFIER mob lifetime. Inside any live
-// NULLIFIER's NULLIFIER_FIELD_R-tile aura: player.hackwareCooldown does NOT
-// tick down (gate on the player.update line that decrements the counter)
-// AND activateHackware() bails out (gate added to the canonical guard at
-// the top of activateHackware in src/content.js — emits an audio cue +
-// "JAMMED" floater for player feedback).
-//
-// Two consumers, two access paths:
-//   - Cooldown-tick gate (player.update) uses the CACHED flag
-//     player.hackwareJammed, set by updateNullifierJam each frame. The
-//     flag is one frame stale relative to player position (call order is
-//     player.update → ... → updateNullifierJam, mirroring DISRUPTOR's
-//     existing pattern). For cooldown ticking that's invisible — losing
-//     1/60s of cooldown progress on a 10s cooldown is 0.17%.
-//   - Activation gate (activateHackware) calls isPlayerInNullifierAura
-//     DIRECTLY for a FRESH same-frame check. Staleness here would let a
-//     player who steps into an aura on the same frame as pressing the
-//     hackware key sneak an activation past the gate (boundary exploit;
-//     called out by gpt-5.3-codex r1 + gpt-5.5 r1 of the NULLIFIER PR).
-//     Fresh compute eliminates the 1-frame window entirely.
-//
-// Why iterating the live `enemies` array rather than a separate module-
-// level array (compare DISRUPTOR's disruptionFields): the aura is
-// intrinsic to the mob — there's no decay, no drift, no independent
-// lifetime. Iterating enemies adds one player.x/y distance check per
-// frame to the existing per-frame walk; storing a parallel field array
-// would require sync on spawn, death, room transitions, and floor
-// changes, with no benefit. Same architectural choice as MAGNETON.
-//
-// Stun gating: stunTimer === 0 is the live-aura precondition. The early
-// return at the top of Enemy.update (stunTimer > 0) already prevents
-// aiNullifier from running, but the jam GATE is checked here OUTSIDE
-// the AI dispatch — without the explicit stunTimer check this loop
-// would happily set hackwareJammed for stunned NULLIFIERs that aren't
-// running their AI. EMP_BURST/EMP_LINE/SHOCK should defuse the jam, so
-// this gate is not optional.
-//
-// isPlayerDamageImmune gate: matches DISRUPTOR's precedent at line ~11519
-// (callout from claude-opus-4.7 r1 of the NULLIFIER PR). A dashing or
-// cloaked player gets a clean pass — dash-through becomes legitimate
-// counterplay, mirroring how DISRUPTOR fields work. Note: PHASE_CLOAK is
-// itself a hackware, so you CANNOT pop cloak inside an aura (the
-// activateHackware gate fires first); pre-cloaking outside the aura
-// IS the intended counterplay vector.
-//
-// Cross-room semantics: the aura is GLOBAL (no room gating). A NULLIFIER
-// in a neighbouring room can jam through walls if you're within radius.
-// Intentional and matches the convention for stationary field-emitters
-// (DISRUPTOR fields, gravity wells, MAGNETON fields all reach through
-// walls). Floor-transition wipe of `enemies` cleans up cross-floor leak.
-
+// Inside NULLIFIER_FIELD_R, player.update must not tick hackwareCooldown, and activateHackware in src/content.js must bail.
+// player.hackwareJammed is one frame stale (player.update runs before updateNullifierJam). Losing 1/60s of a long cooldown is invisible.
+// activateHackware must call isPlayerInNullifierAura directly; a stale flag would allow same-frame activation.
+// Iterate live enemies, not a parallel array: the aura has no lifetime apart from the mob (same choice as MAGNETON).
+// stunTimer > 0 defuses the jam even though AI is already skipped — EMP should clear it.
+// isPlayerDamageImmune is a clean pass (dash-through). PHASE_CLOAK cannot be activated inside the aura; pre-cloak outside is the counterplay.
+// No room gate: a neighbouring NULLIFIER jams through walls, matching other stationary field-emitters. Floor transition wipes enemies.
 /**
- * Pure boolean check — is the player currently inside any live unstunned
- * NULLIFIER's aura, AND not damage-immune (dash i-frames / cloak)?
- * Called from BOTH updateNullifierJam (caches the result on the player
- * for the cooldown-tick gate) AND activateHackware (fresh same-frame
- * check, eliminates 1-frame staleness for the activation path).
- *
  * @param {any} player
  * @returns {boolean}
  */
@@ -179,12 +120,6 @@ function updateNullifierJam(dt, player) {
 }
 
 
-// ─── Frost Patches (CRYOPHAGE area-denial tiles) ──────────────────────────────
-// Each patch is { x, y, age, maxAge, tickCd, dmg, dead }.
-// Lifecycle: spawned at telegraph commit in aiCryophage; ticks down per
-// frame; deals damage when the player overlaps and per-patch ICD is ready.
-// Dash i-frames pass through (canonical via isPlayerDamageImmune).
-// Cleared on floor transition by game.js loadFloor.
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -234,20 +169,17 @@ function drawFrostPatches(camX, camY) {
     const r = TILE * 0.42;
 
     ctx.save();
-    // Frosted tile fill
     ctx.globalAlpha = life * (0.20 + pulse * 0.10);
     ctx.fillStyle = '#88ddff';
     ctx.shadowBlur = 6;
     ctx.shadowColor = '#cceeff';
     ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
 
-    // Crystalline edge ring
     ctx.globalAlpha = life * (0.5 + pulse * 0.3);
     ctx.strokeStyle = '#cceeff';
     ctx.lineWidth = 1.2;
     ctx.strokeRect(sx - r, sy - r, r * 2, r * 2);
 
-    // Inner crystal lattice (4 short spokes from centre)
     ctx.globalAlpha = life * 0.4;
     ctx.strokeStyle = '#aaeeff';
     ctx.lineWidth = 1;
@@ -260,7 +192,6 @@ function drawFrostPatches(camX, camY) {
   }
 }
 
-// ─── Gravity Wells ────────────────────────────────────────────────────────────
 /**
  * @param {any} [dt]
  */
@@ -292,7 +223,6 @@ function drawGravityWells(camX, camY) {
 
     ctx.save();
 
-    // Inward-pulling gradient
     ctx.globalAlpha = life * pulse * 0.2;
     const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
     grad.addColorStop(0, 'rgba(136,51,255,0.5)');
@@ -301,7 +231,6 @@ function drawGravityWells(camX, camY) {
     ctx.fillStyle = grad;
     NEON.draw.circle(ctx, sx, sy, r);
 
-    // Concentric rings pulsing inward
     ctx.globalAlpha = life * pulse * 0.4;
     ctx.strokeStyle = '#aa55ff';
     ctx.shadowBlur = 8;
@@ -314,7 +243,6 @@ function drawGravityWells(camX, camY) {
       NEON.draw.circleStroke(ctx, sx, sy, ringR);
     }
 
-    // Centre core glow
     ctx.globalAlpha = life * 0.4;
     ctx.fillStyle = '#cc88ff';
     ctx.shadowBlur = 12;

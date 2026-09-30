@@ -1,8 +1,7 @@
 // @ts-check
 'use strict';
 
-// Score-combo / kill-streak runtime state. Loaded before src/content.js so the
-// legacy globals remain available to content, entities, render, and game code.
+// Loaded before src/content.js so these names stay script globals.
 
 /** @type {any} */
 const _CC = new Proxy({}, {
@@ -12,10 +11,10 @@ const _CC = new Proxy({}, {
 });
 
 const combo = { count: 0, timer: 0, best: 0, flashTimer: 0 };
-const COMBO_WINDOW    = 3;     // seconds between kills to maintain streak
-const COMBO_STEP      = 0.25;  // multiplier increment per kill beyond first
-const COMBO_MAX_MULT  = 4;     // hard cap on multiplier
-const COMBO_BOSS_CAP  = 2;     // separate lower cap for boss kills
+const COMBO_WINDOW    = 3;     // seconds between kills
+const COMBO_STEP      = 0.25;
+const COMBO_MAX_MULT  = 4;
+const COMBO_BOSS_CAP  = 2;
 function comboMultiplier() {
   return combo.count < 2 ? 1 : Math.min(COMBO_MAX_MULT, 1 + (combo.count - 1) * COMBO_STEP);
 }
@@ -38,7 +37,6 @@ function registerKill(isBoss) {
   combo.flashTimer = 0.3;
   if (combo.count > combo.best) combo.best = combo.count;
   if (combo.count >= 2) audio.comboTick(combo.count);
-  // milestone floating text at kill position
   if (combo.count === 5 || combo.count === 10 || combo.count === 15 || combo.count === 20) {
     const p = _CC.player;
     spawnDmgText(p.x, p.y - 0.5, `×${combo.count} COMBO!`, comboColour());

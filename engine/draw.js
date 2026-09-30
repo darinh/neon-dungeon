@@ -1,66 +1,8 @@
 // @ts-check
 'use strict';
-// engine/draw.js — pure 2D canvas drawing primitives.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. All exports are pure functions
-// over numbers / strings / a CanvasRenderingContext2D-shaped object. No
-// module state, no globals consulted, no allocations per call.
-//
-// Hot-path safe: every helper is allocation-free in the steady state. The
-// host can call these from inside drawWorld per-tile loops without GC churn
-// (per the `render hot path` memory). Helpers do mutate ctx state
-// (fillStyle/strokeStyle/shadowBlur/shadowColor are NOT touched here — the
-// caller sets those before invoking; only beginPath / arc / moveTo / lineTo
-// / fill / stroke calls happen). The two exceptions, `setShadow` and
-// `clearShadow`, exist precisely to make the shadow-state churn explicit.
-//
-// Surface:
-//   circle(ctx, x, y, r)
-//     → fills a closed circle at (x, y) radius r using current fillStyle.
-//
-//   circleStroke(ctx, x, y, r)
-//     → strokes a closed circle at (x, y) radius r using current strokeStyle
-//       and lineWidth.
-//
-//   arcStroke(ctx, x, y, r, a1, a2)
-//     → strokes a partial arc from angle a1 to a2 (radians, like ctx.arc).
-//
-//   line(ctx, x1, y1, x2, y2)
-//     → strokes a single line segment.
-//
-//   roundRect(ctx, x, y, w, h, r)
-//     → fills a rounded rect using current fillStyle.
-//
-//   roundRectStroke(ctx, x, y, w, h, r)
-//     → strokes a rounded rect using current strokeStyle + lineWidth.
-//
-//   roundRectFillStroke(ctx, x, y, w, h, r)
-//     → fills THEN strokes a rounded rect (one beginPath, two paint ops).
-//       Use when the same rect should both fill and stroke without
-//       re-tracing the path.
-//
-//   rectFillStroke(ctx, x, y, w, h)
-//     → fills THEN strokes a non-rounded rect (one beginPath, two paint
-//       ops). Use only when you specifically need fill AND stroke; for
-//       fill-only or stroke-only, prefer the native ctx.fillRect /
-//       ctx.strokeRect (allocation-free and one line).
-//
-//   setShadow(ctx, color, blur)
-//     → sets ctx.shadowColor + ctx.shadowBlur. Use to enable a neon-style
-//       glow before a fill/stroke call.
-//
-//   clearShadow(ctx)
-//     → ctx.shadowBlur = 0. Cheaper than setShadow for the common reset.
-//
-// Browser: attaches as `window.NEON.draw`. Pure helpers only — does NOT
-// own state (mirrors engine/touch.js + engine/viewport.js pure-helpers UMD
-// pattern, not the engine/input.js / engine/audio.js createEngine factory
-// pattern).
-//
-// Node: module.exports = { circle, circleStroke, arcStroke, line,
-//                          roundRect, roundRectStroke, roundRectFillStroke,
-//                          rectFillStroke,
-//                          setShadow, clearShadow }.
+// Allocation-free so drawWorld per-tile loops can call these. They do not
+// touch fillStyle or shadow; setShadow/clearShadow exist so glow state is
+// explicit. Leaving shadowBlur set bleeds onto later draws.
 
 (function (root, factory) {
   const v = factory();
@@ -79,7 +21,6 @@
   const TAU = Math.PI * 2;
 
   /**
-   * Fill a closed circle. Uses the ctx's current fillStyle.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -92,7 +33,6 @@
   }
 
   /**
-   * Stroke a closed circle. Uses the ctx's current strokeStyle + lineWidth.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -105,7 +45,6 @@
   }
 
   /**
-   * Stroke a partial arc from angle a1 to a2 (radians, see ctx.arc).
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -120,7 +59,6 @@
   }
 
   /**
-   * Stroke a single line segment.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x1
    * @param {number} y1
@@ -135,9 +73,7 @@
   }
 
   /**
-   * Fill a rounded rect. Uses current fillStyle. Allocation-free —
-   * delegates to the native ctx.roundRect (Canvas2D, broadly supported
-   * since 2023). For non-rounded rects use ctx.fillRect directly.
+   * Native ctx.roundRect, no polyfill. Canvas2D support is broad since 2023.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -152,7 +88,6 @@
   }
 
   /**
-   * Stroke a rounded rect. Uses current strokeStyle + lineWidth.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -167,10 +102,6 @@
   }
 
   /**
-   * Fill AND stroke a rounded rect in one call. Single beginPath + roundRect,
-   * then fill, then stroke (matches the common "card background" pattern in
-   * src/game.js menus where the same rect is both filled and outlined).
-   * Caller sets fillStyle, strokeStyle, lineWidth before invoking.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -186,12 +117,6 @@
   }
 
   /**
-   * Fill AND stroke a non-rounded rect in one call. Single beginPath +
-   * rect, then fill, then stroke. Use only when you specifically need both
-   * fill AND stroke on the same rect — for fill-only or stroke-only, prefer
-   * native ctx.fillRect / ctx.strokeRect (one line, allocation-free, no
-   * beginPath needed). Caller sets fillStyle, strokeStyle, lineWidth before
-   * invoking.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {number} x
    * @param {number} y
@@ -206,9 +131,6 @@
   }
 
   /**
-   * Enable a neon-style glow. Caller is responsible for clearing it
-   * afterward (typically with clearShadow) — leaving shadowBlur set is a
-   * common cause of bleed onto unrelated draws.
    * @param {CanvasRenderingContext2D | any} ctx
    * @param {string} color
    * @param {number} blur
@@ -219,8 +141,6 @@
   }
 
   /**
-   * Reset shadow blur to 0. Does not touch shadowColor — callers who
-   * setShadow again will overwrite it anyway.
    * @param {CanvasRenderingContext2D | any} ctx
    */
   function clearShadow(ctx) {

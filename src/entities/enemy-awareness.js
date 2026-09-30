@@ -1,8 +1,7 @@
 // @ts-check
 'use strict';
 
-// Shared enemy perception/leash tuning. Loaded before src/entities.js so the
-// Enemy update path can use these classic-script lexical globals directly.
+// Loaded before src/entities.js; Enemy update reads these as script globals.
 const ENEMY_TARGET_MEMORY_SECONDS = 3;
 const ENEMY_SIGHT_RANGE = 15;
 const ENEMY_ROOM_LEASH_TILES = 8;

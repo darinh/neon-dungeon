@@ -2,8 +2,6 @@
 'use strict';
 
 /**
- * GRAVITON: Gravity Manipulation — deploys wells that pull the player.
- *
  * @this {Enemy}
  * @param {any} [dt]
  * @param {any} [player]
@@ -13,7 +11,6 @@
  */
 Enemy.prototype.aiGraviton = function aiGraviton(dt, player, map, d, los) {
   void player;
-  // Prune dead well refs
   this._gvWells = this._gvWells.filter((/** @type {any} */ w) => w && !w.dead);
   this._gvDeployTimer = Math.max(0, this._gvDeployTimer - dt);
   this._gvFireTimer = Math.max(0, this._gvFireTimer - dt);
@@ -21,7 +18,6 @@ Enemy.prototype.aiGraviton = function aiGraviton(dt, player, map, d, los) {
   const spd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
 
   if (los && d < 5) {
-    // Too close — retreat
     const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
     const nx = this.x + dx * spd * dt;
     const ny = this.y + dy * spd * dt;
@@ -33,14 +29,13 @@ Enemy.prototype.aiGraviton = function aiGraviton(dt, player, map, d, los) {
     if (!moved) this.patrol(dt, map);
   } else if (los && d <= 10) {
     this.state = 'ATTACK';
-    // Deploy gravity well near player (priority — gravitational, ignores cloak)
+    // Gravitational: ignores cloak.
     if (this._gvDeployTimer <= 0 && d > 3) {
       const ox = (rand('combat') - 0.5) * 2;
       const oy = (rand('combat') - 0.5) * 2;
       const wx = this._tx + ox, wy = this._ty + oy;
       const tx = Math.floor(wx), ty = Math.floor(wy);
       if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
-        // If at cap, remove oldest
         if (this._gvWells.length >= 2) {
           this._gvWells[0].dead = true;
           this._gvWells.shift();
@@ -56,7 +51,6 @@ Enemy.prototype.aiGraviton = function aiGraviton(dt, player, map, d, los) {
         this._gvDeployTimer = 5.0 / bm;
       }
     }
-    // Secondary ranged attack
     else if (this._gvFireTimer <= 0 && this._canTarget()) {
       this.fireAt(this._tx, this._ty, 6, this.atk, 10, this.colour);
       this._gvFireTimer = 3.0 / bm;

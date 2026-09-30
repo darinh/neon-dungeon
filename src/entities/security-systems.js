@@ -4,7 +4,6 @@
 // Security systems load after src/entities.js so they can reuse shared actor,
 // trap, and wall-facing globals while publishing the legacy camera/laser helpers.
 
-// ─── Security Cameras ─────────────────────────────────────────────────────────
 const CAMERA_CONE_HALF = Math.PI / 6;   // 30° half-angle → 60° beam
 const CAMERA_SWEEP_HALF = Math.PI / 3;  // 60° half-sweep → 120° total coverage
 const CAMERA_RANGE = 5;                 // tiles
@@ -25,7 +24,7 @@ function createCamera(x, y, floor, room, wallSide) {
   return {
     x, y, hp: maxHp, maxHp, dead: false, room, floor, wallSide,
     baseAngle,
-    sweepAngle: 0, sweepDir: 1,      // current offset from base, oscillation direction
+    sweepAngle: 0, sweepDir: 1,
     state: 'scanning',                // scanning | alerted | triggered
     alertTimer: 0,
     rearmCd: 0,                       // debounce after returning to scanning
@@ -101,17 +100,14 @@ function updateCameras(dt) {
     if (c.dead) continue;
     c.bob += dt * 2;
 
-    // Sweep oscillation
     c.sweepAngle += CAMERA_SWEEP_SPD * c.sweepDir * dt;
     if (c.sweepAngle > CAMERA_SWEEP_HALF) { c.sweepAngle = CAMERA_SWEEP_HALF; c.sweepDir = -1; }
     if (c.sweepAngle < -CAMERA_SWEEP_HALF) { c.sweepAngle = -CAMERA_SWEEP_HALF; c.sweepDir = 1; }
 
     const currentAngle = c.baseAngle + c.sweepAngle;
 
-    // Tick rearm cooldown
     if (c.rearmCd > 0) c.rearmCd -= dt;
 
-    // Detection check: player in room, in cone, LOS, targetable
     const r = c.room;
     const inRoom = p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
     let detected = false;
@@ -136,14 +132,12 @@ function updateCameras(dt) {
       }
     } else if (c.state === 'alerted') {
       if (!detected) {
-        // Player left cone — return to scanning with debounce
         c.state = 'scanning';
         c.rearmCd = CAMERA_REARM_CD;
-        _EG.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocked while alerted)
+        _EG.enemyDiedThisFrame = true; // alerted cameras block room-clear
       } else {
         c.alertTimer -= dt;
         if (c.alertTimer <= 0) {
-          // Alert triggered — spawn reinforcements
           c.state = 'triggered';
           c.dead = true;
           audio.cameraAlert();
@@ -184,7 +178,6 @@ function drawCameras(camX, camY) {
     const sx = c.x * TILE - camX, sy = c.y * TILE - camY;
     const currentAngle = c.baseAngle + c.sweepAngle;
 
-    // Draw vision cone (raycast-clipped against walls)
     const coneSteps = 16;
     const coneColor = c.state === 'alerted' ? '#ff4422' : '#ff2200';
     const coneAlpha = c.state === 'alerted'
@@ -198,7 +191,6 @@ function drawCameras(camX, camY) {
     ctx.moveTo(sx, sy);
     for (let s = 0; s <= coneSteps; s++) {
       const a = currentAngle - CAMERA_CONE_HALF + (CAMERA_CONE_HALF * 2) * (s / coneSteps);
-      // Raycast to find effective range (clip at walls)
       let reach = CAMERA_RANGE;
       for (let step = 0.5; step <= CAMERA_RANGE; step += 0.5) {
         const rx = c.x + Math.cos(a) * step;
@@ -216,7 +208,6 @@ function drawCameras(camX, camY) {
     ctx.closePath();
     ctx.fill();
 
-    // Cone edge lines (raycast-clipped to match filled cone)
     ctx.globalAlpha = coneAlpha * 1.5;
     ctx.strokeStyle = coneColor;
     ctx.lineWidth = 1;
@@ -238,14 +229,12 @@ function drawCameras(camX, camY) {
     ctx.stroke();
     ctx.restore();
 
-    // Draw camera body
     ctx.save();
     const baseColour = c.state === 'alerted' ? '#ff4422' : '#cc2200';
     const glowColour = c.state === 'alerted' ? '#ff6644' : '#ff3300';
     ctx.shadowBlur = c.state === 'alerted' ? 10 : 5;
     ctx.shadowColor = glowColour;
 
-    // Camera housing (small rectangle oriented to wall)
     ctx.translate(sx, sy);
     ctx.rotate(c.baseAngle);
     ctx.fillStyle = '#333';
@@ -253,7 +242,6 @@ function drawCameras(camX, camY) {
     ctx.fillStyle = baseColour;
     ctx.fillRect(-3, -2, 6, 4);
 
-    // Lens dot
     const lensPulse = c.state === 'alerted' ? 1.0 : 0.6 + 0.3 * Math.sin(c.bob * 2);
     ctx.globalAlpha = lensPulse;
     ctx.fillStyle = c.state === 'alerted' ? '#ff8866' : '#ff4400';
@@ -261,7 +249,6 @@ function drawCameras(camX, camY) {
 
     ctx.restore();
 
-    // Alert countdown bar
     if (c.state === 'alerted') {
       const bw = 16, bh = 2;
       const bx = sx - bw / 2, by = sy - 12;
@@ -275,7 +262,6 @@ function drawCameras(camX, camY) {
       ctx.restore();
     }
 
-    // HP bar when damaged
     if (c.hp < c.maxHp) {
       const bw = 16, bh = 2, bx = sx - bw / 2, by = sy - 14;
       ctx.save();
@@ -289,7 +275,6 @@ function drawCameras(camX, camY) {
   }
 }
 
-// ─── Laser Tripwires ──────────────────────────────────────────────────────────
 const LASER_HIT_CD = 2.0;      // seconds between re-triggering on same laser
 const LASER_DISABLE_DUR = 3.0; // EMP disable duration
 const LASER_CYCLE_ON = 1.5;    // seconds beam stays on (cycling lasers)
@@ -338,7 +323,6 @@ function destroyLaserEmitter(l, which) {
   spawnParticles(ex, ey, 'EXPLOSION', '#ff6644', 12);
   spawnParticles(ex, ey, 'SPARK', '#ffaa44', 6);
   audio.laserDestroy();
-  // Beam is gone — mark entire laser dead
   l.dead = true;
   l.active = false;
   const d = getDiff();
@@ -381,7 +365,6 @@ function damageLasersInRadius(wx, wy, radius, dmg, map) {
   for (let i = lasers.length - 1; i >= 0; i--) {
     const l = lasers[i];
     if (l.dead) continue;
-    // Check both emitters
     if (!l.deadA && dist(wx, wy, l.x1, l.y1) < radius && hasLOS(wx, wy, l.x1, l.y1, map)) {
       damageLaserEmitter(l, 'A', dmg);
     }
@@ -392,7 +375,6 @@ function damageLasersInRadius(wx, wy, radius, dmg, map) {
   }
 }
 
-// Segment intersection: does segment (px,py)→(px2,py2) cross laser beam?
 /**
  * @param {any} [l]
  * @param {any} [px]
@@ -401,7 +383,6 @@ function damageLasersInRadius(wx, wy, radius, dmg, map) {
  * @param {any} [py2]
  */
 function crossesLaserBeam(l, px, py, px2, py2) {
-  // Beam from (l.x1,l.y1) to (l.x2,l.y2), player from (px,py) to (px2,py2)
   const d1x = l.x2 - l.x1, d1y = l.y2 - l.y1;
   const d2x = px2 - px, d2y = py2 - py;
   const denom = d1x * d2y - d1y * d2x;
@@ -411,7 +392,6 @@ function crossesLaserBeam(l, px, py, px2, py2) {
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 }
 
-// Check if beam path is clear of opaque tiles
 /**
  * @param {any} [l]
  * @param {any} [map]
@@ -442,7 +422,6 @@ function updateLasers(dt) {
     if (l.dead) continue;
     l.bob += dt * 2;
 
-    // EMP disable timer
     if (l.disabled) {
       l.disableTimer -= dt;
       if (l.disableTimer <= 0) {
@@ -452,10 +431,8 @@ function updateLasers(dt) {
       continue;
     }
 
-    // Tick rearm grace
     if (l.rearmGrace > 0) l.rearmGrace -= dt;
 
-    // Cycling logic
     if (l.cycling) {
       l.cycleTimer -= dt;
       if (l.active && l.cycleTimer <= 0) {
@@ -468,23 +445,20 @@ function updateLasers(dt) {
       }
     }
 
-    // Hit cooldown
     if (l.hitCd > 0) l.hitCd -= dt;
 
-    // Beam active? Check path clear (crates can block)
+    // Crates can block the beam.
     if (!l.active) continue;
     if (!isBeamClear(l, map)) continue;
 
-    // Player crossing detection (segment intersection with player prev→current pos)
+    // Segment test against prev→current so a fast cross still hits.
     if (l.hitCd <= 0 && l.rearmGrace <= 0 && canTargetPlayer()) {
       const prevX = p._prevX !== undefined ? p._prevX : p.x;
       const prevY = p._prevY !== undefined ? p._prevY : p.y;
-      // Also check if player is currently overlapping the beam (standing on it)
       const onBeam = crossesLaserBeam(l, prevX, prevY, p.x, p.y);
-      // Proximity check for standing near beam line
       let nearBeam = false;
       if (!onBeam) {
-        // Point-to-segment distance check for player radius
+        // 0.25 is the player radius against the beam segment.
         const ax = l.x1, ay = l.y1, bx = l.x2, by = l.y2;
         const abx = bx - ax, aby = by - ay;
         const apx = p.x - ax, apy = p.y - ay;
@@ -520,7 +494,6 @@ function drawLasers(camX, camY) {
   if (!map) return;
   for (const l of lasers) {
     if (l.dead) continue;
-    // Visibility: either emitter visible
     const t1x = Math.floor(l.x1), t1y = Math.floor(l.y1);
     const t2x = Math.floor(l.x2), t2y = Math.floor(l.y2);
     const vis1 = _EG.dungeon?.visible?.[t1y]?.[t1x];
@@ -530,11 +503,9 @@ function drawLasers(camX, camY) {
     const s1x = l.x1 * TILE - camX, s1y = l.y1 * TILE - camY;
     const s2x = l.x2 * TILE - camX, s2y = l.y2 * TILE - camY;
 
-    // Draw beam line
     if (!l.disabled) {
       const beamClear = isBeamClear(l, map);
       if (l.active && beamClear) {
-        // Active beam — bright red/orange line with glow
         const pulse = 0.6 + 0.2 * Math.sin(l.bob * 4);
         ctx.save();
         ctx.globalAlpha = pulse;
@@ -543,7 +514,6 @@ function drawLasers(camX, camY) {
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#ff4422';
         NEON.draw.line(ctx, s1x, s1y, s2x, s2y);
-        // Inner bright core
         ctx.globalAlpha = pulse * 0.8;
         ctx.strokeStyle = '#ff8866';
         ctx.lineWidth = 1;
@@ -551,7 +521,6 @@ function drawLasers(camX, camY) {
         NEON.draw.line(ctx, s1x, s1y, s2x, s2y);
         ctx.restore();
       } else if (l.cycling && !l.active) {
-        // Cycling off — dim dotted line
         ctx.save();
         ctx.globalAlpha = 0.15;
         ctx.strokeStyle = '#ff4422';
@@ -563,7 +532,6 @@ function drawLasers(camX, camY) {
       }
     }
 
-    // Draw emitter A
     if (!l.deadA) {
       ctx.save();
       const col = l.disabled ? '#666' : '#ff6644';
@@ -574,7 +542,6 @@ function drawLasers(camX, camY) {
       ctx.fillRect(s1x - 3, s1y - 3, 6, 6);
       ctx.fillStyle = col;
       ctx.fillRect(s1x - 2, s1y - 2, 4, 4);
-      // Lens pulse
       if (!l.disabled) {
         const lp = l.active ? 0.8 + 0.2 * Math.sin(l.bob * 3) : 0.3;
         ctx.globalAlpha = lp;
@@ -582,7 +549,6 @@ function drawLasers(camX, camY) {
         NEON.draw.circle(ctx, s1x, s1y, 1.5);
       }
       ctx.restore();
-      // HP bar when damaged
       if (l.hpA < l.maxHp) {
         const bw = 14, bh = 2, bx = s1x - bw / 2, by = s1y - 8;
         ctx.save();
@@ -595,7 +561,6 @@ function drawLasers(camX, camY) {
       }
     }
 
-    // Draw emitter B
     if (!l.deadB) {
       ctx.save();
       const col = l.disabled ? '#666' : '#ff6644';
@@ -625,7 +590,6 @@ function drawLasers(camX, camY) {
       }
     }
 
-    // Disabled sparking effect
     if (l.disabled) {
       if (rand('cosmetic') < 0.1) {
         spawnParticles(l.x1, l.y1, 'SPARK', '#00ddff', 1);

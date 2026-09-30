@@ -1,12 +1,8 @@
 // @ts-check
 'use strict';
 
-// Shield generators load after src/entities.js so they can reuse shared actor
-// collections and publish the legacy globals used by enemy damage mitigation,
-// generation, projectiles, hackware, explosions, updates, and rendering.
-
-// ─── Shield Generators ────────────────────────────────────────────────────────
-const SHIELD_GEN_DR = 0.35; // 35% damage reduction to room enemies
+// Loaded after src/entities.js. Enemy mitigation, generation, projectiles, hackware, explosions, updates, and rendering call these globals.
+const SHIELD_GEN_DR = 0.35; // fraction of damage removed for enemies inside the room
 
 /**
  * @param {any} [x]
@@ -38,12 +34,10 @@ function destroyShieldGen(g) {
   spawnParticles(g.x, g.y, 'EXPLOSION', '#00ccff', 18);
   spawnParticles(g.x, g.y, 'SPARK', '#88eeff', 10);
   audio.generatorDestroy();
-  // Credit reward
   const d = getDiff();
   const amt = Math.round(_EG.floor * 5 * getMetaCreditMultiplier() * d.creditMul * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
   _EG.player.credits += amt;
   spawnDmgText(g.x, g.y - 0.3, '+' + amt + '◈', '#00ccff');
-  // EMP burst — stun enemies in radius (LOS-gated)
   const empR = 3, empDur = 0.8, map = _EG.dungeon.map;
   for (const e of enemies) {
     if (e.dead || e.isBoss || e._disguised) continue;
@@ -76,7 +70,6 @@ function damageShieldGensInRadius(wx, wy, radius, dmg, map) {
   }
 }
 
-// Check if an enemy is protected by a shield generator (room + spatial bounds)
 /**
  * @param {any} [e]
  */
@@ -115,7 +108,6 @@ function drawShieldGens(camX, camY) {
     const pulse = 0.6 + 0.3 * Math.sin(g.bob * 2);
     const t = g.bob;
 
-    // Draw energy beams to shielded enemies in room
     const r = g.room;
     for (const e of enemiesInRoomIter(r)) {
       if (e.dead || e._disguised) continue;
@@ -131,7 +123,6 @@ function drawShieldGens(camX, camY) {
       ctx.restore();
     }
 
-    // Generator body — rotating hexagonal frame
     ctx.save();
     ctx.globalAlpha = pulse;
     ctx.shadowBlur = 12; ctx.shadowColor = '#00ccff';
@@ -149,7 +140,6 @@ function drawShieldGens(camX, camY) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.restore();
 
-    // Inner core — bright dot
     ctx.save();
     ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 4);
     ctx.shadowBlur = 8; ctx.shadowColor = '#44eeff';
@@ -157,7 +147,6 @@ function drawShieldGens(camX, camY) {
     NEON.draw.circle(ctx, sx, sy, 3);
     ctx.restore();
 
-    // HP bar when damaged
     if (g.hp < g.maxHp) {
       const bw = 16, bh = 2, bx = sx - bw / 2, by = sy - 14;
       ctx.save();

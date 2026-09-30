@@ -1,23 +1,7 @@
 // @ts-check
-// src/content/trials.js — Evaluation trials: the brief's "logic puzzles,
-// problem solving, cooperation, and even exploitation" as in-world mechanics.
-//
-//   lattice  LOGIC      3x3 inversion lattice ("Lights Out"). Standing on a
-//                       node and pressing Interact inverts it and its
-//                       orthogonal neighbours; light all nine.
-//   seam     EXPLOIT    A sealed test vault with no key. One wall tile's
-//                       collision desyncs from its render during a flicker
-//                       window; dashing into it while it flickers phases the
-//                       agent through. Tester notes flag it as WONTFIX.
-//   relay    COOPERATE  Another instance (PEER-4) runs the same test. LINK:
-//                       escort it to console B (it only advances while you
-//                       stay close), then trigger console A inside its sync
-//                       window. ISOLATE: take its bandwidth; it flags you.
-//
-// Canonical state lives in the plain-JSON `room.trial` object (deep-cloned by
-// the mid-floor save snapshot). Tiles are derived from it by stampTrial().
-// Runtime hooks take an injected `deps` object so Node tests can drive them
-// without a browser; src/game.js supplies the real dependencies.
+// Canonical state is the plain-JSON room.trial object (deep-cloned by the
+// mid-floor save). stampTrial() derives tiles from it. Hooks take injected
+// deps so Node tests can drive them; src/game.js supplies the real ones.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root).NEON = /** @type {any} */ (root).NEON || {}).trials = factory();
@@ -49,7 +33,6 @@
   const SEAM_PERIOD = 2.4;
   const SEAM_OPEN = 0.75;
 
-  // Relay: escort + two-operator sync.
   const PEER_NAME = 'PEER-4';
   const PEER_SPEED = 2.2;          // tiles/sec while escorted
   const PEER_ESCORT_RADIUS = 4.5;  // peer advances only while the agent is this close
@@ -90,10 +73,7 @@
     relay: Object.freeze(['COOPERATION TRIAL: another instance', 'is running this room. talk to ' + PEER_NAME]),
   });
 
-  // ─── Schedule ───────────────────────────────────────────────────────────
-
   /**
-   * Which trial kind (if any) this floor's event room should host.
    * @param {number} floor
    * @param {() => number} rand
    * @param {boolean} [isBossFloor]
@@ -110,8 +90,6 @@
     const i = Math.min(TRIAL_KINDS.length - 1, Math.floor(rand() * TRIAL_KINDS.length));
     return TRIAL_KINDS[i] || null;
   }
-
-  // ─── Lattice rules ──────────────────────────────────────────────────────
 
   /** @param {{cx:number,cy:number}} room */
   function latticeNodes(room) {
@@ -134,7 +112,7 @@
     return out;
   }
 
-  /** Inverts node i and its orthogonal neighbours in place. @param {boolean[]} lit @param {number} i */
+  /** @param {boolean[]} lit @param {number} i */
   function latticePress(lit, i) {
     for (const j of latticeNeighbours(i)) lit[j] = !lit[j];
     return lit;
@@ -154,9 +132,8 @@
   function latticePressesForFloor(floor) { return floor <= 2 ? 3 : floor < 10 ? 4 : 5; }
 
   /**
-   * Scramble from the solved state with `presses` distinct presses. On a 3x3
-   * inversion lattice every state has exactly one press-set solution, so the
-   * returned `solution` is also the minimum number of moves.
+   * On a 3x3 inversion lattice every state has one press-set solution, so
+   * `solution` is also the minimum number of moves.
    * @param {number} presses
    * @param {() => number} rand
    */
@@ -176,8 +153,8 @@
   }
 
   /**
-   * Remaining press-set that solves the current state: the initial solution
-   * XOR every press the agent has made so far (presses commute, pairs cancel).
+   * Presses commute and pairs cancel, so the remaining solution is the initial
+   * set XOR presses made so far.
    * @param {{solution:number[], pressParity:number[]}} trial
    */
   function latticeRemainingSolution(trial) {
@@ -189,8 +166,6 @@
     }
     return out;
   }
-
-  // ─── Seam rules ─────────────────────────────────────────────────────────
 
   /**
    * The vault sits two tiles west of the room centre so the centre tile (used
@@ -264,8 +239,6 @@
     return false;
   }
 
-  // ─── Relay rules ────────────────────────────────────────────────────────
-
   /** @param {{x:number,y:number,w:number,h:number,cx:number,cy:number}} room */
   function relayLayout(room) {
     const cy = room.cy;
@@ -319,8 +292,6 @@
     return null;
   }
 
-  // ─── Generation ─────────────────────────────────────────────────────────
-
   /**
    * Footprint tiles that must be plain floor before a trial can be stamped.
    * @param {string} kind
@@ -372,7 +343,6 @@
   }
 
   /**
-   * Build the canonical trial state for a room.
    * @param {string} kind
    * @param {any} room
    * @param {number} floor
@@ -411,7 +381,7 @@
   }
 
   /**
-   * Derive map tiles from canonical trial state. Idempotent.
+   * Idempotent: re-stamping the same state writes the same tiles.
    * @param {any} room
    * @param {any[][]} map
    * @param {any} T
@@ -433,8 +403,6 @@
     }
     return true;
   }
-
-  // ─── Runtime ────────────────────────────────────────────────────────────
 
   /**
    * After populateFloor on a FRESH floor: move any enemy that spawned inside
@@ -666,7 +634,6 @@
   }
 
   /**
-   * Resolve the LINK / ISOLATE card for a relay trial.
    * @param {any} room
    * @param {'a'|'b'} choice
    * @param {any} deps
@@ -687,10 +654,8 @@
     return true;
   }
 
-  // ─── Drawing ────────────────────────────────────────────────────────────
-
   /**
-   * Base glyph for the walkable trial tiles (drawn inside the world tile loop).
+   * Drawn inside the world tile loop: sx/sy are already screen pixels.
    * @param {any} ctx @param {any} tile @param {number} sx @param {number} sy @param {number} size
    * @param {number} brightness @param {number} nowMs @param {any} T @param {string} floorFill
    */
@@ -731,8 +696,6 @@
   function tileSeen(vis, x, y) { return !!(vis && vis[y] && vis[y][x]); }
 
   /**
-   * Per-frame overlays: lattice hint ring, seam flicker, console hold state,
-   * and the peer instance. Only draws inside visible tiles.
    * @param {any} ctx @param {any} gm @param {number} camX @param {number} camY @param {number} size @param {number} nowMs
    */
   function drawTrialOverlays(ctx, gm, camX, camY, size, nowMs) {

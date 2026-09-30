@@ -1,7 +1,6 @@
 'use strict';
 // @ts-check
 
-// ─── REFLECTOR AI — Tracking Reflector Duelist ─────────────────────────
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -11,7 +10,7 @@
  * @returns {void}
  */
 Enemy.prototype.aiReflector = function aiReflector(dt, player, map, d, los) {
-  // Smooth-lerp shield facing toward player (with tracking lag)
+  // Tracking lag is intentional.
   if (los) {
     const target = Math.atan2(this._ty - this.y, this._tx - this.x);
     let diff = target - this._rfAngle;
@@ -21,7 +20,6 @@ Enemy.prototype.aiReflector = function aiReflector(dt, player, map, d, los) {
   }
   const bm = this.berserkerMul();
   if (los && d < 4) {
-    // Too close — retreat
     const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
     const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     const nx = this.x + dx * retreatSpd * dt;
@@ -33,7 +31,6 @@ Enemy.prototype.aiReflector = function aiReflector(dt, player, map, d, los) {
     if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
     if (!moved) this.patrol(dt, map);
   } else if (los && d <= 10) {
-    // Hold position and fire
     this.state = 'ATTACK';
     if (this.shootTimer <= 0) {
       this.fireAt(this._tx, this._ty, 7, this.atk, 14, this.colour);

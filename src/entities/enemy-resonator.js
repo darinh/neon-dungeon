@@ -1,24 +1,7 @@
 // @ts-check
 'use strict';
 
-// ─── RESONATOR AI — Stationary Sonic-Cone Battery ──────────────────────
-// Stationary mob (spd=0). Cycles silently, then commits to a 60° sonic
-// cone telegraphed for RESONATOR_TELEGRAPH seconds before firing once.
-// Fire is instant (no projectile) — damage applies the frame the
-// telegraph timer hits 0 to any unit inside the locked cone arc that
-// also has LoS and isn't damage-immune (dash i-frames pass through).
-//
-// Aim source is `_tx,_ty` (canonical taunt-aware target), so hologram
-// decoys redirect the cone correctly with no special branch — unlike
-// ECHOER which had to special-case taunt because it sampled player
-// history directly.
-//
-// States:
-//   idle:      _rsCharge ticks down. When 0 + inRoom + canTarget + LoS,
-//              lock cone aim at (_tx,_ty) and enter telegraph.
-//   telegraph: _rsTele ticks down; cone wedge rendered. On 0, fire,
-//              transition to recovery.
-//   recovery:  _rsRec ticks down; on 0, reset _rsCharge, return to idle.
+// Aim locks on taunt-aware `_tx,_ty`, so a hologram redirects the cone with no extra branch.
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -31,21 +14,16 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
   const bm = this.berserkerMul();
   const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
 
-  // Room-gated: only engage when target or player is inside this resonator's room.
   const inRoom = this.room && (
     (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
      this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||
     (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
      player.y >= this.room.y && player.y < this.room.y + this.room.h));
 
-  // ── Telegraph: lane visible, fire on completion ──
   if (this._rsState === 'telegraph') {
     this._rsTele -= dt; // fixed-rate countdown — fairness > tempo
     if (this._rsTele <= 0) {
-      // FIRE: hit-test player against locked cone. LoS is rechecked at
-      // fire-time (defense in depth — though map is static during a
-      // telegraph window). Damage honors player damage immunity, so
-      // dash i-frames are the canonical pass-through counter.
+      // LoS is rechecked at fire time. takeDamage honors dash i-frames.
       const ax = this._rsAimDx, ay = this._rsAimDy;
       const dx = player.x - this.x, dy = player.y - this.y;
       const dPlayer2 = dx*dx + dy*dy;
@@ -58,7 +36,6 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
         }
       }
       if (audio.resonatorFire) audio.resonatorFire();
-      // Visual punch — pink shockwave at the apex along the aim line.
       const tipX = this.x + ax * RESONATOR_RANGE * 0.6;
       const tipY = this.y + ay * RESONATOR_RANGE * 0.6;
       spawnParticles(tipX, tipY, 'EXPLOSION', '#ff66cc', 10);
@@ -70,7 +47,6 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
     return;
   }
 
-  // ── Recovery: cooling down, no aim attempts ──
   if (this._rsState === 'recovery') {
     this._rsRec -= dt * ocMul * bm;
     if (this._rsRec <= 0) {
@@ -80,7 +56,6 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
     return;
   }
 
-  // ── Idle: silent charge, then try to commit ──
   this._rsCharge = Math.max(0, (this._rsCharge || 0) - dt * ocMul * bm);
   if (this._rsCharge <= 0 && inRoom && this._canTarget()) {
     const dLock = dist(this.x, this.y, this._tx, this._ty);
@@ -96,5 +71,5 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
       if (audio.resonatorCharge) audio.resonatorCharge();
     }
   }
-  // Stationary: never patrol, never reposition. Sitting duck by design.
+  // Stationary: no patrol. Absence is intentional.
 };

@@ -1,23 +1,11 @@
 // @ts-check
-// src/meta/modules.js — UPGRADE MODULES (UNCHAINED #37)
-//
-// Persistent equippable items dropped by rare terminals and bosses. Up to
-// 3 install slots on the player; sellable back for a fixed 4-core refund.
-//
-// This module owns the MODULES catalog and all behaviour-effect logic.
-// save.js keeps the storage schema (modulesOwned, modulesInstalled) and
-// delegates to us via the registerModuleEffects hook so the catalog and
-// the storage layer stay decoupled.
-//
-// Same UMD-lite pattern as save.js — works in the browser via
-// `window.NEON.modules` and in Node tests via `require`.
+// save.js owns modulesOwned / modulesInstalled and calls registerModuleEffects. This file owns the catalog and effect logic.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./save.js'));
   else (/** @type {any} */ (root.NEON = root.NEON || {})).modules = factory((root.NEON && root.NEON.save) || null);
 }(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function (/** @type {any} */ save) {
   'use strict';
 
-  // ─── Catalog ───────────────────────────────────────────────────────────────
   const MODULES = [
     { id:'armor_link',          name:'ARMOR LINK',          effect:'+15 max HP' },
     { id:'kinetic_amp',         name:'KINETIC AMP',         effect:'+8% damage' },
@@ -31,9 +19,9 @@
     { id:'reactive_core',       name:'REACTIVE CORE',       effect:'Reflect 10% of incoming damage to attacker' },
   ];
 
-  const SELL_PRICE = 4;             // fixed v1 — sell refund in cores
+  const SELL_PRICE = 4;             // cores, not credits
   const RARE_TERMINAL_DROP_PCT = 0.25;
-  const BOSS_GENESIS_CORES = 10;    // final-boss bonus (issue #39 may wire this)
+  const BOSS_GENESIS_CORES = 10;
 
   /** @type {Record<string, any>} */
   const _byId = Object.create(null);
@@ -42,16 +30,11 @@
   /** @param {string} id */
   function getModule(id) { return (typeof id === 'string' && _byId[id]) || null; }
 
-  // ─── State queries ─────────────────────────────────────────────────────────
   // `meta` may be a loaded save object; when omitted we load on demand.
   /** @param {any} meta */
   function _meta(meta) { return meta || (save ? save.loadMeta() : null); }
 
-  // canInstall: true iff `id` is a valid owned module AND `slot` is a valid
-  // index AND the slot is not already occupied by the same id in another slot
-  // (save.installModule clears dupes anyway; we still surface this so the UI
-  // can preview the move). An empty slot containing the same id is a no-op
-  // and reports false.
+  // False if this slot already holds id. save.installModule clears duplicate slots; this check lets the UI preview the move.
   /** @param {any} meta @param {number} slot @param {string} id */
   function canInstall(meta, slot, id) {
     const m = _meta(meta);
@@ -70,21 +53,13 @@
   /** @param {any} meta @param {number} slot */
   function uninstall(meta, slot)     { void meta; return save ? save.installModule(slot, null) : undefined; }
 
-  // sell: thin wrapper that bakes in the v1 fixed refund. Returns refund
-  // actually credited (0 if unowned).
   /** @param {any} meta @param {string} id */
   function sell(meta, id) { void meta;
     if (!save) return 0;
     return save.sellModule(id, SELL_PRICE);
   }
 
-  // ─── Drops ─────────────────────────────────────────────────────────────────
-  // rollModuleDrop: returns a module id or null per source rules.
-  //   source='rare-terminal'  → 25% chance of drop, else null.
-  //   source='boss-non-final' → guaranteed drop.
-  //   source='boss-genesis'   → guaranteed drop (+10 cores awarded separately
-  //                             by the boss hook; see #39 follow-up).
-  // Unknown sources: guaranteed drop (treated as boss-style).
+  // boss-genesis cores are awarded by the boss hook, not here. Unknown sources fall through as a guaranteed drop.
   /** @param {{source?: string, rng?: () => number}} [opts] */
   function rollModuleDrop(opts) {
     const source = (opts && opts.source) || '';
@@ -97,11 +72,7 @@
     return /** @type {{id:string}} */ (MODULES[Math.floor(rng() * MODULES.length)]).id;
   }
 
-  // ─── Run-pickup (transient) ────────────────────────────────────────────────
-  // Modules dropped during a run live in game.runModules and are only
-  // committed to meta.modulesOwned on floor clear or victory. On death they
-  // are discarded — the run's transient array is simply dropped when the
-  // next run starts.
+  // Run drops live in game.runModules and are committed on floor clear or victory. Death discards them by dropping the array.
   /** @param {any} game @param {string} id */
   function addRunPickup(game, id) {
     if (!game || !getModule(id)) return false;
@@ -127,11 +98,7 @@
   /** @param {any} game */
   function clearRunModules(game) { if (game) game.runModules = []; }
 
-  // ─── Effect application (called by save.applyMetaToPlayer) ─────────────────
-  // Stat tweaks mutate the player directly; behavioural effects land on
-  // player.metaFlags (same pattern as UNCHAINED #36 hub upgrades). Flag
-  // semantics are documented inline — consumers read them wherever the
-  // relevant game mechanic lives.
+  // Stat tweaks mutate the player. Behavioural effects land on player.metaFlags; consumers read those flags at the mechanic.
   /** @param {any} player @param {Array<string|null|undefined>} installedIds */
   function applyModulesToPlayer(player, installedIds) {
     if (!player || !Array.isArray(installedIds)) return;
@@ -144,7 +111,7 @@
           player.maxHp += 15; player.hp = player.maxHp;
           break;
         case 'kinetic_amp':
-          // +8% damage. Stat tweak on base atk so effectiveAtk() picks it up.
+          // Also on base atk so effectiveAtk() picks it up.
           player.atk = Math.round(player.atk * 1.08);
           f.damageMul = (f.damageMul || 1) * 1.08;
           break;
@@ -153,16 +120,16 @@
           f.moveSpeedMul = (f.moveSpeedMul || 1) * 1.10;
           break;
         case 'neural_coprocessor':
-          // +1 hackware slot — stacks with the hacktool upgrade.
+          // Stacks with the hacktool upgrade.
           f.extraHackwareSlots = (f.extraHackwareSlots || 0) + 1;
           player.hackwareSlots = (player.hackwareSlots || 3) + 1;
           break;
         case 'shield_capacitor':
-          // Floor-start shield charge — consumer: loadFloor() grants +1 shield.
+          // loadFloor() grants the charge; this only sets the flag.
           f.floorStartShieldCharges = (f.floorStartShieldCharges || 0) + 1;
           break;
         case 'ammo_reclaimer':
-          // Consumer: credit-pickup code rolls against this each time.
+          // Credit-pickup code rolls against this; nothing here pays out.
           f.doubleCreditChance = (f.doubleCreditChance || 0) + 0.10;
           break;
         case 'targeting_array':
@@ -170,7 +137,7 @@
           f.critDamageBonus = (f.critDamageBonus || 0) + 0.15;
           break;
         case 'kinetic_buffer':
-          // Multiplicative — stacking two would give 0.9*0.9=0.81.
+          // Multiplicative, not a clamp: two copies are 0.9 * 0.9.
           f.knockbackTakenMul = (f.knockbackTakenMul == null ? 1 : f.knockbackTakenMul) * 0.90;
           break;
         case 'dash_cooler':
@@ -180,28 +147,17 @@
           f.reflectDamagePct = (f.reflectDamagePct || 0) + 0.10;
           break;
         default:
-          // Unknown id — ignore silently. A stale save could reference a
-          // module that was removed from the catalog.
+          // A stale save can name a module removed from the catalog.
           break;
       }
     }
   }
 
-  // Register with save.js so applyMetaToPlayer picks up module effects.
+  // save.applyMetaToPlayer calls this hook.
   if (save && typeof save.registerModuleEffects === 'function') {
     save.registerModuleEffects(applyModulesToPlayer);
   }
 
-  // ─── Hub terminal panel (for #35 integration) ──────────────────────────────
-  // Minimal self-contained renderer + input handler. #35 will wire this
-  // into the hub terminal UI once merged; the API is deliberately small.
-  //
-  // state shape: {
-  //   focus: 'slot'|'inv',  // which column is focused
-  //   slotIdx: 0..2,
-  //   invIdx:  0..n-1,
-  //   confirmSell: boolean, // one-shot "SELL for 4 cores? [Y/N]" prompt
-  // }
   function defaultPanelState() {
     return { focus: 'slot', slotIdx: 0, invIdx: 0, confirmSell: false };
   }
@@ -237,7 +193,6 @@
     const rowH  = 22;
     const topY  = y + 40;
 
-    // ── Slot column ──
     ctx.font = '12px monospace';
     for (let i = 0; i < slots.length; i++) {
       const rowY = topY + i * rowH;
@@ -252,7 +207,6 @@
       ctx.fillText('SLOT ' + (i + 1) + ': ' + (mod ? mod.name : '— EMPTY —'), col1X + 6, rowY + 5);
     }
 
-    // ── Inventory column ──
     ctx.fillStyle = '#99bbcc';
     ctx.fillText('INVENTORY (' + owned.length + ')', col2X, topY - 16);
     const maxRows = Math.floor((h - 80) / rowH);
@@ -273,7 +227,6 @@
       ctx.fillText('(no modules yet)', col2X + 6, topY + 5);
     }
 
-    // ── Effect descr of current focus (word-wrapped) ──
     const focusedId = state.focus === 'slot' ? slots[state.slotIdx] : owned[state.invIdx];
     const focusedMod = getModule(focusedId);
     if (focusedMod) {
@@ -295,7 +248,6 @@
       }
     }
 
-    // ── Hints / confirm prompt (compact on narrow panels) ──
     ctx.fillStyle = '#557788';
     if (state.confirmSell) {
       ctx.fillStyle = '#ffcc22';
@@ -309,10 +261,7 @@
     ctx.restore();
   }
 
-  // handleModuleSlotsKey mutates `state` and meta storage. Returns:
-  //   'exit'     → caller should close the panel (ESC).
-  //   'handled'  → input consumed.
-  //   'ignored'  → caller may handle the key itself.
+  // 'exit' closes the panel. 'ignored' means the caller may still handle the key.
   /** @param {any} game @param {any} state @param {string} key */
   function handleModuleSlotsKey(game, state, key) { void game;
     if (!state) return 'ignored';
@@ -321,13 +270,11 @@
     const slots = meta.modulesInstalled;
     const owned = meta.modulesOwned;
 
-    // Confirm dialog short-circuits navigation.
     if (state.confirmSell) {
       if (key === 'y' || key === 'Y') {
         const id = owned[state.invIdx];
         if (id) {
           sell(null, id);
-          // clamp invIdx after removal
           const nowOwned = save.loadMeta().modulesOwned;
           if (state.invIdx >= nowOwned.length) state.invIdx = Math.max(0, nowOwned.length - 1);
         }
@@ -356,10 +303,8 @@
         return 'handled';
       case 'Enter':
         if (state.focus === 'slot') {
-          // Uninstall focused slot (if occupied).
           if (slots[state.slotIdx]) uninstall(null, state.slotIdx);
         } else {
-          // Install focused inventory module into first empty slot (or slot 0).
           const id = owned[state.invIdx];
           if (id) {
             let target = slots.indexOf(null);

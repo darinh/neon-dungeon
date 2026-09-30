@@ -1,16 +1,8 @@
 // @ts-check
 'use strict';
 
-// ─── TUNNELLER AI — Burrowing Ambusher ──────────────────────────────────
-// States:
-//   tunneling: intangible (`_wrPhased=true`), drifts toward player
-//              ignoring walls. Only a dust mound is rendered at its tile.
-//              Cannot be hit/healed/targeted thanks to existing _wrPhased
-//              gates across the codebase.
-//   surfacing: locked at a passable tile near the player. 1.0s expanding-
-//              ring telegraph. Still intangible. AT END deals AoE damage
-//              within 1.4 tiles, then becomes corporeal.
-//   surfaced:  3s window of normal melee combat. Then re-burrow.
+// Tunneling and surfacing stay intangible via `_wrPhased` (set at spawn).
+// Hit, heal, and target gates elsewhere honor that flag.
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -24,20 +16,17 @@ Enemy.prototype.aiTunneller = function aiTunneller(dt, player, map, d, los) {
   const bm = this.berserkerMul();
   const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
 
-  // ── Tunneling: intangible pursuit underground ──
   if (this._tnState === 'tunneling') {
     this._tnTimer -= dt * ocMul;
-    // Drift toward player ignoring walls; faster while burrowed.
+    // Ignores walls while burrowed.
     const tspd = modSpeed(this.spd * 1.5) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
     const nx = this.x + dx * tspd * dt;
     const ny = this.y + dy * tspd * dt;
     this.x = Math.max(0.1, Math.min(MAP_W - 0.1, nx));
     this.y = Math.max(0.1, Math.min(MAP_H - 0.1, ny));
-    // Dust trail particle puff at current tile (visible warning)
     if (rand('cosmetic') < dt * 8) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
 
-    // Surface when close to player or timer expires — only on a passable tile.
     const closeToTarget = d < 1.5 && this._canTarget();
     if (this._tnTimer <= 0 || closeToTarget) {
       const emerge = this._wrFindEmergeTile(map, player);
@@ -48,23 +37,18 @@ Enemy.prototype.aiTunneller = function aiTunneller(dt, player, map, d, los) {
         this._tnTimer = 1.0; // telegraph window
         audio.wraithPhaseOut();
       } else {
-        // No valid tile — keep burrowing briefly
         this._tnTimer = 0.5;
       }
     }
     return;
   }
 
-  // ── Surfacing: locked telegraph + AoE on emerge ──
   if (this._tnState === 'surfacing') {
     this._tnTimer -= dt;
-    // Hold position while telegraphing
     this.x = this._tnTargetX;
     this.y = this._tnTargetY;
-    // Steady dust spurts during telegraph
     if (rand('cosmetic') < dt * 14) spawnParticles(this.x, this.y, 'SPARK', '#cc8844', 1);
     if (this._tnTimer <= 0) {
-      // Emerge: AoE damage at 1.4 tile radius (telegraphed for ~1s, fair).
       const aoeR = 1.4;
       const aoeDmg = Math.round(this.atk * 1.0);
       if (dist(this.x, this.y, player.x, player.y) < aoeR && this._canTarget() &&
@@ -82,7 +66,6 @@ Enemy.prototype.aiTunneller = function aiTunneller(dt, player, map, d, los) {
     return;
   }
 
-  // ── Surfaced: 3s window of normal melee combat ──
   if (this._tnState === 'surfaced') {
     this._tnTimer -= dt * ocMul;
     if (los && d < 12) {
@@ -93,7 +76,6 @@ Enemy.prototype.aiTunneller = function aiTunneller(dt, player, map, d, los) {
       this.patrol(dt, map);
     }
     if (d < 1.2) this.meleeAttack(player);
-    // Re-burrow when window expires
     if (this._tnTimer <= 0) {
       this._tnState = 'tunneling';
       this._tnTimer = 1.5 + rand('combat') * 1.0;

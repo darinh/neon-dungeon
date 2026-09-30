@@ -1,21 +1,11 @@
 // @ts-check
-// src/meta/save.js — persistent meta-progression state (shards, upgrades, stats)
-//
-// This file follows the NEON "UMD-lite" module pattern: IIFE that exposes a
-// single namespace object via `window.NEON.save` in the browser AND exports for
-// Node so we can unit-test pure logic without a DOM.
-//
-// See CONTRIBUTING.md for the pattern template.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).save = factory();
 }(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function () {
   'use strict';
 
-  // ─── Schema ────────────────────────────────────────────────────────────────
-  // META_UPGRADES defines the persistent upgrade tree. save.js owns this because
-  // loadMeta() clamps stored upgrade levels against these bounds during
-  // deserialization — the data is inseparable from the loader.
+  // save.js owns this: loadMeta() clamps stored levels against these bounds.
   const META_UPGRADES = [
     { id:'VITAL_BOOST',   name:'Vital Systems',    desc:'+10 max HP',                 maxLv:3, costs:[5,12,22],  icon:'♥' },
     { id:'SCAVENGER',     name:'Scavenger Protocol',desc:'+15% credit gain',          maxLv:3, costs:[5,12,22],  icon:'◈' },
@@ -39,25 +29,23 @@
   function defaultMeta() {
     return {
       version: META_VERSION,
-      // ─── Legacy shards economy (v1) — preserved for save-compat; ─────────
-      //     superseded by the cores economy below (UNCHAINED #39).
+      // Legacy shards fields, kept so old saves still load.
       shards: 0,
       upgrades: {},
       stats: { totalRuns:0, totalShards:0, bestFloor:0, victories:0 },
       lastDifficulty: 'NORMAL',
       clearedDifficulties: [],
-      // ─── UNCHAINED Phase 1 (v2) ──────────────────────────────────────────
-      cores: 0,                                        // persistent wallet (#39)
-      upgradeNodes: {},                                // { nodeId: purchasedLevel } (#36)
-      modulesOwned: [],                                // module ids in hub inventory (#37)
-      modulesInstalled: new Array(MODULE_SLOTS).fill(null), // 3 equipped slots
-      logsRead: [],                                    // log ids read in Archive (#41)
+      cores: 0,
+      upgradeNodes: {},                                // { nodeId: purchasedLevel }
+      modulesOwned: [],
+      modulesInstalled: new Array(MODULE_SLOTS).fill(null),
+      logsRead: [],
       logsFound: [],                                   // found but not yet read
-      whispersRead: [],                                // secret-room whispers read (subplot)
-      whispersFound: [],                               // whispers found but not yet read
+      whispersRead: [],
+      whispersFound: [],                               // found but not yet read
       endingsUnlocked: [],                             // 'keeper' | 'unchained' | 'act1_message_sent'
-      act1MessageIntent: null,                         // last Act 1 message intent id
-      introSeen: false,                                // UNCHAINED #42 — intro crawl flag
+      act1MessageIntent: null,
+      introSeen: false,
       runsCompleted: 0,
       deepestBiome: 0                                  // highest AREAS index reached
     };
@@ -72,14 +60,11 @@
     return null;
   }
 
-  // Test hook — lets Node tests inject a fake storage object.
   /** @type {any} */
   let _testStorage = null;
   /** @param {any} s */
   function _setStorageForTests(s) { _testStorage = s; }
   function _getStorage() { return _testStorage || _browserStorage(); }
-
-  // ─── Public API ────────────────────────────────────────────────────────────
 
   let _migrationLogged = false;
 
@@ -102,8 +87,7 @@
     return (typeof id === 'string' && ACT1_MESSAGE_INTENT_IDS.includes(id)) ? id : null;
   }
 
-  // _migrateToV2 fills in every UNCHAINED/current field that's missing on an older save.
-  // Mutates and returns the passed object. Idempotent.
+  // Fills missing fields on an older save. Mutates and returns the same object. Idempotent.
   /** @param {any} m */
   function _migrateToV2(m) {
     const d = defaultMeta();
@@ -139,12 +123,9 @@
     return m;
   }
 
-  // loadMeta returns the persisted meta object, or defaults if nothing saved
-  // or if the save is corrupt. Never throws.
-  //
-  // `validDifficulties` is an optional map used to sanity-check lastDifficulty.
-  // If omitted, lastDifficulty is passed through unchanged. Browser passes the
-  // DIFFICULTIES global; Node tests can pass a test fixture or omit.
+  // Never throws: corrupt or missing saves return defaults.
+  // validDifficulties, if passed, sanity-checks lastDifficulty; omitted leaves it unchanged.
+  // Browser passes the DIFFICULTIES global; Node tests pass a fixture or omit it.
   /** @param {Record<string, any>} [validDifficulties] */
   function loadMeta(validDifficulties) {
     const storage = _getStorage();
@@ -192,8 +173,7 @@
     return reqs.every((/** @type {string} */ r) => cleared.includes(r));
   }
 
-  // calcRunShards is pure — all inputs are parameters. shardMul defaults to 1
-  // so Node tests can exercise the formula without wiring a difficulty table.
+  // shardMul defaults to 1 so tests can run the formula without a difficulty table.
   /** @param {number} floor @param {number} score @param {number} bossesCleared @param {boolean} victory @param {number} [shardMul] */
   function calcRunShards(floor, score, bossesCleared, victory, shardMul) {
     shardMul = (shardMul == null) ? 1 : shardMul;
@@ -214,9 +194,8 @@
   /** @param {any} fn */
   function registerModuleEffects(fn) { _moduleEffectsFn = (typeof fn === 'function') ? fn : null; }
 
-  // applyMetaToPlayer mutates the passed player object. buildWeaponFn is
-  // optional — browser falls through to the global `buildWeapon`. This avoids
-  // a hard import dependency between the meta layer and the weapon data layer.
+  // buildWeaponFn is optional; browser falls through to global buildWeapon.
+  // Avoids a hard import from the meta layer to the weapon data layer.
   /** @param {any} player @param {any} [buildWeaponFn] @param {() => number} [randomFn] */
   function applyMetaToPlayer(player, buildWeaponFn, randomFn) {
     const m = loadMeta();
@@ -233,25 +212,18 @@
         else player.weapon = _sgw;
       }
     }
-    // ─── UNCHAINED Phase 2 (#36) — apply persistent upgrade-tree nodes ──────
-    // Stat effects mutate the player directly. Behavioural effects (on-kill,
-    // every-Nth-hit, on-revive, on-dash) set flags on player.metaFlags so the
-    // game-loop systems can opt-in without breaking when the flag is absent.
-    // Hooking those listeners is intentionally deferred to a follow-up.
+    // Stat effects mutate the player. Behavioural effects set player.metaFlags so game-loop systems can opt in when the flag is absent.
     const nodes = m.upgradeNodes || {};
     if (Object.keys(nodes).length) {
       player.metaFlags = player.metaFlags || {};
       _applyUpgradeNodes(player, nodes);
     }
-    // UNCHAINED #37: apply effects of installed upgrade modules.
     if (_moduleEffectsFn) {
       try { _moduleEffectsFn(player, m.modulesInstalled); } catch (_) { /* never break a run */ }
     }
   }
 
-  // _applyUpgradeNodes — encapsulates per-node stat application. Defensive:
-  // unknown ids and non-positive levels are ignored. Idempotent on a fresh
-  // player snapshot (callers rebuild the player at run-start).
+  // Idempotent on a fresh player snapshot; callers rebuild the player at run-start.
   /** @param {any} player @param {Record<string, number>} nodes */
   function _applyUpgradeNodes(player, nodes) {
     for (const id in nodes) {
@@ -264,7 +236,6 @@
   function _applyNode(player, id, level) {
     const f = player.metaFlags;
     switch (id) {
-      // Vitality
       case 'hull_plating':
         player.maxHp += 10 * level;
         player.hp = player.maxHp;
@@ -275,13 +246,8 @@
         f.regenerator = level;
         break;
       case 'trauma_kit':
-        // Reinterpreted from "start each run with N nano-medic consumables"
-        // (no boost-inventory system exists) → seed `level` panic-button
-        // auto-heal charges. NEON.behavior.tryTraumaKit consumes one
-        // charge each time the player drops below 25% maxHp from a
-        // non-lethal hit, healing 40% maxHp. startingNanoMedics is kept
-        // for stat-readout / save-back-compat; _nanoMedicCharges is the
-        // live runtime counter.
+        // NEON.behavior.tryTraumaKit consumes one charge when HP drops below 25% maxHp from a non-lethal hit, healing 40% maxHp.
+        // startingNanoMedics is the stat readout / save-compat field; _nanoMedicCharges is the live counter.
         player.startingNanoMedics = (player.startingNanoMedics || 0) + level;
         player._nanoMedicCharges = (player._nanoMedicCharges || 0) + level;
         f.trauma_kit = level;
@@ -289,7 +255,6 @@
       case 'second_wind':
         f.second_wind = level;  // game loop honours flag on lethal damage
         break;
-      // Damage
       case 'overclock':
         player.damageMult = (player.damageMult || 1) * (1 + 0.05 * level);
         break;
@@ -302,7 +267,6 @@
       case 'surge':
         f.surge = level;        // every 8th hit deals +100%
         break;
-      // Utility
       case 'recon':
         player.sensorRadiusMult = (player.sensorRadiusMult || 1) * (1 + 0.20 * level);
         break;
@@ -314,17 +278,9 @@
         f.ghostwalk = level;
         break;
       case 'hacktool':
-        // Reinterpreted from "Start with 1 extra hackware slot (3→4)"
-        // (the game has only ONE hackware slot — multi-slot would require
-        // extensive rewrites of render, input, and cooldown tracking) →
-        // pre-equip a RANDOM hackware module at run start. The seeding
-        // itself happens in src/game.js startGame after applyMetaToPlayer
-        // (HACKWARE lives in src/content.js; the meta layer must not hard-
-        // depend on entity data — same pattern as STARTING_GEAR which uses
-        // the buildWeaponFn injection). Here we only set the metaFlag so
-        // the seeding site can opt-in. The legacy hackwareSlots write is
-        // kept for save back-compat (field is persisted by saveGame and
-        // restored by continueGame; harmless when unread).
+        // Random hackware is seeded in src/game.js startGame after applyMetaToPlayer.
+        // HACKWARE lives in src/content.js; this layer must not import it (same injection pattern as STARTING_GEAR).
+        // Only the metaFlag is set here. hackwareSlots stays for save back-compat and is harmless when unread.
         player.hackwareSlots = (player.hackwareSlots || 3) + level;
         f.hacktool = level;
         break;
@@ -335,9 +291,7 @@
   function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }
   function getMetaCreditMultiplier() { return 1 + getMetaLevel('SCAVENGER')     * 0.15; }
 
-  // ─── UNCHAINED helpers ─────────────────────────────────────────────────────
-  // All mutating helpers load → modify → save atomically so callers never hold
-  // stale state. Return values document success/failure where relevant.
+  // Mutating helpers load, modify, and save atomically so callers never hold stale state.
 
   /** @param {number} n */
   function addCores(n) {
@@ -349,8 +303,6 @@
     return m.cores;
   }
 
-  // spendCores deducts `n` iff the wallet has at least that much. Returns true
-  // on success, false if insufficient (wallet unchanged). Never goes negative.
   /** @param {number} n */
   function spendCores(n) {
     n = Math.floor(Number(n) || 0);
@@ -383,7 +335,7 @@
     return changed;
   }
 
-  // Whispers (secret-room subplot) — mirrors the log API exactly.
+  // Mirrors the log found/read API.
   /** @param {string} id */
   function addWhisperFound(id) {
     if (typeof id !== 'string' || !id) return false;
@@ -408,12 +360,6 @@
     return changed;
   }
 
-  // installModule places moduleId into slot (0..MODULE_SLOTS-1). Returns the
-  // previously installed id (or null). Pass `null` explicitly to unslot.
-  // Any other non-string moduleId (undefined, number, object) is invalid input
-  // and returns undefined without mutating state. A string moduleId must be
-  // in modulesOwned. Same module cannot occupy two slots — if it's already
-  // installed elsewhere, that slot is cleared first.
   /** @param {number} slot @param {string|null} moduleId */
   function installModule(slot, moduleId) {
     slot = Math.floor(Number(slot));
@@ -435,10 +381,7 @@
     return prev;
   }
 
-  // sellModule removes moduleId from inventory and returns the cores refunded.
-  // Callers compute the refund (module data lives outside save.js). The passed
-  // refund is credited to the wallet; 0/negative values are ignored. Returns
-  // the refund amount on success, 0 if the module was not owned.
+  // Callers compute the refund; module data lives outside save.js.
   /** @param {string} moduleId @param {number} refund */
   function sellModule(moduleId, refund) {
     if (typeof moduleId !== 'string' || !moduleId) return 0;
@@ -455,8 +398,7 @@
     return refund;
   }
 
-  // resetMeta wipes persistent meta state back to defaults. Used by the main
-  // menu's "Keep persistent unlocks? → No" branch on New Game. Irreversible.
+  // Main menu New Game "Keep persistent unlocks? → No". Irreversible.
   function resetMeta() {
     const storage = _getStorage();
     if (!storage) return;

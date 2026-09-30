@@ -1,7 +1,6 @@
 'use strict';
 // @ts-check
 
-// ─── SCORCHER AI — Fire-Trail Pressure Unit ─────────────────────────────
 /**
  * @param {any} [dt]
  * @param {any} [player]
