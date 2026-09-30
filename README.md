@@ -23,7 +23,7 @@ local server is closer to GitHub Pages and service-worker behavior.
 | Command | What it does |
 |---|---|
 | `npm test` | Runs all `tests/*.test.js` files with Node's built-in test runner. |
-| `npm run typecheck` | Runs `tsc --noEmit` over checked JavaScript and declaration files. |
+| `npm run typecheck` | Runs `tsc --noEmit` over test files that start with `// @ts-check`, then over all runtime code in `src/` and `engine/` (`tsconfig.runtime.json`, without Node types). |
 | `npm run lint` | Runs ESLint over the repository. |
 | `npm run check:engine` | Verifies `engine/*.js` stays free of NEON-specific content tokens. |
 | `npm run check` | Canonical gate: lint, typecheck, engine purity, then tests. |
@@ -76,7 +76,7 @@ see `docs/engine-boundary.md`.
 
 ## Adding files safely
 
-1. Add `// @ts-check` at the top of new `.js` files.
+1. Make `// @ts-check` the first line of new `.js` files, before `'use strict'`.
 2. Use the UMD-lite wrapper for new browser/Node-testable modules; see
    `CONTRIBUTING.md`.
 3. Add the script tag to `index.html` after its producers and before its

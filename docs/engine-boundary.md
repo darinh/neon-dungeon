@@ -16,7 +16,7 @@ NEON DUNGEON started as a single-file prototype. It now has:
 
 - ~24,000 lines across 5 large `src/*.js` files plus 13 `src/meta/*.js`
   modules and 3 `src/data/*.js` data tables.
-- Per-file `// @ts-check` opt-in (Phase 3 complete).
+- Type checking for all of `src/` and `engine/` through JSDoc (Phase 3 complete).
 - A growing set of mechanics that are **clearly reusable** (decor pulse math,
   spawn BFS, render error boundary, telemetry batching) sitting in the same
   load order as **clearly NEON-specific** code (cores currency, the
