@@ -72,6 +72,25 @@ test('saves route the player position through playerSavePosition, so a resume ne
   assert.doesNotMatch(save, /x:p\.x, y:p\.y/);
 });
 
+test('restoreDungeonFloorSnapshot removes generated room properties the save lacks', () => {
+  const src = extractFunction('restoreDungeonFloorSnapshot');
+  // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.
+  const restore = new Function(
+    'restoreNumericFloorGrid', 'restoreShopItemsSnapshot',
+    src + '\nreturn restoreDungeonFloorSnapshot;'
+  )((/** @type {any} */ saved) => saved, (/** @type {any} */ saved) => saved);
+  const kept = { x: 1, roomType: 'armory', generatedOnly: true, healFont: true };
+  const extra = { x: 9, roomType: 'secret', hasLoot: true };
+  const fresh = { map: [[2]], rooms: [kept, extra] };
+  restore(fresh, { map: [[2]], rooms: [{ x: 1, roomType: null }] }, true);
+  assert.equal(fresh.rooms.length, 2, 'the rebuild room list is kept');
+  assert.equal(fresh.rooms[0], kept, 'overlapping rooms keep their object identity');
+  assert.equal(fresh.rooms[1], extra);
+  assert.equal(fresh.rooms[0].roomType, null);
+  assert.equal('generatedOnly' in fresh.rooms[0], false);
+  assert.equal('healFont' in fresh.rooms[0], false);
+});
+
 test('restoreDungeonFloorSnapshot never grafts a freshly generated trial onto an older saved room', () => {
   const src = extractFunction('restoreDungeonFloorSnapshot');
   // eslint-disable-next-line no-new-func -- evaluating project-owned source under test.

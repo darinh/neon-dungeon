@@ -1278,6 +1278,32 @@ function savedPlayerPosition(gameState) {
   return { x: p.x, y: p.y };
 }
 
+/**
+ * Finite previous-exit passed to generateFloor, or null.
+ * @param {any} pos
+ * @returns {{x:number,y:number}|null}
+ */
+function finiteGenerationExit(pos) {
+  if (!pos || typeof pos !== 'object') return null;
+  const x = Number(pos.x);
+  const y = Number(pos.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+/**
+ * Saved descent exit for this floor's snapshot, or null when the field is
+ * absent or the snapshot is not for this floor. Absent means rebuild without it.
+ * @param {any} save
+ * @returns {{x:number,y:number}|null}
+ */
+function generationExitForResume(save) {
+  const snap = save && save.floorSnapshot;
+  if (!snap || snap.v !== FLOOR_SNAPSHOT_VERSION || snap.floor !== (save.floor || 1)) return null;
+  if (!Object.prototype.hasOwnProperty.call(snap, 'generationExitPos')) return null;
+  return finiteGenerationExit(snap.generationExitPos);
+}
+
 /** @param {any} gameState */
 function serializeFloorSnapshot(gameState) {
   if (!gameState || !gameState.player || !gameState.dungeon) return null;
@@ -1307,6 +1333,7 @@ function serializeFloorSnapshot(gameState) {
     placedWalls: placedWalls.map((/** @type {any} */ w) => cloneFloorSnapshotValue(w)).filter((/** @type {any} */ w) => w),
     frostPatches: cloneFloorSnapshotValue(frostPatches) || [],
     clearedRooms: gameState.clearedRooms ? [...gameState.clearedRooms].map((/** @type {any} */ r) => floorSnapshotRoomIndex(rooms, r)).filter((/** @type {any} */ i) => i >= 0) : [],
+    generationExitPos: finiteGenerationExit(gameState._generationExitPos),
     state: {
       bossRoomIndex: floorSnapshotRoomIndex(rooms, gameState.bossRoom),
       bossType: gameState.bossType,
@@ -1339,8 +1366,12 @@ function replaceFloorArray(target, saved, restore) {
   }
 }
 
-/** @param {any} dungeon @param {any} savedDungeon */
-function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
+/**
+ * @param {any} dungeon
+ * @param {any} savedDungeon
+ * @param {boolean} [exactRooms] Present generationExitPos. Absent is a legacy merge.
+ */
+function restoreDungeonFloorSnapshot(dungeon, savedDungeon, exactRooms) {
   if (!dungeon || !savedDungeon) return;
   if (Array.isArray(savedDungeon.map)) dungeon.map = savedDungeon.map;
   if (Array.isArray(savedDungeon.visited)) dungeon.visited = restoreNumericFloorGrid(savedDungeon.visited, dungeon.visited, Uint8Array);
@@ -1349,16 +1380,22 @@ function restoreDungeonFloorSnapshot(dungeon, savedDungeon) {
   if (Array.isArray(savedDungeon.secretMask)) dungeon.secretMask = restoreNumericFloorGrid(savedDungeon.secretMask, dungeon.secretMask, Uint8Array);
   if (Array.isArray(savedDungeon.rooms) && Array.isArray(dungeon.rooms)) {
     for (let i = 0; i < savedDungeon.rooms.length && i < dungeon.rooms.length; i++) {
-      if (savedDungeon.rooms[i]) {
-        const savedRoom = { ...savedDungeon.rooms[i] };
-        if (Array.isArray(savedRoom.shopItems)) {
-          savedRoom.shopItems = restoreShopItemsSnapshot(savedRoom.shopItems, dungeon.rooms[i].shopItems);
-        }
-        Object.assign(dungeon.rooms[i], savedRoom);
-        // Trials exist only on floors generated with them: a snapshot written
-        // before this room hosted a trial must not inherit a fresh one.
-        if (!('trial' in savedRoom)) delete dungeon.rooms[i].trial;
+      if (!savedDungeon.rooms[i]) continue;
+      const room = dungeon.rooms[i];
+      const savedRoom = { ...savedDungeon.rooms[i] };
+      if (Array.isArray(savedRoom.shopItems)) {
+        savedRoom.shopItems = restoreShopItemsSnapshot(savedRoom.shopItems, room.shopItems);
       }
+      // Exact only when the rebuild used the recorded exit. A legacy snapshot
+      // was rebuilt without that exit, so its room refs still carry the
+      // rebuild's designations; drop only a trial the save never had.
+      if (exactRooms) {
+        for (const key of Object.keys(room)) {
+          if (!Object.prototype.hasOwnProperty.call(savedRoom, key)) delete room[key];
+        }
+      }
+      Object.assign(room, savedRoom);
+      if (!exactRooms && !('trial' in savedRoom)) delete room.trial;
     }
   }
   dungeon._fovDirty = true;
@@ -1878,7 +1915,8 @@ function restoreFloorSnapshot(gameState, snapshot) {
     return false;
   }
   const rooms = gameState.dungeon.rooms || [];
-  restoreDungeonFloorSnapshot(gameState.dungeon, snapshot.dungeon);
+  const exactRooms = Object.prototype.hasOwnProperty.call(snapshot, 'generationExitPos');
+  restoreDungeonFloorSnapshot(gameState.dungeon, snapshot.dungeon, exactRooms);
   if (gameState.player && snapshot.player) {
     if (Number.isFinite(snapshot.player.x)) gameState.player.x = snapshot.player.x;
     if (Number.isFinite(snapshot.player.y)) gameState.player.y = snapshot.player.y;
@@ -2459,19 +2497,23 @@ const game = {
       NEON.boosts.clearFloorBoosts(this.player);
     }
     this.player.autoLaserBeam=null;
-    const descentExitPos = savedModifier === undefined ? this._exitPos : null;
+    const descentExitPos = savedModifier === undefined ? this._exitPos : this._pendingGenerationExitPos;
+    this._pendingGenerationExitPos = null;
+    this._generationExitPos = finiteGenerationExit(descentExitPos);
     this.dungeon = withDerivedRngStream('world:floor:' + n, () =>
       generateFloor(n, descentExitPos ? { previousExitPos: descentExitPos } : undefined)
     );
-    // A descent drops the player near the previous floor's exit (nearest passable tile). Must run before populateFloor so that room is the real start for enemy and item placement.
+    // A descent, including a resume rebuild that recorded the same exit, drops
+    // the player near that exit. Must run before populateFloor so that room is
+    // the real start for enemy and item placement. Legacy snapshots have no exit.
     let spawn = this.dungeon.playerPos;
-    if (savedModifier === undefined && this._exitPos) {
+    if (descentExitPos) {
       try {
         if (!this.dungeon.preferredSpawnResolved &&
             typeof NEON !== 'undefined' && NEON.spawn && NEON.spawn.findNearestPassable) {
           const near =
-            NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isSafeSpawn) ||
-            NEON.spawn.findNearestPassable(this.dungeon.map, this._exitPos.x, this._exitPos.y, isPassable);
+            NEON.spawn.findNearestPassable(this.dungeon.map, descentExitPos.x, descentExitPos.y, isSafeSpawn) ||
+            NEON.spawn.findNearestPassable(this.dungeon.map, descentExitPos.x, descentExitPos.y, isPassable);
           if (near) spawn = near;
         }
         spawn = repairDescentSpawnFloor(this.dungeon, spawn, this.player && this.player.keys);
@@ -2506,7 +2548,8 @@ const game = {
     this.challengeWaveDelay=0;
     this.challengeComplete=false;
     this.mainframeFinale = this.dungeon.mainframeRoom ? restoreMainframeFinaleState(null) : null;
-    if (this.player) this.player.secondWindUsed = false;
+    // Fresh floor only: resume has already restored the saved flag.
+    if (savedModifier === undefined && this.player) this.player.secondWindUsed = false;
     // 1.5s of invulnerability on a fresh floor entry only, not save-resume. Damage uses isPlayerDamageImmune in src/content.js; the halo is Player.draw in src/entities.js. Keep the literal in sync with that comment.
     if (this.player) {
       this.player._spawnGraceTimer = (savedModifier === undefined) ? 1.5 : 0;
@@ -3413,8 +3456,15 @@ const game = {
     this.runTime=save.runTime||0;
     this.player=p;
     const savedMod = save.modifier != null && FLOOR_MODIFIERS[save.modifier] ? save.modifier : null;
+    this._pendingGenerationExitPos = generationExitForResume(save);
     this.loadFloor(save.floor||1, savedMod, true);
     const floorSnapshotRestored = restoreFloorSnapshot(this, save.floorSnapshot);
+    // Rebuild reads the persistent event stream (secret-room whispers). Put
+    // every stream back before the resume checkpoint is written. A rejected
+    // snapshot keeps the regenerated floor and the streams it consumed.
+    if (floorSnapshotRestored && save.rngStates && typeof restoreRngStates === 'function') {
+      restoreRngStates(save.rngStates);
+    }
     if (this.mainframeFinale && save.mainframeFinale) {
       this.mainframeFinale = restoreMainframeFinaleState(save.mainframeFinale);
     }
@@ -3433,7 +3483,12 @@ const game = {
       return;
     }
     this.saveGame();
-    if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
+    // A queued prompt was waiting because the room was not safe. Delivering
+    // it here would mark it read-in-progress and rewrite the checkpoint.
+    if (floorSnapshotRestored) {
+      if (this.getActiveSystemMessage()) this.openNextSystemMessage('PLAYING');
+      else this.setState('PLAYING');
+    } else if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
     if (save.floorSnapshot && !floorSnapshotRestored && this._discardedFloorSnapshotReason) {
       this.msg('FLOOR SNAPSHOT REPAIRED — REGENERATED', '#ffb700');
       this._discardedFloorSnapshotReason = null;

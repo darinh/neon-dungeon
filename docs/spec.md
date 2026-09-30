@@ -641,8 +641,10 @@ streams:
 `loadFloor(n)` wraps `generateFloor(n)`, `populateFloor(...)`, and quest setup
 in derived per-floor streams (`world:floor:n`, `spawn:floor:n`,
 `event:floor:n:quest`). Matching explicit stream requests inside those derived
-blocks route to the active derived stream, so Continue can regenerate the same
-floor from `runSeed + floor` without advancing the saved runtime stream state.
+blocks route to the active derived stream. A descended floor also depends on
+the previous exit passed to `generateFloor`, and secret-room whispers draw the
+persistent `event` stream, so Continue reapplies the saved exit and the saved
+runtime stream state after the rebuild (see Continue flow).
 
 **Tile types:** WALL | FLOOR | DOOR | DOOR_OPEN | LOCKED_R | LOCKED_B |
 LOCKED_G | STAIRS | TERMINAL | TRAP_SPIKE | TRAP_SLOW | PLASMA | ARC | VENDOR | CRACKED | LORE | TOXIC | VOID
@@ -705,7 +707,9 @@ detonates: `30 + floor × 3` damage in a 2.2-tile radius (LOS-gated), damages
 both enemies and the player (risk/reward). Detonations chain-react to nearby
 unprimed cores (staggered 0.15–0.35 s fuse). Grenade explosions, VOLATILE
 enemy death explosions, and EXPLOSIVE_KILLS perk detonations also prime cores
-within their blast radius. Not saved (regenerated on floor load). Visual:
+within their blast radius. Saved in the floor snapshot (`vcores`) and restored
+when Continue accepts that snapshot; a rejected snapshot keeps the cores
+`populateFloor` just placed. Visual:
 pulsing amber/orange glow (idle), rapid red flash with yellow core (primed),
 big orange-red particle burst on detonation. Minimap: small orange dot (only
 in LOS). `audio.corePrime()` rising alarm tick, `audio.coreDetonate()` heavy
@@ -781,7 +785,8 @@ mapper path shows crates as wall-like obstacles.
 - Enemies that lose LOS behind crates behave according to their existing
   AI (melee types continue pathing toward player; ranged types stop firing).
 - Volatile cores skip crate tiles during placement (they check `T.FLOOR`).
-- Not saved/restored — regenerated on floor load (same as volatile cores).
+- Saved in the floor snapshot (`crates`) and restored when Continue accepts
+  that snapshot. A rejected snapshot keeps the crates `populateFloor` just placed.
 
 **Audio: `audio.crateBreak()`** — metallic impact: sine 150→40 Hz + square
 90→25 Hz + broadband noise + 3 staggered debris clinks (sine 600–1400→half Hz).
@@ -858,8 +863,9 @@ beacon placement to ensure room-clear tracking is active.
 **Minimap:** Red pulsing 2×2 dot, only when in LOS. Active beacons pulse
 faster (6 Hz) than idle beacons (2 Hz).
 
-**Save/Load:** Not saved — regenerated on floor load (same as volatile cores
-and crates). `beacons=[]` reset in `populateFloor()`.
+**Save/Load:** Saved in the floor snapshot (`beacons`, including room index)
+and restored when Continue accepts that snapshot. `populateFloor()` starts
+from `beacons=[]`; a rejected snapshot keeps that regeneration.
 
 **Audio:**
 - `audio.beaconAlarm()` — escalating electronic alarm: square 600→1200 +
@@ -992,8 +998,9 @@ beacons). They are a combat modifier, not a gate.
 
 **Minimap:** Cyan 2 px dot with glow (compact minimap). Pulsing at ~1 Hz.
 
-**Save/Load:** Not persisted — floor regenerates on continue (same as all
-environmental objects).
+**Save/Load:** Saved in the floor snapshot (`shieldGens`) and restored when
+Continue accepts that snapshot. A rejected snapshot keeps the generators
+`populateFloor` just placed.
 
 **Audio:**
 - `audio.generatorDestroy()` — electric overload burst: ascending sawtooth
@@ -1065,7 +1072,9 @@ reinforcements).
 
 **Minimap:** Small red triangle with glow. Alerted cameras pulse brighter.
 
-**Save/Load:** Not persisted — floor regenerates on continue.
+**Save/Load:** Saved in the floor snapshot (`cameras`) and restored when
+Continue accepts that snapshot. A rejected snapshot keeps the cameras
+`populateFloor` just placed.
 
 **Audio:**
 - `audio.cameraDetect()` — short rising two-tone chirp (square wave
@@ -2461,7 +2470,7 @@ SAVE_VERSION bump — old saves default to `modifier: null` (no modifier).
 | WINDFALL      | ◆    | Every 5th defeat drops a bonus core                  | `#a866ff` | Counter `player._windfallKills` increments per qualifying defeat (!shard, !summon); every 5th drops a bonus +1 core. Run-scoped persistent counter |
 | SIGNAL_BOOST  | ↻    | Every 5th defeat resets hackware                     | `#00ddff` | Counter `player._signalBoostKills` increments per qualifying defeat; every 5th resets `player.hackwareCooldown` to 0 (only when `player.hackware` truthy). Run-scoped persistent counter |
 | REVERB        | ♪    | Every 5th shot fires a free echo                     | `#ff66cc` | Counter `player._reverbShots` increments per shot; every 5th fires a free echo of the same shot intent (ranged: duplicate fan; melee: duplicate AoE). Echo inherits `forceCrit` + `finalMetaMul` but does NOT recurse. Run-scoped persistent counter |
-| QUARTERMASTER | ▣    | First defeat in each room drops a bonus core         | `#ffaa44` | Per-ROOM one-shot. `room._qmHarvested` flag set on first qualifying defeat in each room (no saveGame plumbing — dungeon regenerates on Continue, accepting the save-resume re-harvest exploit) |
+| QUARTERMASTER | ▣    | First defeat in each room drops a bonus core         | `#ffaa44` | Per-ROOM one-shot. `room._qmHarvested` lives on the room; a successful snapshot copies that room's properties onto the rebuild, so Continue does not re-harvest |
 | AUTONOMY      | ⚙    | Hackware cooldowns reduced 25% on this floor         | `#88ff44` | First passive % modifier. `player.hackwareCooldown = hw.cooldown * (OVERCLOCKER ? 0.7 : 1) * (AUTONOMY ? 0.75 : 1)` — multiplicative with OVERCLOCKER augment for ×0.525 combined |
 | CHAINREACT    | ⚡   | Chained defeats within 1.5s award bonus credits      | `#ff8866` | First timer-window modifier. `player._chainBuffTimer` countdown ticked by dt in Player.update; on qualifying defeat: if window > 0 award +15 CR; always refresh window to 1.5s. HUD shows `' ⚡'` glyph while window alive |
 | MAGNETISM     | ⊛    | Item pickup radius increased 50% on this floor       | `#bb88ff` | Affects item pickups only (not core drops — separate magnet system in `src/meta/cores.js`). Multiplies pickup radius by 1.5 at game.js:1602; stacks multiplicatively with MAGNETIC_FIELD augment ×2 → ×3 combined |
@@ -3236,9 +3245,11 @@ WAVE IN Ns"`, or `"⚔ WAVE N/M"` in `#ff9933` with pulsing glow.
 220+330 Hz) + square harmonic (440 Hz) + percussive noise burst + sub-bass
 (60→35 Hz). Plays at the start of each wave.
 
-**Save/load:** No extra save fields needed. Save checkpoints occur at floor
-entry (before the player can enter a challenge room). On continue, the floor
-is regenerated fresh and the challenge room is unvisited.
+**Save/load:** No separate challenge payload. The floor snapshot stores
+`challengeSealed`, the wave counters, `challengeComplete`, and the challenge
+room's own flags. An accepted Continue restores that mid-encounter state,
+including a save taken after the player has entered the room. A rejected
+snapshot keeps the fresh unvisited room from the rebuild.
 
 ### Vendor / Shop System
 
@@ -4482,9 +4493,14 @@ The leaderboard is displayed on three screens:
 
 Uses `localStorage` key `neonDungeonSave`. Saves player stats, current floor,
 run seed metadata, RNG stream state, and an optional live floor snapshot. The
-seeded generator still rebuilds the canonical base floor first; the snapshot is
-then replayed on top so Continue can restore mid-floor mutations instead of
-returning to the floor entrance.
+seeded generator still rebuilds the floor first. A snapshot that records
+`generationExitPos` (a finite previous exit, or `null` when this floor had
+none) rebuilds with that input, then replaces each room's properties exactly.
+A snapshot that omits the field is legacy: the rebuild has no previous exit,
+and saved room properties are merged onto the rebuild (`Object.assign`),
+dropping only a `trial` the save lacks, so the rebuild's designations stay on
+`dungeon.secretRooms`, `dungeon.bossRoom`, and the other room refs. Every
+accepted snapshot restores RNG streams to the saved states.
 
 Both persisted copies of the player position (`saveGame()`'s `player.x/y` and
 the floor snapshot's `player`) come from `savedPlayerPosition()`. If a
@@ -4504,9 +4520,11 @@ eligible). noClip saves the raw position.
 
 Mid-floor progress is saved as a floor snapshot. It captures player position,
 mutated dungeon grids/room flags, live enemies/items/projectiles, environmental
-objects, encounter seals, cleared-room state, and map reveal state. It is not a
-layout re-roll vector because Continue restores the saved seed/RNG state and
-regenerates the base floor before replaying the snapshot.
+objects, encounter seals, cleared-room state, map reveal state, and
+`generationExitPos` (finite `{x,y}`, or `null` when this floor had no previous
+exit). New saves always include the field. Older snapshots omit it and resume
+on the legacy merge described in Continue flow. A rejected snapshot leaves the
+regenerated floor.
 
 **Save payload:** `{ v, floor, difficulty, modifier, runSeed, runSeedHash, rngStates, bossesCleared, floorSnapshot, player: { x, y, hp, maxHp, atk, def, level, xp,
 weapon, upgrades, perks, keys, shards, permSpeedBonus, score, energyShield,
@@ -4528,16 +4546,26 @@ hackware fields default to a legacy sentinel seed and `null`/`0`.
   opening the seed screen.
 
 **Continue flow:** Creates a fresh `Player`, applies saved stats, calls
-`setSeed(save.runSeed, save.rngStates)`, then `loadFloor(savedFloor)`, and
-replays `floorSnapshot` when present before displaying "RUN RESUMED — FLOOR N".
-Because layout and population use derived per-floor streams, the regenerated
-floor matches the saved run seed/floor rather than re-rolling from ambient
-randomness; because the snapshot is replayed afterward, player location,
-already-opened doors/cracked walls, picked-up items, killed/damaged enemies,
-temporary hazards, and encounter state resume from the interruption point.
-Incompatible save versions (different `v` field) are deleted and a fresh run
-starts with an error message. Legacy saves without `floorSnapshot` still resume
-using the older floor-start regeneration behavior.
+`setSeed(save.runSeed, save.rngStates)`, then `loadFloor(savedFloor, savedModifier, true)`,
+and replays `floorSnapshot` when it is compatible. New saves always record
+`generationExitPos`: a finite `{x,y}` when this floor was generated from a
+previous exit, or `null` when it was not. If that field is present and the
+snapshot is for this floor and version, the rebuild passes it to
+`generateFloor` (`null` means no previous exit) and saved room properties
+replace the rebuild's room properties exactly, including removal of properties
+the save lacks, so the matching rebuild's room references stay valid. If the
+field is absent (a save written before it existed), the rebuild has no previous
+exit and rooms are merged with `Object.assign`, deleting `trial` only when the
+save lacks it. Rebuild-only designations then remain on the room objects
+`dungeon.secretRooms`, `dungeon.bossRoom`, and the other generator refs still
+point at. The rebuild still reads the persistent `event` stream (secret-room
+whispers), so every accepted snapshot applies `save.rngStates` again before
+the resume checkpoint is written. A queued system prompt stays queued; an
+already-delivered prompt is reopened. A rejected snapshot keeps the regenerated
+floor and shows "FLOOR SNAPSHOT REPAIRED — REGENERATED". Incompatible save
+versions (different `v` field) are deleted and a fresh run starts with an error
+message. Legacy saves without `floorSnapshot` still resume using the older
+floor-start regeneration behavior.
 
 **Save deletion:** `endRun()` (called on death and victory) deletes the save.
 Starting a new game overwrites the save when the first floor loads.
@@ -5041,7 +5069,10 @@ enhanced stats, distinctive visuals, and bonus rewards for elimination.
 - One candidate selected at random → `enemy._isBounty = true`.
 - Stats boosted: 2× HP (`maxHp` updated), 1.5× ATK.
 - Boss floors (biome-final: 3, 6, 9, 12, 15) never receive bounty targets.
-- Bounty designation is not saved — regenerated with floor on continue.
+- Bounty designation (`enemy._isBounty`, and the boosted HP/ATK already on
+  that enemy) is stored with the enemy in the floor snapshot and restored when
+  Continue accepts that snapshot. A rejected snapshot keeps the designation
+  `populateFloor` just rolled.
 
 **Visual:**
 - **Gold aura:** pulsing `#ffd700` circle behind the enemy (0.3–0.45 alpha,
@@ -5086,7 +5117,9 @@ enhanced stats, distinctive visuals, and bonus rewards for elimination.
 **Save/Load:**
 - `player.bountiesCollected` saved in checkpoint, restored on continue.
   Old saves default to `0` (no `SAVE_VERSION` bump needed).
-- Bounty designation itself is not saved (regenerated per floor, like volatile cores).
+- Bounty designation is part of the saved enemy (`_isBounty`) and is restored
+  with an accepted floor snapshot. A rejected snapshot keeps the designation
+  rolled during regeneration.
 
 **Stats display:** `{N} bounties` shown on Game Over and Victory run-summary
 line (between "events" and "blocked" stats), omitted when 0.
