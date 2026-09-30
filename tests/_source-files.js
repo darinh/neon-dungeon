@@ -304,12 +304,315 @@ function blankStringContents(src) {
     (m) => m[0] + ' '.repeat(m.length - 2) + m[m.length - 1]);
 }
 
+/**
+ * @param {string} src
+ * @param {string} [fileName]
+ * @returns {import('typescript').SourceFile}
+ */
+function parseJsSource(src, fileName = 'source.js') {
+  return ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+}
+
+/**
+ * Declaration text, excluding leading comments. Callers that eval or match
+ * this text must not depend on banner comments.
+ * @param {import('typescript').SourceFile} sourceFile
+ * @param {import('typescript').Node} node
+ * @returns {string}
+ */
+function nodeText(sourceFile, node) {
+  return sourceFile.text.slice(node.getStart(sourceFile), node.end);
+}
+
+/**
+ * @param {import('typescript').Node | undefined} node
+ * @returns {string | undefined}
+ */
+function identifierText(node) {
+  return node && ts.isIdentifier(node) ? node.text : undefined;
+}
+
+/**
+ * @param {import('typescript').Statement} statement
+ * @returns {string[]}
+ */
+function statementNames(statement) {
+  /** @type {string[]} */
+  const names = [];
+  if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+    const name = identifierText(statement.name);
+    if (name) names.push(name);
+  }
+  if (ts.isVariableStatement(statement)) {
+    for (const decl of statement.declarationList.declarations) {
+      const name = identifierText(decl.name);
+      if (name) names.push(name);
+    }
+  }
+  return names;
+}
+
+/**
+ * @param {string} label
+ * @returns {never}
+ */
+function missing(label) {
+  throw new Error(label);
+}
+
+/**
+ * Top-level function, class, or variable declaration, without leading comments.
+ * @param {string} src
+ * @param {string} name
+ * @returns {string}
+ */
+function extractDeclaration(src, name) {
+  const sourceFile = parseJsSource(src);
+  /** @type {import('typescript').Statement[]} */
+  const found = sourceFile.statements.filter((statement) => statementNames(statement).includes(name));
+  if (found.length !== 1) missing(`Expected 1 top-level declaration named ${name}, found ${found.length}`);
+  const statement = found[0];
+  if (!statement) missing(`Expected 1 top-level declaration named ${name}, found 0`);
+  return nodeText(sourceFile, statement);
+}
+
+/**
+ * Inclusive source from the top-level declaration startName through endName.
+ * Leading comments on startName are excluded; comments between the two are kept
+ * only because they sit in the raw span, and eval does not require them.
+ * @param {string} src
+ * @param {string} startName
+ * @param {string} endName
+ * @returns {string}
+ */
+function extractDeclarationSpan(src, startName, endName) {
+  const sourceFile = parseJsSource(src);
+  const starts = sourceFile.statements.filter((statement) => statementNames(statement).includes(startName));
+  const ends = sourceFile.statements.filter((statement) => statementNames(statement).includes(endName));
+  if (starts.length !== 1) missing(`Expected 1 span start named ${startName}, found ${starts.length}`);
+  if (ends.length !== 1) missing(`Expected 1 span end named ${endName}, found ${ends.length}`);
+  const start = starts[0];
+  const end = ends[0];
+  if (!start || !end) missing('Declaration span bounds missing');
+  if (start.getStart(sourceFile) > end.getStart(sourceFile)) {
+    missing(`${startName} does not precede ${endName}`);
+  }
+  return sourceFile.text.slice(start.getStart(sourceFile), end.end);
+}
+
+/**
+ * @typedef {object} SourceContainer
+ * @property {string} [className]
+ * @property {string} [method]
+ * @property {string} [functionName]
+ */
+
+/**
+ * @param {import('typescript').SourceFile} sourceFile
+ * @param {SourceContainer} container
+ * @returns {import('typescript').Node}
+ */
+function findContainer(sourceFile, container) {
+  /** @type {import('typescript').Node[]} */
+  const found = [];
+  /**
+   * @param {import('typescript').Node} node
+   */
+  function visit(node) {
+    if (container.className && container.method && ts.isMethodDeclaration(node)) {
+      const parent = node.parent;
+      if (ts.isClassDeclaration(parent)
+        && identifierText(parent.name) === container.className
+        && identifierText(node.name) === container.method) {
+        found.push(node);
+      }
+    } else if (container.functionName && ts.isFunctionDeclaration(node)
+      && identifierText(node.name) === container.functionName) {
+      found.push(node);
+    } else if (!container.className && !container.functionName && container.method
+      && ts.isMethodDeclaration(node) && identifierText(node.name) === container.method) {
+      found.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  if (found.length !== 1) {
+    const label = container.className
+      ? `${container.className}.${container.method}`
+      : (container.functionName || container.method || 'container');
+    missing(`Expected 1 source container ${label}, found ${found.length}`);
+  }
+  const only = found[0];
+  if (!only) missing('Source container not found');
+  return only;
+}
+
+/**
+ * @param {import('typescript').Node} container
+ * @returns {import('typescript').Statement[]}
+ */
+function containerStatements(container) {
+  if (ts.isFunctionLike(container) && container.body && ts.isBlock(container.body)) {
+    return [...container.body.statements];
+  }
+  missing('Container has no statement body');
+}
+
+/**
+ * Method text, excluding leading comments.
+ * @param {string} src
+ * @param {string} className
+ * @param {string} methodName
+ * @returns {string}
+ */
+function extractMethod(src, className, methodName) {
+  const sourceFile = parseJsSource(src);
+  return nodeText(sourceFile, findContainer(sourceFile, { className, method: methodName }));
+}
+
+/**
+ * Direct statements of a function or method, from the first whose text includes
+ * fromIncludes up to (not including) the later statement whose text includes
+ * untilIncludes.
+ * @param {string} src
+ * @param {SourceContainer & { fromIncludes: string, untilIncludes: string }} spec
+ * @returns {string}
+ */
+function extractStatementRange(src, spec) {
+  const sourceFile = parseJsSource(src);
+  const statements = containerStatements(findContainer(sourceFile, spec));
+  const startIdx = statements.findIndex((statement) => statement.getText(sourceFile).includes(spec.fromIncludes));
+  if (startIdx < 0) missing(`Start statement not found: ${spec.fromIncludes}`);
+  const endIdx = statements.findIndex((statement, index) => (
+    index > startIdx && statement.getText(sourceFile).includes(spec.untilIncludes)
+  ));
+  if (endIdx < 0) missing(`End statement not found: ${spec.untilIncludes}`);
+  const start = statements[startIdx];
+  const end = statements[endIdx];
+  if (!start || !end) missing('Statement range bounds missing');
+  return sourceFile.text.slice(start.getStart(sourceFile), end.getStart(sourceFile));
+}
+
+/**
+ * @param {import('typescript').Node[]} nodes
+ * @returns {import('typescript').Node[]}
+ */
+function innermostNodes(nodes) {
+  return nodes.filter((node) => !nodes.some((other) => (
+    other !== node && node.pos <= other.pos && other.end <= node.end
+  )));
+}
+
+/**
+ * Unique if or for statement inside a container. Nested matches keep the innermost.
+ * @param {string} src
+ * @param {SourceContainer & { kind: 'if' | 'for', includes: readonly string[] }} spec
+ * @returns {string}
+ */
+function extractMatchingStatement(src, spec) {
+  const sourceFile = parseJsSource(src);
+  const container = findContainer(sourceFile, spec);
+  /** @type {import('typescript').Statement[]} */
+  const hits = [];
+  /**
+   * @param {import('typescript').Node} node
+   */
+  function visit(node) {
+    const isKind = spec.kind === 'if' ? ts.isIfStatement(node) : ts.isForStatement(node);
+    if (isKind) {
+      const text = node.getText(sourceFile);
+      if (spec.includes.every((part) => text.includes(part))) hits.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(container);
+  const matches = innermostNodes(hits);
+  if (matches.length !== 1) {
+    missing(`Expected 1 ${spec.kind} statement matching ${spec.includes.join(' + ')}, found ${matches.length}`);
+  }
+  const match = matches[0];
+  if (!match) missing('Matching statement missing');
+  return nodeText(sourceFile, match);
+}
+
+/**
+ * Start offset of the unique innermost statement whose text includes every marker.
+ * A string marker matches one phrase; an array requires all phrases, so a nested
+ * statement cannot satisfy a marker that only the outer statement contains.
+ * @param {string} src
+ * @param {SourceContainer & { includes: string | readonly string[] }} spec
+ * @returns {number}
+ */
+function statementStart(src, spec) {
+  const sourceFile = parseJsSource(src);
+  const container = findContainer(sourceFile, spec);
+  const parts = typeof spec.includes === 'string' ? [spec.includes] : spec.includes;
+  /** @type {import('typescript').Statement[]} */
+  const hits = [];
+  /**
+   * @param {import('typescript').Node} node
+   */
+  function visit(node) {
+    if (ts.isStatement(node)) {
+      const text = node.getText(sourceFile);
+      if (parts.every((part) => text.includes(part))) hits.push(node);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(container);
+  const matches = innermostNodes(hits);
+  if (matches.length !== 1) missing(`Expected 1 statement containing ${parts.join(' + ')}, found ${matches.length}`);
+  const match = matches[0];
+  if (!match) missing('Statement missing');
+  return match.getStart(sourceFile);
+}
+
+/**
+ * Branch offsets relative to the named function declaration.
+ * @param {string} src
+ * @param {string} functionName
+ * @param {string} conditionText
+ * @returns {{ thenStart: number, thenEnd: number, elseStart: number, elseEnd: number }}
+ */
+function ifBranchOffsets(src, functionName, conditionText) {
+  const sourceFile = parseJsSource(src);
+  const fn = findContainer(sourceFile, { functionName });
+  const fnStart = fn.getStart(sourceFile);
+  /** @type {import('typescript').IfStatement[]} */
+  const hits = [];
+  /**
+   * @param {import('typescript').Node} node
+   */
+  function visit(node) {
+    if (ts.isIfStatement(node) && node.expression.getText(sourceFile) === conditionText) hits.push(node);
+    ts.forEachChild(node, visit);
+  }
+  visit(fn);
+  if (hits.length !== 1) missing(`Expected 1 if (${conditionText}) in ${functionName}, found ${hits.length}`);
+  const branch = hits[0];
+  if (!branch || !branch.elseStatement) missing(`if (${conditionText}) has no else`);
+  return {
+    thenStart: branch.thenStatement.getStart(sourceFile) - fnStart,
+    thenEnd: branch.thenStatement.end - fnStart,
+    elseStart: branch.elseStatement.getStart(sourceFile) - fnStart,
+    elseEnd: branch.elseStatement.end - fnStart,
+  };
+}
+
 module.exports = {
   CORE_RUNTIME_SOURCE_KEYS,
   SOURCE_FILE_PATHS,
   blankStringContents,
+  extractDeclaration,
+  extractDeclarationSpan,
+  extractMatchingStatement,
+  extractMethod,
+  extractStatementRange,
+  ifBranchOffsets,
+  parseJsSource,
   readSourceFile,
   readSourceFiles,
   resolveSourceFile,
+  statementStart,
   stripJsComments,
 };

@@ -4,7 +4,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
-const { readSourceFile } = require('./_source-files.js');
+const { extractDeclarationSpan, readSourceFile } = require('./_source-files.js');
 
 const RENDER = readSourceFile(__dirname, 'render');
 const GAME = readSourceFile(__dirname, 'game');
@@ -23,11 +23,7 @@ const T = Object.freeze({
 });
 
 function loadReconRouteHooks() {
-  const start = RENDER.indexOf('// ─── RECON Route Guidance');
-  const end = RENDER.indexOf('// Base-layer cache:', start);
-  assert.ok(start >= 0, 'render source should include RECON route guidance section');
-  assert.ok(end > start, 'RECON route guidance section should end before minimap cache');
-  const source = RENDER.slice(start, end) + `
+  const source = extractDeclarationSpan(RENDER, 'RECON_ROUTE_DX', 'drawReconRouteOverlay') + `
     hooks = {
       computeReconRoute,
       findReconObjectiveTile,

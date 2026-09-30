@@ -9,6 +9,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const ts = require('typescript');
+const { statementStart } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const GAME = fs.readFileSync(path.join(ROOT, 'src/game.js'), 'utf8');
@@ -133,10 +135,28 @@ test('applyEventChoice routes relay trial cards to NEON.trials and plain events 
 
 test('the trial hook runs before generic Interact handlers and consumes the press', () => {
   const { body } = extractMethod('updatePlaying');
-  const hook = body.indexOf('NEON.trials.updateTrials(');
-  const stairs = body.indexOf('(tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp(km(\'interact\'))');
-  const doors = body.indexOf('// door interaction (check adjacent tiles when pressing E)');
+  const hook = statementStart(GAME, { method: 'updatePlaying', includes: 'NEON.trials.updateTrials(' });
+  const stairs = statementStart(GAME, {
+    method: 'updatePlaying',
+    includes: "(tile===T.STAIRS||tile===T.TERMINAL) && !bossBlocking && jp(km('interact'))",
+  });
+  const doors = statementStart(GAME, {
+    method: 'updatePlaying',
+    includes: ["if (jp(km('interact')))", 'const dirs', "this.msg('Door opened'"],
+  });
   assert.ok(hook > 0 && stairs > hook && doors > hook, 'trial hook must precede stairs/door Interact handling');
+  const sf = ts.createSourceFile('game.js', GAME, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  /** @type {number[]} */
+  const interactReads = [];
+  /** @param {import('typescript').Node} node @param {boolean} inside */
+  const visit = (node, inside) => {
+    const here = inside || ((ts.isMethodDeclaration(node) || ts.isPropertyAssignment(node)) && node.name.getText(sf) === 'updatePlaying');
+    if (here && ts.isCallExpression(node) && node.getText(sf) === "jp(km('interact'))") interactReads.push(node.getStart(sf));
+    ts.forEachChild(node, (child) => visit(child, here));
+  };
+  visit(sf, false);
+  assert.ok(interactReads.length > 0, 'updatePlaying reads the Interact key');
+  assert.deepEqual(interactReads.filter((at) => at < hook), [], 'no Interact handler in updatePlaying may run before the trial hook');
   assert.match(body, /if \(NEON\.trials\.updateTrials\(this, dt, jp\(_trialKey\), getTrialDeps\(\)\)\) justPressed\.delete\(_trialKey\);/);
 });
 

@@ -9,16 +9,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { extractDeclarationSpan } = require('./_source-files.js');
 
 const CONTENT_PROJECTILES = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'content', 'projectiles.js'), 'utf8'
 );
 
 function projectileRuntime(width = 5, height = 5) {
-  const start = CONTENT_PROJECTILES.indexOf('// ─── Projectiles (pooled)');
-  const end = CONTENT_PROJECTILES.indexOf('// ─── Hazard Zones', start);
-  assert.notEqual(start, -1, 'Projectile section must be locatable');
-  assert.notEqual(end, -1, 'Hazard section boundary must be locatable');
+  const projectileSection = extractDeclarationSpan(CONTENT_PROJECTILES, 'PROJECTILE_CAP', 'Projectile');
 
   const sandbox = {
     MAP_W: width,
@@ -60,7 +58,7 @@ function projectileRuntime(width = 5, height = 5) {
   sandbox.spawnParticles = (x, y, type, colour, count) => { sandbox.particles.push({ x, y, type, colour, count }); };
   vm.createContext(sandbox);
   vm.runInContext(
-    `${CONTENT_PROJECTILES.slice(start, end)}\nthis.Projectile = Projectile;`,
+    `${projectileSection}\nthis.Projectile = Projectile;`,
     sandbox
   );
   return sandbox;
