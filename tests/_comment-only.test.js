@@ -3,7 +3,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { verdict, comments, nonProse } = require('./_comment-only.js');
+const { verdict, comments } = require('./_comment-only.js');
 
 const BEFORE = `// @ts-check
 'use strict';
@@ -22,6 +22,9 @@ function step(dt) {
 }
 `;
 
+/** @param {string} before @param {string} after */
+const check = (before, after) => verdict('src/a.js', before, after);
+
 test('removing prose comments, banners and history notes is prose comments only', () => {
   const after = BEFORE
     .replace('// ─── Projectiles ───\n', '')
@@ -29,30 +32,100 @@ test('removing prose comments, banners and history notes is prose comments only'
     .replace('  // UNCHAINED #39: was a fixed step\n', '')
     .replace(' // trailing note', '')
     .replace(' /* inline */', '');
-  assert.equal(verdict('src/a.js', BEFORE, after), null);
+  assert.equal(check(BEFORE, after), null);
+});
+
+test('rewording a JSDoc description is prose comments only', () => {
+  assert.equal(check(BEFORE, BEFORE.replace('seconds since the last frame', 'elapsed time in seconds')), null);
 });
 
 test('a code change is not prose comments only', () => {
-  assert.equal(verdict('src/a.js', BEFORE, BEFORE.replace('dt > 0', 'dt >= 0')),
-    'code changed: comment-stripped emit differs');
+  assert.equal(check(BEFORE, BEFORE.replace('dt > 0', 'dt >= 0')), 'code changed: comment-stripped emit differs');
 });
 
-test('a JSDoc type tag change is not prose comments only', () => {
-  assert.match(String(verdict('src/a.js', BEFORE, BEFORE.replace('@returns {boolean}', '@returns {any}'))),
-    /^directive or JSDoc type tag changed: "@returns \{boolean\}" -> "@returns \{any\}"$/);
-  assert.match(String(verdict('src/a.js', BEFORE, BEFORE.replace(' * @param {number} dt seconds since the last frame\n', ''))),
-    /^directive or JSDoc type tag changed/);
+test('a code change that emits identically is not prose comments only', () => {
+  assert.match(String(check('let a = 1;\nlet b = 2;\n', 'let a = 1\nlet b = 2\n')), /^code changed: token 4 /);
+  assert.match(String(check('a();\nb();\n', 'a(); b();\n')), /^code line structure changed: token 4 \(line 1\)/);
+});
+
+test('changing or removing a JSDoc type tag is not prose comments only', () => {
+  assert.match(String(check(BEFORE, BEFORE.replace('@returns {boolean}', '@returns {any}'))), /^JSDoc tag changed or moved: .*BooleanKeyword.* -> .*AnyKeyword/);
+  assert.match(String(check(BEFORE, BEFORE.replace(' * @param {number} dt seconds since the last frame\n', ''))), /^JSDoc tag changed or moved/);
+});
+
+test('a type is compared in full, across lines and asterisks', () => {
+  /** @param {string} t */
+  const typedef = (t) => `/**\n * @typedef {{\n *   a: ${t}\n * }} Foo\n */\n/** @param {Array<*> | ${t}} x */\nfunction f(x) { return x; }\n`;
+  assert.match(String(check(typedef('string'), typedef('number'))), /^JSDoc tag changed or moved: .*StringKeyword.* -> .*NumberKeyword/);
+  /** @param {string} name */
+  const param = (name) => `/** @param {Array<*>} ${name} */\nfunction f(items) { return items; }\n`;
+  assert.match(String(check(param('items'), param('other'))), /^JSDoc tag changed or moved: .*Identifier\\"items\\".* -> .*Identifier\\"other\\"/);
+});
+
+test('removing a tag TypeScript enforces is not prose comments only', () => {
+  for (const tag of ['@readonly', '@private', '@protected', '@override', '@constructor', '@class', '@deprecated']) {
+    const code = `class A {\n  /** ${tag} */\n  x = 1;\n}\n`;
+    assert.match(String(check(code, code.replace(`/** ${tag} */`, '/** Prose. */'))), /^JSDoc tag changed or moved/, tag);
+  }
+});
+
+test('removing a documentation-only tag is prose comments only', () => {
+  const code = '/**\n * Adds.\n * @example add(1)\n * @see sum\n * @param {number} a\n */\nfunction add(a) { return a + 1; }\n';
+  assert.equal(check(code, code.replace(' * @example add(1)\n * @see sum\n', '')), null);
+});
+
+test('moving a type cast to another expression is not prose comments only', () => {
+  const before = 'const x = /** @type {any} */ (1);\nconst y = (2);\n';
+  const after = 'const x = (1);\nconst y = /** @type {any} */ (2);\n';
+  assert.match(String(check(before, after)), /^JSDoc tag changed or moved: .*on token 3.* -> .*on token 10/);
+});
+
+test('moving a directive to another line is not prose comments only', () => {
+  const before = '// @ts-expect-error\nundeclaredA();\nundeclaredB();\n';
+  const after = 'undeclaredA();\n// @ts-expect-error\nundeclaredB();\n';
+  assert.match(String(check(before, after)), /^directive changed or moved/);
+  const lint = '// eslint-disable-next-line no-var\nvar a = 1;\nvar b = 2;\n';
+  assert.match(String(check(lint, 'var a = 1;\n// eslint-disable-next-line no-var\nvar b = 2;\n')), /^directive changed or moved/);
+});
+
+test('removing a prose line between a next-line directive and its code is not prose comments only', () => {
+  const before = '// eslint-disable-next-line no-var\n// why\nvar a = 1;\n';
+  assert.match(String(check(before, before.replace('// why\n', ''))), /^directive changed or moved: .*lines to the next 2.* -> .*lines to the next 1/);
 });
 
 test('removing or adding a directive is not prose comments only', () => {
-  assert.match(String(verdict('src/a.js', BEFORE, BEFORE.replace('// @ts-check\n', ''))), /^directive or JSDoc type tag changed/);
-  assert.match(String(verdict('src/a.js', BEFORE, BEFORE.replace("'use strict';", "'use strict';\n// eslint-disable-next-line no-var"))),
-    /^directive or JSDoc type tag changed/);
+  assert.match(String(check(BEFORE, BEFORE.replace('// @ts-check\n', ''))), /^directive changed or moved/);
+  assert.match(String(check(BEFORE, BEFORE.replace("'use strict';", "'use strict';\n// eslint-disable-next-line no-var"))),
+    /^directive changed or moved/);
+  assert.match(String(check('var foo = 1;\n', '/* exported foo */\nvar foo = 1;\n')), /^directive changed or moved/);
+  assert.match(String(check('/* global a */\na();\n', '/* global b */\na();\n')), /^directive changed or moved/);
 });
 
-test('declaration files, other file types, new and deleted files are never prose comments only', () => {
-  assert.equal(verdict('types/engine.d.ts', 'declare const a: number;', 'declare const a: string;'), 'not a JavaScript file');
-  assert.equal(verdict('docs/spec.md', 'a', 'b'), 'not a JavaScript file');
+test('a line comment that starts with "global" is prose, as it is for ESLint', () => {
+  assert.equal(check('// global helpers for old saves\nvar a = 1;\n', 'var a = 1;\n'), null);
+});
+
+test('a file pragma may lose the prose under it, but not leave the file header', () => {
+  const before = "// @ts-check\n// Why this module exists.\n'use strict';\n";
+  assert.equal(check(before, "// @ts-check\n'use strict';\n"), null);
+  assert.match(String(check(before, "'use strict';\n// @ts-check\n")), /^directive changed or moved: .*in the file header.* -> .*outside the file header/);
+});
+
+test('removing a triple-slash reference directive is not prose comments only', () => {
+  const code = '/// <reference types="node" />\nconst a = 1;\n';
+  assert.match(String(check(code, 'const a = 1;\n')), /^directive changed or moved/);
+});
+
+test('a trailing directive on the same line as code counts as a directive', () => {
+  const code = "const a = eval('1'); // eslint-disable-line no-eval\n";
+  assert.match(String(check(code, "const a = eval('1');\n")), /^directive changed or moved/);
+});
+
+test('only .js files that exist on both sides can be prose comments only', () => {
+  assert.equal(verdict('types/engine.d.ts', 'declare const a: number;', 'declare const a: string;'), 'not a .js file');
+  assert.equal(verdict('docs/spec.md', 'a', 'b'), 'not a .js file');
+  assert.equal(verdict('src/a.cjs', 'const a = 1; // old\n', 'const a = 1; // new\n'), 'not a .js file');
+  assert.equal(verdict('src/a.mjs', 'const a = 1; // old\n', 'const a = 1;\n'), 'not a .js file');
   assert.equal(verdict('src/new.js', null, 'const a = 1;'), 'new file');
   assert.equal(verdict('src/old.js', 'const a = 1;', null), 'deleted file');
 });
@@ -66,15 +139,4 @@ test('comments are found by the parser, not by text that only looks like a comme
     '// trailing note',
     '/* inline */',
   ]);
-  assert.deepEqual(nonProse(BEFORE), ['// @ts-check', '@param {number} dt seconds since the last frame', '@returns {boolean}']);
-});
-
-test('removing a triple-slash reference directive is not prose comments only', () => {
-  const code = '/// <reference types="node" />\nconst a = 1;\n';
-  assert.match(String(verdict('src/a.js', code, 'const a = 1;\n')), /^directive or JSDoc type tag changed/);
-});
-
-test('a trailing directive on the same line as code counts as a directive', () => {
-  const code = "const a = eval('1'); // eslint-disable-line no-eval\n";
-  assert.match(String(verdict('src/a.js', code, "const a = eval('1');\n")), /^directive or JSDoc type tag changed/);
 });

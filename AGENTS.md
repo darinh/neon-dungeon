@@ -232,16 +232,17 @@ Scale adversarial code review to risk. Reviewers read the staged diff only.
 | Tests only | 1 |
 | Any other source change | 3, with split briefs: falsify the claims, find omissions, check logic and performance |
 
-A change is prose comments only when it touches only `.js` files, changes no
-JSDoc type tag (`@type`, `@param`, `@returns`, `@typedef`, `@template`) and no
-directive comment (`@ts-check`, `@ts-nocheck`, `@ts-ignore`, `@ts-expect-error`,
-`eslint-*`, `global`), and, for every changed file,
-`require('typescript').transpileModule(text, { compilerOptions: { removeComments: true, target: 99 } }).outputText`
-is byte-identical before and after. `.d.ts` changes, JSDoc type changes, and
-directive changes are source changes: transpiling erases them.
-`node tests/_comment-only.js [base-ref]` checks all of this for every file
-changed since the base ref (default `origin/develop`), lists each file's
-verdict, and exits nonzero if any file fails.
+A change is prose comments only when it touches only `.js` files and changes
+nothing but comment prose and JSDoc description text: no code, no JSDoc tag
+other than documentation-only ones such as `@example` and `@see`, and no
+directive comment (`@ts-*`, `eslint*`, `/* global */`, `/* exported */`,
+triple-slash), neither its content nor its position. `.d.ts` changes, JSDoc tag
+changes, and directive changes are source changes even though transpiling
+erases them. `node tests/_comment-only.js [base-ref]` proves it for every file
+changed since the base ref (default `origin/develop`): the comment-stripped
+`transpileModule` emit, the code tokens, and which tokens share a line must be
+identical, and every directive and JSDoc tag must keep its content and place.
+It lists each file's verdict and exits nonzero if any file fails.
 
 For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect
