@@ -100,23 +100,37 @@ PID 359051  ROOT /path/to/worktree  HEAD e5d6f28...
   4. Spawn the server and write `server.json` with its pid,
      `status: "starting"` and the same `token`.
   5. Wait for the server's own line, `READY <url> pid=<pid>`. Only log bytes
-     written after this spawn count, and the pid must match.
-  6. Record the url and `status: "ready"`, but only if the lock and record
-     still carry this launch's token. Otherwise stop its own server and fail.
+     written after this spawn count, and the pid must match. A server that
+     has exited fails the launch, even if it printed READY first.
+  6. Record the url and `status: "ready"`, but only if the server is still
+     alive and the lock and record still carry this launch's token.
+     Otherwise stop its own server and fail. Liveness is checked again after
+     the record is written, before exit 0. A server that dies after launch
+     returns is caught by the `server-process` check in doctor and drive.
 
   `server.json` is always written atomically (a temp file, then a rename), so
   no reader sees a torn record. Its schema is exact: `pid`, `status`
-  (`starting` with `url: null`, or `ready` with an `http://127.0.0.1:<port>/`
-  url), `root`, `runDir`, `startedAt`, `head` and a 32-hex `token`. Anything
-  else is unreadable.
+  (`starting` with `url: null`, or `ready` with a url), `root`, `runDir`,
+  `startedAt`, `head` and a 32-hex `token`. The url is parsed with
+  `new URL()` and must be `http:` on host `127.0.0.1` or `[::1]`, with an
+  explicit port 1-65535 and path `/`, in canonical form. Anything else is
+  unreadable (`bad or missing: <fields>`), and doctor and drive refuse it
+  (exit 2) before any browser starts.
 - **Failure cleanup and ownership.** If the launch fails, times out or gets
   SIGINT/SIGTERM/SIGHUP, it kills its own server. It removes `server.json` and
-  `launch.lock` only while they still carry its token. It re-reads each file
-  first, so it never deletes a lock or record another launch has written
-  since, and it says which files it left. The handlers stay installed until
-  the process exits. So exit 0 always means a recorded, running server, and
-  exit 130 always means the launch left nothing running, even if it had
-  already printed READY.
+  `launch.lock` only if they carry its token at the moment of removal. There
+  is no compare-then-delete on the shared path. A quick read first skips a
+  file that is visibly someone else's. Then the path is renamed to a unique
+  `*.quarantine` name, which is atomic, and only that claimed copy is judged:
+  - ours: it is unlinked;
+  - someone else's: it is hard-linked back, which fails rather than clobbers
+    if a newer file took the path. The copy is then left under its quarantine
+    name and reported.
+
+  The launch says which files it left. The handlers stay installed until the
+  process exits. So exit 0 always means a recorded, running server, and exit
+  130 always means the launch left nothing running, even if it had already
+  printed READY.
 - **One server per run dir.** A second `launch` into the same run dir is
   refused while the lock exists; `stop` removes the lock. Relaunching into a
   stopped run dir records the new server even though `server.log` still holds
@@ -135,8 +149,10 @@ PID 359051  ROOT /path/to/worktree  HEAD e5d6f28...
 - **`version.json` is verification scaffolding.** In production,
   `.github/workflows/release-version.yml` writes it. verify-serve answers
   `/version.json` from memory:
-  `{"version":"0.0.0-local","tag":"local","commit":"<HEAD of root>","pid":<server pid>,"runDir":"<run dir>"}`.
-  No file is written, and the menu shows `v0.0.0-local`.
+  `{"version":"0.0.0-local","tag":"local","commit":"<HEAD of root>","pid":<server pid>,"runDir":"<run dir>","root":"<root it serves>"}`.
+  No file is written, and the menu shows `v0.0.0-local`. verify-serve
+  refuses a repeated `--root`, `--run-dir` or `--port` (exit 2), so its
+  command line has one meaning.
 - **The deployed game.** There is nothing to launch. Pass
   `--url https://darinh.github.io/neon-dungeon/` to `doctor` or `drive`, and
   a run dir is created for the evidence.
@@ -151,9 +167,9 @@ node .github/skills/verify-neon-dungeon/scripts/verify.js doctor --run-dir <RUN_
 ```
 
 ```
-PASS  server-process  pid 359051 alive; cmdline has verify-serve.js --run-dir <RUN_DIR>
+PASS  server-process  pid 359051 alive; cmdline has verify-serve.js --root <root> --run-dir <RUN_DIR>
 PASS  http-root       GET / 200; <canvas id="c"> present; bytes match <root>/index.html
-PASS  version-json    version 0.0.0-local commit e5d6f28... == HEAD e5d6f28... of <root>; answered by pid 359051 for this run
+PASS  version-json    version 0.0.0-local commit 9aa1cc3... == HEAD 9aa1cc3... of <root>; answered by pid 359051 for this run; serving the recorded root
 INFO  chromium        ~/.cache/ms-playwright/chromium-1219/chrome-linux64/chrome (source: playwright cache chromium-1219)
 INFO  chromium-warn   cached chromium-1219 is not the Chromium revision playwright-core is pinned to (...); compatibility is not guaranteed. ...
 PASS  browser-boot    game.state=MENU after 2079ms; 0 unexpected error(s), 1 noise filtered; appVersion=0.0.0-local
@@ -172,6 +188,9 @@ or moved from another run, or an unreadable or partial one, is refused
 rows come from one shared function. `drive` runs the same function before it
 opens a browser, and refuses (exit 2) on any FAIL. So a forged record, or a
 dead server's port reused by another run's server, is never driven.
+`server-process` parses the recorded pid's command line with verify-serve's
+own argument parser, so a repeated or unknown flag fails it. `version-json`
+also compares the root the server reports with the recorded root.
 
 - **`server-process` or `http-root` FAIL:** relaunch.
 - **`version-json` FAIL:** the URL is not answered by this run's server. Its
@@ -262,7 +281,7 @@ this holds even on a loaded machine.
 | `tapLogical(x, y)` | Taps with touch in `--touch` contexts and clicks with the mouse otherwise, at logical game coordinates. Only for targets without a label. |
 | `findText(re)` | Finds the topmost visible string matching `re`, drawn on the canvas in the last frame (a string pattern matches literally). Returns `{text, client, logical, box}`: the centre in client and logical coordinates, and `box` `{left, top, right, bottom}` in logical coordinates, the axis-aligned bounds of the ink box mapped through the full transform, so rotated or skewed text gets the box it really covers. If nothing matches within 2 s it throws, listing the visible strings. Use it to check what the player sees. |
 | `tapText(re)` / `clickText(re)` | Finds a label, then taps it (touch contexts; mouse click otherwise) or clicks it with the mouse. On desktop MENU a click activates the highlighted row wherever it lands, so select menu rows with arrow keys there (`menuSelect` does). |
-| `rowText(label, value, {within=12})` | Finds the `value` string drawn where a player reads `label`'s value, for example `rowText(/^SCREEN SHAKE$/, /^◀ (ON\|OFF) ▶$/)`. It must be on the label's row (centre within `within` logical px vertically) and in the row's value column: its box starting right of the label's box, and ending no further right than the label's left edge mirrored across the canvas (the settings and FEET menus are centred panels). A value drawn elsewhere on the row fails with its position. A value drawn over its label fails with `value overlaps its label: <label box> vs <value box>, a game layout defect at this viewport`. That is a real game bug at that viewport, so the check is never loosened (see `features/pause-and-settings.md` for the viewports known to hit it). |
+| `rowText(label, value, {within=12})` | Finds the `value` string drawn where a player reads `label`'s value, for example `rowText(/^SCREEN SHAKE$/, /^◀ (ON\|OFF) ▶$/)`. It must be on the label's row (centre within `within` logical px vertically) and in the row's value column: its box starting right of the label's box, and ending no further right than the label's left edge mirrored across the canvas (the settings and FEET menus are centred panels). A value drawn elsewhere on the row fails with its position. A value drawn over its label fails with `value overlaps its label: <label box> vs <value box>, a game layout defect at this viewport`. Any positive-area overlap counts; the 2 px slack only applies at the column edges, and edges that merely touch are fine. That is a real game bug at that viewport, so the check is never loosened (see `features/pause-and-settings.md` for the viewports known to hit it). |
 | `highlight(label, key, {max=40})` | Presses `key` until `label` is drawn highlighted. A label counts as highlighted when it is drawn in a colour that no other label in its menu column or row uses. This is keyboard navigation by what is shown, with no row indices. |
 | `visibleTexts()` | Every visible drawn string of the last frame, as `{text, client, logical, box}`. |
 | `step(label, fn)` | Runs `fn` and records state before and after, plus a screenshot taken after. Steps nest. |
@@ -372,23 +391,36 @@ that bypasses routing cannot resolve either. PostHog's inline stub in
 node .github/skills/verify-neon-dungeon/scripts/verify.js stop --run-dir <RUN_DIR>
 ```
 
-`stop` reads the pid from `server.json` and kills it only if
-`/proc/<pid>/cmdline` is `verify-serve.js ... --run-dir <RUN_DIR>`. Otherwise
-it prints `REFUSING` and exits 1, and nothing is killed. It sends SIGTERM,
-then SIGKILL if needed, keeps every evidence file and lists them. It is
-idempotent: `NOTHING TO STOP` and `ALREADY STOPPED` exit 0. A server that
+`stop` first looks for a launch still running for this run dir, typically
+one waiting for READY. The lock's launcher pid must be a live
+`verify.js launch`, and either its `--run-dir` is this run dir, or the
+recorded server (whose record carries the lock's token) is its child. Such a
+launch gets SIGTERM, and its own handlers stop its server and remove only
+the files it created. `stop` prints
+`STOPPED  launch in progress (launcher pid N, server pid M) ...`, so the
+launch is never pulled out from under its launcher.
+
+Otherwise `stop` reads the pid from `server.json` and kills it only if
+`/proc/<pid>/cmdline` is `verify-serve.js ... --run-dir <RUN_DIR>`. The
+cmdline is parsed with verify-serve's parser, so repeated flags do not match.
+Otherwise it prints `REFUSING` and exits 1, and nothing is killed. It sends
+SIGTERM, then SIGKILL if needed, keeps every evidence file and lists them. It
+is idempotent: `NOTHING TO STOP` and `ALREADY STOPPED` exit 0. A server that
 exits while `stop` checks it (for example because a concurrent `stop` killed
 it) is `ALREADY STOPPED`.
 
-`stop` removes files only while they are still the ones it judged:
-- **The record** goes only while it carries the token of the launch whose
+`stop` removes a file only if it is still the one it judged at the moment of
+removal, by the same rename-to-quarantine claim as launch. A claimed file
+that turns out to be someone else's goes back. If it cannot go back, it is
+left as `*.quarantine`, with a `NOTE`:
+- **The record** goes only if it carries the token of the launch whose
   server `stop` handled.
 - **The lock** goes if it carries that same token, or if its launcher is no
   longer running and it is unchanged. A lock held by a running launcher stays
   (`NOTE  launch.lock left in place ...`).
 - **With no trustworthy record** (missing, unreadable or foreign) while a
-  launcher is still running, `stop` prints `LAUNCH IN PROGRESS`, removes
-  nothing and exits 1.
+  live launcher that cannot be verified as this run dir's holds the lock,
+  `stop` prints `LAUNCH IN PROGRESS`, removes nothing and exits 1.
 
 When `server.json` is unreadable (`UNREADABLE`: empty, torn, partial, or not
 a server record) or names another run dir (`FOREIGN`: copied or moved), and
@@ -480,3 +512,26 @@ downloads no browser. Run `npm ci` in a fresh worktree first.
   it.
 - **Screenshots** are taken at deviceScaleFactor 1. The game ignores
   `devicePixelRatio`, so this is faithful and keeps evidence small.
+
+## Known limits
+
+- **Visibility.** Only effective alpha and an on-canvas centre are checked.
+  Text that is covered, clipped, drawn in the background colour or erased by
+  a composite mode still counts. Look at the screenshots.
+- **Boxes of rotated or skewed text** are axis-aligned bounds, which are
+  larger than the ink. A "label lies inside its control" check is therefore
+  conservative: a tilted label that fits its button can still fail it.
+- **Process checks read `/proc`.** Server identity, launcher verification and
+  `NOT KILLED` reports need it. Elsewhere, argv comes from `ps`, split on
+  spaces. A launch in progress can then be verified only by an absolute
+  `--run-dir` in its argv, and otherwise `stop` prints `LAUNCH IN PROGRESS`
+  rather than signalling it.
+- **Removal claims a file by renaming it.** A file that was visibly someone
+  else's is never touched. But if a lock or record is replaced within the
+  microseconds between `stop`'s quick read and its rename, the replacement is
+  briefly off its path. If yet another file takes the path in that moment,
+  the displaced copy is kept as `*.quarantine`, and `stop` reports it with a
+  `NOTE`.
+- **Launch checks its server's liveness** when it records `ready` and just
+  before it exits 0. A server that dies after that is caught by doctor's and
+  drive's `server-process` check, not by launch.

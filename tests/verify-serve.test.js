@@ -6,13 +6,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn, spawnSync, execFileSync } = require('node:child_process');
 
 const {
   DEFAULT_ROOT,
   mimeTypeFor,
   resolveSafePath,
   parseRange,
+  parseServeArgs,
 } = require('../.github/skills/verify-neon-dungeon/scripts/verify-serve.js');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -133,7 +134,7 @@ test('answers /version.json from memory with the root HEAD commit and this proce
   assert.equal(res.headers['content-type'], 'application/json; charset=utf-8');
   assert.equal(res.headers['cache-control'], 'no-store');
   assert.deepEqual(JSON.parse(res.body.toString('utf8')), {
-    version: '0.0.0-local', tag: 'local', commit: gitHeadOrUnknown(), pid: server.child.pid, runDir: null,
+    version: '0.0.0-local', tag: 'local', commit: gitHeadOrUnknown(), pid: server.child.pid, runDir: null, root: ROOT,
   });
   assert.equal(fs.existsSync(path.join(ROOT, 'version.json')), false);
 });
@@ -150,6 +151,19 @@ test('reports the --run-dir it was started for in /version.json', async () => {
     s.child.removeAllListeners('exit');
     s.child.kill('SIGTERM');
   }
+});
+
+test('refuses a repeated --root, --run-dir or --port instead of serving the last one', () => {
+  for (const flag of ['--root', '--run-dir', '--port']) {
+    const value = flag === '--port' ? '0' : ROOT;
+    assert.throws(() => parseServeArgs([flag, value, flag, value]), { message: `duplicate ${flag}: each flag may be given once` });
+  }
+  assert.deepEqual(parseServeArgs(['--root', ROOT, '--port', '0', '--run-dir', path.join(ROOT, 'run')]), { root: ROOT, port: 0, runDir: path.join(ROOT, 'run') });
+  // The real process exits 2 before listening; a server that started would be killed by the timeout.
+  const run = spawnSync(process.execPath, [SERVE, '--root', path.join(ROOT, 'src'), '--port', '0', '--root', ROOT], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(run.status, 2);
+  assert.equal(run.stdout, '');
+  assert.equal(run.stderr, 'verify-serve: duplicate --root: each flag may be given once\n');
 });
 
 test('honours a byte range request with 206 Partial Content', async () => {

@@ -20,6 +20,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const SKILL_DIR = path.resolve(__dirname, '..');
 const DEFAULT_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const SERVE_SCRIPT = path.join(__dirname, 'verify-serve.js');
+const { parseServeArgs } = require('./verify-serve.js');
 const DRIVES_DIR = path.join(SKILL_DIR, 'features', 'drives');
 const INSTALL_HINT = 'npx playwright-core install chromium';
 const LOCAL_VERSION = '0.0.0-local';
@@ -415,7 +416,9 @@ function isHighlighted(texts, pattern) {
  * column: its box starting right of the label's box and ending inside the
  * row band, whose right edge is the label's left edge mirrored across the
  * canvas (the settings and FEET menus are centred panels with labels at the
- * left inset). Returns the vertically nearest such string, the row candidates
+ * left inset). A value whose box overlaps the label's box by any positive
+ * area is always misplaced; `slack` only tolerates rounding at the column
+ * edges. Returns the vertically nearest such string, the row candidates
  * rejected for their position, the column, and the label found. Pixels are
  * backing-store.
  * @param {DrawnText[]} texts
@@ -442,7 +445,9 @@ function rowValue(texts, label, value, opts) {
     const d = Math.abs(t.y - anchorText.y);
     if (d > opts.within) continue;
     const vb = textBox(t, 1);
-    if (vb.left < column.left - slack || vb.right > column.right + slack) {
+    // Any positive-area overlap with the label is misplaced, whatever the
+    // slack: slack only tolerates rounding at the column edges.
+    if (boxesOverlap(lb, vb) || vb.left < column.left - slack || vb.right > column.right + slack) {
       misplaced.push(t);
     } else if (d < bestDistance) {
       match = t;
@@ -667,16 +672,23 @@ function resolveChromium(deps = {}) {
 
 /**
  * True when argv is verify-serve.js started for exactly this run dir (and,
- * when given, serving exactly this root).
+ * when given, serving exactly this root). The flags after the script are
+ * parsed with verify-serve's own parser, so this check and the server agree:
+ * a repeated or unknown flag is not our server.
  * @param {string[]} args process argv (from /proc/<pid>/cmdline)
  * @param {string} runDir
  * @param {string} [root]
  */
 function isOurServer(args, runDir, root) {
-  const i = args.indexOf('--run-dir');
-  const r = args.indexOf('--root');
-  return args.some((a) => path.basename(a) === 'verify-serve.js') && i >= 0 && args[i + 1] === runDir &&
-    (root === undefined || (r >= 0 && args[r + 1] === root));
+  const script = args.findIndex((a) => path.basename(a) === 'verify-serve.js');
+  if (script < 0) return false;
+  let served;
+  try {
+    served = parseServeArgs(args.slice(script + 1));
+  } catch (_) {
+    return false;
+  }
+  return served.runDir === runDir && (root === undefined || served.root === root);
 }
 
 // ─── Process / filesystem plumbing ───────────────────────────────────────────
@@ -745,8 +757,28 @@ function uniqueDir(base) {
   throw new Error(`could not create a unique directory at ${base}`);
 }
 
-const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:\d+\/$/;
 const TOKEN = /^[0-9a-f]{32}$/;
+
+/**
+ * A server URL as launch records it: `http:`, host 127.0.0.1 or [::1], an
+ * explicit integer port 1-65535, path `/`, nothing else, in canonical form.
+ * `new URL()` does the parsing, so `http://127.0.0.1:99999/` (out of range)
+ * or `http://127.0.0.1:0/` never reaches a browser.
+ * @param {unknown} url
+ */
+function isServerUrl(url) {
+  if (typeof url !== 'string') return false;
+  let u;
+  try {
+    u = new URL(url);
+  } catch (_) {
+    return false;
+  }
+  const port = Number(u.port);
+  return u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === '[::1]') &&
+    u.port !== '' && Number.isInteger(port) && port >= 1 && port <= 65535 &&
+    u.pathname === '/' && !u.search && !u.hash && !u.username && !u.password && u.href === url;
+}
 
 /**
  * Parses a run dir's server.json text against the full ServerRecord schema.
@@ -771,7 +803,7 @@ function parseServerRecord(text, runDir) {
   const bad = [];
   if (!Number.isInteger(d.pid) || d.pid <= 0) bad.push('pid');
   if (d.status !== 'starting' && d.status !== 'ready') bad.push('status');
-  else if (d.status === 'starting' ? d.url !== null : !(typeof d.url === 'string' && LOOPBACK_URL.test(d.url))) bad.push('url');
+  else if (d.status === 'starting' ? d.url !== null : !isServerUrl(d.url)) bad.push('url');
   for (const key of ['root', 'runDir', 'startedAt', 'head']) if (typeof d[key] !== 'string' || !d[key]) bad.push(key);
   if (typeof d.token !== 'string' || !TOKEN.test(d.token)) bad.push('token');
   if (bad.length) return { kind: 'unreadable', why: `not a server record (bad or missing: ${bad.join(', ')})` };
@@ -807,12 +839,12 @@ function writeServerRecord(file, record) {
 }
 
 /**
- * The launch token a lock or record file carries, or null if it has none.
- * @param {string} file
+ * The launch token in a lock's or record's text, or null.
+ * @param {string} text
  */
-function fileToken(file) {
+function tokenOf(text) {
   try {
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const data = JSON.parse(text);
     return data && typeof data.token === 'string' ? data.token : null;
   } catch (_) {
     return null;
@@ -820,34 +852,99 @@ function fileToken(file) {
 }
 
 /**
- * Removes a lock or record only while it still carries `token`, so cleanup
- * never deletes a file another launch has written since.
+ * The launch token a lock or record file carries, or null if it has none.
  * @param {string} file
- * @param {string} token
- * @returns {boolean} whether it was removed
  */
-function removeIfOwned(file, token) {
-  if (fileToken(file) !== token) return false;
-  fs.rmSync(file, { force: true });
-  return true;
+function fileToken(file) {
+  try {
+    return tokenOf(fs.readFileSync(file, 'utf8'));
+  } catch (_) {
+    return null;
+  }
 }
 
 /**
- * Removes a file only while its content is still `text`, the content `stop`
+ * @typedef {{ renameSync(from: string, to: string): void, readFileSync(file: string, encoding: 'utf8'): string,
+ *   unlinkSync(file: string): void, linkSync(existing: string, target: string): void }} ClaimFs
+ * @typedef {{ result: 'removed' | 'foreign' | 'gone' | 'quarantined', quarantine?: string }} Claim
+ *   quarantined: the claimed file turned out foreign and a newer file had taken its path, so it is left under `quarantine`
+ */
+
+/**
+ * Removes `file` only if `isOurs` holds for the content it has when it is
+ * removed, without a compare-then-delete on the shared path:
+ * 1. a quick read skips a file that is already visibly foreign, so a live
+ *    owner's lock or record is never displaced, even briefly;
+ * 2. the path is renamed to a unique quarantine name (atomic), and only that
+ *    claimed file is judged, so a file another writer puts at the path
+ *    afterwards is never touched;
+ * 3. a claimed file that is ours is unlinked. One that is not (the path was
+ *    replaced between 1 and 2) is linked back to the path, which fails with
+ *    EEXIST instead of clobbering a newer file, and then its quarantine name
+ *    is unlinked. If a newer file did take the path, the foreign file stays
+ *    under its quarantine name, and the caller reports it.
+ * @param {string} file
+ * @param {(text: string) => boolean} isOurs
+ * @param {{ fs?: ClaimFs, beforeClaim?: () => void, afterClaim?: () => void }} [seams] tests: a fake fs, and another writer acting before or after the claim
+ * @returns {Claim}
+ */
+function removeClaimed(file, isOurs, seams = {}) {
+  const f = seams.fs || fs;
+  const code = (/** @type {unknown} */ err) => /** @type {NodeJS.ErrnoException} */ (err).code;
+  let seen;
+  try {
+    seen = f.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (code(err) === 'ENOENT') return { result: 'gone' };
+    throw err;
+  }
+  if (!isOurs(seen)) return { result: 'foreign' };
+  if (seams.beforeClaim) seams.beforeClaim();
+  const quarantine = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.quarantine`;
+  try {
+    f.renameSync(file, quarantine);
+  } catch (err) {
+    if (code(err) === 'ENOENT') return { result: 'gone' };
+    throw err;
+  }
+  if (seams.afterClaim) seams.afterClaim();
+  let claimed = '';
+  try { claimed = f.readFileSync(quarantine, 'utf8'); } catch (_) { /* unreadable: not ours */ }
+  if (isOurs(claimed)) {
+    f.unlinkSync(quarantine);
+    return { result: 'removed' };
+  }
+  try {
+    f.linkSync(quarantine, file);
+  } catch (err) {
+    if (code(err) === 'EEXIST') return { result: 'quarantined', quarantine };
+    throw err;
+  }
+  f.unlinkSync(quarantine);
+  return { result: 'foreign' };
+}
+
+/**
+ * Removes a lock or record only if it carries `token` when it is removed, so
+ * cleanup never deletes a file another launch has written.
+ * @param {string} file
+ * @param {string} token
+ * @param {Parameters<typeof removeClaimed>[2]} [seams]
+ * @returns {Claim}
+ */
+function removeIfOwned(file, token, seams) {
+  return removeClaimed(file, (text) => tokenOf(text) === token, seams);
+}
+
+/**
+ * Removes a file only if its content is still `text`, the content `stop`
  * judged it by.
  * @param {string} file
  * @param {string} text
+ * @returns {Claim}
  */
 function removeIfUnchanged(file, text) {
-  let now;
-  try {
-    now = fs.readFileSync(file, 'utf8');
-  } catch (_) {
-    return false;
-  }
-  if (now !== text) return false;
-  fs.rmSync(file, { force: true });
-  return true;
+  return removeClaimed(file, (now) => now === text);
 }
 
 /**
@@ -880,6 +977,61 @@ function isLiveLauncher(pid) {
   if (pid === null || pid === process.pid) return false;
   const info = processInfo(pid);
   return info.alive && info.args.some((a) => path.basename(a) === 'verify.js') && info.args.includes('launch');
+}
+
+/**
+ * Parent pid of a process (Linux /proc), or null.
+ * @param {number} pid
+ */
+function parentPid(pid) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
+    return Number.isInteger(ppid) ? ppid : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Working directory of a process (Linux /proc), or null.
+ * @param {number} pid
+ */
+function processCwd(pid) {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/cwd`);
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * The pid of a `verify.js launch` still running for this run dir, or null.
+ * It must be the launcher the lock names, be alive with argv `verify.js
+ * launch`, and be tied to this run dir. Either its --run-dir resolves (from
+ * its own working directory) to this run dir, or the recorded server, whose
+ * record carries the lock's token, is its child. `stop` hands such a launch
+ * a SIGTERM so the launch's own handlers clean up, rather than killing its
+ * server under it.
+ * @param {ReturnType<typeof readLock>} lock
+ * @param {ReturnType<typeof readServerRecord>} read
+ * @param {string} runDir
+ * @param {{ info: typeof processInfo, parent: typeof parentPid, cwd: typeof processCwd }} [procs] test seam over /proc
+ * @returns {number | null}
+ */
+function verifiedLauncher(lock, read, runDir, procs = { info: processInfo, parent: parentPid, cwd: processCwd }) {
+  if (lock.kind !== 'present' || lock.launcherPid === null || lock.launcherPid === process.pid) return null;
+  const pid = lock.launcherPid;
+  const info = procs.info(pid);
+  const script = info.args.findIndex((a) => path.basename(a) === 'verify.js');
+  if (!info.alive || script < 0 || info.args[script + 1] !== 'launch') return null;
+  const flag = info.args.indexOf('--run-dir', script);
+  const given = flag >= 0 ? info.args[flag + 1] : undefined;
+  const base = given === undefined ? null : path.isAbsolute(given) ? '/' : procs.cwd(pid);
+  const namesRunDir = given !== undefined && base !== null && path.resolve(base, given) === runDir;
+  const ownsRecord = read.kind === 'ok' && lock.token !== null && read.record.token === lock.token &&
+    procs.parent(read.record.pid) === pid;
+  return namesRunDir || ownsRecord ? pid : null;
 }
 
 /**
@@ -2031,26 +2183,33 @@ function parseReadyLine(text) {
 }
 
 /**
- * Waits for the READY line this launch's server writes. Only bytes appended
- * after `offset` count, so a previous server's READY line in the same log is
- * never mistaken for this one, and the line must name this child's pid.
- * @param {string} logPath
- * @param {number} offset log size before this launch spawned its server
- * @param {import('node:child_process').ChildProcess} child
+ * Waits for the READY line this launch's server writes, and fails once the
+ * server has exited, even if it printed READY first: a dead server is never
+ * recorded as ready. `readLog` returns only the log text written after this
+ * launch spawned its server, so a previous server's READY line in the same
+ * log is never mistaken for this one, and the line must name this child's
+ * pid.
+ * @param {() => string} readLog
+ * @param {{ pid?: number, exitCode: number | null, signalCode: string | null,
+ *   once(event: 'exit', listener: (code: number | null, signal: string | null) => void): unknown }} child
  * @param {number} timeoutMs
+ * @param {string} [logPath] for messages
  */
-async function waitForReady(logPath, offset, child, timeoutMs) {
-  let exited = false;
-  child.once('exit', () => { exited = true; });
+async function waitForReady(readLog, child, timeoutMs, logPath = 'the server log') {
+  const exit = { seen: false };
+  child.once('exit', () => { exit.seen = true; });
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const text = fs.existsSync(logPath) ? fs.readFileSync(logPath).subarray(offset).toString('utf8') : '';
+    const text = readLog();
     const ready = parseReadyLine(text);
+    if (exit.seen || child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`verify-serve exited (code ${child.exitCode}, signal ${child.signalCode}) ` +
+        `${ready ? 'after printing READY' : 'before READY'}; see ${logPath}:\n${text}`);
+    }
     if (ready) {
       if (ready.pid !== child.pid) throw new Error(`READY line names pid ${ready.pid}, but this launch started pid ${child.pid}`);
       return ready.url;
     }
-    if (exited) throw new Error(`verify-serve exited before READY:\n${text}`);
     await sleep(50);
   }
   throw new Error(`verify-serve did not print READY within ${timeoutMs}ms (see ${logPath})`);
@@ -2099,14 +2258,14 @@ async function cmdLaunch(flags) {
     child: /** @type {import('node:child_process').ChildProcess | null} */ (null),
   };
   // What cleanup did to each of this launch's files.
-  /** @param {string} file @param {string} tok @returns {'removed' | 'foreign' | 'gone'} */
-  const release = (file, tok) => (removeIfOwned(file, tok) ? 'removed' : fs.existsSync(file) ? 'foreign' : 'gone');
+  /** @param {string} file @param {string} tok @returns {Claim} */
+  const release = (file, tok) => removeIfOwned(file, tok);
   const cleanup = () => {
     const pid = made.child && made.child.pid;
     if (pid) {
       try { process.kill(pid, 'SIGKILL'); } catch (_) { /* already gone */ }
     }
-    /** @type {{ record: 'removed' | 'foreign' | 'gone' | null, lock: 'removed' | 'foreign' | 'gone' | null }} */
+    /** @type {{ record: Claim | null, lock: Claim | null }} */
     const fate = { record: null, lock: null };
     if (made.record) {
       fate.record = release(made.record, token);
@@ -2119,13 +2278,15 @@ async function cmdLaunch(flags) {
   const onSignal = (sig) => {
     const hadServer = !!(made.child && made.child.pid);
     const fate = cleanup();
-    /** @type {Record<string, string>} */
-    const said = { removed: 'removed', foreign: 'left in place (another launch owns it now)', gone: 'already gone' };
+    /** @param {Claim} c */
+    const said = (c) => (c.result === 'removed' ? 'removed' : c.result === 'gone' ? 'already gone'
+      : c.result === 'foreign' ? 'left in place (another launch owns it now)'
+        : `replaced while it was being removed; the replaced copy is left as ${path.basename(c.quarantine || '')}`);
     /** @type {string[]} */
     const notes = [];
     if (hadServer) notes.push('its server was stopped');
-    if (fate.record) notes.push(`server.json ${said[fate.record]}`);
-    notes.push(fate.lock ? `launch.lock ${said[fate.lock]}` : 'no lock had been taken');
+    if (fate.record) notes.push(`server.json ${said(fate.record)}`);
+    notes.push(fate.lock ? `launch.lock ${said(fate.lock)}` : 'no lock had been taken');
     console.error(`launch interrupted by ${sig}: ${notes.join('; ')}`);
     process.exit(130);
   };
@@ -2178,18 +2339,24 @@ async function cmdLaunch(flags) {
       fs.closeSync(fd);
     }
     const child = made.child;
-    if (!child.pid) throw new Error('verify-serve did not start');
+    const serverPid = child.pid;
+    if (!serverPid) throw new Error('verify-serve did not start');
+    // Alive by Node's exit event and by /proc (which sees a death Node has not reported yet).
+    const serverAlive = () => child.exitCode === null && child.signalCode === null && processInfo(serverPid).alive;
     // Record the pid before waiting, so an interrupted launch can always be stopped.
     /** @type {ServerRecord} */
-    const record = { pid: child.pid, url: null, status: 'starting', root, runDir, startedAt: new Date().toISOString(), head: gitHead(root), token };
+    const record = { pid: serverPid, url: null, status: 'starting', root, runDir, startedAt: new Date().toISOString(), head: gitHead(root), token };
     made.record = serverJson;
     writeServerRecord(serverJson, record);
-    record.url = await waitForReady(logPath, offset, child, 15000);
+    const readLog = () => (fs.existsSync(logPath) ? fs.readFileSync(logPath).subarray(offset).toString('utf8') : '');
+    record.url = await waitForReady(readLog, child, 15000, logPath);
+    if (!serverAlive()) throw new Error(`verify-serve pid ${serverPid} exited after printing READY; it is not recorded as ready`);
     record.status = 'ready';
     if (fileToken(serverJson) !== token || fileToken(lockPath) !== token) {
       throw new Error(`${runDir}: server.json or launch.lock was replaced while this launch waited for READY; stopping its server`);
     }
     writeServerRecord(serverJson, record);
+    if (!serverAlive()) throw new Error(`verify-serve pid ${serverPid} exited just after it was recorded as ready`);
     child.unref();
     console.log(`READY ${record.url}`);
     console.log(`RUN_DIR ${runDir}`);
@@ -2212,8 +2379,9 @@ async function cmdLaunch(flags) {
  *   for this --run-dir and the recorded --root.
  * - http-root: GET / answers 200 with the canvas, byte-identical to the
  *   recorded root's index.html.
- * - version-json: /version.json names the recorded pid and this run dir, and
- *   its commit is the root's HEAD.
+ * - version-json: /version.json names the recorded pid, this run dir and the
+ *   recorded root (the root the server actually serves), and its commit is
+ *   the root's HEAD.
  * A --url target has no process or record; its rows only check that it
  * serves the game and a release version.
  * @param {{ runDir: string, url: string, record: ServerRecord | null }} target
@@ -2254,13 +2422,15 @@ async function checkServer(target) {
   let expectedVersion = LOCAL_VERSION;
   try {
     const res = await fetch(new URL('version.json', target.url), { cache: 'no-store' });
-    const meta = /** @type {{ version?: string, tag?: string, commit?: string, pid?: number, runDir?: string | null }} */ (await res.json());
+    const meta = /** @type {{ version?: string, tag?: string, commit?: string, pid?: number, runDir?: string | null, root?: string }} */ (await res.json());
     if (record) {
       const head = gitHead(record.root);
       const sameRun = meta.pid === record.pid && typeof meta.runDir === 'string' && path.resolve(meta.runDir) === target.runDir;
-      const ok = res.status === 200 && meta.version === LOCAL_VERSION && meta.commit === head && sameRun;
+      const sameRoot = typeof meta.root === 'string' && path.resolve(meta.root) === path.resolve(record.root);
+      const ok = res.status === 200 && meta.version === LOCAL_VERSION && meta.commit === head && sameRun && sameRoot;
       add(ok ? 'PASS' : 'FAIL', 'version-json', `version ${meta.version} commit ${meta.commit} ${meta.commit === head ? '==' : '!='} HEAD ${head} of ${record.root}; ` +
-        `answered by pid ${meta.pid} for ${sameRun ? 'this run' : `run ${meta.runDir} (NOT this run: expected pid ${record.pid}, run dir ${target.runDir})`}`);
+        `answered by pid ${meta.pid} for ${sameRun ? 'this run' : `run ${meta.runDir} (NOT this run: expected pid ${record.pid}, run dir ${target.runDir})`}; ` +
+        `serving ${sameRoot ? 'the recorded root' : `${meta.root} (NOT the recorded root ${record.root})`}`);
     } else {
       expectedVersion = String(meta.version || '');
       add(res.status === 200 && expectedVersion ? 'PASS' : 'FAIL', 'version-json', `version ${meta.version} tag ${meta.tag} commit ${meta.commit}`);
@@ -2450,13 +2620,45 @@ async function cmdStop(flags) {
       if (m && !processInfo(Number(m[1])).alive) fs.rmSync(path.join(runDir, f), { force: true });
     }
   };
-  // Every removal below re-reads the file first: a record or lock is removed
-  // only while it is still the one stop judged, never one another launch has
-  // written since.
-  const lock = readLock(lockPath);
-  const liveLauncher = lock.kind === 'present' && isLiveLauncher(lock.launcherPid);
   /** @type {string[]} */
   const notes = [];
+  // Every removal below claims the file by an atomic rename and judges the
+  // claimed copy (removeClaimed): a lock or record another launch writes
+  // meanwhile is never deleted.
+  /**
+   * @param {string} name
+   * @param {Claim} claim
+   * @param {string} [foreignNote] note when the file was left because it is not the one stop judged
+   * @returns {boolean} removed
+   */
+  const noteClaim = (name, claim, foreignNote) => {
+    if (claim.result === 'foreign' && foreignNote) notes.push(foreignNote);
+    if (claim.result === 'quarantined') {
+      notes.push(`${name} was replaced while stop removed it; the replaced copy is left as ${path.basename(claim.quarantine || '')}`);
+    }
+    return claim.result === 'removed';
+  };
+
+  // A launch still running for this run dir (typically waiting for READY) is
+  // stopped through its own handlers: they stop its server and remove exactly
+  // the files that launch created, so nothing is pulled out from under it.
+  let stoppedLaunch = false;
+  const launcher = verifiedLauncher(readLock(lockPath), readServerRecord(runDir), runDir);
+  if (launcher !== null) {
+    const before = readServerRecord(runDir);
+    signal(launcher, 'SIGTERM');
+    for (let i = 0; i < 100 && processInfo(launcher).alive; i++) await sleep(100);
+    if (processInfo(launcher).alive) {
+      console.error(`FAILED  launcher pid ${launcher} is still running 10 s after SIGTERM; nothing else was touched`);
+      return 1;
+    }
+    console.log(`STOPPED  launch in progress (launcher pid ${launcher}${before.kind === 'ok' ? `, server pid ${before.record.pid}` : ''}): ` +
+      'its own cleanup stopped its server and removed the files it created');
+    stoppedLaunch = true;
+  }
+
+  const lock = readLock(lockPath);
+  const liveLauncher = lock.kind === 'present' && isLiveLauncher(lock.launcherPid);
   let code = 0;
   const read = readServerRecord(runDir);
   if (read.kind === 'ok') {
@@ -2484,36 +2686,32 @@ async function cmdStop(flags) {
         ? `STOPPED  pid ${record.pid} (verify-serve ${record.url || 'never reached READY'})`
         : `ALREADY STOPPED  pid ${record.pid} exited while stop was checking it`);
     }
-    if (!removeIfOwned(serverJson, record.token) && fs.existsSync(serverJson)) {
-      notes.push('server.json left in place: another launch has written it since');
-    }
+    noteClaim('server.json', removeIfOwned(serverJson, record.token), 'server.json left in place: another launch has written it since');
     if (lock.kind === 'present') {
-      if (lock.token === record.token) removeIfOwned(lockPath, record.token);
+      if (lock.token === record.token) noteClaim('launch.lock', removeIfOwned(lockPath, record.token));
       else if (liveLauncher) notes.push(`launch.lock left in place: it belongs to running launcher pid ${lock.launcherPid}`);
-      else if (removeIfUnchanged(lockPath, lock.text)) notes.push('removed a stale launch.lock left by another launch');
+      else if (noteClaim('launch.lock', removeIfUnchanged(lockPath, lock.text))) notes.push('removed a stale launch.lock left by another launch');
     }
   } else if (liveLauncher) {
-    console.error(`LAUNCH IN PROGRESS  launcher pid ${lock.kind === 'present' ? lock.launcherPid : '?'} holds launch.lock and has ` +
-      'not recorded a server yet. Nothing was killed or removed; stop again once it prints READY or fails.');
+    console.error(`LAUNCH IN PROGRESS  launcher pid ${lock.kind === 'present' ? lock.launcherPid : '?'} holds launch.lock, but it ` +
+      'could not be verified as this run dir\'s launch. Nothing was killed or removed; stop again once it prints READY or fails.');
     code = 1;
   } else {
     // No record this run can trust and no live launch: kill nothing, clear
     // the records, and report any server still running for this run dir.
     const lockNote = lock.kind === 'present' ? ' and launch.lock' : '';
     if (read.kind === 'missing') {
-      console.log(`NOTHING TO STOP  no server.json in ${runDir}${lock.kind === 'present' ? '; removed a stale launch.lock' : ''}`);
+      if (!stoppedLaunch || lock.kind === 'present') {
+        console.log(`NOTHING TO STOP  no server.json in ${runDir}${lock.kind === 'present' ? '; removed a stale launch.lock' : ''}`);
+      }
     } else if (read.kind === 'unreadable') {
       console.log(`UNREADABLE  ${serverJson}: ${read.why}. Killed nothing; removed it${lockNote}`);
     } else {
       console.log(`FOREIGN  ${serverJson} names run dir ${read.record.runDir} (pid ${read.record.pid}), not this one: ` +
         `copied or moved. Killed nothing; removed it${lockNote}`);
     }
-    if (read.kind !== 'missing' && !removeIfUnchanged(serverJson, read.text) && fs.existsSync(serverJson)) {
-      notes.push('server.json changed while stop ran and was left in place');
-    }
-    if (lock.kind === 'present' && !removeIfUnchanged(lockPath, lock.text) && fs.existsSync(lockPath)) {
-      notes.push('launch.lock changed while stop ran and was left in place');
-    }
+    if (read.kind !== 'missing') noteClaim('server.json', removeIfUnchanged(serverJson, read.text), 'server.json changed while stop ran and was left in place');
+    if (lock.kind === 'present') noteClaim('launch.lock', removeIfUnchanged(lockPath, lock.text), 'launch.lock changed while stop ran and was left in place');
     for (const pid of serversForRunDir(runDir)) {
       console.error(`NOT KILLED  pid ${pid} is verify-serve for ${runDir}, but no readable server.json records it. ` +
         `If you started it, kill ${pid}.`);
@@ -2521,6 +2719,9 @@ async function cmdStop(flags) {
     }
   }
   clearDeadTemps();
+  for (const f of listDir(runDir)) {
+    if (f.endsWith('.quarantine') && !notes.some((n) => n.includes(f))) notes.push(`${f} is a lock or record left by an interrupted removal; inspect it, then delete it by hand`);
+  }
   for (const n of notes) console.log(`NOTE  ${n}`);
   const files = listFilesRecursive(runDir);
   console.log(`EVIDENCE ${runDir}  (${files.length} files kept)`);
@@ -2587,7 +2788,12 @@ module.exports = {
   misplacedValueMessage,
   driveOutcome,
   parseReadyLine,
+  waitForReady,
   parseServerRecord,
+  isServerUrl,
+  removeClaimed,
+  removeIfOwned,
+  verifiedLauncher,
   checkServer,
   shouldBlockRequest,
   classifyConsole,

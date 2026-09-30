@@ -94,14 +94,15 @@ function gitHead(root) {
  * VERIFICATION SCAFFOLDING: production `version.json` is written by
  * .github/workflows/release-version.yml into the Pages artifact. Locally the
  * file does not exist, so this server answers it from memory (no file is ever
- * written). `commit` is the root's HEAD at request time; `pid` and `runDir`
- * identify this process and run, so `verify.js doctor` can prove the URL it
- * tests belongs to the run it was given.
+ * written). `commit` is the root's HEAD at request time; `pid`, `runDir` and
+ * `root` (the directory this process actually serves) identify this process
+ * and run, so `verify.js doctor` can prove the URL it tests belongs to the run
+ * it was given and serves the root it recorded.
  * @param {string} root
  * @param {string | null} runDir
  */
 function syntheticVersion(root, runDir) {
-  return { version: '0.0.0-local', tag: 'local', commit: gitHead(root), pid: process.pid, runDir };
+  return { version: '0.0.0-local', tag: 'local', commit: gitHead(root), pid: process.pid, runDir, root };
 }
 
 /**
@@ -209,17 +210,24 @@ function createServer(opts) {
 }
 
 /**
+ * The command line. Each flag may appear once: with a repeated --root, a
+ * process check reading the first one and this server using the last one
+ * would disagree about what is served, so repeats are refused. verify.js
+ * checks a running server's argv with this same function.
  * @param {string[]} argv
  * @returns {{ root: string, port: number, runDir: string | null }}
  */
 function parseServeArgs(argv) {
   const out = { root: DEFAULT_ROOT, port: 0, runDir: /** @type {string | null} */ (null) };
+  const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     const value = argv[i + 1];
     if (flag !== '--root' && flag !== '--port' && flag !== '--run-dir') {
       throw new Error(`unknown argument: ${flag}`);
     }
+    if (seen.has(flag)) throw new Error(`duplicate ${flag}: each flag may be given once`);
+    seen.add(flag);
     if (value === undefined || value.startsWith('--')) throw new Error(`${flag} needs a value`);
     i++;
     if (flag === '--root') out.root = path.resolve(value);

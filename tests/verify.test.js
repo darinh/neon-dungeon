@@ -3,8 +3,11 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { EventEmitter } = require('node:events');
+const { spawn, execFileSync } = require('node:child_process');
 
 const verify = require('../.github/skills/verify-neon-dungeon/scripts/verify.js');
 const engineTouch = require('../engine/touch.js');
@@ -261,6 +264,15 @@ test('isOurServer matches verify-serve for exactly this run dir, and this root w
   assert.equal(verify.isOurServer(['/usr/bin/python3', '-m', 'http.server'], '/out/run-1'), false);
 });
 
+test('isOurServer rejects a verify-serve command line with a repeated or unknown flag', () => {
+  const serve = ['/usr/bin/node', '/w/.github/skills/verify-neon-dungeon/scripts/verify-serve.js'];
+  // Whichever --root a reader picks, a repeated flag is not a server launch started.
+  assert.equal(verify.isOurServer([...serve, '--root', '/w', '--port', '0', '--root', '/elsewhere', '--run-dir', '/out/run-1'], '/out/run-1', '/w'), false);
+  assert.equal(verify.isOurServer([...serve, '--root', '/elsewhere', '--port', '0', '--root', '/w', '--run-dir', '/out/run-1'], '/out/run-1', '/w'), false);
+  assert.equal(verify.isOurServer([...serve, '--root', '/w', '--run-dir', '/out/run-1', '--run-dir', '/out/run-1'], '/out/run-1', '/w'), false);
+  assert.equal(verify.isOurServer([...serve, '--root', '/w', '--run-dir', '/out/run-1', '--verbose', 'x'], '/out/run-1', '/w'), false);
+});
+
 test('driveOutcome fails a drive that swallowed a failed check or step, threw anything, or checked nothing', () => {
   const pass = { kind: 'check', label: 'ok', ok: true };
   const step = { kind: 'step', label: 'walk', ok: true };
@@ -473,6 +485,186 @@ test('checkServer, shared by doctor and drive, passes this run\'s server and fai
   } finally {
     child.kill();
   }
+});
+
+test('checkServer fails version-json when the URL reports serving a root other than the recorded one', async () => {
+  const root = path.resolve(__dirname, '..');
+  const runA = '/nonexistent-neon-verify/run-a';
+  const { child } = await startServe(['--root', root, '--port', '0', '--run-dir', runA]);
+  let head = 'unknown';
+  try {
+    head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch (_) { /* not a git checkout: the server says unknown too */ }
+  const index = fs.readFileSync(path.join(root, 'index.html'));
+  /** @type {import('node:http').Server[]} */
+  const stubs = [];
+  // Stands in at the URL: the same page, and a version.json naming the recorded pid and run dir but `served` as its root.
+  /** @param {string} served @returns {Promise<string>} */
+  const stubUrl = (served) => new Promise((resolve) => {
+    const s = http.createServer((req, res) => {
+      if (req.url !== '/version.json') return void res.end(index);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ version: '0.0.0-local', tag: 'local', commit: head, pid: child.pid, runDir: runA, root: served }));
+    });
+    stubs.push(s);
+    s.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (s.address()).port}/`));
+  });
+  try {
+    for (const { served, expected } of [{ served: root, expected: 'PASS' }, { served: '/elsewhere', expected: 'FAIL' }]) {
+      const url = await stubUrl(served);
+      const record = { pid: Number(child.pid), url, status: /** @type {'ready'} */ ('ready'), root, runDir: runA, startedAt: 't', head: 'h', token: '0'.repeat(32) };
+      const r = await verify.checkServer({ runDir: runA, url, record });
+      assert.deepEqual(r.rows.map((row) => `${row.name} ${row.status}`), ['server-process PASS', 'http-root PASS', `version-json ${expected}`], served);
+    }
+  } finally {
+    child.kill();
+    for (const s of stubs) s.close();
+  }
+});
+
+test('rowValue rejects a value overlapping its label by any positive area, even within the slack', () => {
+  const VALUE = /^◀ (ON|OFF) ▶$/;
+  const label = { text: 'SCREEN SHAKE', x: 100, y: 144, alpha: 1, box: { left: 40, top: 138, right: 160, bottom: 150 } };
+  /** @param {number} left */
+  const value = (left) => ({ text: '◀ OFF ▶', x: left + 32, y: 145, alpha: 1, box: { left, top: 139, right: left + 64, bottom: 151 } });
+  const opts = { within: 12, canvasWidth: 960 };
+  for (const left of [158, 158.5, 159.5]) {
+    const v = value(left);
+    assert.deepEqual(verify.rowValue([label, v], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [v], column: { left: 160, right: 920 }, label }, `left ${left}`);
+  }
+  // Touching edges share no area: still in the column.
+  const touching = value(160);
+  assert.equal(verify.rowValue([label, touching], /^SCREEN SHAKE$/, VALUE, opts).match, touching);
+  // The phone scales the slack with world zoom 1.5 (3 backing px); a 2.25 px overlap is still rejected.
+  const zoomed = value(157.75);
+  assert.deepEqual(verify.rowValue([label, zoomed], /^SCREEN SHAKE$/, VALUE, { ...opts, slack: 3 }).misplaced, [zoomed]);
+  assert.match(verify.misplacedValueMessage(label, zoomed, { left: 160, right: 920 }, 1), /^value overlaps its label: /);
+});
+
+/**
+ * An in-memory file system with the operations removeClaimed uses, with the
+ * error codes the real ones throw.
+ * @param {Record<string, string>} files
+ */
+function memoryFs(files) {
+  const f = new Map(Object.entries(files));
+  /** @param {string} code @param {string} p */
+  const fail = (code, p) => Object.assign(new Error(`${code}: ${p}`), { code });
+  return {
+    files: f,
+    /** @param {string} p */
+    readFileSync(p) { if (!f.has(p)) throw fail('ENOENT', p); return f.get(p) ?? ''; },
+    /** @param {string} a @param {string} b */
+    renameSync(a, b) { if (!f.has(a)) throw fail('ENOENT', a); f.set(b, f.get(a) ?? ''); f.delete(a); },
+    /** @param {string} p */
+    unlinkSync(p) { if (!f.has(p)) throw fail('ENOENT', p); f.delete(p); },
+    /** @param {string} a @param {string} b */
+    linkSync(a, b) { if (!f.has(a)) throw fail('ENOENT', a); if (f.has(b)) throw fail('EEXIST', b); f.set(b, f.get(a) ?? ''); },
+  };
+}
+
+test('removeIfOwned claims a lock or record by rename, so a file another writer puts there is never deleted', () => {
+  const FILE = '/run/launch.lock';
+  const OURS = JSON.stringify({ token: 'a'.repeat(32) });
+  const THEIRS = JSON.stringify({ token: 'b'.repeat(32) });
+  const NEWER = JSON.stringify({ token: 'c'.repeat(32) });
+  const token = 'a'.repeat(32);
+  const quarantined = (/** @type {Map<string, string>} */ files) => [...files.keys()].filter((k) => k.endsWith('.quarantine'));
+
+  // Ours, undisturbed: removed.
+  let mem = memoryFs({ [FILE]: OURS });
+  assert.deepEqual(verify.removeIfOwned(FILE, token, { fs: mem }), { result: 'removed' });
+  assert.deepEqual([...mem.files.keys()], []);
+  // Visibly foreign: never renamed, left as is.
+  mem = memoryFs({ [FILE]: THEIRS });
+  assert.deepEqual(verify.removeIfOwned(FILE, token, { fs: mem }), { result: 'foreign' });
+  assert.deepEqual([...mem.files], [[FILE, THEIRS]]);
+  // Missing: gone.
+  assert.deepEqual(verify.removeIfOwned(FILE, token, { fs: memoryFs({}) }), { result: 'gone' });
+
+  // Another launch replaces the file after it was judged ours: the claimed copy is theirs, so it goes back.
+  mem = memoryFs({ [FILE]: OURS });
+  const replaced = mem;
+  assert.deepEqual(verify.removeIfOwned(FILE, token, { fs: mem, beforeClaim: () => { replaced.files.set(FILE, THEIRS); } }), { result: 'foreign' });
+  assert.deepEqual([...mem.files], [[FILE, THEIRS]]);
+  // A new file appears at the path after ours was claimed: ours is removed, theirs is untouched.
+  mem = memoryFs({ [FILE]: OURS });
+  const appeared = mem;
+  assert.deepEqual(verify.removeIfOwned(FILE, token, { fs: mem, afterClaim: () => { appeared.files.set(FILE, NEWER); } }), { result: 'removed' });
+  assert.deepEqual([...mem.files], [[FILE, NEWER]]);
+  // Both: the claimed foreign file cannot go back over the newer one, so it stays under its quarantine name.
+  mem = memoryFs({ [FILE]: OURS });
+  const both = mem;
+  const claim = verify.removeIfOwned(FILE, token, {
+    fs: mem, beforeClaim: () => { both.files.set(FILE, THEIRS); }, afterClaim: () => { both.files.set(FILE, NEWER); },
+  });
+  assert.equal(claim.result, 'quarantined');
+  assert.deepEqual(quarantined(mem.files), [claim.quarantine]);
+  assert.equal(mem.files.get(FILE), NEWER);
+  assert.equal(mem.files.get(String(claim.quarantine)), THEIRS);
+});
+
+test('verifiedLauncher names a live launch only when it is tied to this run dir', () => {
+  const T = 'a'.repeat(32);
+  /** @type {Parameters<typeof verify.verifiedLauncher>[0]} */
+  const lock = { kind: 'present', text: '', token: T, launcherPid: 100 };
+  const record = { pid: 200, url: null, status: /** @type {'starting'} */ ('starting'), root: '/w', runDir: '/out/run-a', startedAt: 't', head: 'h', token: T };
+  /** @type {Parameters<typeof verify.verifiedLauncher>[1]} */
+  const starting = { kind: 'ok', record, text: '' };
+  const LAUNCH = ['/usr/bin/node', '/w/.github/skills/verify-neon-dungeon/scripts/verify.js', 'launch'];
+  /** @param {{ args?: string[], alive?: boolean, parent?: number | null, cwd?: string | null }} [p] */
+  const procs = (p = {}) => ({
+    info: (/** @type {number} */ pid) => ({ alive: p.alive ?? true, args: pid === 100 ? (p.args ?? LAUNCH) : [] }),
+    parent: (/** @type {number} */ pid) => (pid === 200 ? (p.parent === undefined ? 100 : p.parent) : null),
+    cwd: () => (p.cwd === undefined ? '/out' : p.cwd),
+  });
+  // Its recorded server (same token as the lock) is its child.
+  assert.equal(verify.verifiedLauncher(lock, starting, '/out/run-a', procs()), 100);
+  // Its argv names this run dir, absolute or relative to its own working directory, even before a record exists.
+  assert.equal(verify.verifiedLauncher(lock, { kind: 'missing' }, '/out/run-a', procs({ args: [...LAUNCH, '--run-dir', '/out/run-a'] })), 100);
+  assert.equal(verify.verifiedLauncher(lock, { kind: 'missing' }, '/out/run-a', procs({ args: [...LAUNCH, '--run-dir', 'run-a'] })), 100);
+  // Not tied to this run dir, or not a live launch: null.
+  assert.equal(verify.verifiedLauncher(lock, { kind: 'missing' }, '/out/run-a', procs()), null);
+  assert.equal(verify.verifiedLauncher(lock, { kind: 'missing' }, '/out/run-a', procs({ args: [...LAUNCH, '--run-dir', '/out/run-b'] })), null);
+  assert.equal(verify.verifiedLauncher(lock, { kind: 'missing' }, '/out/run-a', procs({ args: [...LAUNCH, '--run-dir', 'run-a'], cwd: null })), null);
+  assert.equal(verify.verifiedLauncher(lock, { ...starting, record: { ...record, token: 'b'.repeat(32) } }, '/out/run-a', procs()), null);
+  assert.equal(verify.verifiedLauncher(lock, starting, '/out/run-a', procs({ parent: 1 })), null);
+  assert.equal(verify.verifiedLauncher(lock, starting, '/out/run-a', procs({ alive: false })), null);
+  assert.equal(verify.verifiedLauncher(lock, starting, '/out/run-a', procs({ args: ['/usr/bin/node', '/w/verify.js', 'doctor'] })), null);
+  assert.equal(verify.verifiedLauncher({ kind: 'missing' }, starting, '/out/run-a', procs()), null);
+});
+
+/** @param {number} pid a fake child process: an EventEmitter with Node's exit fields */
+const fakeChild = (pid) => Object.assign(new EventEmitter(), { pid, exitCode: /** @type {number | null} */ (null), signalCode: /** @type {string | null} */ (null) });
+
+test('waitForReady accepts READY only from a server that is still running', async () => {
+  assert.equal(await verify.waitForReady(() => 'READY http://127.0.0.1:43210/ pid=4242\n', fakeChild(4242), 1000), 'http://127.0.0.1:43210/');
+  // The server prints READY and exits before the launcher's next look at the log.
+  let log = '';
+  const dying = fakeChild(4243);
+  const pending = verify.waitForReady(() => log, dying, 2000);
+  log = 'READY http://127.0.0.1:43211/ pid=4243\n';
+  dying.exitCode = 1;
+  dying.emit('exit', 1, null);
+  await assert.rejects(pending, /^Error: verify-serve exited \(code 1, signal null\) after printing READY/);
+  // It had already exited when waiting began.
+  const dead = fakeChild(4244);
+  dead.signalCode = 'SIGKILL';
+  await assert.rejects(verify.waitForReady(() => 'READY http://127.0.0.1:43212/ pid=4244\n', dead, 1000), /exited \(code null, signal SIGKILL\) after printing READY/);
+  await assert.rejects(verify.waitForReady(() => 'READY http://127.0.0.1:43213/ pid=1\n', fakeChild(4245), 1000), /names pid 1, but this launch started pid 4245/);
+});
+
+test('isServerUrl accepts only the loopback http URL launch records', () => {
+  for (const url of ['http://127.0.0.1:43210/', 'http://127.0.0.1:1/', 'http://127.0.0.1:65535/', 'http://[::1]:43210/']) {
+    assert.equal(verify.isServerUrl(url), true, url);
+  }
+  for (const url of ['http://127.0.0.1:99999/', 'http://127.0.0.1:65536/', 'http://127.0.0.1:0/', 'http://127.0.0.1/', 'http://127.0.0.1:080/',
+    'https://127.0.0.1:43210/', 'http://localhost:43210/', 'http://10.0.0.1:43210/', 'http://127.0.0.1:43210/index.html',
+    'http://127.0.0.1:43210/?x=1', 'http://127.0.0.1:43210/#x', 'http://u@127.0.0.1:43210/', 'http://127.0.0.1:43210', 42, null]) {
+    assert.equal(verify.isServerUrl(url), false, String(url));
+  }
+  const rec = { pid: 4242, url: 'http://127.0.0.1:99999/', status: 'ready', root: '/w', runDir: '/out/run-a', startedAt: 't', head: 'h', token: 'a'.repeat(32) };
+  assert.deepEqual(verify.parseServerRecord(JSON.stringify(rec), '/out/run-a'), { kind: 'unreadable', why: 'not a server record (bad or missing: url)' });
 });
 
 test('parseReadyLine reads the URL and pid from the server READY line only', () => {
