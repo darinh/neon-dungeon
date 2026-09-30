@@ -1,5 +1,5 @@
-'use strict';
 // @ts-check
+'use strict';
 
 // Commits to a predicted tile, not current position. Aiming ignores current LoS; stun cancel is in update(). Shares ECHOER's history ring but queries the future.
 /**

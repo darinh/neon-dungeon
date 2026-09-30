@@ -33,7 +33,8 @@ tests):
 ```
 
 **Rules:**
-1. Add `// @ts-check` to every new `.js` file.
+1. Make `// @ts-check` the first line of every new `.js` file, before
+   `'use strict'`; TypeScript ignores it after the first token.
 2. No npm runtime package dependencies and no top-level `require()`/`import` in
    browser modules. Production `index.html` does load PostHog's hosted analytics
    script; do not add additional hosted runtime dependencies without updating
