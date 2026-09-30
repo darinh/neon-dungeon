@@ -89,19 +89,34 @@ PID 359051  ROOT /path/to/worktree  HEAD e5d6f28...
 
 - **Order of operations.**
   1. Install SIGINT/SIGTERM/SIGHUP handlers, before anything is created.
-  2. Take `<run-dir>/launch.lock` exclusively.
-  3. Spawn the server and write `<run-dir>/server.json` with its pid and
-     `status: "starting"`.
-  4. Wait for the server's own line, `READY <url> pid=<pid>`. Only log bytes
+  2. Take `<run-dir>/launch.lock` exclusively. The lock is written complete
+     to a temp file and hard-linked into place, so it is never seen
+     half-written. It carries a random per-launch `token` and the launcher's
+     pid.
+  3. Refuse if `<run-dir>/server.json` already exists, whether valid,
+     unreadable or foreign. Launch never overwrites another launch's record,
+     because that launch's server may still be running. It releases only its
+     own lock and prints the `stop` instruction.
+  4. Spawn the server and write `server.json` with its pid,
+     `status: "starting"` and the same `token`.
+  5. Wait for the server's own line, `READY <url> pid=<pid>`. Only log bytes
      written after this spawn count, and the pid must match.
-  5. Record the url and `status: "ready"`.
+  6. Record the url and `status: "ready"`, but only if the lock and record
+     still carry this launch's token. Otherwise stop its own server and fail.
 
   `server.json` is always written atomically (a temp file, then a rename), so
-  no reader sees a torn record.
-- **Failure cleanup.** If the launch fails, times out or gets
-  SIGINT/SIGTERM/SIGHUP, it kills its server and removes `server.json` and the
-  lock. It removes only what this launch created, never another launch's
-  lock, so nothing is orphaned or left locked.
+  no reader sees a torn record. Its schema is exact: `pid`, `status`
+  (`starting` with `url: null`, or `ready` with an `http://127.0.0.1:<port>/`
+  url), `root`, `runDir`, `startedAt`, `head` and a 32-hex `token`. Anything
+  else is unreadable.
+- **Failure cleanup and ownership.** If the launch fails, times out or gets
+  SIGINT/SIGTERM/SIGHUP, it kills its own server. It removes `server.json` and
+  `launch.lock` only while they still carry its token. It re-reads each file
+  first, so it never deletes a lock or record another launch has written
+  since, and it says which files it left. The handlers stay installed until
+  the process exits. So exit 0 always means a recorded, running server, and
+  exit 130 always means the launch left nothing running, even if it had
+  already printed READY.
 - **One server per run dir.** A second `launch` into the same run dir is
   refused while the lock exists; `stop` removes the lock. Relaunching into a
   stopped run dir records the new server even though `server.log` still holds
@@ -150,10 +165,13 @@ DOCTOR PASS  evidence <RUN_DIR>/doctor
 
 It exits 1 if any row is FAIL, and 130 if interrupted.
 
-`doctor` and `drive` trust `<RUN_DIR>/server.json` only if its `runDir` is the
-requested `--run-dir`. A record copied or moved from another run is refused,
-and so is an unreadable one; `version-json` must then report this run's pid
-and this `--run-dir`.
+`doctor` and `drive` trust `<RUN_DIR>/server.json` only if it matches the full
+record schema and its `runDir` is the requested `--run-dir`. A record copied
+or moved from another run, or an unreadable or partial one, is refused
+(`REFUSED`, exit 2). The `server-process`, `http-root` and `version-json`
+rows come from one shared function. `drive` runs the same function before it
+opens a browser, and refuses (exit 2) on any FAIL. So a forged record, or a
+dead server's port reused by another run's server, is never driven.
 
 - **`server-process` or `http-root` FAIL:** relaunch.
 - **`version-json` FAIL:** the URL is not answered by this run's server. Its
@@ -188,6 +206,9 @@ node .github/skills/verify-neon-dungeon/scripts/verify.js drive start-seeded-run
 
 - The script argument is a path, or the bare name of a file in
   `features/drives/`.
+- Before any browser starts, `drive` runs doctor's server checks
+  (`server-process`, `http-root`, `version-json`). If one fails, it prints
+  the rows and refuses with exit 2, and no evidence is written.
 - `--viewport` is `desktop` (1280x800), `phone` (390x844, isMobile),
   `phone-landscape` (844x390) or `WxH`. `--touch` gives the context a
   touchscreen. The helpers then use taps, the on-screen `E` (USE), `F`
@@ -239,9 +260,9 @@ this holds even on a loaded machine.
 | `press(code, {times, hold, gap})` | Keyboard press by code: `'Enter'`, `'KeyX'`, `'ArrowDown'`, `'Digit1'`. Each press is down for at least one frame and up before the next, so repeats never merge. `hold` and `gap` add wall time. |
 | `hold(code, ms)` / `type(text)` | Holds a key (at least one frame), or types into whatever has focus. On the seed screen, typing on desktop goes to the canvas field. On touch it goes to the hidden `<input aria-label="Run seed">` after a field tap. |
 | `tapLogical(x, y)` | Taps with touch in `--touch` contexts and clicks with the mouse otherwise, at logical game coordinates. Only for targets without a label. |
-| `findText(re)` | Finds the topmost visible string matching `re`, drawn on the canvas in the last frame (a string pattern matches literally). Returns `{text, client, logical, box}`: the centre in client and logical coordinates, and the ink box `{left, top, right, bottom}` in logical coordinates. If nothing matches within 2 s it throws, listing the visible strings. Use it to check what the player sees. |
+| `findText(re)` | Finds the topmost visible string matching `re`, drawn on the canvas in the last frame (a string pattern matches literally). Returns `{text, client, logical, box}`: the centre in client and logical coordinates, and `box` `{left, top, right, bottom}` in logical coordinates, the axis-aligned bounds of the ink box mapped through the full transform, so rotated or skewed text gets the box it really covers. If nothing matches within 2 s it throws, listing the visible strings. Use it to check what the player sees. |
 | `tapText(re)` / `clickText(re)` | Finds a label, then taps it (touch contexts; mouse click otherwise) or clicks it with the mouse. On desktop MENU a click activates the highlighted row wherever it lands, so select menu rows with arrow keys there (`menuSelect` does). |
-| `rowText(label, value, {within=12})` | Finds the `value` string drawn where a player reads `label`'s value, for example `rowText(/^SCREEN SHAKE$/, /^◀ (ON\|OFF) ▶$/)`. It must be on the label's row (centre within `within` logical px vertically) and in the row's value column: starting right of the label, and ending no further right than the label's left edge mirrored across the canvas (the settings and FEET menus are centred panels). A value drawn elsewhere on the row fails with its position. |
+| `rowText(label, value, {within=12})` | Finds the `value` string drawn where a player reads `label`'s value, for example `rowText(/^SCREEN SHAKE$/, /^◀ (ON\|OFF) ▶$/)`. It must be on the label's row (centre within `within` logical px vertically) and in the row's value column: its box starting right of the label's box, and ending no further right than the label's left edge mirrored across the canvas (the settings and FEET menus are centred panels). A value drawn elsewhere on the row fails with its position. A value drawn over its label fails with `value overlaps its label: <label box> vs <value box>, a game layout defect at this viewport`. That is a real game bug at that viewport, so the check is never loosened (see `features/pause-and-settings.md` for the viewports known to hit it). |
 | `highlight(label, key, {max=40})` | Presses `key` until `label` is drawn highlighted. A label counts as highlighted when it is drawn in a colour that no other label in its menu column or row uses. This is keyboard navigation by what is shown, with no row indices. |
 | `visibleTexts()` | Every visible drawn string of the last frame, as `{text, client, logical, box}`. |
 | `step(label, fn)` | Runs `fn` and records state before and after, plus a screenshot taken after. Steps nest. |
@@ -354,17 +375,27 @@ node .github/skills/verify-neon-dungeon/scripts/verify.js stop --run-dir <RUN_DI
 `stop` reads the pid from `server.json` and kills it only if
 `/proc/<pid>/cmdline` is `verify-serve.js ... --run-dir <RUN_DIR>`. Otherwise
 it prints `REFUSING` and exits 1, and nothing is killed. It sends SIGTERM,
-then SIGKILL if needed, removes `server.json` and `launch.lock`, keeps every
-evidence file and lists them. It is idempotent: `NOTHING TO STOP` and
-`ALREADY STOPPED` exit 0, and a stale lock is removed. A server that exits
-while `stop` checks it (for example because a concurrent `stop` killed it) is
-`ALREADY STOPPED`.
+then SIGKILL if needed, keeps every evidence file and lists them. It is
+idempotent: `NOTHING TO STOP` and `ALREADY STOPPED` exit 0. A server that
+exits while `stop` checks it (for example because a concurrent `stop` killed
+it) is `ALREADY STOPPED`.
 
-When `server.json` is unreadable (`UNREADABLE`: empty, torn, or not a server
-record) or names another run dir (`FOREIGN`: copied or moved), `stop` kills
-nothing, removes it and `launch.lock`, and says so. It then lists any live
-verify-serve whose argv names this run dir as `NOT KILLED  pid N ...` and exits
-1. Kill such a pid yourself only if you started it.
+`stop` removes files only while they are still the ones it judged:
+- **The record** goes only while it carries the token of the launch whose
+  server `stop` handled.
+- **The lock** goes if it carries that same token, or if its launcher is no
+  longer running and it is unchanged. A lock held by a running launcher stays
+  (`NOTE  launch.lock left in place ...`).
+- **With no trustworthy record** (missing, unreadable or foreign) while a
+  launcher is still running, `stop` prints `LAUNCH IN PROGRESS`, removes
+  nothing and exits 1.
+
+When `server.json` is unreadable (`UNREADABLE`: empty, torn, partial, or not
+a server record) or names another run dir (`FOREIGN`: copied or moved), and
+no launch is in progress, `stop` kills nothing, removes it and `launch.lock`,
+and says so. It then lists any live verify-serve whose argv names this run dir
+as `NOT KILLED  pid N ...` and exits 1. Kill such a pid yourself only if you
+started it.
 
 - Never kill by process name, and never stop a run dir you did not launch.
 - Run `stop` after every attempt, including failed ones.
@@ -419,8 +450,11 @@ downloads no browser. Run `npm ci` in a fresh worktree first.
   `CanvasRenderingContext2D` `fillText` and `strokeText`. For the main canvas
   (`id="c"`) only, it records each string of the last complete frame: its
   visual centre (from textAlign, measureText width and the baseline, mapped
-  through `getTransform()`), drawn width and ink height, anchor, alignment,
-  style, filter and globalAlpha. A string counts as visible only if its
+  through `getTransform()`), its box, anchor, alignment, style, filter and
+  globalAlpha. The box is the axis-aligned bounds of the local ink box
+  (advance width by ink ascent and descent) after all four corners go
+  through the full transform, so rotation and skew are accounted for. A
+  string counts as visible only if its
   effective alpha is above 0.05 and its centre is on the canvas. Effective
   alpha is globalAlpha × the fill or stroke style's alpha (`transparent`,
   `rgba()`, `hsla()`, `/ alpha`, `#RGBA`, `#RRGGBBAA`; gradients and patterns

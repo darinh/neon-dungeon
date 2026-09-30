@@ -99,7 +99,31 @@ Preconditions:
 - The first RESET TO DEFAULTS press only arms it: the row reads
   `[ PRESS AGAIN TO CONFIRM ]` for 3 s. Moving the selection or clicking
   elsewhere disarms it.
-- Known cosmetic issue at HEAD `afb39ac`, with runtime files unchanged through
-  `e5d6f28`: the `─── CONTROLS ───` header is drawn on top of the WORLD ZOOM
-  row label, and on the phone the `LOCK AIM TO MOVE` and `REDUCED MOTION`
-  labels run into their values. Input is unaffected.
+- **Known game layout defect: values drawn over their labels.** This is a
+  game bug, tracked separately. `rowText` fails on such a row with
+  `value overlaps its label: <label box> vs <value box>, a game layout defect
+  at this viewport`, and the check is deliberately not loosened. Measured at
+  HEAD `2bb212d` from the drawn text boxes, on MENU → SETTINGS at each world
+  zoom:
+  - `--viewport 320x568` (W=305 at its default zoom 1.5): DAMAGE NUMBERS,
+    LOCK AIM TO MOVE and REDUCED MOTION. From zoom 1.75 (W=261) also SCREEN
+    SHAKE, MINIMAP SIZE and WORLD ZOOM. At 2.0 every toggle and stepper row
+    except CRT MODE, and at 2.5 all of them.
+  - `--viewport phone` (390x844): LOCK AIM TO MOVE from zoom 1.75 (W=318).
+    At 2.0 (W=279) also DAMAGE NUMBERS, REDUCED MOTION and MINIMAP SIZE. At
+    2.5 (W=223) every toggle and stepper row except CRT MODE.
+  - `--viewport desktop` (1280x800): at zoom 2.5 (W=384), DAMAGE NUMBERS,
+    LOCK AIM TO MOVE, REDUCED MOTION and MINIMAP SIZE.
+  - `--viewport phone-landscape`: none through zoom 2.0. At 2.5 the WORLD
+    ZOOM row is off the bottom of the screen.
+
+  In the compact layout (13 px labels from x=20), the longest label, LOCK AIM
+  TO MOVE, meets its centred value at logical W ≈ 345, and `rowText` (2 px
+  slack) fails below W ≈ 341. The wide layout draws 16 px labels from x=40, so
+  it fails below W ≈ 452. The mapped drive reads only SCREEN SHAKE and WORLD
+  ZOOM, at zoom 1 to 1.25 on desktop and 1.5 to 1.75 on the phone, and those
+  rows stay clear.
+- **The `─── CONTROLS ───` header is drawn over the WORLD ZOOM label** on
+  desktop and landscape at every zoom, on 320x568, and on the phone from zoom
+  2.0. This is also a game layout defect. It does not affect input or
+  `rowText` on the WORLD ZOOM row.

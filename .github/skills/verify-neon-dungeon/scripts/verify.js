@@ -11,6 +11,7 @@
 //
 // Exit codes: 0 pass, 1 failed check / error / unexpected page error, 2 usage.
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -31,7 +32,9 @@ const COMMANDS = Object.freeze(['launch', 'doctor', 'drive', 'stop']);
  * @typedef {{ label: string, width: number, height: number, isMobile: boolean }} Viewport
  * @typedef {{ root?: string, runDir?: string, url?: string, viewport?: string, name?: string, timeout?: string, touch?: boolean }} CliFlags
  * @typedef {{ command: string, positional: string[], flags: CliFlags }} ParsedArgs
- * @typedef {{ pid: number, url: string | null, status: 'starting' | 'ready', root: string, runDir: string, startedAt: string, head: string }} ServerRecord
+ * @typedef {{ pid: number, url: string | null, status: 'starting' | 'ready', root: string, runDir: string, startedAt: string, head: string,
+ *   token: string }} ServerRecord
+ *   token: random per launch, also written into launch.lock; cleanup removes a lock or record only while it still carries it
  * @typedef {{ left: number, top: number, width: number, height: number, canvasWidth: number, canvasHeight: number, zoom: number }} CanvasGeometry
  * @typedef {{ path: string, source: string, warning?: string }} ChromiumChoice
  * @typedef {{ type: string, text: string, url?: string }} ConsoleLike
@@ -40,9 +43,15 @@ const COMMANDS = Object.freeze(['launch', 'doctor', 'drive', 'stop']);
  * @typedef {{ text: string, client: { x: number, y: number }, logical: { x: number, y: number }, box: Box }} FoundText
  *   a drawn label: its centre in client (CSS) pixels and logical game coordinates, and its ink box in logical coordinates
  * @typedef {{ text: string, x: number, y: number, alpha: number, fill?: string, filter?: string, align?: string,
- *   ax?: number, ay?: number, w?: number, h?: number }} DrawnText
- *   one string drawn on the main canvas: visual centre (x, y), anchor (ax, ay), drawn width w and ink height h in
- *   backing-store pixels; alpha is globalAlpha, fill the fill/stroke style, filter the canvas filter
+ *   ax?: number, ay?: number, box?: Box }} DrawnText
+ *   one string drawn on the main canvas: visual centre (x, y), anchor (ax, ay) and the axis-aligned bounding box of
+ *   its transformed ink box, all in backing-store pixels; alpha is globalAlpha, fill the fill/stroke style, filter the
+ *   canvas filter
+ * @typedef {{ x: number, y: number, maxWidth?: number, align: string, baseline: string, direction?: string,
+ *   width: number, ascent?: number, descent?: number, fontSize?: number,
+ *   matrix: { a: number, b: number, c: number, d: number, e: number, f: number } }} TextDraw
+ *   one fillText/strokeText call: its arguments, the context's text state, measureText metrics and the transform
+ * @typedef {{ status: 'PASS' | 'FAIL' | 'INFO', name: string, detail: string }} CheckRow
  */
 
 /**
@@ -88,6 +97,8 @@ const COMMANDS = Object.freeze(['launch', 'doctor', 'drive', 'stop']);
 
 class UsageError extends Error {}
 class CheckError extends Error {}
+/** Refusal to act on a run dir whose records or server cannot be trusted as this run's. Exit 2. */
+class RefusedError extends Error {}
 
 // ─── Pure helpers (unit-tested in tests/verify.test.js) ─────────────────────
 
@@ -186,9 +197,7 @@ function logicalToClient(point, geom) {
  * y + (descent - ascent) / 2 for every baseline. Without those metrics it
  * falls back to an em-box estimate per baseline. The point is then mapped
  * through the context transform (a b c d e f) the way the canvas maps it.
- * @param {{ x: number, y: number, maxWidth?: number, align: string, baseline: string, direction?: string,
- *   width: number, ascent?: number, descent?: number, fontSize?: number,
- *   matrix: { a: number, b: number, c: number, d: number, e: number, f: number } }} t
+ * @param {TextDraw} t
  * @returns {{ x: number, y: number }}
  */
 function textCentre(t) {
@@ -207,6 +216,44 @@ function textCentre(t) {
   }
   const m = t.matrix;
   return { x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f };
+}
+
+/**
+ * Axis-aligned bounding box, in canvas backing-store pixels, of what one
+ * fillText/strokeText call covers. The local ink box is the advance width
+ * (clamped by maxWidth, placed by textAlign as in textCentre) by the ink
+ * ascent/descent from the textBaseline (an em box without metrics). All four
+ * of its corners are mapped through the full transform, so rotated and skewed
+ * text gets the box it really covers, not its unrotated size. It is injected
+ * into the page too, so it must stay self-contained.
+ * @param {TextDraw} t
+ * @returns {Box}
+ */
+function textBounds(t) {
+  const w = typeof t.maxWidth === 'number' && t.maxWidth >= 0 ? Math.min(t.width, t.maxWidth) : t.width;
+  const rtl = t.direction === 'rtl';
+  const align = t.align === 'start' ? (rtl ? 'right' : 'left') : t.align === 'end' ? (rtl ? 'left' : 'right') : t.align;
+  const left = align === 'left' ? t.x : align === 'right' ? t.x - w : t.x - w / 2;
+  let top;
+  let bottom;
+  if (typeof t.ascent === 'number' && typeof t.descent === 'number' && t.ascent + t.descent > 0) {
+    top = t.y - t.ascent;
+    bottom = t.y + t.descent;
+  } else {
+    /** @type {Record<string, number>} em offset from the baseline anchor to the em-box middle */
+    const EM_SHIFT = { top: 0.5, hanging: 0.4, middle: 0, alphabetic: -0.35, ideographic: -0.5, bottom: -0.5 };
+    const shift = EM_SHIFT[t.baseline];
+    const size = t.fontSize || 10;
+    const middle = t.y + (typeof shift === 'number' ? shift : -0.35) * size;
+    top = middle - size / 2;
+    bottom = middle + size / 2;
+  }
+  const m = t.matrix;
+  const corners = [{ x: left, y: top }, { x: left + w, y: top }, { x: left, y: bottom }, { x: left + w, y: bottom }]
+    .map((p) => ({ x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f }));
+  const xs = corners.map((p) => p.x);
+  const ys = corners.map((p) => p.y);
+  return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) };
 }
 
 /**
@@ -303,18 +350,27 @@ function pickText(texts, pattern, canvasSize) {
 
 /**
  * The ink box of a drawn string in logical game coordinates (backing-store
- * pixels / worldZoom): its centre plus or minus half the drawn width and ink
- * height. Hit-test its corners with the game's own hit-test to prove a label
- * sits on the control it names.
+ * pixels / worldZoom): the bounding box of its transformed ink box (see
+ * textBounds), or just its centre if no box was recorded. Hit-test its
+ * corners with the game's own hit-test to prove a label sits on the control
+ * it names.
  * @param {DrawnText} t
  * @param {number} zoom
- * @returns {{ left: number, top: number, right: number, bottom: number }}
+ * @returns {Box}
  */
 function textBox(t, zoom) {
   const z = zoom > 0 ? zoom : 1;
-  const hw = (t.w || 0) / 2;
-  const hh = (t.h || 0) / 2;
-  return { left: (t.x - hw) / z, top: (t.y - hh) / z, right: (t.x + hw) / z, bottom: (t.y + hh) / z };
+  const b = t.box || { left: t.x, top: t.y, right: t.x, bottom: t.y };
+  return { left: b.left / z, top: b.top / z, right: b.right / z, bottom: b.bottom / z };
+}
+
+/**
+ * Whether two boxes share any area (touching edges do not count).
+ * @param {Box} a
+ * @param {Box} b
+ */
+function boxesOverlap(a, b) {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
 /**
@@ -356,25 +412,26 @@ function isHighlighted(texts, pattern) {
  * The string matching `value` drawn where a player reads the value of the
  * label matching `label`. It must be on the label's row (centre within
  * `within` px of the label's centre vertically) and in the row's value
- * column: starting right of the label's right edge and ending inside the row
- * band, whose right edge is the label's left edge mirrored across the canvas
- * (the settings and FEET menus are centred panels with labels at the left
- * inset). Returns the vertically nearest such string, the row candidates
- * rejected for their position, and the column. Pixels are backing-store.
+ * column: its box starting right of the label's box and ending inside the
+ * row band, whose right edge is the label's left edge mirrored across the
+ * canvas (the settings and FEET menus are centred panels with labels at the
+ * left inset). Returns the vertically nearest such string, the row candidates
+ * rejected for their position, the column, and the label found. Pixels are
+ * backing-store.
  * @param {DrawnText[]} texts
  * @param {RegExp | string} label
  * @param {RegExp | string} value
  * @param {{ within: number, canvasWidth: number, slack?: number }} opts slack: tolerance at both column edges (default 2)
- * @returns {{ match: DrawnText | null, misplaced: DrawnText[], column: { left: number, right: number } | null }}
+ * @returns {{ match: DrawnText | null, misplaced: DrawnText[], column: { left: number, right: number } | null, label: DrawnText | null }}
  */
 function rowValue(texts, label, value, opts) {
   const lre = textMatcher(label);
   const vre = textMatcher(value);
   const anchorText = [...texts].reverse().find((t) => lre.test(t.text));
-  if (!anchorText) return { match: null, misplaced: [], column: null };
+  if (!anchorText) return { match: null, misplaced: [], column: null, label: null };
   const slack = opts.slack ?? 2;
-  const labelHalf = (anchorText.w || 0) / 2;
-  const column = { left: anchorText.x + labelHalf, right: opts.canvasWidth - (anchorText.x - labelHalf) };
+  const lb = textBox(anchorText, 1);
+  const column = { left: lb.right, right: opts.canvasWidth - lb.left };
   /** @type {DrawnText | null} */
   let match = null;
   let bestDistance = Infinity;
@@ -384,15 +441,39 @@ function rowValue(texts, label, value, opts) {
     if (t === anchorText || !vre.test(t.text)) continue;
     const d = Math.abs(t.y - anchorText.y);
     if (d > opts.within) continue;
-    const half = (t.w || 0) / 2;
-    if (t.x - half < column.left - slack || t.x + half > column.right + slack) {
+    const vb = textBox(t, 1);
+    if (vb.left < column.left - slack || vb.right > column.right + slack) {
       misplaced.push(t);
     } else if (d < bestDistance) {
       match = t;
       bestDistance = d;
     }
   }
-  return { match, misplaced, column };
+  return { match, misplaced, column, label: anchorText };
+}
+
+/**
+ * Why a row value found by rowValue is not in its value column, in logical
+ * px. A value whose box overlaps its label's box is named as such: the game
+ * drew one over the other, which is a layout defect in the game at this
+ * viewport rather than a value drawn in the wrong place.
+ * @param {DrawnText} labelText
+ * @param {DrawnText} valueText
+ * @param {{ left: number, right: number }} column backing-store px
+ * @param {number} zoom
+ */
+function misplacedValueMessage(labelText, valueText, column, zoom) {
+  const z = zoom > 0 ? zoom : 1;
+  const r1 = (/** @type {number} */ v) => Math.round(v * 10) / 10;
+  const lb = textBox(labelText, z);
+  const vb = textBox(valueText, z);
+  const box = (/** @type {Box} */ b) => `x ${r1(b.left)}..${r1(b.right)} y ${r1(b.top)}..${r1(b.bottom)}`;
+  if (boxesOverlap(lb, vb)) {
+    return `value overlaps its label: ${JSON.stringify(labelText.text)} ${box(lb)} vs ${JSON.stringify(valueText.text)} ${box(vb)}, ` +
+      'a game layout defect at this viewport';
+  }
+  return `${JSON.stringify(valueText.text)} spans x ${r1(vb.left)}..${r1(vb.right)}, outside the value column of ` +
+    `${JSON.stringify(labelText.text)} (x ${r1(column.left / z)}..${r1(column.right / z)})`;
 }
 
 /**
@@ -585,13 +666,17 @@ function resolveChromium(deps = {}) {
 }
 
 /**
- * True when argv is verify-serve.js started for exactly this run dir.
+ * True when argv is verify-serve.js started for exactly this run dir (and,
+ * when given, serving exactly this root).
  * @param {string[]} args process argv (from /proc/<pid>/cmdline)
  * @param {string} runDir
+ * @param {string} [root]
  */
-function isOurServer(args, runDir) {
+function isOurServer(args, runDir, root) {
   const i = args.indexOf('--run-dir');
-  return args.some((a) => path.basename(a) === 'verify-serve.js') && i >= 0 && args[i + 1] === runDir;
+  const r = args.indexOf('--root');
+  return args.some((a) => path.basename(a) === 'verify-serve.js') && i >= 0 && args[i + 1] === runDir &&
+    (root === undefined || (r >= 0 && args[r + 1] === root));
 }
 
 // ─── Process / filesystem plumbing ───────────────────────────────────────────
@@ -660,34 +745,43 @@ function uniqueDir(base) {
   throw new Error(`could not create a unique directory at ${base}`);
 }
 
+const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:\d+\/$/;
+const TOKEN = /^[0-9a-f]{32}$/;
+
 /**
- * Parses a run dir's server.json text. A torn, empty or wrongly shaped file
- * is `unreadable` (never an exception, so launch and stop can always recover
- * the run dir), and a record naming another run dir is `foreign` (copied or
- * moved from another run: its server is not this run's).
+ * Parses a run dir's server.json text against the full ServerRecord schema.
+ * A torn, empty, partial or wrongly shaped file is `unreadable` (never an
+ * exception, so launch and stop can always recover the run dir), and a
+ * record naming another run dir is `foreign` (copied or moved from another
+ * run: its server is not this run's).
  * @param {string} text
  * @param {string} runDir the run dir it was read from
  * @returns {{ kind: 'ok', record: ServerRecord } | { kind: 'foreign', record: ServerRecord } | { kind: 'unreadable', why: string }}
  */
 function parseServerRecord(text, runDir) {
   /** @type {any} */
-  let data;
+  let d;
   try {
-    data = JSON.parse(text);
+    d = JSON.parse(text);
   } catch (_) {
     return { kind: 'unreadable', why: text.trim() ? `not valid JSON (${text.length} bytes; torn write?)` : 'empty file' };
   }
-  if (!data || typeof data !== 'object' || !Number.isInteger(data.pid) || data.pid <= 0 ||
-      typeof data.root !== 'string' || typeof data.runDir !== 'string' || !(data.url === null || typeof data.url === 'string')) {
-    return { kind: 'unreadable', why: 'not a server record (needs pid, url, root, runDir)' };
-  }
-  const record = /** @type {ServerRecord} */ (data);
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return { kind: 'unreadable', why: 'not a server record (not a JSON object)' };
+  /** @type {string[]} */
+  const bad = [];
+  if (!Number.isInteger(d.pid) || d.pid <= 0) bad.push('pid');
+  if (d.status !== 'starting' && d.status !== 'ready') bad.push('status');
+  else if (d.status === 'starting' ? d.url !== null : !(typeof d.url === 'string' && LOOPBACK_URL.test(d.url))) bad.push('url');
+  for (const key of ['root', 'runDir', 'startedAt', 'head']) if (typeof d[key] !== 'string' || !d[key]) bad.push(key);
+  if (typeof d.token !== 'string' || !TOKEN.test(d.token)) bad.push('token');
+  if (bad.length) return { kind: 'unreadable', why: `not a server record (bad or missing: ${bad.join(', ')})` };
+  const record = /** @type {ServerRecord} */ (d);
   return path.resolve(record.runDir) === path.resolve(runDir) ? { kind: 'ok', record } : { kind: 'foreign', record };
 }
 
 /**
  * @param {string} runDir
- * @returns {ReturnType<typeof parseServerRecord> | { kind: 'missing' }}
+ * @returns {(ReturnType<typeof parseServerRecord> & { text: string }) | { kind: 'missing' }}
  */
 function readServerRecord(runDir) {
   let text;
@@ -695,9 +789,9 @@ function readServerRecord(runDir) {
     text = fs.readFileSync(path.join(runDir, 'server.json'), 'utf8');
   } catch (err) {
     if (/** @type {NodeJS.ErrnoException} */ (err).code === 'ENOENT') return { kind: 'missing' };
-    return { kind: 'unreadable', why: err instanceof Error ? err.message : String(err) };
+    return { kind: 'unreadable', why: err instanceof Error ? err.message : String(err), text: '' };
   }
-  return parseServerRecord(text, runDir);
+  return { ...parseServerRecord(text, runDir), text };
 }
 
 /**
@@ -710,6 +804,91 @@ function writeServerRecord(file, record) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(record, null, 2) + '\n');
   fs.renameSync(tmp, file);
+}
+
+/**
+ * The launch token a lock or record file carries, or null if it has none.
+ * @param {string} file
+ */
+function fileToken(file) {
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return data && typeof data.token === 'string' ? data.token : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Removes a lock or record only while it still carries `token`, so cleanup
+ * never deletes a file another launch has written since.
+ * @param {string} file
+ * @param {string} token
+ * @returns {boolean} whether it was removed
+ */
+function removeIfOwned(file, token) {
+  if (fileToken(file) !== token) return false;
+  fs.rmSync(file, { force: true });
+  return true;
+}
+
+/**
+ * Removes a file only while its content is still `text`, the content `stop`
+ * judged it by.
+ * @param {string} file
+ * @param {string} text
+ */
+function removeIfUnchanged(file, text) {
+  let now;
+  try {
+    now = fs.readFileSync(file, 'utf8');
+  } catch (_) {
+    return false;
+  }
+  if (now !== text) return false;
+  fs.rmSync(file, { force: true });
+  return true;
+}
+
+/**
+ * @param {string} lockPath
+ * @returns {{ kind: 'missing' } | { kind: 'present', text: string, token: string | null, launcherPid: number | null }}
+ */
+function readLock(lockPath) {
+  let text;
+  try {
+    text = fs.readFileSync(lockPath, 'utf8');
+  } catch (_) {
+    return { kind: 'missing' };
+  }
+  /** @type {any} */
+  let data = null;
+  try { data = JSON.parse(text); } catch (_) { /* unreadable lock: no owner can be read */ }
+  return {
+    kind: 'present',
+    text,
+    token: data && typeof data.token === 'string' ? data.token : null,
+    launcherPid: data && Number.isInteger(data.launcherPid) ? data.launcherPid : null,
+  };
+}
+
+/**
+ * True while `pid` is a running `verify.js launch`: its lock is not stale.
+ * @param {number | null} pid
+ */
+function isLiveLauncher(pid) {
+  if (pid === null || pid === process.pid) return false;
+  const info = processInfo(pid);
+  return info.alive && info.args.some((a) => path.basename(a) === 'verify.js') && info.args.includes('launch');
+}
+
+/**
+ * The one cleanup instruction every refusal gives.
+ * @param {string} runDir
+ */
+function stopHint(runDir) {
+  return `Run \`node .github/skills/verify-neon-dungeon/scripts/verify.js stop --run-dir ${runDir}\` ` +
+    '(it kills only a server it can verify and clears the records), then launch again, or use a new --run-dir.';
 }
 
 /**
@@ -746,15 +925,13 @@ function resolveTarget(flags, fallbackName) {
     const runDir = path.resolve(flags.runDir);
     const read = readServerRecord(runDir);
     if (read.kind === 'missing') throw new UsageError(`${runDir}/server.json not found; run \`verify.js launch\` first (or it was stopped)`);
-    if (read.kind === 'unreadable') {
-      throw new UsageError(`${runDir}/server.json is unreadable (${read.why}); run \`stop --run-dir ${runDir}\` to clear it, then launch again`);
-    }
+    if (read.kind === 'unreadable') throw new RefusedError(`${runDir}/server.json is unreadable: ${read.why}. ${stopHint(runDir)}`);
     if (read.kind === 'foreign') {
-      throw new UsageError(`${runDir}/server.json belongs to run ${read.record.runDir} (pid ${read.record.pid}), not ${runDir}: ` +
-        'it was copied or moved. Refusing to use another run\'s server; launch one for this run dir.');
+      throw new RefusedError(`${runDir}/server.json belongs to run ${read.record.runDir} (pid ${read.record.pid}), not ${runDir}: ` +
+        `it was copied or moved, and another run's server is never used. ${stopHint(runDir)}`);
     }
     const record = read.record;
-    if (!record.url) throw new UsageError(`the server for ${runDir} never reached READY; run \`stop --run-dir ${runDir}\` and launch again`);
+    if (!record.url) throw new RefusedError(`the server for ${runDir} never reached READY. ${stopHint(runDir)}`);
     return { runDir, url: record.url, record };
   }
   if (flags.url) {
@@ -826,8 +1003,9 @@ function pageMenuInfo() {
  * before the game's loop draws. Queries read `current`, which by then holds
  * the last complete frame.
  * @param {typeof textCentre} centreOf
+ * @param {typeof textBounds} boundsOf
  */
-function pageTextRecorder(centreOf) {
+function pageTextRecorder(centreOf, boundsOf) {
   const w = /** @type {any} */ (window);
   if (w.__neonVerifyText) return;
   const rec = { frame: 0, current: /** @type {any[]} */ ([]), previous: /** @type {any[]} */ ([]) };
@@ -857,11 +1035,8 @@ function pageTextRecorder(centreOf) {
           const m = this.measureText(str);
           const t = this.getTransform();
           const px = /(\d+(?:\.\d+)?)px/.exec(this.font);
-          const fontSize = px ? Number(px[1]) : 10;
-          const limit = maxWidth === undefined ? NaN : Number(maxWidth);
-          const drawnWidth = limit >= 0 ? Math.min(m.width, limit) : m.width;
-          const inkHeight = (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0);
-          const c = centreOf({
+          /** @type {TextDraw} */
+          const draw = {
             x: Number(x),
             y: Number(y),
             maxWidth: maxWidth === undefined ? undefined : Number(maxWidth),
@@ -871,9 +1046,10 @@ function pageTextRecorder(centreOf) {
             width: m.width,
             ascent: m.actualBoundingBoxAscent,
             descent: m.actualBoundingBoxDescent,
-            fontSize,
+            fontSize: px ? Number(px[1]) : 10,
             matrix: { a: t.a, b: t.b, c: t.c, d: t.d, e: t.e, f: t.f },
-          });
+          };
+          const c = centreOf(draw);
           const style = name === 'fillText' ? this.fillStyle : this.strokeStyle;
           rec.current.push({
             text: str,
@@ -885,8 +1061,7 @@ function pageTextRecorder(centreOf) {
             align: this.textAlign,
             ax: t.a * Number(x) + t.c * Number(y) + t.e,
             ay: t.b * Number(x) + t.d * Number(y) + t.f,
-            w: drawnWidth * Math.hypot(t.a, t.b),
-            h: (inkHeight > 0 ? inkHeight : fontSize) * Math.hypot(t.c, t.d),
+            box: boundsOf(draw),
           });
         }
       } catch (_) { /* recording must never break the game's drawing */ }
@@ -906,7 +1081,7 @@ function pageVisibleTexts() {
     texts: list.map((/** @type {any} */ t) => ({
       text: String(t.text), x: Number(t.x), y: Number(t.y), alpha: Number(t.alpha),
       fill: String(t.fill), filter: String(t.filter), align: String(t.align), ax: Number(t.ax), ay: Number(t.ay),
-      w: Number(t.w), h: Number(t.h),
+      box: { left: Number(t.box.left), top: Number(t.box.top), right: Number(t.box.right), bottom: Number(t.box.bottom) },
     })),
     geom: { left: r.left, top: r.top, width: r.width, height: r.height, canvasWidth: c.width, canvasHeight: c.height, zoom: settings.worldZoom || 1 },
   };
@@ -1075,7 +1250,7 @@ async function openSession(opts) {
       const pg = await ctx.newPage();
       // Before any game script: record where each canvas string is drawn, so
       // taps can target labels by their visible text (h.findText / h.tapText).
-      await pg.addInitScript({ content: `(${pageTextRecorder.toString()})(${textCentre.toString()});` });
+      await pg.addInitScript({ content: `(${pageTextRecorder.toString()})(${textCentre.toString()}, ${textBounds.toString()});` });
       pg.on('console', (msg) => {
         const loc = msg.location();
         rec.console.push({ t: since(), type: msg.type(), text: msg.text(), url: loc.url || undefined, line: loc.lineNumber });
@@ -1407,11 +1582,10 @@ async function openSession(opts) {
         }, 2000);
       } catch (err) {
         const r = seen.row;
-        if (!r || !r.column || r.misplaced.length === 0) throw err;
-        const lx = (/** @type {number} */ v) => Math.round((v / seen.zoom) * 10) / 10;
-        const where = r.misplaced.map((t) => `${JSON.stringify(t.text)} spans x ${lx(t.x - (t.w || 0) / 2)}..${lx(t.x + (t.w || 0) / 2)}`).join(', ');
-        throw new Error(`${textMatcher(value)} is drawn on the ${textMatcher(label)} row but outside its value column ` +
-          `(logical x ${lx(r.column.left)}..${lx(r.column.right)}): ${where}`);
+        if (!r || !r.column || !r.label || r.misplaced.length === 0) throw err;
+        const { column, label: labelText } = r;
+        const why = r.misplaced.map((t) => misplacedValueMessage(labelText, t, column, seen.zoom)).join('; ');
+        throw new Error(`${textMatcher(value)} is drawn on the ${textMatcher(label)} row but not in its value column: ${why}`);
       }
       record('observe', `row ${textMatcher(label)} shows ${JSON.stringify(found.text)}`, { value: found });
       return found;
@@ -1915,30 +2089,44 @@ async function cmdLaunch(flags) {
   if (!fileExists(path.join(root, 'index.html'))) throw new UsageError(`--root ${root} has no index.html`);
 
   // Signal handlers go in before anything is created. Node runs them from the
-  // event loop, so they see exactly what this launch has created by then, and
-  // they remove only that: never another launch's lock.
+  // event loop, so they see exactly what this launch has created by then.
+  // Every cleanup path removes a file only while it still carries this
+  // launch's token: never a lock or record another launch has written since.
+  const token = crypto.randomBytes(16).toString('hex');
   const made = {
     lock: /** @type {string | null} */ (null),
     record: /** @type {string | null} */ (null),
     child: /** @type {import('node:child_process').ChildProcess | null} */ (null),
   };
+  // What cleanup did to each of this launch's files.
+  /** @param {string} file @param {string} tok @returns {'removed' | 'foreign' | 'gone'} */
+  const release = (file, tok) => (removeIfOwned(file, tok) ? 'removed' : fs.existsSync(file) ? 'foreign' : 'gone');
   const cleanup = () => {
     const pid = made.child && made.child.pid;
     if (pid) {
       try { process.kill(pid, 'SIGKILL'); } catch (_) { /* already gone */ }
     }
+    /** @type {{ record: 'removed' | 'foreign' | 'gone' | null, lock: 'removed' | 'foreign' | 'gone' | null }} */
+    const fate = { record: null, lock: null };
     if (made.record) {
-      fs.rmSync(made.record, { force: true });
+      fate.record = release(made.record, token);
       fs.rmSync(`${made.record}.${process.pid}.tmp`, { force: true });
     }
-    if (made.lock) fs.rmSync(made.lock, { force: true });
+    if (made.lock) fate.lock = release(made.lock, token);
+    return fate;
   };
   /** @param {NodeJS.Signals} sig */
   const onSignal = (sig) => {
-    const had = { server: !!(made.child && made.child.pid), lock: !!made.lock };
-    cleanup();
-    console.error(`launch interrupted by ${sig}: ${had.server ? 'its server was stopped; ' : ''}` +
-      `${had.lock ? 'server.json and launch.lock were removed' : 'no lock had been taken'}`);
+    const hadServer = !!(made.child && made.child.pid);
+    const fate = cleanup();
+    /** @type {Record<string, string>} */
+    const said = { removed: 'removed', foreign: 'left in place (another launch owns it now)', gone: 'already gone' };
+    /** @type {string[]} */
+    const notes = [];
+    if (hadServer) notes.push('its server was stopped');
+    if (fate.record) notes.push(`server.json ${said[fate.record]}`);
+    notes.push(fate.lock ? `launch.lock ${said[fate.lock]}` : 'no lock had been taken');
+    console.error(`launch interrupted by ${sig}: ${notes.join('; ')}`);
     process.exit(130);
   };
   const signals = /** @type {NodeJS.Signals[]} */ (['SIGINT', 'SIGTERM', 'SIGHUP']);
@@ -1947,28 +2135,37 @@ async function cmdLaunch(flags) {
     const runDir = flags.runDir ? path.resolve(flags.runDir) : createRunDir(flags.name || path.basename(root));
     fs.mkdirSync(runDir, { recursive: true });
 
-    // One launch per run dir: the lock exists from here until `stop` removes it.
+    // One launch per run dir: the lock exists from here until `stop` removes
+    // it. It is written complete to a temp file and hard-linked into place,
+    // which fails if a lock exists, so nobody ever reads a half-written lock.
     const lockPath = path.join(runDir, 'launch.lock');
-    let lockFd;
+    const lockTmp = `${lockPath}.${process.pid}.tmp`;
+    fs.writeFileSync(lockTmp, JSON.stringify({ token, launcherPid: process.pid, createdAt: new Date().toISOString() }) + '\n');
     try {
-      lockFd = fs.openSync(lockPath, 'wx');
+      fs.linkSync(lockTmp, lockPath);
     } catch (err) {
       if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'EEXIST') throw err;
-      const existing = readServerRecord(runDir);
-      const detail = existing.kind === 'missing' ? 'no server.json'
-        : existing.kind === 'unreadable' ? `server.json unreadable: ${existing.why}`
-          : `server pid ${existing.record.pid}${existing.kind === 'foreign' ? ` of run ${existing.record.runDir}` : ''}`;
-      throw new UsageError(`${runDir} is locked by another launch (launch.lock; ${detail}). ` +
-        `Use a new --run-dir, or run \`stop --run-dir ${runDir}\` to stop that server and clear the lock.`);
+      const lock = readLock(lockPath);
+      const holder = lock.kind === 'present' && lock.launcherPid !== null ? `, taken by launcher pid ${lock.launcherPid}` : '';
+      throw new RefusedError(`${runDir} is locked by another launch (launch.lock${holder}). ${stopHint(runDir)}`);
+    } finally {
+      fs.rmSync(lockTmp, { force: true });
     }
     made.lock = lockPath;
-    try {
-      fs.writeSync(lockFd, JSON.stringify({ launcherPid: process.pid, createdAt: new Date().toISOString() }) + '\n');
-    } finally {
-      fs.closeSync(lockFd);
+
+    // A record left by any other launch (valid, unreadable or foreign) is
+    // never overwritten: its server may still be running.
+    const serverJson = path.join(runDir, 'server.json');
+    const existing = readServerRecord(runDir);
+    if (existing.kind !== 'missing') {
+      removeIfOwned(lockPath, token);
+      made.lock = null;
+      const detail = existing.kind === 'unreadable' ? `unreadable: ${existing.why}`
+        : `${existing.kind === 'foreign' ? `foreign, run ${existing.record.runDir}, ` : ''}server pid ${existing.record.pid}, ${existing.record.status}`;
+      throw new RefusedError(`${serverJson} already exists (${detail}); launch never overwrites another launch's record, ` +
+        `and released only its own lock. ${stopHint(runDir)}`);
     }
 
-    const serverJson = path.join(runDir, 'server.json');
     const logPath = path.join(runDir, 'server.log');
     const offset = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
     const fd = fs.openSync(logPath, 'a');
@@ -1984,47 +2181,61 @@ async function cmdLaunch(flags) {
     if (!child.pid) throw new Error('verify-serve did not start');
     // Record the pid before waiting, so an interrupted launch can always be stopped.
     /** @type {ServerRecord} */
-    const record = { pid: child.pid, url: null, status: 'starting', root, runDir, startedAt: new Date().toISOString(), head: gitHead(root) };
+    const record = { pid: child.pid, url: null, status: 'starting', root, runDir, startedAt: new Date().toISOString(), head: gitHead(root), token };
     made.record = serverJson;
     writeServerRecord(serverJson, record);
     record.url = await waitForReady(logPath, offset, child, 15000);
     record.status = 'ready';
+    if (fileToken(serverJson) !== token || fileToken(lockPath) !== token) {
+      throw new Error(`${runDir}: server.json or launch.lock was replaced while this launch waited for READY; stopping its server`);
+    }
     writeServerRecord(serverJson, record);
     child.unref();
     console.log(`READY ${record.url}`);
     console.log(`RUN_DIR ${runDir}`);
     console.log(`PID ${record.pid}  ROOT ${root}  HEAD ${record.head}`);
+    // The handlers stay installed until the process exits: a signal that
+    // lands after READY still cancels the launch, so exit 0 always means a
+    // recorded, running server and exit 130 always means nothing was left.
     return 0;
   } catch (err) {
     cleanup();
-    throw err;
-  } finally {
     for (const s of signals) process.removeListener(s, onSignal);
+    throw err;
   }
 }
 
-/** @param {CliFlags} flags */
-async function cmdDoctor(flags) {
-  const target = resolveTarget(flags, 'doctor-live');
-  /** @type {{ status: 'PASS' | 'FAIL' | 'INFO', name: string, detail: string }[]} */
+/**
+ * The checks that tie a target to this run. Doctor prints them; drive runs
+ * the same function and refuses on any FAIL, so the two cannot drift.
+ * - server-process: the recorded pid is alive, and its argv is verify-serve.js
+ *   for this --run-dir and the recorded --root.
+ * - http-root: GET / answers 200 with the canvas, byte-identical to the
+ *   recorded root's index.html.
+ * - version-json: /version.json names the recorded pid and this run dir, and
+ *   its commit is the root's HEAD.
+ * A --url target has no process or record; its rows only check that it
+ * serves the game and a release version.
+ * @param {{ runDir: string, url: string, record: ServerRecord | null }} target
+ * @returns {Promise<{ rows: CheckRow[], ok: boolean, expectedVersion: string }>}
+ */
+async function checkServer(target) {
+  /** @type {CheckRow[]} */
   const rows = [];
   /**
-   * @param {'PASS' | 'FAIL' | 'INFO'} status
+   * @param {CheckRow['status']} status
    * @param {string} name
    * @param {string} detail
    */
-  const add = (status, name, detail) => {
-    rows.push({ status, name, detail });
-    console.log(`${status.padEnd(5)} ${name.padEnd(15)} ${detail}`);
-  };
-  const local = !!target.record;
+  const add = (status, name, detail) => { rows.push({ status, name, detail }); };
+  const record = target.record;
 
-  if (target.record) {
-    const { pid } = target.record;
-    const info = processInfo(pid);
-    if (!info.alive) add('FAIL', 'server-process', `pid ${pid} is not running; launch again`);
-    else if (!isOurServer(info.args, target.runDir)) add('FAIL', 'server-process', `pid ${pid} is not verify-serve for ${target.runDir}: ${info.args.join(' ')}`);
-    else add('PASS', 'server-process', `pid ${pid} alive; cmdline has verify-serve.js --run-dir ${target.runDir}`);
+  if (record) {
+    const info = processInfo(record.pid);
+    if (!info.alive) add('FAIL', 'server-process', `pid ${record.pid} is not running; launch again`);
+    else if (!isOurServer(info.args, target.runDir, record.root)) {
+      add('FAIL', 'server-process', `pid ${record.pid} is not verify-serve for ${target.runDir} serving ${record.root}: ${info.args.join(' ')}`);
+    } else add('PASS', 'server-process', `pid ${record.pid} alive; cmdline has verify-serve.js --root ${record.root} --run-dir ${target.runDir}`);
   } else {
     add('INFO', 'server-process', `remote target ${target.url} (no local process)`);
   }
@@ -2033,11 +2244,9 @@ async function cmdDoctor(flags) {
     const res = await fetch(target.url, { cache: 'no-store' });
     const body = await res.text();
     const hasCanvas = body.includes('<canvas id="c">');
-    let same = true;
-    if (target.record) same = body === fs.readFileSync(path.join(target.record.root, 'index.html'), 'utf8');
-    const ok = res.status === 200 && hasCanvas && same;
-    add(ok ? 'PASS' : 'FAIL', 'http-root', `GET / ${res.status}; <canvas id="c"> ${hasCanvas ? 'present' : 'MISSING'}` +
-      (target.record ? `; ${same ? 'bytes match' : 'DIFFERS FROM'} ${target.record.root}/index.html` : ''));
+    const same = record ? body === fs.readFileSync(path.join(record.root, 'index.html'), 'utf8') : true;
+    add(res.status === 200 && hasCanvas && same ? 'PASS' : 'FAIL', 'http-root', `GET / ${res.status}; <canvas id="c"> ${hasCanvas ? 'present' : 'MISSING'}` +
+      (record ? `; ${same ? 'bytes match' : 'DIFFERS FROM'} ${record.root}/index.html` : ''));
   } catch (err) {
     add('FAIL', 'http-root', `GET / failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -2046,12 +2255,12 @@ async function cmdDoctor(flags) {
   try {
     const res = await fetch(new URL('version.json', target.url), { cache: 'no-store' });
     const meta = /** @type {{ version?: string, tag?: string, commit?: string, pid?: number, runDir?: string | null }} */ (await res.json());
-    if (target.record) {
-      const head = gitHead(target.record.root);
-      const sameRun = meta.pid === target.record.pid && typeof meta.runDir === 'string' && path.resolve(meta.runDir) === target.runDir;
+    if (record) {
+      const head = gitHead(record.root);
+      const sameRun = meta.pid === record.pid && typeof meta.runDir === 'string' && path.resolve(meta.runDir) === target.runDir;
       const ok = res.status === 200 && meta.version === LOCAL_VERSION && meta.commit === head && sameRun;
-      add(ok ? 'PASS' : 'FAIL', 'version-json', `version ${meta.version} commit ${meta.commit} ${meta.commit === head ? '==' : '!='} HEAD ${head} of ${target.record.root}; ` +
-        `answered by pid ${meta.pid} for ${sameRun ? 'this run' : `run ${meta.runDir} (NOT this run: expected pid ${target.record.pid}, run dir ${target.runDir})`}`);
+      add(ok ? 'PASS' : 'FAIL', 'version-json', `version ${meta.version} commit ${meta.commit} ${meta.commit === head ? '==' : '!='} HEAD ${head} of ${record.root}; ` +
+        `answered by pid ${meta.pid} for ${sameRun ? 'this run' : `run ${meta.runDir} (NOT this run: expected pid ${record.pid}, run dir ${target.runDir})`}`);
     } else {
       expectedVersion = String(meta.version || '');
       add(res.status === 200 && expectedVersion ? 'PASS' : 'FAIL', 'version-json', `version ${meta.version} tag ${meta.tag} commit ${meta.commit}`);
@@ -2059,6 +2268,33 @@ async function cmdDoctor(flags) {
   } catch (err) {
     add('FAIL', 'version-json', `could not read version.json: ${err instanceof Error ? err.message : String(err)}`);
   }
+  return { rows, ok: rows.every((r) => r.status !== 'FAIL'), expectedVersion };
+}
+
+/** @param {CheckRow} r */
+function formatRow(r) {
+  return `${r.status.padEnd(5)} ${r.name.padEnd(15)} ${r.detail}`;
+}
+
+/** @param {CliFlags} flags */
+async function cmdDoctor(flags) {
+  const target = resolveTarget(flags, 'doctor-live');
+  /** @type {CheckRow[]} */
+  const rows = [];
+  /**
+   * @param {CheckRow['status']} status
+   * @param {string} name
+   * @param {string} detail
+   */
+  const add = (status, name, detail) => {
+    rows.push({ status, name, detail });
+    console.log(formatRow({ status, name, detail }));
+  };
+  const local = !!target.record;
+
+  const server = await checkServer(target);
+  for (const r of server.rows) add(r.status, r.name, r.detail);
+  const expectedVersion = server.expectedVersion;
 
   const viewport = parseViewport(flags.viewport || 'desktop');
   const evidenceDir = uniqueDir(path.join(target.runDir, 'doctor'));
@@ -2127,6 +2363,14 @@ async function cmdDrive(positional, flags) {
   const touch = !!flags.touch;
   const name = slug(flags.name || `${path.basename(script, '.js')}-${viewport.label}${touch ? '-touch' : ''}`);
   const target = resolveTarget(flags, name);
+  // The doctor's server checks, before any browser: a drive must never test
+  // a server that is not this run's (a forged or stale record, a reused port).
+  const server = await checkServer(target);
+  if (!server.ok) {
+    for (const r of server.rows) console.error(formatRow(r));
+    throw new RefusedError(`the server recorded for ${target.runDir} failed the doctor checks above, so this drive would not ` +
+      `test this run's code. ${stopHint(target.runDir)}`);
+  }
   const timeoutMs = Math.max(10, Number(flags.timeout || 300)) * 1000;
   const evidenceDir = uniqueDir(path.join(target.runDir, name));
   const drive = require(script);
@@ -2185,11 +2429,6 @@ async function cmdStop(flags) {
   const runDir = path.resolve(flags.runDir);
   const lockPath = path.join(runDir, 'launch.lock');
   const serverJson = path.join(runDir, 'server.json');
-  const clearRecords = () => {
-    fs.rmSync(serverJson, { force: true });
-    for (const f of listDir(runDir)) if (/^server\.json\.\d+\.tmp$/.test(f)) fs.rmSync(path.join(runDir, f), { force: true });
-    fs.rmSync(lockPath, { force: true });
-  };
   /**
    * @param {number} pid
    * @param {NodeJS.Signals} sig
@@ -2204,6 +2443,20 @@ async function cmdStop(flags) {
       throw err;
     }
   };
+  // Temp files (server.json.<pid>.tmp, launch.lock.<pid>.tmp) whose writer is gone.
+  const clearDeadTemps = () => {
+    for (const f of listDir(runDir)) {
+      const m = /^(?:server\.json|launch\.lock)\.(\d+)\.tmp$/.exec(f);
+      if (m && !processInfo(Number(m[1])).alive) fs.rmSync(path.join(runDir, f), { force: true });
+    }
+  };
+  // Every removal below re-reads the file first: a record or lock is removed
+  // only while it is still the one stop judged, never one another launch has
+  // written since.
+  const lock = readLock(lockPath);
+  const liveLauncher = lock.kind === 'present' && isLiveLauncher(lock.launcherPid);
+  /** @type {string[]} */
+  const notes = [];
   let code = 0;
   const read = readServerRecord(runDir);
   if (read.kind === 'ok') {
@@ -2231,27 +2484,44 @@ async function cmdStop(flags) {
         ? `STOPPED  pid ${record.pid} (verify-serve ${record.url || 'never reached READY'})`
         : `ALREADY STOPPED  pid ${record.pid} exited while stop was checking it`);
     }
-    clearRecords();
+    if (!removeIfOwned(serverJson, record.token) && fs.existsSync(serverJson)) {
+      notes.push('server.json left in place: another launch has written it since');
+    }
+    if (lock.kind === 'present') {
+      if (lock.token === record.token) removeIfOwned(lockPath, record.token);
+      else if (liveLauncher) notes.push(`launch.lock left in place: it belongs to running launcher pid ${lock.launcherPid}`);
+      else if (removeIfUnchanged(lockPath, lock.text)) notes.push('removed a stale launch.lock left by another launch');
+    }
+  } else if (liveLauncher) {
+    console.error(`LAUNCH IN PROGRESS  launcher pid ${lock.kind === 'present' ? lock.launcherPid : '?'} holds launch.lock and has ` +
+      'not recorded a server yet. Nothing was killed or removed; stop again once it prints READY or fails.');
+    code = 1;
   } else {
-    // No record this run can trust: kill nothing, clear the records, and
-    // report any server still running for this run dir.
-    const hadLock = fs.existsSync(lockPath);
-    const lockNote = hadLock ? ' and launch.lock' : '';
+    // No record this run can trust and no live launch: kill nothing, clear
+    // the records, and report any server still running for this run dir.
+    const lockNote = lock.kind === 'present' ? ' and launch.lock' : '';
     if (read.kind === 'missing') {
-      console.log(`NOTHING TO STOP  no server.json in ${runDir}${hadLock ? '; removed a stale launch.lock' : ''}`);
+      console.log(`NOTHING TO STOP  no server.json in ${runDir}${lock.kind === 'present' ? '; removed a stale launch.lock' : ''}`);
     } else if (read.kind === 'unreadable') {
       console.log(`UNREADABLE  ${serverJson}: ${read.why}. Killed nothing; removed it${lockNote}`);
     } else {
       console.log(`FOREIGN  ${serverJson} names run dir ${read.record.runDir} (pid ${read.record.pid}), not this one: ` +
         `copied or moved. Killed nothing; removed it${lockNote}`);
     }
-    clearRecords();
+    if (read.kind !== 'missing' && !removeIfUnchanged(serverJson, read.text) && fs.existsSync(serverJson)) {
+      notes.push('server.json changed while stop ran and was left in place');
+    }
+    if (lock.kind === 'present' && !removeIfUnchanged(lockPath, lock.text) && fs.existsSync(lockPath)) {
+      notes.push('launch.lock changed while stop ran and was left in place');
+    }
     for (const pid of serversForRunDir(runDir)) {
       console.error(`NOT KILLED  pid ${pid} is verify-serve for ${runDir}, but no readable server.json records it. ` +
         `If you started it, kill ${pid}.`);
       code = 1;
     }
   }
+  clearDeadTemps();
+  for (const n of notes) console.log(`NOTE  ${n}`);
   const files = listFilesRecursive(runDir);
   console.log(`EVIDENCE ${runDir}  (${files.length} files kept)`);
   for (const f of files.slice(0, 80)) console.log(`  ${f}`);
@@ -2285,6 +2555,9 @@ if (require.main === module) {
       if (err instanceof UsageError) {
         console.error(`verify: ${err.message}\n${USAGE}`);
         process.exitCode = 2;
+      } else if (err instanceof RefusedError) {
+        console.error(`verify: REFUSED  ${err.message}`);
+        process.exitCode = 2;
       } else {
         console.error(`verify: ${err instanceof Error ? err.stack || err.message : String(err)}`);
         process.exitCode = 1;
@@ -2300,6 +2573,7 @@ module.exports = {
   backingToClient,
   logicalToClient,
   textCentre,
+  textBounds,
   textMatcher,
   pickText,
   visibleOnCanvas,
@@ -2307,11 +2581,14 @@ module.exports = {
   filterOpacity,
   effectiveAlpha,
   textBox,
+  boxesOverlap,
   isHighlighted,
   rowValue,
+  misplacedValueMessage,
   driveOutcome,
   parseReadyLine,
   parseServerRecord,
+  checkServer,
   shouldBlockRequest,
   classifyConsole,
   defaultOutRoot,
@@ -2321,4 +2598,5 @@ module.exports = {
   resolveChromium,
   isOurServer,
   UsageError,
+  RefusedError,
 };

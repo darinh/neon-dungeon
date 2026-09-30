@@ -132,7 +132,7 @@ player-visible and browser-specific behavior in a real browser. Read its
 |---|---|
 | `node .github/skills/verify-neon-dungeon/scripts/verify.js launch` | Serve this worktree on 127.0.0.1. Prints `READY <url>` and `RUN_DIR <dir>`. |
 | `node .github/skills/verify-neon-dungeon/scripts/verify.js doctor --run-dir <dir>` | Read-only health check: server pid, HTTP, and `version.json` (checked against HEAD and this run's pid). Then a clean boot to MENU. |
-| `node .github/skills/verify-neon-dungeon/scripts/verify.js drive <feature> --run-dir <dir> [--viewport phone --touch]` | Run a drive script from `features/drives/`. Evidence goes to `<dir>/<name>/`. |
+| `node .github/skills/verify-neon-dungeon/scripts/verify.js drive <feature> --run-dir <dir> [--viewport phone --touch]` | Run the doctor's server checks, refusing (exit 2) if the server is not this run's, then run a drive script from `features/drives/`. Evidence goes to `<dir>/<name>/`. |
 | `node .github/skills/verify-neon-dungeon/scripts/verify.js stop --run-dir <dir>` | Kill only this run's server. Evidence is kept. |
 
 ## Shell safety

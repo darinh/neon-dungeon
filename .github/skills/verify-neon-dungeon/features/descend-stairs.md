@@ -58,7 +58,9 @@ Preconditions:
   - desktop: `h.findText(/\[SPACE\] DESCEND/)`, then `h.press('Space')`;
   - touch: `const label = await h.findText(/▼ DESCEND/)`. Hit-test
     `label.logical` and the four corners of `label.box` with the game's own
-    `NEON.hub.hitTestHub(game, x, y)` inside `h.observe`. Every point must
+    `NEON.hub.hitTestHub(game, x, y)` inside `h.observe`. The box is the
+    label's ink box after the full canvas transform, so a label that is
+    shifted, rotated or skewed off its button is caught. Every point must
     return `{kind: 'descend'}`, which proves the drawn label lies on the
     button that touch input hits. Then `h.tapText(/▼ DESCEND/)`.
 

@@ -3,6 +3,8 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const verify = require('../.github/skills/verify-neon-dungeon/scripts/verify.js');
 const engineTouch = require('../engine/touch.js');
@@ -249,9 +251,11 @@ test('parseViewport resolves presets and WxH sizes', () => {
   assert.throws(() => verify.parseViewport('tablet'), verify.UsageError);
 });
 
-test('isOurServer matches verify-serve for exactly this run dir', () => {
+test('isOurServer matches verify-serve for exactly this run dir, and this root when given', () => {
   const args = ['/usr/bin/node', '/w/.github/skills/verify-neon-dungeon/scripts/verify-serve.js', '--root', '/w', '--port', '0', '--run-dir', '/out/run-1'];
   assert.equal(verify.isOurServer(args, '/out/run-1'), true);
+  assert.equal(verify.isOurServer(args, '/out/run-1', '/w'), true);
+  assert.equal(verify.isOurServer(args, '/out/run-1', '/other-worktree'), false);
   assert.equal(verify.isOurServer(args, '/out/run-10'), false);
   assert.equal(verify.isOurServer(['/usr/bin/node', '/w/other.js', '--run-dir', '/out/run-1'], '/out/run-1'), false);
   assert.equal(verify.isOurServer(['/usr/bin/python3', '-m', 'http.server'], '/out/run-1'), false);
@@ -321,24 +325,37 @@ test('rowValue returns the value drawn in a label\'s row and value column', () =
   // Settings on a 960-wide canvas: labels left-aligned at x=40, values centred at W/2.
   const VALUE = /^◀ (ON|OFF) ▶$/;
   const opts = { within: 12, canvasWidth: 960 };
-  const shake = { text: 'SCREEN SHAKE', x: 100, y: 144, alpha: 1, w: 120 };
-  const off = { text: '◀ OFF ▶', x: 480, y: 145, alpha: 1, w: 64 };
-  const damage = { text: 'DAMAGE NUMBERS', x: 110, y: 178, alpha: 1, w: 140 };
-  const on = { text: '◀ ON ▶', x: 480, y: 179, alpha: 1, w: 56 };
+  const shake = { text: 'SCREEN SHAKE', x: 100, y: 144, alpha: 1, box: { left: 40, top: 138, right: 160, bottom: 150 } };
+  const off = { text: '◀ OFF ▶', x: 480, y: 145, alpha: 1, box: { left: 448, top: 139, right: 512, bottom: 151 } };
+  const damage = { text: 'DAMAGE NUMBERS', x: 110, y: 178, alpha: 1, box: { left: 40, top: 172, right: 180, bottom: 184 } };
+  const on = { text: '◀ ON ▶', x: 480, y: 179, alpha: 1, box: { left: 452, top: 173, right: 508, bottom: 185 } };
   const texts = [shake, off, damage, on];
-  assert.deepEqual(verify.rowValue(texts, /^SCREEN SHAKE$/, VALUE, opts), { match: off, misplaced: [], column: { left: 160, right: 920 } });
-  assert.deepEqual(verify.rowValue(texts, /^DAMAGE NUMBERS$/, VALUE, opts), { match: on, misplaced: [], column: { left: 180, right: 920 } });
-  assert.deepEqual(verify.rowValue(texts, /^AIM ASSIST$/, VALUE, opts), { match: null, misplaced: [], column: null });
+  assert.deepEqual(verify.rowValue(texts, /^SCREEN SHAKE$/, VALUE, opts), { match: off, misplaced: [], column: { left: 160, right: 920 }, label: shake });
+  assert.deepEqual(verify.rowValue(texts, /^DAMAGE NUMBERS$/, VALUE, opts), { match: on, misplaced: [], column: { left: 180, right: 920 }, label: damage });
+  assert.deepEqual(verify.rowValue(texts, /^AIM ASSIST$/, VALUE, opts), { match: null, misplaced: [], column: null, label: null });
   // Off the row vertically: not a candidate at all.
-  assert.deepEqual(verify.rowValue([shake, { ...off, y: 157 }], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [], column: { left: 160, right: 920 } });
+  const below = { ...off, y: 157 };
+  assert.deepEqual(verify.rowValue([shake, below], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [], column: { left: 160, right: 920 }, label: shake });
   // On the row but at the canvas edge, or overlapping the label: misplaced.
-  const edge = { ...off, x: 959 };
-  const overlap = { ...off, x: 150 };
-  assert.deepEqual(verify.rowValue([shake, edge], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [edge], column: { left: 160, right: 920 } });
-  assert.deepEqual(verify.rowValue([shake, overlap], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [overlap], column: { left: 160, right: 920 } });
+  const edge = { ...off, x: 959, box: { left: 927, top: 139, right: 991, bottom: 151 } };
+  const overlap = { ...off, x: 150, box: { left: 118, top: 139, right: 182, bottom: 151 } };
+  assert.deepEqual(verify.rowValue([shake, edge], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [edge], column: { left: 160, right: 920 }, label: shake });
+  assert.deepEqual(verify.rowValue([shake, overlap], /^SCREEN SHAKE$/, VALUE, opts), { match: null, misplaced: [overlap], column: { left: 160, right: 920 }, label: shake });
   // Right-aligned exactly at the mirrored inset (the FEET menu's ONLINE/OFFLINE) is in the column.
-  const status = { text: 'OFFLINE', x: 892, y: 150, alpha: 1, w: 56 };
+  const status = { text: 'OFFLINE', x: 892, y: 150, alpha: 1, box: { left: 864, top: 144, right: 920, bottom: 156 } };
   assert.deepEqual(verify.rowValue([shake, status], /^SCREEN SHAKE$/, /^(ONLINE|OFFLINE)$/, opts).match, status);
+});
+
+test('misplacedValueMessage names a value drawn over its label as a game layout defect', () => {
+  const shake = { text: 'SCREEN SHAKE', x: 100, y: 144, alpha: 1, box: { left: 40, top: 138, right: 160, bottom: 150 } };
+  const overlap = { text: '◀ OFF ▶', x: 150, y: 145, alpha: 1, box: { left: 118, top: 139, right: 182, bottom: 151 } };
+  const edge = { text: '◀ OFF ▶', x: 959, y: 145, alpha: 1, box: { left: 927, top: 139, right: 991, bottom: 151 } };
+  const column = { left: 160, right: 920 };
+  assert.equal(verify.misplacedValueMessage(shake, overlap, column, 1),
+    'value overlaps its label: "SCREEN SHAKE" x 40..160 y 138..150 vs "◀ OFF ▶" x 118..182 y 139..151, a game layout defect at this viewport');
+  assert.equal(verify.misplacedValueMessage(shake, overlap, column, 2),
+    'value overlaps its label: "SCREEN SHAKE" x 20..80 y 69..75 vs "◀ OFF ▶" x 59..91 y 69.5..75.5, a game layout defect at this viewport');
+  assert.equal(verify.misplacedValueMessage(shake, edge, column, 1), '"◀ OFF ▶" spans x 927..991, outside the value column of "SCREEN SHAKE" (x 160..920)');
 });
 
 test('styleAlpha reads the alpha a canvas fill or stroke style carries', () => {
@@ -373,20 +390,89 @@ test('visibleOnCanvas drops text whose globalAlpha x style alpha x filter opacit
 });
 
 test('textBox gives a drawn string\'s ink box in logical game coordinates', () => {
-  assert.deepEqual(verify.textBox({ text: '▼ DESCEND', x: 300, y: 150, alpha: 1, w: 90, h: 12 }, 1.5), { left: 170, top: 96, right: 230, bottom: 104 });
+  assert.deepEqual(verify.textBox({ text: '▼ DESCEND', x: 300, y: 150, alpha: 1, box: { left: 255, top: 144, right: 345, bottom: 156 } }, 1.5),
+    { left: 170, top: 96, right: 230, bottom: 104 });
   assert.deepEqual(verify.textBox({ text: 'x', x: 50, y: 20, alpha: 1 }, 1), { left: 50, top: 20, right: 50, bottom: 20 });
 });
 
-test('parseServerRecord treats torn, empty, malformed and copied records as not this run\'s', () => {
-  const rec = { pid: 4242, url: 'http://127.0.0.1:43210/', status: 'ready', root: '/w', runDir: '/out/run-a', startedAt: 't', head: 'abc' };
+test('textBounds boxes the ink a fillText call covers, through rotation and skew', () => {
+  const identity = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+  const base = { align: 'left', baseline: 'alphabetic', width: 40, ascent: 10, descent: 2, matrix: identity };
+  assert.deepEqual(verify.textBounds({ ...base, x: 10, y: 20 }), { left: 10, top: 10, right: 50, bottom: 22 });
+  // Right-aligned, clamped by maxWidth, scaled x2.
+  assert.deepEqual(verify.textBounds({ ...base, align: 'right', x: 100, y: 20, width: 80, maxWidth: 50, matrix: { ...identity, a: 2, d: 2 } }),
+    { left: 100, top: 20, right: 200, bottom: 44 });
+  // Centred label rotated 90 degrees about (200, 300): 100 wide by 14 tall becomes 14 wide by 100 tall.
+  const rotated = { x: 0, y: 0, align: 'center', baseline: 'middle', width: 100, ascent: 7, descent: 7, matrix: { a: 0, b: 1, c: -1, d: 0, e: 200, f: 300 } };
+  assert.deepEqual(verify.textCentre(rotated), { x: 200, y: 300 });
+  assert.deepEqual(verify.textBounds(rotated), { left: 193, top: 250, right: 207, bottom: 350 });
+  // Skewed along x by half the height: x' = x + 0.5 y.
+  assert.deepEqual(verify.textBounds({ ...base, x: 10, y: 20, matrix: { ...identity, c: 0.5 } }), { left: 15, top: 10, right: 61, bottom: 22 });
+  // Without ink metrics: the em box around the baseline's middle.
+  assert.deepEqual(verify.textBounds({ x: 100, y: 100, align: 'center', baseline: 'middle', width: 60, fontSize: 20, matrix: identity }),
+    { left: 70, top: 90, right: 130, bottom: 110 });
+});
+
+test('parseServerRecord accepts only a complete record for this run dir', () => {
+  const token = '0123456789abcdef0123456789abcdef';
+  const rec = { pid: 4242, url: 'http://127.0.0.1:43210/', status: 'ready', root: '/w', runDir: '/out/run-a', startedAt: '2026-09-30T06:00:00.000Z', head: 'abc123', token };
   const starting = { ...rec, url: null, status: 'starting' };
   assert.deepEqual(verify.parseServerRecord(JSON.stringify(rec), '/out/run-a'), { kind: 'ok', record: rec });
   assert.deepEqual(verify.parseServerRecord(JSON.stringify(starting), '/out/run-a/'), { kind: 'ok', record: starting });
   assert.deepEqual(verify.parseServerRecord(JSON.stringify(rec), '/out/run-b'), { kind: 'foreign', record: rec });
   assert.deepEqual(verify.parseServerRecord('', '/out/run-a'), { kind: 'unreadable', why: 'empty file' });
   assert.deepEqual(verify.parseServerRecord('{"pid": 42', '/out/run-a'), { kind: 'unreadable', why: 'not valid JSON (10 bytes; torn write?)' });
-  assert.deepEqual(verify.parseServerRecord('{}', '/out/run-a'), { kind: 'unreadable', why: 'not a server record (needs pid, url, root, runDir)' });
-  assert.deepEqual(verify.parseServerRecord('null', '/out/run-a'), { kind: 'unreadable', why: 'not a server record (needs pid, url, root, runDir)' });
+  assert.deepEqual(verify.parseServerRecord('null', '/out/run-a'), { kind: 'unreadable', why: 'not a server record (not a JSON object)' });
+  assert.deepEqual(verify.parseServerRecord('{}', '/out/run-a'),
+    { kind: 'unreadable', why: 'not a server record (bad or missing: pid, status, root, runDir, startedAt, head, token)' });
+  const partial = { pid: 4242, url: 'http://127.0.0.1:43210/', root: '/w', runDir: '/out/run-a' };
+  assert.deepEqual(verify.parseServerRecord(JSON.stringify(partial), '/out/run-a'),
+    { kind: 'unreadable', why: 'not a server record (bad or missing: status, startedAt, head, token)' });
+  const bad = (/** @type {Record<string, unknown>} */ change) => verify.parseServerRecord(JSON.stringify({ ...rec, ...change }), '/out/run-a');
+  assert.deepEqual(bad({ url: 'https://darinh.github.io/neon-dungeon/' }), { kind: 'unreadable', why: 'not a server record (bad or missing: url)' });
+  assert.deepEqual(bad({ status: 'starting' }), { kind: 'unreadable', why: 'not a server record (bad or missing: url)' });
+  assert.deepEqual(bad({ token: 'forged' }), { kind: 'unreadable', why: 'not a server record (bad or missing: token)' });
+});
+
+/**
+ * Spawns the real verify-serve and resolves with its READY url.
+ * @param {string[]} args
+ * @returns {Promise<{ child: import('node:child_process').ChildProcess, url: string }>}
+ */
+function startServe(args) {
+  const serve = path.join(__dirname, '..', '.github', 'skills', 'verify-neon-dungeon', 'scripts', 'verify-serve.js');
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [serve, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    const timer = setTimeout(() => { child.kill(); reject(new Error(`no READY within 5s: ${out}`)); }, 5000);
+    child.once('exit', (code) => { clearTimeout(timer); reject(new Error(`verify-serve exited early with ${code}`)); });
+    /** @type {import('node:stream').Readable} */ (child.stdout).on('data', (chunk) => {
+      out += chunk;
+      const m = /^READY (\S+) pid=\d+$/m.exec(out);
+      if (!m || !m[1]) return;
+      clearTimeout(timer);
+      resolve({ child, url: m[1] });
+    });
+  });
+}
+
+test('checkServer, shared by doctor and drive, passes this run\'s server and fails another run\'s pid and URL', async () => {
+  const root = path.resolve(__dirname, '..');
+  const runA = '/nonexistent-neon-verify/run-a';
+  const { child, url } = await startServe(['--root', root, '--port', '0', '--run-dir', runA]);
+  try {
+    const record = { pid: Number(child.pid), url, status: /** @type {'ready'} */ ('ready'), root, runDir: runA, startedAt: 't', head: 'h', token: '0'.repeat(32) };
+    const own = await verify.checkServer({ runDir: runA, url, record });
+    assert.deepEqual(own.rows.map((r) => `${r.name} ${r.status}`), ['server-process PASS', 'http-root PASS', 'version-json PASS']);
+    assert.equal(own.ok, true);
+    // Run B's record with run A's pid and URL (forged, or a dead server's port reused by run A).
+    const runB = '/nonexistent-neon-verify/run-b';
+    const forged = await verify.checkServer({ runDir: runB, url, record: { ...record, runDir: runB } });
+    assert.deepEqual(forged.rows.map((r) => `${r.name} ${r.status}`), ['server-process FAIL', 'http-root PASS', 'version-json FAIL']);
+    assert.equal(forged.ok, false);
+  } finally {
+    child.kill();
+  }
 });
 
 test('parseReadyLine reads the URL and pid from the server READY line only', () => {
