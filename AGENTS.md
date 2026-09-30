@@ -308,6 +308,11 @@ If you add a brand-new file under `ASSETS`, add the path to the precache list in
   choice screens, trial mechanics, hub panels, or combat past floor 1, and it
   checks no real pixels, fonts, or browser layout. Prove changes there with
   their own tests or the verification skill.
+- `node tests/_journey-coverage.js diff [ref]` lists the changed runtime code
+  lines (against `origin/develop` by default) that no journey executes, and
+  exits 1 if there are any; the oracle cannot vouch for those lines.
+  `node tests/_journey-coverage.js` prints coverage per file, and
+  `uncovered <file>` shows the gaps in one file.
 
 ## Documentation
 
