@@ -136,11 +136,201 @@ test('resume restores the floor, difficulty, belt, stats and upgrades of a hidde
   }
 });
 
-test('resume saves exactly what was saved when the page was hidden',
-  { todo: 'issue #1064: resume re-rolls room metadata and the event RNG stream' }, () => {
-    const { atHide, afterResume } = rich();
-    assert.deepEqual(differingPaths(atHide, afterResume), []);
+test('resume saves exactly what was saved when the page was hidden', () => {
+  const { atHide, afterResume } = rich();
+  assert.deepEqual(differingPaths(atHide, afterResume), []);
+});
+
+/**
+ * Room types and dungeon room-reference indexes. Eval results are copied out
+ * of the sim realm before compare.
+ * @param {ReturnType<typeof createGameSim>} sim
+ */
+function floorRoomRefs(sim) {
+  const refs = sim.eval(`(() => {
+    const d = game.dungeon;
+    const idx = (r) => d.rooms.indexOf(r);
+    return {
+      types: d.rooms.map((r) => r.roomType || null),
+      spawn: idx(d.spawnRoom),
+      stair: idx(d.stairRoom),
+      boss: idx(d.bossRoom),
+      secrets: (d.secretRooms || []).map(idx),
+      vendor: idx(d.vendorRoom),
+      challenge: idx(d.challengeRoom),
+    };
+  })()`);
+  return {
+    types: [...refs.types],
+    spawn: refs.spawn,
+    stair: refs.stair,
+    boss: refs.boss,
+    secrets: [...refs.secrets],
+    vendor: refs.vendor,
+    challenge: refs.challenge,
+  };
+}
+
+test('resume keeps the descent spawn and stair rooms when the preferred spawn did not resolve', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  sim.key('ArrowRight');
+  play.startRun(sim, 'SPAWN-28');
+  play.enableCheats(sim, ['Digit1']);
+  play.descend(sim);
+  play.descend(sim);
+  play.descend(sim);
+  assert.equal(sim.eval('game.floor'), 4);
+  /** @param {ReturnType<typeof createGameSim>} s */
+  const refs = (s) => {
+    const r = s.eval(`(() => {
+      const d = game.dungeon;
+      return { spawn: d.rooms.indexOf(d.spawnRoom), stair: d.rooms.indexOf(d.stairRoom) };
+    })()`);
+    return { spawn: r.spawn, stair: r.stair };
+  };
+  const before = refs(sim);
+  sim.hide();
+  sim.frames(1);
+  const resumed = createGameSim({ width: 1280, height: 800, storage: sim.storage() });
+  resumed.frames(30);
+  resumed.eval('game.continueGame()');
+  assert.deepEqual(refs(resumed), before);
+});
+
+test('a rejected descended-floor snapshot resumes on the descent spawn, not a wall', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  play.startRun(sim, 'SAFE-20');
+  play.enableCheats(sim, ['Digit1']);
+  play.descend(sim);
+  play.descend(sim);
+  assert.equal(sim.eval('game.floor'), 3);
+  const descent = sim.eval(`(() => {
+    const p = game.player;
+    const t = game.dungeon.map[Math.floor(p.y)][Math.floor(p.x)];
+    return { x: p.x, y: p.y, wall: t === T.WALL };
+  })()`);
+  sim.eval('game.player.x = game.bossRoom.cx + 2.5; game.player.y = game.bossRoom.cy + 0.5;');
+  sim.frames(5);
+  sim.hide();
+  sim.frames(1);
+  const resumed = createGameSim({ width: 1280, height: 800, storage: sim.storage() });
+  resumed.frames(30);
+  resumed.eval('game.continueGame()');
+  const at = resumed.eval(`(() => {
+    const p = game.player;
+    const t = game.dungeon.map[Math.floor(p.y)][Math.floor(p.x)];
+    return { x: p.x, y: p.y, wall: t === T.WALL, passable: isPassable(t) };
+  })()`);
+  assert.equal(at.wall, false, 'resume must not leave the player in a wall');
+  assert.equal(at.passable, true);
+  assert.equal(at.x, descent.x);
+  assert.equal(at.y, descent.y);
+});
+
+test('resume of a descended floor keeps room types and room references', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  sim.key('ArrowRight');
+  play.startRun(sim, 'ORACLE-SAVE');
+  play.enableCheats(sim, ['Digit1']);
+  play.descend(sim);
+  play.descend(sim);
+  for (let i = 0; i < 14; i++) {
+    play.killNearest(sim);
+    play.settle(sim);
+  }
+  const before = floorRoomRefs(sim);
+  assert.equal(sim.eval('game.floor'), 3);
+  sim.hide();
+  sim.frames(1);
+  const resumed = createGameSim({ width: 1280, height: 800, storage: sim.storage() });
+  resumed.frames(30);
+  resumed.eval('game.continueGame()');
+  assert.deepEqual(floorRoomRefs(resumed), before);
+});
+
+test('a floor-3 save without generationExitPos uses the legacy room merge', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  sim.key('ArrowRight');
+  play.startRun(sim, 'ORACLE-SAVE');
+  play.enableCheats(sim, ['Digit1']);
+  play.descend(sim);
+  play.descend(sim);
+  sim.hide();
+  sim.frames(1);
+  const stored = { ...sim.storage() };
+  const save = JSON.parse(stored.neonDungeonSave ?? 'null');
+  assert.equal(save.floor, 3);
+  delete save.floorSnapshot.generationExitPos;
+  stored.neonDungeonSave = JSON.stringify(save);
+  const savedRooms = save.floorSnapshot.dungeon.rooms;
+  const resumed = createGameSim({ width: 1280, height: 800, storage: stored });
+  resumed.frames(30);
+  assert.doesNotThrow(() => resumed.eval('game.continueGame()'));
+  assert.equal(resumed.state(), 'PLAYING');
+  const view = resumed.eval(`(() => {
+    const d = game.dungeon;
+    return {
+      types: d.rooms.map((r) => r.roomType || null),
+      secretTypes: (d.secretRooms || []).map((r) => r.roomType || null),
+      bossIsRoom: !!(d.bossRoom && d.rooms.indexOf(d.bossRoom) >= 0),
+    };
+  })()`);
+  const types = [...view.types];
+  const secretTypes = [...view.secretTypes];
+  assert.ok(secretTypes.length > 0, 'the rebuild still designates secret rooms');
+  assert.ok(secretTypes.every((t) => t === 'secret'), 'legacy merge keeps secretRooms on secret rooms');
+  assert.equal(view.bossIsRoom, true, 'dungeon.bossRoom still points at a rebuild room');
+  const keptGenerated = types.some((t, i) => {
+    const saved = savedRooms[i];
+    const savedType = saved && saved.roomType ? saved.roomType : null;
+    return t != null && t !== savedType;
   });
+  assert.equal(keptGenerated, true, 'a rebuild-only roomType survives the legacy merge');
+});
+
+test('a new floor-1 save records generationExitPos null and restores exactly', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  sim.key('ArrowRight');
+  play.startRun(sim, 'ORACLE-1');
+  assert.equal(sim.eval('game.floor'), 1);
+  sim.hide();
+  sim.frames(1);
+  const stored = sim.storage();
+  const atHide = JSON.parse(stored.neonDungeonSave ?? 'null');
+  assert.equal(atHide.floor, 1);
+  assert.equal(Object.prototype.hasOwnProperty.call(atHide.floorSnapshot, 'generationExitPos'), true);
+  assert.equal(atHide.floorSnapshot.generationExitPos, null);
+  const resumed = createGameSim({ width: 1280, height: 800, storage: stored });
+  resumed.frames(30);
+  resumed.eval('game.continueGame()');
+  assert.equal(resumed.state(), 'PLAYING');
+  const afterResume = JSON.parse(resumed.storage().neonDungeonSave ?? 'null');
+  assert.deepEqual(differingPaths(atHide, afterResume), []);
+});
+
+test('a resumed run draws the same next event value as an uninterrupted run', () => {
+  const boot = () => {
+    const sim = createGameSim({ width: 1280, height: 800 });
+    sim.frames(30);
+    sim.key('ArrowRight');
+    play.startRun(sim, 'ORACLE-1');
+    return sim;
+  };
+  const live = boot();
+  const expected = live.eval('rand("event")');
+  const saved = boot();
+  saved.hide();
+  saved.frames(1);
+  const resumed = createGameSim({ width: 1280, height: 800, storage: saved.storage() });
+  resumed.frames(30);
+  resumed.eval('game.continueGame()');
+  assert.equal(resumed.eval('rand("event")'), expected);
+});
 
 test('the crawl clears all fifteen floors, five bosses, and the finale', () => {
   const t = trace('crawl-desktop');

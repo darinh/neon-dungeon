@@ -606,8 +606,7 @@ class Enemy {
         spawnParticles(this.x, this.y, 'MUZZLE', '#00ddff', 5);
       }
     }
-    // room._qmHarvested is not saved. Continue rebuilds rooms, so a resume can
-    // re-harvest; accepted because save-quit per room is slower than playing.
+    // room._qmHarvested is saved with the floor snapshot, so Continue does not re-harvest.
     if (_EG.modifier === 'QUARTERMASTER' && !this.isShard && !isSummon
         && this.room && !this.room._qmHarvested) {
       this.room._qmHarvested = true;
