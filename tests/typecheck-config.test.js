@@ -30,6 +30,14 @@ function parseRuntimeConfig() {
 }
 
 /** @param {string} dir @returns {string[]} */
+function allFilesUnder(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    return e.isDirectory() ? allFilesUnder(full) : [full];
+  });
+}
+
+/** @param {string} dir @returns {string[]} */
 function jsFilesUnder(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const full = path.join(dir, e.name);
@@ -76,13 +84,11 @@ const runtime = (() => {
   };
 })();
 
-test('npm run typecheck runs tsc on the runtime config with no options that change it', () => {
+test('npm run typecheck runs the runtime pass', () => {
   const script = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts.typecheck;
-  const commands = String(script).split('&&').map((c) => c.trim().split(/\s+/));
-  const runtimeRun = commands.find((argv) => argv[0] === 'tsc' && argv.some((a, i) => (a === '-p' || a === '--project') && argv[i + 1] === RUNTIME_CONFIG));
-  assert.ok(runtimeRun, `no tsc -p ${RUNTIME_CONFIG} in: ${script}`);
-  const extra = runtimeRun.slice(1).filter((a, i, all) => a !== '--noEmit' && a !== '-p' && a !== '--project' && !((all[i - 1] === '-p' || all[i - 1] === '--project') && a === RUNTIME_CONFIG));
-  assert.deepEqual(extra, [], 'extra tsc options would override the runtime config');
+  // Pinned, not parsed: a shell can redefine or wrap a command in ways no parser here would catch.
+  assert.equal(script, `tsc --noEmit && tsc --noEmit -p ${RUNTIME_CONFIG}`,
+    'keep the runtime pass when changing the typecheck script, then update this test');
 });
 
 test('the runtime program holds every file in src/ and engine/ and no Node type declarations', () => {
@@ -90,6 +96,11 @@ test('the runtime program holds every file in src/ and engine/ and no Node type 
   const included = new Set(parsed.fileNames.map((/** @type {string} */ f) => path.resolve(f)));
   const expected = [...jsFilesUnder(path.join(ROOT, 'src')), ...jsFilesUnder(path.join(ROOT, 'engine'))];
   assert.ok(expected.length > 100, `found only ${expected.length} runtime files`);
+  // index.html loads classic .js scripts; other script extensions would sit outside the runtime pass.
+  const otherScripts = [path.join(ROOT, 'src'), path.join(ROOT, 'engine')]
+    .flatMap((dir) => allFilesUnder(dir))
+    .filter((f) => /\.(mjs|cjs|jsx|ts|mts|cts|tsx)$/.test(f));
+  assert.deepEqual(otherScripts.map((f) => path.relative(ROOT, f)), []);
   assert.deepEqual(expected.filter((f) => !included.has(f)).map((f) => path.relative(ROOT, f)), []);
   const nodeTypes = program.getSourceFiles()
     .map((/** @type {import('typescript').SourceFile} */ sf) => sf.fileName)
