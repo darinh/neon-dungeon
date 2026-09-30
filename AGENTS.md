@@ -120,6 +120,21 @@ These are hard rules, not preferences:
 | `npm run lint:fix` | Auto-fix what eslint can. |
 | `npm run check` | Run lint + typecheck + engine-purity + tests in sequence. **This is the canonical pre-commit gate.** |
 
+## Verification
+
+The project-local skill `.github/skills/verify-neon-dungeon/` drives the real
+game in headless Chromium with real keyboard, mouse and touch input. It
+captures evidence in a run directory outside the repo. Use it to prove
+player-visible and browser-specific behavior in a real browser. Read its
+`SKILL.md` and `features/README.md` before driving.
+
+| Command | Purpose |
+|---|---|
+| `node .github/skills/verify-neon-dungeon/scripts/verify.js launch` | Serve this worktree on 127.0.0.1. Prints `READY <url>` and `RUN_DIR <dir>`. |
+| `node .github/skills/verify-neon-dungeon/scripts/verify.js doctor --run-dir <dir>` | Read-only health check: server pid, HTTP, and `version.json` (checked against HEAD and this run's pid). Then a clean boot to MENU. |
+| `node .github/skills/verify-neon-dungeon/scripts/verify.js drive <feature> --run-dir <dir> [--viewport phone --touch]` | Run the doctor's server checks, refusing (exit 2) if the server is not this run's, then run a drive script from `features/drives/`. Evidence goes to `<dir>/<name>/`. |
+| `node .github/skills/verify-neon-dungeon/scripts/verify.js stop --run-dir <dir>` | Kill only this run's server. Evidence is kept. |
+
 ## Shell safety
 
 - For Markdown-heavy `gh pr create`, `gh pr edit`, and `gh pr comment` bodies,
