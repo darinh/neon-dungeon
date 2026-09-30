@@ -64,9 +64,10 @@ Each rule is here because skipping it caused a real incident.
     the operations the brief allows before launching the rest.
 19. Do not enforce an invariant by approximating syntax another tool owns
     (compiler directives, lint directives, shell commands). Assert the invariant
-    directly or call the tool's own parser. If neither is possible, copy the
-    rule from the tool's source, test the result against the tool itself on an
-    enumerated set of cases, and reject input it does not recognize.
+    directly or call the tool's own parser. If neither is possible, cite the
+    tool's source (file and line, at the version the lockfile pins) for each
+    rule you copy, test the copy against the tool itself on an enumerated set
+    of cases, and reject input it does not recognize.
 
 ## Merge and release gates
 
