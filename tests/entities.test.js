@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { statementStart } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const ENTITIES = fs.readFileSync(path.join(ROOT, 'src', 'entities.js'), 'utf8');
@@ -160,8 +161,16 @@ test('movement call sites pass the right tile, coordinates and dash flag', () =>
   assert.match(ENTITIES, /if \(!noClip\) resolvePlayerCornerCut\(this, map, dashPrevX, dashPrevY, true\);/);
   assert.match(ENTITIES, /if \(!noClip\) resolvePlayerCornerCut\(this, map, walkPrevX, walkPrevY, false\);/);
   assert.match(ENTITIES, /if \(!playerCheatEnabled\('noClip'\)\) resolvePlayerCornerCut\(this, map, pullPrevX, pullPrevY, false\);/, 'gravity pull resolves corner cuts too');
-  const depen = ENTITIES.indexOf("if (!playerCheatEnabled('noClip')) depenetratePlayer(this, map);");
-  const dash = ENTITIES.indexOf('    // Active dash movement');
+  const depen = statementStart(ENTITIES, {
+    className: 'Player',
+    method: 'update',
+    includes: "if (!playerCheatEnabled('noClip')) depenetratePlayer(this, map);",
+  });
+  const dash = statementStart(ENTITIES, {
+    className: 'Player',
+    method: 'update',
+    includes: 'if (this.dashTimer>0)',
+  });
   assert.ok(depen > 0 && depen < dash, 'depenetration runs before the dash/walk movement');
   assert.doesNotMatch(ENTITIES, /function playerStepPassable\(/, 'no same-tile shortcut helper remains');
   assert.match(ENTITIES, /this\.dashTimer=0\.12;\s*\n\s*this\._dashSerial = \(this\._dashSerial \| 0\) \+ 1;/);

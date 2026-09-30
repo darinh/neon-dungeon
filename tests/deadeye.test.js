@@ -19,7 +19,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { readSourceFile } = require('./_source-files.js');
+const { extractMatchingStatement, readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const PLAYER_PERK_TUNING = readSourceFile(__dirname, 'entitiesPlayerPerkTuning');
@@ -171,11 +171,17 @@ test('shoot() folds the deadeye multiplier through metaMul (covers melee + MULTI
 
 // ─── Tick wiring in Player.update ────────────────────────────────────────
 
+function deadeyeTick() {
+  return extractMatchingStatement(ENTITIES, {
+    className: 'Player',
+    method: 'update',
+    kind: 'if',
+    includes: ['this.perks.DEADEYE && dt > 0', 'DEADEYE_MOVE_RATE'],
+  });
+}
+
 test('Player.update ticks DEADEYE using moved/dt rate (frame-rate independent)', () => {
-  const tickRe = /\[tick:DEADEYE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'DEADEYE tick block must exist in Player.update');
-  const stripped = stripComments(m[0]);
+  const stripped = stripComments(deadeyeTick());
   assert.match(stripped, /dist\s*\(\s*this\._prevX\s*,\s*this\._prevY\s*,\s*this\.x\s*,\s*this\.y\s*\)/,
     'DEADEYE tick must read post-movement displacement via dist(_prevX,_prevY,x,y)');
   assert.match(stripped, /\/\s*dt/,
@@ -187,28 +193,19 @@ test('Player.update ticks DEADEYE using moved/dt rate (frame-rate independent)',
 });
 
 test('DEADEYE tick is gated on this.perks.DEADEYE (no overhead for non-owners)', () => {
-  const tickRe = /\[tick:DEADEYE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'DEADEYE tick block must exist');
-  const stripped = stripComments(m[0]);
+  const stripped = stripComments(deadeyeTick());
   assert.match(stripped, /this\.perks\.DEADEYE/,
     'DEADEYE tick must short-circuit when the player has not picked the perk');
 });
 
 test('DEADEYE tick is suppressed during shock (force-zeroed movement should not grant a free charge)', () => {
-  const tickRe = /\[tick:DEADEYE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'DEADEYE tick block must exist');
-  const stripped = stripComments(m[0]);
+  const stripped = stripComments(deadeyeTick());
   assert.match(stripped, /shockTimer/,
     'DEADEYE tick must reference shockTimer (defensive: explicit "no charge while shocked")');
 });
 
 test('DEADEYE moving branch cancels partial charge but does NOT clear an existing readiness latch', () => {
-  const tickRe = /\[tick:DEADEYE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'DEADEYE tick block must exist');
-  const stripped = stripComments(m[0]);
+  const stripped = stripComments(deadeyeTick());
   // The `else` (moving) branch must zero _steadyChargeTime so a brief
   // pause buffered by accumulated time can't re-grant a free charge on
   // the very next still frame (the same defence STRIDE has).
@@ -272,10 +269,7 @@ test('DEADEYE moving branch cancels partial charge but does NOT clear an existin
 });
 
 test('DEADEYE charge does not over-tick once latched (re-charging gated on !_steadyReady)', () => {
-  const tickRe = /\[tick:DEADEYE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'DEADEYE tick block must exist');
-  const stripped = stripComments(m[0]);
+  const stripped = stripComments(deadeyeTick());
   // Once _steadyReady is true, _steadyChargeTime should not keep
   // incrementing — otherwise a long camp would push it to absurd
   // values that take a full second to re-cancel after movement starts.

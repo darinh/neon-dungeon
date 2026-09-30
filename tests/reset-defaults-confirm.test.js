@@ -19,6 +19,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { extractMatchingStatement } = require('./_source-files.js');
 
 const GAME = fs.readFileSync(
   path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8'
@@ -193,21 +194,21 @@ test('reset-confirm: every non-reset actionable mouse-click row clears the arm',
   // this, the user clicks reset → walks the mouse over to a toggle to
   // verify their setting → clicks back to reset, which now commits on
   // the FIRST visible click. That defeats the safety contract.
-  // We use the UNSTRIPPED GAME source here so we can anchor on the
-  // distinctive comment markers that scope each click branch.
-  const updateBody = GAME.match(/updateSettings\s*\(\s*\)\s*\{[\s\S]*?\n\s{2}\},?/);
-  assert.ok(updateBody, 'updateSettings body must be findable');
-  const sliderStart = updateBody[0].indexOf("this._settingsDrag = i === 0");
-  const toggleHeader = updateBody[0].indexOf("// Toggle rows click");
-  const rebindHeader = updateBody[0].indexOf("// Rebind rows click");
-  const resetHeader = updateBody[0].indexOf("// Reset defaults row");
-  assert.ok(sliderStart !== -1, 'slider branch marker not found');
-  assert.ok(toggleHeader !== -1, 'toggle branch marker not found');
-  assert.ok(rebindHeader !== -1, 'rebind branch marker not found');
-  assert.ok(resetHeader !== -1, 'reset branch marker not found');
-  const sliderSlice = updateBody[0].slice(sliderStart, toggleHeader);
-  const toggleSlice = updateBody[0].slice(toggleHeader, rebindHeader);
-  const rebindSlice = updateBody[0].slice(rebindHeader, resetHeader);
+  const sliderSlice = extractMatchingStatement(GAME, {
+    method: 'updateSettings',
+    kind: 'for',
+    includes: ['_settingsSliderHit', 'this._settingsResetConfirm = 0'],
+  });
+  const toggleSlice = extractMatchingStatement(GAME, {
+    method: 'updateSettings',
+    kind: 'for',
+    includes: ['toggleKeys.length', 'this._settingsResetConfirm = 0'],
+  });
+  const rebindSlice = extractMatchingStatement(GAME, {
+    method: 'updateSettings',
+    kind: 'for',
+    includes: ['this._settingsCapture = actions[i]', 'this._settingsResetConfirm = 0'],
+  });
   assert.match(
     sliderSlice,
     /this\._settingsResetConfirm\s*=\s*0/,
