@@ -20,6 +20,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { extractMatchingStatement, extractStatementRange } = require('./_source-files.js');
 
 // ─── Fake localStorage so platform.js can be require()'d in Node ────────
 const _store = /** @type {Record<string,string>} */ ({});
@@ -568,15 +569,19 @@ test('expanded-minimap title + close-hint scale with settings.textScale', () => 
   // the title/hint section — those would silently ignore textScale.
   // We scope to the title block to avoid flagging similar strings used
   // elsewhere in the function (room labels etc).
-  const titleBlock = fn[0].match(/Title \+ hint[\s\S]{0,800}/);
-  assert.ok(titleBlock, 'must locate the Title + hint block in drawExpandedMinimap');
-  assert.doesNotMatch(titleBlock[0],
+  const titleBlock = extractStatementRange(RENDER, {
+    functionName: 'drawExpandedMinimap',
+    fromIncludes: 'const tFs =',
+    untilIncludes: 'const legendX',
+  });
+  assert.match(titleBlock, /const tFs =/, 'must locate the Title + hint block in drawExpandedMinimap');
+  assert.doesNotMatch(titleBlock,
     /ctx\.font\s*=\s*['"]bold\s+14px/,
     'expanded minimap title must not hard-code "bold 14px monospace"');
-  assert.doesNotMatch(titleBlock[0],
+  assert.doesNotMatch(titleBlock,
     /ctx\.font\s*=\s*['"]11px/,
     'expanded minimap close-hint must not hard-code "11px monospace"');
-  assert.doesNotMatch(titleBlock[0],
+  assert.doesNotMatch(titleBlock,
     /my\s*-\s*22\b/,
     'expanded minimap title must not hard-code "my - 22" — the gap must use the textScale-derived local');
 });
@@ -589,16 +594,22 @@ test('expanded-minimap title + close-hint scale with settings.textScale', () => 
 // text-scaled — it's a graphical indicator), so they're safe to scale
 // without an HUD overhaul.
 
+function keyIndicatorBlock() {
+  return extractMatchingStatement(RENDER, {
+    functionName: 'drawHUD',
+    kind: 'if',
+    includes: ['hasKeys', 'const keyFs', 'keyFontStr'],
+  });
+}
+
 test('key indicator font + gap-above-HUD + horizontal stride scale with settings.textScale', () => {
   // Found above the HUD bar when the player carries any keys. The font
   // (12), the y-gap above the HUD (18), AND the per-token x-stride
   // (55) all need to scale together — otherwise the row either
   // overlaps the HUD/status badges (large font + small gap) or
   // adjacent key tokens collide (large font + small stride).
-  // Match a generous slice around the 'Key indicators' comment so we
-  // pin the right block (drawHUD has multiple `if (hasKeys)` siblings).
-  const block = RENDER.match(/Key indicators[\s\S]{0,2000}?ctx\.restore\(\);\s*\}/);
-  assert.ok(block, 'must locate the Key indicators block in drawHUD');
+  const block = [keyIndicatorBlock()];
+  assert.match(block[0], /const keyFs/, 'must locate the Key indicators block in drawHUD');
   // Producer-side: pin EACH scale formula bound to its EXACT canonical
   // identifier. Per gpt-5.3-codex r1: independent formula+consumer
   // assertions can be bypassed by declaring a real scaled local AND a
@@ -653,8 +664,8 @@ test('key indicator hoists font string out of the for-loop (hot path discipline)
   // per-iteration template-literal alloc is GC churn. Pin: the bold
   // font string is cached in a const BEFORE the for-loop, and the
   // body assigns ctx.font = <identifier> — never a fresh template.
-  const block = RENDER.match(/Key indicators[\s\S]{0,2000}?ctx\.restore\(\);\s*\}/);
-  assert.ok(block, 'must locate the Key indicators block');
+  const block = [keyIndicatorBlock()];
+  assert.match(block[0], /const keyFontStr/, 'must locate the Key indicators block');
   assert.match(block[0],
     /const\s+keyFontStr\s*=\s*`bold\s*\$\{keyFs\}px\s+monospace`[\s\S]{0,200}for\s*\(/,
     'key indicator must declare const keyFontStr = `bold ${keyFs}px monospace` BEFORE the for-loop');

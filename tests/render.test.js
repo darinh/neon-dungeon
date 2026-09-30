@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { ifBranchOffsets } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const RENDER = fs.readFileSync(path.join(ROOT, 'src', 'render.js'), 'utf8');
@@ -432,9 +433,10 @@ test('the swept states reach every draw call in the landscape HUD branch', () =>
   // each fillText/fillRect call site of the landscape branch and require the
   // sweep states to reach every one.
   const body = extractFunctionSource(RENDER, 'drawHUD');
-  const from = body.indexOf('// ── Standard landscape HUD');
-  const to = body.indexOf('drawObservationHudFrame(y);', from);
-  assert.ok(from > 0 && to > from, 'landscape branch located');
+  const spans = ifBranchOffsets(body, 'drawHUD', 'layout.compact');
+  const from = spans.elseStart;
+  const to = spans.elseEnd;
+  assert.ok(from >= 0 && to > from, 'landscape branch located');
   let sites = 0;
   const branch = body.slice(from, to).replace(/ctx\.(fillText|fillRect)\(/g, (_m, fn) => `(__hit(${sites++}), ctx).${fn}(`);
   const tagged = `const HUD_STAT_GAP = 12;\n${body.slice(0, from)}${branch}${body.slice(to)}\nthis.drawHUD = drawHUD;`;
@@ -628,9 +630,10 @@ test('compact weapon line never runs past the right margin, even when its budget
 
 test('the swept states reach every draw call in the compact HUD branch', () => {
   const body = extractFunctionSource(RENDER, 'drawHUD');
-  const from = body.indexOf('// ── Compact portrait: two rows ──');
-  const to = body.indexOf('// ── Standard landscape HUD', from);
-  assert.ok(from > 0 && to > from, 'compact branch located');
+  const spans = ifBranchOffsets(body, 'drawHUD', 'layout.compact');
+  const from = spans.thenStart;
+  const to = spans.thenEnd;
+  assert.ok(from >= 0 && to > from, 'compact branch located');
   let sites = 0;
   const branch = body.slice(from, to).replace(/ctx\.(fillText|fillRect)\(/g, (_m, fn) => `(__hit(${sites++}), ctx).${fn}(`);
   const tagged = `const HUD_STAT_GAP = 12;\n${body.slice(0, from)}${branch}${body.slice(to)}\nthis.drawHUD = drawHUD;`;
