@@ -30,6 +30,12 @@ local server is closer to GitHub Pages and service-worker behavior.
 
 Run `npm run check` before opening a PR.
 
+`npm test` includes the golden oracle, `tests/_game-sim.test.js`. It plays
+scripted journeys through the real game in Node and requires what they draw,
+play, send, and save to match `tests/golden/journeys.json`. See the Tests
+section of `AGENTS.md` for what it covers and the `trace`, `diff`, and `update`
+commands.
+
 ## Architecture at a glance
 
 The runtime is ordered script tags in `index.html`:
