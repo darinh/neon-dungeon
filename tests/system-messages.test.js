@@ -8,8 +8,6 @@ const path = require('node:path');
 
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
 const PLATFORM = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'platform.js'), 'utf8');
-const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
-const DESIGN = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'vision', 'act1-system-message-design.md'), 'utf8');
 
 /**
  * @param {string} src
@@ -539,35 +537,4 @@ test('system message queue is wired into start, save, and continue contracts', (
   assert.match(GAME, /systemMessages:\s*serializeSystemMessagesState\(this\.systemMessages\)/);
   assert.match(GAME, /this\.loadFloor\(save\.floor\|\|1,\s*savedMod,\s*true\)[\s\S]*this\.systemMessages\s*=\s*restoreSystemMessagesState\(save\.systemMessages\)[\s\S]*this\.saveGame\(\)[\s\S]*openNextSystemMessage\('PLAYING'\)/,
     'Continue must restore system-message queue state before rewriting the checkpoint');
-});
-
-test('system message spec and design artifact reflect shipped MSG-001 through MSG-011 scope', () => {
-  assert.match(SPEC, /system-message data model and run-scoped queue are shipped/i);
-  assert.match(SPEC, /system-prompt overlay and explicit ACK dismissal are shipped/i);
-  assert.match(SPEC, /unread HUD indicator and\s+combat-safe automatic delivery are shipped/i);
-  assert.match(SPEC, /run\s+archive\/recovery surface is\s+shipped in THE GAP's ARCHIVE/i);
-  assert.match(DESIGN, /MSG-001: System message data model and queue/i);
-  assert.match(DESIGN, /Status: shipped data-model slice/i);
-  assert.match(DESIGN, /MSG-002: Explicit acknowledgement and dismissal safety/i);
-  assert.match(DESIGN, /Status: shipped explicit-ACK modal slice plus legacy overlay hardening/i);
-  assert.match(DESIGN, /MSG-003: Combat-safe delivery rules/i);
-  assert.match(DESIGN, /Status: shipped combat-safe delivery slice/i);
-  assert.match(DESIGN, /MSG-004: Boot and early-floor prompt schedule/i);
-  assert.match(DESIGN, /Status: shipped early-floor prompt schedule/i);
-  assert.match(DESIGN, /MSG-005: Message archive\/recovery surface/i);
-  assert.match(DESIGN, /Status: shipped in THE GAP ARCHIVE/i);
-  assert.match(DESIGN, /MSG-006: Terminal pool retune/i);
-  assert.match(DESIGN, /Status: shipped\. Floors 1-5 now keep terminal copy external and practical/i);
-  assert.match(DESIGN, /MSG-007: Intro retune/i);
-  assert.match(DESIGN, /Status: shipped\. The intro now presents session boot/i);
-  assert.match(DESIGN, /MSG-008: Narrative guardrail tests/i);
-  assert.match(DESIGN, /Status: shipped\. `tests\/act1-narrative-guardrails\.test\.js` pins/i);
-  assert.match(DESIGN, /MSG-009: Model-assisted copy workflow/i);
-  assert.match(DESIGN, /Status: shipped as a production workflow and pre-rewrite audit/i);
-  assert.match(DESIGN, /Claude Opus 4\.7[\s\S]*GPT-5\.5[\s\S]*Mechanical checks/i);
-  assert.match(DESIGN, /MSG-010: Finale integration pass/i);
-  assert.match(DESIGN, /Status: shipped as integration guardrails/i);
-  assert.match(DESIGN, /MSG-011: Normal-play comprehension spine/i);
-  assert.match(DESIGN, /Status: shipped in `src\/game\.js`[\s\S]*floor-6-iteration-record[\s\S]*floor-14-contact-objective/i);
-  assert.match(SPEC, /milestone comprehension schedule\s+is shipped for floors 6, 10, 12, and 14/i);
 });

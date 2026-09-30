@@ -39,37 +39,24 @@ first, then read `README.md`, `docs/module-map.md`, and
   `.github/extensions/**` is ignored, force-add the intended project extension
   deliberately.
 
-## Retrospective requirement
+## Retrospectives
 
-- After every completed task, PR, issue, or coherent refactor iteration, run the
-  retrospective protocol in `docs/agent-retrospective.md` from the worktree, not
-  from the main checkout.
-- The retrospective MUST include critique from two other LLMs before the work is
-  considered complete.
-- The final retrospective step is deciding whether the retrospective protocol
-  itself should change. If yes, update `docs/agent-retrospective.md` immediately.
-- The work item is not complete until the two reviewers return, adopted/rejected
-  findings are recorded, required system changes are applied, and the
-  retrospective is attached to the PR, issue, session history, or final response.
-- The work item is still not complete if actionable backlog remains and the agent
-  has not started the next item. Do not call `task_complete` merely because one
-  PR, issue, or retrospective is done.
-- For issue-backed work, run `npm run check:agent-continuity -- --issue <number>`
-  before `task_complete`; a nonzero exit means actionable work remains or an
-  agent-authored PR still needs monitoring.
-- The standard `npm run check:agent-continuity` command must also prove the
-   operator guard extension is present and tracked in the implementation worktree
-   and that no ignored extension files were stranded in the primary checkout.
-   It also proves the `develop: squash-only PRs` ruleset keeps its pull-request
-   rule while granting the admin bypass needed for post-release
-   force-with-lease alignment.
-- Do not remove the implementation worktree until the retrospective is complete
-  and attached. Worktree cleanup is the final step.
-- Retrospectives are for behavior change, not ceremony: record concrete failure
-  modes, earlier catches, adopted process changes, and rejected weak suggestions.
-- Retrospective reviewers get pasted evidence and must not enter the repository,
-  run git, or mutate files. Protocol-only edits made by a retrospective do not
-  trigger a second recursive retrospective.
+- Run the checklist in `docs/agent-retrospective.md` once per milestone: each
+  `develop` -> `main` promotion, or the end of a planned program phase. Do not
+  run one per PR.
+- Milestone retrospectives get critique from two reviewers on different model
+  families. They work from pasted evidence only and never enter the repository,
+  run git, or write files. Record adopted and rejected findings, and attach the
+  retrospective to the promotion PR, or to the phase's final PR when the phase
+  ends without a promotion.
+- A retrospective ends by asking whether the checklist should change. If it
+  should, edit it in the same milestone.
+- Keep working while actionable backlog remains. For issue-backed work, run
+  `npm run check:agent-continuity -- --issue <number>` before stopping; a nonzero
+  exit means work remains. The same command checks that the operator guard
+  extension is tracked and that the `develop` ruleset keeps the admin bypass
+  needed for post-release alignment.
+- Remove a worktree after its PR merges.
 
 ## Merge policy
 
@@ -237,15 +224,27 @@ affected update/render/hit-test consumers and add or update a guard test for eac
 shared path that could regress.
 
 ### Code review policy
-**Every commit that changes code must have at least 1 adversarial code-review subagent before pushing.** No exceptions for Small tasks. 🔴 files (game.js, entities.js, content.js, platform.js, sw.js, save.js, anything auth/crypto/payments/concurrency) escalate to 3 reviewers. The red file names are literal top-level/runtime files; `src/content/floor-generator.js` and other `src/content/*` submodules are Medium by default unless the specific change touches a red-risk domain such as data deletion, schema migration, auth/crypto/payments, or concurrency.
+Scale adversarial code review to risk. Reviewers read the staged diff only.
+
+| Change | Reviewers before push |
+|---|---|
+| Docs only, or prose comments only | none required |
+| Tests only | 1 |
+| Any other source change | 3, with split briefs: falsify the claims, find omissions, check logic and performance |
+
+A change is prose comments only when it touches only `.js` files, changes no
+JSDoc type tag (`@type`, `@param`, `@returns`, `@typedef`, `@template`) and no
+directive comment (`@ts-check`, `@ts-nocheck`, `@ts-ignore`, `@ts-expect-error`,
+`eslint-*`, `global`), and, for every changed file,
+`require('typescript').transpileModule(text, { compilerOptions: { removeComments: true, target: 99 } }).outputText`
+is byte-identical before and after. `.d.ts` changes, JSDoc type changes, and
+directive changes are source changes: transpiling erases them.
 
 For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect
-assertion, not just dispatch or existence coverage; every touched versioned spec
-or changelog must be checked against the current highest version in the file
-before editing. Each new or moved engine public export, shared coordinate table,
+assertion, not just dispatch or existence coverage. Each new or moved engine public export, shared coordinate table,
 or engine-facing constant must have a direct shape/value or behavior assertion,
-a matching `types/engine.d.ts` declaration, engine-boundary/spec documentation,
+a matching `types/engine.d.ts` declaration, engine-boundary documentation,
 and an explicit note of which semantics remain caller-owned.
 
 ## Service worker
@@ -274,3 +273,13 @@ If you add a brand-new file under `ASSETS`, add the path to the precache list in
   shared helper must include direct behavioral evidence that exercises the caller
   mutation path. Source-shape assertions, digest stability, or callback identity
   are supporting evidence only; they are not sufficient by themselves.
+- Tests assert behavior. Do not add assertions on the text of source files or
+  documentation. Existing source-text assertions are legacy; convert one to a
+  behavior test, or delete it if it only restates a constant, when you touch it.
+
+## Documentation
+
+- `docs/spec.md` describes current mechanics. Keep a section accurate when you
+  change the behavior it describes. The spec has no version number and no
+  changelog; history lives in git and in the GitHub Release notes that
+  `release-version.yml` writes from commit subjects.
