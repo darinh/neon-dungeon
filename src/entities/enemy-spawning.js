@@ -1,8 +1,6 @@
 // @ts-check
 'use strict';
 
-// Enemy construction/orchestration depends on Enemy from src/entities.js and
-// initializeEnemySpawnState from src/entities/spawn-initializers.js.
 /**
  * @param {any} [type]
  * @param {any} [x]

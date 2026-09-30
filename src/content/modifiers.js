@@ -1,9 +1,7 @@
 // @ts-check
 'use strict';
 
-// Difficulty and floor-modifier registries. Loaded before src/content.js so
-// content, entity, render, and game coordinators keep sharing the same
-// script-tag globals while modifier data lives in its own module.
+// Loaded before src/content.js so coordinators keep sharing these script-tag globals.
 
 /** @type {any} */
 const _CM = new Proxy({}, {
@@ -12,7 +10,6 @@ const _CM = new Proxy({}, {
   has: (_t, p) => p in /** @type {any} */ (game),
 });
 
-// ─── Difficulty ──────────────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
 const DIFFICULTIES = {
   EASY:   { id:'EASY',   label:'EASY',   colour:'#39ff14', enemyHp:0.75, enemyAtk:0.75, enemySpd:1.0,  itemDrop:0.25, creditMul:1.2, xpMul:1.0,  eliteRate:0.04, shardMul:0.85, envDmg:0.75, roomLoot:2 },
@@ -23,7 +20,6 @@ const DIFFICULTIES = {
 const DIFF_ORDER = ['EASY','NORMAL','HARD','NIGHTMARE'];
 function getDiff() { return DIFFICULTIES[_CM.difficulty] || DIFFICULTIES.NORMAL; }
 
-// ─── Floor Modifiers ─────────────────────────────────────────────────────────
 /** @type {Record<string, any>} */
 const FLOOR_MODIFIERS = {
   BLACKOUT:  { label:'BLACKOUT',  desc:'Emergency lights only',     colour:'#4466aa', icon:'◐' },

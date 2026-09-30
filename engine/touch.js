@@ -1,33 +1,7 @@
 // @ts-check
 'use strict';
-// engine/touch.js — pure touch input math helpers.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. All exports are pure functions
-// over numbers / DOM-ish inputs the caller supplies. This module owns no
-// mutable state — the host (src/platform.js) keeps the canvas reference,
-// gameScale, the touch/mouse state objects, and uses these helpers.
-//
-// Surface:
-//   toCanvas(clientX, clientY, canvas)
-//     → [cx, cy]. Maps a CSS-pixel client coordinate (e.g. from a Touch
-//     or MouseEvent) to canvas-internal coordinates using the canvas's
-//     getBoundingClientRect(). `canvas` must expose width/height and
-//     getBoundingClientRect().
-//
-//   hitBtn(cx, cy, btn, scale)
-//     → boolean. Circular hit-test for a {x,y,r} button. Hit radius is
-//     `max(btn.r, 22 / scale)` to enforce a minimum 44 CSS-px touch
-//     target on small screens. `scale` is the host's gameScale (CSS px
-//     per logical px); pass <=0 and it falls back to 1.
-//
-//   resetTouch(touch, mouse)
-//     → void. Zeroes out the host's touch state object (joystick + aim
-//     gestures, button-touch IDs) and clears mouse.down. The shapes
-//     mutated are documented by the JSDoc typedefs below — anything
-//     extra on the objects is left alone.
-//
-// Browser: attaches as `window.NEON.touch`. Pure helpers only — does NOT
-// own state (unlike engine/input.js's createEngine factory).
+// toCanvas maps CSS client px to canvas buffer px. hitBtn's 22/scale floor
+// is a 44 CSS-px touch target; scale is CSS px per logical px.
 
 (function (root, factory) {
   const v = factory();

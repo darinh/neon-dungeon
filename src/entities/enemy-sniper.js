@@ -20,23 +20,20 @@ Enemy.prototype.aiSniper = function aiSniper(dt, player, map, d, los) {
     (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
      player.y >= this.room.y && player.y < this.room.y + this.room.h));
 
-  // Cancel charge conditions: lost LOS, player cloaked, stunned, or player fled room
   if (this._laserTimer > 0) {
     if (!los || !this._canTarget() || !inRoom || this.stunTimer > 0 || d < 3) {
       this._laserTimer = 0;
       this._laserTarget = null;
-      this._sniperCooldown = 0.8; // post-cancel cooldown
+      this._sniperCooldown = 0.8;
       if (d < 3 && this._canTarget()) {
-        // Flee if too close
         const [fx, fy] = norm(this.x - this._tx, this.y - this._ty);
         this.moveToward(this.x + fx * 5, this.y + fy * 5, this.spd * 1.3, dt, map);
       }
       return;
     }
-    // Charging — count down (fixed rate, unaffected by OVERCLOCK/berserker)
+    // Fixed rate: charge is not scaled by OVERCLOCK or berserker.
     this._laserTimer -= dt;
     if (this._laserTimer <= 0) {
-      // Fire along the locked direction
       const tx = this._laserTarget.x, ty = this._laserTarget.y;
       const [dx, dy] = norm(tx - this.x, ty - this.y);
       const p = new Projectile(this.x, this.y, dx, dy, 14, this.atk, 20, this.colour, false, false);
@@ -50,10 +47,8 @@ Enemy.prototype.aiSniper = function aiSniper(dt, player, map, d, los) {
     return;
   }
 
-  // Repositioning after firing — move to a far tile in the room
   if (this._repositionTimer > 0 && this.room) {
     if (!this._repositionTarget) {
-      // Pick a passable tile far from player
       let bestX = this.x, bestY = this.y, bestDist = 0;
       for (let a = 0; a < 15; a++) {
         const nx = this.room.x + rnd(1, this.room.w - 1);
@@ -75,15 +70,13 @@ Enemy.prototype.aiSniper = function aiSniper(dt, player, map, d, los) {
   }
   this._repositionTarget = null;
 
-  // Idle / patrol / lock-on
   if (inRoom && los && d < 15 && this._canTarget() && this._sniperCooldown <= 0) {
-    // Lock on
     this._laserTarget = { x: this._tx, y: this._ty };
     this._laserTimer = 1.5;
     audio.sniperCharge();
   } else if (!inRoom || !los) {
     this.patrol(dt, map);
   }
-  // If in room with LOS but on cooldown, hold position (menacing idle)
+  // In room with LOS but on cooldown: hold position, do not patrol.
 };
 

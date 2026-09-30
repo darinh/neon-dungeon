@@ -1,15 +1,6 @@
 // @ts-check
-// src/meta/upgrades.js — UNCHAINED Phase 2 (#36) — persistent UPGRADE MATRIX
-//
-// Pure data + pure functions for the 12-node upgrade tree spent with cores at
-// the hub's UPGRADE MATRIX terminal. Storage and stat-application live in
-// save.js; this module owns the node table, cost curve, prereq rules, and the
-// terminal-panel renderer/input handler exported for the hub UI (#35) to glue
-// in after merge.
-//
-// Naming note: the persistent meta field is `upgradeNodes` (already in v2
-// schema). The issue text calls it `upgradesPurchased`; we reuse the existing
-// field rather than introduce a duplicate. See save.js applyMetaToPlayer().
+// save.js owns storage and stat application. This file owns the node table, cost curve, prereqs, and hub panel.
+// The persistent field is upgradeNodes, not upgradesPurchased. See save.applyMetaToPlayer().
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory(require('./save.js'));
@@ -20,21 +11,15 @@
 }(/** @type {any} */ (typeof self !== 'undefined' ? self : this), function (/** @type {any} */ save) {
   'use strict';
 
-  // ─── Node Table ────────────────────────────────────────────────────────────
-  // 12 nodes: 3 branches × 4 tiers. Capstone nodes (tier 4) are maxLevel 1;
-  // naturally-scaling stat nodes are maxLevel 3.
   const UPGRADE_NODES = [
-    // Vitality
     { id:'hull_plating', branch:'Vitality', tier:1, baseCost:3,  maxLevel:3, effect:'+10 max HP per level' },
     { id:'regenerator',  branch:'Vitality', tier:2, baseCost:6,  maxLevel:2, effect:'Regen 0.5 HP/s out of combat (per level)' },
     { id:'trauma_kit',   branch:'Vitality', tier:3, baseCost:10, maxLevel:2, effect:'Start each run with 1 nano-medic consumable (per level)' },
     { id:'second_wind',  branch:'Vitality', tier:4, baseCost:18, maxLevel:1, effect:'Revive once per floor at 25% HP when lethally hit' },
-    // Damage
     { id:'overclock',     branch:'Damage', tier:1, baseCost:3,  maxLevel:3, effect:'+5% weapon damage per level' },
     { id:'critical_bias', branch:'Damage', tier:2, baseCost:6,  maxLevel:3, effect:'+4% crit chance per level' },
     { id:'momentum',      branch:'Damage', tier:3, baseCost:10, maxLevel:2, effect:'+15% damage for 3s after a kill (per level)' },
     { id:'surge',         branch:'Damage', tier:4, baseCost:18, maxLevel:1, effect:'Every 8th shot deals +100% damage' },
-    // Utility
     { id:'recon',     branch:'Utility', tier:1, baseCost:3,  maxLevel:3, effect:'+20% sensor radius (minimap reveal) per level' },
     { id:'scavenger', branch:'Utility', tier:2, baseCost:6,  maxLevel:3, effect:'+1 credit per pickup per level' },
     { id:'ghostwalk', branch:'Utility', tier:3, baseCost:10, maxLevel:2, effect:'Dash has 0.2s extra i-frames (per level)' },
@@ -43,7 +28,7 @@
 
   const BRANCHES = ['Vitality', 'Damage', 'Utility'];
 
-  // Index by id and by (branch,tier) for O(1) lookups.
+  // O(1) id and branch:tier lookup; the table is scanned only for totals.
   const BY_ID = Object.create(null);
   const BY_BRANCH_TIER = Object.create(null);
   for (const n of UPGRADE_NODES) {
@@ -54,10 +39,7 @@
   /** @param {string} id */
   function getNode(id) { return BY_ID[id] || null; }
 
-  // ─── Cost Curve ────────────────────────────────────────────────────────────
-  // Linear: cost of level L (1-indexed) = baseCost × L. So purchasing the next
-  // level when currently at level `level` costs baseCost × (level + 1).
-  // Returns undefined if the node is unknown or already at maxLevel.
+  // `level` is the current level, so the next purchase costs baseCost × (level + 1). undefined if unknown or maxed.
   /** @param {string} id @param {number} level */
   function nodeCost(id, level) {
     const node = BY_ID[id];
@@ -67,7 +49,7 @@
     return node.baseCost * (cur + 1);
   }
 
-  // Sum of every cost paid to reach `level` from 0: baseCost × L(L+1)/2.
+  // Triangular sum of baseCost × 1..L.
   /** @param {any} node @param {number} level */
   function _spentForLevel(node, level) {
     const L = Math.max(0, Math.min(node.maxLevel, Math.floor(Number(level) || 0)));
@@ -85,8 +67,6 @@
     return sum;
   }
 
-  // ─── Prereqs ───────────────────────────────────────────────────────────────
-  // Tier N requires the same-branch tier (N-1) at level >= 1.
   /** @param {any} meta @param {string} id */
   function prereqMet(meta, id) {
     const node = BY_ID[id];
@@ -98,15 +78,7 @@
     return owned >= 1;
   }
 
-  // ─── Purchase ──────────────────────────────────────────────────────────────
-  // Atomically: load meta, validate, deduct cores, record level, save. Returns
-  // { ok, reason?, cost?, level? }. Reasons: 'unknown' | 'maxed' | 'prereq' |
-  // 'cores'. Caller is expected to refresh its own view of meta after success.
-  //
-  // The `meta` argument is accepted for ergonomics (tests can pass a snapshot)
-  // but we always re-load from storage to do the mutation atomically — same
-  // pattern as save.spendCores. The passed meta is updated in-place to reflect
-  // the new state so callers holding a reference see the change.
+  // Reloads from storage for the mutation (same as save.spendCores). The meta arg is not the source of truth.
   /** @param {any} meta @param {string} id */
   function purchase(meta, id) {
     const node = BY_ID[id];
@@ -134,9 +106,7 @@
     return { ok: true, cost, level: cur + 1 };
   }
 
-  // ─── Terminal Panel — exported for hub UI (#35) to glue in after merge ─────
-  // Selector state shape: { col: 0..2 (branch), row: 0..3 (tier-1) }.
-  // The hub will own creation/persistence of selectorState and pass it in.
+  // selectorState: col 0..2 is branch, row 0..3 is tier-1. The hub owns it.
 
   function defaultSelectorState() { return { col: 0, row: 0 }; }
 
@@ -146,10 +116,6 @@
     return branch ? BY_BRANCH_TIER[branch + ':' + (row + 1)] || null : null;
   }
 
-  // handleUpgradeInput(key, game, selectorState) → boolean (true if consumed).
-  // `key` is a normalized key string ('ArrowUp', 'ArrowDown', 'ArrowLeft',
-  // 'ArrowRight', 'Enter'). `game` may expose `game.audio` for sfx and
-  // `game.meta` for the live meta snapshot.
   /** @param {string} key @param {any} game @param {any} selectorState */
   function handleUpgradeInput(key, game, selectorState) {
     const sel = selectorState || defaultSelectorState();
@@ -160,13 +126,12 @@
     if (key === 'Enter' || key === ' ' || key === 'Space') {
       const node = _nodeAt(sel.col, sel.row);
       if (!node) return true;
-      // purchase() ignores its `meta` arg and reads via save.loadMeta() (L115),
-      // so passing `game.meta` is meaningless. Pass null for clarity.
+      // purchase() reloads meta itself; game.meta is not the source of truth.
       const result = purchase(null, node.id);
       if (result.ok) {
         const audio = game && game.audio;
         if (audio && typeof audio.upgradePurchased === 'function') {
-          try { audio.upgradePurchased(); } catch (_) { /* ignore */ }
+          try { audio.upgradePurchased(); } catch (_) { /* optional sfx */ }
         }
       }
       return true;
@@ -174,28 +139,15 @@
     return false;
   }
 
-  // drawUpgradeMatrix — renders the 3×4 grid + tooltip on `ctx` within bounds.
-  // Pure-ish: depends on canvas API only. Skips draw entirely when ctx is
-  // missing (Node tests). Reads cores + upgradeNodes from save.loadMeta()
-  // directly — `game.meta` is never assigned anywhere in the codebase
-  // (verified by grep), so the previous `(game && game.meta)` path always
-  // fell through to the `{cores:0, upgradeNodes:{}}` defaults. Result:
-  // upgrade matrix showed CORES: 0 + every node appeared unaffordable +
-  // selection state didn't reflect actual purchases — even though the
-  // player had cores in their wallet (visible in The Gap's hub chrome).
-  // Reported by user 2026-04-25 (6bc2e985): 'in the gap, i have no way of
-  // upgrading anything (on mobile - havent rrie desktop) even though i
-  // have cores the upgrade matrix items dont respond to my touches'.
-  // Mirrors the modules.js pattern at L210 which also reads via save.
+  // Reads save.loadMeta() because game.meta is never assigned; reading it would show zero cores.
   /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} _game @param {any} selectorState */
   function drawUpgradeMatrix(ctx, x, y, w, h, _game, selectorState) {
     if (!ctx || typeof ctx.fillRect !== 'function') return;
-    void _game; // legacy param — meta is read from save directly now
+    void _game; // Panel API passes game; meta comes from save.
     const sel = selectorState || defaultSelectorState();
     const meta = save ? save.loadMeta() : { cores: 0, upgradeNodes: {} };
     const nodes = meta.upgradeNodes || {};
 
-    // Responsive font sizes — scale down on narrow panels.
     const narrow = w < 420;
     const hdrFs = narrow ? 12 : 14;
     const cellFs = narrow ? 10 : 11;
@@ -203,7 +155,6 @@
     const ttFs = narrow ? 10 : 11;
     const pad = narrow ? 10 : 16;
 
-    // Header.
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#00f5ff';
@@ -216,14 +167,12 @@
     ctx.fillText('CORES: ' + (meta.cores | 0), x + w - pad + 4, y + 10);
     ctx.textAlign = 'left';
 
-    // Grid layout: top area for the 3×4 grid, bottom strip for the tooltip.
     const gridTop = y + 34;
     const tooltipH = narrow ? 70 : 80;
     const gridH = Math.max(100, h - gridTop + y - tooltipH - 12);
     const cellW = Math.floor((w - pad * 2) / 3);
     const cellH = Math.floor((gridH - 18) / 4);
 
-    // Branch headers.
     ctx.fillStyle = '#9ad';
     ctx.font = cellFs + 'px monospace';
     for (let c = 0; c < BRANCHES.length; c++) {
@@ -246,17 +195,14 @@
         const affordable = cost != null && (meta.cores || 0) >= cost;
         const isSel = (c === sel.col && r === sel.row);
 
-        // Body.
         ctx.fillStyle = locked ? '#101018' : (maxed ? '#0d2018' : '#0d1422');
         ctx.fillRect(cx, cy, cw, ch);
-        // Border — selector colour wins.
         ctx.strokeStyle = isSel
           ? '#ffe66d'
           : (locked ? '#222' : (maxed ? '#0f8' : (affordable ? '#0ff' : '#345')));
         ctx.lineWidth = isSel ? 2 : 1;
         ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, ch - 1);
 
-        // Title — measure and truncate if needed.
         ctx.fillStyle = locked ? '#445' : (maxed ? '#7f9' : '#cfe');
         ctx.font = cellFs + 'px monospace';
         let title = node.id.toUpperCase().replace(/_/g, ' ');
@@ -265,7 +211,6 @@
         }
         ctx.fillText(title, cx + 5, cy + 5);
 
-        // Level + status — only if cell is tall enough for a second line.
         if (ch >= 30) {
           ctx.fillStyle = locked ? '#334' : '#9ad';
           ctx.fillText('LV ' + lv + '/' + node.maxLevel, cx + 5, cy + 20);
@@ -289,7 +234,6 @@
       }
     }
 
-    // Tooltip strip.
     const ttY = gridY0 + 4 * cellH + 4;
     const ttH = Math.max(50, y + h - ttY - 6);
     ctx.fillStyle = '#06060c';
@@ -305,7 +249,6 @@
       const cost = nodeCost(node.id, lv);
       const locked = !prereqMet(meta, node.id);
 
-      // Row 1: name + branch/tier.
       ctx.fillStyle = '#cfe';
       ctx.font = ttTitleFs + 'px monospace';
       let ttTitle = node.id.toUpperCase().replace(/_/g, ' ') + '  [' + node.branch + ' T' + node.tier + ']';
@@ -314,7 +257,7 @@
       }
       ctx.fillText(ttTitle, x + ttPad, ttY + 8);
 
-      // Row 2: level + cost/status + lock (all relative, no absolute offsets).
+      // Cumulative x so a narrow panel does not use absolute offsets.
       ctx.font = ttFs + 'px monospace';
       let infoX = x + ttPad;
       ctx.fillStyle = '#9ad';
@@ -342,7 +285,6 @@
         }
       }
 
-      // Row 3: effect description with word-wrap.
       ctx.fillStyle = '#bdd';
       ctx.font = ttFs + 'px monospace';
       const effectY0 = locked && (infoX + ctx.measureText('REQ: ' + node.branch + ' T' + (node.tier - 1)).width > x + w - ttPad) ? ttY + 52 : ttY + 40;
@@ -363,9 +305,7 @@
     }
   }
 
-  // Convenience factory mirroring the terminal-panel API shape that #35 will
-  // expect ({ id, label, update, draw, onOpen, onClose }). #35 may call this
-  // directly or build its own panel using the bare draw/input helpers above.
+  // Hub panel shape: { id, label, update, draw, onOpen, onClose }.
   /** @param {any} game */
   function createUpgradeMatrixPanel(game) {
     const sel = defaultSelectorState();

@@ -1,17 +1,14 @@
 // @ts-check
 'use strict';
 
-// Wall turrets load after src/entities.js so they can reuse shared combat,
-// projectile, room-index, and wall-facing globals while preserving legacy APIs.
-
-// ─── Wall Turrets ─────────────────────────────────────────────────────────────
+// Loaded after src/entities.js so it can use shared combat, projectile, room-index, and wall-facing globals.
 const WTURRET_RANGE_HOSTILE = 6;
 const WTURRET_RANGE_HACKED  = 7;
 const WTURRET_COOLDOWN_HOSTILE = 1.8;
 const WTURRET_COOLDOWN_HACKED  = 1.5;
 const WTURRET_PROJ_SPD = 7;
 const WTURRET_PROJ_RANGE = 10;
-const WTURRET_DISABLE_DUR = 3; // EMP disable duration (before hack)
+const WTURRET_DISABLE_DUR = 3; // EMP disable, seconds
 
 /**
  * @param {any} [x]
@@ -31,7 +28,7 @@ function createWallTurret(x, y, floor, room, wallSide) {
     shootTimer: 1.0 + rand('spawn'), // stagger first shots
     disabled: false, disableTimer: 0,
     bob: rand('cosmetic') * TWO_PI,
-    hackFlash: 0, // brief glow on hack
+    hackFlash: 0,
   };
 }
 
@@ -76,7 +73,7 @@ function hackWallTurret(t) {
   spawnParticles(t.x, t.y, 'SPARK', '#00ffaa', 10);
   spawnDmgText(t.x, t.y - 0.3, '◇ HACKED', '#00ffaa');
   audio.turretHack();
-  _EG.enemyDiedThisFrame = true; // re-evaluate room-clear (was blocking)
+  _EG.enemyDiedThisFrame = true; // re-evaluate room-clear; a hacked turret no longer blocks it
 }
 
 /**
@@ -109,7 +106,6 @@ function updateWallTurrets(dt) {
     t.bob += dt * 2;
     if (t.hackFlash > 0) t.hackFlash -= dt;
 
-    // Disabled (EMP'd before hack)
     if (t.disabled) {
       t.disableTimer -= dt;
       if (t.disableTimer <= 0) t.disabled = false;
@@ -120,7 +116,6 @@ function updateWallTurrets(dt) {
     const dmg = wallTurretDmg(t.floor);
 
     if (t.hacked) {
-      // ── Allied: target nearest visible enemy in room ──
       const r = t.room;
       let best = null, bestD = Infinity;
       for (const e of enemiesInRoomIter(r)) {
@@ -132,7 +127,6 @@ function updateWallTurrets(dt) {
         }
       }
       if (best) {
-        // Track toward target
         const aimAngle = Math.atan2(best.y - t.y, best.x - t.x);
         t.scanAngle = aimAngle;
         if (t.shootTimer <= 0) {
@@ -145,14 +139,12 @@ function updateWallTurrets(dt) {
           t.shootTimer = WTURRET_COOLDOWN_HACKED;
         }
       } else {
-        // No target — slow sweep
         t.scanAngle += 0.8 * t.scanDir * dt;
         const halfSweep = Math.PI / 3;
         if (t.scanAngle > t.baseAngle + halfSweep) { t.scanAngle = t.baseAngle + halfSweep; t.scanDir = -1; }
         if (t.scanAngle < t.baseAngle - halfSweep) { t.scanAngle = t.baseAngle - halfSweep; t.scanDir = 1; }
       }
     } else {
-      // ── Hostile: target player ──
       const d = dist(t.x, t.y, p.x, p.y);
       if (d < WTURRET_RANGE_HOSTILE && canTargetPlayer() && hasLOS(t.x, t.y, p.x, p.y, map)) {
         const aimAngle = Math.atan2(p.y - t.y, p.x - t.x);
@@ -166,7 +158,6 @@ function updateWallTurrets(dt) {
           t.shootTimer = WTURRET_COOLDOWN_HOSTILE;
         }
       } else {
-        // No target — slow sweep around base angle
         t.scanAngle += 0.6 * t.scanDir * dt;
         const halfSweep = Math.PI / 3;
         if (t.scanAngle > t.baseAngle + halfSweep) { t.scanAngle = t.baseAngle + halfSweep; t.scanDir = -1; }
@@ -193,7 +184,6 @@ function drawWallTurrets(camX, camY) {
 
     ctx.save();
 
-    // Hack flash overlay
     if (t.hackFlash > 0) {
       ctx.globalAlpha = t.hackFlash;
       ctx.fillStyle = '#00ffaa';
@@ -202,7 +192,6 @@ function drawWallTurrets(camX, camY) {
       ctx.shadowBlur = 0;
     }
 
-    // Wall mount base (small rectangle against wall)
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = '#334455';
     const ws = t.wallSide;
@@ -212,24 +201,19 @@ function drawWallTurrets(camX, camY) {
     else if (ws === 'W') ctx.fillRect(sx - bh - 2, sy - bw / 2, bh, bw);
     else ctx.fillRect(sx + 2, sy - bw / 2, bh, bw);
 
-    // Barrel — rotates to scanAngle
     ctx.globalAlpha = pulse;
     ctx.translate(sx, sy);
     ctx.rotate(t.scanAngle);
-    // Barrel body
     ctx.fillStyle = mainCol;
     ctx.shadowBlur = 6; ctx.shadowColor = glowCol;
     ctx.fillRect(0, -2.5, 8, 5);
-    // Muzzle flash hint
     ctx.fillStyle = glowCol;
     ctx.fillRect(7, -1.5, 3, 3);
     ctx.shadowBlur = 0;
-    // Base pivot
     ctx.fillStyle = '#556677';
     NEON.draw.circle(ctx, 0, 0, 3);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // HP bar (when damaged)
     if (t.hp < t.maxHp) {
       const bw2 = 14, bh2 = 2;
       const hpFrac = t.hp / t.maxHp;

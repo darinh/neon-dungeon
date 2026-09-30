@@ -1,11 +1,7 @@
 // @ts-check
 'use strict';
 
-// Procedural gameplay soundtrack and rendered title/menu music controller.
-// Loaded before src/content.js so the global `music` surface remains stable
-// for platform.js and game.js while audio state lives in its own module.
-
-// ─── Procedural Music ────────────────────────────────────────────────────────
+// Loaded before src/content.js so platform.js and game.js keep the global `music` surface.
 const music = (() => {
   /** @type {any} */ let bus = null;
   /** @type {any} */ let ctx = null;
@@ -24,12 +20,11 @@ const music = (() => {
   const TITLE_THEME_SRC = './assets/audio/title-theme.wav';
   const TITLE_THEME_GAIN = 0.28;
 
-  // Layer gain nodes
   /** @type {any} */ let droneG = null;
   /** @type {any} */ let pulseG = null;
   /** @type {any} */ let arpG = null;
   /** @type {any} */ let bassG = null;
-  // Persistent drone synth parts
+  // Live for the drone's lifetime; other voices are scheduled one-shots.
   /** @type {any} */ let droneOscA = null;
   /** @type {any} */ let droneOscB = null;
   /** @type {any} */ let droneSub = null;
@@ -304,7 +299,6 @@ const music = (() => {
     droneSub.frequency.exponentialRampToValueAtTime(root * 0.5, t + 0.24);
   }
 
-  // ── Drone: dual saw + sub → lowpass with animated cutoff ──
   function startDrone() {
     if (!ctx || droneOscA) return;
     const t = ctx.currentTime;
@@ -356,7 +350,6 @@ const music = (() => {
     droneOscA = droneOscB = droneSub = droneFilter = droneLFO = droneLfoDepth = null;
   }
 
-  // ── Pulse layer: kick/snare/hat with state-specific patterns ──
   /**
    * @param {any} t
    * @param {any} weight
@@ -448,7 +441,6 @@ const music = (() => {
     if (pat.open.includes(s)) hat(t, true, (s % 2 ? -0.3 : 0.3));
   }
 
-  // ── Arp/motif layer: recurring phrase fragments tied to progression ──
   /**
    * @param {any} t
    */
@@ -486,7 +478,6 @@ const music = (() => {
     osc.stop(t + dur + 0.02); osc2.stop(t + dur + 0.02);
   }
 
-  // ── Bass layer: progression-following low pulses with passing tones ──
   /**
    * @param {any} t
    */
@@ -517,7 +508,6 @@ const music = (() => {
     body.stop(t + dur + 0.02); sub.stop(t + dur + 0.02);
   }
 
-  // Occasional filtered noise swell for timbral depth
   /**
    * @param {any} t
    */

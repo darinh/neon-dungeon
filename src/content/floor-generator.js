@@ -1,15 +1,8 @@
 // @ts-check
 'use strict';
 
-// Dungeon generation, room feature placement, and floor-level content
-// orchestration. Loaded before the src/content.js compatibility facade so the
-// legacy script-tag globals remain available to game/runtime callers.
-//
-// Proxy-based alias for the cross-file `game` global. Generation touches many
-// runtime-added game props (game._minimapDirty, game.mapRevealed, etc.) that
-// don't appear on the typed game shape declared in src/game.js. The proxy
-// widens access to `any` and defers resolution. Mirrors the pattern in
-// src/render.js (_RG) and src/platform.js (_G).
+// Loaded before src/content.js so game and runtime callers keep these script-tag globals.
+// _CG proxies `game` because generation writes runtime props that are not on the typed shape in src/game.js. Same pattern as src/render.js and src/platform.js.
 /** @type {any} */
 const _CG = new Proxy({}, {
   get: (_t, p) => /** @type {any} */ (game)[p],
@@ -20,7 +13,6 @@ const dungeonTopology = /** @type {any} */ (requireNEON('dungeonTopology', 'src/
 const dungeonReachability = /** @type {any} */ (requireNEON('dungeonReachability', 'src/content/floor-generator.js'));
 const DUNGEON_CARDINAL_DIRECTIONS = /** @type {ReadonlyArray<readonly [number, number]>} */ (dungeonTopology.CARDINAL_DIRECTIONS);
 
-// ─── Dungeon Generator ───────────────────────────────────────────────────────
 /** @returns {any} */
 function createMap() {
   return dungeonTopology.createMap(MAP_W, MAP_H, T.WALL);
@@ -94,13 +86,11 @@ function generateFloor(floorNum, opts) {
   const map = bsp.map;
   const rooms = bsp.rooms;
 
-  // Pick spawn room — try several candidates and pick the one that maximizes
-  // BFS distance to the farthest room (ensures exit is far from spawn).
+  // Maximize BFS depth so the exit is far from spawn.
   let spawnRoom = rooms[0];
   if (rooms.length > 3) {
     const candidates = [];
     for (let ci = 0; ci < Math.min(rooms.length, 6); ci++) candidates.push(rooms[ci]);
-    // Also try a random room for variety
     candidates.push(rooms[rndInt(0, rooms.length - 1)]);
     let bestMaxD = 0;
     for (const c of candidates) {
@@ -118,7 +108,6 @@ function generateFloor(floorNum, opts) {
     playerPos = preferredSpawn.pos;
   }
 
-  // Furthest room from spawn for stairs
   let dist = bfsRooms(rooms, spawnRoom, map);
   let farthest = spawnRoom, farthestD = 0;
   for (const [r,d] of dist) {
@@ -230,11 +219,10 @@ function generateFloor(floorNum, opts) {
     map[farthest.cy][farthest.cx] = T.STAIRS;
   }
 
-  // boss room on biome-final floors (3,6,9,12,15 for the 5-biome arc)
+  // Boss rooms are the biome-final floors: 3, 6, 9, 12, 15.
   /** @type {any} */ let bossRoom = null;
   /** @type {any[]} */ const bossEntrances = [];
   if (_isBossFloor) {
-    // use the room furthest from spawn that isn't the stair room
     let br = null, bd = 0;
     for (const [r,d] of dist) {
       if (r===farthest) continue;
@@ -242,7 +230,6 @@ function generateFloor(floorNum, opts) {
     }
     bossRoom = br || rooms[Math.floor(rooms.length/2)];
 
-    // Enforce minimum boss room size (15×15) by expanding if needed
       const MIN_BOSS = 15;
       if (bossRoom.w < MIN_BOSS || bossRoom.h < MIN_BOSS) {
         /**
@@ -276,7 +263,7 @@ function generateFloor(floorNum, opts) {
           bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = bossRect.w; bossRoom.h = bossRect.h;
           bossRoom.cx = Math.floor(nx + bossRect.w/2); bossRoom.cy = Math.floor(ny + bossRect.h/2);
           carveRect(map, nx, ny, bossRect.w, bossRect.h, T.FLOOR);
-        // re-carve corridors to this room from neighbours, never through the mainframe.
+        // Re-carve neighbour links, but never through the mainframe.
         for (const r of rooms) {
           if (r === bossRoom || r.roomType === 'mainframe') continue;
           const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
@@ -292,20 +279,7 @@ function generateFloor(floorNum, opts) {
       }
     }
 
-    // Record entrance tiles: floor tiles on the boss room boundary that
-    // connect to a CORRIDOR tile (not the interior of another adjacent
-    // room). Without the corridor check, when the boss room shares a
-    // boundary with another room (no carved-corridor gap between them),
-    // every shared boundary tile would be sealed to WALL on boss-spawn —
-    // putting walls INSIDE the neighbouring room and trapping the player
-    // against them (reported by user 2026-04-20 b95c0573: 'the fence that
-    // surrounds a boss should not leave a room's boundary. It went into
-    // another room and trapped me against a wall').
-    //
-    // Both the boundary tile AND its outside neighbour must NOT be inside
-    // another room — boundary check catches overlapping-rect gen edge
-    // cases (where the boundary tile itself is shared); outside check
-    // catches abutting-rooms (most common case).
+    // Both the boundary tile and its outside neighbour must be outside every other room. Sealing a shared boundary puts a wall inside the neighbour and traps the player.
     /** @param {number} px @param {number} py */
     const isInsideAnotherRoom = (px, py) => {
       for (const r of rooms) {
@@ -315,21 +289,13 @@ function generateFloor(floorNum, opts) {
       return false;
     };
     const isOpenBossEntranceTile = (/** @type {number} */ tile) => tile === T.FLOOR;
-    /** Filtered + safe scan — both edge tile and outside tile must be
-     *  outside any other room. */
     const _scanFiltered = () => dungeonTopology.findRoomBoundaryOpenings(
       map,
       bossRoom,
       isOpenBossEntranceTile,
       isInsideAnotherRoom
     );
-    /** Unfiltered fallback — original logic, keeps lock-arena mechanic
-     *  working even in the degenerate case where the boss room only
-     *  shares boundaries with other rooms (no corridor entrance). The
-     *  re-carve loop at L2198-2202 makes this near-impossible in
-     *  practice but the fallback is here for safety: the lesser evil
-     *  is the original cosmetic bug (wall poking into neighbour) vs
-     *  losing boss arena lockout entirely. */
+    // If every opening touches another room, still record one so the arena can lock. Losing lockout is worse than a wall poking into the neighbour.
     const _scanUnfiltered = () => dungeonTopology.findRoomBoundaryOpenings(map, bossRoom, isOpenBossEntranceTile);
     const filtered = _scanFiltered();
     const chosen = filtered.length > 0 ? filtered : _scanUnfiltered();
@@ -345,26 +311,21 @@ function generateFloor(floorNum, opts) {
     map[core.y][core.x] = T.TERMINAL;
   }
 
-  // lights
   const lights = [];
   for (const r of rooms) {
     lights.push({x:r.x+1,y:r.y+1});
     lights.push({x:r.x+r.w-2,y:r.y+r.h-2});
   }
 
-  // fog of war
   /** @type {any} */ const visited = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
   /** @type {any} */ const light   = Array.from({length:MAP_H},()=>new Float32Array(MAP_W));
   /** @type {any} */ const visible = Array.from({length:MAP_H},()=>new Uint8Array(MAP_W));
 
-  // ── Room types: assign special purposes ──────────────────────────────────
-  // Types: null (normal), 'armory', 'medbay', 'shrine', 'vault'
   const ROOM_TYPES = ['armory','medbay','shrine','vault'];
   /** @type {Record<string, any>} */   const ROOM_COLOURS = {armory:'#2a1a10',medbay:'#0a1a15',shrine:'#1a0a20',vault:'#1a1a05',vendor:'#0a1a0f',secret:'#1a1005',challenge:'#1a0a0a',implant:'#0f0a1a',event:'#0a1a1a',trial:'#081a14',mainframe:'#081828'};
   /** @type {any[]} */ const specialRooms = [];
   const eligible = rooms.filter((/** @type {any} */ r) => r!==spawnRoom && r!==farthest && r!==bossRoom && r.w*r.h>=20);
 
-  // ── Vendor room (floor 2+, one per non-boss floor) — reserved first ─────
   /** @type {any} */ let vendorRoom = null;
   if (floorNum >= 2 && !bossRoom) {
     const vendorEligible = eligible.filter((/** @type {any} */ r) => r.w >= 5 && r.h >= 5);
@@ -376,7 +337,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Special room rotation (excluding vendor room) ───────────────────────
   const specialEligible = eligible.filter((/** @type {any} */ r) => r !== vendorRoom);
   const numSpecial = Math.min(specialEligible.length, Math.floor(floorNum/2)+1);
   const picked = shuffleInPlace(specialEligible.slice(), 'world').slice(0,numSpecial);
@@ -386,9 +346,6 @@ function generateFloor(floorNum, opts) {
     specialRooms.push(r);
   }
 
-  // ── Doors: place at room-corridor junctions (chokepoints only) ──────────
-  // Helper: find entrance clusters for a room (groups of adjacent boundary
-  // tiles on the room wall line). Returns array of arrays.
   /**
    * @param {any} room
    * @returns {{x:number,y:number}[][]}
@@ -467,7 +424,7 @@ function generateFloor(floorNum, opts) {
     for (const room of rooms) {
       const gates = dungeonTopology.findRoomBoundaryGates(map, room, isDoorLikeEntranceTile);
       for (const gate of gates) {
-        // The engine helper includes room corners; legacy normalization only moved flat edge entrances.
+        // The engine helper includes room corners; this pass only moves flat edge entrances.
         if (dungeonTopology.roomHasCorner(room, gate.x, gate.y)) continue;
         normalizeBoundaryEntrance(room, gate.x, gate.y, moved);
       }
@@ -845,7 +802,7 @@ function generateFloor(floorNum, opts) {
 
   /** @param {any} t */
   function keyPlacementOpenTile(t) {
-    // Key-placement reach keeps cracked walls blocked; crates remain open as in the legacy BFS.
+    // Cracked walls stay blocked for key placement; crates stay open.
     return Number.isFinite(t) && t !== T.WALL && t !== T.VOID && t !== T.CRACKED && !lockColourForTile(t);
   }
 
@@ -959,8 +916,7 @@ function generateFloor(floorNum, opts) {
       isDoorLikeEntranceTile,
       tileInsideAnyRoom,
       (/** @type {number} */ x, /** @type {number} */ y) => {
-        // Before normalizeEntranceTilesOutsideRooms(), normal/locked doors still
-        // occupy the room boundary. Only clear already-relocated outside tiles.
+        // Before normalizeEntranceTilesOutsideRooms(), doors still sit on the room boundary. Only clear tiles already moved outside.
         if (tileOnRoomCorner(x, y) || !hasAlignedOutsideEntrancePassage(x, y)) map[y][x] = T.FLOOR;
       }
     );
@@ -1036,7 +992,6 @@ function generateFloor(floorNum, opts) {
   for (const r of rooms) {
     if (r === bossRoom) continue;
     const clusters = getEntranceClusters(r);
-    // Single room-boundary entrance tiles become optional doors.
     for (const cl of clusters) {
       if (cl.length === 1 && rand('world') < 0.5) {
         for (const e of cl) map[e.y][e.x] = T.DOOR;
@@ -1044,14 +999,10 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Locked doors + keys (floor 2+) ──────────────────────────────────────
-  // Lock meaningful targets: stair room first, then special rooms, then random.
-  // All narrow entrance clusters of the target room are locked so the room
-  // is truly gated (no walking around a single locked tile).
+  // Lock every narrow entrance, not one tile, or the room can be walked around.
   /** @type {{x:number,y:number,colour:string,tileColour:string}[]} */
   const keyItems = [];
   if (floorNum >= 2) {
-    // Build priority list: stair room > special rooms > eligible randoms
     const lockPriority = [];
     if (farthest !== spawnRoom && farthest !== bossRoom && farthest.roomType !== 'mainframe') lockPriority.push(farthest);
     for (const r of specialRooms) {
@@ -1072,13 +1023,10 @@ function generateFloor(floorNum, opts) {
     for (const lr of lockPriority) {
       if (placed >= numLocked) break;
       const ci = Math.min(placed, 2);
-      // Entrance clusters were already narrowed to one room-boundary tile;
-      // lock every current entrance so the room cannot be bypassed.
       const cls = getEntranceClusters(lr);
       const narrowClusters = cls.filter(cl => cl.length <= 2);
-      if (!narrowClusters.length) continue; // can't meaningfully gate this room
+      if (!narrowClusters.length) continue;
 
-      // Convert every tile in every entrance cluster to a locked door.
       const lockedTiles = [];
       for (const cl of narrowClusters) {
         for (const e of cl) {
@@ -1110,9 +1058,7 @@ function generateFloor(floorNum, opts) {
       const preferredKeyRooms = keyEligible.filter((/** @type {any} */ r) =>
         r !== farthest && r.roomType !== 'vendor'
       );
-      // Find a reachable, already-explorable room to place the key. Never put
-      // progression keys in the spawn room: that creates "locked start room"
-      // layouts that are technically solvable but read as broken generation.
+      // Never put a progression key in the spawn room; a locked start reads as broken generation.
       const keyRoom = preferredKeyRooms.length ? preferredKeyRooms : keyEligible;
       if (keyRoom.length) {
         const kr = keyRoom[rndInt(0, keyRoom.length-1)];
@@ -1131,41 +1077,30 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Secret room (every floor, one per floor) ─────────────────────────────
   /** @type {any[]} */ const secretRooms = [];
   /** @type {any[]} */ const whisperItems = [];
   {
-    // Candidates: not spawn, not stair, not boss, not already special, decent size
     const secretEligible = rooms.filter((/** @type {any} */ r) =>
       r !== spawnRoom && r !== farthest && r !== bossRoom && !r.roomType && r.w * r.h >= 20
     );
-    // Shuffle and try to find one with a normalized single-tile entrance.
     const shuffled = shuffleInPlace(secretEligible.slice(), 'world');
     for (const r of shuffled) {
       const cls = getEntranceClusters(r);
       const narrow = cls.filter(cl => cl.length <= 2);
-      if (!narrow.length) continue; // no entrance to convert into a cracked wall
+      if (!narrow.length) continue;
 
       r.roomType = 'secret';
       r.secretRevealed = false;
       specialRooms.push(r);
       secretRooms.push(r);
 
-      // Wall off ALL entrances
       for (const cl of cls) {
         for (const e of cl) map[e.y][e.x] = T.WALL;
       }
-      // Place T.CRACKED at one narrow cluster (the "hidden entrance")
       const crackedCluster = /** @type {any} */ (narrow[rndInt(0, narrow.length - 1)]);
       for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
 
-      // Whispers subplot — narrative fragments found in secret rooms.
-      // Try to spawn one whisper item at the secret room's center. NEON.whispers
-      // returns null if no eligible unread whisper for this floor's biome, in
-      // which case the secret room still rewards the player with normal loot
-      // (the per-room loot pass at render.js handles that). Try/catch keeps
-      // gen resilient if the meta module isn't loaded yet (e.g. early Node
-      // tests of generateFloor).
+      // pickWhisperForFloor returns null when this biome has no unread whisper. Catch a missing meta module so Node tests of generateFloor still run.
       try {
         if (typeof NEON !== 'undefined' && NEON.whispers && NEON.whispers.pickWhisperForFloor) {
           const w = NEON.whispers.pickWhisperForFloor(floorNum, () => rand('event'));
@@ -1179,7 +1114,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Challenge Room (floor 2+, non-boss): optional wave-based arena ─────
   /** @type {any} */ let challengeRoom = null;
   /** @type {any[]} */ const challengeEntrances = [];
   if (floorNum >= 2 && !bossRoom) {
@@ -1190,13 +1124,12 @@ function generateFloor(floorNum, opts) {
     const shuffledCh = shuffleInPlace(challengeEligible.slice(), 'world');
     for (const r of shuffledCh) {
       const cls = getEntranceClusters(r);
-      // Only pick rooms where ALL entrance clusters are narrow (≤2 tiles)
+      // A wide entrance cannot be sealed by a gate.
       if (cls.length === 0) continue;
       if (cls.some(cl => cl.length > 2)) continue;
       r.roomType = 'challenge';
       challengeRoom = r;
       specialRooms.push(r);
-      // Replace entrance tiles with challenge gates
       for (const cl of cls) {
         for (const e of cl) {
           map[e.y][e.x] = T.CHALLENGE_GATE;
@@ -1207,7 +1140,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Implant Room (floor 2+, non-boss, ~50% chance): augment shrine ─────
   /** @type {any} */ let implantRoom = null;
   if (floorNum >= 2 && !bossRoom && rand('world') < 0.5) {
     const implantEligible = rooms.filter((/** @type {any} */ r) =>
@@ -1222,13 +1154,7 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Evaluation trial room (floor 2+, non-boss): logic / exploit / co-op ─
-  // Real in-world mechanics for the brief's "logic puzzles, problem solving,
-  // cooperation, and even exploitation" (src/content/trials.js). The room is
-  // reserved here so later hazard/lore/pad passes skip it; tiles are stamped
-  // after the reachability repairs. A trial replaces that floor's event
-  // terminal; if no room fits, the event terminal (and its story protocol
-  // choice) is placed as before.
+  // Reserved now so later hazard, lore, and pad passes skip it. Tiles are stamped after reachability repairs. A trial replaces this floor's event terminal.
   /** @type {any} */ let trialRoom = null;
   const _trials = (typeof NEON !== 'undefined' && NEON.trials) ? NEON.trials : null;
   const trialKind = (_trials && !bossRoom)
@@ -1250,7 +1176,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Event Room (floor 2+, non-boss): risk/reward encounter terminal ───
   /** @type {any} */ let eventRoom = null;
   if (floorNum >= 2 && !bossRoom && !trialRoom) {
     const eventEligible = rooms.filter((/** @type {any} */ r) =>
@@ -1266,13 +1191,8 @@ function generateFloor(floorNum, opts) {
   }
 
   collapseAdjacentEntranceTiles();
-  // ── Prune dead-end corridor tiles ─────────────────────────────────────
-  // After secret rooms, locked doors, and challenge rooms wall off entrances,
-  // some corridor segments become dead ends (floor tile with only 1 passable
-  // neighbour that isn't inside any room). Iteratively fill them so players
-  // never walk down a tunnel to nowhere.
+  // Walling entrances leaves corridor dead-ends. Fill those so they are not walkable tunnels to nowhere.
   {
-    // Build room membership lookup
     const inRoom = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, rooms);
     const connects = (/** @type {any} */ t) => t !== T.WALL && t !== T.VOID; // doors/locks/cracked all count
     dungeonTopology.pruneDeadEndGridTiles({
@@ -1288,64 +1208,22 @@ function generateFloor(floorNum, opts) {
   repairMisalignedOutsideEntrancePassages();
   clearOrphanEntranceTiles();
 
-  // ── All-rooms reachability gate (key-cascade BFS) ──────────────────────
-  // Goal: from spawn, the player must be able to reach EVERY room — not just
-  // the stairs. Special rooms (vendor / lore / event terminal / shrine /
-  // challenge) host gameplay-critical interactions; if any becomes unreachable
-  // due to lock placement + later passes (secret rooms, dead-end pruning), the
-  // floor feels broken even when technically completable.
-  //
-  // User reports on floor 3 (twice on 2026-04-25 / 6bc2e985):
-  //   "spawned into a room with the exit and a red key door, but no red key,
-  //    so I can't explore the floor or fight the miniboss"
-  //
-  // The previous fix only checked KEY-item reachability and missed the case
-  // where a key is reachable but the rooms it would unlock are still gated
-  // behind ANOTHER unreachable lock (multi-color cascades) or the key is
-  // simply absent for a placed lock (lockPriority/keyRoom empty edge cases).
-  //
-  // Algorithm:
-  //   1. BFS from spawn through `passable` tiles + locks of any colour for
-  //      which a reachable key exists. Iterate until fixed point (each pass
-  //      may discover new keys, which open new locks, exposing more keys).
-  //   2. If any room has zero reachable tiles after fixed point, downgrade
-  //      every locked door whose colour the player COULDN'T pick up. The
-  //      floor loses some gating gameplay but every room becomes reachable.
-  //   3. If rooms are still unreachable (e.g. structurally walled by gen),
-  //      the rescue-corridor pass below carves spawn→stairs as a last resort.
-  //
-  // Tile vocabulary kept in sync with src/platform.js isPassable() so this
-  // gen-time reachability matches what the player actually experiences. The
-  // notable additions over the prior fix are T.PLASMA, T.ARC (walkable
-  // hazards — runtime isPassable allows them, the prior gen-time check did
-  // not) and T.CRACKED (interact-breakable per game.js:663,1691 — secret
-  // rooms ARE reachable to the player without keys/upgrades, so they should
-  // count as reachable here too). T.DOOR (closed) stays passable because the
-  // player can open closed doors via interact; that diverges from runtime
-  // isPassable but is intentional (matches dungeon-gen connectivity intent).
+  // Every room must be reachable from spawn, not only the stairs. A key behind another lock, or a lock with no key, still counts as blocked until that colour is collected.
+  // Passability must match src/platform.js isPassable, including walkable T.PLASMA and T.ARC. T.CRACKED counts (interact-breakable, no key). Closed T.DOOR counts here even though runtime isPassable does not, because the player can open it.
   {
     const solvedReach = solveProgressionReachability(rooms);
     const computeReach = solvedReach.computeReach;
     /** @type {any} */ let reach = solvedReach.reachable;
-    // After fixed point, `reach` reflects max possible exploration with all
-    // collectible keys. Check every room for at least one reachable tile.
     /** @param {{x:number,y:number,w:number,h:number,cx:number,cy:number}} room */
     const roomTouchesReach = (room) => dungeonReachability.roomTouchesReach(room, reach);
     const unreachableWithKeys = solvedReach.unreachableRooms;
     if (unreachableWithKeys.length > 0) {
-      // Downgrade every locked door whose colour the player couldn't pick up.
-      // This includes colours with no key item placed at all (the
-      // lockPriority/keyRoom empty-fallback edge case in the lock-placement
-      // loop above).
+      // Includes colours that never received a key item.
       replaceLockTilesForColours(solvedReach.missingColours, T.FLOOR);
-      // After downgrading, recompute reach (no longer gated by missing keys).
       reach = computeReach(new Set(['red', 'blue', 'gold']));
     }
 
-    // Final repair pass: validate with ALL locks open using the same 4-way
-    // movement the player has. If a gated room is unreachable, carve to the
-    // OUTSIDE face of its gate so the lock still matters; only ungated rooms
-    // get a direct rescue corridor to their centre.
+    // All locks open, 4-way like the player. Carve to the outside face of a gate so the lock still matters; ungated rooms get a corridor to their centre.
     for (let repair = 0; repair < rooms.length; repair++) {
       reach = computeReach(new Set(['red', 'blue', 'gold']));
       const blocked = rooms.find((/** @type {any} */ r) => !roomTouchesReach(r));
@@ -1365,16 +1243,11 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Reachability guarantee: spawn → stairs must always be connected ────
-  // BFS from spawn across all non-wall/void tiles (doors + locked doors
-  // count as passable since the player will acquire keys). If stairs are
-  // unreachable, carve a rescue corridor. Structured as a reusable helper
-  // so it can later double as a player power-up (path visualisation).
+  // Doors and locks count as passable here because the player will get the keys. Stairs must still connect.
   {
     const sx = spawnRoom.cx, sy = spawnRoom.cy;
     const stairTile = floorNum >= _finalFloor ? T.TERMINAL : T.STAIRS;
     let stairX = -1, stairY = -1;
-    // Find stairs position
     for (let y = 0; y < MAP_H; y++)
       for (let x = 0; x < MAP_W; x++)
         if (map[y][x] === stairTile) { stairX = x; stairY = y; }
@@ -1386,7 +1259,7 @@ function generateFloor(floorNum, opts) {
       (/** @type {number} */ t) => t !== T.WALL && t !== T.VOID
     );
     if (!stairsReachable) {
-      // Stairs unreachable — carve rescue corridor, only overwriting WALL/VOID
+      // Only overwrite WALL/VOID so a rescue does not erase doors or keys.
       let cx = sx, cy = sy;
       while (cx !== stairX) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cx += cx < stairX ? 1 : -1; }
       while (cy !== stairY) { if (map[cy][cx] === T.WALL || map[cy][cx] === T.VOID) map[cy][cx] = T.FLOOR; cy += cy < stairY ? 1 : -1; }
@@ -1457,27 +1330,16 @@ function generateFloor(floorNum, opts) {
     challengeEntrances.splice(i, 1);
   }
 
-  // ── Traps (floor 3+) ────────────────────────────────────────────────────
   if (floorNum >= 3) {
     for (const r of rooms) {
-      // Skip spawn (player needs safe arrival), boss (boss room is its own
-      // hazard), and special rooms — secret rooms in particular, because the
-      // whisper item spawns at the room center (see secret-room placement
-      // above) and a trap landing on that exact tile would visually replace
-      // the whisper. Special rooms (vendor/lore/event/shrine/challenge) host
-      // gameplay-critical interactions that traps would clutter.
+      // Skip spawn, boss, and special rooms. A trap on a secret-room center would cover the whisper item.
       if (r === spawnRoom || r === bossRoom || r.roomType) continue;
       const trapCount = rndInt(0, Math.min(3, Math.floor(floorNum/3)));
       for (let t=0; t<trapCount; t++) {
         const tx = r.x + rndInt(1, r.w-2);
         const ty = r.y + rndInt(1, r.h-2);
         if (map[ty][tx] === T.FLOOR) {
-          // Trap mix: 55% spike (damage), 22% slow (impede), 13% shock
-          // (movement-suppress), 10% repulsor (positional knockback).
-          // Status hazards (shock, repulsor) stay rare because they commit
-          // the player in place / displace them — over-spawning trivialises
-          // rooms. Repulsor is the rarest because adjacent repulsors can
-          // chain a forced detour that's hard to plan around.
+          // Shock and repulsor stay rare: they pin or chain-displace the player. Adjacent repulsors are hard to plan around.
           const roll = rand('world');
           map[ty][tx] = roll < 0.55 ? T.TRAP_SPIKE
                       : roll < 0.77 ? T.TRAP_SLOW
@@ -1488,11 +1350,10 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Toxic Pools (floor 3+): corrosive pools that damage player AND enemies ──
   if (floorNum >= 3) {
     for (const r of rooms) {
       if (r === spawnRoom || r === bossRoom || r.roomType) continue;
-      if (rand('world') > 0.30) continue; // ~30% of eligible rooms
+      if (rand('world') > 0.30) continue;
       const sx = r.x + rndInt(2, r.w-3);
       const sy = r.y + rndInt(2, r.h-3);
       if (map[sy][sx] !== T.FLOOR) continue;
@@ -1511,17 +1372,14 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Plasma Vents (floor 4+): clustered pools in normal rooms ─────────
   if (floorNum >= 4) {
     for (const r of rooms) {
       if (r === spawnRoom || r === bossRoom || r.roomType) continue;
-      if (rand('world') > 0.35) continue; // ~35% of eligible rooms
-      // Seed tile for the pool
+      if (rand('world') > 0.35) continue;
       const sx = r.x + rndInt(2, r.w-3);
       const sy = r.y + rndInt(2, r.h-3);
       if (map[sy][sx] !== T.FLOOR) continue;
       map[sy][sx] = T.PLASMA;
-      // Grow pool via random-walk from seed (2-4 total tiles)
       const poolSize = rndInt(2, 4);
       let cx = sx, cy = sy;
       for (let p = 1; p < poolSize; p++) {
@@ -1536,7 +1394,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Lore Terminals (floor 1+, non-boss): guaranteed opening frame + floor-scaled extras ────
   /** @type {{x:number,y:number}[]} */
   const loreTerminals = [];
   /** @param {any} r */
@@ -1576,16 +1433,12 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Arc Grids (floor 5+): pulsing hazards in corridors ───────────────
   if (floorNum >= 5) {
-    // Build room mask to identify corridor tiles
     const roomMask = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, rooms);
-    // Collect corridor floor tiles (not adjacent to doors/stairs/terminals)
     const corridorTiles = [];
     for (let ty = 1; ty < MAP_H-1; ty++) {
       for (let tx = 1; tx < MAP_W-1; tx++) {
         if (map[ty][tx] !== T.FLOOR || roomMask[ty][tx]) continue;
-        // Skip if adjacent to door, stairs, terminal, or locked door
         let nearSpecial = false;
         for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
           const nt = map[ty+ddy]?.[tx+ddx];
@@ -1594,13 +1447,11 @@ function generateFloor(floorNum, opts) {
         if (!nearSpecial) corridorTiles.push({x:tx, y:ty});
       }
     }
-    // Place arc grids: ~1 per 12 corridor tiles, capped
     const arcCount = Math.min(Math.floor(corridorTiles.length / 12) + 1, 6 + floorNum);
     const shuffled = shuffleInPlace(corridorTiles.slice(), 'world');
     let placed = 0;
     for (const ct of shuffled) {
       if (placed >= arcCount) break;
-      // Don't place adjacent to another arc
       let adjArc = false;
       for (const [ddx, ddy] of /** @type {[number,number][]} */ ([[0,1],[0,-1],[1,0],[-1,0]])) {
         if (map[ct.y+ddy]?.[ct.x+ddx] === T.ARC) { adjArc = true; break; }
@@ -1611,7 +1462,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // ── Teleport Pads (floor 3+, non-boss): linked pairs for fast travel ───
   const teleportPads = [];
   if (floorNum >= 3 && !bossRoom) {
     const padEligible = rooms.filter((/** @type {any} */ r) =>
@@ -1619,7 +1469,6 @@ function generateFloor(floorNum, opts) {
       !specialRooms.includes(r) && r.w * r.h >= 16 &&
       map[r.cy][r.cx] === T.FLOOR
     );
-    // Want pairs of rooms far apart — sort by BFS distance from spawn and pair extremes
     const pairCount = floorNum >= 6 ? 2 : 1;
     const shuffled = shuffleInPlace(padEligible.slice(), 'world');
     const used = new Set();
@@ -1659,7 +1508,6 @@ function generateFloor(floorNum, opts) {
     }
   }
 
-  // Room colour map (floor tile → tint)
   /** @type {any} */ const roomColour = Array.from({length:MAP_H},()=>new Array(MAP_W).fill(null));
   for (const r of rooms) {
     if (!r.roomType) continue;
@@ -1669,8 +1517,7 @@ function generateFloor(floorNum, opts) {
         if (map[ty][tx]===T.FLOOR) roomColour[ty][tx]=col;
   }
 
-  // Secret room mask — tiles inside unrevealed secret rooms are hidden from lighting/rendering
-  // Cracked entrance tiles are excluded so they can receive light and render crack visuals
+  // Unrevealed secret tiles are hidden from lighting. Cracked entrances stay visible so the crack can render.
   const secretMask = dungeonTopology.createRoomMembershipGrid(MAP_W, MAP_H, secretRooms);
   for (let ty = 0; ty < MAP_H; ty++) {
     const maskRow = secretMask[ty];

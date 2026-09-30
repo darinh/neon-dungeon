@@ -1,59 +1,9 @@
 // @ts-check
 'use strict';
-// engine/particles.js — pooled particle system: pool + physics integration.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. Owns the data structure (a
-// capped object pool with compact-in-place reclamation) and the per-frame
-// physics step (Euler integration of velocity + gravity + lifetime decay).
-// Knows NOTHING about particle "types" (EXPLOSION/SPARK/BLOOD/etc),
-// colours, draw style, tile sizes, or the canvas. Those are gameplay
-// vocabulary and stay in the host's content layer.
-//
-// Surface (factory):
-//   createSystem({ cap?, burstScaleThreshold? })
-//     → system. `cap` is the hard ceiling on TOTAL allocated slots
-//       (alive + pooled). `burstScaleThreshold` is the alive-count above
-//       which `scaleBurst()` halves new burst sizes to protect the frame
-//       budget. Both have sensible defaults.
-//
-// System surface:
-//   acquire()         → a fresh-or-recycled particle slot, or null if the
-//                       pool is empty and `cap` is reached. Caller is
-//                       responsible for filling EVERY field — slots may
-//                       carry stale data from a previous life.
-//   release(p)        → manually return a slot to the free pool. Normally
-//                       not needed: `update()` reclaims dead slots
-//                       automatically. Useful for synchronous purges.
-//   update(dt)        → integrates each alive particle:
-//                         x  += vx*dt
-//                         y  += vy*dt
-//                         vy += grav*dt
-//                         life -= dt / maxLife
-//                       Then compacts in-place and releases dead slots
-//                       (life <= 0) back to the pool. O(n) over alive
-//                       count, zero allocation in the steady state.
-//   forEach(cb)       → iterates alive particles by index, lowest overhead.
-//                       cb receives (particle, index).
-//   clear()           → release every alive particle back to the pool.
-//   scaleBurst(n)     → returns `max(1, n*0.5 | 0)` when alive count
-//                       exceeds `burstScaleThreshold`, else `n` unchanged.
-//                       Pure helper for callers building burst spawns.
-//   count             → live particle count (getter).
-//   pooled            → free-pool size (getter, mostly for tests).
-//   capacity          → the hard cap (getter).
-//
-// Particle shape (engine-relevant fields only):
-//   { x, y, vx, vy, life, maxLife, grav, alive }
-// Plus carrier fields that engine ignores but preserves through the pool:
-//   { size, colour, type }
-// Hosts may attach more fields at will; the engine never reads them.
-//
-// Hot-path safe: zero allocation per update tick once the pool has warmed
-// up. The compact-in-place pattern ensures `splice()` never runs in the
-// per-frame path (per the `render hot path` memory).
-//
-// Browser: attaches as `window.NEON.particles` with `{ createSystem }`.
-// Node: module.exports = { createSystem } (for tests).
+// No gameplay nouns: particle types, colours, draw style, and tile size stay in the host.
+// acquire() may return a recycled slot with stale fields; the caller must fill every field.
+// update() compacts in place and does not allocate once the pool is warm (no splice on the hot path).
+// cap counts alive + pooled slots. scaleBurst halves new bursts above burstScaleThreshold to protect the frame.
 
 (function (root, factory) {
   const v = factory();
@@ -109,7 +59,6 @@
         alive.push(recycled);
         return recycled;
       }
-      // Pool empty — check cap before allocating new.
       if (alive.length >= cap) return null;
       const p = _newSlot();
       alive.push(p);

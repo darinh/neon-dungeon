@@ -1,7 +1,6 @@
 'use strict';
 // @ts-check
 
-// ─── DISRUPTOR AI — Field-Control Skirmisher ────────────────────────────
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -11,7 +10,6 @@
  * @returns {void}
  */
 Enemy.prototype.aiDisruptor = function aiDisruptor(dt, player, map, d, los) {
-  // Prune dead field refs
   this._dFields = this._dFields.filter((/** @type {any} */ f) => f && !f.dead);
   this._dDeployTimer = Math.max(0, this._dDeployTimer - dt);
   this._dFireTimer = Math.max(0, this._dFireTimer - dt);
@@ -19,7 +17,6 @@ Enemy.prototype.aiDisruptor = function aiDisruptor(dt, player, map, d, los) {
   const spd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
 
   if (los && d < 4) {
-    // Too close — retreat
     const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
     const nx = this.x + dx * spd * dt;
     const ny = this.y + dy * spd * dt;
@@ -31,15 +28,13 @@ Enemy.prototype.aiDisruptor = function aiDisruptor(dt, player, map, d, los) {
     if (!moved) this.patrol(dt, map);
   } else if (los && d <= 10) {
     this.state = 'ATTACK';
-    // Deploy disruption field (priority over shooting)
+    // Field before shot: the else-if below must not fire in the same frame as a deploy.
     if (this._dDeployTimer <= 0 && this._canTarget() && d > 2) {
-      // Place field near player with small offset, validated to passable tile
       const ox = (rand('combat') - 0.5) * 1.5;
       const oy = (rand('combat') - 0.5) * 1.5;
       const fx = this._tx + ox, fy = this._ty + oy;
       const tx = Math.floor(fx), ty = Math.floor(fy);
       if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && isPassable(map[ty][tx])) {
-        // If at cap, remove oldest
         if (this._dFields.length >= 2) {
           this._dFields[0].dead = true;
           this._dFields.shift();
@@ -52,7 +47,6 @@ Enemy.prototype.aiDisruptor = function aiDisruptor(dt, player, map, d, los) {
         this._dDeployTimer = 4.0 / bm;
       }
     }
-    // Secondary ranged attack
     else if (this._dFireTimer <= 0 && this._canTarget()) {
       this.fireAt(this._tx, this._ty, 7, this.atk, 12, this.colour);
       this._dFireTimer = 2.5 / bm;

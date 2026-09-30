@@ -1,17 +1,8 @@
 // @ts-check
 'use strict';
 
-// Pooled projectile runtime and grenade hazard-zone helpers. Loaded before
-// src/content.js so content, entity, render, and game coordinators keep sharing
-// the same script-tag globals while projectile behavior lives in its own module.
-
-// ─── Projectiles (pooled) ────────────────────────────────────────────────────
-// projectiles[] holds live projectiles only. _projPool is the free list of
-// dead Projectile instances. `new Projectile(...)` returns a pooled instance
-// if one is free (constructors may return an object), else allocates a fresh
-// one. Every field — required AND optional — is explicitly (re)assigned in
-// _init() so there is zero stale bleed-through between reuses. Release
-// happens in the main update loop when p.dead becomes true.
+// Loaded before src/content.js so coordinators keep these script-tag globals.
+// projectiles[] is live only; _projPool is the free list. new Projectile returns a pooled object instead of this. _init must assign every field so a reuse cannot bleed.
 const PROJECTILE_CAP = 200;
 /** @type {any[]} */ const projectiles = [];
 /** @type {any[]} */ const _projPool = [];
@@ -20,10 +11,8 @@ const PROJECTILE_CAP = 200;
  * @param {any} p
  */
 function releaseProjectile(p) {
-  if (_projPool.length >= PROJECTILE_CAP) return; // hard cap
-  // Best-effort cleanup of references that could hold onto dead enemies/
-  // weapons longer than needed. _init() rewrites these on reuse anyway, but
-  // nulling here keeps the free-list from pinning garbage.
+  if (_projPool.length >= PROJECTILE_CAP) return;
+  // Null owner and weapon refs so the free list does not pin them until reuse.
   p.homing = null;
   p._owner = null;
   if (p.hitEnemies) p.hitEnemies.clear();
@@ -81,9 +70,7 @@ class Projectile {
    * @param {any} [weaponName]
    */
   constructor(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
-    // Reuse a dead slot from the pool when possible. Returning an object from
-    // a constructor makes `new Projectile(...)` yield that object instead of
-    // `this`, so every existing callsite keeps working without change.
+    // Returning an object from a constructor makes `new` yield that object, not `this`.
     if (_projPool.length) {
       const p = _projPool.pop();
       p._init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName);
@@ -105,7 +92,6 @@ class Projectile {
    * @param {any} [weaponName]
    */
   _init(x,y,dx,dy,spd,dmg,range,colour,piercing,fromPlayer,weaponName) {
-    // ── Core motion/state (mirrors original constructor) ──
     /** @type {any} */ (this).x=x; /** @type {any} */ (this).y=y;
     [this.dx,this.dy]=norm(dx,dy);
     this.spd= fromPlayer && hasAugment('KINETIC_AMPLIFIER') ? spd * 1.2 : spd;
@@ -126,9 +112,7 @@ class Projectile {
     this._hasRicochet=false;
     if (this.trail) this.trail.length = 0;
     else this.trail = /** @type {any[]} */ ([]);
-    // ── Optional fields — EXPLICITLY reset so stale values from a prior
-    // occupant of this slot cannot leak into new behaviour. Every property
-    // that any callsite ever assigns must be zeroed here. ──
+    // Every optional field must be reset; a prior occupant can leak into the next shot.
     this.homing = /** @type {any} */ (null);
     this.isGrenade = false;
     this.grenadeDmg = 0;
@@ -141,10 +125,7 @@ class Projectile {
     this._isReverbEcho = false;
     this._owner = /** @type {any} */ (null);
     this.isCrit = false;
-    // Pool-reset: a recycled projectile slot must NOT inherit a
-    // _timeMul=0.5 from a prior occupant that died inside a
-    // TIME_DILATION zone. Without this reset, the next shot fired
-    // from the same slot would crawl at half speed.
+    // A slot that died inside TIME_DILATION would otherwise keep _timeMul 0.5 and crawl.
     this._timeMul = 1;
     if (this._affixes && this._affixes.length) this._affixes.length = 0;
     else if (!this._affixes) this._affixes = /** @type {any[]} */ ([]);
@@ -156,7 +137,6 @@ class Projectile {
    * @param {any} enemies
    */
   update(dt, map, player, enemies) {
-    // Homing: steer toward target
     if (this.homing && !this.homing.dead) {
       const [tx, ty] = [this.homing.x - this.x, this.homing.y - this.y];
       const [nd, ndy] = norm(tx, ty);
@@ -166,22 +146,14 @@ class Projectile {
       const [fd, fdy] = norm(this.dx, this.dy);
       this.dx = fd; this.dy = fdy;
     }
-    // Trail: record position before moving (ricochet projectiles only)
+    // Record before the move so the trail lags the projectile.
     if (this._hasRicochet) {
       this.trail.push(this.x*TILE, this.y*TILE);
       if (this.trail.length>24) this.trail.splice(0,2); // max 12 points (x,y pairs)
     }
           /** @type {any} */ const prevX=this.x;
           /** @type {any} */ const prevY=this.y;
-    // TIME_DILATION temporal field (content.js time_field branch in
-    // updateHackwareEffects) sets this._timeMul to 0.5 each frame
-    // for enemy projectiles inside the radius, and back to 1 when
-    // outside. The expiry branch + the activation dedup both restore
-    // any leftover slowed projectiles. Default to 1 so projectiles
-    // never touched by a field move at full speed. Multiply BOTH the
-    // x/y delta AND the travelled accumulator so range budget ticks
-    // at the same slowed rate (otherwise a slowed projectile would
-    // exhaust its maxRange before traversing the slowed distance).
+    // updateHackwareEffects writes _timeMul. Scale position and travelled together or range expires before the slowed distance.
     const tmul = this._timeMul || 1;
     const mx=this.dx*this.spd*tmul*dt, my=this.dy*this.spd*tmul*dt;
     this.x+=mx; this.y+=my;
@@ -288,18 +260,15 @@ class Projectile {
       this.dead=true; return;
     }
     if (!isPassable(map[ty][tx])) {
-      // Damage crates on impact
       if (map[ty][tx] === T.CRATE) damageCrateAtTile(tx, ty, this.dmg);
-      // Grenades detonate at last passable position on wall hit
       if (this.isGrenade) {
         detonateGrenade(prevX, prevY, this.grenadeDmg);
         this.dead = true; return;
       }
-      // Ricochet: bounce off walls if bounces remain
       if (this.bouncesLeft>0) {
         this.bouncesLeft--;
         this.x=prevX; this.y=prevY;
-        // Axis-separated wall detection
+        // Test each axis on the other axis's previous tile so a corner flips both.
         const ntx=Math.floor(prevX+mx), nty=Math.floor(prevY+my);
         const xWall=ntx<0||ntx>=MAP_W||!isPassable(map[pty][ntx]);
         const yWall=nty<0||nty>=MAP_H||!isPassable(map[nty][ptx]);
@@ -315,7 +284,6 @@ class Projectile {
       spawnParticles(this.x,this.y,'SPARK',this.colour,3);
       this.dead=true; return;
     }
-    // Grenades: detonate when reaching target
     if (this.isGrenade && dist(this.x, this.y, this.targetX, this.targetY) < 0.5) {
       detonateGrenade(this.x, this.y, this.grenadeDmg);
       this.dead = true; return;
@@ -325,7 +293,7 @@ class Projectile {
         if (e.dead||this.hitEnemies.has(e)) continue;
         if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x,this.y,e.x,e.y)<0.6) {
-          // Reflection check — REFLECTOR bounces projectiles back (including piercing)
+          // REFLECTOR bounces even piercing shots.
           if (e.reflectsProjectile(this)) {
             this.dx = -this.dx;
             this.dy = -this.dy;
@@ -345,11 +313,8 @@ class Projectile {
             audio.reflect();
             return;
           }
-          // Shield deflection check (skip for piercing weapons)
           if (e.blocksProjectile(this) && !this.piercing) {
-            // SHIELDER directional shield: deplete shieldHp and start the
-            // broken-recovery timer when it drops to 0. The shield comes
-            // back over a 5s window per the aiShielder tick logic.
+            // SHIELDER: deplete shieldHp and start shieldBrokenTimer at 0. aiShielder restores it after 5s.
             if (e.type === 'SHIELDER' && e.shieldHp > 0) {
               e.shieldHp -= this.dmg;
               if (e.shieldHp <= 0) {
@@ -375,12 +340,8 @@ class Projectile {
         }
       }
     } else if (!this.isGrenade && !this.isAllyTurret) {
-      // Normal enemy projectiles damage player (grenades don't — they create zones)
-      // PARRY perk: while dashing, enemy projectiles touching the player are
-      // reflected back at full damage (skill-tied — requires precise dash timing).
-      // Mirrors the REFLECTOR enemy-side reflect at line ~3418, but enemy→player.
-      // Gated on dashTimer specifically (not cloak / spawn-grace) so the perk
-      // only rewards active dash timing, not passive immunity windows.
+      // Grenades create zones instead of hitting the player here.
+      // PARRY reflects only while dashTimer > 0, not during cloak or spawn-grace.
       if (player.perks.PARRY && player.dashTimer > 0 && dist(this.x,this.y,player.x,player.y)<0.5) {
         this.dx = -this.dx;
         this.dy = -this.dy;
@@ -400,25 +361,19 @@ class Projectile {
         this._affixes = /** @type {any[]} */ ([]);
         this.isCrit = false;
         this.colour = '#aaffee';
-        // TIME_DILATION ownership-flip cleanup — see REVERSE_POLARITY
-        // mirror at ~L1153 for the rationale. A parried bullet that
-        // was slowed by a time_field needs _timeMul snapped back to 1
-        // so the player's reflected shot doesn't crawl at half speed.
+        // A time_field slow must not follow the shot after it becomes the player's.
         this._timeMul = 1;
         spawnParticles(this.x, this.y, 'SPARK', '#aaffee', 8);
         audio.reflect();
         return;
       }
-      // Cloaked player: projectiles pass through
       if (!player.invincibleTimer && !isPlayerDamageImmune() && dist(this.x,this.y,player.x,player.y)<0.5) {
         const dealt = player.takeDamage(this.dmg, this.ownerType || 'Projectile');
-        // SNIPER shots shock the player on hit
         if (dealt > 0 && this.ownerType === 'SNIPER') {
           const wasShocked = player.shockTimer > 0;
           player.shockTimer = Math.max(player.shockTimer, 0.4);
           if (!wasShocked) audio.playerShock();
         }
-        // SIPHON life steal: heal owner for % of damage dealt
         if (dealt > 0 && this.ownerType === 'SIPHON' && this._owner && !this._owner.dead) {
           const stealPct = this._owner._spFrenzy ? 0.75 : 0.50;
           const heal = Math.ceil(dealt * stealPct);
@@ -430,7 +385,6 @@ class Projectile {
         this.dead=true;
       }
     }
-    // Any projectile can prime volatile cores (skip if already consumed)
     if (!this.dead) {
       for (const c of vcores) {
         if (c.dead || c.primed) continue;
@@ -443,7 +397,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles can damage alarm beacons
     if (!this.dead && this.fromPlayer) {
       for (const b of beacons) {
         if (b.dead) continue;
@@ -454,7 +407,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles can damage shield generators
     if (!this.dead && this.fromPlayer) {
       for (const g of shieldGens) {
         if (g.dead) continue;
@@ -465,7 +417,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles can damage security cameras
     if (!this.dead && this.fromPlayer) {
       for (const cam of cameras) {
         if (cam.dead) continue;
@@ -476,7 +427,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles can damage laser tripwire emitters
     if (!this.dead && this.fromPlayer) {
       for (const l of lasers) {
         if (l.dead) continue;
@@ -493,7 +443,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles trigger proximity mines (pre-detonate from range)
     if (!this.dead && this.fromPlayer) {
       for (const m of mines) {
         if (m.dead || m.state !== 'dormant') continue;
@@ -504,7 +453,6 @@ class Projectile {
         }
       }
     }
-    // Player projectiles can damage hostile wall turrets
     if (!this.dead && this.fromPlayer) {
       for (const wt of wallTurrets) {
         if (wt.dead || wt.hacked) continue;
@@ -515,16 +463,13 @@ class Projectile {
         }
       }
     }
-    // Ally turret projectiles can hit enemies
     if (!this.dead && this.isAllyTurret) {
       for (const e of enemies) {
         if (e.dead || this.hitEnemies.has(e)) continue;
         if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x, this.y, e.x, e.y) < 0.6) {
           if (e.blocksProjectile(this) && !this.piercing) {
-            // Mirror the player-projectile path: SHIELDER takes shield damage
-            // and the shield breaks at 0 HP. (Hacked turrets don't get the
-            // satisfaction-of-breaking sound — keep the deflect for them.)
+            // Same shield break as player shots. No shieldBreak sound: hacked turrets keep the quiet deflect.
             if (e.type === 'SHIELDER' && e.shieldHp > 0) {
               e.shieldHp -= this.dmg;
               if (e.shieldHp <= 0) {
@@ -547,7 +492,6 @@ class Projectile {
         }
       }
     }
-    // Enemy projectiles can damage hacked wall turrets
     if (!this.dead && !this.fromPlayer && !this.isAllyTurret && !this.isGrenade) {
       for (const wt of wallTurrets) {
         if (wt.dead || !wt.hacked) continue;
@@ -563,7 +507,6 @@ class Projectile {
    * @param {any} camY
    */
   draw(camX,camY) {
-    // Ricochet trail — fading cyan line behind bouncing projectiles
     const tl=this.trail.length;
     if (tl>=4) {
       ctx.save();
@@ -580,7 +523,6 @@ class Projectile {
           this.trail[a]-camX, this.trail[a+1]-camY,
           this.trail[b]-camX, this.trail[b+1]-camY);
       }
-      // Line from last trail point to current position
       ctx.globalAlpha=0.6;
       ctx.lineWidth=2;
       NEON.draw.line(ctx,
@@ -595,7 +537,6 @@ class Projectile {
     const r = this.isGrenade ? 5 : 3;
     NEON.draw.circle(ctx, sx, sy, r);
     if (this.isGrenade) {
-      // Pulsing warning ring
       ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 80) * 0.3;
       ctx.strokeStyle = '#ffaa00';
       ctx.lineWidth = 1;
@@ -605,7 +546,6 @@ class Projectile {
   }
 }
 
-// ─── Hazard Zones (grenade AoE) ───────────────────────────────────────────────
 /**
  * @param {any} x
  * @param {any} y
@@ -658,7 +598,6 @@ function drawHazardZones(camX, camY) {
     const pulse = 0.7 + Math.sin(z.age * 6) * 0.15;
     ctx.save();
     if (z.armTimer > 0) {
-      // Arming: pulsing warning ring only
       const arm = 0.4 + Math.sin(z.age * 14) * 0.3;
       ctx.globalAlpha = arm * 0.5;
       ctx.strokeStyle = z.colour;

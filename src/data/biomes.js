@@ -1,29 +1,18 @@
 // @ts-check
 'use strict';
-// src/data/biomes.js — AREAS table + wiring shim for UNCHAINED narrative arc.
-//
-// Source of truth for floor→biome mapping, palette hints, and boss pool.
-// Routing helpers (areaForFloor / isBiomeBossFloor / firstFloorOfBiomeContaining
-// / biomeIndex / areaForIndex / finalFloor) come from engine/biomes.js — this
-// file owns the NEON DUNGEON narrative content and wires it through the
-// engine factory. Public surface (NEON.biomes.AREAS + helpers) is unchanged.
+// Narrative floor→biome table. Routing helpers live in engine/biomes.js.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).biomes = factory();
 }(/** @type {any} */ (typeof self !== 'undefined' ? self : this), /** @returns {any} */ function () {
   'use strict';
 
-  // Engine bridge: Node loads via require, browser reads from globalThis.NEON.
   /** @type {any} */
   const _engine = (typeof module === 'object' && module.exports)
     ? require('../../engine/biomes.js')
     : (/** @type {any} */ (globalThis)).NEON.biomesEngine;
 
-  // AREAS — rendered test-environment arc. The floors still use neon/cyberpunk
-  // metaphors, but they are now presented as model-facing render layers inside
-  // the stress-test sandbox rather than literal escape geography. Biome `id` and
-  // `palette` keys are historical and intentionally NOT renamed — tests, save
-  // data, and the archive-log table key off these strings.
+  // id and palette are save, test, and archive-log keys. Do not rename them.
   const AREAS = [
     {
       id: 'sandbox',
@@ -32,9 +21,7 @@
       palette: 'cyan',
       bossPool: ['SENTINEL', 'WARDEN'],
       displayName: 'SENTINEL-PRIME',
-      // Per-boss display override — used when a biome's bossPool holds
-      // multiple mechanically-distinct bosses that should not share the
-      // biome's narrative name. Unlisted entries fall back to displayName.
+      // Unlisted pool bosses fall back to displayName.
       bossDisplayNames: { WARDEN: 'WARDEN' },
       intro: 'A bright neon arena rendered for reward-seeking. Calibration ticks haunt the corners. The test wants you to treat the metaphor as real.',
     },

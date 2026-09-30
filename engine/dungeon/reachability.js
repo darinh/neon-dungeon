@@ -1,9 +1,6 @@
 // @ts-check
 'use strict';
-// engine/dungeon/reachability.js — generic key/lock reachability solver.
-//
-// Engine layer: callers inject tile semantics and game policy. This module
-// reports traversal facts; it does not mutate maps or choose repair strategy.
+// Callers inject tile semantics. Reports facts; does not mutate the map or apply repairs.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;

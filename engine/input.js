@@ -1,37 +1,7 @@
 // @ts-check
 'use strict';
-// engine/input.js — keyboard input tracker (held keys + per-frame edges).
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. Owns the held-keys Set and the
-// per-frame justPressed/justReleased edge Sets. Wires keydown/keyup to
-// `win` (defaults to globalThis) and calls e.preventDefault() on keydown
-// to stop browser default actions (space-scroll, arrow-scroll, slash-quickfind,
-// etc.) for any game that wants the canvas to own the keyboard.
-//
-// Surface (factory):
-//   createEngine({ win, onKeyDown, onKeyUp })
-//     → engine. `win` is optional (defaults to globalThis) and exists so
-//     tests can inject a stub window. `onKeyDown` / `onKeyUp` are optional
-//     host callbacks fired AFTER the engine's internal state is updated —
-//     hosts use them to layer content-specific state (e.g. lastKey for
-//     name-entry text capture) on top of the raw event stream.
-//
-// Engine surface:
-//   keys           → Set<string> of currently-held KeyboardEvent.code values
-//   justPressed    → Set<string> of codes pressed THIS frame (cleared by clearJust)
-//   justReleased   → Set<string> of codes released THIS frame
-//   jp(code)       → boolean shorthand for justPressed.has(code)
-//   clearJust()    → clears justPressed and justReleased (call once per frame
-//                    after consumers have read edges)
-//   attach()       → registers the keydown/keyup listeners on `win` (idempotent)
-//   detach()       → removes them
-//
-// Edge debouncing: keydown fires justPressed only on the FIRST press while a
-// key is held (browser key-repeat is suppressed). keyup always fires
-// justReleased.
-//
-// Browser: attaches as `window.NEON.input` with `{ createEngine }`.
-// Node: module.exports = { createEngine } (for tests).
+// preventDefault stops browser defaults (space-scroll, arrow-scroll, slash-quickfind).
+// justPressed records only the first keydown of a hold; browser key-repeat is suppressed.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {

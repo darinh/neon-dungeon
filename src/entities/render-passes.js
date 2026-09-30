@@ -5,12 +5,7 @@
 // entity constants and collections while publishing the legacy global helpers
 // invoked by game.js.
 
-// REAPER player-ring telegraph render pass. Drawn from game.js BEFORE the
-// player sprite so the ring sits underneath the player. Iterates the global
-// `enemies` list — bypasses the per-enemy FOV/cull in Enemy.draw because
-// the on-player warning must remain visible even when the reaper itself
-// is off-screen (detect range 14 tiles can exceed the vertical half-screen
-// at default zoom, so a marked player could otherwise see no warning).
+// Drawn from game.js before the player sprite. Iterates the global list, not Enemy.draw, so the on-player warning stays visible when the reaper is off-screen.
 /**
  * @param {any} camX
  * @param {any} camY
@@ -51,14 +46,7 @@ function drawReaperPlayerRings(camX, camY) {
   }
 }
 
-// TETHER leash render pass. Drawn from game.js BEFORE the player sprite
-// so the leash sits underneath the player. Iterates global `enemies`
-// — bypasses per-enemy FOV cull (drawn even if TETHER body is offscreen
-// at the edge of FIELD_RANGE, so the source of the slow is always
-// legible). Only renders for live TETHERs whose REAL distance to the
-// player is within TETHER_FIELD_RANGE — matches the slow trigger
-// exactly. Telegraph parity: the visual exists if and only if the slow
-// is being applied, so the player can never wonder "why am I slow".
+// Drawn from game.js before the player sprite, even if the body is off-screen. The leash exists only while the slow is applied.
 /**
  * @param {any} camX
  * @param {any} camY
@@ -74,12 +62,10 @@ function drawTetherLeashes(camX, camY) {
     if (pd >= TETHER_FIELD_RANGE) continue;
     const esx = e.x * TILE - camX;
     const esy = e.y * TILE - camY;
-    // Slow strength normalised 0..1 for visual intensity. At melee
-    // range strength->0 (no leash needed since slow is 0); at field
-    // edge strength->1 (max leash drawn). Mirrors aiTether's lerp.
+    // Matches aiTether's lerp: no slow inside melee range, so no leash.
     let t = (pd - TETHER_MELEE_RANGE) / (TETHER_FIELD_RANGE - TETHER_MELEE_RANGE);
     if (t < 0) t = 0; else if (t > 1) t = 1;
-    if (t <= 0) continue; // factor==1 (pd<=MELEE_RANGE), no slow -> no leash needed
+    if (t <= 0) continue;
     const phase = (e._teLashPhase || 0);
     ctx.save();
     ctx.globalAlpha = 0.30 + 0.30 * t;

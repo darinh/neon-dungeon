@@ -5,12 +5,11 @@
 // collections and publish the legacy globals used by generation, projectiles,
 // explosions, game updates, and rendering.
 
-// ─── Proximity Mines ──────────────────────────────────────────────────────────
-const MINE_TRIGGER_RADIUS = 0.9;  // proximity trigger
-const MINE_REVEAL_RADIUS  = 3.0;  // visible shimmer
+const MINE_TRIGGER_RADIUS = 0.9;
+const MINE_REVEAL_RADIUS  = 3.0;
 const MINE_BLAST_RADIUS   = 2.0;
-const MINE_FUSE_NORMAL    = 0.8;  // walked-into fuse
-const MINE_FUSE_SHOT      = 0.3;  // shot-by-projectile fuse
+const MINE_FUSE_NORMAL    = 0.8;  // walked-into fuse; MINE_FUSE_SHOT is the projectile fuse
+const MINE_FUSE_SHOT      = 0.3;
 
 /**
  * @param {any} [x]
@@ -48,35 +47,24 @@ function detonateMine(m) {
   spawnParticles(m.x, m.y, 'EXPLOSION', '#ffcc44', 8);
   triggerShake(6, 0.2);
   audio.mineExplode();
-  // Damage enemies (LOS-gated)
   for (const e of enemies) {
     if (e.dead) continue;
     if (dist(e.x, e.y, m.x, m.y) < r && hasLOS(m.x, m.y, e.x, e.y, map)) {
       e.takeDamage(m.dmg, 'Proximity Mine');
     }
   }
-  // Damage player (environmental — bypasses defense)
   const p = _EG.player;
   if (dist(p.x, p.y, m.x, m.y) < r && !isPlayerDamageImmune() && hasLOS(m.x, m.y, p.x, p.y, map)) {
     p.takeDamage(m.dmg, 'Proximity Mine', { ignoreDefense: true });
   }
-  // Chain to nearby mines (staggered fuse for cascade effect)
   triggerMinesInRadius(m.x, m.y, r, map);
-  // Chain to volatile cores
   primeVCoresInRadius(m.x, m.y, r, map);
-  // Damage nearby crates
   damageCratesInRadius(m.x, m.y, r, m.dmg, map);
-  // Damage nearby beacons
   damageBeaconsInRadius(m.x, m.y, r, m.dmg, map);
-  // Damage nearby shield generators
   damageShieldGensInRadius(m.x, m.y, r, m.dmg, map);
-  // Damage nearby cameras
   damageCamerasInRadius(m.x, m.y, r, m.dmg, map);
-  // Damage nearby laser tripwire emitters
   damageLasersInRadius(m.x, m.y, r, m.dmg, map);
-  // Damage nearby wall turrets
   damageWallTurretsInRadius(m.x, m.y, r, m.dmg, map);
-  // Remove from array
   const idx = mines.indexOf(m);
   if (idx >= 0) mines.splice(idx, 1);
 }
@@ -108,17 +96,15 @@ function updateMines(dt) {
     if (m.dead) continue;
     m.bob += dt * 2;
 
-    // Reveal when player is nearby (persistent for the floor)
+    // Revealed stays set for the rest of the floor.
     if (!m.revealed && dist(p.x, p.y, m.x, m.y) < MINE_REVEAL_RADIUS) {
       m.revealed = true;
     }
 
     if (m.state === 'dormant') {
-      // Check proximity trigger — player
       if (dist(p.x, p.y, m.x, m.y) < MINE_TRIGGER_RADIUS) {
         armMine(m, MINE_FUSE_NORMAL);
       }
-      // Check proximity trigger — enemies
       if (m.state === 'dormant') {
         for (const e of enemies) {
           if (e.dead) continue;
@@ -151,34 +137,29 @@ function drawMines(camX, camY) {
     ctx.save();
 
     if (m.state === 'armed') {
-      // Armed: rapid red flash + expanding ring
       const flashAlpha = 0.6 + 0.4 * Math.sin(m.flash);
       ctx.globalAlpha = flashAlpha;
       ctx.fillStyle = '#ff2200';
       ctx.shadowBlur = 12;
       ctx.shadowColor = '#ff4400';
       NEON.draw.circle(ctx, sx, sy, 6);
-      // Expanding warning ring
       const ringR = 6 + (1 - m.fuse / MINE_FUSE_NORMAL) * 12;
       ctx.globalAlpha = Math.max(0, flashAlpha * 0.5);
       ctx.strokeStyle = '#ff4400';
       ctx.lineWidth = 1.5;
       NEON.draw.circleStroke(ctx, sx, sy, ringR);
     } else if (m.revealed) {
-      // Revealed: visible orange hazard shimmer
       const pulse = 0.3 + 0.2 * Math.sin(m.bob * 1.5);
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#ff8800';
       ctx.shadowBlur = 6;
       ctx.shadowColor = '#ff6600';
       NEON.draw.circle(ctx, sx, sy, 4);
-      // Small hazard indicator
       ctx.globalAlpha = pulse * 0.5;
       ctx.strokeStyle = '#ff8800';
       ctx.lineWidth = 1;
       NEON.draw.circleStroke(ctx, sx, sy, 7);
     } else {
-      // Dormant: very subtle shimmer (attentive players can spot)
       const pulse = 0.08 + 0.05 * Math.sin(m.bob);
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#ff6600';

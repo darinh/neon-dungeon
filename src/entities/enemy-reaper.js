@@ -1,27 +1,10 @@
 // @ts-check
 'use strict';
 
-// ─── REAPER AI — Aggression-Punishing Chaser ────────────────────────────
-// Floor 7+. Melee chaser whose threat scales with PLAYER aggression
-// (player.killsInCurrentRoom) instead of with floor number. Reward
-// careful pacing, punish spam-clearing.
-//
-// States:
-//   idle:      chase player at base spd; melee on contact (d<1.2). Each
-//              frame, if player is in this REAPER's room AND
-//              killsInCurrentRoom >= REAPER_FRENZY_THRESHOLD AND we
-//              haven't already frenzied this room visit, enter telegraph.
-//   telegraph: _reTele ticks down (REAPER_TELEGRAPH s) ONLY while player
-//              is in our room. Visible red ring drawn ON THE PLAYER.
-//              Chase continues. On 0, enter frenzy and set _reHasFrenzied
-//              so we don't re-trigger this room visit. Stun cancels (see
-//              update() stun branch).
-//   frenzy:    _reFrenzy ticks down (REAPER_FRENZY_DURATION s) ONLY while
-//              player is in our room. Chase speed = base * 1.6.
-//              Stun-immune (handled in update() stun branch).
-//
-// Reset: player room change clears killsInCurrentRoom AND _reHasFrenzied
-// for every REAPER in the new room (handled in game.js updatePlaying).
+// Telegraph and frenzy timers pause while the player is outside this room.
+// Stun cancel and frenzy stun-immunity live in Enemy.update's stun branch.
+// Room change clears killsInCurrentRoom and _reHasFrenzied in game.js updatePlaying.
+// The red telegraph ring is drawn on the player, not on this mob.
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -63,7 +46,6 @@ Enemy.prototype.aiReaper = function aiReaper(dt, player, map, d, los) {
       }
     }
   } else {
-    // idle: arm telegraph if conditions met
     const kills = (player && player.killsInCurrentRoom) || 0;
     if (playerInRoom && !this._reHasFrenzied && kills >= REAPER_FRENZY_THRESHOLD &&
         this._canTarget()) {

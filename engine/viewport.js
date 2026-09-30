@@ -1,45 +1,7 @@
 // @ts-check
 'use strict';
-// engine/viewport.js — pure viewport math + orientation helpers.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. All exports are pure functions
-// over numbers / DOM-ish inputs the caller supplies. This module owns no
-// mutable state — the host (src/platform.js) keeps the W/H/scale/offX/offY/
-// safe-area `let`s and uses these helpers to recompute them on resize.
-//
-// Surface:
-//   isLandscape(win, scr)
-//     → boolean. Prefers `scr.orientation.type` (modern), falls back to
-//     `win.innerWidth > win.innerHeight`. `scr` and `win` are injected so
-//     the function stays testable in Node.
-//
-//   computeScale(vw, vh, target=600, lo=0.7, hi=1.5)
-//     → number in [lo, hi]. Maps the smaller viewport dimension to ~`target`
-//     logical px, then clamps. This is the per-resize gameScale formula.
-//
-//   computeLogicalSize(vw, vh, scale)
-//     → { W, H } rounded logical dimensions (vw/scale, vh/scale).
-//
-//   computeLayout(W, H, safeBottom)
-//     → { compact, hudH, hudTop, msgBase }. `compact` is true on portrait
-//     phones (H>W && W<=600), which bumps HUD height. msgBase is the y for
-//     the bottom-of-screen message log.
-//
-//   parseSafeAreaInsets(getProp, scale)
-//     → { top, right, bottom, left } in logical px. `getProp` is a function
-//     taking a CSS custom property name ('--sat'/'--sar'/'--sab'/'--sal')
-//     and returning the raw computed value (typically a CSS px string from
-//     getComputedStyle(documentElement).getPropertyValue). Non-numeric →
-//     treated as 0. Each inset is divided by `scale` to convert CSS px →
-//     logical px.
-//
-// Browser: attaches as `window.NEON.viewport`. Pure helpers only — does NOT
-// mount bare globals (unlike engine/math.js) because the host owns the
-// stateful equivalents (resize/updateLayout/isLandscape) and re-exports
-// them as wrappers in src/platform.js.
-//
-// Node: module.exports = { isLandscape, computeScale, computeLogicalSize,
-//                          computeLayout, parseSafeAreaInsets }.
+// parseSafeAreaInsets divides CSS px by scale to get logical px.
+// W/H from computeLogicalSize are logical px; compact is W <= 600 in that space.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {

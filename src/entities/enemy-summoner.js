@@ -2,13 +2,10 @@
 'use strict';
 
 /**
- * Queue a summoned DRONE near this SUMMONER.
- *
  * @this {Enemy}
  * @param {any} [map]
  */
 Enemy.prototype.summonMinion = function summonMinion(map) {
-  // Find a passable tile near the summoner
   let sx, sy, found = false;
   for (let a = 0; a < 10; a++) {
     sx = this.x + rnd(-2, 2);
@@ -40,7 +37,6 @@ Enemy.prototype.summonMinion = function summonMinion(map) {
  */
 Enemy.prototype.aiSummoner = function aiSummoner(dt, player, map, d, los) {
   this._summonTimer = Math.max(0, (this._summonTimer || 0) - dt);
-  // Prune dead summons from tracking array.
   if (this._summons) this._summons = this._summons.filter((/** @type {any} */ s) => !s.dead);
   const bm = this.berserkerMul();
   if (los && d < 5) {

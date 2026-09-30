@@ -1,9 +1,6 @@
 // @ts-check
 'use strict';
-// engine/dungeon/topology.js — reusable room/corridor topology helpers.
-//
-// Engine layer: no game content, no narrative, no tile vocabulary beyond
-// caller-injected numeric wall/floor tile ids.
+// Engine layer: no game content. Callers inject numeric wall/floor tile ids.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) module.exports = v;
@@ -28,9 +25,6 @@
   ]));
 
   /**
-   * Counts caller-defined cardinal neighbours around a grid position. The engine
-   * owns only traversal order and coordinate math; callers inject tile semantics.
-   *
    * @param {number} x
    * @param {number} y
    * @param {(x:number, y:number) => boolean} matchesNeighbor
@@ -48,10 +42,7 @@
   }
 
   /**
-   * Collects the cardinal-connected component containing `start` for a
-   * caller-defined position predicate. Callers own all grid bounds and tile
-   * semantics: `matchesPosition` must return false for out-of-range coordinates
-   * and should stay stable for the duration of the outer scan using the result.
+   * `matchesPosition` must return false for out-of-range coordinates and stay stable for the outer scan that uses the result.
    *
    * @param {number} startX
    * @param {number} startY
@@ -89,10 +80,6 @@
   }
 
   /**
-   * Builds a clipped room-membership grid for callers that need to distinguish
-   * room interiors from corridor/outside topology. The engine owns rectangle
-   * coordinate clipping; callers own room semantics and subsequent policy.
-   *
    * @param {number} width
    * @param {number} height
    * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
@@ -301,8 +288,7 @@
   }
 
   /**
-   * Overlap area between a candidate rectangle, optionally expanded by
-   * candidate-side padding, and an existing room rectangle.
+   * Padding expands the candidate only, not the existing room.
    *
    * @param {{x:number,y:number,w:number,h:number}} rect
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -368,9 +354,7 @@
   }
 
   /**
-   * Selects the y-major, then x-major median position from a cluster and returns
-   * the other positions for caller-owned mutation. This helper is intentionally
-   * position-only; callers needing tile-aware keep policy should not use it.
+   * Position-only. Callers that need a tile-aware keep policy should not use it.
    *
    * @param {Array<{x:number,y:number}>} cluster
    * @returns {{keep:{x:number,y:number}|null, discard:Array<{x:number,y:number}>}}
@@ -382,9 +366,7 @@
   }
 
   /**
-   * Selects the first y-major, then x-major cluster position matching the
-   * caller-defined preference, falling back to the median sorted position.
-   * The preference predicate runs in sorted order and stops at the first match.
+   * First match in y-then-x order, else the median. The predicate is not scanned past the first hit.
    *
    * @param {Array<{x:number,y:number}>} cluster
    * @param {(position:{x:number,y:number}) => boolean} isPreferred
@@ -404,9 +386,7 @@
   }
 
   /**
-   * Finds the closest placement for a rectangle expanded around a room centre.
-   * Scan order intentionally preserves legacy generation tie-breaks: x is the
-   * outer loop, y is the inner loop, and equal scores keep the first candidate.
+   * Scan order preserves legacy tie-breaks: x outer, y inner, equal scores keep the first candidate.
    *
    * @param {{
    *   room: {x:number,y:number,w:number,h:number,cx:number,cy:number},
@@ -449,9 +429,7 @@
   }
 
   /**
-   * Resolve a preferred spawn point by cardinally searching for the first
-   * passable tile that belongs to a generated room. The host owns tile
-   * semantics through `isPassable`; this helper only owns grid search/order.
+   * Cardinal BFS. A passable tile counts only if it also lies in a generated room.
    *
    * @param {{
    *   map: ArrayLike<ArrayLike<number>>,
@@ -522,9 +500,7 @@
   }
 
   /**
-   * Returns the two room-interior side-padding coordinates perpendicular to a
-   * former boundary entrance, preserving legacy sign order and corner skipping.
-   * The host owns tile mutation and blocked-tile semantics.
+   * Preserves legacy sign order and skips corners.
    *
    * @param {{x:number,y:number,w:number,h:number}} room
    * @param {number} x
@@ -549,9 +525,7 @@
   }
 
   /**
-   * Finds room boundary sides adjacent to an outside entrance tile. Scan order
-   * follows `CARDINAL_DIRECTIONS`, and boundary tiles that are corners of any
-   * room are skipped to preserve single-face entrance semantics.
+   * Scan order is CARDINAL_DIRECTIONS. Corner tiles are skipped so an entrance stays single-face.
    *
    * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
    * @param {number} x
@@ -574,9 +548,7 @@
   }
 
   /**
-   * Finds the topology-only repair positions needed to align a one-sided
-   * outside entrance with an existing outside passage. The host injects tile
-   * semantics; this helper only owns coordinate search and cardinal order.
+   * Cardinal search order is the contract. The host owns tile semantics.
    *
    * @param {number} x
    * @param {number} y
@@ -602,9 +574,7 @@
   }
 
   /**
-   * Scans interior anchor tiles and visits diagonal bypass corners that should be
-   * sealed. Callers inject tile semantics and perform mutation in `sealCorner`;
-   * invoking the callback during the scan preserves sequential map effects.
+   * sealCorner runs during the scan, so its mutations affect later coordinates.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {(tile:any) => boolean} isAnchorTile
@@ -635,10 +605,7 @@
   }
 
   /**
-   * Finds boundary tiles where both the room edge and the outside-facing tile
-   * satisfy the caller's open-tile predicate, then groups cardinal-adjacent
-   * boundary tiles. Scan order intentionally mirrors the legacy generator:
-   * top edge, bottom edge, left edge, right edge.
+   * Scan order mirrors the legacy generator: top, bottom, left, right.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -699,10 +666,7 @@
   }
 
   /**
-   * Finds open room-boundary tiles with open outside-facing neighbours. Unlike
-   * `findBoundaryEntranceClusters`, this flat scan intentionally includes room
-   * corners and preserves the legacy perimeter order: top/bottom per x, then
-   * left/right per y. Duplicate corner hits keep their first occurrence.
+   * Unlike findBoundaryEntranceClusters, corners are included. Legacy order is top/bottom per x, then left/right per y. Duplicate corners keep the first hit.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -750,10 +714,7 @@
   }
 
   /**
-   * Finds caller-defined gate tiles on a room perimeter and reports the
-   * outside-facing coordinate for each one. Scan order preserves the legacy
-   * generator's repair order: top/bottom per x, then left/right per y. Corner
-   * gates can be reported twice, once for each outside face.
+   * Legacy repair order: top/bottom per x, then left/right per y. A corner gate is reported twice, once per outside face.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -780,9 +741,7 @@
   }
 
   /**
-   * Visits caller-defined outside entrance tiles in interior y-major map order.
-   * The host injects tile semantics, room-occupancy semantics, and mutation.
-   * Mutations performed by `visit` affect later coordinates in the same scan.
+   * Interior y-major order. Mutations in visit affect later coordinates in the same scan.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {(tile:number) => boolean} isEntranceTile
@@ -805,10 +764,7 @@
   }
 
   /**
-   * Finds outside entrance tiles adjacent to a specific room boundary and
-   * reports the tile outside the entrance on the opposite side. The host injects
-   * both entrance tile semantics and room-occupancy semantics; this helper owns
-   * only the map scan, boundary-face matching, and cardinal order.
+   * Reports the tile outside the entrance on the opposite side. Cardinal order is the contract.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -831,10 +787,7 @@
   }
 
   /**
-   * Finds room-boundary sides next to outside entrance tiles that need their
-   * former room-edge padding repaired. The helper owns map scan order, room
-   * iteration order, and the legacy neighbour order for boundary-face matching;
-   * callers inject entrance and room-occupancy semantics plus all tile mutation.
+   * Legacy neighbour order for boundary-face matching. Callers own tile mutation.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {Array<{x:number,y:number,w:number,h:number}>} rooms
@@ -864,9 +817,7 @@
   }
 
   /**
-   * Finds the first tile matching `isTargetTile` inside the room rectangle plus
-   * a caller-selected surrounding padding. Scan order is y-major, then x-min to
-   * x-max, preserving legacy room-neighbourhood searches.
+   * Y-major, then x-min to x-max, matching legacy room-neighbourhood searches.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room
@@ -892,10 +843,6 @@
   }
 
   /**
-   * Iteratively fills caller-defined interior dead-end tiles. The engine owns
-   * scan order and cardinal adjacency; callers inject tile semantics and any
-   * coordinate exclusions such as room interiors.
-   *
    * @param {{
    *   map: ArrayLike<ArrayLike<number>>,
    *   fillTile: number,
@@ -940,9 +887,7 @@
   }
 
   /**
-   * Reports whether `target` is reachable from `start` over caller-defined open
-   * map tiles. The start coordinate is considered reachable without probing its
-   * tile, matching legacy generation guards that already chose a legal start.
+   * Start is reachable without probing its tile. Legacy guards already chose a legal start.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number}} start
@@ -986,12 +931,7 @@
   }
 
   /**
-   * Finds a cardinal BFS path across the interior grid only, ignoring map tile
-   * contents entirely. This is topology coordinate search: callers own all
-   * walkability and mutation policy.
-   *
-   * Returns coordinates from target back toward start, excluding start, matching
-   * the legacy rescue-corridor backtracking order.
+   * Ignores map tiles. Returns coordinates from target back toward start, excluding start, in the legacy rescue-corridor order.
    *
    * @param {number} width
    * @param {number} height
