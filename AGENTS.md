@@ -238,14 +238,15 @@ other than documentation-only ones such as `@example` and `@see`, and no
 directive comment (`@ts-*`, `eslint*`, `/* global */`, `/* exported */`,
 triple-slash), neither its content nor the code it applies to. `.d.ts` changes, JSDoc tag
 changes, and directive changes are source changes even though transpiling
-erases them. `node tests/_comment-only.js [base-ref]` proves it for every file
+erases them. `node tests/_comment-only.js [base-ref]` checks it for every file
 changed since the base ref (default `origin/develop`): the comment-stripped
 `transpileModule` emit, the code tokens, and which tokens share a line must be
 identical, and every directive and JSDoc tag must keep its content and the
 code it applies to, read the way TypeScript and ESLint read them.
 It lists each file's verdict and exits nonzero if any file fails. It does not
-run ESLint, so rules that read comment text are left to `npm run lint`, and it
-assumes no code reads its own source through `Function.prototype.toString`.
+run ESLint or the tests, so lint rules that read comment text and tests that
+read source text are left to `npm run check`, and it assumes no code reads its
+own source through `Function.prototype.toString`.
 
 For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect

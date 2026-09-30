@@ -90,7 +90,7 @@ test('moving a directive to another line is not prose comments only', () => {
 
 test('removing a prose line between a next-line directive and its code is not prose comments only', () => {
   const before = '// eslint-disable-next-line no-var\n// why\nvar a = 1;\n';
-  assert.match(String(check(before, before.replace('// why\n', ''))), /^directive changed or moved: .*lines to the next 2.* -> .*lines to the next 1/);
+  assert.match(String(check(before, before.replace('// why\n', ''))), /^directive changed or moved: .*applies to no code.* -> .*applies to tokens 0-4/);
 });
 
 test('removing or adding a directive is not prose comments only', () => {
@@ -113,7 +113,7 @@ test('prose that mentions eslint or @ts- is not a directive', () => {
 test('a suppression that mentions @ts-check is still a suppression, not a file pragma', () => {
   const before = '// @ts-check\n// @ts-ignore needed because @ts-check reports this\nundeclaredName();\n';
   const after = before.replace('undeclaredName', '/* Explain why this call is safe. */\nundeclaredName');
-  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses tokens 0-3.* -> .*suppresses nothing/);
+  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses \\"undeclaredName\(\);\\".* -> .*suppresses \\"\/\* Explain/);
 });
 
 test('deleting a prose line between a TypeScript suppression and its code is prose comments only', () => {
@@ -136,7 +136,52 @@ test('an array typedef is not the same tag as an object typedef', () => {
 test('a file pragma may lose the prose under it, but not leave the file header', () => {
   const before = "// @ts-check\n// Why this module exists.\n'use strict';\n";
   assert.equal(check(before, "// @ts-check\n'use strict';\n"), null);
-  assert.match(String(check(before, "'use strict';\n// @ts-check\n")), /^directive changed or moved: .*in the file header.* -> .*outside the file header/);
+  assert.match(String(check(before, "'use strict';\n// @ts-check\n")), /^directive changed or moved: .*in the file header/);
+});
+
+test('changing the line a TypeScript suppression applies to is not prose comments only', () => {
+  const before = '// @ts-check\n// @ts-expect-error SaveV0 was removed with the old loader\n/** @type {SaveV0} */\nlet legacy = null;\n';
+  const expanded = before.replace('/** @type {SaveV0} */\n', '/**\n * Old-format save, kept so legacy slots still load.\n * @type {SaveV0}\n */\n');
+  assert.match(String(check(before, expanded)), /^directive changed or moved: .*suppresses/);
+  const inserted = before.replace('/** @type', '/* Kept so legacy slots still load. */\n/** @type');
+  assert.match(String(check(before, inserted)), /^directive changed or moved: .*suppresses/);
+});
+
+test('a block suppression is read from its last line, as TypeScript reads it', () => {
+  const directive = '// @ts-check\n/* The page injects this global before any script runs, so the\n   compiler cannot see it.\n   @ts-expect-error */\ninjectedGlobal();\n';
+  const reflowed = '// @ts-check\n/* The page injects this global before any script runs, so the compiler\n   cannot see it. @ts-expect-error */\ninjectedGlobal();\n';
+  assert.match(String(check(directive, reflowed)), /^directive changed or moved/);
+  const prose = '// @ts-check\nconst z = 0;\n/* @ts-ignore was dropped here once the loader got types;\n   keep it that way. */\nconst a = 1;\n';
+  assert.equal(check(prose, '// @ts-check\nconst z = 0;\nconst a = 1;\n'), null);
+});
+
+test('a suppression TypeScript honors without a word boundary is a directive', () => {
+  const before = '// @ts-check\n// @ts-ignores here predate the typed loader.\nundeclaredName();\n';
+  assert.match(String(check(before, before.replace('// @ts-ignores here predate the typed loader.\n', ''))), /^directive changed or moved/);
+});
+
+test('TypeScript line breaks such as U+2028 end the lines a suppression skips', () => {
+  const before = '// @ts-check\n// @ts-ignore\n// note\u2028undeclaredName();\n';
+  assert.match(String(check(before, before.replace('// note', '/* note */'))), /^directive changed or moved/);
+});
+
+test('removing a JSDoc block after a tagged one is not prose comments only', () => {
+  const before = '// @ts-check\n/** @type {string} */\n/** Lives left in this run. */\nlet lives = 3;\n';
+  assert.match(String(check(before, before.replace('/** Lives left in this run. */\n', ''))), /^JSDoc tag changed or moved: .*not in the last JSDoc block/);
+  assert.match(String(check(before, before.replace('/** Lives left in this run. */', '// Lives left in this run.'))), /^JSDoc tag changed or moved/);
+  const leading = '// @ts-check\n/** Lives left in this run. */\n/** @type {number} */\nlet lives = 3;\n';
+  assert.equal(check(leading, leading.replace('/** Lives left in this run. */\n', '')), null);
+});
+
+test('ESLint directives keep only the position ESLint uses', () => {
+  const nextLine = 'const a = 1;\n// Build a function we can call.\n// eslint-disable-next-line no-new-func\nconst f = new Function(\'return 1\');\n';
+  assert.equal(check(nextLine, nextLine.replace('// Build a function we can call.\n', '')), null);
+  const global = '/* global NEON */\n// Uses the page global.\nNEON.go();\n';
+  assert.equal(check(global, global.replace('// Uses the page global.\n', '')), null);
+  const disable = 'const a = 1;\n/* eslint-disable no-var */\n// Old style kept for the loader.\nvar b = 2;\n';
+  assert.equal(check(disable, disable.replace('// Old style kept for the loader.\n', '')), null);
+  const reference = '/// <reference types="node" />\n// Node-only helper.\nconst a = 1;\n';
+  assert.equal(check(reference, reference.replace('// Node-only helper.\n', '')), null);
 });
 
 test('removing a triple-slash reference directive is not prose comments only', () => {

@@ -4,10 +4,12 @@
 // Proves a change is prose comments only, as AGENTS.md "Code review policy"
 // defines it. Every changed file must be a .js file whose code is untouched
 // (comment-stripped emit, code tokens, and which tokens share a line) and whose
-// directives and JSDoc tags keep their content and effect. Only comment prose
-// and JSDoc description text may differ. It cannot see lint rules that read
-// comment text (npm run lint still runs them) or code that reads its own source
-// through Function.prototype.toString (none in src/, engine/ or sw.js).
+// directives and JSDoc tags keep their content and the code they apply to,
+// following TypeScript's and ESLint's own rules. Only comment prose and JSDoc
+// description text may differ. It cannot see lint rules that read comment text
+// (npm run lint still runs them), tests that read source text (npm test still
+// runs them), or code that reads its own source through Function.prototype.toString
+// (none in src/, engine/ or sw.js).
 // Usage, from anywhere inside the repository to check:
 //   node tests/_comment-only.js [base-ref]   (default origin/develop)
 
@@ -16,18 +18,17 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const ts = require('typescript');
 
-// Directive grammars, matched against a comment's text without its // or /* */
-// markers, the way TypeScript and ESLint read them. Transpiling drops them all.
-const TS_PRAGMA = /^\/?\s*@ts-(no)?check\b/i;
-const TS_SUPPRESS = { line: /^\/?\s*@ts-(ignore|expect-error)\b/i, block: /^[/*]*\s*@ts-(ignore|expect-error)\b/i };
-const ESLINT = {
-  line: /^\s*eslint-disable-(next-)?line(\s|$)/,
-  block: /^\s*(eslint(-env|-enable|-disable(-(next-)?line)?)?|exported|globals?)(\s|$)/,
-};
-const OTHER = {
-  line: /^\/\s*<(reference|amd-)|^[#@]\s*source(Mapping)?URL=/,
-  block: /^[#@]\s*source(Mapping)?URL=|[#@]__(PURE|NO_SIDE_EFFECTS)__/,
-};
+// TypeScript's comment-directive patterns (typescript.js scanner): a // comment
+// is tested whole, a block comment by its last line, both after trimStart.
+const TS_SUPPRESS_LINE = /^\/\/\/?\s*@(ts-expect-error|ts-ignore)/;
+const TS_SUPPRESS_BLOCK = /^(?:\/|\*)*\s*@(ts-expect-error|ts-ignore)/;
+// ESLint's directive grammar, tested on the comment's text without its markers;
+// line comments only honor the -line forms.
+const ESLINT_LINE = /^\s*(eslint-disable-(?:next-)?line)(?:\s|$)/;
+const ESLINT_BLOCK = /^\s*(eslint(?:-env|-enable|-disable(?:-(?:next-)?line)?)?|exported|globals?)(?:\s|$)/;
+const TRIPLE_SLASH = /^\/\/\/\s*<(reference|amd-)/;
+const ANNOTATION = /[#@]\s*source(Mapping)?URL=|[#@]__(PURE|NO_SIDE_EFFECTS)__/;
+const LINE_BREAK = /\r\n|[\r\n\u2028\u2029]/g;
 // Tags TypeScript and ESLint ignore; every other JSDoc tag can change typecheck results.
 const DOC_ONLY_TAGS = new Set(['example', 'see', 'since', 'author', 'todo', 'remarks', 'note', 'summary',
   'description', 'desc', 'file', 'fileoverview', 'overview', 'license', 'copyright', 'version',
@@ -149,45 +150,58 @@ function shape(code) {
   /** @type {string[]} */
   const directives = [];
   const lineStarts = sf.getLineStarts();
+  /** @param {number} n Line n without its line break. */
+  const lineText = (n) => code.slice(lineStarts[n] ?? code.length, lineStarts[n + 1] ?? code.length).replace(/(\r\n|[\r\n\u2028\u2029])$/, '');
   /** @param {number} n */
-  const lineText = (n) => code.slice(lineStarts[n] ?? code.length, lineStarts[n + 1] ?? code.length);
-  // TypeScript applies a suppression to the first later line that is neither blank nor a // comment.
-  /** @param {number} endLine */
-  const suppressed = (endLine) => {
-    let n = endLine + 1;
-    while (n < lineStarts.length && /^(\s*|\s*\/\/.*)$/.test(lineText(n).replace(/\r?\n$/, ''))) n++;
-    if (n >= lineStarts.length) return 'nothing';
-    const hit = toks.flatMap((t, i) => (line(t.pos) <= n && line(t.end) >= n ? [i] : []));
-    return hit.length ? `tokens ${hit[0]}-${hit[hit.length - 1]}` : 'nothing';
+  const tokensOn = (n) => {
+    const on = toks.flatMap((t, i) => (line(t.pos) === n ? [i] : []));
+    return on.length ? `tokens ${on[0]}-${on[on.length - 1]}` : 'no code';
   };
+  const headerEnd = toks[0]?.pos ?? code.length;
   for (const r of commentRanges(sf)) {
-    const text = code.slice(r.pos, r.end).replace(/\r\n?/g, '\n');
+    const raw = code.slice(r.pos, r.end);
+    const text = JSON.stringify(raw);
     const isLine = r.kind === ts.SyntaxKind.SingleLineCommentTrivia;
-    const value = isLine ? text.slice(2) : text.slice(2, -2);
-    const next = tokenAt(r.end);
-    const prev = next - 1;
-    if (isLine && TS_PRAGMA.test(value)) {
-      directives.push(`${text} ${prev < 0 ? 'in the file header' : 'outside the file header'}`);
-    } else if ((isLine ? TS_SUPPRESS.line : TS_SUPPRESS.block).test(value)) {
-      directives.push(`${text} suppresses ${suppressed(line(r.end))}`);
-    } else if ((isLine ? ESLINT.line : ESLINT.block).test(value) || (isLine ? OTHER.line : OTHER.block).test(value)) {
-      const prevToken = toks[prev];
-      const nextToken = toks[next];
-      const fromPrev = prevToken ? line(r.pos) - line(prevToken.end) : 'none';
-      const toNext = nextToken ? line(nextToken.pos) - line(r.end) : 'none';
-      directives.push(`${text} after token ${prev}, lines from it ${fromPrev}, lines to the next ${toNext}, spanning ${line(r.end) - line(r.pos) + 1}`);
+    const value = isLine ? raw.slice(2) : raw.slice(2, -2);
+    const endLine = line(r.end);
+    const prev = tokenAt(r.end) - 1;
+    // Pragmas such as @ts-check are read only from comments before the first token.
+    if (r.end <= headerEnd && /@ts-/i.test(raw)) directives.push(`${text} in the file header`);
+    const lastLine = isLine ? raw : raw.split(LINE_BREAK).pop() ?? '';
+    if ((isLine ? TS_SUPPRESS_LINE : TS_SUPPRESS_BLOCK).test(lastLine.trimStart())) {
+      // TypeScript skips blank and // lines, then suppresses diagnostics that start on the next line.
+      let target = endLine + 1;
+      while (target < lineStarts.length && /^(|\/\/.*)$/.test(lineText(target).trim())) target++;
+      directives.push(`${text} suppresses ${target < lineStarts.length ? JSON.stringify(lineText(target)) : 'nothing'}`);
+      continue;
+    }
+    const eslint = (isLine ? ESLINT_LINE : ESLINT_BLOCK).exec(value);
+    if (eslint) {
+      const kind = eslint[1];
+      if (kind === 'eslint-disable-line') directives.push(`${text} applies to ${tokensOn(line(r.pos))}`);
+      else if (kind === 'eslint-disable-next-line') directives.push(`${text} applies to ${tokensOn(endLine + 1)}`);
+      else if (kind === 'eslint-disable' || kind === 'eslint-enable') directives.push(`${text} after token ${prev}`);
+      else directives.push(text);
+    } else if (isLine && TRIPLE_SLASH.test(raw)) {
+      directives.push(`${text} ${r.end <= headerEnd ? 'in' : 'outside'} the file header`);
+    } else if (ANNOTATION.test(value)) {
+      directives.push(`${text} after token ${prev}`);
     }
   }
   /** @type {string[]} */
   const tags = [];
   /** @param {import('typescript').Node} node */
   const visitDocs = (node) => {
-    for (const doc of /** @type {any} */ (node).jsDoc || []) {
+    /** @type {any[]} */
+    const docs = /** @type {any} */ (node).jsDoc || [];
+    docs.forEach((doc, i) => {
       for (const tag of doc.tags || []) {
         if (DOC_ONLY_TAGS.has(String(tag.tagName.text).toLowerCase())) continue;
-        tags.push(`${tagShape(tag)} on token ${tokenAt(node.getStart(sf))}`);
+        // TypeScript takes a node's tags from its last JSDoc block (and @overload from any).
+        const last = i === docs.length - 1 ? '' : ', not in the last JSDoc block';
+        tags.push(`${tagShape(tag)} on token ${tokenAt(node.getStart(sf))}${last}`);
       }
-    }
+    });
     ts.forEachChild(node, visitDocs);
   };
   visitDocs(sf);
