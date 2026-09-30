@@ -115,7 +115,7 @@ These are hard rules, not preferences:
 |---|---|
 | `npm ci` | Install exact locked dependencies in a fresh worktree before baseline verification. Use this instead of `npm install` when `node_modules/` is absent. |
 | `npm test` | Run the full test suite (Node built-in test runner, 2300+ tests). Must exit 0. |
-| `npm run typecheck` | Run `tsc --noEmit` over `src/` + `engine/` + `tests/` + `types/`. Only files with `// @ts-check` are checked. As of 2026-04-26 every `src/**/*.js` has `// @ts-check`; engine modules are also included by `tsconfig.json`. Must exit 0. |
+| `npm run typecheck` | Run `tsc --noEmit` twice. `tsconfig.json` covers `src/`, `engine/`, `tests/` and `types/`, but checks only files that start with `// @ts-check`. `tsconfig.runtime.json` checks every `src/` and `engine/` file, with or without `// @ts-check`, and without Node types. Must exit 0. |
 | `npm run lint` | Run `eslint .` over the repository. Currently exits 0 with no errors and no warnings — keep it that way. |
 | `npm run lint:fix` | Auto-fix what eslint can. |
 | `npm run check` | Run lint + typecheck + engine-purity + tests in sequence. **This is the canonical pre-commit gate.** |
@@ -137,7 +137,7 @@ These are hard rules, not preferences:
 
 **Phase 2 — Eslint cleanup**: ✅ COMPLETE. `npm run lint` exits 0 with zero warnings across `src/` and `tests/`.
 
-**Phase 3 — Per-file `// @ts-check`**: ✅ COMPLETE. Every `src/**/*.js` (including `src/game.js`, `src/entities.js`, `src/content.js`, `src/render.js`, `src/platform.js`, all of `src/data/*` and `src/meta/*`) has `// @ts-check` at the top, and `npm run typecheck` exits 0. New `.js` files MUST keep this convention — see "Type checking" below.
+**Phase 3 — Per-file `// @ts-check`**: ✅ COMPLETE. Every file under `src/` and `engine/` is type-checked: `tsconfig.runtime.json` turns on `checkJs` there, so a missing or misplaced `// @ts-check` cannot drop a file from the check, and `npm run typecheck` exits 0. `sw.js` and `scripts/` are not type-checked yet. New `.js` files still start with `// @ts-check` — see "Type checking" below.
 
 **Phase 4 — Engine boundary**: ✅ COMPLETE for the type surface. `types/engine.d.ts`, `types/game.d.ts`, and `types/neon.d.ts` exist and are referenced by the typecheck; `docs/engine-boundary.md` is the human architecture reference for the same boundary. The deferred `p4-engine-extraction` design work (extracting the engine into its own package) is still open and tracked outside this file.
 
@@ -166,8 +166,8 @@ These are hard rules, not preferences:
 ## Conventions
 
 ### Type checking
-- New code: add `// @ts-check` at top of every new `.js` file. Use JSDoc `@param`/`@returns`/`@typedef` for shapes.
-- Existing code: opt in file-by-file. When you add `// @ts-check`, fix all `tsc --noEmit` errors that file produces (or use `// @ts-expect-error` with a tracking todo).
+- New code: make `// @ts-check` the first line of every new `.js` file, before `'use strict'`; TypeScript reads it only from the comments before the first token. Runtime files are checked either way; test files are checked only with it. Use JSDoc `@param`/`@returns`/`@typedef` for shapes.
+- Test files opt in file by file. When you add `// @ts-check` to one, fix all `tsc --noEmit` errors that file produces (or use `// @ts-expect-error` with a tracking todo).
 - Shared shapes: declare in `types/*.d.ts` (see `types/engine.d.ts`, `types/game.d.ts`, `types/neon.d.ts`).
 - When moving a prototype method or other typed global surface, inspect and
   update `types/neon.d.ts` (or the relevant `types/*.d.ts`) before the first full
@@ -186,7 +186,7 @@ These are hard rules, not preferences:
 The codebase uses `<script>` tag UMD loading. Every `src/*.js` declares top-level globals on purpose. `tsc` catches genuinely-missing references via its cross-file symbol table; eslint's `no-undef` would produce ~7000 false positives. See `eslint.config.js` comments.
 
 ### Type lib scoping
-`tsconfig.json` sets `lib: ["ES2020","DOM"]` and `types: ["node"]`. The `node` types are added so test files (which use `node:test`, `node:assert/strict`, etc.) can be `// @ts-check`ed. **Do not introduce Node globals (`process`, `Buffer`, `__dirname`, etc.) into `src/` browser code** — even though tsc won't flag them, they will crash in the browser. Code reviewers must catch this.
+`tsconfig.json` sets `lib: ["ES2020","DOM"]` and `types: ["node"]`, so test files (which use `node:test`, `node:assert/strict`, etc.) can be `// @ts-check`ed. `tsconfig.runtime.json` checks `src/` and `engine/` with `types: []`, so `tsc` reports Node globals such as `process`, `Buffer` and `__dirname` in browser code as errors; they would crash in the browser. It does not report `require`, `module` or `exports`, which TypeScript treats as CommonJS syntax in `.js` files. Runtime files use them only inside a `typeof module` guard for Node tests, so reviewers must reject any unguarded use, and any `// @ts-nocheck` header, which would opt a file out of the check.
 
 ### Map-mutating topology helpers
 Any helper that iterates a map and fills tiles based on caller-supplied

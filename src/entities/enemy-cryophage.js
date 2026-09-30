@@ -1,5 +1,5 @@
-'use strict';
 // @ts-check
+'use strict';
 
 // frostPatches are global and outlive this mob; game.js loadFloor clears them.
 /**

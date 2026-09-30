@@ -281,7 +281,7 @@ tokens that would leak game content into the engine layer.
 
 ### Add a new browser-loaded source file
 
-1. Add `// @ts-check`.
+1. Make `// @ts-check` the first line, before `'use strict'`.
 2. Use the UMD-lite wrapper from `CONTRIBUTING.md` if it must load in both browser
    and Node tests.
 3. Add it to `index.html` in dependency order.

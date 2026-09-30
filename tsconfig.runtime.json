@@ -1,0 +1,13 @@
+{
+  "_comment": "Runtime code (src/, engine/) is type-checked with or without // @ts-check, and without Node types because it runs in the browser. Tests use tsconfig.json, where files opt in with // @ts-check.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "types": []
+  },
+  "include": [
+    "src/**/*.js",
+    "engine/**/*.js",
+    "types/**/*.d.ts"
+  ]
+}
