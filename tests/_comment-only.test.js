@@ -113,7 +113,7 @@ test('prose that mentions eslint or @ts- is not a directive', () => {
 test('a suppression that mentions @ts-check is still a suppression, not a file pragma', () => {
   const before = '// @ts-check\n// @ts-ignore needed because @ts-check reports this\nundeclaredName();\n';
   const after = before.replace('undeclaredName', '/* Explain why this call is safe. */\nundeclaredName');
-  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses \\"undeclaredName\(\);\\".* -> .*suppresses \\"\/\* Explain/);
+  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses tokens 0-3.* -> .*suppresses no code/);
 });
 
 test('deleting a prose line between a TypeScript suppression and its code is prose comments only', () => {
@@ -182,6 +182,39 @@ test('ESLint directives keep only the position ESLint uses', () => {
   assert.equal(check(disable, disable.replace('// Old style kept for the loader.\n', '')), null);
   const reference = '/// <reference types="node" />\n// Node-only helper.\nconst a = 1;\n';
   assert.equal(check(reference, reference.replace('// Node-only helper.\n', '')), null);
+});
+
+
+test('moving a suppression between two identical lines is not prose comments only', () => {
+  const before = "// @ts-check\nconst ready = true;\n// @ts-expect-error missing global\nplay('hit');\nplay('hit');\n";
+  const after = "// @ts-check\nconst ready = true;\nplay('hit');\n// @ts-expect-error missing global\nplay('hit');\n";
+  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses tokens 5-9 .* -> .*suppresses tokens 10-14 /);
+});
+
+test('rewording prose on the line a suppression applies to is prose comments only', () => {
+  const trailing = '// @ts-check\n// @ts-expect-error page injects this\ninjectedGlobal(); // set in index.html\n';
+  assert.equal(check(trailing, trailing.replace('set in index.html', 'set by the host page')), null);
+  const doc = '// @ts-check\n// @ts-expect-error legacy\n/** Lives remaining in this run. */ let lives = legacyLives;\n';
+  assert.equal(check(doc, doc.replace('Lives remaining', 'Hit points remaining')), null);
+});
+
+test('rewording an ESLint justification is prose comments only', () => {
+  const before = 'const a = 1;\n// eslint-disable-next-line no-var -- old loader still assigns this\nvar slot = 1;\n';
+  assert.equal(check(before, before.replace('old loader still assigns this', 'kept so the old loader can assign it')), null);
+  assert.match(String(check(before, before.replace('no-var --', 'no-var, no-unused-vars --'))), /^directive changed or moved/);
+});
+
+test('header prose that mentions a pragma or an annotation is prose', () => {
+  const before = '// @ts-check\n// This file uses @ts-check so missing globals are reported.\n/* We opted into @ts-check after the loader gained types. */\n// Bundlers treat #__PURE__ as an annotation.\nconst a = 1;\n';
+  const after = '// @ts-check\nconst a = 1;\n';
+  assert.equal(check(before, after), null);
+});
+
+test('removing a prose JSDoc block after a tag the binder reads from any block is prose comments only', () => {
+  for (const tagged of ['/** @typedef {string} Name */', '/** @enum {number} */', '/** @callback Visit */', '/** @import { Dirent } from "node:fs" */']) {
+    const before = `// @ts-check\n${tagged}\n/** A display name shown in the HUD. */\nconst E = {};\n`;
+    assert.equal(check(before, before.replace('/** A display name shown in the HUD. */\n', '')), null, tagged);
+  }
 });
 
 test('removing a triple-slash reference directive is not prose comments only', () => {

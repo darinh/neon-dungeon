@@ -27,7 +27,12 @@ const TS_SUPPRESS_BLOCK = /^(?:\/|\*)*\s*@(ts-expect-error|ts-ignore)/;
 const ESLINT_LINE = /^\s*(eslint-disable-(?:next-)?line)(?:\s|$)/;
 const ESLINT_BLOCK = /^\s*(eslint(?:-env|-enable|-disable(?:-(?:next-)?line)?)?|exported|globals?)(?:\s|$)/;
 const TRIPLE_SLASH = /^\/\/\/\s*<(reference|amd-)/;
-const ANNOTATION = /[#@]\s*source(Mapping)?URL=|[#@]__(PURE|NO_SIDE_EFFECTS)__/;
+// TypeScript's single-line pragma pattern (parser.ts); only // comments before the first token count.
+const TS_PRAGMA = /^\/\/\/?\s*@([^\s:]+)((?:[^\S\r\n]|:).*)?$/m;
+// ESLint ignores the justification after " -- " when it applies a directive.
+const ESLINT_JUSTIFICATION = /\s-{2,}\s/;
+// The binder reads these from every JSDoc block on a node, not only the last one.
+const BINDER_WIDE_TAGS = new Set(['typedef', 'callback', 'enum', 'import', 'overload']);
 const LINE_BREAK = /\r\n|[\r\n\u2028\u2029]/g;
 // Tags TypeScript and ESLint ignore; every other JSDoc tag can change typecheck results.
 const DOC_ONLY_TAGS = new Set(['example', 'see', 'since', 'author', 'todo', 'remarks', 'note', 'summary',
@@ -157,6 +162,19 @@ function shape(code) {
     const on = toks.flatMap((t, i) => (line(t.pos) === n ? [i] : []));
     return on.length ? `tokens ${on[0]}-${on[on.length - 1]}` : 'no code';
   };
+  /** @type {Map<number, string[]>} JSDoc tags by the line they start on. */
+  const tagLines = new Map();
+  /** @param {import('typescript').Node} node */
+  const collectTags = (node) => {
+    for (const doc of /** @type {any} */ (node).jsDoc || []) {
+      for (const tag of doc.tags || []) {
+        const at = line(tag.getStart(sf));
+        tagLines.set(at, [...(tagLines.get(at) ?? []), String(tag.tagName.text)]);
+      }
+    }
+    ts.forEachChild(node, collectTags);
+  };
+  collectTags(sf);
   const headerEnd = toks[0]?.pos ?? code.length;
   for (const r of commentRanges(sf)) {
     const raw = code.slice(r.pos, r.end);
@@ -165,27 +183,28 @@ function shape(code) {
     const value = isLine ? raw.slice(2) : raw.slice(2, -2);
     const endLine = line(r.end);
     const prev = tokenAt(r.end) - 1;
-    // Pragmas such as @ts-check are read only from comments before the first token.
-    if (r.end <= headerEnd && /@ts-/i.test(raw)) directives.push(`${text} in the file header`);
+    const pragma = isLine && r.end <= headerEnd ? TS_PRAGMA.exec(raw) : null;
+    if (pragma && /^ts-(no)?check$/i.test(pragma[1] ?? '')) directives.push(`${text} in the file header`);
     const lastLine = isLine ? raw : raw.split(LINE_BREAK).pop() ?? '';
     if ((isLine ? TS_SUPPRESS_LINE : TS_SUPPRESS_BLOCK).test(lastLine.trimStart())) {
-      // TypeScript skips blank and // lines, then suppresses diagnostics that start on the next line.
+      // TypeScript skips blank and // lines, then suppresses diagnostics that start on the next
+      // line: on its code tokens or in JSDoc tags there.
       let target = endLine + 1;
       while (target < lineStarts.length && /^(|\/\/.*)$/.test(lineText(target).trim())) target++;
-      directives.push(`${text} suppresses ${target < lineStarts.length ? JSON.stringify(lineText(target)) : 'nothing'}`);
+      const reach = target < lineStarts.length ? `${tokensOn(target)} and JSDoc ${JSON.stringify(tagLines.get(target) ?? [])}` : 'nothing';
+      directives.push(`${JSON.stringify(lastLine.trimStart())} suppresses ${reach}`);
       continue;
     }
     const eslint = (isLine ? ESLINT_LINE : ESLINT_BLOCK).exec(value);
     if (eslint) {
       const kind = eslint[1];
-      if (kind === 'eslint-disable-line') directives.push(`${text} applies to ${tokensOn(line(r.pos))}`);
-      else if (kind === 'eslint-disable-next-line') directives.push(`${text} applies to ${tokensOn(endLine + 1)}`);
-      else if (kind === 'eslint-disable' || kind === 'eslint-enable') directives.push(`${text} after token ${prev}`);
-      else directives.push(text);
+      const directive = JSON.stringify(value.split(ESLINT_JUSTIFICATION)[0]?.trim() ?? '');
+      if (kind === 'eslint-disable-line') directives.push(`${directive} applies to ${tokensOn(line(r.pos))}`);
+      else if (kind === 'eslint-disable-next-line') directives.push(`${directive} applies to ${tokensOn(endLine + 1)}`);
+      else if (kind === 'eslint-disable' || kind === 'eslint-enable') directives.push(`${directive} after token ${prev}`);
+      else directives.push(directive);
     } else if (isLine && TRIPLE_SLASH.test(raw)) {
       directives.push(`${text} ${r.end <= headerEnd ? 'in' : 'outside'} the file header`);
-    } else if (ANNOTATION.test(value)) {
-      directives.push(`${text} after token ${prev}`);
     }
   }
   /** @type {string[]} */
@@ -198,7 +217,8 @@ function shape(code) {
       for (const tag of doc.tags || []) {
         if (DOC_ONLY_TAGS.has(String(tag.tagName.text).toLowerCase())) continue;
         // TypeScript takes a node's tags from its last JSDoc block (and @overload from any).
-        const last = i === docs.length - 1 ? '' : ', not in the last JSDoc block';
+        const binderWide = BINDER_WIDE_TAGS.has(String(tag.tagName.text).toLowerCase());
+        const last = i === docs.length - 1 || binderWide ? '' : ', not in the last JSDoc block';
         tags.push(`${tagShape(tag)} on token ${tokenAt(node.getStart(sf))}${last}`);
       }
     });
