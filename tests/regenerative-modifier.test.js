@@ -15,6 +15,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const { extractMatchingStatement } = require('./_source-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONTENT = fs.readFileSync(path.join(ROOT, 'src', 'content', 'modifiers.js'), 'utf8') + '\n' +
@@ -95,19 +97,63 @@ test('REGENERATIVE timer reset is wired in takeDamage on actual > 0', () => {
   assert.ok(m, 'REGENERATIVE reset must be `if (actual > 0 && _EG.modifier === \'REGENERATIVE\') this._regenTimer = 0` in takeDamage');
 });
 
+function enemyUpdateIf(includes) {
+  const text = extractMatchingStatement(ENTITIES, {
+    className: 'Enemy',
+    method: 'update',
+    kind: 'if',
+    includes,
+  });
+  const start = ENTITIES.indexOf(text);
+  assert.notEqual(start, -1, 'Enemy.update statement must be locatable by its code');
+  return { start, end: start + text.length };
+}
+
+function runStunAndRegen(stunTimer) {
+  const stun = enemyUpdateIf(['if (this.stunTimer > 0)', 'this.stunTimer -= dt', 'return;']);
+  const regen = enemyUpdateIf(["_EG.modifier === 'REGENERATIVE'", 'this._regenTimer = (this._regenTimer || 0) + dt']);
+  const enemy = {
+    stunTimer,
+    hp: 40,
+    maxHp: 100,
+    _regenTimer: 2,
+    attackTimer: 1,
+    shootTimer: 1,
+    spawnCooldown: 1,
+    isBoss: false,
+    elite: false,
+    _summoned: false,
+    isShard: false,
+    _disguised: false,
+    _wrPhased: false,
+    _ghIsGhost: false,
+    x: 1,
+    y: 1,
+  };
+  vm.runInNewContext(
+    `function tick() {\n${ENTITIES.slice(Math.min(stun.start, regen.start), Math.max(stun.end, regen.end))}\n}\ntick.call(enemy);`,
+    {
+      enemy,
+      dt: 1,
+      map: null,
+      player: null,
+      _EG: { modifier: 'REGENERATIVE' },
+      rand: () => 1,
+      spawnParticles() {},
+      audio: { wraithPhaseIn() {} },
+    }
+  );
+  return enemy;
+}
+
 test('REGENERATIVE regen does NOT tick during stun (stun is neutralization)', () => {
-  // The stun branch in Enemy.update returns at `// skip all AI` BEFORE
-  // the regen block. Stunning a mob shuts off its regen — players can
-  // still chip-EMP-chip strategically. Verified by ordering: the regen
-  // tick must appear AFTER `return; // skip all AI`. Use raw ENTITIES
-  // (not stripped) for the comment-string anchor.
-  const stunReturnIdx = ENTITIES.indexOf('return; // skip all AI, leave attack/shoot timers frozen');
-  // Anchor on the tick site (uses _regenTimer accumulator), NOT the
-  // takeDamage reset which appears earlier in the file.
-  const regenIdx = ENTITIES.indexOf('this._regenTimer = (this._regenTimer || 0) + dt');
-  assert.ok(stunReturnIdx !== -1, 'stun early-return must exist in Enemy.update');
-  assert.ok(regenIdx !== -1, 'REGENERATIVE tick must exist in Enemy.update');
-  assert.ok(regenIdx > stunReturnIdx, 'REGENERATIVE regen tick must live AFTER the stun early-return so stun freezes regen');
+  const stunned = runStunAndRegen(1);
+  assert.equal(stunned._regenTimer, 2, 'stun early-return must freeze the regen accumulator');
+  assert.equal(stunned.hp, 40, 'a stunned enemy must not heal');
+
+  const free = runStunAndRegen(0);
+  assert.equal(free._regenTimer, 3, 'an unstunned enemy must still accumulate regen time');
+  assert.ok(free.hp > 40, 'an unstunned enemy past the delay must heal');
 });
 
 test('REGENERATIVE timer reset is wired in burn DoT path (anti-regression)', () => {

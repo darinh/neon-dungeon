@@ -17,7 +17,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { readSourceFile } = require('./_source-files.js');
+const { extractMatchingStatement, readSourceFile } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8');
 const PLAYER_DAMAGE = readSourceFile(__dirname, 'entitiesPlayerDamage');
@@ -115,11 +115,17 @@ test('effectiveAtk multiplies by (1 + STRIDE_DMG_PER_STACK * stacks) when STRIDE
 
 // ─── Tick wiring in Player.update ────────────────────────────────────────
 
+function strideTick() {
+  return extractMatchingStatement(ENTITIES, {
+    className: 'Player',
+    method: 'update',
+    kind: 'if',
+    includes: ['this.perks.STRIDE && dt > 0', 'STRIDE_MOVE_RATE'],
+  });
+}
+
 test('Player.update ticks STRIDE using moved/dt rate (frame-rate independent)', () => {
-  // Find the tick block by anchoring on the three known signals.
-  const tickRe = /\[tick:STRIDE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'STRIDE tick block must exist in Player.update');
+  const m = [strideTick()];
   // moved/dt rate gate (the codified rule: rate threshold, NOT
   // tiles/frame absolute).
   assert.match(m[0], /dist\s*\(\s*this\._prevX\s*,\s*this\._prevY\s*,\s*this\.x\s*,\s*this\.y\s*\)/,
@@ -144,17 +150,13 @@ test('Player.update ticks STRIDE using moved/dt rate (frame-rate independent)', 
 });
 
 test('STRIDE tick is gated on this.perks.STRIDE (no overhead for non-owners)', () => {
-  const tickRe = /\[tick:STRIDE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'STRIDE tick block must exist');
+  const m = [strideTick()];
   assert.match(m[0], /this\.perks\.STRIDE/,
     'STRIDE tick must short-circuit when the player has not picked the perk');
 });
 
 test('STRIDE tick is suppressed during shock (movement is force-zeroed anyway)', () => {
-  const tickRe = /\[tick:STRIDE\][\s\S]*?\n\s{4}\}/;
-  const m = ENTITIES.match(tickRe);
-  assert.ok(m, 'STRIDE tick block must exist');
+  const m = [strideTick()];
   // Either an explicit shockTimer guard OR the rate test alone would
   // both correctly report not-moving; we require the explicit guard so a
   // future change that allows movement-while-shocked doesn't silently

@@ -47,6 +47,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const { extractMatchingStatement } = require('./_source-files.js');
 const { stripComments, extractBranch } = require('./_alignment-helpers.js');
 
 const RENDER = fs.readFileSync(
@@ -126,18 +128,36 @@ test('helper renders ♥N/20 format with the heart glyph', () => {
 });
 
 test('helper hardcoded cap (20) matches the entities.js Enemy.die gate', () => {
-  // The cap is ALSO hardcoded at src/entities.js Enemy.die `_phStacks < 20`
-  // — when changing the cap, BOTH sites MUST be updated. This test pins
-  // the entities.js gate value so a refactor that bumps the cap to 25
-  // there will fail this test until the HUD is updated to match.
+  // The cap is ALSO enforced by Enemy.die. When changing it, BOTH sites
+  // MUST be updated. A kill at 19 stacks grants the 20th; a kill at 20 does not.
+  const body = extractHelperBody();
+  assert.match(body, /\/20/,
+    'HUD denominator must stay /20 while Enemy.die caps piercing-heart stacks at 20');
   const ENT = fs.readFileSync(
     path.resolve(__dirname, '..', 'src', 'entities.js'), 'utf8'
   );
-  // Anchor on the comment-bracketed PIERCING_HEART block to avoid
-  // matching some other unrelated `< 20` literal.
-  assert.match(ENT,
-    /PIERCING_HEART[\s\S]*?_phStacks\s*<\s*20/,
-    'entities.js Enemy.die PIERCING_HEART block must still cap at < 20 — bump HUD denominator if changing');
+  const gate = extractMatchingStatement(ENT, {
+    className: 'Enemy',
+    method: 'die',
+    kind: 'if',
+    includes: ["includes('pierceheart')", '_phStacks'],
+  });
+  const stacksAfterKill = (/** @type {number} */ stacks) => {
+    const player = { _piercingHearts: stacks, maxHp: 10, hp: 10, x: 1, y: 1 };
+    const enemy = {
+      isShard: false,
+      x: 2,
+      y: 2,
+      _lastHitCtx: { isProc: false, effects: ['pierceheart'] },
+    };
+    vm.runInNewContext(
+      `function apply(isSummon) {\nconst _phctx = this._lastHitCtx;\n${gate}\n}\napply.call(enemy, false);`,
+      { enemy, _EG: { player }, spawnDmgText() {}, spawnParticles() {} }
+    );
+    return player._piercingHearts;
+  };
+  assert.equal(stacksAfterKill(19), 20, 'the 20th piercing-heart stack is still granted');
+  assert.equal(stacksAfterKill(20), 20, 'Enemy.die must not grant a piercing-heart stack at the cap of 20');
 });
 
 // ─── helper is called in BOTH weapon-name render sites ───────────────────

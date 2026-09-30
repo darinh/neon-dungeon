@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { extractStatementRange } = require('./_source-files.js');
 
 const ENTITIES = fs.readFileSync(path.join(__dirname, '..', 'src/entities.js'), 'utf8');
 const ENEMY_AWARENESS = fs.readFileSync(path.join(__dirname, '..', 'src/entities', 'enemy-awareness.js'), 'utf8');
@@ -20,10 +21,12 @@ function sourceBetween(start, end, source = ENTITIES) {
 
 function targetMemoryHarness({ canTarget = true, los = true } = {}) {
   const state = { canTarget, los };
-  const block = sourceBetween(
-    '    // Set perceived target position. Normal enemies are not omniscient:',
-    '    // Stun: freeze AI + cooldown timers while stunned'
-  );
+  const block = extractStatementRange(ENTITIES, {
+    className: 'Enemy',
+    method: 'update',
+    fromIncludes: 'this._tx = this.patrolTarget ? this.patrolTarget.x : this.x',
+    untilIncludes: "this.stunTimer > 0 && this.type === 'REAPER'",
+  });
   const run = vm.runInNewContext(`(function targetMemoryBlock(
     dt, player, map, dist, canTargetPlayer, hasLOS,
     ENEMY_SIGHT_RANGE, ENEMY_LEASH_DEFEND_RANGE, ENEMY_TARGET_MEMORY_SECONDS

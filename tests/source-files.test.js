@@ -8,6 +8,13 @@ const {
   CORE_RUNTIME_SOURCE_KEYS,
   SOURCE_FILE_PATHS,
   blankStringContents,
+  extractDeclaration,
+  extractDeclarationSpan,
+  extractMatchingStatement,
+  extractMethod,
+  extractStatementRange,
+  ifBranchOffsets,
+  statementStart,
   readSourceFile,
   readSourceFiles,
   resolveSourceFile,
@@ -392,7 +399,6 @@ test('source file facade resolves and loads core runtime sources', () => {
   assert.match(enemyAwarenessSource, /const\s+ENEMY_TARGET_MEMORY_SECONDS\s*=\s*3/);
   assert.match(enemyAwarenessSource, /const\s+ENEMY_ROOM_LEASH_TILES\s*=\s*8/);
   assert.match(runtimeGlobalSource, /const\s+_EG\s*=\s*new Proxy\(\{\}, \{/);
-  assert.match(runtimeGlobalSource, /src\/entities\.js and any later src\/entities\/\*\.js consumer/);
   assert.match(runtimeCollectionSource, /const\s+enemies\s*=\s*\[\]/);
   assert.match(runtimeCollectionSource, /const\s+items\s*=\s*\[\]/);
   assert.match(runtimeCollectionSource, /const\s+placedWalls\s*=\s*\[\]/);
@@ -664,7 +670,6 @@ test('source file facade resolves and loads core runtime sources', () => {
     assert.doesNotMatch(entitySource, new RegExp(`${method}\\s*\\(\\s*dt\\s*,\\s*player\\s*,\\s*map\\s*,\\s*d\\s*,\\s*los\\s*\\)\\s*\\{`));
     assert.match(bossAiSource, new RegExp(`Enemy\\.prototype\\.${method}\\s*=\\s*function\\s+${method}\\s*\\(`));
   }
-  assert.match(bossAiSource, /UNCHAINED #42: _unchainedPhase locks the boss into phase-3 attack/);
   assert.match(bossAiSource, /hazardZones\.push\(\{ x: hx, y: hy/);
   assert.match(enemyPhantomSource, /Enemy\.prototype\._phReposition\s*=\s*function _phReposition\s*\(/);
   assert.match(enemyPhantomSource, /this\.room\.x \+ rnd\(1, this\.room\.w - 1\)/);
@@ -1096,4 +1101,84 @@ test('blankStringContents preserves string length and quote delimiters', () => {
   assert.equal(blanked.length, src.length);
   assert.match(blanked, /'                   '/);
   assert.doesNotMatch(blanked, /tricky/);
+});
+
+test('AST extractors locate declarations and statement ranges without comments', () => {
+  const src = [
+    '// banner must not be required to find the declaration',
+    'const LIMIT = 1;',
+    'function helper(n) { return n + LIMIT; }',
+    'class Box {',
+    '  update(dt) {',
+    '    this.n = 0;',
+    '    if (this.on && dt > 0) { this.n = 1; }',
+    '    for (let i = 0; i < 1; i++) { this.n += i; }',
+    '    this.done = true;',
+    '  }',
+    '}',
+    'function after() { return 2; }',
+    'function choose(flag) {',
+    '  if (flag) { return 1; }',
+    '  else { return 0; }',
+    '}',
+  ].join('\n');
+
+  assert.equal(extractDeclaration(src, 'helper'), 'function helper(n) { return n + LIMIT; }');
+  assert.doesNotMatch(extractDeclaration(src, 'LIMIT'), /banner/);
+  const span = extractDeclarationSpan(src, 'LIMIT', 'helper');
+  assert.match(span, /^const LIMIT = 1;/);
+  assert.match(span, /function helper\(n\) \{ return n \+ LIMIT; \}$/);
+  assert.doesNotMatch(span, /function after/);
+  assert.match(extractMethod(src, 'Box', 'update'), /update\(dt\)/);
+  assert.doesNotMatch(extractMethod(src, 'Box', 'update'), /banner/);
+
+  const range = extractStatementRange(src, {
+    className: 'Box',
+    method: 'update',
+    fromIncludes: 'this.n = 0',
+    untilIncludes: 'this.done = true',
+  });
+  assert.match(range, /this\.n = 0/);
+  assert.match(range, /if \(this\.on && dt > 0\)/);
+  assert.doesNotMatch(range, /this\.done = true/);
+
+  assert.match(extractMatchingStatement(src, {
+    className: 'Box',
+    method: 'update',
+    kind: 'if',
+    includes: ['this.on && dt > 0', 'this.n = 1'],
+  }), /if \(this\.on && dt > 0\)/);
+  assert.match(extractMatchingStatement(src, {
+    className: 'Box',
+    method: 'update',
+    kind: 'for',
+    includes: ['i < 1', 'this.n += i'],
+  }), /for \(let i = 0; i < 1; i\+\+\)/);
+
+  const first = statementStart(src, { className: 'Box', method: 'update', includes: 'this.n = 0' });
+  const later = statementStart(src, { className: 'Box', method: 'update', includes: 'this.done = true' });
+  assert.ok(first < later);
+
+  const choose = extractDeclaration(src, 'choose');
+  const branches = ifBranchOffsets(choose, 'choose', 'flag');
+  assert.ok(branches.thenStart < branches.thenEnd);
+  assert.ok(branches.thenEnd <= branches.elseStart);
+  assert.match(choose.slice(branches.thenStart, branches.thenEnd), /return 1/);
+  assert.match(choose.slice(branches.elseStart, branches.elseEnd), /return 0/);
+  assert.throws(() => extractDeclaration(src, 'missing'), /Expected 1 top-level declaration named missing, found 0/);
+});
+
+test('extractDeclarationSpan rejects duplicate, missing, and reversed boundaries', () => {
+  const present = 'function helper() { return 1; }\nfunction after() { return 2; }';
+  assert.throws(
+    () => extractDeclarationSpan('function helper() { return 1; }\nfunction helper() { return 2; }\nfunction after() { return 3; }', 'helper', 'after'),
+    /Expected 1 span start named helper, found 2/
+  );
+  assert.throws(
+    () => extractDeclarationSpan('function helper() { return 1; }\nfunction after() { return 2; }\nfunction after() { return 3; }', 'helper', 'after'),
+    /Expected 1 span end named after, found 2/
+  );
+  assert.throws(() => extractDeclarationSpan(present, 'missing', 'after'), /Expected 1 span start named missing, found 0/);
+  assert.throws(() => extractDeclarationSpan(present, 'helper', 'missing'), /Expected 1 span end named missing, found 0/);
+  assert.throws(() => extractDeclarationSpan(present, 'after', 'helper'), /after does not precede helper/);
 });
