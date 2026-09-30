@@ -276,6 +276,30 @@ If you add a brand-new file under `ASSETS`, add the path to the precache list in
 - Tests assert behavior. Do not add assertions on the text of source files or
   documentation. Existing source-text assertions are legacy; convert one to a
   behavior test, or delete it if it only restates a constant, when you touch it.
+- `tests/_game-sim.test.js` is the golden oracle. `tests/_game-sim.js` boots the
+  real scripts in index.html order inside a Node vm context with a scripted
+  clock, seeded randomness, browser autoplay rules, and keyboard, mouse and
+  touch input. It then plays journeys: menus, settings and an offline boot; a
+  run with a dash, combo kills, pause, save on page hide, resume, a stalled
+  frame and death; a cheat-assisted crawl through all fifteen floors, with two
+  bosses fought in phase two (and the HIVE in phase three) without
+  invulnerability, and the finale; three seeds; and touch play in portrait and
+  landscape.
+- Each checkpoint records what reached the canvas (every fill, stroke, text and
+  image with the transform, style, and other canvas state it used), audio calls,
+  media volume and filled audio buffers, network calls, stored data, and
+  console output at every level.
+  All of it must match `tests/golden/journeys.json`. The order of state writes
+  does not matter; what is drawn does.
+- A behavior-preserving change must pass the oracle without re-recording. When
+  a journey fails, `node tests/_game-sim.js diff <journey>` prints the first
+  entry that differs from `origin/develop`. Re-record with
+  `node tests/_game-sim.js update <journey>` only for an intended behavior
+  change, and say why in the PR.
+- The oracle protects only code its journeys run. It does not reach the shop,
+  choice screens, trial mechanics, hub panels, or combat past floor 1, and it
+  checks no real pixels, fonts, or browser layout. Prove changes there with
+  their own tests or the verification skill.
 
 ## Documentation
 
