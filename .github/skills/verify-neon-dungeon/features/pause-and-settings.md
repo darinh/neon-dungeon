@@ -100,7 +100,7 @@ Preconditions:
   `[ PRESS AGAIN TO CONFIRM ]` for 3 s. Moving the selection or clicking
   elsewhere disarms it.
 - **Known game layout defect: values drawn over their labels.** This is a
-  game bug, tracked separately. `rowText` fails on such a row with
+  game bug, tracked in #1078. `rowText` fails on such a row with
   `value overlaps its label: <label box> vs <value box>, a game layout defect
   at this viewport`, and the check is deliberately not loosened. Measured at
   HEAD `2bb212d` from the drawn text boxes, on MENU → SETTINGS at each world

@@ -112,10 +112,10 @@ PID 359051  ROOT /path/to/worktree  HEAD e5d6f28...
   no reader sees a torn record. Its schema is exact: `pid`, `status`
   (`starting` with `url: null`, or `ready` with a url), `root`, `runDir`,
   `startedAt`, `head` and a 32-hex `token`. The url is parsed with
-  `new URL()` and must be `http:` on host `127.0.0.1` or `[::1]`, with an
-  explicit port 1-65535 and path `/`, in canonical form. Anything else is
-  unreadable (`bad or missing: <fields>`), and doctor and drive refuse it
-  (exit 2) before any browser starts.
+  `new URL()` and must be `http:` on host `127.0.0.1` (the only address
+  `verify-serve.js` binds), with an explicit port 1-65535 and path `/`, in
+  canonical form. Anything else is unreadable (`bad or missing: <fields>`),
+  and doctor and drive refuse it (exit 2) before any browser starts.
 - **Failure cleanup and ownership.** If the launch fails, times out or gets
   SIGINT/SIGTERM/SIGHUP, it kills its own server. It removes `server.json` and
   `launch.lock` only if they carry its token at the moment of removal. There
