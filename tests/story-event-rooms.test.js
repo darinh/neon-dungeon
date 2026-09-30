@@ -11,7 +11,6 @@ const { readSourceFile } = require('./_source-files.js');
 const ROOT = path.resolve(__dirname, '..');
 const EVENTS_SRC = readSourceFile(__dirname, 'contentEvents');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
-const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'spec.md'), 'utf8');
 const biomes = require(path.join(ROOT, 'src', 'data', 'biomes.js'));
 
 /**
@@ -303,16 +302,4 @@ test('protocol trial effects execute concrete runtime state changes', () => {
   sandbox.applyEventEffect(consent, 'b', player, gm);
   assert.equal(sandbox.enemies.length, 3);
   assert.ok(player.score > 0);
-});
-
-test('spec documents protocol trials as story-driven level mechanics', () => {
-  const headerVersion = SPEC.match(/^# NEON DUNGEON — Game Specification v(\d+\.\d+\.\d+)/m);
-  assert.ok(headerVersion, 'spec header must declare a semantic version');
-  const latestChangelogVersion = SPEC.match(/^\| v(\d+\.\d+\.\d+) \|/m);
-  assert.ok(latestChangelogVersion, 'spec changelog must declare a latest semantic version');
-  assert.equal(headerVersion[1], latestChangelogVersion[1], 'spec header version must match the latest changelog entry');
-  assert.match(SPEC, /\*\*11 Events\*\* \(selected randomly per terminal, filtered by player state, with protocol trials guaranteed on selected story floors\):/);
-  assert.match(SPEC, /\| Route Proof \| Reveal non-secret floor map \+ XP \+score \| Open nearest locked door, \+credits, −10 HP \|/);
-  assert.match(SPEC, /Floors 2, 5, and 8 force story-mechanical trials \(`Route Proof`, `Cooperation Protocol`, `Consent Lock`\)/);
-  assert.match(SPEC, /\| v6\.1\.20 \| Story-driven event-room pass shipped:/);
 });

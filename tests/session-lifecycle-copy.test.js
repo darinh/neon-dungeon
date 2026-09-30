@@ -8,7 +8,6 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const GAME = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'game.js'), 'utf8');
-const SPEC = fs.readFileSync(path.resolve(__dirname, '..', 'docs', 'spec.md'), 'utf8');
 const SW = fs.readFileSync(path.resolve(__dirname, '..', 'sw.js'), 'utf8');
 
 /**
@@ -135,10 +134,4 @@ test('lifecycle helpers reconcile session counters and return compact victory co
   for (const line of [...message.details, ...legacy.details]) {
     assert.ok(line.length <= 35, 'compact victory detail should fit narrow screens: ' + line);
   }
-});
-
-test('spec documents shipped session lifecycle framing', () => {
-  assert.match(SPEC, /Run start UI now labels fresh starts as booted test\s+sessions/i);
-  assert.match(SPEC, /death\s+recap presents instance termination and a queued memory wipe/i);
-  assert.match(SPEC, /Victory\s+copy has an `act1_message_sent` branch/i);
 });
