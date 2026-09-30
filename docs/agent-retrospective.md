@@ -44,7 +44,8 @@ Each rule is here because skipping it caused a real incident.
 12. A universal claim ("never overlaps", "always restores") needs a test that
     enumerates the claim's domain, uses fixtures from the runtime predicate, and
     fails when a named state is never exercised. If two review rounds falsify
-    the same claim, stop reviewing. Extend that test first.
+    the same claim, stop reviewing and extend that test first; a third review
+    round starts only once the PR contains that extended test.
 13. Treat reviewer findings as leads. Check the cited file and line before
     acting on a finding or dismissing it.
 14. Before calling a review finding fixed, confirm the fix commit is in the PR
@@ -56,6 +57,17 @@ Each rule is here because skipping it caused a real incident.
 17. If the machine-local git wrapper blocks a mutation in a linked worktree,
     confirm that `git rev-parse --git-dir` prints `.git/worktrees/<name>` before
     using `/usr/bin/git`. Never replace a guarded npm script with raw git.
+18. Before launching a fan-out of workers, put every brief, input and output
+    file outside `/tmp` (workers here refuse it), pin the base commit the
+    workers diff against, keep review briefs free of attack wording that can get
+    a request refused, and run one pilot batch. Check the pilot's diff against
+    the operations the brief allows before launching the rest.
+19. Do not enforce an invariant by approximating syntax another tool owns
+    (compiler directives, lint directives, shell commands). Assert the invariant
+    directly or call the tool's own parser. If neither is possible, cite the
+    tool's source (file and line, at the version the lockfile pins) for each
+    rule you copy, test the copy against the tool itself on an enumerated set
+    of cases, and reject input it does not recognize.
 
 ## Merge and release gates
 
