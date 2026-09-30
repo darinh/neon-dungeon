@@ -349,3 +349,43 @@ test('an audio context clock starts at zero and stands still while suspended', (
   const t = read(sim, '__ac.currentTime');
   assert.ok(t > 0.45 && t < 0.55, `ran for half a second: ${t}`);
 });
+
+test('a canvas cleared by a size write and then drawn from is not mistaken for the painted one', () => {
+  /** Two fresh pages with the same history, so canvases get the same ids. @param {boolean} clear */
+  const blit = (clear) => {
+    const sim = menuSim();
+    sim.checkpoint('menu');
+    sim.eval(`(() => {
+      const off = document.createElement('canvas'); off.width = 8; off.height = 8;
+      const o = off.getContext('2d'); o.fillStyle = 'red'; o.fillRect(0, 0, 8, 8);
+      ${clear ? 'off.width = 8;' : ''}
+      const c = document.createElement('canvas').getContext('2d');
+      c.drawImage(off, 0, 0);
+      c.fillStyle = c.createPattern(off, 'repeat');
+      c.fillRect(0, 0, 4, 4);
+    })()`);
+    return sim.checkpoint('blit').draw;
+  };
+  assert.notEqual(blit(true), blit(false));
+});
+
+test('a health-buffered fight gives health back, keeps any level gained, and restores invulnerability', () => {
+  const sim = createGameSim({ width: 1280, height: 800 });
+  sim.frames(30);
+  play.startRun(sim, 'ORACLE-BUFFER');
+  const before = read(sim, '({ hp: game.player.hp, maxHp: game.player.maxHp, level: game.player.level, inv: !!game.cheats.invulnerable })');
+  play.withHealthBuffer(sim, () => {
+    assert.deepEqual(read(sim, '[game.player.hp, game.player.maxHp, !!game.cheats.invulnerable]'), [5000, 5000, false]);
+    sim.eval('game.player.hp -= 123;');
+  });
+  assert.deepEqual(read(sim, '({ hp: game.player.hp, maxHp: game.player.maxHp, level: game.player.level, inv: !!game.cheats.invulnerable })'), before);
+  play.withHealthBuffer(sim, () => {
+    sim.eval('game.player.gainXP(1000);');
+    play.settle(sim);
+  });
+  const after = read(sim, '({ hp: game.player.hp, maxHp: game.player.maxHp, level: game.player.level, inv: !!game.cheats.invulnerable })');
+  assert.ok(after.level > before.level, 'the fight levelled up');
+  assert.ok(after.maxHp > before.maxHp && after.maxHp < 5000, `level-up health kept without the buffer: ${after.maxHp}`);
+  assert.equal(after.hp, after.maxHp);
+  assert.equal(after.inv, before.inv);
+});

@@ -568,6 +568,9 @@ function createGameSim(options = {}) {
 
   /** @type {Map<string, { x: number, y: number }>} */
   const texts = new Map();
+  /** Every canvas, so a checkpoint can record clears nothing has drawn after. */
+  /** @type {Array<{ __simFlushResize: () => void }>} */
+  const canvases = [];
 
   /** @param {number} id @param {(() => { width: number, height: number }) | null} cssSize */
   const createCanvas = (id, cssSize) => {
@@ -578,7 +581,13 @@ function createGameSim(options = {}) {
     let context = null;
     const tag = id === 0 ? 'canvas' : 'canvas' + id;
     const canvas = {
-      __simTag: tag,
+      // Reading the tag (drawImage or createPattern of this canvas) first
+      // records any pending clear, so a cleared source is not mistaken for
+      // the painted one.
+      get __simTag() {
+        canvas.__simFlushResize();
+        return tag;
+      },
       style: {},
       get width() { return width; },
       set width(v) {
@@ -617,9 +626,12 @@ function createGameSim(options = {}) {
       toDataURL: () => 'data:,',
       classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     };
+    canvases.push(canvas);
     return canvas;
   };
   const canvas = createCanvas(0, () => viewport);
+  /** The main canvas's event target key (its tag, read without flushing). */
+  const MAIN_CANVAS = 'canvas';
 
   /** @type {any} */
   const body = { __simTag: 'body', tagName: 'BODY', style: {}, appendChild: (/** @type {any} */ c) => c, removeChild: (/** @type {any} */ c) => c, classList: { add() {}, remove() {}, toggle() {}, contains: () => false } };
@@ -1008,7 +1020,7 @@ function createGameSim(options = {}) {
     const list = [...touches.values()].map((v) => ({ ...v, pageX: v.clientX, pageY: v.clientY, target: canvas }));
     task(() => {
       if (type === 'touchend') activate();
-      events.fire(canvas.__simTag, type, { type, touches: list, targetTouches: list, changedTouches: [touch], target: canvas, cancelable: true, preventDefault() {}, stopPropagation() {} });
+      events.fire(MAIN_CANVAS, type, { type, touches: list, targetTouches: list, changedTouches: [touch], target: canvas, cancelable: true, preventDefault() {}, stopPropagation() {} });
     });
   };
   /** @param {string} type @param {number} x @param {number} y @param {object} [extra] */
@@ -1049,24 +1061,24 @@ function createGameSim(options = {}) {
     /** @param {string} text */
     type(text) { for (const ch of text) sim.key(codeFor(ch), ch); },
     /** @param {number} x @param {number} y */
-    mouseMove(x, y) { task(() => events.fire(canvas.__simTag, 'mousemove', mouseEvent('mousemove', x, y))); },
+    mouseMove(x, y) { task(() => events.fire(MAIN_CANVAS, 'mousemove', mouseEvent('mousemove', x, y))); },
     /** Moves to (x, y), waits a frame as a real cursor would, then clicks. @param {number} x @param {number} y */
     click(x, y) {
       sim.mouseMove(x, y);
       step();
       task(() => {
         activate();
-        events.fire(canvas.__simTag, 'mousedown', mouseEvent('mousedown', x, y, { buttons: 1 }));
+        events.fire(MAIN_CANVAS, 'mousedown', mouseEvent('mousedown', x, y, { buttons: 1 }));
       });
       step();
       task(() => {
-        events.fire(canvas.__simTag, 'mouseup', mouseEvent('mouseup', x, y));
+        events.fire(MAIN_CANVAS, 'mouseup', mouseEvent('mouseup', x, y));
         events.fire('window', 'mouseup', mouseEvent('mouseup', x, y));
       });
       step();
     },
     /** @param {number} x @param {number} y @param {number} deltaY */
-    wheel(x, y, deltaY) { task(() => events.fire(canvas.__simTag, 'wheel', mouseEvent('wheel', x, y, { deltaY, deltaX: 0, deltaMode: 0 }))); },
+    wheel(x, y, deltaY) { task(() => events.fire(MAIN_CANVAS, 'wheel', mouseEvent('wheel', x, y, { deltaY, deltaX: 0, deltaMode: 0 }))); },
     /** @param {number} id @param {number} x @param {number} y */
     touchStart(id, x, y) { touches.set(id, { identifier: id, clientX: x, clientY: y }); touchEvent('touchstart', id); },
     /** @param {number} id @param {number} x @param {number} y */
@@ -1121,6 +1133,7 @@ function createGameSim(options = {}) {
     storage: () => Object.fromEntries(storageMap),
     /** Folds everything observed since the previous checkpoint into one record. @param {string} label */
     checkpoint(label) {
+      for (const c of canvases) c.__simFlushResize();
       const probe = JSON.parse(PROBE.runInContext(context));
       const d = draw.take();
       const a = audio.take();
@@ -1359,14 +1372,36 @@ function dashAcrossRoom(sim) {
 }
 
 /**
+ * Runs `fight` with invulnerability off and a 5000 health buffer, so enemy
+ * damage shows in the player's health, then takes the buffer away. Health
+ * returns to its value before the fight; a level gained during the fight keeps
+ * its extra maximum health and heals to full, as gainXP does. Invulnerability
+ * returns to what it was.
+ * @param {GameSim} sim @param {() => void} fight
+ */
+function withHealthBuffer(sim, fight) {
+  const before = sim.eval(`JSON.stringify({
+    hp: game.player.hp, maxHp: game.player.maxHp, level: game.player.level, invulnerable: !!game.cheats.invulnerable })`);
+  sim.eval('game.cheats.invulnerable = false; game.player.maxHp = 5000; game.player.hp = 5000;');
+  try {
+    fight();
+  } finally {
+    sim.eval(`(() => {
+      const b = ${before}, p = game.player;
+      p.maxHp = b.maxHp + (p.maxHp - 5000);
+      p.hp = p.level > b.level ? p.maxHp : Math.min(b.hp, p.maxHp);
+      game.cheats.invulnerable = b.invulnerable;
+    })()`);
+    sim.frames(1);
+  }
+}
+
+/**
  * Wounds the floor's boss to `fraction` of its health and lets it fight the
  * player, standing nearby, for `frames` frames. Bosses change phase by health:
  * 32% is phase two for every boss (the SENTINEL enters it at 33%, the HIVE
- * between 70% and 30%) and 25% is the HIVE's phase three. Invulnerability is
- * off for the fight, with a health buffer, so boss damage shows in the
- * player's health. Call the returned function to put both back.
+ * between 70% and 30%) and 25% is the HIVE's phase three.
  * @param {GameSim} sim @param {number} fraction @param {number} frames
- * @returns {() => void}
  */
 function bossFight(sim, fraction, frames) {
   const near = sim.eval(`(() => {
@@ -1384,14 +1419,8 @@ function bossFight(sim, fraction, frames) {
   })()`);
   if (!near) throw new Error('journey: no living boss with open floor near it');
   teleport(sim, near);
-  const before = sim.eval('[game.player.hp, game.player.maxHp]');
-  sim.eval('game.cheats.invulnerable = false; game.player.maxHp = 5000; game.player.hp = 5000;');
   sim.frames(frames);
   settle(sim);
-  return () => {
-    sim.eval(`game.player.maxHp = ${before[1]}; game.player.hp = ${before[0]}; game.cheats.invulnerable = true;`);
-    sim.frames(1);
-  };
 }
 
 /**
@@ -1555,13 +1584,14 @@ const JOURNEYS = {
         mark(`floor ${floor}`);
         if (sim.eval('!!game.bossAlive')) {
           if (floor === 3 || floor === 6) {
-            const restore = bossFight(sim, 0.32, 600);
-            mark(`floor ${floor} boss in phase two`);
-            if (floor === 6) {
-              bossFight(sim, 0.25, 300);
-              mark('floor 6 boss in phase three');
-            }
-            restore();
+            withHealthBuffer(sim, () => {
+              bossFight(sim, 0.32, 600);
+              mark(`floor ${floor} boss in phase two`);
+              if (floor === 6) {
+                bossFight(sim, 0.25, 300);
+                mark('floor 6 boss in phase three');
+              }
+            });
           }
           killBosses(sim);
           mark(`floor ${floor} boss down`);
@@ -1868,7 +1898,7 @@ function main(argv) {
 if (require.main === module) main(process.argv.slice(2));
 
 /** Player actions journeys are built from, for tests that script their own play. */
-const play = { activateMenuRow, startRun, settle, arrive, descend, enableCheats, killNearest, killBosses, findTile, teleport };
+const play = { activateMenuRow, startRun, settle, arrive, descend, enableCheats, killNearest, killBosses, findTile, teleport, withHealthBuffer };
 
 module.exports = {
   ROOT,
