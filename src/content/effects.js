@@ -1,19 +1,10 @@
 // @ts-check
 'use strict';
 
-// Gameplay feedback effects: pooled particles, ambient particles, floating text,
-// and screen shake. Loaded before src/content.js so existing script-tag globals
-// keep their legacy names while the visual-effects surface has a smaller owner.
-
-// ─── Particles (pooled via engine/particles.js) ─────────────────────────────
-// The pool mechanics + per-frame physics integration live in
-// NEON.particles.createSystem(). This file owns the gameplay vocabulary:
-// the type-keyed magic numbers (EXPLOSION/MUZZLE/SPARK/BLOOD speed, life,
-// size, gravity), the TILE-coordinate translation, and the draw style.
-// Engine handles: pool acquire/release, compact-in-place, vx*dt/vy*dt/grav,
-// life decay, burst scaling under load.
-const PARTICLE_CAP = 2000;     // hard cap on total allocated particle objects
-const PARTICLE_BURST_SCALE_THRESHOLD = 1500; // scale new bursts above this
+// Loaded before src/content.js so particle, text, and shake globals keep their names.
+// Pool and integration live in NEON.particles. This file owns type speeds, tile coords, and draw style.
+const PARTICLE_CAP = 2000;
+const PARTICLE_BURST_SCALE_THRESHOLD = 1500;
 const _particles = /** @type {any} */ (requireNEON('particles', 'src/content/effects.js'));
 const _particleSystem = _particles.createSystem({
   cap: PARTICLE_CAP,
@@ -28,23 +19,16 @@ const _particleSystem = _particles.createSystem({
  * @param {any} count
  */
 function spawnParticles(wx, wy, type, colour, count) {
-  // Burst cap — under extreme stacking, halve new burst sizes to protect the
-  // frame budget. Gameplay-visible only in pathological scenarios.
+  // Under extreme stacking, scaleBurst halves new bursts to protect the frame budget.
   count = _particleSystem.scaleBurst(count);
-  // REDUCED MOTION accessibility umbrella (settings.reducedMotion):
-  // dampen burst sizes by ~half so EXPLOSION fountains, level-up
-  // sparks, hit splatters, etc. are less overwhelming for users with
-  // vestibular sensitivity / photosensitive epilepsy. Floored at 1
-  // because MUZZLE flashes are a critical gameplay tell (where my
-  // shot went, what direction the enemy is facing) and zero would
-  // hide them entirely.
+  // REDUCED MOTION halves bursts. Floor at 1: a MUZZLE of 0 would hide the shot tell.
   if (settings.reducedMotion) count = Math.max(1, Math.floor(count * 0.5));
   for (let i=0; i<count; i++) {
     const p = _particleSystem.acquire();
     if (!p) return; // cap reached mid-burst
     const a = rand('cosmetic') * TWO_PI;
     const spd = type==='EXPLOSION' ? rnd(1,4,'cosmetic') : rnd(0.5,3,'cosmetic');
-    // EXHAUSTIVE reset — every field rewritten, no bleed-through
+    // Pooled object: every field must be rewritten or the previous burst bleeds through.
     p.x = wx*TILE;
     p.y = wy*TILE;
     p.vx = Math.cos(a)*spd*(TILE/2);
@@ -98,18 +82,14 @@ function drawParticles(camX, camY) {
   _particleSystem.forEach(_drawParticleCb);
 }
 
-// Release every live particle back to the pool (on floor change / game reset).
 function clearParticles() {
   _particleSystem.clear();
 }
 
-// Expose live particle count for telemetry + debug overlay (replaces the
-// pre-extraction `particles.length` global access from src/game.js).
 function particleCount() {
   return _particleSystem.count;
 }
 
-// ─── Ambient Particles ───────────────────────────────────────────────────────
 /** @type {any[]} */ const ambientParticles = [];
 const AMB_CAP = 80;
 const AMB_SPAWN_INTERVAL = 0.08; // seconds between spawn attempts
@@ -119,21 +99,18 @@ let ambSpawnTimer = 0;
  * @param {any} dt
  */
 function updateAmbient(dt) {
-  // Update existing
   for (let i = ambientParticles.length - 1; i >= 0; i--) {
     const p = ambientParticles[i];
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.life -= dt / p.maxLife;
     if (p.life <= 0) { ambientParticles.splice(i, 1); continue; }
-    // Drift for dust motes
     if (p.kind === 'DUST') {
       p.vx += (Math.sin(p.seed + lastTime / 2000) * 3 - p.vx) * dt * 0.5;
       p.vy += (Math.cos(p.seed + lastTime / 1700) * 2 - p.vy) * dt * 0.5;
     }
   }
 
-  // Spawn new particles
   ambSpawnTimer += dt;
   if (ambSpawnTimer < AMB_SPAWN_INTERVAL || ambientParticles.length >= AMB_CAP) {
     if (ambSpawnTimer >= AMB_SPAWN_INTERVAL) ambSpawnTimer = 0;
@@ -153,14 +130,13 @@ function updateAmbient(dt) {
   const torchR = _CG.modifier === 'BLACKOUT' ? 5 : 9;
   const ptx = Math.floor(player.x), pty = Math.floor(player.y);
 
-  // Collect emitter candidates in visible range
   const emitters = [];
   for (let ty = startY; ty < endY; ty++) {
     for (let tx = startX; tx < endX; tx++) {
       if (!dungeon.visited[ty][tx]) continue;
       if (dungeon.secretMask[ty][tx]) continue;
       const tile = dungeon.map[ty][tx];
-      // Only spawn on tiles currently in torch range (light never decays)
+      // Distance, not the light grid: light never decays, so it is not the live torch.
       const ddx = tx - ptx, ddy = ty - pty;
       if (ddx * ddx + ddy * ddy > torchR * torchR) continue;
 
@@ -184,7 +160,6 @@ function updateAmbient(dt) {
     }
   }
 
-  // Spawn from a few random emitters (budget-aware)
   const budget = AMB_CAP - ambientParticles.length;
   const count = Math.min(emitters.length, budget, 3);
   for (let i = 0; i < count; i++) {
@@ -195,7 +170,6 @@ function updateAmbient(dt) {
 
     switch (e.kind) {
       case 'DUST': {
-        // UNCHAINED #40: biome-tinted DUST colour (fallback to cyan palette).
         let dustPal = ['#66ddff','#aabbcc'];
         try {
           if (typeof NEON !== 'undefined' && NEON.biomes && typeof BIOME_PALETTES !== 'undefined') {
@@ -287,7 +261,6 @@ function drawAmbient(camX, camY) {
   }
 }
 
-// ─── Floating Damage Numbers ─────────────────────────────────────────────────
 /** @type {any[]} */ const floatingTexts = [];
 /**
  * @param {any} wx
@@ -298,12 +271,8 @@ function drawAmbient(camX, camY) {
 function spawnDmgText(wx, wy, text, colour) {
   if (!settings.damageNumbers) return;
   if (floatingTexts.length >= 20) floatingTexts.shift();
-  // Player.shoot (entities.js) and several other damage paths produce
-  // float multiplications like (w.dmg + atk) * critMul * metaMul, which
-  // can land on values like 31.999999999999996 instead of 32. Round
-  // numeric callers here so every damage floater shows a clean integer
-  // without forcing every call site to remember Math.round. Non-numeric
-  // text ('CRIT!', '+5', 'EXECUTE', '+3 CR', etc.) is unaffected.
+  // Damage paths multiply floats (31.999999999999996). Round here so call sites
+  // stay unrounded; non-numeric labels ('CRIT!', '+5') are left alone.
   if (typeof text === 'number' && Number.isFinite(text)) text = Math.round(text);
   floatingTexts.push({
     x: wx * TILE + rnd(-6, 6), y: wy * TILE - 8,
@@ -327,14 +296,7 @@ function updateFloatingTexts(dt) {
  * @param {any} camY
  */
 function drawFloatingTexts(camX, camY) {
-  // Settings-scaled bold font for floating damage / pickup numbers.
-  // Base 15px multiplied by `settings.textScale` (0.85 / 1.0 / 1.15 / 1.3).
-  // Both the integer fontPx AND the assembled font string are computed
-  // ONCE per call (not per text) — the loop just assigns the cached
-  // string to ctx.font. Heavy combat can have 10+ floating texts at
-  // once and this runs every frame; per-iteration template-literal
-  // allocation here would churn GC for no functional benefit.
-  // Per gpt-5.3-codex r1 review of this file.
+  // One font string per frame: 10+ texts, and a per-text template literal would churn.
   const fontPx = Math.max(8, Math.round(15 * settings.textScale));
   const fontStr = `bold ${fontPx}px monospace`;
   for (const f of floatingTexts) {
@@ -351,7 +313,6 @@ function drawFloatingTexts(camX, camY) {
   }
 }
 
-// ─── Screen Shake ────────────────────────────────────────────────────────────
 const shake = { intensity: 0, timer: 0, ox: 0, oy: 0 };
 /**
  * @param {any} intensity
@@ -371,7 +332,7 @@ function updateShake(dt) {
   if (!settings.screenShake || shake.timer <= 0) { shake.intensity = 0; shake.timer = 0; shake.ox = shake.oy = 0; return; }
   shake.timer -= dt;
   const t = Math.max(0, shake.timer);
-  const mag = shake.intensity * (t / 0.25);  // decay linearly
+  const mag = shake.intensity * (t / 0.25);
   shake.ox = (rand('cosmetic') * 2 - 1) * mag;
   shake.oy = (rand('cosmetic') * 2 - 1) * mag;
   if (shake.timer <= 0) { shake.intensity = 0; shake.ox = shake.oy = 0; }

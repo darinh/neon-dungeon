@@ -1,11 +1,7 @@
 // @ts-check
 'use strict';
 
-// Floor event terminal catalog and effect helpers. Loaded before src/content.js
-// so content, entity, render, and game coordinators keep sharing the same
-// script-tag globals while event content lives in its own module.
-
-// ─── Floor Events (Risk/Reward Encounters) ──────────────────────────────────
+// Loaded before src/content.js so event globals stay shared with content, entities, render, and game.
 const EVENTS = [
   { id:'STASIS_POD',         name:'Stasis Pod',          desc:'A cryo-pod hums with residual power. Frost clings to the glass.',
     icon:'❄', colour:'#66ccff',
@@ -319,20 +315,15 @@ function applyEventEffect(event, choice, player, gm) {
         player.credits += Math.round(cr * (hasAugment('CREDIT_SIPHON') ? 1.5 : 1));
         gm.msg('+' + cr + ' CR (purged)', '#ff4488');
         spawnParticles(player.x, player.y, 'SPARK', '#ff4488', 8);
-        // UNCHAINED #41: rare-terminal log-fragment drop (40% if eligible).
-        // Runs BEFORE the module drop — logs and modules are mutually
-        // exclusive per spec ("logs never collide with module drops").
+        // Logs and modules are mutually exclusive; this roll runs before the module drop.
         const gotLog = tryRareTerminalLogDrop(gm, player);
         if (!gotLog) {
-          // UNCHAINED #39: 50% chance the rare-terminal reward is a core
-          // instead of a module. Same slot as the module roll — cores and
-          // modules are mutually exclusive per the #39 spec.
+          // Cores and modules share this slot and are mutually exclusive.
           if (rand('loot') < 0.50 && typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
             NEON.cores.spawnCoreDrop(gm, player.x, player.y, 1);
             gm.msg('CORE FRAGMENT SALVAGED', '#a866ff');
             spawnParticles(player.x, player.y, 'SPARK', '#a866ff', 10);
           } else {
-            // UNCHAINED #37: rare-terminal module drop chance (floor 2+).
             tryRareTerminalModuleDrop(gm, player);
           }
         }
@@ -430,12 +421,7 @@ function applyEventEffect(event, choice, player, gm) {
   }
 }
 
-// ─── UNCHAINED #37: Upgrade Module drop hook ────────────────────────────────
-// Called from the CORRUPTED_TERMINAL PURGE branch. Rolls against the rare-
-// terminal drop table (25% chance, floor 2+), pushes the module onto the
-// transient run array, plays the pickup jingle, and toasts the HUD.
-// NOTE: The boss-drop equivalent is intentionally not wired in this PR —
-// see issue #37 body ("#39 can do the boss hook; may be split").
+// Boss-drop equivalent is intentionally not wired; see issue #37.
 /**
  * @param {any} gm
  * @param {any} player
@@ -453,12 +439,7 @@ function tryRareTerminalModuleDrop(gm, player) {
   if (player) spawnParticles(player.x, player.y, 'EXPLOSION', '#66ffcc', 14);
 }
 
-// ─── UNCHAINED #41: ARCHIVE log-fragment drop hook ──────────────────────────
-// Rolls a 40% chance for a predecessor log on CORRUPTED_TERMINAL PURGE. If an
-// eligible log (biome-matched, unfound, floor-gated) exists, marks it found,
-// routes the body into the existing READING overlay, and plays audio.logFound.
-// Returns true if a log was awarded (caller should then SKIP the module roll —
-// logs and modules are mutually exclusive per spec).
+// True means a log was awarded; the caller must skip the module roll.
 const _LOG_DROP_CHANCE = 0.40;
 /**
  * @param {any} gm
@@ -475,7 +456,7 @@ function tryRareTerminalLogDrop(gm, player) {
   gm.msg('▒ SIGNAL FRAGMENT RECOVERED — AXIOM-' + log.axiom, '#39ff14');
   try { if (typeof audio !== 'undefined' && audio.logFound) audio.logFound(); } catch (_) {}
   if (player) spawnParticles(player.x, player.y, 'EXPLOSION', '#39ff14', 14);
-  // Display the body via the existing READING overlay (same path as T.LORE).
+  // Same READING overlay path as T.LORE.
   try {
     gm.currentLore = 'AXIOM-' + log.axiom + ' — ' + log.title + ': ' + log.body;
     if (typeof gm.setState === 'function') gm.setState('READING');

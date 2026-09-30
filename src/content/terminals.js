@@ -1,8 +1,7 @@
 // @ts-check
 'use strict';
 
-// Lore terminal content and selection helpers. Loaded before src/content.js so
-// floor generation can place T.LORE terminals while game.js can read entries.
+// Loaded before src/content.js so floor generation can place T.LORE terminals while game.js can read entries.
 
 const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [

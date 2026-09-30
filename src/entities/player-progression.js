@@ -2,8 +2,6 @@
 'use strict';
 
 /**
- * Return the XP required for the player's next level.
- *
  * @this {Player}
  * @returns {number}
  */
@@ -12,18 +10,13 @@ Player.prototype.xpNeeded = function xpNeeded() {
 };
 
 /**
- * Add XP, applying floor/meta/augment multipliers and resolving level-ups.
- *
  * @this {Player}
  * @param {any} [amount]
  * @returns {void}
  */
 Player.prototype.gainXP = function gainXP(amount) {
   const augMul = hasAugment('NEURAL_LINK') ? 1.25 : 1;
-  // OVERFLOW floor modifier: +25% XP gain on this floor. Composes
-  // multiplicatively with NEURAL_LINK aug and getMetaXPMultiplier()
-  // (meta-progression buff). Floor modifiers are mutually exclusive
-  // per floor (only one rolls), so OVERFLOW + HARDENED can't co-occur.
+  // Floor modifiers are mutually exclusive, so OVERFLOW and HARDENED cannot both apply.
   const overflowMul = (_EG.modifier === 'OVERFLOW') ? 1.25 : 1;
   this.xp += Math.round(amount * getMetaXPMultiplier() * augMul * overflowMul);
   while (this.xp >= this.xpNeeded() && this.level < 10) {
@@ -39,7 +32,7 @@ Player.prototype.gainXP = function gainXP(amount) {
     }
     if (this.level === 10) grantCapstone(this);
   }
-  // Trigger perk choice UI after the loop (deferred so XP chips etc. resolve first)
+  // After the loop so stacked XP chips resolve before the perk UI opens.
   if (_EG.pendingPerkChoices.length && _EG.state === 'PLAYING') {
     _EG.openNextPerkChoice();
   }

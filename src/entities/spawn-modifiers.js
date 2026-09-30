@@ -1,8 +1,7 @@
 // @ts-check
 
 /**
- * Apply floor-modifier HP scaling before an enemy is constructed so maxHp stays
- * in sync with the adjusted spawn HP.
+ * Scale before construction so maxHp stays in sync with the adjusted spawn HP.
  *
  * @param {number} hp
  * @param {string | undefined} modifier
@@ -13,18 +12,13 @@ function scaleEnemySpawnHpForModifier(hp, modifier, isBoss) {
   if (isBoss) return hp;
   if (modifier === 'SWARM')     return Math.round(hp * 0.6);
   if (modifier === 'FORTIFIED') return Math.round(hp * 1.4);
-  // FRAGILE: glass-cannon protocol — non-boss enemies have 0.55x HP but
-  // damage to player is amplified 1.3x in player.takeDamage. Both sides
-  // get more lethal: fast clears reward aggression, single mistakes cost
-  // more. Bosses are exempt because HP-ratio phase transitions are tuned
-  // tight; see the boss note in src/entities/enemy-stats.js.
+  // HP only. Player damage is 1.3x in player.takeDamage. Bosses stay exempt:
+  // their HP-ratio phases are tuned tight (src/entities/enemy-stats.js).
   if (modifier === 'FRAGILE')   return Math.round(hp * 0.55);
   return hp;
 }
 
 /**
- * Apply difficulty-scaled elite roll for eligible floor-3+ enemies.
- *
  * @param {any} enemy
  * @param {string} type
  * @param {number} floorNum

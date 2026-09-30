@@ -1,47 +1,8 @@
 // @ts-check
 'use strict';
-// engine/decor.js — pure helpers for per-tile decor scaffolding.
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. All exports are pure values
-// and pure functions over numbers; no module state, no globals consulted,
-// no allocations per call.
-//
-// These primitives back the kind of per-tile decor systems found in
-// tile-based renderers: a deterministic per-tile hash (so decor placement
-// stays stable across frames without storage), a frozen 4-direction
-// neighbour-offset table (read-only iteration in hot paths), and a
-// scratch-object factory (single instance reused per call to avoid GC
-// churn inside the per-tile draw loop).
-//
-// Surface:
-//   tileHash(tx, ty, floor)
-//     → uint32 hash of three integer coordinates. Same inputs always
-//       produce the same output. Reasonable distribution for sparse-rate
-//       gating and `% N` bucketing; NOT cryptographic.
-//
-//   NEIGHBOR_OFFSETS_4
-//     → frozen [[0,-1],[0,1],[-1,0],[1,0]] (N, S, W, E). Inner arrays are
-//       also frozen so iteration cannot accidentally mutate.
-//
-//   createContextScratch()
-//     → returns a fresh mutable scratch object the host populates each
-//       tile and returns to its draw loop. Shape:
-//         { h:0, roll:0, wallSide:null, flicker:0,
-//           alarmEligible:false, decorEligible:false }
-//       Hosts hold ONE instance at module scope and overwrite fields per
-//       tile — this is the hot-path allocation rule.
-//
-// Hot-path safe: every helper is allocation-free in the steady state. The
-// host can call tileHash and read NEIGHBOR_OFFSETS_4 from inside per-tile
-// loops without GC churn (per the `render hot path` memory).
-//
-// Browser: attaches as `window.NEON.decor`. Pure helpers only — does NOT
-// own state (mirrors engine/draw.js / engine/touch.js / engine/viewport.js
-// pure-helpers UMD pattern, not the engine/input.js / engine/audio.js
-// createEngine factory pattern).
-//
-// Node: module.exports = { tileHash, NEIGHBOR_OFFSETS_4,
-//                          createContextScratch }.
+// tileHash is not cryptographic and not collision-free.
+// Hosts must reuse one createContextScratch() instance per tile; allocating inside the draw loop churns GC.
+// NEIGHBOR_OFFSETS_4 is frozen so a hot-path write throws instead of corrupting the shared table.
 
 (function (root, factory) {
   const v = factory();
@@ -56,15 +17,6 @@
   'use strict';
 
   /**
-   * Deterministic uint32 hash of three integer tile coordinates. Mixes
-   * via Knuth-style large-prime multipliers + an xorshift step. Cheap
-   * (no Math.* calls), stable across runs, decent low-bit distribution
-   * for `% N` bucketing.
-   *
-   * NOT cryptographic. NOT collision-free. Suitable for sparse-rate
-   * decor gating ("draw a prop on ~11% of tiles") and per-tile seeding
-   * of secondary RNG.
-   *
    * @param {number} tx
    * @param {number} ty
    * @param {number} floor
@@ -77,11 +29,6 @@
   }
 
   /**
-   * Cardinal neighbour offsets in N, S, W, E order. Frozen at module
-   * load — both the outer array and each inner pair — so accidental
-   * mutation throws in strict mode rather than silently corrupting the
-   * shared table. Iterate by index for the lowest overhead.
-   *
    * @type {ReadonlyArray<readonly [number, number]>}
    */
   const NEIGHBOR_OFFSETS_4 = Object.freeze([
@@ -102,10 +49,8 @@
    */
 
   /**
-   * Allocate a fresh decor context scratch object. Hosts hold ONE
-   * instance at module scope and overwrite its fields each tile, then
-   * return the same reference to their per-tile draw loop. This avoids
-   * per-tile object allocation in the render hot path.
+   * Hosts hold ONE instance at module scope and overwrite its fields each tile.
+   * Allocating inside the per-tile draw loop churns GC.
    *
    * @returns {DecorContextScratch}
    */

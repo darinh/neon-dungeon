@@ -2,8 +2,6 @@
 'use strict';
 
 /**
- * Find the lowest-health wounded, non-boss ally close enough for a HEALER pulse.
- *
  * @this {Enemy}
  * @returns {any}
  */
@@ -35,8 +33,7 @@ Enemy.prototype.aiHealer = function aiHealer(dt, player, map, d, los) {
   if (this._healBeam && this._healBeam.t <= 0) this._healBeam = null;
   const bm = this.berserkerMul();
   if (los && d < 4) {
-    // Too close — retreat
-    const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
+  const [dx, dy] = norm(this.x - this._tx, this.y - this._ty);
     const retreatSpd = modSpeed(this.spd) * this.slowFactor * bm * (hasAugment('TEMPORAL_DILATION') ? 0.85 : 1);
     const nx = this.x + dx * retreatSpd * dt;
     const ny = this.y + dy * retreatSpd * dt;
@@ -47,13 +44,10 @@ Enemy.prototype.aiHealer = function aiHealer(dt, player, map, d, los) {
     if (xf >= 0 && yf >= 0 && xf < MAP_W && yf < MAP_H && isPassable(map[yf][xf])) { this.y = ny; moved = true; }
     if (!moved) this.patrol(dt, map);
   } else if (los && d <= 12) {
-    // In heal range — find wounded ally and heal
     if (this._healTimer <= 0) {
       const target = this._findHealTarget();
       if (target) {
-        // 0.075 (was 0.15) so post-HP-double absolute heal output matches
-        // pre-double rates. Player DPS unchanged by HP buff, so leaving
-        // this at 0.15 doubled negation %; reviewers caught this.
+        // 7.5% keeps absolute heal matched to player DPS after enemy HP doubled.
         const healAmt = Math.round(target.maxHp * 0.075);
         target.hp = Math.min(target.maxHp, target.hp + healAmt);
         this._healBeam = { tx: target.x, ty: target.y, t: 0.4 };

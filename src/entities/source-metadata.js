@@ -67,10 +67,7 @@ function sourceColour(/** @type {any} */ s) { return SOURCE_COLOURS[s] || '#aaaa
 
 /** @type {Record<string, any>} */
 const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
-// UNCHAINED #40: biome-narrative displayName overrides. BOSS_NAMES keys that
-// appear in AREAS[].bossPool get rewritten to AREAS[].displayName so HUD/
-// announce text reads as the narrative name (e.g. SENTINEL-PRIME) while the
-// combat class id stays the internal 'SENTINEL'.
+// Boss-pool ids are rewritten to the biome display name so HUD text is narrative while the combat class id stays internal.
 (function(){
   try {
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.AREAS) {

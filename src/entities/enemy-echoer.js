@@ -1,19 +1,9 @@
 // @ts-check
 'use strict';
 
-// ─── ECHOER AI — Sonar Predictor ────────────────────────────────────────
-// Punishes pattern movement: locks onto the player's position from
-// ECHOER_LOOKBACK seconds ago, telegraphs a ghost + dashed lane for
-// ECHOER_TELEGRAPH seconds, then fires a slow projectile that dissipates
-// at the locked point. Counter-play: change direction unpredictably.
-//
-// States:
-//   idle:   on cooldown OR scanning. When room-gated LoS is true and the
-//           past-position is reachable (LoS to past-pos), lock and enter
-//           aiming.
-//   aiming: lock is fixed; ghost+lane render; brief backstep if rushed.
-//           Cannot be interrupted by losing LoS to current player —
-//           the lane is committed and visible. Stun cancels.
+// Locks a past position, telegraphs, then fires a shot that ends there.
+// Counter is to break the pattern. Aiming does not cancel if current LoS
+// is lost; stun cancels it from Enemy.update. The lane stays committed.
 /**
  * @this {Enemy}
  * @param {any} [dt]
@@ -36,20 +26,16 @@ Enemy.prototype.aiEchoer = function aiEchoer(dt, player, map, d, los) {
     (player.x >= this.room.x && player.x < this.room.x + this.room.w &&
      player.y >= this.room.y && player.y < this.room.y + this.room.h));
 
-  // ── Aiming: telegraph window, then fire ──
   if (this._ecState === 'aiming') {
     this._ecAimTimer -= dt; // fixed-rate countdown — fairness > tempo
 
-    // Backstep if player has closed the distance during the telegraph.
     if (d < 3 && this._canTarget()) {
       const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
       this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd * 1.1, dt, map);
     }
 
     if (this._ecAimTimer <= 0) {
-      // Fire toward the locked past-position. Dissipates at the locked
-      // point (small overshoot so a player standing exactly there still
-      // takes a hit at the lane endpoint).
+      // Range overshoots the lock by 0.5 so a player standing on the point is still hit.
       const lx = this._ecLockX, ly = this._ecLockY;
       const [dx, dy] = norm(lx - this.x, ly - this.y);
       const range = Math.max(1, dist(this.x, this.y, lx, ly) + 0.5);
@@ -64,13 +50,9 @@ Enemy.prototype.aiEchoer = function aiEchoer(dt, player, map, d, los) {
     return;
   }
 
-  // ── Idle: try to lock when conditions allow ──
   if (this._ecCooldown <= 0 && inRoom && this._canTarget()) {
-    // Taunt redirection: when a hologram-taunt is active (_tx/_ty point
-    // at the decoy), every other enemy targets the decoy. Mirror that
-    // behavior here — lock at the decoy's position rather than reading
-    // from the real player's history. Otherwise: use the predictive
-    // past-position from player history (the actual ECHOER mechanic).
+    // A hologram taunt points _tx/_ty at the decoy, like other enemies.
+    // Lock there instead of the player's history.
     let lockX = 0, lockY = 0, haveLock = false;
     const taunt = this._tauntTarget;
     const tauntActive = taunt && taunt.age < taunt.maxAge;
@@ -83,8 +65,6 @@ Enemy.prototype.aiEchoer = function aiEchoer(dt, player, map, d, los) {
       if (past) { lockX = past.x; lockY = past.y; haveLock = true; }
     }
     if (haveLock) {
-      // Need LoS from echoer to the lock point. Range gate uses
-      // straight-line distance to the lock.
       const dLock = dist(this.x, this.y, lockX, lockY);
       if (dLock < ECHOER_RANGE && hasLOS(this.x, this.y, lockX, lockY, map)) {
         this._ecState = 'aiming';
@@ -97,14 +77,11 @@ Enemy.prototype.aiEchoer = function aiEchoer(dt, player, map, d, los) {
     }
   }
 
-  // No lock available: hold position. If player rushes within 3 tiles,
-  // backstep gently to maintain niche identity (anti-orbit zoner, not
-  // a melee combatant).
+  // Backstep when rushed: this is a zoner, not a melee fighter.
   if (d < 3 && this._canTarget()) {
     const [bx, by] = norm(this.x - this._tx, this.y - this._ty);
     this.moveToward(this.x + bx * 4, this.y + by * 4, this.spd, dt, map);
   } else if (!inRoom) {
     this.patrol(dt, map);
   }
-  // else: hold position (menacing idle)
 };

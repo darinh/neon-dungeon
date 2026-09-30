@@ -7,13 +7,7 @@
 
 /** @type {any[]} */ const fuseShards = [];
 
-// ─── Fuse Bomb (tap-tap V) ───────────────────────────────────────────────────
-// FuseShard replaces the old consumable VOID_SHARD detonation. Players tap V
-// to drop one at their feet (3s telegraph: slow→fast→rapid flash), then tap V
-// again to detonate ALL active fuses early (panic mode). Bombs are infinite,
-// gated by BOMB_DROP_COOLDOWN to prevent literal spam without limiting
-// strategic chains. Wall-shatter + secret-room reveal logic preserved from the
-// original useVoidShard.
+// A second V tap detonates every active fuse early; drop spacing is BOMB_DROP_COOLDOWN.
 const FUSE_DURATION       = 3.0;   // seconds from drop to auto-detonate
 const FUSE_PHASE_FAST     = 1.5;   // s remaining when flash speeds up
 const FUSE_PHASE_RAPID    = 0.5;   // s remaining when flash goes rapid
@@ -21,8 +15,8 @@ const FUSE_FLASH_SLOW     = 0.50;  // toggle period in slow phase (s)
 const FUSE_FLASH_FAST     = 0.20;  // toggle period in fast phase (s)
 const FUSE_FLASH_RAPID    = 0.08;  // toggle period in rapid phase (s)
 const BOMB_DROP_COOLDOWN  = 1.0;   // min seconds between drops
-const BOMB_BLAST_RADIUS   = 6;     // tiles (matches old useVoidShard)
-const BOMB_DAMAGE         = 80;    // matches old useVoidShard
+const BOMB_BLAST_RADIUS   = 6;     // tiles
+const BOMB_DAMAGE         = 80;
 
 class FuseShard {
   /**
@@ -55,11 +49,7 @@ class FuseShard {
    */
   draw(camX, camY) {
     if (this.dead) return;
-    // camX/camY are pixel-space (see getCamera in render.js); world->screen
-    // is `pos * TILE - cam`, matching every other draw* in this file
-    // (drawMines, drawCameras, drawWallTurrets, ...). The earlier
-    // `(pos - cam) * TILE` form treated cam as tile-space, which placed the
-    // bomb thousands of pixels off-screen so it was never visible.
+    // camX/camY are pixel-space (getCamera in render.js). world->screen is pos * TILE - cam; treating cam as tile-space puts the bomb off-screen.
     const sx = this.x * TILE - camX;
     const sy = this.y * TILE - camY;
     const remaining = this.fuseTime;
@@ -80,9 +70,6 @@ class FuseShard {
 }
 
 /**
- * Bomb detonation: damage mobs in radius, shatter cracked walls, reveal
- * adjacent secret rooms. Called by FuseShard.detonate() (auto-fuse expiry or
- * panic-tap). Mirrors old useVoidShard's side-effects exactly.
  * @param {number} x
  * @param {number} y
  */
@@ -136,7 +123,6 @@ function _detonateBombAt(x, y) {
 }
 
 /**
- * Per-frame update + dead-bomb prune. Called from game.js update loop.
  * @param {number} dt
  */
 function updateFuseShards(dt) {
@@ -147,9 +133,7 @@ function updateFuseShards(dt) {
 }
 
 /**
- * Per-frame draw. Called from game.js render loop, drawn between items and
- * enemies so the bomb is visible above ground but obscured by mobs (so a
- * planted bomb under a charging enemy still looks "in the world").
+ * Drawn between items and enemies so a planted bomb stays above the floor and under mobs.
  * @param {number} camX
  * @param {number} camY
  */

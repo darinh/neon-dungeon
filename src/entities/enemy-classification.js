@@ -1,8 +1,7 @@
 // @ts-check
 'use strict';
 
-// Spawn-time enemy type classifications. Loaded before entities.js so
-// spawnEnemy can share type predicates without carrying long inline lists.
+// Loaded before entities.js so spawnEnemy can share these type predicates.
 
 const BOSS_TYPES = new Set([
   'SENTINEL',

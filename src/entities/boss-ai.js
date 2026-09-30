@@ -43,7 +43,6 @@ Enemy.prototype.aiBossSentinel = function aiBossSentinel(dt,player,map,d,los) {
     this.bossTimers.laser=rate;
   }
 
-  // Tracking shot: aimed projectile at player (both phases)
   if (this.bossTimers.track<=0 && los) {
     this.fireAt(player.x,player.y,8,this.atk+3,16,'#ff6666');
     this.bossTimers.track=this.phase===2?2.5:4;
@@ -84,9 +83,7 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
   T.stomp  = (T.stomp  || 0) - dt;
   T.move   = (T.move   || 0) - dt;
 
-  // Charge wind-up → charge → recovery
   if (this._chargeState === 'windup') {
-    // Cancel wind-up if player cloaks or LOS breaks
     if (!los) {
       this._chargeState = 'idle';
       T.charge = 1.5;
@@ -103,12 +100,10 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
     const cspd = this.spd * 3;
     this.x += this._chargeDx * cspd * dt;
     this.y += this._chargeDy * cspd * dt;
-    // Clamp to room
     if (this.room) {
       this.x = Math.max(this.room.x + 0.5, Math.min(this.room.x + this.room.w - 0.5, this.x));
       this.y = Math.max(this.room.y + 0.5, Math.min(this.room.y + this.room.h - 0.5, this.y));
     }
-    // Hit check: damage player if within 1.5 tiles during charge
     if (dist(this.x, this.y, player.x, player.y) < 1.5) {
       player.takeDamage(Math.round(this.atk * getDiff().enemyAtk), 'WARDEN');
       const [kx, ky] = norm(player.x - this.x, player.y - this.y);
@@ -119,7 +114,6 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
       this._chargeState = 'idle';
       T.charge = this.phase === 2 ? 2.5 : 3.5;
     } else if (this._chargeDur <= 0) {
-      // Charge ended without hitting — spark burst at endpoint
       const missCount = this.phase === 2 ? 6 : 4;
       for (let i = 0; i < missCount; i++) {
         const a = (i / missCount) * TWO_PI;
@@ -132,9 +126,7 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
       T.charge = this.phase === 2 ? 2.5 : 3.5;
     }
   } else {
-    // Idle — pursue player or initiate charge
     if (T.charge <= 0 && los) {
-      // Begin wind-up
       const [dx, dy] = norm(player.x - this.x, player.y - this.y);
       this._chargeDx = dx; this._chargeDy = dy;
       this._chargeState = 'windup';
@@ -151,7 +143,6 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
     }
   }
 
-  // Radial stomp: close-range burst when player is nearby (both phases)
   if (T.stomp <= 0 && d < 3 && this._chargeState === 'idle') {
     const stompCount = this.phase === 2 ? 6 : 4;
     for (let i = 0; i < stompCount; i++) {
@@ -164,7 +155,6 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
     T.stomp = this.phase === 2 ? 4 : 6;
   }
 
-  // Phase 2: Ground slam when player is close
   if (this.phase === 2 && T.slam <= 0 && d < 4 && this._chargeState === 'idle') {
     audio.wardenSlam();
     triggerShake(6, 0.2);
@@ -172,7 +162,6 @@ Enemy.prototype.aiBossWarden = function aiBossWarden(dt,player,map,d,los) {
     player.x += kx * 3 * playerKnockMul(); player.y += ky * 3 * playerKnockMul();
     clampToBossRoom(player);
     player.takeDamage(Math.round(22 * getDiff().enemyAtk), 'Warden Slam');
-    // Radial spark projectiles
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * TWO_PI;
       const bp = new Projectile(this.x, this.y, Math.cos(a), Math.sin(a), 4, Math.round(this.atk * 0.5), 6, '#ff8800', false, false);
@@ -228,7 +217,6 @@ Enemy.prototype.aiBossHive = function aiBossHive(dt,player,map,d,los) {
     this.spawnCooldown=1;
   }
 
-  // Swarm cloud: burst of slow aimed projectiles (Phase 2+)
   if (this.phase>=2 && this.bossTimers.swarm<=0 && los) {
     const count = this.phase === 3 ? 5 : 3;
     for (let i=0; i<count; i++) {
@@ -277,7 +265,6 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
   T.discharge= (T.discharge|| 0) - dt;
   T.move     = (T.move     || 0) - dt;
 
-  // Movement: drift toward room center in P1, pursue player in P2+
   if (T.move <= 0) {
     if (this.phase >= 2 && los) {
       this.patrolTarget = {x: player.x, y: player.y};
@@ -288,7 +275,6 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
   }
   if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, this.phase >= 2 ? this.spd : this.spd * 0.6, dt, map);
 
-  // Radial arc burst
   const arcCount = this.phase >= 2 ? 12 : 8;
   const arcCD = this.phase === 3 ? 2.5 : this.phase === 2 ? 3 : 3.5;
   if (T.arc <= 0) {
@@ -303,7 +289,7 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
     T.arc = arcCD;
   }
 
-  // Electric hazard zones — placed away from player to be readable
+  // Reject spots within 3 tiles of the player so the zone stays readable.
   const hazCount = this.phase >= 2 ? 2 : 1;
   const hazCD = this.phase === 3 ? 4 : this.phase === 2 ? 5 : 6;
   if (T.hazard <= 0 && this.room) {
@@ -321,13 +307,11 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
     T.hazard = hazCD;
   }
 
-  // Phase 2+: conduit beam — fast single shot at player
   if (this.phase >= 2 && T.beam <= 0 && los) {
     this.fireAt(player.x, player.y, 8, this.atk + 5, 20, '#00eeff');
     T.beam = 4;
   }
 
-  // Phase 3: discharge AoE with magnetic pull telegraph
   if (this.phase === 3) {
     if (T.discharge <= 0) {
       this._dischargeChannel = 1.5;
@@ -335,7 +319,7 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
     }
     if (this._dischargeChannel > 0) {
       this._dischargeChannel -= dt;
-      // Magnetic pull toward boss (resistible — player speed >> pull)
+      // Pull is 1 tile/s, well under player speed, so it is resistible.
       if (d > 2) {
         const [px, py] = norm(this.x - player.x, this.y - player.y);
         const nx = player.x + px * 1.0 * dt;
@@ -347,7 +331,7 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
         clampToBossRoom(player);
       }
       if (this._dischargeChannel <= 0) {
-        // Discharge pulse — recompute distance after pull
+        // `d` is pre-pull; recompute so the pulse uses the post-pull position.
         const pulseDist = dist(this.x, this.y, player.x, player.y);
         audio.conductorPulse();
         triggerShake(5, 0.2);
@@ -379,14 +363,12 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
  * @param {any} [los]
  */
 Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
-  // Phase transitions based on maxHp percentage
   const hpPct = this.hp / this.maxHp;
   if (hpPct <= 0.2) this.phase = 4;
   else if (hpPct <= 0.4) this.phase = 3;
   else if (hpPct <= 0.7) this.phase = 2;
   else this.phase = 1;
 
-  // Phase transition VFX
   if (this.phase !== this.prevPhase) {
     spawnParticles(this.x, this.y, 'EXPLOSION', this.colour, 25);
     audio.phaseShift();
@@ -405,7 +387,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
   T.shock  = (T.shock  || 0) - dt;
   T.move   = (T.move   || 0) - dt;
 
-  // Movement — patrol within boss room
   if (T.move <= 0) {
     if (this.room) this.patrolTarget = {
       x: this.room.x + rnd(2, this.room.w - 2),
@@ -415,7 +396,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
   }
   if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, spd * 2, dt, map);
 
-  // Phase 1+: Radial turret shots (from SENTINEL)
   if (T.turret <= 0) {
     const n = this.phase >= 3 ? 8 : this.phase >= 2 ? 5 : 4;
     for (let i = 0; i < n; i++) {
@@ -427,13 +407,11 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     T.turret = 2 / spd;
   }
 
-  // Phase 1+: Homing missile at player (from HIVE)
   if (T.homing <= 0 && los) {
     this.fireAt(player.x, player.y, 7, this.atk + 5, 20, '#aa00ff');
     T.homing = 2.5 / spd;
   }
 
-  // Phase 2+: Spawn crawlers (inherited from HIVE) and drones — capped at 8 active adds
   if (this.phase >= 2 && T.spawn <= 0 && this.spawnCooldown <= 0) {
     let activeAdds = 0;
     for (const e of enemiesInRoomIter(this.room)) {
@@ -451,7 +429,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     this.spawnCooldown = 0.5;
   }
 
-  // Phase 3+: Beam fan (5–7 piercing beams aimed at player)
   if (this.phase >= 3 && T.beam <= 0) {
     const [dx, dy] = norm(player.x - this.x, player.y - this.y);
     const count = this.phase >= 4 ? 7 : 5;
@@ -465,7 +442,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     T.beam = 3.5 / spd;
   }
 
-  // Phase 3+: Shield burst — AoE knockback+damage within 5 tiles (from SENTINEL)
   if (this.phase >= 3 && T.shield <= 0) {
     if (d < 5) {
       const [kx, ky] = norm(player.x - this.x, player.y - this.y);
@@ -478,7 +454,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     T.shield = 6 / spd;
   }
 
-  // Phase 4: Psionic shockwave — AoE damage within 7 tiles (from HIVE)
   if (this.phase >= 4 && T.shock <= 0) {
     if (d < 7) {
       player.takeDamage(Math.round(25*getDiff().enemyAtk), 'OMEGA');
@@ -488,7 +463,6 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     T.shock = 4 / spd;
   }
 
-  // Phase 4: Void orbs — expanding AoE zones that fill the room
   if (this.phase >= 4 && T.void <= 0 && this.room) {
     const count = rndInt(2, 3);
     for (let i = 0; i < count; i++) {
@@ -503,14 +477,12 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
     T.void = 3.5 / spd;
   }
 
-  // Update void orbs — expand and tick damage
   for (let i = this.voidOrbs.length - 1; i >= 0; i--) {
     const orb = this.voidOrbs[i];
     orb.age += dt;
     orb.radius = orb.maxRadius * Math.min(1, orb.age / (orb.maxAge * 0.6));
     orb.tickCd = Math.max(0, orb.tickCd - dt);
     if (orb.age >= orb.maxAge) { this.voidOrbs.splice(i, 1); continue; }
-    // tick damage every 0.5s while player is inside
     if (orb.tickCd <= 0 && dist(player.x, player.y, orb.x, orb.y) < orb.radius) {
       player.takeDamage(Math.round(15*getDiff().enemyAtk), 'Void Orb');
       spawnParticles(player.x, player.y, 'SPARK', '#aa00ff', 4);
@@ -529,8 +501,7 @@ Enemy.prototype.aiBossOmega = function aiBossOmega(dt,player,map,d,los) {
  */
 Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
   const hpPct = this.hp / this.maxHp;
-  // UNCHAINED #42: _unchainedPhase locks the boss into phase-3 attack
-  // patterns regardless of remaining HP — it's the "secret boss" fight.
+  // `_unchainedPhase` locks phase-3 patterns regardless of remaining HP.
   const newPhase = this._unchainedPhase ? 3
                  : hpPct <= 0.35 ? 3 : hpPct <= 0.7 ? 2 : 1;
   if (newPhase !== this.phase) {
@@ -551,7 +522,6 @@ Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
   T.purge  = (T.purge  || 0) - dt;
   T.move   = (T.move   || 0) - dt;
 
-  // Movement: slow center patrol (deliberate, not erratic)
   if (T.move <= 0 && this.room) {
     this.patrolTarget = {
       x: this.room.cx + rnd(-3, 3),
@@ -561,7 +531,6 @@ Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
   }
   if (this.patrolTarget) this.moveToward(this.patrolTarget.x, this.patrolTarget.y, this.spd * 0.6, dt, map);
 
-  // Spiral salvo: rotating burst with incremental offset
   const spiralCount = this.phase >= 3 ? 10 : this.phase >= 2 ? 8 : 6;
   const spiralCD = this.phase >= 3 ? 2 : this.phase >= 2 ? 2.5 : 3;
   if (T.spiral <= 0) {
@@ -576,13 +545,12 @@ Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
     T.spiral = spiralCD;
   }
 
-  // Targeting lance: telegraphed aimed shot — aim locks at start
+  // Aim locks when the telegraph starts; it does not track.
   const lanceTelegraph = this.phase >= 3 ? 0.4 : 0.5;
   const lanceCD = this.phase >= 3 ? 3 : this.phase >= 2 ? 3.5 : 4;
   const lanceSpread = this.phase >= 3 ? 5 : this.phase >= 2 ? 3 : 1;
 
   if (this._lanceTelegraph > 0) {
-    // Cancel on LOS loss or cloak (same pattern as SNIPER laser)
     if (!los || !canTargetPlayer()) {
       this._lanceTelegraph = 0; this._lanceLock = null;
       T.lance = 1.0;
@@ -608,7 +576,6 @@ Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
     T.lance = lanceCD + lanceTelegraph;
   }
 
-  // Hazard grid: zones near player's recent position (Phase 2+)
   if (this.phase >= 2 && T.hazard <= 0 && this.room) {
     const hazCount = this.phase >= 3 ? 3 : 2;
     const armTime = this.phase >= 3 ? 0.8 : 1.2;
@@ -632,7 +599,6 @@ Enemy.prototype.aiBossGenesis = function aiBossGenesis(dt,player,map,d,los) {
     T.hazard = this.phase >= 3 ? 4 : 5;
   }
 
-  // Purge ring: circle of hazard zones around room center (Phase 3 signature)
   if (this.phase >= 3 && T.purge <= 0 && this.room) {
     const cx = this.room.cx, cy = this.room.cy;
     const ringCount = 6;

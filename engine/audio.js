@@ -1,43 +1,6 @@
 // @ts-check
 'use strict';
-// engine/audio.js — Web Audio synth engine (context, busses, voices).
-//
-// Engine layer (🟦): no NEON DUNGEON nouns. Provides the lazy AudioContext,
-// master/reverb/music busses, a cached noise buffer, and three voice helpers
-// (osc / noise / wetDry) plus a stereo pan helper. All synth-DEFINING content
-// (named SFX like "shoot", "death", "menuSelect", etc.) stays in the host as
-// a content layer that calls into the engine.
-//
-// Surface (factory):
-//   createEngine({ getSfxVolume, getMusicVolume, win })
-//     → engine. `getSfxVolume`/`getMusicVolume` are zero-arg functions the
-//     engine calls when first mounting the master / music bus to seed initial
-//     gain values. `win` is optional (defaults to globalThis) and exists so
-//     tests can inject a stub window with a faux AudioContext.
-//
-// Engine surface:
-//   getCtx()                  → AudioContext (lazy, also mounts master+reverb+noiseBuf)
-//   resume()                  → tries actx.resume(); swallows errors
-//   isRunning()               → boolean
-//   setSfxVolume(v)           → ramps master gain to 0.7*v over 20ms
-//   setMusicVolume(v)         → ramps music bus gain to 0.20*v over 20ms
-//   getMusicBus()             → { bus, ctx } — lazy-mounts a music compressor + bus
-//   getNoiseBuffer()          → the cached white-noise AudioBuffer (or null
-//                               before getCtx() has run)
-//   panOut(target, pan, life) → routes signal through a StereoPannerNode and
-//                               schedules disconnect; returns the connected node
-//                               (or `target||master` if pan is too small)
-//   osc(type, f1, f2, vol, start, dur, target?, opt?)
-//                             → schedules an oscillator voice with optional
-//                               filter + pan; auto-cleans on release
-//   noise(vol, start, dur, filterFreq, target?, opt?)
-//                             → schedules a noise burst from the cached buffer
-//   wetDry(vol, wetAmt, lifetime)
-//                             → returns a split gain that fans into dry +
-//                               reverb-wet busses; auto-cleans after lifetime+2s
-//
-// Browser: attaches as `window.NEON.audio` with `{ createEngine }`.
-// Node: module.exports = { createEngine } (for tests).
+// Engine voices only. Named SFX stay in the host; this module has no game nouns.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {
@@ -76,7 +39,6 @@
       if (!actx) {
         const Ctor = win.AudioContext || win.webkitAudioContext;
         actx = new Ctor();
-        // Master bus: compressor → destination
         compressor = actx.createDynamicsCompressor();
         compressor.threshold.value = -12;
         compressor.ratio.value = 4;
@@ -84,7 +46,6 @@
         master = actx.createGain();
         master.gain.value = 0.7 * getSfxVol();
         master.connect(compressor);
-        // Reverb bus: ConvolverNode with procedural impulse response
         reverbNode = actx.createConvolver();
         const irLen = actx.sampleRate * 1.6;
         const irBuf = actx.createBuffer(2, irLen, actx.sampleRate);
@@ -99,7 +60,6 @@
         reverbGain.gain.value = 0.35;
         reverbNode.connect(reverbGain);
         reverbGain.connect(master);
-        // Cached noise buffer (2 seconds, reused by all noise calls)
         const nLen = actx.sampleRate * 2;
         noiseBuf = actx.createBuffer(1, nLen, actx.sampleRate);
         const nd = noiseBuf.getChannelData(0);
@@ -165,7 +125,6 @@
       return p;
     }
 
-    // Core voice: oscillator → gain/filter → optional pan → target node
     /** @param {OscillatorType} type @param {number} freq1 @param {number} freq2 @param {number} vol @param {number} start @param {number} dur @param {any} [target] @param {any} [opt] */
     function osc(type, freq1, freq2, vol, start, dur, target, opt) {
       const c = getCtx();
@@ -199,7 +158,6 @@
       o.stop(releaseAt + 0.04);
     }
 
-    // Noise burst from cached buffer
     /** @param {number} vol @param {number} start @param {number} dur @param {number} filterFreq @param {any} [target] @param {any} [opt] */
     function noise(vol, start, dur, filterFreq, target, opt) {
       const c = getCtx();
@@ -221,8 +179,7 @@
       src.start(start); src.stop(start + dur + 0.03);
     }
 
-    // Reverb send helper — routes signal to both dry and wet busses
-    // lifetime: seconds until all voices through this bus have finished (excludes reverb tail)
+    // lifetime excludes the reverb tail; cleanup waits an extra 2s.
     /** @param {number} vol @param {number} wetAmt @param {number} lifetime */
     function wetDry(vol, wetAmt, lifetime) {
       const c = getCtx();

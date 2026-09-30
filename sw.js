@@ -1,4 +1,3 @@
-// NEON DUNGEON — Service Worker (cache-first offline PWA)
 'use strict';
 
 const CACHE = 'neon-dungeon-assets';
@@ -159,7 +158,6 @@ const ASSETS = [
 ];
 const ASSET_URLS = new Set(ASSETS.map((asset) => new URL(asset, self.location.href).href));
 
-// Pre-cache all static assets on install
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(ASSETS))
@@ -167,8 +165,7 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-// Purge old caches on activate. The cache name is intentionally stable:
-// freshness comes from network-first fetches, not a second version number.
+// Cache name stays stable; freshness is network-first, not a second version number.
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -206,7 +203,6 @@ function isAppShellNavigation(url) {
     url.pathname === appIndex.pathname;
 }
 
-// Network-first for app assets; cached fallback keeps the PWA offline-capable.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);

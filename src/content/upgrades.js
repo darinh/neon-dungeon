@@ -1,65 +1,33 @@
 // @ts-check
 'use strict';
 
-// Upgrade and augment catalogs. Loaded before src/content.js so runtime
-// generation, shops, events, and UI code keep using the same globals while
-// catalog ownership no longer lives in the large content coordinator.
-
-// ─── Upgrades ────────────────────────────────────────────────────────────────
+// Loaded before src/content.js so shops, events, and UI keep these globals.
 const UPGRADES = [
-  // Instant (one-time) upgrades
   {id:'MED_PACK',    name:'Med-Pack',     desc:'+40 HP',               colour:'#00ff88', rarity:40, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
   {id:'NANO_REPAIR', name:'Nano-Repair',  desc:'+15 HP',               colour:'#88ff88', rarity:35, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+15); }},
   {id:'XP_CHIP',     name:'XP Chip',      desc:'+50 XP',               colour:'#ffff00', rarity:20, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.gainXP(50); }},
-  // Credit Cache — currency drop. Per user "loot philosophy" rule, drops are
-  // heals / XP / **currency** only; persistents live in meta-progression.
-  // Amount scales with floor + meta credit multiplier + CREDIT_SIPHON augment
-  // so it stays meaningful in late-game. Gold colour reads as currency on
-  // sight; auto-applied via the _isSimple path in src/game.js (non-persistent,
-  // not WEAPON_/HACKWARE_) so there's no popup. Rarity 50 sits between
-  // MED_PACK (40) and NANO_REPAIR (35) so currency is the most common drop —
-  // that's the point: drops mostly become things you spend at the Gap / shops.
+  // Currency only — no persistent power. Auto-applied on the _isSimple path in src/game.js (not WEAPON_/HACKWARE_), so no popup.
   {id:'CREDIT_CACHE', name:'Credit Cache', desc:'+CR',                  colour:'#ffd700', rarity:50, persistent:false,
    fn: (/** @type {any} */ p)=>{
      const floor = (typeof _CG !== 'undefined' && _CG.floor) ? _CG.floor : 1;
      const base = 15 + floor * 5;
      const metaMul = (typeof getMetaCreditMultiplier === 'function') ? getMetaCreditMultiplier() : 1;
      const siphon = (typeof hasAugment === 'function' && hasAugment('CREDIT_SIPHON')) ? 1.5 : 1;
-     // Match existing credit award paths (game.js:1472 room-clear,
-     // entities.js:690 kill credits): scale by difficulty creditMul so
-     // NIGHTMARE (0.85) and EASY (1.2) don't break the economy.
+     // Same difficulty creditMul as room-clear and kill credits, so NIGHTMARE/EASY don't diverge.
      const diffMul = (typeof getDiff === 'function') ? (getDiff().creditMul || 1) : 1;
-     // SCAVENGER meta upgrade (src/meta/save.js applyMetaToPlayer):
-     // bonusCreditPerPickup is a flat per-pickup additive bonus (+1 CR per
-     // upgrade level). Added AFTER rounding/clamp so the bonus is always
-     // exactly the upgrade level value (not subject to metaMul / siphon /
-     // diffMul). This matches the upgrade contract '+1 credit per pickup
-     // per level' (src/meta/upgrades.js:39). Sanitize against corrupted
-     // localStorage: bonusCreditPerPickup must be a finite non-negative
-     // integer; clamp to a sane upper bound (32) to defend against
-     // tampered save data injecting Infinity / very large values.
+     // SCAVENGER bonus is flat and added after rounding so multipliers cannot scale it. Clamp corrupt saves (non-finite or >32).
      let bonus = (p && p.bonusCreditPerPickup) || 0;
      if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
      if (bonus > 32) bonus = 32;
      bonus = Math.floor(bonus);
      const amt = Math.max(1, Math.round(base * metaMul * siphon * diffMul)) + bonus;
      p.credits = (p.credits || 0) + amt;
-     // Mirror kill-credit telemetry: a floating "+N CR" so the player sees it.
      if (typeof spawnDmgText === 'function') spawnDmgText(p.x, p.y, '+' + amt + ' CR', '#ffd700');
    }},
-  // Tactical Drop — random temporary boost. Reuses NEON.boosts (the vendor
-  // boost system) so floor-duration buffs (COMBAT_STIM/REFLEX_BOOSTER/
-  // CRIT_MATRIX/RECON_PING) and instant grants (SHIELD_DRIVER) integrate
-  // automatically with combat math, HUD, save/load. Per "loot philosophy":
-  // temporary effects are explicitly OK as drops — only persistent power
-  // (saws/sentries/regen) is forbidden. Excluded from the vendor pool
-  // (filterVendorPool in src/meta/boosts.js) because vendors already sell
-  // each boost individually at known prices; a flat-priced random pick
-  // would be either strictly worse or an arbitrage loop. Rarity 25 sits
-  // below MED_PACK/CREDIT_CACHE so it stays a "treat" pickup.
+  // Temporary boost via NEON.boosts, not persistent power. Excluded from the vendor pool in src/meta/boosts.js so a flat random pick cannot arbitrage listed prices.
   {id:'TACTICAL_DROP', name:'Tactical Drop', desc:'Random combat boost', colour:'#ff8800', rarity:25, persistent:false,
    fn: (/** @type {any} */ p)=>{
      if (typeof NEON === 'undefined' || !NEON.boosts || !NEON.boosts.rollDropBoost) return;
@@ -67,14 +35,12 @@ const UPGRADES = [
      if (!id) return;
      const b = NEON.boosts.BOOSTS && NEON.boosts.BOOSTS[id];
      NEON.boosts.applyBoost(p, id);
-     // Activation feedback — burst + audio + floating label so the player
-     // sees WHAT they got (random pick is opaque otherwise).
+     // Label the rolled boost; the pickup itself does not name it.
      if (typeof spawnParticles === 'function') spawnParticles(p.x, p.y, 'EXPLOSION', (b && b.colour) || '#ff8800', 12);
      if (typeof audio !== 'undefined' && audio.hackwareCloak) { try { audio.hackwareCloak(); } catch(_){} }
      if (b && _CG && _CG.msg) _CG.msg(b.icon + ' ' + b.name + ' ACTIVE', b.colour);
      if (typeof spawnDmgText === 'function' && b) spawnDmgText(p.x, p.y, b.icon + ' ' + b.name, b.colour);
    }},
-  // Persistent (stackable) upgrades
   {id:'SAW_BLADE',   name:'Saw Blade',    desc:'Orbital blade circles you',   colour:'#ff3333', rarity:12, persistent:true, maxLevel:4,
    levelDesc: (/** @type {any} */ l)=>(l+1)+' blade'+(l>0?'s':'')+', 12 dmg each',
    fn: (/** @type {any} */ p)=>{ p.upgrades.SAW_BLADE=(p.upgrades.SAW_BLADE||0)+1; }},
@@ -98,7 +64,6 @@ const UPGRADES = [
    fn: (/** @type {any} */ p)=>{ p.upgrades.SENTRY_DRONE=(p.upgrades.SENTRY_DRONE||0)+1; }},
 ];
 
-// ─── Augments (Cybernetic Implants) ──────────────────────────────────────────
 const MAX_AUGMENTS = 3;
 /** @type {Record<string, any>} */
 const AUGMENTS = {

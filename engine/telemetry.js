@@ -1,13 +1,5 @@
 // @ts-check
-// engine/telemetry.js — Lightweight game telemetry with offline-safe localStorage batching
-//
-// UMD module. Browser: NEON.telemetry. Node tests: require().
-// Events are queued in memory, flushed to localStorage on interval + page
-// hide/unload. A pluggable transport sends batches to a remote endpoint
-// when online; unsent batches stay in localStorage until next flush.
-//
-// Privacy: no PII collected. Session IDs are random, not tied to accounts.
-// All data stays local until a transport is configured.
+// No PII. Session ids are random; events stay in localStorage until a transport is set.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).telemetry = factory();
@@ -15,9 +7,9 @@
   'use strict';
 
   const STORAGE_KEY = 'neon_telemetry';
-  const MAX_QUEUE = 500;       // max events before forced flush
-  const MAX_STORED = 2000;     // max events in localStorage (oldest trimmed)
-  const FLUSH_INTERVAL = 30;   // seconds between auto-flushes
+  const MAX_QUEUE = 500;
+  const MAX_STORED = 2000;
+  const FLUSH_INTERVAL = 30;   // seconds
 
   /** @type {Array<{e:string,t:number,s:string,p:any}>} */
   let _queue = [];
@@ -25,10 +17,10 @@
   let _sessionId = null;
   let _sessionStart = 0;
   /** @type {((batch: any) => Promise<any>) | null} */
-  let _transport = null;       // function(batch) → Promise; null = local-only
+  let _transport = null;
   let _flushTimer = 0;
   /** @type {Storage|null} */
-  let _storage = null;         // injectable for tests
+  let _storage = null;         // tests inject storage; production falls through to localStorage
   let _enabled = true;
 
   function _getStorage() {
@@ -43,8 +35,6 @@
     else for (let i = 0; i < 8; i++) a[i] = Math.floor(Math.random() * 256);
     return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
   }
-
-  // ─── Public API ────────────────────────────────────────────────────────────
 
   /** @type {((this: Document, ev: Event) => any) | null} */
   let _visHandler = null;
@@ -61,20 +51,19 @@
     _enabled = o.enabled !== false;
     _queue = [];
 
-    // Remove stale listeners from prior init (idempotent)
+    // init() can run again; drop the previous listeners or hide/unload flush twice.
     if (_visHandler && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', _visHandler);
     }
     if (_unloadHandler && typeof window !== 'undefined') {
       window.removeEventListener('beforeunload', _unloadHandler);
     }
-    // Auto-flush on page hide / beforeunload
     _visHandler = function () { if (document.visibilityState === 'hidden') flush(); };
     _unloadHandler = function () { flush(); };
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', _visHandler);
     if (typeof window !== 'undefined') window.addEventListener('beforeunload', _unloadHandler);
 
-    // Coarse device info — no full userAgent to avoid fingerprinting.
+    // Coarse class only — a full userAgent is a fingerprint.
     let platform = 'unknown';
     if (typeof navigator !== 'undefined') {
       const ua = navigator.userAgent || '';
@@ -115,7 +104,7 @@
     try {
       let existing;
       try { existing = JSON.parse(store.getItem(STORAGE_KEY) || '[]'); }
-      catch (_) { existing = []; } // corrupted JSON — reset and keep current batch
+      catch (_) { existing = []; } // corrupted JSON: drop the old blob, keep this batch
       if (!Array.isArray(existing)) existing = [];
       const merged = existing.concat(batch);
       const trimmed = merged.length > MAX_STORED ? merged.slice(merged.length - MAX_STORED) : merged;
@@ -131,7 +120,7 @@
       const all = store ? JSON.parse(store.getItem(STORAGE_KEY) || '[]') : batch;
       const sentCount = all.length;
       const result = _transport(all);
-      // On success, remove only the events we sent (not newer ones added since)
+      // Slice by the count we sent so events queued during the request stay stored.
       if (result && typeof result.then === 'function') {
         result.then(function () {
           try {
@@ -145,7 +134,7 @@
     } catch (_) { /* transport error — data stays in localStorage */ }
   }
 
-  // Called from game loop (dt in seconds). Handles periodic auto-flush.
+  // dt is seconds.
   /** @param {number} [dt] */
   function update(dt) {
     _flushTimer += (dt || 0);
@@ -176,7 +165,6 @@
   /** @param {any} v */
   function setEnabled(v) { _enabled = !!v; }
 
-  // Test helper
   /** @param {any} s */
   function _setStorageForTests(s) { _storage = s; }
   function _reset() { _queue = []; _sessionId = null; _sessionStart = 0; _transport = null; _flushTimer = 0; _enabled = true; _visHandler = null; _unloadHandler = null; }

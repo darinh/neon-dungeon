@@ -1,19 +1,6 @@
 // @ts-check
-// src/meta/logs.js — ARCHIVE terminal runtime (#41).
-//
-// Pure, testable module. Consumes LOGS data from src/data/logs.js and the
-// persisted logsFound/logsRead arrays from src/meta/save.js. Surfaces helpers
-// for the rare-terminal drop (content.js) and the ARCHIVE hub panel (hub.js).
-//
-// Public API:
-//   pickLogForFloor(floor, rand?)  → log | null    — eligible & unfound pick
-//   findLog(id)                    → log | null    — writes save: addLogFound
-//   readLog(id)                    → log | null    — writes save: markLogRead
-//   logById(id)                    → log | null    — lookup only (no save)
-//   logsForBiome(biomeId)          → log[]         — in data order
-//   unreadCount()                  → number        — found but not read
-//   progress()                     → {read,total}  — overall progress
-//   groupedByAxiom()               → [{axiom,logs[]}, ...]  — UI helper
+// Reads LOGS from src/data/logs.js and logsFound/logsRead from src/meta/save.js.
+// Callers: the rare-terminal drop (content.js) and the ARCHIVE hub panel (hub.js).
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).logs = factory();
@@ -21,7 +8,7 @@
   'use strict';
 
   function _data() {
-    // Browser: read NEON.logData.LOGS (already loaded). Node: require it.
+    // Browser path assumes NEON.logData.LOGS is already loaded.
     if (typeof module === 'object' && module.exports) {
       return require('../data/logs.js').LOGS;
     }
@@ -58,9 +45,7 @@
     return _data().filter((/** @type {any} */ l) => l.biomeId === biomeId);
   }
 
-  // pickLogForFloor — returns an unfound log eligible for this floor (biome
-  // matches and floor >= floorMin), or null if none available. `rand` is an
-  // injectable 0..1 generator for deterministic tests; defaults to Math.random.
+  // `rand` is an injectable 0..1 generator for tests; defaults to Math.random.
   /** @param {number} floor @param {() => number} [rand] */
   function pickLogForFloor(floor, rand) {
     const f = Math.floor(Number(floor));
@@ -80,8 +65,6 @@
     return pool[idx];
   }
 
-  // findLog — marks the log as found (not read). Returns the log on success,
-  // or null if the id is unknown or already found. Persists to save.
   /** @param {string} id */
   function findLog(id) {
     const log = logById(id);
@@ -92,10 +75,8 @@
     return added ? log : null;
   }
 
-  // readLog — marks the log as both found and read. Returns the log on any
-  // state change; returns the log with null-ish if already read (caller can
-  // check by re-loading meta). For simplicity we return the log on success,
-  // null if id unknown.
+  // markLogRead also records the log as found. Returns the log even if it was
+  // already read; null only when the id is unknown.
   /** @param {string} id */
   function readLog(id) {
     const log = logById(id);

@@ -1,10 +1,7 @@
 // @ts-check
 'use strict';
 
-// Runtime pickup classes, reward rollers, and pickup-specific tunables. Loaded
-// before src/content.js so content, entity, render, and game coordinators keep
-// sharing the same script-tag globals while pickup visuals live in their own
-// module.
+// Loaded before src/content.js so pickup classes stay script globals.
 
 /**
  * @param {number} sx
@@ -19,11 +16,7 @@ function drawPickupHalo(sx, sy, colour, pulse, radius) {
   NEON.draw.circleStroke(ctx, sx, sy, radius + 1.5 * pulse);
 }
 
-// HARVESTER drop — pulses, decays after 5s if uncollected. Picking it up
-// applies HARVEST_SURGE (+50% damage for 8s — see src/meta/boosts.js). Shape
-// is a diamond core wrapped in a pulsing surge ring so it's distinguishable
-// at a glance from a plain Item or KeyItem; orange-amber palette matches the
-// HARVESTER mob's body colour for source attribution.
+// Pickup applies HARVEST_SURGE (src/meta/boosts.js). ttl is seconds.
 class HarvestPickup {
   /**
    * @param {any} x
@@ -34,9 +27,7 @@ class HarvestPickup {
     this.dead = false;
     this.bob = rand('cosmetic') * TWO_PI;
     this.isHarvest = true;
-    // Decays after 5s if uncollected. Tracks remaining time so the draw
-    // branch can flash + alpha-fade in the last second to telegraph imminent
-    // expiry — the player decides whether the dash is worth it.
+    // Seconds. Draw flickers once ttl < 1 so expiry is visible before deletion.
     this.ttl = 5;
   }
   /** @param {any} dt */
@@ -53,16 +44,13 @@ class HarvestPickup {
     const bobY = Math.sin(this.bob) * 3;
     const sx = this.x * TILE - camX, sy = this.y * TILE - camY + bobY;
     const pulse = 0.6 + 0.4 * Math.sin(this.bob * 1.6);
-    // Last-second urgency: rapid alpha flicker once ttl < 1.0.
     const urgent = this.ttl < 1.0;
     const flick = urgent ? (0.3 + 0.7 * Math.abs(Math.sin(this.bob * 14))) : 1;
     ctx.save();
     ctx.shadowBlur = 10 + 12 * pulse;
     ctx.shadowColor = '#ff9933';
     ctx.globalAlpha = (0.7 + 0.3 * pulse) * flick;
-    // Outer surge ring — clearly different from Item's diamond core.
     drawPickupHalo(sx, sy, '#ffcc66', pulse, 7);
-    // Inner diamond core
     ctx.fillStyle = '#ff9933';
     ctx.translate(sx, sy);
     ctx.rotate(Math.PI / 4);
@@ -71,18 +59,8 @@ class HarvestPickup {
   }
 }
 
-// MagpieHoard — hoard pickup dropped by MAGPIE on death. Grants the
-// total credit value the thief banked across all the items it consumed
-// during its life. Hand-rolled (instead of reusing CREDIT_CACHE)
-// because CREDIT_CACHE.fn() recomputes the amount from current floor +
-// meta multipliers — which would be wrong here: we want to refund the
-// EXACT value the thief banked. Auto-collected via an `isHoard` branch
-// in game.js's pickup loop (mirrors the isHarvest pattern). The pickup
-// sits on the floor visibly so the player has to actually walk to the
-// thief's death spot — a small "go fetch" beat that makes the kill
-// feel earned. No TTL: hoard pickups persist for the rest of the
-// floor (so a long detour to clear other enemies first doesn't lose
-// the recovery).
+// Not CREDIT_CACHE: that recomputes from floor and meta. amt is the exact
+// banked value. isHoard is the game.js auto-collect branch. No TTL.
 class MagpieHoard {
   /**
    * @param {any} x
@@ -110,35 +88,17 @@ class MagpieHoard {
     ctx.shadowBlur = 10 + 12 * pulse;
     ctx.shadowColor = '#ffd700';
     ctx.globalAlpha = 0.75 + 0.25 * pulse;
-    // Outer ring — pale silver-blue (MAGPIE colour) so the player
-    // recognises it as "the thief's hoard" at a glance.
+    // Silver-blue is MAGPIE's body colour, not the gold of a vault coin.
     drawPickupHalo(sx, sy, '#cceeff', pulse, 7);
-    // Inner gold square — currency glyph.
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(sx - 3, sy - 3, 6, 6);
     ctx.restore();
   }
 }
 
-// VaultCoin — credit pickup ejected by VAULTMASTER. Two flavours, both
-// constructed via `new VaultCoin(x, y, amt)`:
-//   - per-hit ejection (small): amt = VAULTMASTER_COIN_AMT (5)
-//   - on-death jackpot (large): amt = VAULTMASTER_JACKPOT_AMT (25)
-// Visual scales with amt so the player reads "small drop" vs "fat
-// jackpot" at a glance. Auto-collected via the `isHoard` branch in
-// game.js's pickup loop (mirrors MagpieHoard); also flagged isHoard so
-// MAGPIE's loot-scan filter excludes it (`if (it.isHoard) continue;`
-// at entities.js aiMagpie ~2315) — otherwise a passing thief could
-// vacuum the vault drops mid-fight, which would feel like a bug
-// rather than counterplay. Hand-rolled (instead of reusing CREDIT_CACHE
-// or the Item-with-CREDIT-type approach) for the same reason as
-// MagpieHoard: we want a fixed, exact amount granted on collection,
-// not a floor-recomputed value. No TTL — coins persist for the rest
-// of the floor so milking-then-clearing-the-room-first is a valid
-// economic play (matches MagpieHoard's no-TTL choice for the same
-// "earn the recovery" beat). Distinct visual from MagpieHoard:
-// pure gold ring + inner gold core (no MAGPIE silver-blue), so the
-// player reads vault-drops as a different economic source.
+// isHoard so MAGPIE's loot scan skips it; otherwise a thief vacuums vault
+// drops mid-fight. amt is exact, not floor-recomputed. No TTL. _big splits
+// the 5cr coin from the 25cr jackpot visually.
 class VaultCoin {
   /**
    * @param {any} x
@@ -151,8 +111,7 @@ class VaultCoin {
     this.bob = rand('cosmetic') * TWO_PI;
     this.isHoard = true;
     this.amt = Math.max(0, Math.round(amt || 0));
-    // Visual size hint — used to scale the ring radius. Coin (5cr) reads
-    // as small + abundant; jackpot (25cr) reads as fat + singular.
+    // 15 sits between the 5cr coin and the 25cr jackpot.
     this._big = this.amt >= 15;
   }
   /** @param {any} dt */
@@ -171,40 +130,20 @@ class VaultCoin {
     ctx.shadowBlur = (this._big ? 12 : 7) + 10 * pulse;
     ctx.shadowColor = '#ffd700';
     ctx.globalAlpha = 0.75 + 0.25 * pulse;
-    // Outer ring — pure gold (distinct from MagpieHoard's silver-blue
-    // ring, so the player reads "vault loot" not "thief loot").
     drawPickupHalo(sx, sy, '#ffe680', 0, ringR);
-    // Inner gold core.
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(sx - coreSz / 2, sy - coreSz / 2, coreSz, coreSz);
     ctx.restore();
   }
 }
 
-// SHOCK_PULSE pickup — defensive panic-button consumable. Auto-collected on
-// player contact (mirrors HealthPack-style pickup feedback). Discharges an
-// AoE knockback + brief stun centred on the player. NON-DAMAGING — the
-// payoff is positional / tempo (panic-eject a swarm, regain footing) rather
-// than DPS. Distinct from MAGPIE/VAULTMASTER pickups (currency) and
-// HARVESTER pickup (timed buff): this one has an immediate spatial/control
-// effect and no lingering boost.
-//
-// Design notes:
-//  - Floor-gated to floor 3+ via populateFloor placement (matches mines).
-//  - Spawn rate ~30% per floor with a once-per-floor cap (rare panic
-//    button, not a stack-and-spam consumable).
-//  - LOS-gated knockback so enemies behind walls aren't shoved around the
-//    geometry. Same gate other AoE helpers use (LEAPER shockwave, mine
-//    explode), keeps "what you can see is what you affect" parity.
-//  - Bosses: brief stun (boss stunTimer cap = 0.3s already enforced
-//    elsewhere) but NO knockback — boss positioning is a designed
-//    encounter constraint and shoving them breaks arena flow.
-//  - No TTL — sits on the floor until claimed (matches MagpieHoard /
-//    VaultCoin choice; the player decides when to use it).
+// Non-damaging. Knockback is LOS-gated and bosses get stun only — shoving a
+// boss breaks the arena. Applied directly, so the takeDamage stun cap does
+// not apply; use SHOCK_PULSE_BOSS_STUN. No TTL.
 const SHOCK_PULSE_RADIUS = 5.0;       // tiles
-const SHOCK_PULSE_STUN   = 1.0;       // seconds (capped to 0.3 for bosses by takeDamage path; we apply directly)
-const SHOCK_PULSE_BOSS_STUN = 0.3;    // explicit shorter cap for bosses
-const SHOCK_PULSE_KNOCK  = 2.5;       // tiles of impulse displacement
+const SHOCK_PULSE_STUN   = 1.0;       // seconds
+const SHOCK_PULSE_BOSS_STUN = 0.3;    // seconds
+const SHOCK_PULSE_KNOCK  = 2.5;       // tiles
 class ShockPulsePickup {
   /**
    * @param {any} x
@@ -230,20 +169,17 @@ class ShockPulsePickup {
     ctx.shadowBlur = 10 + 14 * pulse;
     ctx.shadowColor = '#66e0ff';
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
-    // Two concentric arc rings — "stored shockwave" silhouette, distinct
-    // from VaultCoin's solid gold ring + core and HarvestPickup's diamond.
     drawPickupHalo(sx, sy, '#aaf0ff', pulse, 7);
     ctx.strokeStyle = '#66e0ff';
     ctx.lineWidth = 1;
     NEON.draw.circleStroke(ctx, sx, sy, 3.5 + 0.8 * pulse);
-    // Central spark — small bright dot.
     ctx.fillStyle = '#e8faff';
     ctx.fillRect(sx - 1, sy - 1, 2, 2);
     ctx.restore();
   }
 }
 
-// Legacy compatibility: items on the ground still use a type for colour/visual.
+// Ground items still key colour off a non-persistent upgrade type.
 const ITEM_TYPES = UPGRADES.filter(u => !u.persistent).slice(0, 3);
 function pickItemType() { return ITEM_TYPES[rndInt(0, ITEM_TYPES.length - 1)]; }
 
@@ -277,7 +213,6 @@ class Item {
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
     drawPickupHalo(sx, sy, this.type.colour, pulse, 7);
     ctx.fillStyle = this.type.colour;
-    // Diamond shape (rotated square) — visually distinct from enemy squares.
     ctx.translate(sx, sy);
     ctx.rotate(Math.PI / 4);
     ctx.fillRect(-4.5, -4.5, 9, 9);
@@ -316,7 +251,6 @@ class KeyItem {
     ctx.globalAlpha = 0.72 + 0.28 * pulse;
     drawPickupHalo(sx, sy, this.tileColour, pulse, 8);
     ctx.fillStyle=this.tileColour;
-    // Key shape: circle + teeth
     NEON.draw.circle(ctx, sx, sy-3, 5);
     ctx.fillRect(sx-1.5, sy, 3, 8);
     ctx.fillRect(sx, sy+3, 4, 2);
@@ -325,11 +259,8 @@ class KeyItem {
   }
 }
 
-// Whispers subplot — pickup that triggers the narrative fragment in the
-// ARCHIVE (src/data/whispers.js + src/meta/whispers.js). Visually distinct
-// from KeyItem: pulsing violet glyph (the cryptic-fragment colour echoes the
-// 'WHISPERS: N/M' counter in hub.js Archive). isWhisper flag drives the
-// pickup branch in src/game.js.
+// isWhisper selects the game.js pickup branch. Colour matches the Archive
+// WHISPERS counter (hub.js); body lives in src/data/whispers.js.
 class WhisperItem {
   /**
    * @param {any} x
@@ -358,8 +289,6 @@ class WhisperItem {
     ctx.globalAlpha = 0.7 + 0.3 * pulse;
     drawPickupHalo(sx, sy, '#ff77ff', pulse, 7);
     ctx.fillStyle = '#cc99ee';
-    // Hexagonal/diamond glyph — clearly NOT a key (no teeth) and NOT a
-    // generic Item diamond (slightly larger, vertical orientation).
     NEON.draw.circle(ctx, sx, sy, 4 + 1.2 * pulse);
     ctx.fillStyle = '#552277';
     ctx.fillRect(sx - 0.8, sy - 5, 1.6, 10);

@@ -1,9 +1,8 @@
 // @ts-check
 'use strict';
 
-// Meta-progression compatibility wrappers. Loaded before src/content.js so
-// gameplay callers keep the legacy global names while persistence stays owned
-// by src/meta/save.js.
+// Wrappers only. Loaded before src/content.js so callers keep these names;
+// persistence lives in src/meta/save.js.
 
 const _save = /** @type {any} */ (requireNEON('save', 'src/content/meta-save.js'));
 const META_UPGRADES = _save.META_UPGRADES;

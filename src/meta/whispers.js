@@ -1,22 +1,6 @@
 // @ts-check
-// src/meta/whispers.js — Secret-room whisper runtime (companion to logs.js).
-//
-// Whispers (src/data/whispers.js) are a deeper-tier narrative layer than
-// the main ARCHIVE logs. They drop ONLY from secret rooms (interact-broken
-// cracked walls). This module mirrors the logs.js API for a clean parallel:
-//
-// Public API:
-//   pickWhisperForFloor(floor, rand?)  → whisper | null  — eligible & unfound
-//   findWhisper(id)                    → whisper | null  — writes save
-//   readWhisper(id)                    → whisper | null  — writes save
-//   whisperById(id)                    → whisper | null
-//   unreadCount()                      → number
-//   progress()                         → {read,total}
-//   groupedByBiome()                   → [{biomeId, biomeName, whispers[]}]
-//
-// Save schema additions handled by src/meta/save.js:
-//   whispersFound: string[]
-//   whispersRead:  string[]
+// Drops only from secret rooms (elsewhere). Save fields whispersFound/whispersRead
+// are owned by src/meta/save.js. Catalog lives in src/data/whispers.js.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).whispers = factory();
@@ -54,8 +38,7 @@
     return null;
   }
 
-  // pickWhisperForFloor — returns an unfound whisper eligible for this floor
-  // (biome matches and floor >= floorMin), or null. `rand` injectable for tests.
+  // `rand` is injectable so tests do not depend on Math.random.
   /** @param {number} floor @param {() => number} [rand] */
   function pickWhisperForFloor(floor, rand) {
     const f = Math.floor(Number(floor));

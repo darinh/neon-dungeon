@@ -1,7 +1,6 @@
 'use strict';
 // @ts-check
 
-// ─── SHIELDER AI — Frontal Guard Unit ───────────────────────────────────
 /**
  * @param {any} [dt]
  * @param {any} [player]
@@ -11,11 +10,7 @@
  * @returns {void}
  */
 Enemy.prototype.aiShielder = function aiShielder(dt, player, map, d, los) {
-  // Tick the broken-shield recovery timer.
-  //   shieldBrokenTimer === -1 → shield is up (or never broken yet)
-  //   0 ≤ t < 3                → shield down, no visual
-  //   3 ≤ t < 5                → shield blinking back into existence
-  //   t ≥ 5                    → restore shield to full + clear timer
+  // -1 shield up; [0,3) down; [3,5) blink (render); >=5 restore. Render reads the same bands.
   if (this.shieldBrokenTimer >= 0) {
     this.shieldBrokenTimer += dt;
     if (this.shieldBrokenTimer >= 5) {

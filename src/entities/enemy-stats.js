@@ -1,8 +1,7 @@
 // @ts-check
 'use strict';
 
-// Enemy base stat rows. Loaded before entities.js so spawnEnemy can preserve
-// script-tag globals while keeping per-type initialization with the Enemy class.
+// Loaded before entities.js so spawnEnemy can keep these as script-tag globals.
 
 /**
  * @typedef {{
@@ -25,14 +24,8 @@ const FALLBACK_ENEMY_BASE_STATS = Object.freeze({
 
 /** @type {Record<string, EnemyBaseStats>} */
 const ENEMY_BASE_STATS = {
-  // 2026-04-26: doubled all non-boss base HP per playtester feedback
-  // ("mobs feel like 1-shot kills since the beginning, every floor").
-  // Bosses (SENTINEL/WARDEN/HIVE/CONDUCTOR/OMEGA/GENESIS) intentionally
-  // unchanged — phase transitions are HP-ratio based and current tuning
-  // makes those fights feel right; doubling would just stretch them.
-  // Difficulty multipliers in content/modifiers.js DIFFICULTIES still apply on top
-  // (EASY 0.75 / NORMAL 1.0 / HARD 1.5 / NIGHTMARE 2.0), so NIGHTMARE
-  // players now effectively get 4x base. Watch for feedback.
+  // Boss HP stays on a different scale: phase transitions are HP-ratio based.
+  // content/modifiers.js DIFFICULTIES multiply these values on top.
   GUARD: { hp: 80, atk: 8, spd: 2, xpVal: 20, colour: '#ff3333' },
   TURRET: { hp: 50, atk: 12, spd: 0, xpVal: 15, colour: '#ffb700' },
   CRAWLER: { hp: 40, atk: 6, spd: 4, xpVal: 10, colour: '#39ff14' },

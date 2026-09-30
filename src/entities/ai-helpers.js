@@ -1,17 +1,9 @@
 // @ts-check
 'use strict';
 
-// Pure AI helper functions load after src/entities.js so they can reuse tuning
-// constants while entity methods resolve these globals when gameplay runs.
-
+// Loaded after src/entities.js so these helpers can reuse its tuning constants.
 /**
- * Pure helper: is point (px,py) inside a cone with apex (ox,oy), aim
- * direction (aimDx,aimDy) (assumed unit vector), depth `range` and
- * half-angle `halfAngleRad` (radians). Apex itself counts as inside.
- *
- * Used by the RESONATOR fire step and tested directly. Keeping this
- * pure (no LoS, no immunity) means the geometry is independently
- * verifiable; LoS / immunity gates are layered on at the call site.
+ * aimDx/aimDy must be a unit vector. No LoS or immunity — callers add those.
  *
  * @param {number} px
  * @param {number} py
@@ -26,7 +18,7 @@
 function isInsideCone(px, py, ox, oy, aimDx, aimDy, range, halfAngleRad) {
   const vx = px - ox, vy = py - oy;
   const d2 = vx*vx + vy*vy;
-  if (d2 === 0) return true;          // point is at the apex
+  if (d2 === 0) return true;
   if (d2 > range * range) return false;
   const len = Math.sqrt(d2);
   // Dot of unit aim with unit (px-ox, py-oy) = cos(angle between them).
@@ -35,15 +27,7 @@ function isInsideCone(px, py, ox, oy, aimDx, aimDy, range, halfAngleRad) {
 }
 
 /**
- * Pure helper: returns the entry from a {t,x,y} position history that is
- * AT LEAST `seconds` old, preferring the freshest such entry (i.e. the
- * sample closest to the lookback target without going under it). Returns
- * null if no entry is old enough yet (player hasn't been alive long
- * enough or history was just cleared on floor transition).
- *
- * Extracted from Player.getPositionAgo so it's testable without
- * instantiating the browser-bound Player class. The history array is
- * ordered oldest-first (entries[0].t is the largest age).
+ * history is oldest-first; t is age in seconds. Extracted from Player.getPositionAgo so tests need no Player.
  *
  * @param {Array<{t:number,x:number,y:number}> | null | undefined} history
  * @param {number} seconds
@@ -51,9 +35,7 @@ function isInsideCone(px, py, ox, oy, aimDx, aimDy, range, halfAngleRad) {
  */
 function getPositionAgoFromHistory(history, seconds) {
   if (!history || history.length === 0) return null;
-  // Walk newest->oldest; first entry with age >= seconds is the freshest
-  // sample that still satisfies the lookback. This biases toward "just
-  // old enough" rather than "very old", giving more recent causality.
+  // Newest-first walk: first age >= seconds is the freshest sample that still qualifies.
   for (let i = history.length - 1; i >= 0; i--) {
     const e = history[i];
     if (e && e.t >= seconds) {
@@ -64,21 +46,6 @@ function getPositionAgoFromHistory(history, seconds) {
 }
 
 /**
- * Pure helper: predict the player's position `lookahead` seconds in the
- * future by linear extrapolation from velocity. Velocity is estimated by
- * (current position - sample `sampleSec` seconds ago) / sampleSec, then
- * clamped to `velCap` tiles/sec to neutralise dash/teleport blowups
- * (a 0.2s dash that covers 4 tiles would otherwise project 12 tiles
- * downrange and fire into a wall).
- *
- * Returns null if history doesn't reach back `sampleSec` (e.g. just
- * spawned, just changed floors) — caller is expected to fall through
- * to a no-lock branch in that case.
- *
- * Used by PROPHET (the inverse of ECHOER): rewards stillness, punishes
- * straight-line motion. Extracted so it's testable without instantiating
- * browser-bound classes.
- *
  * @param {Array<{t:number,x:number,y:number}> | null | undefined} history
  * @param {number} curX
  * @param {number} curY
@@ -89,13 +56,7 @@ function getPositionAgoFromHistory(history, seconds) {
  */
 function predictFromHistory(history, curX, curY, lookahead, sampleSec, velCap) {
   if (!history || history.length === 0) return null;
-  // Walk newest->oldest; pick the freshest entry whose age >= sampleSec.
-  // Mirrors getPositionAgoFromHistory's selection rule, but we keep the
-  // entry's actual age so we can divide by it (not by the requested
-  // `sampleSec`). Using the requested seconds as the denominator inflates
-  // velocity whenever the chosen sample is older than requested — common
-  // under frame-time jitter / low FPS — and over-leads the shot.
-  // (Bug caught by gpt-5.3-codex review of PR #137.)
+  // Divide by the sample's actual age, not sampleSec. An older sample under jitter inflates velocity and over-leads.
   let past = null;
   for (let i = history.length - 1; i >= 0; i--) {
     const e = history[i];
@@ -115,16 +76,7 @@ function predictFromHistory(history, curX, curY, lookahead, sampleSec, velCap) {
 }
 
 /**
- * Pure helper: pick safe projectile kinematics for a MIRROR shot from the
- * player's _shotHistory ring. Returns the most recent entry's speed and
- * colour, clamped into the fair band (MIRROR_PROJ_SPD_MIN..MAX) so a
- * future bullet-time perk can't yield invisible-fast return shots, and
- * defaulted when the player hasn't fired yet (or has only used melee).
- *
- * Damage is intentionally NOT pulled from history — it's mob-scaled at
- * fire time so the player's late-game crit/perk damage never returns.
- *
- * Extracted so it's testable without instantiating browser-bound classes.
+ * Speed is clamped so a fast perk cannot make the return shot invisible. Damage is mob-scaled at fire time, not taken from history.
  *
  * @param {Array<{spd?:number,colour?:string}> | null | undefined} shotHistory
  * @returns {{spd:number, colour:string}}
@@ -141,25 +93,9 @@ function pickMirrorKinematics(shotHistory) {
 }
 
 /**
- * Pure helper: compute the new (dx,dy) direction for a projectile after
- * one frame of MAGNETON pull. Inputs:
- *   px, py     — projectile position (tile coords)
- *   dx, dy     — current unit direction (caller guarantees normalised)
- *   mx, my     — magneton position (tile coords)
- *   fieldR     — field radius (tiles); no bend at or beyond
- *   strength   — base lerp rate (1/sec) at field center; scales with proximity
- *   dt         — frame delta (seconds)
- *
- * Returns [ndx, ndy] — new unit direction. Returns [dx, dy] unchanged when:
- *   - distance to magneton >= fieldR (out of range), or
- *   - distance to magneton <= MAGNETON_SAFE_R (apex / NaN guard), or
- *   - the lerp produces a degenerate zero vector (defensive — should not
- *     happen with strength*dt clamped to <= 1, but guards against a future
- *     regression where the call sequence forgets to clamp).
- *
- * Used by aiMagneton and tested directly. Pure — no globals, no allocs
- * beyond the [ndx,ndy] tuple. Keep this self-contained so the unit tests
- * can vm-extract it without dragging in module state.
+ * Tile coords. dx/dy must already be unit length. strength is 1/sec at field center.
+ * MAGNETON_SAFE_R skips the apex so a zero vector cannot NaN the normalise.
+ * No allocs beyond the returned pair so tests can extract this function alone.
  *
  * @param {number} px
  * @param {number} py
@@ -190,8 +126,6 @@ function magnetonBendDir(px, py, dx, dy, mx, my, fieldR, strength, dt) {
 }
 
 /**
- * Decide whether a MAGPIE's remembered pickup target can no longer be chased.
- *
  * @param {any | null | undefined} target
  * @param {Array<any>} candidates
  * @returns {boolean}
@@ -201,8 +135,6 @@ function isMagpieTargetStale(target, candidates) {
 }
 
 /**
- * Decide whether a MAGPIE is close enough to consume its remembered target.
- *
  * @param {any} target
  * @param {number} x
  * @param {number} y
@@ -215,8 +147,6 @@ function isMagpieTargetInGrabRange(target, x, y, grabRange) {
 }
 
 /**
- * Decide whether a MAGPIE carrying stolen credits should flee the real player.
- *
  * @param {number} stolenCredits
  * @param {number} playerDistance
  * @param {number} fleeRange
@@ -227,8 +157,8 @@ function shouldMagpieFlee(stolenCredits, playerDistance, fleeRange) {
 }
 
 /**
- * Pick the nearest loot target a MAGPIE may steal. Returns the original item
- * object so aiMagpie can later mark that exact pickup dead when it is grabbed.
+ * Returns the same item object so aiMagpie can mark that pickup dead.
+ * Keys, harvest, whispers, and hoards are not loot; a hoard would loop between magpies.
  *
  * @param {Array<any>} candidates
  * @param {number} x
@@ -253,8 +183,6 @@ function pickMagpieTarget(candidates, x, y, scanRange) {
 }
 
 /**
- * Project a MAGPIE flee target away from the real player while it carries loot.
- *
  * @param {number} x
  * @param {number} y
  * @param {number} playerX
@@ -272,8 +200,6 @@ function pickMagpieFleeTarget(x, y, playerX, playerY, fleeRange) {
 }
 
 /**
- * Compute how many credits a MAGPIE banks when it steals a generic pickup.
- *
  * @param {number} floorNum
  * @param {number} base
  * @param {number} perFloor

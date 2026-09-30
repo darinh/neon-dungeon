@@ -1,11 +1,7 @@
 // @ts-check
 'use strict';
 
-// Crates load after src/entities.js so they can reuse shared actor arrays and
-// map/game globals while publishing the legacy crate helpers consumed by
-// projectiles, volatile cores, generation, and enemy damage.
-
-// ─── Crates ───────────────────────────────────────────────────────────────────
+// Loads after src/entities.js. Helpers are the crate API for projectiles, cores, generation, and enemy damage.
 /**
  * @param {any} [tx]
  * @param {any} [ty]
@@ -46,7 +42,6 @@ function destroyCrate(c) {
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'EXPLOSION', '#667788', 10);
   spawnParticles(c.tx + 0.5, c.ty + 0.5, 'SPARK', '#44ccff', 6);
   audio.crateBreak();
-  // 25% chance to drop credits
   if (rand('loot') < 0.25) {
     const amt = _EG.floor * 4;
     _EG.player.credits = (_EG.player.credits || 0) + amt;
