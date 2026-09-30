@@ -85,6 +85,7 @@ jobs:
           next="${major}.${minor}.${patch}"
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "previous=$latest_tag" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
         if: "${{ steps.version.outputs.skip != 'true' }}"
@@ -92,9 +93,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           KIND: ${{ steps.bump.outputs.kind }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
         run: |
           set -euo pipefail
-          BODY=$(printf 'Automated %s release for main commit %s.' "$KIND" "$GITHUB_SHA")
+          : "${PREVIOUS:?previous release tag is required for the release notes}"
+          # The notes are the changelog: one line per commit since the last release.
+          CHANGES=$(git log --no-merges --format='- %s' "${PREVIOUS}..${GITHUB_SHA}")
+          BODY=$(printf 'Automated %s release for main commit %s.\n\n## Changes since %s\n\n%s\n' "$KIND" "$GITHUB_SHA" "$PREVIOUS" "$CHANGES")
           gh release create "v${VERSION}" \
             --target "$GITHUB_SHA" \
             --title "NEON DUNGEON v${VERSION}" \

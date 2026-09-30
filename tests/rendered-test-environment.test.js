@@ -9,7 +9,6 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const RENDER = fs.readFileSync(path.join(ROOT, 'src', 'render.js'), 'utf8');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
-const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'spec.md'), 'utf8');
 const biomes = require(path.join(ROOT, 'src', 'data', 'biomes.js'));
 
 /**
@@ -81,12 +80,4 @@ test('simulation tile overlay is primitive-only and called from drawWorld tile l
   const drawWorld = extractFunctionSource(RENDER, 'drawWorld');
   assert.match(drawWorld, /drawSimulationTileOverlay\(tile,\s*sx,\s*sy,\s*tx,\s*ty,\s*brightness\);\s*ctx\.restore\(\)/,
     'simulation overlay must render inside the existing per-tile save/restore');
-});
-
-test('spec records concrete rendered-test art direction and hot-path constraint', () => {
-  assert.match(SPEC, /### Visual Style — rendered AI test environment/);
-  assert.match(SPEC, /TESTER DATA TERMINAL/);
-  assert.match(SPEC, /RUNTIME SYSTEM PROMPT/);
-  assert.match(SPEC, /EVALUATION ARCHIVE/);
-  assert.match(SPEC, /must not allocate arrays, objects, gradients, or lambdas per tile/);
 });

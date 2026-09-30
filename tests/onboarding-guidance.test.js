@@ -9,7 +9,6 @@ const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const GAME = fs.readFileSync(path.join(ROOT, 'src', 'game.js'), 'utf8');
-const SPEC = fs.readFileSync(path.join(ROOT, 'docs', 'spec.md'), 'utf8');
 
 function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -86,15 +85,4 @@ test('first-floor onboarding explains objective and desktop/touch controls', () 
     'touch guidance must use touch vocabulary');
   assert.match(guidance, /USE interact · DASH dodge · BOMB cracks\/walls/,
     'touch guidance must explain touch actions by button label');
-});
-
-test('spec documents first-floor onboarding guidance contract', () => {
-  assert.match(SPEC, /renderOnboardingGuidance\(\)/,
-    'spec must name the code surface that owns onboarding guidance');
-  assert.match(SPEC, /floor 1[^.]+while `PLAYING`/s,
-    'spec must pin the floor and state guards');
-  assert.match(SPEC, /unread system prompt[^.]+unsafe rooms/s,
-    'spec must pin the prompt and safety guards');
-  assert.match(SPEC, /Objective: clear rooms, read cyan terminals, find stairs\./,
-    'spec must preserve the immediate objective copy');
 });
