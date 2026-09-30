@@ -760,8 +760,9 @@ function uniqueDir(base) {
 const TOKEN = /^[0-9a-f]{32}$/;
 
 /**
- * A server URL as launch records it: `http:`, host 127.0.0.1 or [::1], an
- * explicit integer port 1-65535, path `/`, nothing else, in canonical form.
+ * A server URL as launch records it: `http:`, host 127.0.0.1 (verify-serve
+ * binds nothing else), an explicit integer port 1-65535, path `/`, nothing
+ * else, in canonical form.
  * `new URL()` does the parsing, so `http://127.0.0.1:99999/` (out of range)
  * or `http://127.0.0.1:0/` never reaches a browser.
  * @param {unknown} url
@@ -775,7 +776,7 @@ function isServerUrl(url) {
     return false;
   }
   const port = Number(u.port);
-  return u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === '[::1]') &&
+  return u.protocol === 'http:' && u.hostname === '127.0.0.1' &&
     u.port !== '' && Number.isInteger(port) && port >= 1 && port <= 65535 &&
     u.pathname === '/' && !u.search && !u.hash && !u.username && !u.password && u.href === url;
 }
@@ -1312,13 +1313,23 @@ function pageDoctorInfo() {
 // ─── Browser session + harness ───────────────────────────────────────────────
 
 /**
+ * The Chromium flag that lets only the served host resolve. Chromium matches
+ * an IPv6 literal without the brackets `new URL().hostname` keeps, so
+ * `EXCLUDE [::1]` would leave `http://[::1]:PORT/` unresolvable.
+ * @param {string} url
+ */
+function hostResolverRules(url) {
+  const host = new URL(url).hostname.replace(/^\[(.*)\]$/, '$1');
+  return `--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE ${host}`;
+}
+
+/**
  * @param {{ url: string, viewport: Viewport, touch: boolean, evidenceDir: string, log?: (line: string) => void }} opts
  */
 async function openSession(opts) {
   const { chromium } = require('playwright-core');
   const chromiumChoice = resolveChromium();
   const allowedOrigin = new URL(opts.url).origin;
-  const allowedHost = new URL(opts.url).hostname;
   const log = opts.log || (() => {});
   if (chromiumChoice.warning) console.error(`WARNING  ${chromiumChoice.warning}`);
   fs.mkdirSync(opts.evidenceDir, { recursive: true });
@@ -1360,7 +1371,7 @@ async function openSession(opts) {
       handleSIGHUP: false,
       // Second network fence behind context.route: no hostname except the served
       // one resolves, so even a request that bypasses routing cannot leave.
-      args: ['--mute-audio', `--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE ${allowedHost}`],
+      args: ['--mute-audio', hostResolverRules(opts.url)],
     });
   } catch (err) {
     restoreTmp();
@@ -2791,6 +2802,7 @@ module.exports = {
   waitForReady,
   parseServerRecord,
   isServerUrl,
+  hostResolverRules,
   removeClaimed,
   removeIfOwned,
   verifiedLauncher,

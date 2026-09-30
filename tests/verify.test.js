@@ -655,16 +655,22 @@ test('waitForReady accepts READY only from a server that is still running', asyn
 });
 
 test('isServerUrl accepts only the loopback http URL launch records', () => {
-  for (const url of ['http://127.0.0.1:43210/', 'http://127.0.0.1:1/', 'http://127.0.0.1:65535/', 'http://[::1]:43210/']) {
+  for (const url of ['http://127.0.0.1:43210/', 'http://127.0.0.1:1/', 'http://127.0.0.1:65535/']) {
     assert.equal(verify.isServerUrl(url), true, url);
   }
-  for (const url of ['http://127.0.0.1:99999/', 'http://127.0.0.1:65536/', 'http://127.0.0.1:0/', 'http://127.0.0.1/', 'http://127.0.0.1:080/',
+  for (const url of ['http://[::1]:43210/', 'http://127.0.0.1:99999/', 'http://127.0.0.1:65536/', 'http://127.0.0.1:0/', 'http://127.0.0.1/', 'http://127.0.0.1:080/',
     'https://127.0.0.1:43210/', 'http://localhost:43210/', 'http://10.0.0.1:43210/', 'http://127.0.0.1:43210/index.html',
     'http://127.0.0.1:43210/?x=1', 'http://127.0.0.1:43210/#x', 'http://u@127.0.0.1:43210/', 'http://127.0.0.1:43210', 42, null]) {
     assert.equal(verify.isServerUrl(url), false, String(url));
   }
   const rec = { pid: 4242, url: 'http://127.0.0.1:99999/', status: 'ready', root: '/w', runDir: '/out/run-a', startedAt: 't', head: 'h', token: 'a'.repeat(32) };
   assert.deepEqual(verify.parseServerRecord(JSON.stringify(rec), '/out/run-a'), { kind: 'unreadable', why: 'not a server record (bad or missing: url)' });
+});
+
+test('hostResolverRules lets only the served host resolve, with IPv6 literals unbracketed', () => {
+  assert.equal(verify.hostResolverRules('http://127.0.0.1:43210/'), '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1');
+  assert.equal(verify.hostResolverRules('http://[::1]:43210/'), '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE ::1');
+  assert.equal(verify.hostResolverRules('https://darinh.github.io/neon-dungeon/'), '--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE darinh.github.io');
 });
 
 test('parseReadyLine reads the URL and pid from the server READY line only', () => {
