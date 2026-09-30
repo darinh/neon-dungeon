@@ -14,6 +14,9 @@ Keep the current architecture for now:
 - `index.html` as the explicit dependency graph.
 - `sw.js` as the explicit PWA asset list.
 - `npm run check` as the merge gate.
+- The golden oracle (`tests/_game-sim.test.js`) as the safety net for
+  extractions: moving code must not change what any journey draws, plays,
+  sends, or saves.
 
 Do not convert the repo to TypeScript or ES modules until the seams below are
 smaller and the browser loading strategy is intentionally changed.
