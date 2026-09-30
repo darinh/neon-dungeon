@@ -105,6 +105,34 @@ test('a line comment that starts with "global" is prose, as it is for ESLint', (
   assert.equal(check('// global helpers for old saves\nvar a = 1;\n', 'var a = 1;\n'), null);
 });
 
+test('prose that mentions eslint or @ts- is not a directive', () => {
+  const before = 'const value = 1;\n// eslint evaluates this file in script mode, and @ts-check covers it.\n';
+  assert.equal(check(before, 'const value = 1;\n// The linter evaluates this file in script mode.\n'), null);
+});
+
+test('a suppression that mentions @ts-check is still a suppression, not a file pragma', () => {
+  const before = '// @ts-check\n// @ts-ignore needed because @ts-check reports this\nundeclaredName();\n';
+  const after = before.replace('undeclaredName', '/* Explain why this call is safe. */\nundeclaredName');
+  assert.match(String(check(before, after)), /^directive changed or moved: .*suppresses tokens 0-3.* -> .*suppresses nothing/);
+});
+
+test('deleting a prose line between a TypeScript suppression and its code is prose comments only', () => {
+  const before = '// @ts-check\n// @ts-expect-error legacy global is injected by the page\n// This call is safe after bootstrap.\ninjectedGlobal();\n';
+  assert.equal(check(before, before.replace('// This call is safe after bootstrap.\n', '')), null);
+});
+
+test('whitespace inside a directive is compared exactly', () => {
+  /** @param {string} gap */
+  const ref = (gap) => `/// <reference path="./types${gap}one.d.ts" />\nconst a = 1;\n`;
+  assert.match(String(check(ref(' '), ref('  '))), /^directive changed or moved/);
+});
+
+test('an array typedef is not the same tag as an object typedef', () => {
+  /** @param {string} t */
+  const typedef = (t) => `/**\n * @typedef {${t}} Foo\n * @property {number} x\n */\n/** @type {Foo} */\nconst value = { x: 1 };\n`;
+  assert.match(String(check(typedef('Object'), typedef('Object[]'))), /^JSDoc tag changed or moved: .*isArrayType=true/);
+});
+
 test('a file pragma may lose the prose under it, but not leave the file header', () => {
   const before = "// @ts-check\n// Why this module exists.\n'use strict';\n";
   assert.equal(check(before, "// @ts-check\n'use strict';\n"), null);
