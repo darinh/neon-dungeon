@@ -84,13 +84,11 @@ function drawDisruptionFields(camX, camY) {
   }
 }
 
-// Inside NULLIFIER_FIELD_R, player.update must not tick hackwareCooldown, and activateHackware in src/content.js must bail.
-// player.hackwareJammed is one frame stale (player.update runs before updateNullifierJam). Losing 1/60s of a long cooldown is invisible.
-// activateHackware must call isPlayerInNullifierAura directly; a stale flag would allow same-frame activation.
-// Iterate live enemies, not a parallel array: the aura has no lifetime apart from the mob (same choice as MAGNETON).
-// stunTimer > 0 defuses the jam even though AI is already skipped — EMP should clear it.
-// isPlayerDamageImmune is a clean pass (dash-through). PHASE_CLOAK cannot be activated inside the aura; pre-cloak outside is the counterplay.
-// No room gate: a neighbouring NULLIFIER jams through walls, matching other stationary field-emitters. Floor transition wipes enemies.
+// player.update skips the hackwareCooldown tick while hackwareJammed is set; it reads the previous environment update's value because updateNullifierJam runs later in game.js.
+// activateHackware in src/content/hackware.js calls isPlayerInNullifierAura directly so same-update activation cannot use the stale cache.
+// Iterate live NULLIFIERs: the aura ends with the mob. Stun and any isPlayerDamageImmune state suppress the jam.
+// An active jam blocks hackware activation; a cloak or other immunity established before entry suppresses the aura check.
+// There is no room or LOS gate, so a nearby NULLIFIER can jam through walls; floor transitions clear the enemy list.
 /**
  * @param {any} player
  * @returns {boolean}
@@ -158,9 +156,8 @@ function updateFrostPatches(dt, player) {
 function drawFrostPatches(camX, camY) {
   for (const f of frostPatches) {
     if (f.dead) continue;
-    // FOV-cull per patch — frozen tiles outside the player's vision
-    // shouldn't render (they still tick if entered, but the player
-    // would never see the warning before stepping in).
+    // FOV-cull each patch so hazards do not render through hidden tiles.
+    // Damage ticking is independent of visibility.
     const tx = Math.floor(f.x), ty = Math.floor(f.y);
     if (!_EG.dungeon?.visible?.[ty]?.[tx]) continue;
     const sx = f.x * TILE - camX, sy = f.y * TILE - camY;

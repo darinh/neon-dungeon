@@ -3,8 +3,8 @@
 
 /**
  * Stun forces an immediate manifest before AI dispatch, so EMP is not a
- * free phase. phaseImmune is owned here; SPECTRE is excluded from the
- * PHASING elite roll so that tick cannot also write the flag.
+ * free phase. SPECTRE's phase state controls phaseImmune; SPECTRE is
+ * excluded from PHASING elites so tickEliteAffix cannot overwrite it.
  *
  * @this {Enemy}
  * @param {number} dt

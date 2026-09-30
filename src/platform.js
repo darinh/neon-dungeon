@@ -4,7 +4,7 @@
 // Logical canvas size (raw backing / worldZoom). Renderers and layout use this space.
 // worldZoom is a ctx.scale wrap; pointer input is divided by it once at the host boundary.
 let W = 900, H = 600;
-// Pre-zoom backing size (vw / gameScale). Kept so a settings stepper can resize without re-reading the DOM.
+// Pre-zoom backing size (vw / gameScale), reused when first-resize defaults change worldZoom mid-call.
 let rawW = 900, rawH = 600;
 let gameScale = 1;
 const TILE = 32;
@@ -45,7 +45,7 @@ const KEY_DISPLAY = k => {
 // Only legal stepper values. load() snaps anything else so old saves cannot leak intermediate scales.
 const MINIMAP_SCALE_STEPS = [0.75, 1.0, 1.25, 1.5];
 const TEXT_SCALE_STEPS    = [0.85, 1.0, 1.15, 1.3];
-// Playfield-only. HUD stays at 1.0. Steps exceed text/minimap because phones need tiles above the ~14–30 CSS-px auto-fit.
+// Whole-frame zoom, including HUD. Its wider range extends the ~22–48 CSS-px tile auto-fit.
 const WORLD_ZOOM_STEPS    = [1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
 
 /**
@@ -72,13 +72,13 @@ const settings = {
   screenShake: true,
   damageNumbers: true,
   lockAimToMove: false,
-  aimAssist: false,  // auto-aim at the nearest visible enemy
+  aimAssist: false,  // auto-aim at the nearest eligible LOS enemy under 4 tiles
   crtMode: false,    // scanline + vignette overlay
   reducedMotion: false,
   minimapScale: 1.0,
   textScale: 1.0,
   worldZoom: 1.0,
-  // True until the user picks a zoom or a saved zoom is restored. Persisted so an explicit 1.0 is not replaced on the next device.
+  // True while the one-shot viewport default is pending. Persisted so an accepted 1.0 is not replaced in later sessions or viewports.
   _worldZoomFromDefault: true,
   keyMap: { ...DEFAULT_KEY_MAP },
   load() {
@@ -117,7 +117,7 @@ const settings = {
       }
     } catch(e) {}
   },
-  // Once per session, after the first real viewport measurement. A later rotation must not clobber an explicit zoom.
+  // One-shot after the first real viewport measurement. Persistence prevents later sessions or rotations from clobbering the accepted zoom.
   applyMobileFirstDefaults() {
     if (!this._worldZoomFromDefault) return;
     // Same predicate as engine/viewport.js computeLayout (`H > W && W <= 600`). Do not re-derive it here.
@@ -125,7 +125,7 @@ const settings = {
     if (isCompact) {
       this.worldZoom = 1.5;
     }
-    // Latch even when not compact, or a later resize into compact would overwrite an explicit 1.0.
+    // Latch even when not compact, or a later compact resize would replace the accepted 1.0 default.
     this._worldZoomFromDefault = false;
     this.save();
   },
@@ -187,7 +187,7 @@ const _PG_STATES = _PG_STATE_DEFS.GAME_STATES;
 /** @type {any} */
 const _vp = /** @type {any} */ (requireNEON('viewport', 'src/platform.js'));
 
-// Logical px, not CSS px. Notched devices.
+// Pre-worldZoom canvas px (CSS safe-area px / gameScale), not CSS px.
 let safeTop = 0, safeRight = 0, safeBottom = 0, safeLeft = 0;
 
 let scale = 1, offX = 0, offY = 0;
@@ -196,22 +196,22 @@ function resize() {
   const rect = canvas.getBoundingClientRect();
   const vw = rect.width  || window.innerWidth;
   const vh = rect.height || window.innerHeight;
-  // Clamps tiles to ~14–30 CSS px. The formula is engine/viewport.js computeScale.
+  // Clamps pre-worldZoom tiles to ~22–48 CSS px. The formula is engine/viewport.js computeScale.
   gameScale = _vp.computeScale(vw, vh);
   const _sz = _vp.computeLogicalSize(vw, vh, gameScale);
-  // Backing size is pre-worldZoom. worldZoom only changes the W/H exposed to layout.
+  // Backing size is pre-worldZoom. W/H are raw/worldZoom; render applies the matching ctx.scale.
   rawW = _sz.W;
   rawH = _sz.H;
   canvas.width  = rawW;
   canvas.height = rawH;
-  // settings.load() may not have run on the first resize.
+
   const _wz = (settings && settings.worldZoom) || 1;
   W = Math.max(1, Math.round(rawW / _wz));
   H = Math.max(1, Math.round(rawH / _wz));
   scale = gameScale;
   offX = 0;
   offY = 0;
-  // CSS env() px divided by gameScale, so insets match logical space.
+  // CSS env() px divided by gameScale; worldZoom is not applied to these inset values.
   const cs = getComputedStyle(document.documentElement);
   const _sa = _vp.parseSafeAreaInsets((/** @type {string} */ n) => cs.getPropertyValue(n), gameScale);
   safeTop    = _sa.top;
@@ -230,7 +230,7 @@ function resize() {
   }
   console.log(`[NEON DUNGEON] ${vw.toFixed(0)}×${vh.toFixed(0)} → ${W}×${H} (×${gameScale.toFixed(2)}) tile=${(TILE*gameScale).toFixed(1)}css-px compact=${layout.compact}`);
 }
-// The resize listener is registered in Boot, after every def it closes over exists.
+// The resize listener is registered at the end of game.js, after every definition it closes over exists.
 
 const layout = { compact: false, hudH: 40, hudTop: 0, msgBase: 0 };
 function updateLayout() {
@@ -253,7 +253,7 @@ const fsApi = {
   supported: !!(_fsCanvas.requestFullscreen || _fsCanvas.webkitRequestFullscreen),
 };
 let fsWantLandscape = false;   // landscape, but fullscreen still needs a gesture
-let fsDismissed = false;       // dismissed for this session only
+let fsDismissed = false;       // runtime-only; reset on the next portrait→landscape transition
 
 function isLandscape() {
   return _vp.isLandscape(window, screen);
@@ -476,7 +476,7 @@ const BTNS = {
   PAUSE: { x:0, y:0, r:20, label:'II', caption:'PAUSE', colour:'#ff00c8' },
 };
 function updateBtns() {
-  // 22 logical px radius * gameScale ≈ 44 CSS px diameter, the touch-target floor.
+  // Floor radius at 22 CSS px, a 44 CSS-px touch target (the same floor engine/touch.js hitBtn uses), in pre-worldZoom canvas units; the global zoom enlarges it further.
   const minR = 22 / gameScale;
   BTNS.E.r     = Math.max(30, minR);
   BTNS.F.r     = Math.max(28, minR);
@@ -584,7 +584,7 @@ canvas.addEventListener('touchstart', e => {
           }
         } catch (_) {}
         if (hit && hit.kind === 'terminal') {
-          // Select before Enter so a re-tap still moves the highlight.
+          // Select before Enter so updateHub activates the tapped terminal, not the previous selection.
           if (_G.hub) _G.hub.selected = hit.index;
           justPressed.add('Enter');
         } else if (hit && hit.kind === 'descend') {
@@ -1386,7 +1386,7 @@ const audio = (() => {
     },
     watcherFire() {
       const c = getCtx(); const t = c.currentTime;
-      // No sub, short tail. Same dry envelope as watcherCharge so a canceled charge does not leave reverb.
+      // No sub; wet mix 0.20 and lifetime 0.30, versus watcherCharge's 0.30 and 0.20.
       const bus = wetDry(1, 0.20, 0.30);
       osc('square', 880, 440, 0.05, t, 0.16, bus);
       osc('sine', 2200, 1100, 0.07, t, 0.14, bus);
@@ -1676,7 +1676,7 @@ const audio = (() => {
     },
     shockPulse() {
       const c = getCtx(); const t = c.currentTime;
-      // No concussive thud (mineExplode) and no high zwip (teleport).
+      // No sub-bass thud like mineExplode's; three descending voices start at 1600, 1200, and 600 Hz.
       const bus = wetDry(0.9, 0.25, 0.2);
       osc('sine',     1600, 200, 0.10, t,        0.18, bus);
       osc('triangle', 1200, 300, 0.06, t + 0.02, 0.14, bus);
@@ -1890,7 +1890,7 @@ const audio = (() => {
     hackwareChronoLure() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.35, 0.45);
-      // Ticks at 0 and 0.5s telegraph the 1s fuse. Must not share hackwareGravity's impact.
+      // Ticks at 0, 0.3, and 0.6s lead into the 1s fuse. Must not share hackwareGravity's impact.
       osc('triangle', 1100, 1400, 0.08, t,         0.10, bus);
       osc('triangle',  900, 1100, 0.06, t + 0.30,  0.10, bus);
       osc('triangle',  700,  900, 0.05, t + 0.60,  0.10, bus);
@@ -1925,7 +1925,7 @@ const audio = (() => {
     hackwareShieldBubble() {
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(1, 0.4, 0.7);
-      // Longer and lower than shieldRestore. Sub body separates it from hackwareCloak and hackwareRepair.
+      // Lower and shorter than shieldRestore. A dry 180→90 Hz voice separates it from hackwareCloak and Repair Protocol's heal cue.
       osc('sine',     350, 750,  0.18, t,          0.22, bus);
       osc('triangle', 500, 1050, 0.14, t + 0.04,   0.18, bus);
       osc('sine',     700, 1300, 0.08, t + 0.10,   0.14, bus);
@@ -2121,7 +2121,7 @@ const audio = (() => {
       noise(0.06, t + 0.02, 0.08, 4000, bus);
     },
     elitePredator() {
-      // ~0.18s so it does not cover the hit sounds it sequences with. Not eliteFrenzy or shieldBreak.
+      // Voices end by 0.15s; this cue is triggered immediately before audio.hit(true). Not eliteFrenzy or shieldBreak.
       const c = getCtx(); const t = c.currentTime;
       const bus = wetDry(0.7, 0.35, 0.25);
       osc('square',   1400, 700,  0.08, t,        0.10, bus, { attack:0.002 });
@@ -2173,7 +2173,7 @@ const audio = (() => {
 })();
 
 // iOS leaves an interrupted AudioContext running and that kills the rAF chain.
-// wasAutoPaused is cleared by game.js on a manual unpause, not when the tab returns.
+// game.js clears wasAutoPaused on any transition out of PAUSED; visibility return leaves it set.
 let _autoPaused = false;
 let _preVisibilityState = null;
 
@@ -2194,7 +2194,7 @@ function _onVisibilityHidden() {
   if (typeof game !== 'undefined' && _PAUSABLE_STATES.has(_G.state)) {
     _preVisibilityState = _G.state;
     _autoPaused = true;
-    // Survives hidden→visible while still paused. game.js clears it on manual resume.
+    // Survives hidden→visible while PAUSED. game.js clears it on any transition out of PAUSED.
     _G.wasAutoPaused = true;
     _G.setState(_PG_STATES.PAUSED);
   }

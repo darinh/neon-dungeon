@@ -429,7 +429,7 @@
   }
 
   /**
-   * Cardinal BFS. A passable tile counts only if it also lies in a generated room.
+   * Cardinal-distance search ignores intervening tiles. A candidate counts only if it is passable and lies in a generated room.
    *
    * @param {{
    *   map: ArrayLike<ArrayLike<number>>,
@@ -605,7 +605,7 @@
   }
 
   /**
-   * Scan order mirrors the legacy generator: top, bottom, left, right.
+   * Scan order is top/bottom per x, then left/right per y.
    *
    * @param {ArrayLike<ArrayLike<number>>} map
    * @param {{x:number,y:number,w:number,h:number}} room

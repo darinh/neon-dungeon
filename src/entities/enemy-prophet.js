@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Commits to a predicted tile, not current position. Aiming ignores current LoS; stun cancel is in update(). Shares ECHOER's history ring but queries the future.
+// Commits to a predicted position, not the player's current position. Active aiming ignores current LoS; Enemy.update cancels it on stun. Uses ECHOER's player history but extrapolates forward.
 /**
  * @param {any} [dt]
  * @param {any} [player]

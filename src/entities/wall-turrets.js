@@ -8,7 +8,7 @@ const WTURRET_COOLDOWN_HOSTILE = 1.8;
 const WTURRET_COOLDOWN_HACKED  = 1.5;
 const WTURRET_PROJ_SPD = 7;
 const WTURRET_PROJ_RANGE = 10;
-const WTURRET_DISABLE_DUR = 3; // EMP disable, seconds
+const WTURRET_DISABLE_DUR = 3;
 
 /**
  * @param {any} [x]

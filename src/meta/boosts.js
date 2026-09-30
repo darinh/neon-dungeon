@@ -175,7 +175,7 @@
     return out;
   }
 
-  // CREDIT_CACHE is currency bought with currency (arbitrage once floor scaling applies). TACTICAL_DROP resells a boost the vendor already prices individually. Lives here so the filter can be tested without the browser bundle.
+  // CREDIT_CACHE's payout scales with floor, meta, augments, and difficulty, so selling it for credits can create arbitrage at high floors. TACTICAL_DROP resells a boost the vendor already prices individually. Lives here so the filter can be tested without the browser bundle.
   /** @param {any} upgrades */
   function filterVendorPool(upgrades) {
     if (!Array.isArray(upgrades)) return [];
@@ -188,7 +188,7 @@
     });
   }
 
-  // NANO_MEDIC is excluded: it duplicates the MED_PACK heal drop. Order is stable so tests can lock the roll.
+  // NANO_MEDIC is excluded to avoid another healing roll alongside MED_PACK and NANO_REPAIR. Order is stable so tests can lock the roll.
   const DROP_BOOST_POOL = ['COMBAT_STIM', 'REFLEX_BOOSTER', 'CRIT_MATRIX', 'SHIELD_DRIVER', 'RECON_PING'];
 
   // Math.min(len - 1, ...), not `% len`: a seeded rng that emits 1.0 must still land on the last index.

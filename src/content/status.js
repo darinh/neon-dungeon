@@ -121,7 +121,7 @@ function getStatusEffects(player) {
   if (player.burnTimer > 0) {
     fx.push({ id: 'burn', icon: '🔥', label: player.burnTimer.toFixed(1)+'s', colour: '#ff6600' });
   }
-  // Shock locks input; the countdown is when control returns.
+  // Shock zeroes walking input; the countdown is when normal walking returns.
   if (player.shockTimer > 0) {
     fx.push({ id: 'shocked', icon: '⚡', label: player.shockTimer.toFixed(1)+'s', colour: '#ffee44' });
   }
@@ -177,7 +177,7 @@ function getStatusEffects(player) {
   if (player.perks && player.perks.DEADEYE && player._steadyReady) {
     fx.push({ id: 'deadeye', icon: '◎', label: 'AIM', colour: '#ffee88' });
   }
-  // Same id as the AIM badge: drawStatusBar crossfades distinct ids for ~200ms,
+  // Same id as the AIM badge: distinct ids can overlap for up to about 13 rendered frames,
   // and this latch flips often enough that two ids would flicker.
   // Sibling if, not else-if: alignment tests do not see an else-if's implicit negation.
   // Literal 1 must match DEADEYE_CHARGE_TIME. `|| 0` keeps NaN out of toFixed.
@@ -209,7 +209,7 @@ function getStatusEffects(player) {
     const mul = (1 + 0.15 * lv).toFixed(2);
     fx.push({ id: 'momentum', icon: '▶', label: '×' + mul, colour: '#ff8844' });
   }
-  // `combo` is declared later in src/content.js; the typeof guard keeps isolated harnesses from throwing.
+  // `combo` comes from content/combo.js; the typeof guard keeps isolated harnesses from throwing.
   // Gate, 0.03, and 0.30 must match the damage site (tests/overdrive-hud.test.js).
   const overdriveCombo = (typeof combo !== 'undefined' && combo) ? combo.count : 0;
   if (player.perks && player.perks.OVERDRIVE && overdriveCombo >= 2) {
@@ -289,7 +289,7 @@ function drawStatusBar(player) {
 
   const hasKeys = player.keys.red + player.keys.blue + player.keys.gold > 0;
   // Offsets scale with settings.textScale to track the key row in render.js drawHUD.
-  // Floors stop the row collapsing into the HUD (0.85×) or the keys (hasKeys).
+  // The two floors only guard textScale values below the supported 0.85× minimum.
   const badgeYOffset = hasKeys
     ? Math.max(24, Math.round(32 * settings.textScale))
     : Math.max(12, Math.round(16 * settings.textScale));

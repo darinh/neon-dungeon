@@ -15,7 +15,7 @@
 Enemy.prototype.aiMagpie = function aiMagpie(dt, player, map, d, los) {
   void los; // LOS is irrelevant — MAGPIE pursues items, not the player
   this._mgScanT = (this._mgScanT || 0) - dt;
-  // Drop targets another MAGPIE or the player already marked dead.
+  // Drop the target if another MAGPIE marked it dead or any path removed it from items[].
   if (isMagpieTargetStale(this._mgTarget, items)) {
     this._mgTarget = null;
   }

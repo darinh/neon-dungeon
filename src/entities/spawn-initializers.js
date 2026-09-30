@@ -7,7 +7,7 @@
 let _cdEidCounter = 0;
 
 /**
- * src/entities.js still owns construction, room registration, and elite rolls.
+ * src/entities/enemy-spawning.js owns construction, elite rolls, and room registration.
  *
  * @param {any} e
  * @param {string} type
@@ -67,7 +67,7 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._ecLockX=x; e._ecLockY=y;
   }
   if (type==='PROPHET') {
-    // Slower than ECHOER: the telegraph is shorter, so the first shot waits until the player is in the room.
+    // Initial lock delay is 0.6–1.6s, versus ECHOER's 0.5–1.5s; both are room-gated.
     e._prState='idle';
     e._prAimTimer=0;
     e._prCooldown=0.6+rand('spawn')*1.0;
@@ -93,7 +93,7 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._miShotColour='#88ff44';
   }
   if (type==='REAPER') {
-    // _reHasFrenzied is cleared on room change in game.js updatePlaying. _reFrenzied is also the stun-immunity flag in update().
+    // Room entry clears _reHasFrenzied for that room's REAPERs. Active _reFrenzied also ignores stun in update().
     e._reState = 'idle';
     e._reTele = 0;
     e._reFrenzy = 0;
@@ -101,7 +101,8 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._reHasFrenzied = false;
   }
   if (type==='GHOST_PROJECTOR') {
-    // _gpActiveGhost blocks a new claim while a haunt is live. All of these clear in the update() stun branch.
+    // Pending, awaiting-flush, and live-ghost states each block a new claim.
+    // Stun drops a pending type and delay but leaves queued and active ghosts intact.
     e._gpPendingType  = null;
     e._gpPendingX     = 0;
     e._gpPendingY     = 0;
@@ -109,7 +110,7 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._gpActiveGhost  = null;
   }
   if (type==='CRYOPHAGE') {
-    // Slower first lock than ECHOER/PROPHET: the patches are a dense denial footprint.
+    // Initial lock delay is 0.8–2.0s, versus 0.5–1.5s for ECHOER and 0.6–1.6s for PROPHET.
     e._cyState='idle';
     e._cyAimTimer=0;
     e._cyCooldown=0.8+rand('spawn')*1.2;
@@ -167,12 +168,12 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._glStacks = 0;
     e._glChargeTimer = 0;
     e._glRecoverTimer = 0;
-    // Any finite angle works; update() lerps toward the player on the first LOS frame.
+    // Any finite angle is a valid seed; chase updates lerp it toward taunt-aware _tx/_ty.
     e._glAimAngle = rand('spawn') * TWO_PI;
     e._glPulse = rand('cosmetic') * TWO_PI;
   }
   if (type==='WATCHER') {
-    // Offset sweep phase so a cluster does not telegraph together. Starts in sweep: the cone is a passive telegraph and is never hidden.
+    // Randomize the initial sweep angle so clustered spawns scan out of phase. Starts in sweep; render uses this angle until lock.
     e._wState = 'sweep';
     e._wAng = rand('spawn') * Math.PI * 2;
     e._wLockAng = 0;
@@ -189,7 +190,6 @@ function initializeEnemySpawnState(e, type, x, y) {
     e._aRec   = 0;
     /** @type {{tx:number, ty:number} | null} */
     e._aTarget = null;
-    // Render commit-flash requires this, so a cancelled target does not flash. Same gate as WATCHER's _wFired.
     e._aCommitted = false;
   }
   if (type==='NULLIFIER') {

@@ -55,7 +55,7 @@ Enemy.prototype.aiConduit = function aiConduit(dt, player, map, d, los) {
       if (other.stunTimer && other.stunTimer > 0) continue;
       livePartnerEids.add(other._cdEid);
       pairCount++;
-      // Lower _cdEid owns the link so a pair is not damaged or drawn twice.
+      // Lower _cdEid owns damage checks; rendering intentionally draws from both endpoints.
       if (this._cdEid >= other._cdEid) continue;
       if (!hasLOS(this.x, this.y, other.x, other.y, map)) continue;
       const icd = this._cdLinkICD.get(other._cdEid) || 0;

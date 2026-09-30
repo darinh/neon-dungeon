@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Elite affix combat tempo multiplier: scales speed and cooldowns.
+ * Elite-affix tempo multiplier used by callers for movement and selected cooldowns.
  *
  * @this {Enemy}
  * @returns {number}

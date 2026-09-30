@@ -23,7 +23,7 @@ Player.prototype.effectiveAtk = function effectiveAtk() {
     a = Math.round(a * (1 + STRIDE_DMG_PER_STACK * ss));
   }
   if (this.perks.OVERDRIVE) {
-    // Uses combo.count, which auto-clears via COMBO_WINDOW, so this needs no floor reset.
+    // Uses combo.count; updateCombo expires it after COMBO_WINDOW, and populateFloor also resets it.
     const c = (typeof combo !== 'undefined' && combo) ? combo.count : 0;
     if (c >= 2) {
       const bonus = Math.min(0.30, (c - 1) * 0.03);

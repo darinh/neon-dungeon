@@ -1,9 +1,9 @@
 // @ts-check
 'use strict';
 
-// Locks a past position, telegraphs, then fires a shot that ends there.
-// Counter is to break the pattern. Aiming does not cancel if current LoS
-// is lost; stun cancels it from Enemy.update. The lane stays committed.
+// Locks a past position, telegraphs it, then sets the shot range half a tile beyond it.
+// Losing current LoS does not cancel an active aim; Enemy.update cancels it
+// on stun, so the lane stays committed unless the ECHOER is stunned.
 /**
  * @this {Enemy}
  * @param {any} [dt]
@@ -19,7 +19,7 @@ Enemy.prototype.aiEchoer = function aiEchoer(dt, player, map, d, los) {
   const ocMul = _EG.modifier === 'OVERCLOCK' ? 1.2 : 1;
   this._ecCooldown = Math.max(0, (this._ecCooldown || 0) - dt * ocMul * bm);
 
-  // Room-gated: only engage when target or player is inside this echoer's room.
+  // Lock acquisition is room-gated: start aiming only when the target or player is inside this echoer's room.
   const inRoom = this.room && (
     (this._tx >= this.room.x && this._tx < this.room.x + this.room.w &&
      this._ty >= this.room.y && this._ty < this.room.y + this.room.h) ||

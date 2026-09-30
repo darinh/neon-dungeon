@@ -35,8 +35,8 @@ function notifyGhostProjectors(deadEnemy) {
   }
 }
 
-// Only volitional kills charge VENGEANCE, same exclusion as the PACIFIST
-// counter: shards, summons, ghosts, bosses, and VENGEANCE itself do not.
+// VENGEANCE ignores deaths of VENGEANCE, ghosts, shards, summons, bosses,
+// and _volatileKill chain victims.
 /**
  * @param {any} deadEnemy
  */

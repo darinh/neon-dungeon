@@ -15,5 +15,6 @@
 /** @type {any[]} */ const lasers  = [];
 /** @type {any[]} */ const wallTurrets = [];
 // ARCHITECT walls: { tx, ty, origTile, decayTimer, owner }. origTile is restored
-// on decay; owner lets each ARCHITECT replace its own wall without stacking.
+// on decay only while the tile is still WALL; owner lets each ARCHITECT replace
+// its own wall without stacking.
 /** @type {any[]} */ const placedWalls = [];

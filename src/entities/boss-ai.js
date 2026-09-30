@@ -289,7 +289,7 @@ Enemy.prototype.aiBossConductor = function aiBossConductor(dt,player,map,d,los) 
     T.arc = arcCD;
   }
 
-  // Reject spots within 3 tiles of the player so the zone stays readable.
+  // Sample up to ten spots, rejecting any within 3 tiles of the player; if all ten are that close, the tenth is used.
   const hazCount = this.phase >= 2 ? 2 : 1;
   const hazCD = this.phase === 3 ? 4 : this.phase === 2 ? 5 : 6;
   if (T.hazard <= 0 && this.room) {

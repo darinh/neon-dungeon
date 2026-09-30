@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Loaded before src/content.js so event globals stay shared with content, entities, render, and game.
+// Loaded before src/content.js; game.js consumes these event globals later in script order.
 const EVENTS = [
   { id:'STASIS_POD',         name:'Stasis Pod',          desc:'A cryo-pod hums with residual power. Frost clings to the glass.',
     icon:'❄', colour:'#66ccff',

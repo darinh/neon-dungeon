@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Loaded before src/content.js so shops, events, and UI keep these globals.
+// Loaded before src/content/pickups.js, whose top-level ITEM_TYPES reads UPGRADES at load; later scripts read these globals only when called.
 const UPGRADES = [
   {id:'MED_PACK',    name:'Med-Pack',     desc:'+40 HP',               colour:'#00ff88', rarity:40, persistent:false,
    fn: (/** @type {any} */ p)=>{ p.hp=Math.min(p.maxHp,p.hp+40); }},
@@ -16,9 +16,9 @@ const UPGRADES = [
      const base = 15 + floor * 5;
      const metaMul = (typeof getMetaCreditMultiplier === 'function') ? getMetaCreditMultiplier() : 1;
      const siphon = (typeof hasAugment === 'function' && hasAugment('CREDIT_SIPHON')) ? 1.5 : 1;
-     // Same difficulty creditMul as room-clear and kill credits, so NIGHTMARE/EASY don't diverge.
+     // Use the same difficulty creditMul as room-clear and kill credits so this pickup scales with the rest of the economy on EASY and NIGHTMARE.
      const diffMul = (typeof getDiff === 'function') ? (getDiff().creditMul || 1) : 1;
-     // SCAVENGER bonus is flat and added after rounding so multipliers cannot scale it. Clamp corrupt saves (non-finite or >32).
+     // SCAVENGER bonus is flat and added after rounding so multipliers cannot scale it. Clamp corrupt saves to 0..32 before flooring.
      let bonus = (p && p.bonusCreditPerPickup) || 0;
      if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
      if (bonus > 32) bonus = 32;

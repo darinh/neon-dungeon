@@ -16,7 +16,7 @@
  * @returns {{tx:number, ty:number} | null}
  */
 function pickArchitectTarget(ax, ay, px, py, map, player) {
-  // Midpoint first; nearer fractions are fallbacks if that tile is blocked.
+  // Midpoint first; then alternate progressively farther on either side until a valid tile is found.
   const fractions = [0.5, 0.4, 0.6, 0.3, 0.7];
   // Chebyshev-1 is still a prison. Exact-tile rejection is not enough.
   const ptx = Math.floor(player.x), pty = Math.floor(player.y);
@@ -53,7 +53,8 @@ function _isTileOccupiedByActor(tx, ty, player) {
 }
 
 /**
- * Walls outlive the architect. Only the timer restores origTile.
+ * Walls outlive the architect. Decay restores origTile; a later commit by the
+ * same architect restores its previous wall immediately.
  *
  * @param {number} dt
  * @param {any} map

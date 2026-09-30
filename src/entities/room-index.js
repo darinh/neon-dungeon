@@ -2,7 +2,7 @@
 'use strict';
 
 // Loaded before src/entities.js so entity methods can call these helpers.
-// Callers include wall turrets, NEXUS links, room-clear, and vengeance/frenzy.
+// Callers include wall turrets, NEXUS links, room-clear, and VENGEANCE/GHOST_PROJECTOR death hooks.
 
 const enemiesByRoom = new Map();
 

@@ -9,7 +9,7 @@ Enemy.prototype._findHealTarget = function _findHealTarget() {
   let best = null, bestRatio = 1;
   for (const e of enemies) {
     if (e === this || e.dead || e.isBoss) continue;
-    if (e._wrPhased) continue; // can't heal phased WRAITHs
+    if (e._wrPhased) continue; // can't heal phased WRAITHs or tunneling/surfacing TUNNELLERs
     if (e.hp >= e.maxHp) continue;
     const ed = dist(this.x, this.y, e.x, e.y);
     if (ed > 6) continue;

@@ -19,7 +19,7 @@ Enemy.prototype._wlFindWard = function _wlFindWard() {
   return best;
 };
 
-// No intercept logic: body sits on the player→ward line so content.js projectile collision absorbs the shot.
+// No intercept logic: positioning relies on normal collision in src/content/projectiles.js.
 // _tx/_ty is taunt-aware, so a hologram decoy pulls the wardling off the real firing line.
 /**
  * @param {any} [dt]
@@ -43,7 +43,7 @@ Enemy.prototype.aiWardling = function aiWardling(dt, player, map, d, los) {
   if (!ward || ward.dead) {
     if (this._canTarget()) {
       this.moveToward(this._tx, this._ty, this.spd * WARDLING_PANIC_MUL, dt, map);
-      // meleeAttack checks real-player distance, so a taunted chase still whiffs.
+      // meleeAttack rechecks the real player's distance, so reaching a distant decoy cannot deal damage.
       if (d < 1.2) this.meleeAttack(player);
     } else {
       this.patrol(dt, map);
@@ -63,6 +63,6 @@ Enemy.prototype.aiWardling = function aiWardling(dt, player, map, d, los) {
     ty = ward.y + uy * WARDLING_GUARD_DIST;
   }
   this.moveToward(tx, ty, this.spd, dt, map);
-  // Contact damage even while guarding. meleeAttack uses real-player distance, so taunt still whiffs.
+  // Contact damage remains active while guarding; meleeAttack rechecks the real player's distance after the perceived-target gate.
   if (d < 1.2) this.meleeAttack(player);
 };
