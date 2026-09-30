@@ -11,7 +11,7 @@ const _RG = new Proxy({}, {
   has: (_t, p) => p in /** @type {any} */ (game),
 });
 
-// BIOME_PALETTES is a script global from src/data/palettes.js, loaded first in index.html.
+// BIOME_PALETTES is a script global from src/data/palettes.js, loaded before this file in index.html.
 function currentBiomePalette() {
   try {
     if (typeof NEON !== 'undefined' && NEON.biomes && typeof game !== 'undefined' && _RG.floor) {
@@ -282,8 +282,8 @@ function drawSimulationTileOverlay(tile, sx, sy, tx, ty, brightness) {
  * @param {any} player
  */
 function getCamera(player) {
-  // W and H are logical canvas px (raw / worldZoom). Visible world area is
-  // W × H; render()'s ctx.scale(worldZoom) upscales. No per-zoom divide here.
+  // W and H are logical canvas px (raw / worldZoom). render() upscales this
+  // coordinate space with ctx.scale(worldZoom); no per-zoom divide belongs here.
   const viewW = W;
   const viewH = H;
   const worldW = MAP_W * TILE, worldH = MAP_H * TILE;
@@ -357,7 +357,7 @@ function _decoContext(dungeon, tx, ty) {
   return _DECO_CX;
 }
 
-// Pulse math is in src/meta/alarm-light.js. Draw stays here to reuse ctx, TILE, and the in-flight shadow state.
+// Pulse math is in engine/alarm-light.js; src/meta/alarm-light.js supplies the biome allow-list. Draw stays here to reuse ctx, TILE, and the in-flight shadow state.
 /**
  * @param {any} sx
  * @param {any} sy
@@ -686,7 +686,7 @@ const _BIOME_DECOR = {
 };
 
 // Alarm first: one prop per tile, so a beacon replaces regular decor.
-// Missing NEON.biomes falls back to sandbox so the floor is never bare.
+// Missing NEON.biomes falls back to sandbox decor for eligible tiles.
 /**
  * @param {any} dungeon
  * @param {any} tx
@@ -1168,7 +1168,7 @@ function drawHUD(player) {
     ctx.fillText(hpTextC, lx + 2, r1 + 10);
     const hpTextEndC = lx + 2 + ctx.measureText(hpTextC).width;
 
-    // `| 0` tolerates a missing ctor field on legacy saves.
+    // `| 0` converts an absent charge counter to integer zero.
     const _nmcCompact = player._nanoMedicCharges | 0;
     if (_nmcCompact > 0) {
       ctx.save();
@@ -1634,7 +1634,7 @@ function drawBossBar() {
   const slideY = -30 * (1 - easeOutCubic(anim));
   const alpha = anim;
 
-  // Stop short of the minimap (W - 128 - safeRight).
+  // Reserve 12px before the default-scale minimap's left edge; this bound ignores minimapScale.
   const minimapLeft = W - 128 - safeRight - 12;
   const maxBarW = Math.max(100, (minimapLeft - safeLeft) * 0.8);
   const barW = Math.min(320, maxBarW);
@@ -1701,7 +1701,7 @@ function drawBossBar() {
     }
   }
 
-  // Font and gap scale together so a 1.3× name does not crowd the bar.
+  // HP text and its gap scale together so enlarged text does not crowd the bar.
   const hpFs = Math.max(7, Math.round(8 * settings.textScale));
   const hpGap = Math.max(7, Math.round(9 * settings.textScale));
   ctx.font = `${hpFs}px monospace`;
@@ -1728,7 +1728,7 @@ function drawBossIntroOverlay() {
   else if (t < fadeOut) alpha = t / fadeOut;
   alpha = Math.max(0, Math.min(1, alpha));
 
-  // The boss can be missing on the first frame, after the seal flips and before the enemies scan.
+  // The title still uses bossType without a live boss; colour falls back to red.
   const boss = enemies.find(e => e.isBoss && !e.dead);
   const col = boss ? boss.colour : '#ff3333';
   const name = /** @type {any} */ (BOSS_NAMES)[_RG.bossType] || _RG.bossType || 'BOSS';
@@ -2165,18 +2165,18 @@ function drawReconRouteOverlay(route, ox, oy, sx, sy, expanded) {
   ctx.restore();
 }
 
-// Rebuilt only when _minimapDirty flips. Enemies, POIs, the player, and the ARC pulse are drawn after the blit.
+// The cached base rebuilds when missing, dirty, reveal mode changes, or size changes; dynamic markers and the ARC pulse draw after the blit.
 /**
  * @param {any} dungeon
  * @param {any} echoMap
  */
 function rebuildMinimapBase(dungeon, echoMap) {
-  // Same 120×80 × minimapScale formula as drawMinimap, or the blit stretches.
+  // Match drawMinimap's 120×80 × minimapScale frame dimensions.
   const MW = Math.round(120 * settings.minimapScale);
   const MH = Math.round(80 * settings.minimapScale);
   const pal = currentBiomePalette();
   let off = _RG._minimapCanvas;
-  // Recreate when minimapScale changes. A size mismatch blits stretched pixels.
+  // Recreate when minimapScale changes so the cached bitmap matches the frame dimensions.
   if (off && (off.width !== MW || off.height !== MH)) {
     off = null;
     _RG._minimapCanvas = null;
@@ -2239,7 +2239,7 @@ function rebuildMinimapBase(dungeon, echoMap) {
  * @param {any} player
  */
 function drawMinimap(dungeon, player) {
-  // Same formula as rebuildMinimapBase, or the blit stretches.
+  // Match rebuildMinimapBase so the cached bitmap and frame dimensions stay identical.
   const MW = Math.round(120 * settings.minimapScale);
   const MH = Math.round(80 * settings.minimapScale);
   const MX = W - MW - 8 - safeRight, MY = 8 + safeTop;
@@ -2247,7 +2247,7 @@ function drawMinimap(dungeon, player) {
   NEON.minimap.drawMinimapFrame(ctx, MX, MY, MW, MH);
 
   const sx=MW/MAP_W, sy=MH/MAP_H;
-  const echoMap = _RG.mapRevealed || !!(_RG.cheats && _RG.cheats.revealMap); // ECHO_MAPPER / FEET show-map cheat
+  const echoMap = _RG.mapRevealed || !!(_RG.cheats && _RG.cheats.revealMap); // ECHO_MAPPER / RECON_PING / FEET show-map cheat
 
   // echoMap or a minimapScale change forces a rebuild.
   const sizeMismatch = _RG._minimapCanvas
@@ -2542,7 +2542,7 @@ function drawExpandedMinimap(dungeon, player) {
   ctx.fillStyle = 'rgba(0,0,10,0.82)';
   ctx.fillRect(0, 0, W, H);
 
-  // fillInner keeps the 2px ring of dim backdrop that a fill-outer path would cover.
+  // fillInner leaves the inset border zone unfilled so the dim backdrop shows around the map fill.
   NEON.minimap.drawMinimapFrame(ctx, mx, my, mw, mh, {
     borderColor: '#2d2d5e',
     borderWidth: 2,
@@ -3014,7 +3014,7 @@ function populateFloor(dungeon, floorNum) {
   const spawnRoom=dungeon.spawnRoom;
   const bossRoom=dungeon.bossRoom;
 
-  // One per floor from floor 3, same spacing as mines. A panic button, not a stack.
+  // At most one from floor 3, gated by a 30% floor roll; pickup detonates on contact.
   const _shockPulseRoll = floorNum >= 3 && rand('spawn') < 0.30;
   let _shockPulsePlaced = !_shockPulseRoll;
 
@@ -3107,7 +3107,7 @@ function populateFloor(dungeon, floorNum) {
       }
     }
 
-    // Once per floor. Same spacing as mines so the pickup does not stack on another prop.
+    // Avoid existing beacons, cores, crates, and mines by 1.5 tiles; place at most once.
     if (!_shockPulsePlaced && !rt && room.w >= 5 && room.h >= 5 && rand('spawn') < 0.34) {
       const sx = room.x + rndInt(2, room.w - 3) + 0.5;
       const sy = room.y + rndInt(2, room.h - 3) + 0.5;

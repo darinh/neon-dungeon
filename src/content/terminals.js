@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Loaded before src/content.js so floor generation can place T.LORE terminals while game.js can read entries.
+// Loaded before src/game.js so lore interactions can choose gated entries from these globals.
 
 const ACT1_OPENING_LORE_INDEX = 0;
 const LORE_ENTRIES = [

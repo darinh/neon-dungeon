@@ -67,7 +67,7 @@ function sourceColour(/** @type {any} */ s) { return SOURCE_COLOURS[s] || '#aaaa
 
 /** @type {Record<string, any>} */
 const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',CONDUCTOR:'CONDUCTOR',OMEGA:'OMEGA CORE',GENESIS:'GENESIS PROTOCOL'};
-// Boss-pool ids are rewritten to the biome display name so HUD text is narrative while the combat class id stays internal.
+// Boss-pool ids map to biome display names for HUD copy; combat keeps the original class ids.
 (function(){
   try {
     if (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.AREAS) {
@@ -82,7 +82,7 @@ const BOSS_NAMES = {SENTINEL:'SENTINEL MK-I',WARDEN:'WARDEN',HIVE:'NEURAL HIVE',
   } catch(_) { /* biomes optional -- keep built-in defaults */ }
 })();
 
-// Phase transition thresholds as hpPct values (descending); absolute-HP bosses computed at draw time
+// Phase-transition thresholds as descending fractions of max HP; render.js places them on the normalized boss bar.
 /** @type {Record<string, number[]>} */
 const BOSS_PHASE_MARKS = {
   SENTINEL: [0.33],

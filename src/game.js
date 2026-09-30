@@ -1,14 +1,14 @@
 // @ts-check
 'use strict';
 
-// Two-tap window for [RESET TO DEFAULTS]: first press arms a timestamp, a second press inside the window commits, anything else cancels.
+// Two-tap window for [RESET TO DEFAULTS]: first activation arms a timestamp; a second inside the window commits. Expiry, changing rows, another settings action, clicking elsewhere, or leaving settings cancels.
 // Shared by updateSettings and renderSettings.
 const RESET_CONFIRM_WINDOW_MS = 3000;
 
-// Boss intro telegraph length in seconds. Gameplay is not paused; 2.4s is long enough for the titlecard to register and short enough not to cover the boss's first telegraph.
+// Boss intro overlay duration in seconds. Gameplay continues while its 2.4s timer counts down.
 const BOSS_INTRO_DURATION = 2.4;
 
-// Boss death telegraph length in seconds. Gameplay is not paused; 2.6s is slightly longer than the intro so the kill can land before the player descends.
+// Boss death overlay duration in seconds. Gameplay continues while its 2.6s timer counts down.
 const BOSS_DEATH_DURATION = 2.6;
 const _GG_STATE_DEFS = /** @type {any} */ (requireNEON('gameStates', 'src/game.js'));
 const _GG_STATES = _GG_STATE_DEFS.GAME_STATES;
@@ -108,7 +108,7 @@ const MAINFRAME_ADDRESS_RECORD_ID = 'contact-address';
 // after the arming delay so the SEND press itself cannot dismiss it.
 const MESSAGE_SENT_HOLD_S = 6;
 const MESSAGE_SENT_ARM_S = 1;
-// RFC 1918 private-range address so it can never point at a real host.
+// RFC 1918 private-range address, so it is not globally routable on the public Internet.
 const ACT1_CONTACT_ADDRESS = '10.44.7.19:7070 / mailbox anchor-7';
 // Compact-viewport fallback when the full address line would clip.
 const ACT1_CONTACT_HOST = '10.44.7.19:7070';
@@ -1266,8 +1266,9 @@ function serializeProjectileSnapshot(projectile, enemyIndex) {
 }
 
 /**
- * Player position for a save: the last safe position when a knockback has
- * the agent inside a wall this frame (see playerSavePosition in entities.js).
+ * Player position for a save: playerSavePosition keeps the current position
+ * unless a non-noClip player is embedded, then uses its usable safe record or
+ * a nearby unembed tile.
  * @param {any} gameState
  * @returns {{x: number, y: number}}
  */
@@ -2089,7 +2090,7 @@ const game = {
   bossAlive: false,
   bossBarAnim: 0,
   bossHpGhost: 0,
-  // Counts down; duration is kept so the renderer can fade with 1 - timer/duration without re-reading the constant. Gameplay is not paused.
+  // Counts down; duration lets the renderer derive elapsed time and its fixed fade windows. Gameplay is not paused.
   bossIntroTimer: 0,
   bossIntroDuration: 0,
   // Snapshots the boss colour and name because the instance is removed from enemies on the kill frame, and the renderer still needs them. Gameplay is not paused.
@@ -2099,7 +2100,7 @@ const game = {
   bossDeathName: '',
   modifier: null,
   modBannerTimer: 0,
-  // Shown 3s on the first floor of a biome (4/7/10/13). Floor 1 is the intro crawl, not this card.
+  // Shown for up to 3s on the first floor of a biome (4/7/10/13); any new keypress dismisses it. Floor 1 uses the intro crawl instead.
   biomeCardTimer: 0,
   biomeCardArea: null,
   bossesCleared: 0,
@@ -2120,7 +2121,7 @@ const game = {
   systemMessageAckTimer: 0,
   _lastAct1MessageIntent: null,
   clearedRooms: null,
-  enemyDiedThisFrame: false, // flag to skip room-clear scan when nothing died
+  enemyDiedThisFrame: false, // room-clear dirty flag; skip the scan until a blocker may have changed
   challengeRoom: null,
   challengeSealed: false,
   challengeWave: 0,
@@ -2302,7 +2303,7 @@ const game = {
   },
   markMinimapDirty() { this._minimapDirty = true; },
 
-  // Any dungeon.map mutation must come through here: it also drops the per-frame LOS cache so later queries in the same tick see the new tiles.
+  // Invalidates minimap, FOV and per-frame LOS state and bumps the map mutation version after a runtime tile change.
   markMapMutated() {
     this._minimapDirty = true;
     clearLosCache();
@@ -2477,7 +2478,7 @@ const game = {
       } catch(_) { /* ignore — meta bookkeeping must never break a floor load */ }
     }
     music.setFloor(n);
-    this.floorTime=0; // arc grid phase timer
+    this.floorTime=0; // per-floor gameplay clock for hazards, trials and render pulses
     // Biome boss floors and floor 1 are modifier-free. The boss-floor list comes from AREAS via NEON.biomes, with a 3/6/10 fallback if that data is missing.
     const _isBossFloor_mod = (typeof NEON !== 'undefined' && NEON.biomes && NEON.biomes.isBiomeBossFloor) ? NEON.biomes.isBiomeBossFloor(n) : (n===3||n===6||n===10);
     if (savedModifier !== undefined) {
@@ -2487,7 +2488,6 @@ const game = {
     } else {
       this.modifier = withDerivedRngStream('event:floor:' + n + ':modifier', () => MODIFIER_KEYS[rndInt(0, MODIFIER_KEYS.length - 1)]);
     }
-    // shieldBonus is floor-only; strip it before this floor grants its own.
     this.player.def-=this.player.shieldBonus;
     this.player.shieldBonus=0;
     // Keys are floor-scoped: keep them for this floor, clear on fresh floor transitions
@@ -2517,7 +2517,7 @@ const game = {
           if (near) spawn = near;
         }
         spawn = repairDescentSpawnFloor(this.dungeon, spawn, this.player && this.player.keys);
-      } catch (_) { /* fall through to default spawn */ }
+      } catch (_) { /* keep the last spawn resolved before the optional repair failed */ }
     }
     this._exitPos = null;
     // Reset boss state before populating (populateFloor sets them for boss floors)
@@ -2550,12 +2550,12 @@ const game = {
     this.mainframeFinale = this.dungeon.mainframeRoom ? restoreMainframeFinaleState(null) : null;
     // Fresh floor only: resume has already restored the saved flag.
     if (savedModifier === undefined && this.player) this.player.secondWindUsed = false;
-    // 1.5s of invulnerability on a fresh floor entry only, not save-resume. Damage uses isPlayerDamageImmune in src/content.js; the halo is Player.draw in src/entities.js. Keep the literal in sync with that comment.
+    // Grant 1.5s of spawn-grace invulnerability on fresh floor entries, not save-resume. isPlayerDamageImmune in src/content/hackware.js reads the timer; Player.draw in src/entities.js renders the halo.
     if (this.player) {
       this.player._spawnGraceTimer = (savedModifier === undefined) ? 1.5 : 0;
     }
     if (this.player) { this.player.burnTimer = 0; this.player.burnDps = 0; this.player.shockTimer = 0; }
-    // Drop STRIDE stacks on floor change. The descend warp would otherwise look like a huge moved/dt and keep full RUSH stacks for free.
+    // Drop STRIDE stacks and movement timers on floor change so RUSH charge does not carry between floors.
     if (this.player) {
       this.player._strideStacks = 0;
       this.player._strideMovingTime = 0;
@@ -2573,8 +2573,8 @@ const game = {
       NEON.cores.clearCoreDrops(this);
     }
     withDerivedRngStream('spawn:floor:' + n, () => populateFloor(this.dungeon,n));
-    // Evaluation trials: clear anything spawned inside a sealed vault and
-    // place its loot once. A save-resume overwrites this with the snapshot.
+    // Seam trials: move enemies out of the sealed vault and remove stray pickups
+    // after population. A save-resume overwrites this fresh state with the snapshot.
     if (typeof NEON !== 'undefined' && NEON.trials) NEON.trials.afterPopulate(this, getTrialDeps());
     // Grant shield charges on a fresh floor only. Save-resume would stack another charge on reload.
     if (savedModifier === undefined && this.player && this.player.metaFlags && this.player.metaFlags.floorStartShieldCharges > 0) {
@@ -2605,7 +2605,7 @@ const game = {
     if (this.player._posHistory) this.player._posHistory.length = 0;
     // Clear shot history so a MIRROR cannot copy a shot fired on the previous floor.
     if (this.player._shotHistory) this.player._shotHistory.length = 0;
-    // Frost patches are room-local. Left behind, a previous-floor CRYOPHAGE patch damages the new floor's coordinates.
+    // Frost patches outlive their CRYOPHAGE but not the floor. Clear them so a previous-floor patch cannot damage matching coordinates on the new map.
     frostPatches.length = 0;
     // The new floor's rooms are new objects, so the old room ref and kill count must not carry. updatePlaying re-arms REAPERs on the first room-change.
     this.player.killsInCurrentRoom = 0;
@@ -2735,7 +2735,7 @@ const game = {
     this.augmentChoice=null;
     this.player=new Player();
     applyMetaToPlayer(this.player);
-    // Pre-equip a random hackware module here, not in save.applyMetaToPlayer: that helper is also run by node tests that do not load content.js. The !hackware guard keeps a confirm-loop re-entry from rerolling it.
+    // Pre-equip random hackware here, after applyMetaToPlayer: save.applyMetaToPlayer only sets the hacktool flag, because Node tests run it without src/content/hackware.js and its HACKWARE_KEYS. The !hackware guard keeps any module already equipped on this player.
     if (this.player.metaFlags && this.player.metaFlags.hacktool && !this.player.hackware) {
       const _hwKey = HACKWARE_KEYS[rndInt(0, HACKWARE_KEYS.length - 1, 'loot')];
       this.player.hackware = _hwKey;
@@ -2829,7 +2829,7 @@ const game = {
     return ss.seed;
   },
 
-  // Intro has already set introSeen. This only finishes the startGame handoff into PLAYING.
+  // The intro controller has already attempted to persist introSeen. This only finishes the startGame handoff into PLAYING.
   _finishIntro() {
     this._intro = null;
     if (!this.openNextSystemMessage('PLAYING')) this.setState('PLAYING');
@@ -2907,7 +2907,7 @@ const game = {
     if (g && !g.dead) {
       // aiBossGenesis forces phase-3 patterns when this flag is set. The enemy renderer reads the same flag for the palette inversion.
       g._unchainedPhase = true;
-      g._endgameOffered = true;  // still set so choice can't re-open
+      g._endgameOffered = true;
       g.maxHp = Math.round(g.maxHp * 1.5);
       g.hp    = g.maxHp;
       g.colour = '#88ccff';       // inverted gold → cool blue
@@ -3001,8 +3001,9 @@ const game = {
     ctx.restore();
   },
 
-  // True iff the stored meta contains any progress worth confirming before
-  // a wipe. Fresh installs answer false → no prompt shown.
+  // True when stored meta has shards, cores, completed runs or stats, upgrades,
+  // owned modules, logs, endings, or cleared difficulties. Fresh defaults return
+  // false; whispers and deepestBiome alone do not trigger this prompt.
   _hasMetaProgress() {
     const m = loadMeta();
     if (!m) return false;
@@ -3069,7 +3070,7 @@ const game = {
       for (let tx=Math.max(0,sr.x-1); tx<Math.min(MAP_W,sr.x+sr.w+1); tx++)
         if (dungeon.map[ty][tx]===T.CRACKED) dungeon.map[ty][tx]=T.FLOOR;
     this.markMapMutated();
-    // Fewer enemies than a normal room; this is a bonus room.
+    // Lower enemy bounds and a tighter area cap than a normal room; this is a bonus room.
     const floorNum = this.floor;
     const minE = 1 + Math.floor(floorNum / 4);
     const maxE = Math.min(4, 2 + Math.floor(floorNum / 3));
@@ -3098,7 +3099,7 @@ const game = {
     this.player.credits += secretCr;
     this.msg('+' + secretCr + ' credits found!', '#39ff14');
     this.player.score += 300 * floorNum;
-    // The room-end chest always drops a core.
+    // Revealing the secret room drops one core at its centre.
     if (typeof NEON !== 'undefined' && NEON.cores && NEON.cores.spawnCoreDrop) {
       NEON.cores.spawnCoreDrop(this, sr.cx, sr.cy, 1);
     }
@@ -3144,7 +3145,7 @@ const game = {
     this.deleteSave();
     const meta = loadMeta();
     const sessionNumber = lifecycleNextSessionNumber(meta);
-    // Snapshot recap data before anything else
+    // Snapshot recap data before meta rewards and result-state transitions.
     const p = this.player;
     this.lastRunRecap = {
       sessionNumber: sessionNumber,
@@ -3297,7 +3298,7 @@ const game = {
         lastStandTimer:p.lastStandTimer || 0,
         lastStandCD:p.lastStandCD || 0,
         augments:p.augments||{},
-        // Persist meta-node runtime hooks. Additive stats already live in maxHp/atk/def/critChance from applyMetaToPlayer.
+        // Persist behavioral meta/module hooks alongside their separately stored scalar runtime fields.
         metaFlags: p.metaFlags ? {...p.metaFlags} : null,
         damageMult: p.damageMult || 1,
         regenPerSec: p.regenPerSec || 0,
@@ -3340,7 +3341,7 @@ const game = {
     this._runEnded = false;
     this._lastEnding = null;
     this._lastAct1MessageIntent = null;
-    this._exitPos = null;     // resume should not relocate the player
+    this._exitPos = null;     // Drop any exit from an earlier descent; the resume rebuild uses the save's generationExitPos.
     this.cheats = defaultCheats();
     this.cheatSequenceProgress = 0;
     this.cheatSelected = 0;
@@ -3451,7 +3452,7 @@ const game = {
     } else if (s.metaFlags && s.metaFlags.trauma_kit) {
       p._nanoMedicCharges = s.metaFlags.trauma_kit | 0;
     }
-    p.shieldBonus=0; // loadFloor will manage floor-only bonuses
+    p.shieldBonus=0; // def is restored as a total; no separate floor-only bonus is available for loadFloor to subtract.
     this.bossesCleared=Math.max(0, Math.floor(Number(save.bossesCleared) || 0));
     this.runTime=save.runTime||0;
     this.player=p;
@@ -3644,7 +3645,7 @@ const game = {
     this.floorTime = (this.floorTime || 0) + dt;
     this.runTime = (this.runTime || 0) + dt;
 
-    // Expanded map modal — freeze gameplay, only handle dismiss
+    // Expanded map modal returns before player/world updates; floorTime and runTime have already advanced.
     if (this.mapExpanded) {
       if (jp('Tab') || jp('Escape')) this.mapExpanded = false;
       justPressed.clear();
@@ -3700,7 +3701,7 @@ const game = {
       }
     }
 
-    // Aim priority: aim-assist (falls through if nothing is in LOS), then lock-aim-to-move, then the cursor. Assist uses visibility range, not the auto-laser's 8 tiles.
+    // Aim priority: LOS aim-assist under four tiles, then lock-aim-to-move, then the cursor.
     let worldAimX, worldAimY;
     let aimAssistTarget = null;
     if (settings.aimAssist) {
@@ -3724,7 +3725,7 @@ const game = {
       const [afx, afy] = norm(worldAimX - player.x, worldAimY - player.y);
       if (afx || afy) player.facing = { x: afx, y: afy };
     } else if (settings.lockAimToMove) {
-      // facing updates only while moving, so a stationary lock-aim still uses the last walk direction.
+      // With no assist target, a stationary player keeps the existing facing, so lock-aim preserves that direction.
       worldAimX = player.x + player.facing.x * 8;
       worldAimY = player.y + player.facing.y * 8;
     } else {
@@ -3757,7 +3758,7 @@ const game = {
     if (_ptEnemies) perfRecord('enemies', performance.now() - _ptEnemies);
     for (const e of enemies) {
       if (e.dead || e._disguised) continue;
-      if (e._wrPhased) continue; // phased WRAITHs are intangible
+      if (e._wrPhased) continue; // Phased WRAITHs and tunnelling TUNNELLERs are intangible.
       const etx = Math.floor(e.x), ety = Math.floor(e.y);
       if (dungeon.map[ety]?.[etx] === T.TOXIC) {
         e._toxicDmgCD = (e._toxicDmgCD || 0) - dt;
@@ -3828,7 +3829,7 @@ const game = {
     updateGravityWells(dt);
 
     for (const it of items) it.update(dt);
-    // TTL pickups set dead and are not spliced at pickup. Leaving them in items keeps a dead pickup drawing and hit-testing.
+    // Prune items marked dead by expiry or theft before rendering; generic Item.draw does not check dead.
     for (let i = items.length - 1; i >= 0; i--) {
       if (items[i].dead) items.splice(i, 1);
     }
@@ -3849,7 +3850,7 @@ const game = {
       if (_ptCores) perfRecord('cores-update', performance.now() - _ptCores);
     }
 
-    // item pickup → keys go to inventory, upgrades trigger choice UI
+    // Resolve nearby pickups, including keys, special drops, auto-applied options, and upgrade choices.
     for (let i=items.length-1;i>=0;i--) {
       const it=items[i];
       // MAGNETIC_FIELD and the MAGNETISM floor modifier stack multiplicatively (x2 and x1.5). Uses this.modifier, the floor-modifier field; a different name would silently drop the bonus.
@@ -3877,7 +3878,8 @@ const game = {
         if (it.isHoard) {
           audio.pickup();
           items.splice(i, 1);
-          // Same flat bonus as CREDIT_CACHE. Both credit pickups set isHoard, so this one branch covers them. Sanitize the same way as that upgrade: meta can come from corrupted localStorage.
+          // Add the same flat SCAVENGER bonus as CREDIT_CACHE. MagpieHoard and VaultCoin both set isHoard, so this one branch covers both.
+          // Sanitize it the same way because meta can come from corrupted localStorage.
           let bonus = (player && player.bonusCreditPerPickup) || 0;
           if (!Number.isFinite(bonus) || bonus < 0) bonus = 0;
           if (bonus > 32) bonus = 32;
@@ -3898,7 +3900,7 @@ const game = {
           continue;
         }
         if (it.isWhisper) {
-          // Opens a READING overlay instead of a toast so the find and the read are the same moment. Marked found and read so the archive counter moves.
+          // Show the whisper in a READING overlay after the announcement toast; readWhisper records it as found and read so the archive counter advances.
           items.splice(i, 1);
           let title = 'WHISPER';
           let body = '';
@@ -3914,13 +3916,13 @@ const game = {
                 voice = String(w.voice || '');
               }
             }
-          } catch (_) { /* meta unavailable; just toast generic */ }
+          } catch (_) { /* Whisper lookup/read failed; continue with whatever announcement data was recovered. */ }
           try { audio.logRead(); } catch (_) {}
           this.msg('★ WHISPER · ' + title, '#cc99ee');
           if (typeof NEON !== 'undefined' && NEON.telemetry) {
             NEON.telemetry.track('whisper_found', { id: it.whisperId, floor: this.floor });
           }
-          // _whisperMeta selects the violet READING style. Clear currentLore so a data terminal cannot also paint.
+          // _whisperMeta selects the violet READING style; replacing currentLore with the whisper body prevents stale terminal text.
           if (body) {
             this.currentLore = body;
             this._whisperMeta = { title, voice };
@@ -3941,7 +3943,7 @@ const game = {
         items.splice(i,1);
         const optA = pickUpgradeOption(null);
         const optB = pickUpgradeOption(optA.id);
-        // Auto-collect simple consumables (health/XP/shard) to reduce popup fatigue.
+        // Auto-collect nonpersistent non-weapon/non-hackware options such as heals, XP, credits, and tactical boosts.
         /**
          * @param {any} o
          */
@@ -3963,7 +3965,7 @@ const game = {
           if (typeof NEON !== 'undefined' && NEON.telemetry) NEON.telemetry.track('auto_collect', { item: pick.id, floor: this.floor });
           continue;
         }
-        // Auto-collect weapon if belt has space (prefer weapon option for belt, apply other)
+        // If the belt has space and one option is a weapon while the other is simple, apply both without opening the choice UI.
         if (_isAutoWeapon(optA) && _isSimple(optB)) {
           optA.fn(player); optB.fn(player);
           this.msg(optA.name + ' + ' + optB.name, optA.colour);
@@ -4380,10 +4382,9 @@ const game = {
         this.msg('Slow trap!','#8866ff');
         spawnParticles(player.x, player.y, 'SPARK', '#8866ff', 4);
       } else if (tile===T.REPULSOR && !isPlayerDamageImmune()) {
-        // Push back along the way they entered (previous position minus current), not facing. Aim overwrites facing every frame, so a facing push launches the player toward the thing they are shooting.
+        // Push back opposite the movement that entered the tile (previous position minus current), not along facing, which may track aim instead of movement.
         // Not tile-centre either: a large dt can step past the centre and reverse the push. If there was no movement, fall back to tile-centre, then opposite facing.
         // PUSH is 0.95 so the knockback stays under one tile and cannot tunnel a wall. If the diagonal cell is blocked, slide on the open axis instead of writing into a wall.
-        // This branch must stay before T.SHOCK_TILE. tests/shock-tile.test.js extracts the SHOCK_TILE body with a regex that requires it to be the last branch.
         let kxr = (player._prevX !== undefined ? player._prevX : player.x) - player.x;
         let kyr = (player._prevY !== undefined ? player._prevY : player.y) - player.y;
         if (Math.abs(kxr) < 0.001 && Math.abs(kyr) < 0.001) {
@@ -4415,7 +4416,7 @@ const game = {
         spawnParticles(player.x, player.y, 'SPARK', '#44ddff', 6);
         audio.repulsor();
       } else if (tile===T.SHOCK_TILE && !isPlayerDamageImmune()) {
-        // Reuses player.shockTimer, which zeroes movement but leaves aim and shoot. 0.5s is the lockdown; trapCooldown 1.5s stops a player standing on the tile from refreezing. Damage-immune frames bypass it, same as the other env tiles.
+        // Reuses player.shockTimer, which suppresses movement but leaves aim and shooting. The 0.5s lockdown ends before the 1.5s cooldown permits another trigger; damage-immune frames bypass it.
         player.shockTimer = Math.max(player.shockTimer || 0, 0.5);
         player.trapCooldown = 1.5;
         this.msg('Shock tile!','#ffee44');
@@ -4424,9 +4425,9 @@ const game = {
       }
     }
 
-    // environmental hazards (separate from traps — own cooldowns, bypass armor)
+    // Environmental hazards are independent of trapCooldown and bypass defense.
     if (tile === T.PLASMA && !isPlayerDamageImmune()) {
-      // Continuous burn: bypasses defense and hit i-frames, but still respects shield/SECOND_WIND.
+      // Continuous burn bypasses defense and hit i-frames. It skips bubble and boost-charge absorbs, but ENERGY_SHIELD and SECOND_WIND can still intervene.
       // BIOFILTER augment halves env-tile damage (status-resistance niche).
       const bioMul = hasAugment('BIOFILTER') ? 0.5 : 1;
       const burnDps = (3 + this.floor) * getDiff().envDmg * bioMul;
@@ -4610,14 +4611,14 @@ const game = {
         }
         audio.roomSeal();
         this.msg('⚠ ROOM SEALED','#ff3333');
-        // Fires once, on the false-to-true bossSealed flip. Save/load mid-fight does not re-trigger it: descend resets the seal and Continue regenerates the dungeon, so the flip only happens on first entry.
+        // Fires on the false-to-true bossSealed transition. A valid Continue restores bossSealed from the floor snapshot, so a mid-fight save does not re-trigger it.
         this.bossIntroDuration = BOSS_INTRO_DURATION;
         this.bossIntroTimer = BOSS_INTRO_DURATION;
         if (audio.bossIntro) audio.bossIntro();
       }
     }
 
-    // Count down every frame and clamp at 0. A huge dt (alt-tab, phone call) must not leave a negative timer that the renderer treats as still playing.
+    // Clamp the active countdown at 0 so a large dt cannot break the timer invariant.
     if (this.bossIntroTimer > 0) {
       this.bossIntroTimer = Math.max(0, this.bossIntroTimer - dt);
     }
@@ -4642,7 +4643,7 @@ const game = {
       game.msg((BOSS_NAMES[this.bossType]||'BOSS')+' DESTROYED','#39ff14');
     }
 
-    // Count down and clamp at 0. A huge dt must not leave a negative timer that keeps the overlay up forever.
+    // Count down and clamp at 0 so a huge dt leaves the timer in its stable inactive state.
     if (this.bossDeathTimer > 0) {
       this.bossDeathTimer = Math.max(0, this.bossDeathTimer - dt);
     }
@@ -6036,7 +6037,9 @@ const game = {
   _settingsSel: 0,
   _settingsCapture: null,  // action name being rebound, or null
   _settingsDrag: null,     // 'sfx' or 'music' while dragging a slider
-  // First Enter or click arms a timestamp; a second one inside the window commits. Any other action or expiry cancels. resetAll is irreversible.
+  // Enter/shoot or a reset-row click arms one shared timestamp; another
+  // activation inside the window commits. Moving to another row, clicking
+  // elsewhere, leaving settings, or expiry cancels. resetAll has no undo.
   _settingsResetConfirm: 0,
 
   /**
@@ -6159,9 +6162,8 @@ const game = {
     const layoutM = this._settingsLayout(totalRows);
     const startY = layoutM.startY;
     const rowH = layoutM.rowH;
-    // Auto-expire a stale reset confirmation. Without this, a player who
-    // armed the confirmation 30 seconds ago and walks away returns to a
-    // settings menu where the very next Enter wipes their config.
+    // Clear an expired timestamp so stored confirmation state matches the
+    // active confirmation window.
     if (this._settingsResetConfirm > 0
         && (performance.now() - this._settingsResetConfirm) > RESET_CONFIRM_WINDOW_MS) {
       this._settingsResetConfirm = 0;
@@ -6461,8 +6463,8 @@ const game = {
       const fillW = sliderW * (volVals[i] ?? 0);
       ctx.fillStyle = isSel ? '#00f5ff' : '#555577';
       ctx.fillRect(sliderX, trackY, fillW, 10);
-      // Slider knob: 12 px tall so it ends with the track (ry+6), inside the
-      // tappable strip and clear of the next row's card when rows are short.
+      // Slider knob: ry-6..ry+6. It ends with the track at ry+6 so it clears the next row's
+      // card when rows are short; the 2 px above the strip lie inside this row's card, so all of it is tappable.
       ctx.fillStyle = isSel ? '#ffffff' : '#aaaacc';
       ctx.fillRect(sliderX + fillW - 3, trackY - 2, 6, 12);
       ctx.textAlign = 'right';
@@ -6645,7 +6647,7 @@ const game = {
 
   render() {
     // Every state draws inside this one ctx.scale(zoom). Logical W/H is raw/worldZoom, so the scale fills the backing canvas. textScale is already in the font px, so it stacks with zoom.
-    // Skip the save/scale/restore when zoom is 1: it is the hot path, and a strict !== also treats a string "1" from bad storage as the no-op so render and aim cannot disagree.
+    // Skip save/scale/restore when zoom is the number 1, the hot path. Strict !== sends any other truthy value through the scaled path.
     const _uiZoom = (settings && settings.worldZoom) || 1;
     const _uiScaled = _uiZoom !== 1;
     if (_uiScaled) { ctx.save(); ctx.scale(_uiZoom, _uiZoom); }
@@ -7239,7 +7241,7 @@ const game = {
     this.renderSystemMessageIndicator();
     this.renderOnboardingGuidance();
 
-    // The right-edge HUD has to clear the boost strip or the pills collide with the text.
+    // Count active boost pills when positioning the difficulty, quest, and bounty baselines.
     const _boostPills = (typeof NEON !== 'undefined' && NEON.boosts)
       ? NEON.boosts.getActiveBoostList(player).length : 0;
     const _boostOffset = _boostPills > 0 ? _boostPills * 21 + 4 : 0; // 18px pill + 3px gap + 4px bottom margin
@@ -8797,7 +8799,7 @@ const game = {
   }
 };
 
-// F3 toggles it. Ring buffer of the last PERF_SAMPLES frames. Zero cost when hidden.
+// F3 toggles it. Ring buffer of the last PERF_SAMPLES profiled frames. When neither visible nor capturing, timing is skipped but instrumented sites still check perfEnabled().
 const PERF_SAMPLES = 60;
 const perf = {
   visible: false,
@@ -8886,7 +8888,7 @@ const perf = {
   },
 };
 
-// Scanlines and vignette, off by default. The pattern and radial gradient are cached and rebuilt on resize.
+// Scanlines and vignette, off by default. The pattern and radial gradient are cached and lazily rebuilt when W or H changes.
 /** @type {{ w:number, h:number, pattern: CanvasPattern|null, vignette: CanvasGradient|null }} */
 const _crtCache = { w: 0, h: 0, pattern: null, vignette: null };
 function _rebuildCrtCache() {
@@ -8937,7 +8939,7 @@ function renderPerfHUD() {
     `wt ${wallTurrets.length}  sg ${shieldGens.length}  df ${disruptionFields.length}  gw ${gravityWells.length}  fp ${frostPatches.length}`,
     `bolts ${(game._chainBolts||[]).length}  hackFX ${hackwareEffects.length}`,
   ];
-  // Hottest subsystem first. A label with zero time this frame is hidden so an idle system does not stretch the HUD.
+  // Hottest rolling average first; every subsystem with at least one recorded sample is shown.
   const subs = perfSubsystemStats();
   if (subs.length) {
     lines.push('─ subsystems (avg/max ms) ─');
@@ -9065,8 +9067,8 @@ function _onFrameError(phase, err) {
 game.capturePerf = function(label, durationMs) { perf.startCapture(label, durationMs); };
 game.perf = perf;
 
-// Block timers for the hot loops. Enabled only while the HUD is visible or a capture is running, so normal play pays nothing.
-// Call sites must stay allocation-free when off: const t = perfEnabled() ? performance.now() : 0; then if (t) perfRecord(label, performance.now() - t).
+// Block timers for the hot loops. performance.now() and perfRecord run only while the HUD is visible or a capture is active.
+// Off-path call sites stay allocation-free: const t = perfEnabled() ? performance.now() : 0; then if (t) perfRecord(label, performance.now() - t).
 const PERF_SUB_SAMPLES = 60;
 const perfSubsystems = new Map();
 function perfEnabled() { return perf.visible || perf.capturing; }

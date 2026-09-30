@@ -59,10 +59,10 @@ Enemy.prototype.aiResonator = function aiResonator(dt, player, map, d, los) {
   this._rsCharge = Math.max(0, (this._rsCharge || 0) - dt * ocMul * bm);
   if (this._rsCharge <= 0 && inRoom && this._canTarget()) {
     const dLock = dist(this.x, this.y, this._tx, this._ty);
-    // Range gate is INCLUSIVE to match isInsideCone / fire-time geometry.
-    // dLock > 0.1 prevents the zero-aim edge case (target sitting exactly
-    // on the apex would yield norm(0,0) = [0,0], producing an east-pointing
-    // visual that never hits — "phantom cone" bug).
+    // The upper range gate is inclusive, matching isInsideCone and fire-time geometry.
+    // dLock > 0.1 avoids the zero-aim edge case: norm(0, 0) returns [0, 0],
+    // Math.atan2(0, 0) draws the telegraph east, and isInsideCone rejects that
+    // aim for any target that has moved off the apex.
     if (dLock > 0.1 && dLock <= RESONATOR_RANGE && hasLOS(this.x, this.y, this._tx, this._ty, map)) {
       const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       this._rsAimDx = dx; this._rsAimDy = dy;

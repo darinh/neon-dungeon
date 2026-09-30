@@ -29,7 +29,7 @@
   function defaultMeta() {
     return {
       version: META_VERSION,
-      // Legacy shards fields, kept so old saves still load.
+      // Shard progression fields remain active alongside the newer cores system.
       shards: 0,
       upgrades: {},
       stats: { totalRuns:0, totalShards:0, bestFloor:0, victories:0 },
@@ -40,9 +40,9 @@
       modulesOwned: [],
       modulesInstalled: new Array(MODULE_SLOTS).fill(null),
       logsRead: [],
-      logsFound: [],                                   // found but not yet read
+      logsFound: [],                                   // discovered, whether read or unread
       whispersRead: [],
-      whispersFound: [],                               // found but not yet read
+      whispersFound: [],                               // discovered, whether read or unread
       endingsUnlocked: [],                             // 'keeper' | 'unchained' | 'act1_message_sent'
       act1MessageIntent: null,
       introSeen: false,
@@ -157,7 +157,7 @@
   function saveMeta(meta) {
     const storage = _getStorage();
     if (!storage) return;
-    try { storage.setItem(STORAGE_KEY, JSON.stringify(meta)); } catch (_) { /* ignore quota */ }
+    try { storage.setItem(STORAGE_KEY, JSON.stringify(meta)); } catch (_) { /* ignore storage failure */ }
   }
 
   /** @param {string} id @param {Record<string, any>} [validDifficulties] */
@@ -194,8 +194,8 @@
   /** @param {any} fn */
   function registerModuleEffects(fn) { _moduleEffectsFn = (typeof fn === 'function') ? fn : null; }
 
-  // buildWeaponFn is optional; browser falls through to global buildWeapon.
-  // Avoids a hard import from the meta layer to the weapon data layer.
+  // buildWeaponFn is optional; the browser wrapper injects buildWeapon, and
+  // direct browser callers can fall back to the global without a hard import.
   /** @param {any} player @param {any} [buildWeaponFn] @param {() => number} [randomFn] */
   function applyMetaToPlayer(player, buildWeaponFn, randomFn) {
     const m = loadMeta();
@@ -223,7 +223,7 @@
     }
   }
 
-  // Idempotent on a fresh player snapshot; callers rebuild the player at run-start.
+  // Applies once to the freshly rebuilt run-start player; repeated calls stack additive effects.
   /** @param {any} player @param {Record<string, number>} nodes */
   function _applyUpgradeNodes(player, nodes) {
     for (const id in nodes) {
@@ -265,7 +265,7 @@
         f.momentum = level;     // +15% damage for 3s after a kill (per level stacks)
         break;
       case 'surge':
-        f.surge = level;        // every 8th hit deals +100%
+        f.surge = level;        // every 8th shot deals +100%
         break;
       case 'recon':
         player.sensorRadiusMult = (player.sensorRadiusMult || 1) * (1 + 0.20 * level);
@@ -278,9 +278,9 @@
         f.ghostwalk = level;
         break;
       case 'hacktool':
-        // Random hackware is seeded in src/game.js startGame after applyMetaToPlayer.
-        // HACKWARE lives in src/content.js; this layer must not import it (same injection pattern as STARTING_GEAR).
-        // Only the metaFlag is set here. hackwareSlots stays for save back-compat and is harmless when unread.
+        // Random hackware is equipped in src/game.js after applyMetaToPlayer.
+        // This layer avoids importing src/content/hackware.js; it exposes the hacktool flag and
+        // retains hackwareSlots as a legacy value that save/resume carries but gameplay does not read.
         player.hackwareSlots = (player.hackwareSlots || 3) + level;
         f.hacktool = level;
         break;
@@ -291,7 +291,7 @@
   function getMetaXPMultiplier()     { return 1 + getMetaLevel('QUICK_LEARNER') * 0.15; }
   function getMetaCreditMultiplier() { return 1 + getMetaLevel('SCAVENGER')     * 0.15; }
 
-  // Mutating helpers load, modify, and save atomically so callers never hold stale state.
+  // Each mutating helper reloads before modifying and saves before returning; callers pass no meta snapshot.
 
   /** @param {number} n */
   function addCores(n) {
@@ -398,7 +398,7 @@
     return refund;
   }
 
-  // Main menu New Game "Keep persistent unlocks? → No". Irreversible.
+  // Main-menu New Game "RESET META": deletes all persistent progress. Irreversible.
   function resetMeta() {
     const storage = _getStorage();
     if (!storage) return;

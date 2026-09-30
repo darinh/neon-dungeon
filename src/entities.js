@@ -272,7 +272,7 @@ class Enemy {
     this.flashTimer=0;
     this.voidOrbs=[];
     this.prevPhase=1;
-    this.shieldAngle=0;    // SHIELDER: facing angle toward player
+    this.shieldAngle=0;    // SHIELDER: frontal shield angle toward the current visible target
     this.grenadeTimer=0;
     this.eliteAffix=null;
     this.shieldHp=0; this.shieldMax=0; this.shieldRegenDelay=0;
@@ -298,8 +298,8 @@ class Enemy {
   takeDamage(dmg, hitCtx) {
     if (this.dead) return 0;
     // Phase-immune absorbs still apply stun-only effects so shock can force a
-    // phased SPECTRE to manifest. Player shots skip _wrPhased before takeDamage
-    // (content.js); this branch still covers non-projectile paths.
+    // phased SPECTRE to manifest. Player projectiles and melee skip _wrPhased
+    // in content/projectiles.js and Player.shoot; direct callers still land here.
     if (this.phaseImmune || this._wrPhased) {
       _applyStunOnlyEffects(this, hitCtx);
       const label = this._wrPhased ? 'PHASED' : 'PHASE';
@@ -359,8 +359,8 @@ class Enemy {
         }
       }
     }
-    // Mutates the player's streak, so only fromPlayerShot counts. That flag is set
-    // in Player.shoot and cleared when the projectile pool recycles (content.js);
+    // Mutates the player's streak, so only fromPlayerShot counts. Player.shoot sets it;
+    // Projectile._init resets it on each allocation or reuse (content/projectiles.js);
     // turrets, orbs, and flipped enemy shots do not carry it.
     {
       const _hctx = typeof hitCtx === 'string' ? null : hitCtx;
@@ -380,7 +380,7 @@ class Enemy {
       }
     }
     if (this.eliteAffix === 'SHIELDED') this.shieldRegenDelay = 0;
-    // Affix-gated: SHIELDER also uses shieldHp, but only for frontal blocks in content.js.
+    // Affix-gated: SHIELDER also uses shieldHp, but only in the frontal projectile-block path.
     if (this.eliteAffix === 'SHIELDED' && this.shieldHp > 0) {
       const absorbed = Math.min(this.shieldHp, dmg);
       this.shieldHp -= absorbed;
@@ -425,7 +425,7 @@ class Enemy {
     if (this.hp<=0) { this.hp=0; this.die(); }
     else { const wn = ctx.name || null; audio.hit(false, wn); }
     // ICD so multi-pellet weapons can't print a coin per pellet. The killing blow
-    // does not eject; the death jackpot is the only drop then.
+    // skips the per-hit coin; VAULTMASTER's separate death jackpot still drops.
     if (this.type === 'VAULTMASTER' && actual > 0 && !this.dead && (this._vmHitICD || 0) <= 0) {
       this._vmHitICD = VAULTMASTER_HIT_ICD;
       const ang = rand('loot') * TWO_PI;
@@ -441,7 +441,7 @@ class Enemy {
     if (this.dead) return;
     this.dead=true;
     unregisterEnemyFromRoom(this);
-    // Before the _despawning return, so a cascade kill still arms a haunt.
+    // Death hooks run before the _despawning return; each hook applies its own summon and ghost exclusions.
     notifyGhostProjectors(this);
     notifyVengeance(this);
     if (this._summons) {
@@ -512,8 +512,8 @@ class Enemy {
     const corrosiveMul = _EG.modifier === 'CORROSIVE' ? 1.5 : 1;
     const cr = Math.round(baseCr * (1 + _EG.floor * 0.15) * getMetaCreditMultiplier() * d.creditMul * creditSiphonMul * corrosiveMul * 0.85); // 0.85 = -15% credit drops
     _EG.player.credits += cr;
-    // Sub-1 bonus floors to 0 so low-CR mobs don't show "+0 CR". Burn DoT kills
-    // still credit if the prior direct hit unmarked isProc.
+    // Skip the label when the rounded bonus is 0. Burn and poison DoT kills
+    // credit an existing greedy hit because status-effects.js clears its isProc flag.
     const _gctx = this._lastHitCtx;
     if (_gctx && !_gctx.isProc && _gctx.effects && _gctx.effects.includes('greedy')
         && !this.isShard && !isSummon) {
@@ -534,7 +534,7 @@ class Enemy {
       }
       if (coreVal > 0) NEON.cores.spawnCoreDrop(game, this.x, this.y, coreVal);
     }
-    // Stacks on the elite/boss core drop. The NEON.cores guard keeps this path from crashing node:test.
+    // Independent of the elite/boss core drop, so SALVAGE can add a core to any eligible kill. The NEON.cores guard keeps node:test safe.
     const _sctx = this._lastHitCtx;
     if (_sctx && !_sctx.isProc && _sctx.effects && _sctx.effects.includes('salvage')
         && !this.isShard && !isSummon && rand('loot') < 0.10
@@ -584,7 +584,7 @@ class Enemy {
       }
       spawnParticles(this.x, this.y, 'MUZZLE', '#44ff88', 5);
     }
-    // Counter is per-run and persisted; it increments only on WINDFALL floors so a later floor doesn't inherit a ready bonus.
+    // Per-run and persisted; only eligible kills on WINDFALL floors advance the every-fifth-kill bonus.
     if (_EG.modifier === 'WINDFALL' && !this.isShard && !isSummon) {
       const _wfp = _EG.player;
       _wfp._windfallKills = (_wfp._windfallKills || 0) + 1;
@@ -606,7 +606,8 @@ class Enemy {
         spawnParticles(this.x, this.y, 'MUZZLE', '#00ddff', 5);
       }
     }
-    // room._qmHarvested is saved with the floor snapshot, so Continue does not re-harvest.
+    // Rooms are cloned into the floor snapshot, including _qmHarvested, so Continue
+    // preserves the one-core-per-room guard.
     if (_EG.modifier === 'QUARTERMASTER' && !this.isShard && !isSummon
         && this.room && !this.room._qmHarvested) {
       this.room._qmHarvested = true;
@@ -824,7 +825,7 @@ class Enemy {
         this._glRecoverTimer = 0;
         this._glStacks = 0;
       }
-      // Clear beam ICDs so a stale timer can't damage on the resume frame.
+      // Clear beam ICDs while stunned; a re-formed link may hit immediately after stun ends.
       if (this.type === 'CONDUIT' && this._cdLinkICD) this._cdLinkICD.clear();
       // Cancel resonator telegraph on stun — drop straight to recovery so the
       // wedge doesn't fire after stun ends and the player can punish the stun.
@@ -834,7 +835,7 @@ class Enemy {
       if (this._miState === 'telegraph') { this._miState = 'recovery'; this._miRec = MIRROR_RECOVERY; this._miTele = 0; }
       // Drop to recovery and clear _wFired so render doesn't flash a beam that never fired.
       if (this._wState === 'telegraph') { this._wState = 'recovery'; this._wRec = WATCHER_RECOVERY; this._wTele = 0; this._wFired = false; }
-      // Clear _aCommitted so a stun-cancel doesn't flash a wall that was never placed.
+
       if (this.type === 'ARCHITECT' && this._aState === 'target') {
         this._aState = 'recovery';
         this._aRec = ARCHITECT_RECOVERY;
@@ -893,7 +894,7 @@ class Enemy {
       if (this._lpState === 'airborne' || this._lpState === 'recovery') {
         this.aiLeaper(dt, player, map, 0, false);
       }
-      return; // skip all AI, leave attack/shoot timers frozen
+      return; // skip normal AI dispatch; leave attack/shoot timers frozen
     }
 
     this.attackTimer=Math.max(0,this.attackTimer-dt);
@@ -902,8 +903,8 @@ class Enemy {
     if (this._vmHitICD) this._vmHitICD = Math.max(0, this._vmHitICD - dt);
 
     // After the stun return so stun freezes regen. Bosses, elites, summons, shards,
-    // disguised mimics, phased wraiths, and ghosts are excluded (phase thresholds,
-    // no visual leak, no permanent escort).
+    // disguised mimics, ghosts, and intangible _wrPhased units are excluded (phase
+    // thresholds, no visual leak, no permanent escort).
     if (_EG.modifier === 'REGENERATIVE'
         && !this.isBoss && !this.elite && !this._summoned && !this.isShard
         && !this._disguised && !this._wrPhased && !this._ghIsGhost) {
@@ -1011,7 +1012,7 @@ class Enemy {
   draw(camX,camY) {
     if (this.dead) return;
     const etx = Math.floor(this.x), ety = Math.floor(this.y);
-    // WRAITH emerging telegraph is always visible (warns player)
+    // WRAITH emerging telegraphs bypass the dungeon-visibility gate.
     if (!_EG.dungeon?.visible?.[ety]?.[etx] &&
         !(this.type === 'WRAITH' && this._wrState === 'emerging') &&
         !(this.type === 'TUNNELLER' && (this._tnState === 'tunneling' || this._tnState === 'surfacing'))) return;
@@ -1559,7 +1560,7 @@ class Enemy {
           ctx.fillStyle = '#ff4466';
           NEON.draw.circle(ctx, sx, sy, sz * 0.8 * (0.8 + hb * 0.4));
         }
-        // Drain beam (set on successful life steal in content.js)
+        // Drain beam, set after a SIPHON projectile deals real HP damage in content/projectiles.js.
         if (this._spDrainBeam && this._spDrainBeam.t > 0) {
           const db = this._spDrainBeam;
           const beamAlpha = (db.t / 0.3) * 0.5;
@@ -1689,7 +1690,7 @@ class Enemy {
       if (this.type === 'ECHOER') {
         ctx.save();
         if (this._ecState === 'aiming' && this._ecAimTimer > 0) {
-          const total = 0.8; // ECHOER_TELEGRAPH — kept inline (host has TILE etc.)
+          const total = 0.8; // Must match ECHOER_TELEGRAPH in enemy-ability-tuning.js.
           const progress = 1 - Math.max(0, Math.min(1, this._ecAimTimer / total));
           const lx = this._ecLockX * TILE - camX;
           const ly = this._ecLockY * TILE - camY;
@@ -1723,7 +1724,7 @@ class Enemy {
       if (this.type === 'PROPHET') {
         ctx.save();
         if (this._prState === 'aiming' && this._prAimTimer > 0) {
-          const total = 0.7; // PROPHET_TELEGRAPH — kept inline (host has TILE etc.)
+          const total = 0.7; // Must match PROPHET_TELEGRAPH in enemy-ability-tuning.js.
           const progress = 1 - Math.max(0, Math.min(1, this._prAimTimer / total));
           const lx = this._prLockX * TILE - camX;
           const ly = this._prLockY * TILE - camY;
@@ -1873,7 +1874,7 @@ class Enemy {
         ctx.shadowColor = '#44ffff';
         ctx.lineWidth = 1.2;
         NEON.draw.circleStroke(ctx, sx, sy, sz * (1.0 + pulse * 0.4));
-        // _EG.dungeon can be null during floor transitions; same optional map access as the other draw paths.
+        // Defensive: the visibility gate at the top of draw() already returns for a CONDUIT when game.dungeon is null.
         const room = this.room;
         const inRoom = room ? enemiesByRoom.get(room) : null;
         const dmap = _EG.dungeon && _EG.dungeon.map;
@@ -2190,8 +2191,8 @@ class Enemy {
           const ax = this._miAimDx, ay = this._miAimDy;
           const radPx = MIRROR_RANGE * TILE;
           const shotColour = this._miShotColour || '#88ff44';
-          // Dashed aim line in the SHOT'S colour (the player's last weapon
-          // colour) — telegraphs both direction and what kind of shot.
+          // Dashed aim line uses the last recorded ranged shot's colour, or the green
+          // fallback, so the telegraph matches the projectile that will fire.
           ctx.globalAlpha = 0.30 + progress * 0.55;
           ctx.strokeStyle = shotColour;
           ctx.shadowBlur = 6 + progress * 12;
@@ -2549,8 +2550,8 @@ class Enemy {
         NEON.draw.circle(ctx, sx, sy, sz * (1.1 + this.frenzyStacks * 0.15));
         ctx.restore();
       }
-      // Clamp alpha to [0,1]: canvas ignores an out-of-range globalAlpha and keeps
-      // the previous value, so a negative pulse trough would flash at full opacity.
+      // Defensive clamp: canvas ignores globalAlpha assignments outside [0,1] and
+      // retains the previous value.
       if (this.eliteAffix === 'PREDATOR' && this.predatorBuffTimer > 0) {
         ctx.save();
         const frac = Math.min(1, this.predatorBuffTimer / 3);
@@ -2689,8 +2690,8 @@ function markPlayerStood(player, map, tx, ty) {
 }
 
 /**
- * Where an embedded agent with no usable safe record should go: the nearest
- * passable tile centre within 4 tiles, ranked by (1) inside a sealed boss arena
+ * Where an embedded agent with no usable safe record should go: a passable tile
+ * centre at most 4 tiles away on each axis, ranked by (1) inside a sealed boss arena
  * the agent is in, so an embed never leaks out; (2) a tile it has stood on this
  * floor; (3) a tile it has seen; (4) distance. Never an unrevealed secret room
  * or the unbreached seam vault. Allocates only its result.
@@ -2954,7 +2955,7 @@ class Player {
     // resets it each frame. dashTimer bypasses (mirrors toxic/disruption).
     this._tetherSlowFactor=1;
     this.disruptionFieldActive=false;
-    this.hackwareJammed=false;        // true while inside a NULLIFIER aura — blocks cooldown ticking AND activateHackware
+    this.hackwareJammed=false;        // cached NULLIFIER-aura state; blocks cooldown ticking, while activateHackware checks the aura directly
     this.gravityPullActive=false;
     this.burnTimer=0; this.burnDps=0;
     this.shockTimer=0;                 // shock: brief movement suppress
@@ -2970,10 +2971,10 @@ class Player {
     this.autoLaserTimer=0;
     this.autoLaserBeam=null;    // {x1,y1,x2,y2,timer} for beam rendering
     this.credits=0;
-    // Cleared by loadFloor via NEON.boosts.clearFloorBoosts().
+    // Cleared by loadFloor on fresh transitions via NEON.boosts.clearFloorBoosts().
     this.activeBoosts={};
     this._shieldCharges=0;
-    // Remaining seconds. Not serialised: a few seconds of temp window is acceptable to lose on resume.
+    // Remaining seconds. Serialized with activeBoosts so timed windows survive Continue and still expire.
     this._boostTimers={};
     this.loreRead=new Set();
     this.dashCooldown=0;        // cooldown remaining (1.5s max)
@@ -2999,7 +3000,7 @@ class Player {
     this.hackwareCooldown=0;
     this.cloakTimer=0;
     this.regenTimer=0;
-    // Self-clearing HoT. Tick is next to HP_REGEN; activation is in content.js.
+    // Self-clearing HoT. Tick is next to HP_REGEN; activation is in src/content/hackware.js.
     this._repairTicksLeft=0;
     this._repairTickTimer=0;
     // Drain in takeDamage before the one-shot shields so a bubble doesn't burn them.
@@ -3054,7 +3055,7 @@ class Player {
     const options = opts || {};
     if (playerCheatEnabled('invulnerable') && !options.ignoreCheats) return 0;
     if (!options.ignoreInvincible && this.invincibleTimer>0) return 0;
-    if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash i-frames + phase cloak
+    if (!options.ignoreImmunity && isPlayerDamageImmune()) return 0; // dash, cloak, spawn-grace, and Ghostwalk immunity
     // Drains before one-shot shields so a bubble doesn't burn them.
     // ignoreShield/ignoreInvincible: env DoTs must bypass, or a 35hp pool dies in
     // a second of plasma. Break sound only on full drain.
@@ -3218,7 +3219,7 @@ class Player {
       }
       this.killedBy=src; audio.gameOver(); _EG.endRun(false);
     }
-    // After the lethal-hit revives, so this only spends a charge on a non-lethal cross of the threshold.
+    // After the lethal-hit revives, so this only spends a charge when post-hit HP is alive and below 25%.
     if (this.hp > 0 && NEON.behavior.tryTraumaKit(this)) {
       audio.heal();
       spawnParticles(this.x, this.y, 'EXPLOSION', '#00ffaa', 14);
@@ -3250,7 +3251,7 @@ class Player {
     // || 0 is required: weapons without DEADLY leave critMulAdd undefined, and bare addition would NaN every crit's damage.
     const critMul = 2 + (mf.critDamageBonus || 0) + (w.critMulAdd || 0);
 
-    // Counter increments only on OVERCHARGE floors so another floor doesn't inherit a ready crit. Auto-fire does not go through shoot().
+    // Counter advances only on OVERCHARGE floors; shots elsewhere neither advance nor consume the persisted rhythm. Auto-fire does not go through shoot().
     let forceCrit = false;
     if (_EG.modifier === 'OVERCHARGE') {
       this._overchargeShots = (this._overchargeShots || 0) + 1;
@@ -3415,10 +3416,10 @@ class Player {
       this._posHistory.shift();
     }
     this.invincibleTimer=Math.max(0,this.invincibleTimer-dt);
-    // SPAWN GRACE: brief floor-entry invulnerability window (set by loadFloor
-    // on fresh transitions, value SPAWN_GRACE_DUR seconds). isPlayerDamageImmune()
-    // ORs this in so all damage paths — env hazards (PLASMA/ARC/TOXIC/Frost),
-    // mob contact, projectiles, AoE — are uniformly blocked while > 0.
+    // SPAWN GRACE: 1.5-second floor-entry invulnerability window set by loadFloor
+    // on fresh transitions. isPlayerDamageImmune() ORs this in so all damage paths
+    // — env hazards (PLASMA/ARC/TOXIC/Frost), mob contact, projectiles, and AoE —
+    // are uniformly blocked while > 0.
     this._spawnGraceTimer=Math.max(0,(this._spawnGraceTimer||0)-dt);
     this.shootCooldown=Math.max(0,this.shootCooldown-dt);
     this.bombCooldown=Math.max(0,this.bombCooldown-dt);
@@ -3427,8 +3428,9 @@ class Player {
     this.dashCooldown=Math.max(0,this.dashCooldown-dt);
     // Must tick or the first dash's bonus i-frames never expire. isPlayerDamageImmune reads this.
     this._dashIFrameTimer = Math.max(0, (this._dashIFrameTimer || 0) - dt);
-    // Jam is set by updateNullifierJam before this tick. Without the gate the
-    // cooldown would tick inside the aura and a camp-then-dash would bypass the mob.
+    // updateNullifierJam runs after player.update, so this uses the previous frame's
+    // aura state. Without the gate the cooldown would recharge inside the aura, and a dash
+    // (whose immunity clears the aura check) would then fire the hackware without leaving.
     if (!this.disruptionFieldActive && !this.hackwareJammed) this.hackwareCooldown=Math.max(0,this.hackwareCooldown-dt);
     if (this.cloakTimer > 0) {
       this.cloakTimer -= dt;
@@ -3671,8 +3673,8 @@ class Player {
       this.dashDx=dx; this.dashDy=dy;
       this.dashTimer=0.12;
       this._dashSerial = (this._dashSerial | 0) + 1;
-      // Movement ends at dashTimer === 0; this timer keeps immunity for the bonus
-      // window after that. Always set, so bonus 0 matches dashTimer.
+      // Movement ends at dashTimer === 0; this timer keeps immunity for Ghostwalk's
+      // bonus and is not shortened when a wall ends the dash early.
       this._dashIFrameTimer = 0.12 + (this.dashIFrameBonus || 0);
       const baseCd = this.perks.DASH_MASTER ? 0.75 : 1.5;
       // Multiplies the already-reduced base cooldown. Floor modifiers don't stack.
@@ -3815,7 +3817,7 @@ class Player {
       NEON.draw.circleStroke(ctx, sx, sy, 12);
       ctx.restore();
     }
-    // Opacity tracks remaining bubbleHp. Slower pulse and larger radius than the
+    // Opacity tracks remaining bubbleHp. Faster pulse and larger radius than the
     // perk ring so both can show at once. Requires hp and timer so a half-cleared
     // bubble doesn't draw.
     if (this.bubbleHp > 0 && this.bubbleTimer > 0) {
@@ -3846,7 +3848,7 @@ class Player {
       NEON.draw.circle(ctx, sx, sy, 9);
       ctx.restore();
     }
-    // Keep in sync with isPlayerDamageImmune()'s spawn-grace branch in src/content.js.
+    // Keep in sync with isPlayerDamageImmune()'s spawn-grace branch in src/content/hackware.js.
     if (this._spawnGraceTimer > 0) {
       ctx.save();
       const t = this._spawnGraceTimer;

@@ -1,5 +1,6 @@
 // @ts-check
-// No PII. Session ids are random; events stay in localStorage until a transport is set.
+// Current call sites send gameplay metrics, not user identifiers. Session ids are random;
+// flush persists events locally before an optional transport sends them.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).telemetry = factory();

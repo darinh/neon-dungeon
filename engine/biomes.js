@@ -30,7 +30,7 @@
       if (!Number.isFinite(n)) return first;
       if (n < (first.floors[0] ?? 1)) return first;
       for (const a of areas) if (a.floors.includes(n)) return a;
-      // Above the last defined floor, clamp to the last area.
+      // Any unmatched finite floor at or above the first falls back to the last area.
       return last;
     }
 

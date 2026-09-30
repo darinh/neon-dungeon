@@ -38,7 +38,7 @@
     return null;
   }
 
-  // `rand` is injectable so tests do not depend on Math.random.
+  // `rand` accepts an injected generator for seeded runtime rolls and deterministic tests.
   /** @param {number} floor @param {() => number} [rand] */
   function pickWhisperForFloor(floor, rand) {
     const f = Math.floor(Number(floor));

@@ -1,5 +1,5 @@
 // @ts-check
-// save.js owns modulesOwned / modulesInstalled and calls registerModuleEffects. This file owns the catalog and effect logic.
+// save.js owns modulesOwned / modulesInstalled and exposes registerModuleEffects; this file owns the catalog, effects, and hook registration.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./save.js'));
   else (/** @type {any} */ (root.NEON = root.NEON || {})).modules = factory((root.NEON && root.NEON.save) || null);
@@ -120,7 +120,7 @@
           f.moveSpeedMul = (f.moveSpeedMul || 1) * 1.10;
           break;
         case 'neural_coprocessor':
-          // Stacks with the hacktool upgrade.
+          // Adds to the legacy hackwareSlots count; save/resume carries it, but active hackware is still a single value.
           f.extraHackwareSlots = (f.extraHackwareSlots || 0) + 1;
           player.hackwareSlots = (player.hackwareSlots || 3) + 1;
           break;
@@ -137,7 +137,7 @@
           f.critDamageBonus = (f.critDamageBonus || 0) + 0.15;
           break;
         case 'kinetic_buffer':
-          // Multiplicative, not a clamp: two copies are 0.9 * 0.9.
+          // Duplicate ids multiply (0.9 * 0.9) in stale saves; normal installs deduplicate slots.
           f.knockbackTakenMul = (f.knockbackTakenMul == null ? 1 : f.knockbackTakenMul) * 0.90;
           break;
         case 'dash_cooler':
@@ -261,7 +261,7 @@
     ctx.restore();
   }
 
-  // 'exit' closes the panel. 'ignored' means the caller may still handle the key.
+  // 'exit' asks the caller to close the panel. 'ignored' leaves the key available to the caller.
   /** @param {any} game @param {any} state @param {string} key */
   function handleModuleSlotsKey(game, state, key) { void game;
     if (!state) return 'ignored';

@@ -59,9 +59,9 @@ function makeHackwareOption(exclude) {
  * @returns {any}
  */
 function pickUpgradeOption(exclude) {
-  // Drops are heals and XP only. Persistent items stay out of the run drop
-  // pool (meta, shops, weapon terminals). Hackware and weapons are not drops.
-  // What remains is simple, so game.js auto-applies it with no popup.
+  // Drops are non-persistent auto-applied upgrades: healing, XP, credits, or a
+  // temporary boost. Persistent upgrades, hackware, and weapons stay out of
+  // this pool, so game.js needs no choice popup.
   const pool = UPGRADES.filter(u => {
     if (u.persistent) return false;
     if (exclude && u.id === exclude) return false;
@@ -168,7 +168,7 @@ function generateShopItems(floor, player, dungeon) {
     const augOpt = makeAugmentShopOption(null);
     if (augOpt) pool.push(augOpt);
   }
-  // Boosts are floor-scoped or one-shots and never grant permanent growth.
+  // Priced vendor boosts are floor-scoped or one-shots and never grant permanent growth.
   const boostKeys = (typeof NEON !== 'undefined' && NEON.boosts) ? NEON.boosts.BOOST_KEYS.slice() : [];
   shuffleInPlace(boostKeys, 'loot');
   const usedIds = new Set(pool.map(p => p.id));
@@ -193,7 +193,7 @@ function generateShopItems(floor, player, dungeon) {
     });
     usedIds.add(bid);
   }
-  // Backfill with consumables only. Permanent stat growth is not sold for credits.
+  // Backfill from non-persistent consumables only; persistent UPGRADES are not sold for credits.
   const nonPersistentPool = (typeof NEON !== 'undefined' && NEON.boosts)
     ? NEON.boosts.filterVendorPool(UPGRADES)
     : UPGRADES.filter(u => !u.persistent && u.id !== 'CREDIT_CACHE');

@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Leech-on-hit lives in meleeAttack, gated on dealt > 0 so parry and shield skip the drain.
+// Timed-boost drain lives in meleeAttack, gated on dealt > 0 so parry and shield absorbs skip it.
 /**
  * @this {Enemy}
  * @param {number} dt
@@ -18,6 +18,6 @@ Enemy.prototype.aiSapper = function aiSapper(dt, player, map, d, los) {
     this.patrol(dt, map);
   }
   // No generic body-collision damage, so atk only lands here.
-  // meleeAttack is taunt-aware: pass `player` even when the target is a decoy.
+  // Pass `player` even for a decoy-targeted approach; meleeAttack's real-player range check makes it a hologram whiff.
   if (d < SAPPER_MELEE_RANGE) this.meleeAttack(player);
 };

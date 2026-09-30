@@ -10,7 +10,8 @@
  */
 Enemy.prototype.aiGhostProjector = function aiGhostProjector(dt, player, map, d, los) {
   void player; void map; void d; void los; // stationary, no engagement logic
-  // A dead ghost still occupies the slot and blocks the next claim.
+  // Drop the stale ref. The field can still hold a dead ghost (for example while this projector is stunned),
+  // so the claim check and the renderer test .dead themselves.
   if (this._gpActiveGhost && this._gpActiveGhost.dead) {
     this._gpActiveGhost = null;
   }
@@ -25,9 +26,9 @@ Enemy.prototype.aiGhostProjector = function aiGhostProjector(dt, player, map, d,
         this
       );
       if (queued) {
-        // Sentinel for the same-frame window before game.js flush assigns
-        // _gpActiveGhost. Without it a second kill this frame arms another
-        // pending memory, leaving both an active ghost and a new claim.
+        // Sentinel until game.js flush assigns _gpActiveGhost. If the flush is
+        // delayed by an earlier return, it prevents this pending haunt from
+        // being queued again on the next gameplay update.
         this._gpAwaitingFlush = true;
         if (audio && audio.ghostProjectorSpawn) audio.ghostProjectorSpawn();
         spawnParticles(this._gpPendingX, this._gpPendingY, 'EXPLOSION', '#ccaaff', 10);

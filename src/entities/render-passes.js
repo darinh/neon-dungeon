@@ -46,7 +46,7 @@ function drawReaperPlayerRings(camX, camY) {
   }
 }
 
-// Drawn from game.js before the player sprite, even if the body is off-screen. The leash exists only while the slow is applied.
+// Drawn from game.js before the player sprite, even if the body is off-screen. Its distance band matches aiTether, but the leash stays visible when no slow applies: while the player dashes, and while the TETHER is stunned (Enemy.update returns before aiTether).
 /**
  * @param {any} camX
  * @param {any} camY

@@ -26,11 +26,11 @@ const CRYOPHAGE_PATCH_RADIUS = 0.6;   // tiles - damage radius from each patch c
 const CRYOPHAGE_TICK_ICD     = 0.5;   // seconds between damage ticks per patch
 const CRYOPHAGE_DMG_MUL      = 0.45;  // damage = round(atk * 0.45) per tick
 
-const WARDLING_GUARD_DIST    = 1.0;   // tiles from ward toward player (interception offset)
+const WARDLING_GUARD_DIST    = 1.0;   // tiles from ward toward perceived target (interception offset)
 const WARDLING_REWARD_PERIOD = 0.5;   // seconds between ward re-acquisition scans (perf)
 const WARDLING_PANIC_MUL     = 1.4;   // speed multiplier when no ward available
 
-const VENGEANCE_THRESHOLD     = 3;     // kills in room before rush triggers
+const VENGEANCE_THRESHOLD     = 3;     // qualifying same-room kills required to arm
 const VENGEANCE_TELEGRAPH     = 0.8;   // seconds of warning before strike
 const VENGEANCE_RUSH_DURATION = 0.6;   // seconds the strike dash lasts
 const VENGEANCE_RUSH_SPD      = 9;     // tiles/sec during the rush dash
@@ -39,7 +39,7 @@ const VENGEANCE_RANGE         = 10;    // tiles - max LoS distance to commit a r
 const CONDUIT_SOLO_FIRE_CD    = 3.0;   // seconds between solo basic shots
 const CONDUIT_SOLO_PROJ_SPD   = 4.5;   // tiles/sec for solo basic shot
 const CONDUIT_SOLO_DMG_MUL    = 0.6;   // basic-shot damage multiplier vs atk
-const CONDUIT_SOLO_RANGE      = 9;     // tiles - solo shot lifetime in tiles
+const CONDUIT_SOLO_RANGE      = 9;     // tiles - solo engage and projectile range
 const CONDUIT_BEAM_W          = 0.4;   // tiles - perpendicular hit threshold
 const CONDUIT_BEAM_DMG_MUL    = 0.7;   // beam damage per ICD tick vs atk
 const CONDUIT_BEAM_ICD        = 0.5;   // seconds between beam ticks per link
@@ -53,7 +53,7 @@ const RESONATOR_CONE_DEG   = 60;             // full cone angular width (degrees
 const RESONATOR_DMG_MUL    = 0.8;
 const RESONATOR_HALF_RAD   = (RESONATOR_CONE_DEG * 0.5) * Math.PI / 180;
 
-const WATCHER_SWEEP_RATE = 0.55; // rad/s - full rotation ~11.4s
+const WATCHER_SWEEP_RATE = 0.55; // rad/s - base full rotation ~11.4s before tempo modifiers
 const WATCHER_CONE_DEG   = 50;
 const WATCHER_RANGE      = 9;    // tiles - cone depth and beam reach
 const WATCHER_TELEGRAPH  = 0.65; // seconds - fairness window after lock
@@ -64,11 +64,11 @@ const WATCHER_HALF_RAD   = (WATCHER_CONE_DEG * 0.5) * Math.PI / 180;
 const ARCHITECT_RANGE        = 8;     // tiles - perceived-target lock distance
 const ARCHITECT_TARGET_TIME  = 1.5;   // seconds - telegraph window before commit
 const ARCHITECT_RECOVERY     = 2.0;   // seconds - post-commit cooldown
-const ARCHITECT_IDLE_BASE    = 8.0;   // seconds - between commits when conditions hold
+const ARCHITECT_IDLE_BASE    = 8.0;   // seconds - idle after recovery before the next attempt
 const ARCHITECT_DECAY_TIME   = 12.0;  // seconds - placed wall lifetime
 
 const NULLIFIER_FIELD_R      = 5;     // tiles - aura radius
-const NULLIFIER_PULSE_RATE   = 1.8;   // hz - visual pulse base rate
+const NULLIFIER_PULSE_RATE   = 1.8;   // 1/sec - visual phase advance; draw applies angular multipliers
 
 const MIRROR_CHARGE        = 2.5;            // silent windup before telegraph
 const MIRROR_TELEGRAPH     = 1.0;            // aim line visible fairness window
@@ -93,8 +93,8 @@ const GHOST_PROJECTOR_HP_MUL     = 0.5;
 const GHOST_PROJECTOR_ATK_MUL    = 0.5;
 
 const MAGNETON_FIELD_R       = 5.5;   // tiles - radius of magnetic field
-const MAGNETON_BEND_STRENGTH = 6.0;   // base lerp rate (1/sec) at field center
-const MAGNETON_SAFE_R        = 0.15;  // tiles - minimum distance for bend
+const MAGNETON_BEND_STRENGTH = 6.0;   // 1/sec lerp scale, multiplied by proximity outside the dead zone
+const MAGNETON_SAFE_R        = 0.15;  // tiles - dead zone around the field center
 
 const SPECTRE_PHASE_DUR      = 1.4;   // seconds - invulnerable chase window
 const SPECTRE_MANIFEST_DUR   = 0.7;   // seconds - vulnerable stationary window
@@ -113,9 +113,9 @@ const TETHER_CHASE_RANGE = 11;    // tiles - los/proximity gate before chase
 const TETHER_MELEE_RANGE = 1.0;   // tiles - body proximity where slow vanishes
 
 const MAGPIE_SCAN_RANGE   = 12;    // tiles - radius for nearest-Item scan
-const MAGPIE_SCAN_PERIOD  = 0.4;   // seconds - re-scan throttle
+const MAGPIE_SCAN_PERIOD  = 0.4;   // seconds - re-scan delay while tracking; no target scans every frame
 const MAGPIE_GRAB_RANGE   = 0.6;   // tiles - item grab distance
-const MAGPIE_FLEE_RANGE   = 8;     // tiles - desired distance while carrying
+const MAGPIE_FLEE_RANGE   = 8;     // tiles - flee trigger radius and target step while carrying
 const MAGPIE_STOLEN_BASE  = 15;    // base credit value per stolen item
 const MAGPIE_STOLEN_PERFL = 5;     // additional per-floor credit value
 
@@ -127,10 +127,10 @@ const VAULTMASTER_ENGAGE_RANGE = 14;    // tiles - los/proximity gate for chase
 
 const GULPER_MOUTH_RANGE       = 3.5;  // tiles - depth of eat-cone
 const GULPER_MOUTH_HALF_ANGLE  = Math.PI * (35 / 180); // 70-degree total arc
-const GULPER_MAX_STACKS        = 5;    // stacks that trigger belch
-const GULPER_FACE_LERP         = 4.0;  // rad/sec lerp rate for mouth aim
+const GULPER_MAX_STACKS        = 5;    // stacks required before the belch can charge
+const GULPER_FACE_LERP         = 4.0;  // 1/sec interpolation rate for mouth aim
 const GULPER_BELCH_TELEGRAPH   = 0.9;  // seconds - telegraph window
 const GULPER_BELCH_RECOVERY    = 0.4;  // seconds - post-belch idle
-const GULPER_BELCH_SPD         = 5.5;  // tiles/sec - slow, dodgeable
+const GULPER_BELCH_SPD         = 5.5;  // tiles/sec - belch projectile speed
 const GULPER_BELCH_RANGE       = 12;   // tiles - projectile range
 const GULPER_BELCH_DMG_PER_STACK = 4;  // bonus dmg per stack consumed

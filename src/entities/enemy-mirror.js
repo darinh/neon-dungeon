@@ -28,10 +28,10 @@ Enemy.prototype.aiMirror = function aiMirror(dt, player, map, d, los) {
       const dmg = Math.round(this.atk * MIRROR_DMG_MUL);
       const spd = this._miShotSpd || MIRROR_PROJ_SPD_DEF;
       const colour = this._miShotColour || '#88ff44';
-      // The false, false tail is (piercing, friendly). No homing or bounce — player perks must not leak into this shot.
+      // The false, false tail is (piercing, fromPlayer). Homing and bounce stay at their reset defaults.
       const p = new Projectile(this.x, this.y, ax, ay, spd, dmg,
                                 MIRROR_PROJ_RANGE, colour, false, false);
-      // Projectile._init applies CHARGED and KINETIC_AMPLIFIER after the ctor. Re-assign so those cannot leak past the clamp.
+      // Projectile._init applies CHARGED speed to every projectile. Re-assign so it cannot push this shot past the clamp.
       p.spd = spd;
       // Death recap reads ownerType, not the class name.
       p.ownerType = 'Mirror Shot';
@@ -58,7 +58,7 @@ Enemy.prototype.aiMirror = function aiMirror(dt, player, map, d, los) {
   this._miCharge = Math.max(0, (this._miCharge || 0) - dt * ocMul * bm);
   if (this._miCharge <= 0 && inRoom && this._canTarget()) {
     const dLock = dist(this.x, this.y, this._tx, this._ty);
-    // dLock > 0.1: norm(0, 0) is [0, 0] and would fire a phantom shot due east. Same guard as RESONATOR.
+    // dLock > 0.1 avoids the zero-length telegraph and stationary projectile produced by norm(0, 0).
     if (dLock > 0.1 && dLock <= MIRROR_RANGE && hasLOS(this.x, this.y, this._tx, this._ty, map)) {
       const [dx, dy] = norm(this._tx - this.x, this._ty - this.y);
       this._miAimDx = dx; this._miAimDy = dy;

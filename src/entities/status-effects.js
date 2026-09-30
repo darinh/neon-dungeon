@@ -71,7 +71,7 @@ function tickEnemyStatusEffects(enemy, dt) {
   if (enemy._recoilICD > 0) enemy._recoilICD -= dt;
   // ICD so rapid fire cannot chain the stagger slow into a permanent cripple.
   if (enemy._staggerICD > 0) enemy._staggerICD -= dt;
-  // Read at takeDamage; no per-tick effect and no per-floor reset.
+  // takeDamage reads the active window; this tick only expires it.
   if (enemy._markedTimer > 0) {
     enemy._markedTimer -= dt;
     if (enemy._markedTimer <= 0) enemy._markedTimer = 0;
