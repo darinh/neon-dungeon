@@ -259,8 +259,8 @@ class KeyItem {
   }
 }
 
-// isWhisper selects the game.js pickup branch. Colour matches the Archive
-// WHISPERS counter (hub.js); body lives in src/data/whispers.js.
+// isWhisper selects the game.js pickup branch. Its #aa66cc shadow matches the
+// Archive WHISPERS counter (hub.js); whisper body copy lives in src/data/whispers.js.
 class WhisperItem {
   /**
    * @param {any} x

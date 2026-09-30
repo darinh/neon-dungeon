@@ -139,7 +139,7 @@
     return false;
   }
 
-  // Reads save.loadMeta() because game.meta is never assigned; reading it would show zero cores.
+  // Reads save.loadMeta() because the game object does not own a meta snapshot.
   /** @param {any} ctx @param {number} x @param {number} y @param {number} w @param {number} h @param {any} _game @param {any} selectorState */
   function drawUpgradeMatrix(ctx, x, y, w, h, _game, selectorState) {
     if (!ctx || typeof ctx.fillRect !== 'function') return;

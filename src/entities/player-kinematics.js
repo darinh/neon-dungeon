@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// The history ring is owned by Player.reset()/update(), not this module.
+// Player.reset initializes the history, Player.update appends it, and game.js loadFloor clears it.
 
 /**
  * @this {Player}

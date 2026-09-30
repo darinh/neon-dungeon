@@ -307,7 +307,7 @@ function activateHackware(player) {
       break;
     }
     case 'REPAIR_PROTOCOL': {
-      // Ticks live in Player.update next to HP_REGEN so the hot path allocates nothing.
+      // Player.update owns the four one-second ticks next to HP_REGEN; no hackware effect tracks the HoT.
       // Full HP refunds the cooldown; a misclick at full health must not spend it.
       if (player.hp >= player.maxHp) {
         player.hackwareCooldown = 0;
@@ -330,7 +330,7 @@ function activateHackware(player) {
       for (const p of projectiles) {
         if (!p || p.dead) continue;
         if (p.fromPlayer) continue;
-        // Ally turret shots aim at enemies. Reflecting them would turn them back at the player.
+        // Ally turret shots already target enemies; reversing them would send a friendly shot away from its target.
         if (p.isAllyTurret) continue;
         const dx = p.x - player.x;
         const dy = p.y - player.y;
@@ -426,7 +426,7 @@ function activateHackware(player) {
         const vx = dx - cx, vy = dy - cy;
         const a = ux * ux + uy * uy;
         const c = vx * vx + vy * vy;
-        // A zero-length segment makes the parametric solve 0/0. Facing a wall is that case.
+        // A zero-length segment makes the parametric solve 0/0; it can occur when the first beam sample hits a wall.
         if (a < 1e-9 && c < 1e-9) {
           const ddx = ax - cx, ddy = ay - cy;
           return ddx * ddx + ddy * ddy;
@@ -662,7 +662,7 @@ function activateHackware(player) {
       break;
     }
     case 'SHIELD_BUBBLE': {
-      // takeDamage drains this pool before one-shot shields. Inverting that makes the bubble useless beside a ready one-shot.
+      // takeDamage drains this pool before one-shot shields, preserving ready shield charges until the pool is exhausted.
       // Recast while a bubble is up refunds the cooldown so a misclick cannot refresh a partial pool.
       if (player.bubbleHp > 0 && player.bubbleTimer > 0) {
         player.hackwareCooldown = 0;
@@ -719,7 +719,7 @@ function updateHackwareEffects(dt) {
       for (const e of enemies) {
         if (e.dead) continue;
         if (e._disguised) continue; // don't home toward disguised mimics
-        if (e._wrPhased) continue; // can't target phased WRAITHs
+        if (e._wrPhased) continue; // can't target phased WRAITHs or TUNNELLERs
         const d = dist(fx.x, fx.y, e.x, e.y);
         if (d < bestD && map && hasLOS(fx.x, fx.y, e.x, e.y, map)) { best = e; bestD = d; }
       }
@@ -781,7 +781,7 @@ function updateHackwareEffects(dt) {
       for (const e of enemies) {
         if (e.dead || e.isBoss) continue;
         if (e._disguised) continue; // don't pull disguised mimics
-        if (e._wrPhased) continue; // can't pull phased WRAITHs
+        if (e._wrPhased) continue; // can't pull phased WRAITHs or TUNNELLERs
         const d = dist(e.x, e.y, fx.x, fx.y);
         if (d < fx.radius && d > 0.3 && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
           e.moveToward(fx.x, fx.y, pullStr, dt, map);
@@ -911,12 +911,12 @@ function updateHackwareEffects(dt) {
     if (fx.type === 'time_field') {
       for (const e of enemies) {
         if (e.dead) continue;
-        // A slow with no damage would reveal a disguised mimic. Static field does not need this skip because it also damages.
+        // Skip disguised mimics because this field deals no damage; Static Field reveals them through takeDamage.
         if (e._disguised) continue;
         if (e._wrPhased) continue;
         const d = dist(e.x, e.y, fx.x, fx.y);
         if (d < fx.radius && map && hasLOS(e.x, e.y, fx.x, fx.y, map)) {
-          // 0.3s refresh so the slow lingers past the edge. Boss factor is weaker so stacked fields cannot lock a boss.
+          // 0.3s refresh lets the slow linger after leaving the field. Bosses use 0.6 instead of 0.35.
           e.slowTimer = Math.max(e.slowTimer || 0, 0.3);
           e.slowFactor = Math.min(e.slowFactor || 1, e.isBoss ? 0.6 : 0.35);
         }
@@ -1164,7 +1164,7 @@ function drawHackwareEffects(camX, camY) {
       // Arms rotate slower than other hackware rings so the field reads as stretched time, not a pulse.
       const sx = fx.x * TILE - camX, sy = fx.y * TILE - camY;
       const r = fx.radius * TILE;
-      // Fade in and out so enemies do not snap from slowed to full speed at the boundary.
+      // Fade the ring in over 0.2s and out over its final 0.5s.
       const fadeIn = Math.min(1, fx.age / 0.2);
       const fadeOut = Math.min(1, (fx.maxAge - fx.age) / 0.5);
       const fade = Math.max(0, Math.min(fadeIn, fadeOut));

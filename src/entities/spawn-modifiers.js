@@ -12,8 +12,8 @@ function scaleEnemySpawnHpForModifier(hp, modifier, isBoss) {
   if (isBoss) return hp;
   if (modifier === 'SWARM')     return Math.round(hp * 0.6);
   if (modifier === 'FORTIFIED') return Math.round(hp * 1.4);
-  // HP only. Player damage is 1.3x in player.takeDamage. Bosses stay exempt:
-  // their HP-ratio phases are tuned tight (src/entities/enemy-stats.js).
+  // FRAGILE scales non-boss HP only. Player.takeDamage multiplies non-ignored
+  // incoming damage by 1.3; bosses are exempt here.
   if (modifier === 'FRAGILE')   return Math.round(hp * 0.55);
   return hp;
 }

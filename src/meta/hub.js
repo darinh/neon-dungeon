@@ -672,13 +672,13 @@
         if (typeof game.loadFloor === 'function') game.loadFloor(next);
       }, 'PLAYING');
     } else {
-      // Node tests have no fadeTo. Advance floor and state directly.
+      // Hosts without fadeTo, including the unit-test fake, advance floor and state directly.
       game.floor = next;
       game.state = 'PLAYING';
     }
   }
 
-  // Browser uses global jp/km. Node tests inject game._hubInput.
+  // Browser runtime uses global jp/km; focused unit tests can inject game._hubInput.
   /** @param {any} game @param {number} dt */
   function updateHub(game, dt) {
     const hub = game && game.hub;
@@ -754,8 +754,8 @@
     const rowX = Math.floor((W_ - (tw * n + gap * (n - 1))) / 2);
     let descendBtn = null;
     if (isTouch) {
-      // Floor wins over the on-screen ceiling: a short viewport keeps the
-      // button tappable even if it sits partly off the bottom.
+      // Floor wins over the on-screen ceiling so the button stays below the
+      // terminal row, even when that pushes it partly off the bottom.
       const bw = Math.min(260, W_ - 80);
       const bh = 56;
       const bx = Math.floor((W_ - bw) / 2);
@@ -799,8 +799,8 @@
     const n = hub.terminals.length;
     const isTouch = (typeof isTouchDevice === 'function') ? isTouchDevice() : false;
     const { rowX, rowY, tw, th, gap, descendBtn } = _layoutHub(W_, H_, n, isTouch);
-    // Cards before descend. On a short viewport the button overlaps the row,
-    // and a card tap must win; descend is a second tap.
+    // Cards are checked before descend, so a card wins if their hit regions
+    // overlap and descending requires a separate tap.
     const pad = 8;
     if (cy >= rowY - pad && cy <= rowY + th + pad) {
       for (let i = 0; i < n; i++) {
@@ -819,8 +819,9 @@
     return null;
   }
 
-  // True means the tap was inside the panel and consumed. False is outside,
-  // including when no panel is open — the caller closes on that.
+  // True means the tap was inside the open panel and consumed. False means no
+  // panel is open or the tap was outside; the touch router forwards outside
+  // taps so updateHub closes the panel.
   /** @param {any} game @param {number} cx @param {number} cy */
   function hitTestActivePanel(game, cx, cy) {
     const hub = game && game.hub;
@@ -982,7 +983,7 @@
     drawHub: drawHubWithAnnotations,
     hitTestHub,
     hitTestActivePanel,
-    // Tests and sibling modules call this; drawHub is not the only caller.
+    // Exported so tests can exercise panel behavior without entering the hub.
     buildTerminals,
   };
 }));

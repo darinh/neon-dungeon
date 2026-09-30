@@ -1,5 +1,5 @@
 // @ts-check
-// save.js owns addCores/spendCores; this file owns in-world drops, pull, and floor-transition vacuum.
+// save.js owns addCores/spendCores; this file owns in-world drops, pull, and transition collection.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).cores = factory();
@@ -9,11 +9,11 @@
   // Tile radius. Inside PICKUP_RADIUS the drop is collected instead.
   const MAGNET_RADIUS = 2.0;
   const PICKUP_RADIUS = 0.7;
-  // Tiles per second at the magnet edge.
+  // Maximum pull speed in tiles per second; vacuumed drops use it directly.
   const MAGNET_MAX_SPEED = 10.0;
   // Seconds.
   const PULSE_DURATION = 0.5;
-  // Seconds. Floor-clear vacuum uses this age so stragglers do not linger.
+  // Seconds.
   const VACUUM_FADE = 0.3;
 
   /** @param {any} game */
@@ -22,7 +22,7 @@
     return game.coreDrops;
   }
 
-  // Drops are not serialised; they vacuum on descent.
+  // Drops are not serialised; descent credits any remainder before loading the next floor.
   /** @param {number} x @param {number} y @param {number} value */
   function _makeDrop(x, y, value) {
     return {
@@ -58,7 +58,7 @@
     if (addCoresFn) {
       const newTotal = addCoresFn(drop.value);
       // Cache the post-pickup wallet count so HUD renders without reading
-      // localStorage every frame. Nothing else writes this field.
+      // localStorage every frame. startGame and continueGame seed this field; forceCollectAll also updates it.
       if (typeof newTotal === 'number') game._cachedCores = newTotal;
     }
     pulseHud(game);
@@ -158,7 +158,7 @@
   /** @param {any} game */
   function clearCoreDrops(game) { if (game) game.coreDrops = []; }
 
-  // game.descend() sets _vacuum so the fade can sweep drops in.
+  // Marks every drop for radius-independent pull; current descent uses forceCollectAll().
   /** @param {any} game */
   function vacuumAllCores(game) {
     const drops = game && game.coreDrops;
@@ -167,7 +167,7 @@
     return drops.length;
   }
 
-  // Floor transition before pull finishes: credit remaining drops with no fx.
+  // Descent and endRun credit every remaining drop with no per-drop fx.
   /** @param {any} game @param {any} [deps] */
   function forceCollectAll(game, deps) {
     const drops = game && game.coreDrops;

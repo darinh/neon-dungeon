@@ -32,7 +32,7 @@ Player.prototype.gainXP = function gainXP(amount) {
     }
     if (this.level === 10) grantCapstone(this);
   }
-  // After the loop so stacked XP chips resolve before the perk UI opens.
+  // After the loop so one XP award queues every crossed perk level before the first perk UI opens.
   if (_EG.pendingPerkChoices.length && _EG.state === 'PLAYING') {
     _EG.openNextPerkChoice();
   }

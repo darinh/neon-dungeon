@@ -28,7 +28,7 @@ function updateLighting(dungeon, px, py) {
   if (sensorMult > 8) sensorMult = 8;
   const r = Math.max(1, Math.round(baseR * sensorMult));
   const tx = Math.floor(px), ty = Math.floor(py);
-  // Same tile, modifier, and sensor: the previous light/visible grids are still valid.
+  // Same tile, modifier, and sensor: reuse cached grids; sconce brightness updates on the next invalidation.
   if (!dungeon._fovDirty &&
       dungeon._fovTx === tx && dungeon._fovTy === ty &&
       dungeon._fovMod === mod &&
@@ -74,7 +74,7 @@ function updateLighting(dungeon, px, py) {
   }
 }
 
-// Unlike hasLOS: uses isSeeThrough and blocks diagonal corner-cuts.
+// Uncached tile-target LOS for FOV; like hasLOS, it uses isSeeThrough and blocks diagonal corner-cuts.
 /**
  * @param {any} x1
  * @param {any} y1

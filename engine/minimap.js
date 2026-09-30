@@ -1,8 +1,8 @@
 // @ts-check
 'use strict';
-// No tile types or palette here — the host owns colour. createOffscreenMinimap
-// allocates once; fitExpandedMinimap allocates only while the toggle is held.
-// sx/sy are pixels per cell (mw/mapW), not cells per pixel.
+// No tile types or palette here — the host owns colour. The host caches the
+// offscreen canvas per floor (loadFloor drops it) and recreates it when its size changes; fitExpandedMinimap
+// returns a fresh layout on expanded-map frames. sx/sy are pixels per cell, not cells per pixel.
 
 (function (root, factory) {
   const v = factory();
@@ -17,7 +17,7 @@
   'use strict';
 
   /**
-   * Returns null when there is no DOM. Callers must check.
+   * Returns null without a DOM; non-browser callers must handle it, while the browser runtime assumes document exists.
    *
    * @param {number} width
    * @param {number} height

@@ -14,7 +14,7 @@ Enemy.prototype.aiTeleporter = function aiTeleporter(dt, player, map, d, los) {
   if (this._materialize > 0) this._materialize -= dt;
   if (this._warpFade > 0) this._warpFade -= dt * 1.5;
 
-  // Emergency blink if player gets close (skip if just teleported or player cloaked)
+  // Emergency blink when the perceived target is close and >0.8s remains; skip while materializing or untargetable.
   if (d < 2 && this._canTarget() && this.teleportTimer > 0.8 && this._materialize <= 0) this.teleportTimer = 0;
 
   if (this.teleportTimer <= 0 && this.room) {

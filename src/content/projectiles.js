@@ -2,7 +2,7 @@
 'use strict';
 
 // Loaded before src/content.js so coordinators keep these script-tag globals.
-// projectiles[] is live only; _projPool is the free list. new Projectile returns a pooled object instead of this. _init must assign every field so a reuse cannot bleed.
+// projectiles[] is live only; _projPool is the free list. When available, new Projectile returns a pooled object instead of this; _init must reset every field before reuse.
 const PROJECTILE_CAP = 200;
 /** @type {any[]} */ const projectiles = [];
 /** @type {any[]} */ const _projPool = [];
@@ -140,7 +140,7 @@ class Projectile {
     if (this.homing && !this.homing.dead) {
       const [tx, ty] = [this.homing.x - this.x, this.homing.y - this.y];
       const [nd, ndy] = norm(tx, ty);
-      const steer = 8; // radians/sec turn rate
+      const steer = 8; // steering blend rate (1/sec)
       this.dx = lerp(this.dx, nd,  Math.min(1, steer * dt));
       this.dy = lerp(this.dy, ndy, Math.min(1, steer * dt));
       const [fd, fdy] = norm(this.dx, this.dy);
@@ -314,7 +314,7 @@ class Projectile {
             return;
           }
           if (e.blocksProjectile(this) && !this.piercing) {
-            // SHIELDER: deplete shieldHp and start shieldBrokenTimer at 0. aiShielder restores it after 5s.
+            // SHIELDER: deplete shieldHp and start shieldBrokenTimer at 0. aiShielder restores it after 5 unstunned update seconds.
             if (e.type === 'SHIELDER' && e.shieldHp > 0) {
               e.shieldHp -= this.dmg;
               if (e.shieldHp <= 0) {
@@ -341,7 +341,7 @@ class Projectile {
       }
     } else if (!this.isGrenade && !this.isAllyTurret) {
       // Grenades create zones instead of hitting the player here.
-      // PARRY reflects only while dashTimer > 0, not during cloak or spawn-grace.
+      // PARRY reflects only while dashTimer > 0; cloak or spawn-grace alone do not trigger it.
       if (player.perks.PARRY && player.dashTimer > 0 && dist(this.x,this.y,player.x,player.y)<0.5) {
         this.dx = -this.dx;
         this.dy = -this.dy;
@@ -469,7 +469,7 @@ class Projectile {
         if (e._wrPhased) continue; // phased WRAITHs are intangible
         if (dist(this.x, this.y, e.x, e.y) < 0.6) {
           if (e.blocksProjectile(this) && !this.piercing) {
-            // Same shield break as player shots. No shieldBreak sound: hacked turrets keep the quiet deflect.
+            // Same shield break as player shots. Breaks play shieldBreak; ordinary hacked-turret deflects stay quiet.
             if (e.type === 'SHIELDER' && e.shieldHp > 0) {
               e.shieldHp -= this.dmg;
               if (e.shieldHp <= 0) {

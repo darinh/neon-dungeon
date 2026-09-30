@@ -77,10 +77,10 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       }
     }
     else if (eff === 'recoil') {
-      // Per-enemy ICD so rapid fire cannot perma-shove. Skip bosses (arenas assume
-      // pinned positions, same as SHOCK_PULSE / KNOCK_PULSE), disguised mimics
-      // (displacement leaks the ambush), and phased mobs (survives a damage path
-      // that skips the projectile/melee prefilters).
+      // Per-enemy ICD so rapid fire cannot perma-shove. Skip bosses to keep
+      // arena positions pinned (triggerShockPulse makes the same boss carve-out),
+      // disguised mimics because displacement leaks the ambush, and phased mobs
+      // if a damage path skipped its normal prefilters.
       if (enemy.isBoss) continue;
       if (enemy._disguised) continue;
       if (enemy._wrPhased) continue;
@@ -94,7 +94,7 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       let nxv, nyv;
       if (d0 > 0.0001) { nxv = dx0 / d0; nyv = dy0 / d0; }
       else { nxv = 1; nyv = 0; }
-      // Swept, not single-snap, so the push slides along walls. Mirrors triggerShockPulse; single-snap is unsafe above 1 tile.
+      // Move in 0.1-tile steps so the enemy can slide along an unblocked axis; this mirrors triggerShockPulse's wall handling.
       const KNOCK = 0.4;
       const STEP = 0.1;
       const steps = Math.ceil(KNOCK / STEP);
@@ -119,7 +119,7 @@ function applyHitEffects(enemy, actualDmg, hitCtx) {
       spawnParticles(enemy.x, enemy.y, 'SPARK', '#ffaa66', 4);
     }
     else if (eff === 'stagger') {
-      // Unlike FROST (flat refresh, no ICD), this is a short burst whose ICD ticks in Enemy.update. Skip phased mobs so a damage path that skips prefilters cannot stutter an intangible mob.
+      // Unlike FROST (flat refresh, no ICD), this is a short burst whose ICD ticks in tickEnemyStatusEffects before Enemy.update. Skip phased mobs so a damage path that skips prefilters cannot stutter an intangible mob.
       if (enemy._wrPhased) continue;
       const icd = enemy._staggerICD || 0;
       if (icd > 0) continue;

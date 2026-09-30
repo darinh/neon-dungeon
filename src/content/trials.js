@@ -37,7 +37,7 @@
   const PEER_SPEED = 2.2;          // tiles/sec while escorted
   const PEER_ESCORT_RADIUS = 4.5;  // peer advances only while the agent is this close
   const PEER_TALK_RADIUS = 1.6;
-  const PEER_STUCK_SECONDS = 6;    // moving without progress this long -> snap to next node
+  const PEER_STUCK_SECONDS = 6;    // approach timeout per path node; then snap to it
   const RELAY_SYNC_WINDOW = 10;    // seconds console B stays held per attempt
   const RELAY_RESYNC_DELAY = 2.5;  // pause before the peer re-arms after a missed window
 
@@ -407,8 +407,8 @@
   /**
    * After populateFloor on a FRESH floor: move any enemy that spawned inside
    * the sealed vault out to the room's walkable centre (it stays registered to
-   * the same room, so room-clear bookkeeping stays exact) and drop stray
-   * pickups there. The vault's own loot spawns only on breach (updateSeam),
+   * the same room, so room-clear bookkeeping stays exact) and remove stray
+   * pickups from the sealed cell. The vault's own loot spawns only on breach (updateSeam),
    * so magnets and pickup radius cannot pull it through the wall.
    * @param {any} gm
    * @param {any} deps
@@ -534,8 +534,9 @@
     // the relay must never swallow Interact meant for an entrance.
     const doorNear = !!(deps.doorAdjacent && deps.doorAdjacent(tx, ty));
     const use = interact && !doorNear;
-    // The relay is a room-local encounter: outside the room it neither ticks
-    // its sync timers nor writes hints/messages (no floor-wide spam).
+    // Holding and resync timers pause outside the room, and the escort stay-close
+    // hint shows only inside it. The waiting talk prompt and escort stepping are
+    // gated by distance to the peer instead, so no relay hint spams floor-wide.
     const inside = playerInRoom(room, p);
 
     if (tr.phase === 'waiting') {
@@ -599,8 +600,8 @@
   }
 
   /**
-   * Advance the escorted peer toward console B. The path is transient (not
-   * canonical) and recomputed when missing, e.g. after a save/resume.
+   * Advance the escorted peer toward console B. Its cached path is recomputed
+   * whenever missing.
    * @param {any} tr
    * @param {number} dt
    * @param {any} deps

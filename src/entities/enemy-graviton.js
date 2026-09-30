@@ -29,7 +29,7 @@ Enemy.prototype.aiGraviton = function aiGraviton(dt, player, map, d, los) {
     if (!moved) this.patrol(dt, map);
   } else if (los && d <= 10) {
     this.state = 'ATTACK';
-    // Gravitational: ignores cloak.
+    // Deployment requires a visible target; an existing well keeps pulling through cloak.
     if (this._gvDeployTimer <= 0 && d > 3) {
       const ox = (rand('combat') - 0.5) * 2;
       const oy = (rand('combat') - 0.5) * 2;

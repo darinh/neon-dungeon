@@ -32,7 +32,7 @@ Enemy.prototype.aiPulser = function aiPulser(dt, player, map, d, los) {
   }
 
   if (this._plState === 'charging') {
-    // _canTarget is false while cloaked.
+    // Without an active taunt, _canTarget is false while the player is cloaked.
     if (!los || !this._canTarget() || d > chargeRange + 2) {
       this._plState = 'idle';
       this._plCooldown = 0.8;

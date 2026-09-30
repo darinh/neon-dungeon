@@ -19,7 +19,7 @@ const _particleSystem = _particles.createSystem({
  * @param {any} count
  */
 function spawnParticles(wx, wy, type, colour, count) {
-  // Under extreme stacking, scaleBurst halves new bursts to protect the frame budget.
+  // Under extreme stacking, scaleBurst halves new bursts with a floor of one to protect the frame budget.
   count = _particleSystem.scaleBurst(count);
   // REDUCED MOTION halves bursts. Floor at 1: a MUZZLE of 0 would hide the shot tell.
   if (settings.reducedMotion) count = Math.max(1, Math.floor(count * 0.5));
@@ -136,7 +136,7 @@ function updateAmbient(dt) {
       if (!dungeon.visited[ty][tx]) continue;
       if (dungeon.secretMask[ty][tx]) continue;
       const tile = dungeon.map[ty][tx];
-      // Distance, not the light grid: light never decays, so it is not the live torch.
+      // Bound ambient emitters by torch radius, independent of the cached light grid.
       const ddx = tx - ptx, ddy = ty - pty;
       if (ddx * ddx + ddy * ddy > torchR * torchR) continue;
 

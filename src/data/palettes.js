@@ -15,7 +15,7 @@
 
   // Keys stay cyan/rust/glitch/sky/green: render.js falls back to
   // BIOME_PALETTES.cyan and AREAS[i].palette names them verbatim.
-  // cyan training sim, rust calibration lab, glitch evaluation complex,
+  // cyan neon dungeon render, rust calibration lab, glitch evaluation complex,
   // sky synthetic wilds, green open-net mirage.
   const BIOME_PALETTES = {
     cyan: {

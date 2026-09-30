@@ -2,7 +2,8 @@
 'use strict';
 
 // Loaded before src/content.js so game and runtime callers keep these script-tag globals.
-// _CG proxies `game` because generation writes runtime props that are not on the typed shape in src/game.js. Same pattern as src/render.js and src/platform.js.
+// _CG is `game` typed as any, for runtime props the game type does not declare; the proxy reads `game` on each access.
+// src/game.js and other content files use it; this file does not.
 /** @type {any} */
 const _CG = new Proxy({}, {
   get: (_t, p) => /** @type {any} */ (game)[p],
@@ -86,7 +87,8 @@ function generateFloor(floorNum, opts) {
   const map = bsp.map;
   const rooms = bsp.rooms;
 
-  // Maximize BFS depth so the exit is far from spawn.
+  // Among sampled rooms, choose the default spawn whose BFS reaches the greatest depth. Without a descent spawn,
+  // the stairs go in the room deepest from it, so the exit lands far away.
   let spawnRoom = rooms[0];
   if (rooms.length > 3) {
     const candidates = [];
@@ -219,7 +221,7 @@ function generateFloor(floorNum, opts) {
     map[farthest.cy][farthest.cx] = T.STAIRS;
   }
 
-  // Boss rooms are the biome-final floors: 3, 6, 9, 12, 15.
+  // With biome data loaded, boss rooms use biome-final floors; the fallback is 3, 6, and 10.
   /** @type {any} */ let bossRoom = null;
   /** @type {any[]} */ const bossEntrances = [];
   if (_isBossFloor) {
@@ -263,7 +265,7 @@ function generateFloor(floorNum, opts) {
           bossRoom.x = nx; bossRoom.y = ny; bossRoom.w = bossRect.w; bossRoom.h = bossRect.h;
           bossRoom.cx = Math.floor(nx + bossRect.w/2); bossRoom.cy = Math.floor(ny + bossRect.h/2);
           carveRect(map, nx, ny, bossRect.w, bossRect.h, T.FLOOR);
-        // Re-carve neighbour links, but never through the mainframe.
+        // Re-carve links from nearby non-mainframe rooms to the expanded boss room.
         for (const r of rooms) {
           if (r === bossRoom || r.roomType === 'mainframe') continue;
           const dx = Math.abs(r.cx - bossRoom.cx), dy = Math.abs(r.cy - bossRoom.cy);
@@ -295,7 +297,7 @@ function generateFloor(floorNum, opts) {
       isOpenBossEntranceTile,
       isInsideAnotherRoom
     );
-    // If every opening touches another room, still record one so the arena can lock. Losing lockout is worse than a wall poking into the neighbour.
+    // If filtering removes every opening, keep all unfiltered openings so the arena can lock; sealing them may put a wall inside a neighbouring room.
     const _scanUnfiltered = () => dungeonTopology.findRoomBoundaryOpenings(map, bossRoom, isOpenBossEntranceTile);
     const filtered = _scanFiltered();
     const chosen = filtered.length > 0 ? filtered : _scanUnfiltered();
@@ -1100,7 +1102,7 @@ function generateFloor(floorNum, opts) {
       const crackedCluster = /** @type {any} */ (narrow[rndInt(0, narrow.length - 1)]);
       for (const e of crackedCluster) map[e.y][e.x] = T.CRACKED;
 
-      // pickWhisperForFloor returns null when this biome has no unread whisper. Catch a missing meta module so Node tests of generateFloor still run.
+      // pickWhisperForFloor may return null when no unread whisper matches. Missing or failing optional meta modules must not break isolated generation tests.
       try {
         if (typeof NEON !== 'undefined' && NEON.whispers && NEON.whispers.pickWhisperForFloor) {
           const w = NEON.whispers.pickWhisperForFloor(floorNum, () => rand('event'));
@@ -1108,7 +1110,7 @@ function generateFloor(floorNum, opts) {
             whisperItems.push({ x: r.cx + 0.5, y: r.cy + 0.5, whisperId: w.id });
           }
         }
-      } catch (_) { /* gen-time meta unavailable; skip whisper this floor */ }
+      } catch (_) { /* optional whisper lookup failed; skip this floor */ }
 
       break; // only one secret room per floor
     }

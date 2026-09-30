@@ -12,7 +12,7 @@
     ? require('../../engine/biomes.js')
     : (/** @type {any} */ (globalThis)).NEON.biomesEngine;
 
-  // id and palette are save, test, and archive-log keys. Do not rename them.
+  // id keys lore and alarm metadata; palette keys BIOME_PALETTES. Tests pin both names.
   const AREAS = [
     {
       id: 'sandbox',

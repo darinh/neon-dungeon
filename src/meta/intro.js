@@ -80,7 +80,7 @@
         const m = save.loadMeta();
         if (m) { m.introSeen = true; save.saveMeta(m); }
       }
-    } catch (_) { /* Node tests have no storage */ }
+    } catch (_) { /* defensive: a missing or stubbed NEON.save must not break the intro; save.js already no-ops without storage */ }
   }
 
   // alpha and flash are computed by the engine; this only paints.

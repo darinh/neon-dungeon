@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Loaded before src/content.js so item and shop generation keep these globals.
+// Loaded before later content, entity, render, and game scripts so weapon generation and UI can use these globals.
 /** @type {Record<string, any>} */
 const WEAPONS = {
   PULSE_PISTOL: { name:'Pulse Pistol', dmg:15, rate:3,   range:10, spread:0,   count:1, colour:'#00f5ff' },
@@ -65,7 +65,7 @@ function rollEliteAffix(enemyType) {
   const eligible = ELITE_AFFIX_KEYS.filter(k => {
     if (k === 'PHASING' && enemyType === 'PHANTOM') return false; // already phases
     if (k === 'VOLATILE' && enemyType === 'SEEKER') return false; // seeker already explodes
-    // SHIELDER shares shieldHp. SHIELDED regen would restore it inside the 5s broken window and skip shieldBrokenTimer.
+    // SHIELDER shares shieldHp. SHIELDED regen would refill it during the 5s broken window, making the shield active before shieldBrokenTimer restores it.
     if (k === 'SHIELDED' && enemyType === 'SHIELDER') return false;
     return true;
   });

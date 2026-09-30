@@ -1,7 +1,8 @@
 // @ts-check
 'use strict';
 // parseSafeAreaInsets divides CSS px by scale to get logical px.
-// W/H from computeLogicalSize are logical px; compact is W <= 600 in that space.
+// W/H from computeLogicalSize are logical px before worldZoom; platform.js divides them by worldZoom before
+// computeLayout, so compact (H > W && W <= 600) is judged on the zoomed size.
 (function (root, factory) {
   const v = factory();
   if (typeof module === 'object' && module.exports) {

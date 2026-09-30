@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-// Loaded after src/entities.js so it can use shared actor arrays, trap damage, and the globals generation, projectiles, and game call.
+// Loaded after src/entities.js and the AoE helpers so it can use shared actor arrays and damage helpers; render.js, content/projectiles.js, and game.js call the globals it publishes.
 /**
  * @param {any} [x]
  * @param {any} [y]

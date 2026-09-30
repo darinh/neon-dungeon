@@ -1,6 +1,6 @@
 // @ts-check
 // Reads LOGS from src/data/logs.js and logsFound/logsRead from src/meta/save.js.
-// Callers: the rare-terminal drop (content.js) and the ARCHIVE hub panel (hub.js).
+// Callers: the rare-terminal drop (src/content/events.js) and the ARCHIVE hub panel (src/meta/hub.js).
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else (/** @type {any} */ (root.NEON = root.NEON || {})).logs = factory();
@@ -45,7 +45,7 @@
     return _data().filter((/** @type {any} */ l) => l.biomeId === biomeId);
   }
 
-  // `rand` is an injectable 0..1 generator for tests; defaults to Math.random.
+  // `rand` accepts an injected 0..1 generator for seeded runtime rolls and tests; otherwise Math.random is used.
   /** @param {number} floor @param {() => number} [rand] */
   function pickLogForFloor(floor, rand) {
     const f = Math.floor(Number(floor));
@@ -76,7 +76,7 @@
   }
 
   // markLogRead also records the log as found. Returns the log even if it was
-  // already read; null only when the id is unknown.
+  // already read; returns null if the id is unknown or the save module is unavailable.
   /** @param {string} id */
   function readLog(id) {
     const log = logById(id);
