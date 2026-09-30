@@ -239,6 +239,9 @@ directive comment (`@ts-check`, `@ts-nocheck`, `@ts-ignore`, `@ts-expect-error`,
 `require('typescript').transpileModule(text, { compilerOptions: { removeComments: true, target: 99 } }).outputText`
 is byte-identical before and after. `.d.ts` changes, JSDoc type changes, and
 directive changes are source changes: transpiling erases them.
+`node tests/_comment-only.js [base-ref]` checks all of this for every file
+changed since the base ref (default `origin/develop`), lists each file's
+verdict, and exits nonzero if any file fails.
 
 For extraction work, finish a self-check before launching reviewers:
 each moved public/prototype method needs at least one behavioral side-effect
