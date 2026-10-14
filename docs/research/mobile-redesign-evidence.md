@@ -23,9 +23,18 @@ ground comparisons — not to audit the implementation.
 
 Every claim below is tagged:
 
-- **[REQUIREMENT]** — a normative platform/accessibility spec (WCAG, Xbox
-  Accessibility Guidelines certification criteria). Binding where it applies;
-  not automatically proof of fun or playability.
+- **[REQUIREMENT]** — normative wording *within that standard's or platform's
+  own conformance/certification scope* (WCAG conformance, or Xbox's XAG
+  certification program for titles seeking Xbox accessibility certification).
+  This project has not stated it is pursuing WCAG conformance or Xbox
+  certification, so a **[REQUIREMENT]** tag here means "mandatory if you claim
+  conformance to that specific standard/program," not "mandatory for this
+  project." Imperative wording in a source (e.g., XAG's "must"/"not fine to
+  require") does not, by itself, make that wording binding on this project —
+  it becomes a requirement here only if the project explicitly adopts that
+  standard or program. Treat every **[REQUIREMENT]** item as *sourced,
+  scoped, optional-to-adopt guidance* unless a separate decision says
+  otherwise.
 - **[EMPIRICAL]** — a measured/observed finding from a named study or field
   observation.
 - **[CONVENTION]** — expert consensus, heuristic, or widely repeated industry
@@ -38,6 +47,15 @@ None of the pixel/mm/dp figures below are claimed as universal cutoffs for
 certification programs, several explicitly built for discrete tap targets, not
 continuous-drag virtual sticks or fast-moving combat telegraphs. Where a source
 itself says its figures don't transfer to twitch gameplay, that caveat is kept.
+
+**Xbox Accessibility Guidelines (XAG) specifically**: XAG is Microsoft's own
+accessibility program for games seeking Xbox/Microsoft accessibility
+certification. Its "must"/"not fine to require" language is normative *for
+that certification program*, not a universal law or an automatic obligation
+for a web game that isn't pursuing Xbox certification. XAG citations below are
+tagged **[PLATFORM GUIDANCE — Xbox certification scope]** rather than a bare
+**[REQUIREMENT]**, and are included because they are a well-documented,
+concrete reference point, not because this project has adopted them.
 
 ---
 
@@ -89,7 +107,7 @@ Per `docs/spec.md` and `src/game.js` at the branch base commit:
   Design accessibility guidance.
   https://support.google.com/accessibility/android/answer/7101858?hl=en —
   Google (undated help article).
-- **[REQUIREMENT, game-certification-specific]** Xbox Accessibility Guidelines
+- **[PLATFORM GUIDANCE — Xbox certification scope]** Xbox Accessibility Guidelines
   (XAG) v3.2, "XAG 107: Input," gives separate mobile and tablet figures:
   mobile **15mm × 15mm** (59px @100dpi / 118px @200dpi / 236px @400dpi);
   tablet **24mm × 24mm**.
@@ -114,7 +132,8 @@ Per `docs/spec.md` and `src/game.js` at the branch base commit:
   also invokes Fitts's Law (smaller/farther targets take longer and are less
   accurate to reach). https://www.nngroup.com/articles/touch-target-size/ —
   NN/g, citing Parhi, Karlson & Bederson and the MIT Touch Lab.
-- **[REQUIREMENT]** Game Accessibility Guidelines, "Ensure interactive
+- **[CONVENTION — community guideline, no certification program behind it]**
+  Game Accessibility Guidelines, "Ensure interactive
   elements/virtual controls are large and well spaced": states "2.4cm has
   been found to be the ideal size for touch screens, but impractical for
   smaller phone screens, so 0.96cm is the recommendation for phones... use
@@ -163,15 +182,16 @@ playtest, not to adopt as-is):**
   and `/mobile-thumb-zones/` both 404 as of 2026-10-14). *[HYPOTHESIS]*: treat
   the colored heatmap diagrams as a design heuristic to test on real devices
   for this game's control layout, not as validated fact.
-- **[REQUIREMENT, motor accessibility]** Game Accessibility Guidelines, "Allow
+- **[CONVENTION — community guideline, no certification program behind it]**
+  Game Accessibility Guidelines, "Allow
   play in both landscape and portrait," gives a concrete accessibility
   rationale beyond preference: "Some mobile/tablet players have their devices
   mounted in a fixed position, such as on a wheelchair mount or bed frame, so
   are only able to play in a specific orientation."
   https://gameaccessibilityguidelines.com/allow-play-in-both-landscape-and-portrait/
-  — Game Accessibility Guidelines. This directly supports the map's existing
-  "full landscape also supported" requirement with an accessibility rationale,
-  independent of aesthetic preference.
+  — Game Accessibility Guidelines. This is a real accessibility rationale, not
+  a binding requirement on this project, and happens to align with the map's
+  existing "full landscape also supported" direction.
 
 **Candidate measurable criteria (provisional):**
 
@@ -217,15 +237,17 @@ things, not three names for the same number.
   for each input type." It is a **Working Draft** — the document's own status
   section says it is "inappropriate to cite... as other than a work in
   progress." https://www.w3.org/TR/pointerevents/ — W3C.
-- **Gap, explicitly flagged**: no reputable primary source was found
-  quantifying *latency or precision differences* between native touch APIs and
-  mobile-browser touch/pointer events for canvas games. This is discussed
-  informally in game-dev forums but has no authoritative benchmark behind it.
-  **[HYPOTHESIS]**: do not treat "browser touch has higher input latency than
-  native" as a sourced fact for planning; if input feel becomes a concern,
-  this needs its own measurement (e.g., high-speed camera or
-  `requestAnimationFrame` timestamp logging against raw touch timestamps),
-  not an assumption.
+- **Gap, explicitly flagged**: this research did not find a reputable primary
+  source quantifying *latency or precision differences* between native touch
+  APIs and mobile-browser touch/pointer events for canvas games, within the
+  public, non-paywalled search performed. It is discussed informally in
+  game-dev forums, but this brief did not locate an authoritative benchmark
+  behind that discussion. **[HYPOTHESIS]**: do not treat "browser touch has
+  higher input latency than native" as a sourced fact for planning on the
+  strength of this search; if input feel becomes a concern, this needs its
+  own measurement (e.g., high-speed camera or `requestAnimationFrame`
+  timestamp logging against raw touch timestamps), not an assumption, and a
+  further targeted search could still surface a source this pass missed.
 
 **Implication for the redesign (not a new finding, a consequence of the
 above):** any control-layout or hit-test spec written for this game should
@@ -250,7 +272,7 @@ skill's instruction not to fabricate authority where none exists.
   game. This is one developer's trial-and-error writeup, not a controlled
   study. https://www.gamedeveloper.com/design/everything-i-learned-about-dual-stick-shooter-controls
   — Game Developer/Gamasutra.
-- **[REQUIREMENT, accessibility-certification]** Xbox Accessibility Guidelines
+- **[PLATFORM GUIDANCE — Xbox certification scope]** Xbox Accessibility Guidelines
   v3.2, "XAG 107: Input" — directly bears on the manual-vs-assisted-vs-locked
   question: "It's fine to offer a primary input for your game. It's **not**
   fine to require it. Always provide alternate inputs with equivalent
@@ -261,13 +283,15 @@ skill's instruction not to fabricate authority where none exists.
   adjusting size, spacing, and position of all touch targets. Provide a range
   of pre-set layout options."
   https://devdocs.xbox.com/build/game-principles/accessibility/xag-deep-dives/xag-107-input
-  — Microsoft, v3.2 (2023-06-08). Verified by direct fetch. This reframes the
-  dual-stick-vs-single-stick question: XAG treats single-stick/assisted-aim
-  operability as an **accessibility requirement to offer alongside** manual
-  dual-stick, not as a replacement for it or a "casual mode" value judgment.
-  The project already has this shape (`aimAssist`/`lockAimToMove` as opt-in
-  toggles alongside manual dual-stick), which matches this pattern rather than
-  contradicting it.
+  — Microsoft, v3.2 (2023-06-08). Verified by direct fetch. Within Xbox's own
+  certification program, XAG treats single-stick/assisted-aim operability as
+  something to **offer alongside** manual dual-stick, not as a replacement for
+  it or a "casual mode" value judgment; this project is not pursuing Xbox
+  certification, so XAG 107 is cited here as well-documented, concrete
+  guidance to weigh, not as a rule this project is bound by. The project
+  already has this general shape (`aimAssist`/`lockAimToMove` as opt-in
+  toggles alongside manual dual-stick) — that is a pre-existing design choice
+  noted for context, not evidence that the choice was made to satisfy XAG.
 - **[CONVENTION]** Game Accessibility Guidelines, "Include an option to adjust
   the sensitivity of controls": "There is no one-size-fits-all sensitivity
   level... Allow players to set it at game level... This applies to all types
@@ -288,9 +312,9 @@ skill's instruction not to fabricate authority where none exists.
 
 | Scheme | Claimed upside (source quality) | Claimed cost (source quality) |
 |---|---|---|
-| Manual dual-stick | Full player expression/precision; matches genre convention — [CONVENTION], no controlled-study citation found | Two simultaneous thumb inputs; XAG explicitly flags "requiring two sticks" as an accessibility barrier — [REQUIREMENT] |
-| Movement-locked aim (existing `lockAimToMove`) | Frees a thumb/reduces simultaneous-input demand — inferred from XAG's single-stick operability goal [REQUIREMENT], not measured for this game | Couples facing to movement, which can't aim away from travel direction without further design (strafing, lock-on, etc.) — [HYPOTHESIS], untested here |
-| Assisted/auto-aim (existing `aimAssist`) | Lowers precision demand, matching XAG's "alternate input, equivalent functionality" goal [REQUIREMENT] | Can reduce perceived player agency/skill expression if poorly tuned — [CONVENTION]/[HYPOTHESIS], not measured for this game |
+| Manual dual-stick | Full player expression/precision; matches genre convention — [CONVENTION], no controlled-study citation found | Two simultaneous thumb inputs; XAG 107 flags "requiring two sticks" as a barrier *within Xbox's certification scope* — [PLATFORM GUIDANCE — Xbox certification scope], not this project's requirement |
+| Movement-locked aim (existing `lockAimToMove`) | Frees a thumb/reduces simultaneous-input demand — inferred from XAG's single-stick operability goal [PLATFORM GUIDANCE — Xbox certification scope], not measured for this game | Couples facing to movement, which can't aim away from travel direction without further design (strafing, lock-on, etc.) — [HYPOTHESIS], untested here |
+| Assisted/auto-aim (existing `aimAssist`) | Lowers precision demand, matching XAG's "alternate input, equivalent functionality" goal [PLATFORM GUIDANCE — Xbox certification scope] | Can reduce perceived player agency/skill expression if poorly tuned — [CONVENTION]/[HYPOTHESIS], not measured for this game |
 | Contextual actions (e.g., single context button vs. USE/HACK/DASH/BOMB separately) | Fewer simultaneous targets to hit under thumb occlusion — inferred from §1/§2 reachability sources, not measured directly | Can create ambiguity about which action will fire — [HYPOTHESIS] |
 
 All four options are already partially present in the codebase as toggles
@@ -302,7 +326,8 @@ of them — see "Outstanding decisions" below.
 
 ## 5. Accessibility specific to games (beyond input)
 
-- **[REQUIREMENT]** GAG, "Use an easily readable default font size": cites
+- **[CONVENTION — community guideline, no certification program behind it]**
+  GAG, "Use an easily readable default font size": cites
   "Amazon TV['s] 10-foot-UI guidelines... text size recommendations[] of 28px
   minimum when viewed on a 1080p screen... use 28px as a minimum rather than a
   target," and separately asserts (without its own inline citation) that small
@@ -312,7 +337,7 @@ of them — see "Outstanding decisions" below.
   treated as **[CONVENTION]**, not independently verified here.
   https://gameaccessibilityguidelines.com/use-an-easily-readable-default-font-size/
   — Game Accessibility Guidelines.
-- **[REQUIREMENT, game-certification]** XAG 101 "Text display" gives concrete,
+- **[PLATFORM GUIDANCE — Xbox certification scope]** XAG 101 "Text display" gives concrete,
   rigorously defined minimums for mobile: "100 DPI → 18px, 200 DPI → 36px, 400
   DPI → 72px" minimum default text body-height, with body-height explicitly
   defined as "the pixel distance from the lowest descender to the highest
@@ -325,7 +350,7 @@ of them — see "Outstanding decisions" below.
 - Apple HIG Dynamic Type figures (commonly cited 11pt floor / 17pt default
   body) have the same **not directly fetchable** caveat as §1 — corroborated
   by secondary sources only.
-- **[REQUIREMENT]** XAG 107 again: "Provide in-game sensitivity adjustment for
+- **[PLATFORM GUIDANCE — Xbox certification scope]** XAG 107 again: "Provide in-game sensitivity adjustment for
   each analog input individually... ±50% of the default" and mobile
   touch-target layout presets, both already summarized in §4.
 - **[gap]** XAG 102 "Contrast" (colorblind-safe readability) exists in the
@@ -351,14 +376,26 @@ of them — see "Outstanding decisions" below.
   scalable "up to 200%... without loss of content or functionality." This SC
   is written for general web UI text, not fast-moving game telegraphs.
   https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html — W3C WAI.
-- **[REQUIREMENT, and notably self-scoping]** WCAG 2.2 SC 1.4.10 *Reflow*
-  (AA) requires no two-dimensional scrolling at a 320 CSS px equivalent
-  viewport width, **except** "images required for understanding (such as maps
-  and diagrams)... and games" — WCAG itself explicitly exempts games from the
-  reflow mandate, which is a useful signal that general web-readability rules
-  are known by their own authors not to map cleanly onto a game canvas.
-  https://www.w3.org/WAI/WCAG22/Understanding/reflow.html — W3C WAI.
-- **[REQUIREMENT, game-specific]** XAG 101's concrete DPI-tiered minimums (see
+- **[REQUIREMENT, scoped]** WCAG 2.2 SC 1.4.10 *Reflow* (AA) requires no
+  two-dimensional scrolling at a 320 CSS px equivalent viewport width,
+  **except for "parts of the content which require two-dimensional layout for
+  usage or meaning."** The SC's own Note 2 lists examples of such content:
+  "images required for understanding (such as maps and diagrams), video,
+  **games**, presentations, data tables (not individual cells), and
+  interfaces where it is necessary to keep toolbars in view while
+  manipulating content." **Precise scope, corrected from an earlier overbroad
+  reading**: this is an exception for *parts of content that themselves
+  require 2D layout* (the game's real-time play canvas is a clear case), not
+  a blanket exemption for every screen a game shows — a game's settings
+  menu, text-heavy dialogue screen, or other section that does not itself
+  require 2D layout would not automatically inherit the exception merely for
+  being part of a game. Still useful as a signal that WCAG's own authors
+  recognize real-time play canvases as a different case from ordinary
+  reflowable text, but not a general "games are exempt from readability
+  rules" license.
+  https://www.w3.org/WAI/WCAG22/Understanding/reflow.html — W3C WAI. Verified
+  by direct fetch, including Note 2's exact wording.
+- **[PLATFORM GUIDANCE — Xbox certification scope]** XAG 101's concrete DPI-tiered minimums (see
   §5) are the most directly game-relevant sourced figures found for text size.
 - **Explicit, load-bearing caveat for this project**: none of the above
   sources address minimum legible size/contrast for **time-pressured, moving**
@@ -384,13 +421,16 @@ This is the weakest-sourced area overall — flagged explicitly, as anticipated.
   research but does not cite a single discrete controlled study inline — treat
   as expert consensus, not a specific measurement.
   https://www.nngroup.com/articles/modal-nonmodal-dialog/ — NN/g.
-- **No game-specific authoritative source was found** comparing diegetic vs.
-  non-diegetic interruption patterns for pausing real-time combat to present a
-  story-choice overlay. The commonly cited "diegetic/non-diegetic/meta/
-  spatial" HUD taxonomy appears in game-design blogs/talks, but no primary
-  authoritative source for that taxonomy, nor any source quantifying player
-  confusion/drop-off from combat-interrupting dialogue, was verified in this
-  pass. **[GAP, explicitly flagged]**.
+- **This research did not find a game-specific authoritative source**
+  comparing diegetic vs. non-diegetic interruption patterns for pausing
+  real-time combat to present a story-choice overlay, within the search
+  performed. The commonly cited "diegetic/non-diegetic/meta/ spatial" HUD
+  taxonomy appears in game-design blogs/talks, but this pass did not verify a
+  primary authoritative source for that taxonomy, nor find a source
+  quantifying player confusion/drop-off from combat-interrupting dialogue.
+  **[GAP, explicitly flagged]**: a further targeted search (e.g., published
+  game-UX research databases, academic HCI venues) could still surface
+  something this pass missed.
 - **Practical implication, not a citation**: any choice-overlay/interruption
   design for this game should be treated as informed by the general
   modal-interruption cost model above plus XAG's general "let the player
@@ -413,17 +453,17 @@ ticket) could test; none are decisions.
 2. **Manual vs. locked vs. assisted aim, same encounter**: run the same
    scripted encounter three times (toggle each existing setting), logging
    hit-rate, time-to-kill, and a post-session preference/confidence survey,
-   since no authoritative published comparison was found for this project's
-   genre and input context.
+   since this research did not find a published comparison for this
+   project's genre and input context.
 3. **Telegraph legibility under load**: present the same attack telegraph at
    candidate sizes/contrasts in low-threat and high-threat (busy-screen)
-   moments, measuring reaction success, since §6 explicitly found no
-   authoritative source for telegraph legibility under time pressure.
+   moments, measuring reaction success, since §6 found no source within the
+   search performed addressing telegraph legibility under time pressure.
 4. **Combat-interruption pacing for story choices**: compare a hard-pause
    modal choice overlay against a time-pressured or diegetic-in-world choice
    prompt, measuring task (choice) completion and self-reported
    disruption/immersion, since §7 found no game-specific authoritative source
-   to rely on instead.
+   within the search performed to rely on instead.
 
 ---
 
@@ -439,18 +479,24 @@ ticket) could test; none are decisions.
 - Material Design 3's own site (m3.material.io) has the same client-rendering
   problem; Google's official Android accessibility help page was used instead
   as an official (if not literally identical) substitute.
-- No GDC Vault talk on mobile twin-stick/auto-aim design was found freely
-  accessible; GDC Vault is largely paywalled/session-gated. Area 4 (control
-  scheme comparison) is therefore the weakest-sourced section and should not
-  be treated as settled by citation alone.
-- No authoritative benchmark was found for native-vs-mobile-browser touch
-  input latency/precision (§3) or for combat-telegraph legibility under time
-  pressure (§6) or for combat-interruption-overlay best practice (§7). All
-  three are explicit, load-bearing gaps, not oversights.
-- This brief distinguishes "general UI/accessibility requirement" from
-  "validated for fast-paced game combat" throughout; it does not assume
-  the former proves the latter. Every "candidate measurable criterion" above
-  is marked **provisional** and is meant to be tested, not adopted outright.
+- This research did not locate a GDC Vault talk on mobile twin-stick/auto-aim
+  design that was freely accessible; GDC Vault is largely
+  paywalled/session-gated and was not searched with paid/session access. Area
+  4 (control scheme comparison) is therefore the weakest-sourced section and
+  should not be treated as settled by citation alone.
+- This research did not find an authoritative benchmark for
+  native-vs-mobile-browser touch input latency/precision (§3), for
+  combat-telegraph legibility under time pressure (§6), or for
+  combat-interruption-overlay best practice (§7), within the public,
+  non-paywalled search performed. All three are explicit, load-bearing gaps
+  in this pass, not claims that no such evidence exists anywhere.
+- This brief distinguishes "general UI/accessibility requirement" (and, for
+  XAG specifically, "requirement within Xbox's own certification scope") from
+  "validated for fast-paced game combat" throughout; it does not assume either
+  one proves the other, and it does not treat a cited standard's normative
+  wording as automatically binding on this project. Every "candidate
+  measurable criterion" above is marked **provisional** and is meant to be
+  tested, not adopted outright.
 - This brief does not select a world/story direction, an area design, an
   encounter grammar, a replay/reward model, or a specific control scheme —
   those remain open decisions for other child tickets or the human.
