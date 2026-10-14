@@ -39,18 +39,36 @@ first, then read `README.md`, `docs/module-map.md`, and
   `.github/extensions/**` is ignored, force-add the intended project extension
   deliberately.
 
+## Design and planning work
+
+Design decisions for the mobile-first redesign are tracked as a Wayfinder map on
+GitHub Issues: [Wayfinding: Make NEON DUNGEON a compelling mobile-first adventure](https://github.com/darinh/neon-dungeon/issues/1084).
+Read the map and its closed tickets before proposing story, area, enemy,
+progression, control, or UI changes. A closed ticket's resolution comment is the
+decision; do not re-litigate it in a PR or reinvent it from the code.
+
+- Vocabulary comes from `GLOSSARY.md`. Use its terms (Iteration, Run, Act, Area,
+  Clue, Fork, Emotion sidechain) and avoid the words it lists under `_Avoid_`.
+  Add a term when a decision settles one; keep the file free of implementation
+  detail.
+- Planning is still worktree work. A planning-only change (a glossary, research
+  brief, or outline) is docs-only: no reviewers, and `npm run check` is not
+  required.
+- Research briefs live under `docs/research/` on a disposable `research/*`
+  branch that is pushed and linked from the ticket, with no PR.
+- Work a map ticket only after assigning it to yourself and confirming its
+  native blockers are closed. Human-in-the-loop tickets need the human's actual
+  answers; never answer for them. Record the outcome as a ticket comment, close
+  the ticket, and add one linked line to the map. Put question context in the
+  chat reply, not only in a form field.
+- Specs describe current behavior. Put intended redesign behavior in tickets or
+  `docs/research/`, and change `docs/spec.md` only when the behavior ships.
+
 ## Retrospectives
 
 - Run the checklist in `docs/agent-retrospective.md` once per milestone: each
   `develop` -> `main` promotion, or the end of a planned program phase. Do not
-  run one per PR.
-- Milestone retrospectives get critique from two reviewers on different model
-  families. They work from pasted evidence only and never enter the repository,
-  run git, or write files. Record adopted and rejected findings, and attach the
-  retrospective to the promotion PR, or to the phase's final PR when the phase
-  ends without a promotion.
-- A retrospective ends by asking whether the checklist should change. If it
-  should, edit it in the same milestone.
+  run one per PR. That file holds the reviewer and evidence rules.
 - Keep working while actionable backlog remains. For issue-backed work, run
   `npm run check:agent-continuity -- --issue <number>` before stopping; a nonzero
   exit means work remains. The same command checks that the operator guard
@@ -146,15 +164,12 @@ player-visible and browser-specific behavior in a real browser. Read its
 
 ## Type-safety status
 
-**Path A (chosen 2026-04-24)**: JSDoc + `// @ts-check` per file, strict eslint, no bundler, no file extension changes.
+**Path A (chosen 2026-04-24)**: JSDoc + `// @ts-check` per file, strict eslint, no bundler, no file extension changes. The tooling, lint cleanup, per-file checks and engine type surface are all done.
 
-**Phase 1 — Tooling baseline**: ✅ COMPLETE. `tsconfig.json`, `eslint.config.js`, npm scripts wired.
-
-**Phase 2 — Eslint cleanup**: ✅ COMPLETE. `npm run lint` exits 0 with zero warnings across `src/` and `tests/`.
-
-**Phase 3 — Per-file `// @ts-check`**: ✅ COMPLETE. Every file under `src/` and `engine/` is type-checked: `tsconfig.runtime.json` turns on `checkJs` there, so a missing or misplaced `// @ts-check` cannot drop a file from the check, and `npm run typecheck` exits 0. `sw.js` and `scripts/` are not type-checked yet. New `.js` files still start with `// @ts-check` — see "Type checking" below.
-
-**Phase 4 — Engine boundary**: ✅ COMPLETE for the type surface. `types/engine.d.ts`, `types/game.d.ts`, and `types/neon.d.ts` exist and are referenced by the typecheck; `docs/engine-boundary.md` is the human architecture reference for the same boundary. The deferred `p4-engine-extraction` design work (extracting the engine into its own package) is still open and tracked outside this file.
+- Every file under `src/` and `engine/` is type-checked: `tsconfig.runtime.json` turns on `checkJs` there, so a missing or misplaced `// @ts-check` cannot drop a file from the check. `sw.js` and `scripts/` are not type-checked yet.
+- `types/engine.d.ts`, `types/game.d.ts`, and `types/neon.d.ts` are part of the typecheck; `docs/engine-boundary.md` is the architecture reference for the same boundary.
+- Extracting the engine into its own package is open and tracked outside this file.
+- New `.js` files still start with `// @ts-check` — see "Type checking" below.
 
 ## Human handoff posture
 
