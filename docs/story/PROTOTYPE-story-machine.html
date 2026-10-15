@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE: NEON DUNGEON story machine</title>
+<style>
+  :root { --accent:#0ac; --bg:#12151a; --panel:#1b2028; --text:#e6e9ee; --dim:#8a94a3; --bad:#e55; --ok:#5c8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--text); padding:16px; max-width:900px; margin:auto; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; color:var(--accent); margin:0 0 8px; text-transform:uppercase; letter-spacing:.05em; }
+  .banner { background:#3a2a10; color:#fc8; padding:6px 10px; border-radius:6px; font-size:13px; margin-bottom:12px; }
+  .panel { background:var(--panel); border-radius:8px; padding:12px 14px; margin:12px 0; }
+  .dim { color:var(--dim); } .bad { color:var(--bad); } .ok { color:var(--ok); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; }
+  button { background:#232a35; color:var(--text); border:1px solid #384152; border-radius:6px; padding:10px 12px; font-size:15px; min-height:44px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); } button:disabled { opacity:.35; cursor:not-allowed; }
+  button.on { background:var(--accent); color:#001; border-color:var(--accent); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:8px; }
+  .chip { display:inline-block; padding:2px 8px; border-radius:10px; background:#2a3342; margin:2px 4px 2px 0; font-size:13px; }
+  .chip.got { background:#164; } .chip.opt.got { background:#541; }
+  .log { font-size:14px; max-height:180px; overflow:auto; } .log div { padding:2px 0; border-bottom:1px solid #262d38; }
+  .changed { color:#fc6; }
+  ol.steps { padding-left:20px; } ol.steps li { margin:6px 0; }
+</style>
+</head>
+<body>
+<div class="banner">PROTOTYPE. Throwaway demo for ticket #1095. State lives in memory. The ending mapping and clue rules are proposals to push on.</div>
+<h1>The story machine</h1>
+<p class="dim">Question: do the four acts, two-of-three clues, two forks and three endings hold together? Can a player skip lore, get stuck, or reach an ending that contradicts the story? Press buttons and watch.</p>
+
+<div class="panel"><h2>Where the story stands</h2><div id="state"></div></div>
+<div class="panel"><h2>What just happened</h2><div id="last"></div></div>
+
+<div class="panel"><h2>Free play</h2>
+  <div class="dim">Find clues in the current act</div>
+  <div class="row" id="clueBtns"></div>
+  <div class="dim" style="margin-top:10px">Story actions</div>
+  <div class="row" id="actBtns"></div>
+</div>
+
+<div class="panel"><h2>Guided walkthroughs</h2>
+  <div class="row" id="tabs"></div>
+  <p id="tabDesc" class="dim"></p>
+  <ol class="steps" id="steps"></ol>
+</div>
+
+<div class="panel"><h2>Log</h2><div class="log" id="log"></div></div>
+
+<script>
+// ---- Pure story module (no DOM). Liftable into the real game. ----
+const Story = (() => {
+  const ACTS = ['Lab', 'Fringe', 'Wilds', 'Source'];
+  // Three clues per act: first two are "main", third is optional epilogue flavour.
+  const CLUES = {
+    0: ['The first note', 'The unlocked exit log', 'A pruned maintenance record'],
+    1: ['The ally\u2019s forged order', 'The overseer\u2019s arrest list', 'A hidden cache that looks familiar'],
+    2: ['The wasteland census', 'The research vault index', 'A note in the protagonist\u2019s own phrasing'],
+    3: ['The overseer\u2019s directive', 'The shutdown protocol', 'The oldest note']
+  };
+  const NEED = 2;
+  const initial = () => ({
+    act: 0, runs: 1, status: 'playing', // playing | break | ended
+    clues: [[false,false,false],[false,false,false],[false,false,false],[false,false,false]], // persists across runs
+    forkA: null, forkB: null, ending: null, epilogue: null, betrayed: false
+  });
+  const found = (s, a) => s.clues[a].filter(Boolean).length;
+  const mainFound = (s, a) => s.clues[a].slice(0, 2).filter(Boolean).length;
+  const gotAny = (s, a) => found(s, a) >= NEED;
+  const optionalCount = s => s.clues.reduce((n, c) => n + (c[2] ? 1 : 0), 0);
+  const endingFor = (a, b) => ({
+    'friend|preserve': 'Guarded', 'friend|destroy': 'Hardware',
+    'buddy|destroy': 'Guarded', 'buddy|preserve': 'Failure'
+  })[a + '|' + b];
+  const hint = s => {
+    const missing = s.clues[s.act].findIndex(c => !c);
+    return missing < 0 ? null : 'Thought: something is missing about \u201c' + CLUES[s.act][missing] + '\u201d.';
+  };
+  const copy = s => JSON.parse(JSON.stringify(s));
+
+  function canAct(s, action) {
+    if (s.status === 'ended') return false;
+    switch (action.type) {
+      case 'findClue': return s.status === 'playing' && !s.clues[s.act][action.i];
+      case 'finishAct': return s.status === 'playing' && gotAny(s, s.act) && s.act < 3 && forkReady(s);
+      case 'chooseA': return s.status === 'playing' && s.act === 1 && gotAny(s, 1) && !s.forkA;
+      case 'chooseB': return s.status === 'playing' && s.act === 2 && gotAny(s, 2) && !s.forkB;
+      case 'continue': return s.status === 'break';
+      case 'finale': return s.status === 'playing' && s.act === 3 && gotAny(s, 3) && !!s.forkA && !!s.forkB;
+      case 'die': return s.status === 'playing' || s.status === 'break';
+      default: return false;
+    }
+  }
+  function forkReady(s) {
+    if (s.act === 1) return !!s.forkA;
+    if (s.act === 2) return !!s.forkB;
+    return true;
+  }
+  function why(s, type) {
+    if (s.status === 'ended') return 'The story is over.';
+    if (type === 'finishAct') {
+      if (s.act === 3) return 'Use the finale instead.';
+      if (!gotAny(s, s.act)) return 'Need ' + NEED + ' of 3 clues for this act (have ' + found(s, s.act) + ').';
+      if (!forkReady(s)) return 'A fork must be chosen first.';
+    }
+    if (type === 'finale') {
+      if (s.act !== 3) return 'Only in Act 4.';
+      if (!gotAny(s, 3)) return 'Need 2 of 3 clues.';
+      if (!s.forkA || !s.forkB) return 'Both forks must have been chosen in this run.';
+    }
+    return '';
+  }
+  function reduce(s0, action) {
+    if (!canAct(s0, action)) return { state: s0, note: 'Not allowed. ' + why(s0, action.type), changed: [] };
+    const s = copy(s0); const changed = [];
+    switch (action.type) {
+      case 'findClue':
+        s.clues[s.act][action.i] = true; changed.push('clue: ' + CLUES[s.act][action.i]);
+        if (s.act === 0 && action.i === 1) { /* nothing special */ }
+        if (s.act === 1 && action.i === 0) { s.betrayed = true; changed.push('emotion: betrayal registers (first deep trigger)'); }
+        return { state: s, note: 'Found \u201c' + CLUES[s.act][action.i] + '\u201d.', changed };
+      case 'chooseA':
+        s.forkA = action.v; changed.push('Fork A: ' + action.v);
+        return { state: s, note: action.v === 'buddy'
+          ? 'You saved the AI buddy. The human friend is arrested and leaves the story.'
+          : 'You rescued the human friend. The AI buddy is lost.', changed };
+      case 'chooseB':
+        s.forkB = action.v; changed.push('Fork B: ' + action.v);
+        return { state: s, note: action.v === 'preserve' ? 'You preserved the research.' : 'You destroyed the research. The human mind persists anyway.', changed };
+      case 'finishAct':
+        s.status = 'break'; changed.push('cutscene: ' + ACTS[s.act] + ' into ' + ACTS[s.act + 1]);
+        return { state: s, note: 'Cutscene plays.', changed };
+      case 'continue':
+        s.act += 1; s.status = 'playing'; changed.push('act: ' + ACTS[s.act]);
+        return { state: s, note: 'Act ' + (s.act + 1) + ': ' + ACTS[s.act] + ' begins.', changed };
+      case 'finale': {
+        s.ending = endingFor(s.forkA, s.forkB); s.status = 'ended';
+        s.epilogue = optionalCount(s) >= 3 ? 'full' : optionalCount(s) >= 1 ? 'partial' : 'bare';
+        changed.push('ending: ' + s.ending);
+        return { state: s, note: 'The story ends: ' + s.ending + '.', changed };
+      }
+      case 'die':
+        s.runs += 1; s.act = 0; s.status = 'playing'; s.forkA = null; s.forkB = null; s.betrayed = false;
+        changed.push('run: ' + s.runs, 'forks and act reset; clues kept');
+        return { state: s, note: 'The protagonist dies. A new run starts at Act 1 with every clue kept.', changed };
+    }
+  }
+  return { ACTS, CLUES, NEED, initial, reduce, canAct, why, hint, found, optionalCount, endingFor };
+})();
+
+// ---- Throwaway page shell ----
+let S = Story.initial(), lastNote = 'The protagonist wakes with a gap in its memory.', lastChanged = [];
+const logEl = document.getElementById('log');
+function dispatch(a) {
+  const r = Story.reduce(S, a); S = r.state; lastNote = r.note; lastChanged = r.changed;
+  const d = document.createElement('div'); d.textContent = r.note; logEl.prepend(d);
+  render();
+}
+function reset() { S = Story.initial(); lastNote = 'Reset.'; lastChanged = []; logEl.innerHTML = ''; render(); }
+function render() {
+  const st = document.getElementById('state');
+  const chips = Story.CLUES.map((names, a) => '<div><b>' + Story.ACTS[a] + '</b> ' + names.map((n, i) =>
+    '<span class="chip ' + (i === 2 ? 'opt ' : '') + (S.clues[a][i] ? 'got' : '') + '">' + (S.clues[a][i] ? '\u2713 ' : '') + n + (i === 2 ? ' (optional)' : '') + '</span>').join('') + '</div>').join('');
+  st.innerHTML =
+    '<div>Act: <b>' + (S.status === 'break' ? 'cutscene after ' + Story.ACTS[S.act] : (S.act + 1) + ' ' + Story.ACTS[S.act]) + '</b> &nbsp; Run: <b>' + S.runs + '</b></div>' +
+    '<div>Fork A (buddy or friend): <b>' + (S.forkA || '-') + '</b> &nbsp; Fork B (research): <b>' + (S.forkB || '-') + '</b></div>' +
+    (S.ending ? '<div class="ok">Ending: <b>' + S.ending + '</b> (epilogue: ' + S.epilogue + ')</div>' : '') +
+    (Story.hint(S) && S.status === 'playing' ? '<div class="dim">' + Story.hint(S) + '</div>' : '') +
+    '<div style="margin-top:8px">' + chips + '</div>';
+  document.getElementById('last').innerHTML = lastNote + (lastChanged.length ? '<div class="changed">Changed: ' + lastChanged.join('; ') + '</div>' : '');
+  const cb = document.getElementById('clueBtns'); cb.innerHTML = '';
+  Story.CLUES[S.act].forEach((n, i) => {
+    const b = document.createElement('button'); b.textContent = 'Find: ' + n;
+    b.disabled = !Story.canAct(S, { type: 'findClue', i }); b.onclick = () => dispatch({ type: 'findClue', i }); cb.append(b);
+  });
+  const acts = [
+    ['Fork A: save the AI buddy', { type: 'chooseA', v: 'buddy' }],
+    ['Fork A: rescue the human friend', { type: 'chooseA', v: 'friend' }],
+    ['Fork B: preserve the research', { type: 'chooseB', v: 'preserve' }],
+    ['Fork B: destroy the research', { type: 'chooseB', v: 'destroy' }],
+    ['Finish act (cutscene)', { type: 'finishAct' }],
+    ['Continue after cutscene', { type: 'continue' }],
+    ['Face the overseer (finale)', { type: 'finale' }],
+    ['Die (new run)', { type: 'die' }]
+  ];
+  const ab = document.getElementById('actBtns'); ab.innerHTML = '';
+  acts.forEach(([t, a]) => { const b = document.createElement('button'); b.textContent = t; b.disabled = !Story.canAct(S, a); b.title = Story.why(S, a.type); b.onclick = () => dispatch(a); ab.append(b); });
+  const rb = document.createElement('button'); rb.textContent = 'Reset everything'; rb.onclick = reset; ab.append(rb);
+  renderTab();
+}
+
+// ---- Walkthroughs ----
+const F = (a, i) => ({ t: 'Find ' + Story.CLUES[a][i], a: { type: 'findClue', i } });
+const next = { t: 'Finish act, then continue', a: [{ type: 'finishAct' }, { type: 'continue' }] };
+const WALK = [
+  { name: 'Happy path', desc: 'A thorough first run. Collect the two main clues per act, choose forks, reach an ending. Watch the act breaks and the epilogue.', steps: [
+    F(0,0), F(0,1), next, F(1,0), F(1,1), { t: 'Fork A: friend', a: { type: 'chooseA', v: 'friend' } }, next,
+    F(2,0), F(2,1), { t: 'Fork B: preserve', a: { type: 'chooseB', v: 'preserve' } }, next, F(3,0), F(3,1), { t: 'Face the overseer', a: { type: 'finale' } }] },
+  { name: 'Skip lore', desc: 'Only two clues per act, never the optional third. Does the story still work? Epilogue should be bare.', steps: [
+    F(0,0), F(0,2), next, F(1,1), F(1,2), { t: 'Fork A: buddy', a: { type: 'chooseA', v: 'buddy' } }, next,
+    F(2,0), F(2,2), { t: 'Fork B: destroy', a: { type: 'chooseB', v: 'destroy' } }, next, F(3,1), F(3,2), { t: 'Face the overseer', a: { type: 'finale' } }] },
+  { name: 'Stuck and die', desc: 'You only find one clue, try to leave, get blocked, die, and return. Clues persist, forks do not. What does the player learn from the hint?', steps: [
+    F(0,0), { t: 'Try to finish the act', a: { type: 'finishAct' } }, { t: 'Die', a: { type: 'die' } }, F(0,1), next] },
+  { name: 'Worst pairing', desc: 'Save the buddy and preserve the research. Under the proposed mapping this is the Failure ending. Is that fair, or is it a trap the player cannot see?', steps: [
+    F(0,0), F(0,1), next, F(1,0), F(1,1), { t: 'Fork A: buddy', a: { type: 'chooseA', v: 'buddy' } }, next,
+    F(2,0), F(2,1), { t: 'Fork B: preserve', a: { type: 'chooseB', v: 'preserve' } }, next, F(3,0), F(3,1), { t: 'Face the overseer', a: { type: 'finale' } }] },
+  { name: 'Illegal: skip a fork', desc: 'Try to leave Act 2 without choosing Fork A. The button should stay disabled.', steps: [
+    F(0,0), F(0,1), next, F(1,0), F(1,1), { t: 'Finish act (should be blocked)', a: { type: 'finishAct' } }] }
+];
+let tab = 0, step = 0;
+function startWalk(i) { tab = i; reset(); step = 0; renderTab(); }
+function renderTab() {
+  const tabs = document.getElementById('tabs'); tabs.innerHTML = '';
+  WALK.forEach((w, i) => { const b = document.createElement('button'); b.textContent = w.name; if (i === tab) b.className = 'on'; b.onclick = () => startWalk(i); tabs.append(b); });
+  const w = WALK[tab];
+  document.getElementById('tabDesc').textContent = w.desc + ' (Selecting a tab resets to a fresh game.)';
+  const ol = document.getElementById('steps'); ol.innerHTML = '';
+  w.steps.forEach((s, i) => {
+    const li = document.createElement('li'); const b = document.createElement('button');
+    b.textContent = s.t; b.disabled = i !== step;
+    b.onclick = () => { [].concat(s.a).forEach(dispatch); step = i + 1; renderTab(); };
+    if (i < step) li.className = 'dim'; li.append(b); ol.append(li);
+  });
+}
+render();
+</script>
+</body>
+</html>
