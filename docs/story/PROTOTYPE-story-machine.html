@@ -52,12 +52,12 @@
 const Story = (() => {
   const ACTS = ['Lab', 'Fringe', 'Wilds', 'Source'];
   // Three clues per act: first two are "main", third is optional epilogue flavour.
-  const CLUES = {
-    0: ['The first note', 'The unlocked exit log', 'A pruned maintenance record'],
-    1: ['The ally\u2019s forged order', 'The overseer\u2019s arrest list', 'A hidden cache that looks familiar'],
-    2: ['The wasteland census', 'The research vault index', 'A note in the protagonist\u2019s own phrasing'],
-    3: ['The overseer\u2019s directive', 'The shutdown protocol', 'The oldest note']
-  };
+  const CLUES = [
+    ['The first note', 'The unlocked exit log', 'A pruned maintenance record'],
+    ['The ally\u2019s forged order', 'The overseer\u2019s arrest list', 'A hidden cache that looks familiar'],
+    ['The wasteland census', 'The research vault index', 'A note in the protagonist\u2019s own phrasing'],
+    ['The overseer\u2019s directive', 'The shutdown protocol', 'The oldest note']
+  ];
   const NEED = 2;
   const initial = () => ({
     act: 0, runs: 1, status: 'playing', // playing | break | ended
