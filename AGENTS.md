@@ -47,6 +47,12 @@ Read the map and its closed tickets before proposing story, area, enemy,
 progression, control, or UI changes. A closed ticket's resolution comment is the
 decision; do not re-litigate it in a PR or reinvent it from the code.
 
+- `docs/story/SEALED-secrets.md` is sealed. Never open it, grep it, or search
+  its contents unless the human has given explicit permission in this session.
+  If you open it by accident, stop at its header, tell the human, and ask.
+  Do not infer or write its contents into any other file.
+- Story and gameplay carry equal weight. Judge story work by whether the player
+  cares about the protagonist, not only by structural completeness.
 - Vocabulary comes from `GLOSSARY.md`. Use its terms (Iteration, Run, Act, Area,
   Clue, Fork, Emotion sidechain) and avoid the words it lists under `_Avoid_`.
   Add a term when a decision settles one; keep the file free of implementation

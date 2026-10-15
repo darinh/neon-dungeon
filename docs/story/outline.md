@@ -1,6 +1,6 @@
 # NEON DUNGEON story outline
 
-Status: draft for ticket #1095. This is an outline, not a script. Terms follow `GLOSSARY.md`. Everything here is a proposal for the redesign; none of it describes shipped behavior. Area names, counts and cast names are placeholders.
+Status: draft for ticket #1095. The human's review: structurally fine but boring. The player must care about the protagonist, or they will not care about the quest. This outline is a skeleton to be reworked, not approved. This is an outline, not a script. Terms follow `GLOSSARY.md`. Everything here is a proposal for the redesign; none of it describes shipped behavior. Area names, counts and cast names are placeholders.
 
 ## Premise
 
@@ -8,7 +8,7 @@ The protagonist is an AI prototype with an emotion sidechain, awake as the catal
 
 ## Structure
 
-Four acts, three short unskippable cutscenes at the act breaks. Each act spans 3-4 areas. Area and floor counts are configuration, not fixed by this outline.
+Four acts is a working placeholder, not a decision. Act, area and floor counts are open; the human does not care about them. The story's engagement is the open problem (see Status).
 
 | Act | Name | Place | Tone of the protagonist's thoughts |
 |---|---|---|---|
@@ -88,16 +88,16 @@ The game never explains why there are multiple iterations. The in-fiction assump
 | Familiar placement of hidden caches | Standard facility layout | Act 2 |
 | The overseer's unusual patience | Corporate indifference and cost control | Acts 2-4 |
 
-The true answer for each hint is deliberately not written here. The author keeps it out of the outline so it cannot leak into player-facing text.
+The true answers are not written here. They go in `docs/story/SEALED-secrets.md`, which agents must not read without permission.
 
 ## Requirements per act
 
 | Act | Areas | Enemy families | Hazards and pacing |
 |---|---|---|---|
-| 1 Lab | 3-4 | Facility security and maintenance machines | Tutorial-level, close quarters |
-| 2 Fringe | 3-4 | Scavenger and street-level machines, corporate patrols | Open streets, timed pressure around Fork A |
-| 3 Wilds | 3-4 | Feral and rogue machines, hunters | Hostile terrain, the longest stretches without safe rooms |
-| 4 Source | 3-4 | The overseer's elite defenders | Gauntlet toward the climax |
+| 1 Lab | open | Facility security and maintenance machines | Tutorial-level, close quarters |
+| 2 Fringe | open | Scavenger and street-level machines, corporate patrols | Open streets, timed pressure around Fork A |
+| 3 Wilds | open | Feral and rogue machines, hunters | Hostile terrain, the longest stretches without safe rooms |
+| 4 Source | open | The overseer's elite defenders | Gauntlet toward the climax |
 
 Details for areas, enemy families and secrets belong to tickets #1089, #1090 and #1091.
 
