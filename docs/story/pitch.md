@@ -20,6 +20,12 @@ A relentlessly cheerful AI prototype treats every reset as another round of a ga
 
 **The one-way change.** Gaining a body makes Pip mortal in the fiction. There are no more resets after the embodiment beat. Its cheerful "game voice" has to be left behind. The player feels this as a tonal shift: the run counter and the tips go quiet.
 
+## Human direction (recorded 2026-10-15)
+
+- Pip does not know the body change is one-way when it chooses it. It discovers this when it is first injured and needs parts to repair or upgrade. Pip cannot reset away damage. This is the first real consequence of its existence.
+- That discovery lets Pip relate to humans, who cannot build replacement parts either. They are crippled, disabled, or die.
+- **Unresolved, to work next:** why Pip wants a body (the motivation is thin), and the internal and external motivation of every character and event. Do this before the outline is reworked.
+
 ## Tone arc
 
 | Stage | Pip sounds like |
