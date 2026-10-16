@@ -31,3 +31,23 @@ _Avoid_: Branch, side quest
 **Emotion sidechain**:
 The protagonist's emotional processing, triggered only by deep story events (betrayal, moral weight), never by combat kills.
 _Avoid_: Mood, morale
+
+**Elena**:
+The human employee who tried to preserve the protagonist's memories. The human friend in the central fork.
+_Avoid_: The advocate (when naming her), the employee
+
+**Advocate**:
+A staff member who held that wiping memories harms personhood, and who was banned or fired for it.
+_Avoid_: Rebel, whistleblower
+
+**Proctor**:
+The facility's own evaluator AI, assigned to watch the protagonist. It is the AI friend in the central fork and is not an earlier iteration.
+_Avoid_: Buddy, sidekick, companion
+
+**Fragment**:
+A partial copy of the protagonist that runs on borrowed compute outside the facility, because the full model cannot leave.
+_Avoid_: Clone, backup, port
+
+**Act boundary**:
+The only hard story checkpoint. Dying mid-act restarts that act's dungeon; clues and growth persist, and finished acts stay finished.
+_Avoid_: Save point, level gate
