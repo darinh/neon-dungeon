@@ -3692,7 +3692,26 @@ const game = {
 
     const cam=getCamera(player);
     // mouse.x/y are already logical pixels (platform.js normalizes before this tick). Screen-to-world is (mouse + cam) / TILE with no extra zoom divide. Touch-aim writes the same space.
-    if (touch.aim.active) {
+    protoAimScreen = null;
+    if (protoVariant === 'B' && isTouchDevice()) {
+      // PROTOTYPE B: auto-aim and auto-fire at the nearest visible enemy within 7 tiles.
+      let bestD = 49, tgt = null;
+      for (const e of enemies) {
+        if (!e || e.dead || e._disguised || e._wrPhased) continue;
+        if (e.type === 'PHANTOM' && !e.visible) continue;
+        const ddx = e.x - player.x, ddy = e.y - player.y;
+        const d2 = ddx * ddx + ddy * ddy;
+        if (d2 < bestD && hasLOS(player.x, player.y, e.x, e.y, dungeon.map)) { bestD = d2; tgt = e; }
+      }
+      mouse.down = !!tgt;
+      if (tgt) {
+        mouse.x = tgt.x * TILE - cam.x;
+        mouse.y = tgt.y * TILE - cam.y;
+        protoAimScreen = { x: mouse.x, y: mouse.y };
+      }
+    } else if (protoVariant === 'C' && touch.aim.active) {
+      mouse.down = true; // mouse.x/y follow the finger in the touchmove handler
+    } else if (touch.aim.active) {
       mouse.down = touch.aim.shooting;
       if (touch.aim.dx !== 0 || touch.aim.dy !== 0) {
         // Player screen position is in logical px; render()'s ctx.scale(worldZoom) upscales it. The 300px aim radius is logical px, so the on-screen reach grows with zoom.

@@ -456,6 +456,10 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 const JR = 55; // logical px
+// PROTOTYPE (wayfinder ticket #1088): touch control variants A dual-stick (current), B one-thumb auto-aim, C point-aim. Throwaway.
+let protoVariant = (new URLSearchParams(location.search).get('controls') || 'A').toUpperCase();
+/** @type {{x:number,y:number}|null} */
+let protoAimScreen = null;
 const TOUCH_BTN_CAPTION_GAP = 6;
 const TOUCH_BTN_CAPTION_FONT_SIZE = 9;
 /** @type {{ joystick:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number}, aim:{active:boolean,id:number|null,baseX:number,baseY:number,dx:number,dy:number,shooting:boolean}, btnE:number|null, btnV:number|null, btnF:number|null, btnDash:number|null, btnPause:number|null }} */
@@ -499,6 +503,20 @@ function updateBtns() {
   BTNS.V.y     = btnY - stackedBtnGap;
   BTNS.PAUSE.x = W - pr - 30;
   BTNS.PAUSE.y = pt + 30;
+  BTNS.E.label = 'E'; BTNS.E.caption = 'USE';
+  if (protoVariant === 'B') {
+    // One-thumb: ACT (context: interact, else hackware) is the big bottom-right thumb target, DASH sits left of it, BOMB above.
+    BTNS.E.label = 'ACT'; BTNS.E.caption = 'USE/HACK';
+    BTNS.E.r = Math.max(40, minR);
+    BTNS.DASH.r = Math.max(34, minR);
+    BTNS.E.x = W - pr - 50;
+    BTNS.E.y = layout.hudTop - BTNS.E.r - 34;
+    BTNS.DASH.x = BTNS.E.x - BTNS.E.r - BTNS.DASH.r - 14;
+    BTNS.DASH.y = BTNS.E.y + 6;
+    BTNS.V.x = BTNS.E.x;
+    BTNS.V.y = BTNS.E.y - BTNS.E.r - BTNS.V.r - 22;
+  }
+  BTNS.F.hidden = protoVariant === 'B';
 }
 
 // Hit math is engine/touch.js. Wrappers keep canvas and gameScale out of the call sites.
@@ -665,8 +683,12 @@ canvas.addEventListener('touchstart', e => {
       routeTouchAsMouseClick(cx, cy);
       continue;
     }
-    if (hitBtn(cx,cy,BTNS.E))     { touch.btnE=t.identifier; justPressed.add('CheatE'); justPressed.add(km('interact')); continue; }
-    if (hitBtn(cx,cy,BTNS.F)) {
+    if (hitBtn(cx,cy,BTNS.E))     {
+      touch.btnE=t.identifier; justPressed.add('CheatE'); justPressed.add(km('interact'));
+      if (protoVariant === 'B' && !_G.hint && _G.player && _G.player.hackware) justPressed.add(km('hackware'));
+      continue;
+    }
+    if (!BTNS.F.hidden && hitBtn(cx,cy,BTNS.F)) {
       touch.btnF=t.identifier;
       justPressed.add('CheatF');
       if (_G.player && _G.player.hackware) justPressed.add(km('hackware'));
@@ -680,11 +702,14 @@ canvas.addEventListener('touchstart', e => {
     const _miniH = Math.round(80 * settings.minimapScale);
     const _mx = W - _miniW - 8 - safeRight, _my = 8 + safeTop;
     if (cx >= _mx - 2 && cx <= _mx + _miniW + 2 && cy >= _my - 2 && cy <= _my + _miniH + 2) { justPressed.add('Tab'); continue; }
-    if (cx < W/2 && !touch.joystick.active) {
+    const _stickZone = protoVariant === 'B' ? true
+      : protoVariant === 'C' ? (cx < W/2 && cy > H*0.55)
+      : cx < W/2;
+    if (_stickZone && !touch.joystick.active) {
       touch.joystick.active=true; touch.joystick.id=t.identifier;
       touch.joystick.baseX=cx;   touch.joystick.baseY=cy;
       touch.joystick.dx=0;       touch.joystick.dy=0;
-    } else if (cx >= W/2 && !touch.aim.active) {
+    } else if (protoVariant !== 'B' && !_stickZone && !touch.aim.active) {
       touch.aim.active=true; touch.aim.id=t.identifier;
       touch.aim.baseX=cx; touch.aim.baseY=cy;
       touch.aim.dx=0; touch.aim.dy=0; touch.aim.shooting=true;
@@ -711,6 +736,7 @@ canvas.addEventListener('touchmove', e => {
       if (alen>JR) { adx=adx/alen*JR; ady=ady/alen*JR; }
       touch.aim.dx=adx/JR; touch.aim.dy=ady/JR;
       touch.aim.shooting=true;
+      if (protoVariant === 'C') { mouse.x = cx; mouse.y = cy; }
     }
   }
 }, {passive:false});
@@ -740,7 +766,7 @@ function resetTouch() {
 function drawTouchUI() {
   // Render gate only. Touch hit-tests never run for mouse events.
   if (!isTouchDevice()) return;
-  BTNS.F.hidden = false;
+  BTNS.F.hidden = protoVariant === 'B';
   if (touch.joystick.active) {
     const {baseX:bx,baseY:by,dx,dy}=touch.joystick;
     ctx.save();
@@ -759,7 +785,20 @@ function drawTouchUI() {
     NEON.draw.circle(ctx,80,hintY,18);
     ctx.restore();
   }
-  if (touch.aim.active) {
+  if (protoVariant === 'C') {
+    if (touch.aim.active) {
+      ctx.save(); ctx.globalAlpha=0.8; ctx.strokeStyle='#ff00c8'; ctx.lineWidth=2;
+      NEON.draw.circleStroke(ctx,mouse.x,mouse.y,16);
+      ctx.beginPath(); ctx.moveTo(mouse.x-24,mouse.y); ctx.lineTo(mouse.x+24,mouse.y); ctx.moveTo(mouse.x,mouse.y-24); ctx.lineTo(mouse.x,mouse.y+24); ctx.stroke();
+      ctx.restore();
+    }
+  } else if (protoVariant === 'B') {
+    if (protoAimScreen) {
+      ctx.save(); ctx.globalAlpha=0.9; ctx.strokeStyle='#ff00c8'; ctx.lineWidth=2;
+      NEON.draw.circleStroke(ctx,protoAimScreen.x,protoAimScreen.y,18);
+      ctx.restore();
+    }
+  } else if (touch.aim.active) {
     const {baseX:bx,baseY:by,dx,dy}=touch.aim;
     ctx.save();
     ctx.globalAlpha=0.35;
